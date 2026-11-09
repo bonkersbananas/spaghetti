@@ -1,25 +1,257 @@
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "@/components/ui/Toast";
+import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
+import { ideasQuery } from "./items";
+import { outbox } from "./outbox";
+import { setPreview } from "./previews";
+import { sessionQuery } from "./queries";
+
+/** A photo in the capture sheet, resized in the background while you type. */
+export interface DraftPhoto {
+  id: string;
+  file: Blob;
+  processed?: ProcessedPhoto;
+}
 
 interface CaptureContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  /** The unsaved note, kept when the sheet closes so nothing is lost. */
+  /** The unsaved note, kept when the sheet closes (and across reloads) so nothing is lost. */
   draft: string;
   setDraft: (draft: string) => void;
+  photos: DraftPhoto[];
+  addFiles: (files: Iterable<File>) => void;
+  removePhoto: (id: string) => void;
+  /** Opens the sheet with photos or text already in it (paste, drop). */
+  openWith: (input: { files?: Iterable<File>; text?: string }) => void;
+  /** Saves the capture to the outbox and closes the sheet at once. Returns the new id. */
+  save: () => string | null;
+  /** The idea saved last in this visit, so the inbox can welcome it. */
+  landed: string | null;
 }
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
+const DRAFT_KEY = "spaghetti:capture-draft";
+const FIRST_KEY = "spaghetti:first-idea";
+
+function storedDraft(): string {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Only images; a browser may hand us other files from a drop. */
+export function imageFiles(files: Iterable<File>): File[] {
+  return Array.from(files).filter(
+    (file) => file.type.startsWith("image/") || /\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name),
+  );
+}
 
 /** Holds the capture sheet's state, so any screen can open it. */
 export function CaptureProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const value = useMemo(() => ({ open, setOpen, draft, setDraft }), [open, draft]);
+  const [draft, setDraftState] = useState(storedDraft);
+  const [photos, setPhotos] = useState<DraftPhoto[]>([]);
+  const [landed, setLanded] = useState<string | null>(null);
+  // The welcome animation plays once, on the inbox the capture lands in.
+  useEffect(() => {
+    if (!landed) return;
+    const timer = setTimeout(() => setLanded(null), 1500);
+    return () => clearTimeout(timer);
+  }, [landed]);
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
+
+  const setDraft = useCallback((value: string) => {
+    setDraftState(value);
+    try {
+      if (value) localStorage.setItem(DRAFT_KEY, value);
+      else localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Private mode: the draft lives in memory only.
+    }
+  }, []);
+
+  const addFiles = useCallback((files: Iterable<File>) => {
+    const added = imageFiles(files).map((file) => ({ id: crypto.randomUUID(), file }));
+    if (!added.length) return;
+    for (const photo of added) setPreview(photo.id, photo.file, photo.file);
+    setPhotos((current) => [...current, ...added]);
+    for (const photo of added) {
+      processPhoto(photo.file).then(
+        (processed) => {
+          setPreview(photo.id, processed.thumb, processed.large);
+          setPhotos((current) => current.map((p) => (p.id === photo.id ? { ...p, processed } : p)));
+        },
+        (error) => {
+          setPhotos((current) => current.filter((p) => p.id !== photo.id));
+          toast.error(
+            "Couldn't open that photo",
+            error instanceof UnreadablePhotoError ? error.message : "Try another one.",
+          );
+        },
+      );
+    }
+  }, []);
+
+  const removePhoto = useCallback((id: string) => {
+    setPhotos((current) => current.filter((photo) => photo.id !== id));
+  }, []);
+
+  const openWith = useCallback(
+    ({ files, text }: { files?: Iterable<File>; text?: string }) => {
+      if (files) addFiles(files);
+      if (text) {
+        setDraftState((current) => {
+          const next = current.trim() ? `${current.trimEnd()}\n${text}` : text;
+          try {
+            localStorage.setItem(DRAFT_KEY, next);
+          } catch {}
+          return next;
+        });
+      }
+      setOpen(true);
+    },
+    [addFiles],
+  );
+
+  const save = useCallback(() => {
+    const note = draft.trim();
+    const current = photosRef.current;
+    const user = queryClient.getQueryData(sessionQuery.queryKey);
+    if ((!note && !current.length) || !user) return null;
+
+    const firstEver = isFirstIdea(queryClient.getQueryData(ideasQuery.queryKey));
+    const itemId = crypto.randomUUID();
+    const now = Date.now();
+    void outbox.add({
+      itemId,
+      create: { title: null, note, createdAt: now, createdBy: user.id },
+      photos: current.map((photo, position) => ({
+        id: photo.id,
+        position,
+        // Still resizing: the outbox finishes the job from the original.
+        ...(photo.processed ? { processed: photo.processed } : { file: photo.file }),
+      })),
+      queuedAt: now,
+    });
+    setDraft("");
+    setPhotos([]);
+    setOpen(false);
+    setLanded(itemId);
+    if (firstEver) {
+      try {
+        localStorage.setItem(FIRST_KEY, "1");
+      } catch {}
+      toast.delight("First one in the pot", "Every print starts as an idea like this. Add more whenever they come.");
+    }
+    return itemId;
+  }, [draft, queryClient, setDraft]);
+
+  const value = useMemo(
+    () => ({ open, setOpen, draft, setDraft, photos, addFiles, removePhoto, openWith, save, landed }),
+    [open, draft, setDraft, photos, addFiles, removePhoto, openWith, save, landed],
+  );
   return <CaptureContext value={value}>{children}</CaptureContext>;
+}
+
+/** The very first idea in the workspace, seen on this device only once. */
+function isFirstIdea(ideas: unknown[] | undefined): boolean {
+  try {
+    if (localStorage.getItem(FIRST_KEY)) return false;
+  } catch {
+    return false;
+  }
+  return Array.isArray(ideas) && ideas.length === 0 && outbox.getSnapshot().entries.length === 0;
 }
 
 export function useCapture(): CaptureContextValue {
   const value = useContext(CaptureContext);
   if (!value) throw new Error("useCapture must be used inside <CaptureProvider>");
   return value;
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  );
+}
+
+/**
+ * Desktop capture from anywhere: paste an image or a link, or drop photos on
+ * the window. Returns whether files are being dragged over the window, for
+ * the drop overlay.
+ */
+export function useGlobalCapture(): boolean {
+  const { openWith, open } = useCapture();
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    function onPaste(event: ClipboardEvent) {
+      const data = event.clipboardData;
+      if (!data) return;
+      const files = imageFiles(data.files);
+      const inCapture = event.target instanceof HTMLElement && !!event.target.closest("[data-capture]");
+      if (files.length) {
+        // Images join the capture, even when pasted into its note.
+        if (isTypingTarget(event.target) && !inCapture) return;
+        event.preventDefault();
+        openWith({ files });
+        return;
+      }
+      // Text pasted into a field is that field's business.
+      if (isTypingTarget(event.target) || open) return;
+      const text = data.getData("text/plain").trim();
+      if (!text) return;
+      event.preventDefault();
+      openWith({ text });
+    }
+
+    let depth = 0;
+    const hasFiles = (event: DragEvent) => !!event.dataTransfer?.types.includes("Files");
+    function onDragEnter(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      depth += 1;
+      setDragging(true);
+    }
+    function onDragLeave(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      depth = Math.max(0, depth - 1);
+      if (!depth) setDragging(false);
+    }
+    function onDragOver(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    }
+    function onDrop(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      depth = 0;
+      setDragging(false);
+      const files = imageFiles(event.dataTransfer?.files ?? []);
+      if (files.length) openWith({ files });
+      else toast.message("Only photos can be dropped here", "Drop JPEG, PNG or WebP images to capture them.");
+    }
+
+    window.addEventListener("paste", onPaste);
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("paste", onPaste);
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [openWith, open]);
+
+  return dragging;
 }

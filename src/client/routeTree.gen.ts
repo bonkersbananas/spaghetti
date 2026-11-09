@@ -13,10 +13,11 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppBuildsRouteImport } from './routes/_app/builds'
-import { Route as AppIdeasRouteImport } from './routes/_app/ideas'
 import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
+import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
+import { Route as AppIdeasIdeaIdRouteImport } from './routes/_app/ideas.$ideaId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -37,11 +38,6 @@ const AppBuildsRoute = AppBuildsRouteImport.update({
   path: '/builds',
   getParentRoute: () => AppRoute,
 } as any)
-const AppIdeasRoute = AppIdeasRouteImport.update({
-  id: '/ideas',
-  path: '/ideas',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppJournalRoute = AppJournalRouteImport.update({
   id: '/journal',
   path: '/journal',
@@ -57,35 +53,48 @@ const AppStyleguideRoute = AppStyleguideRouteImport.update({
   path: '/styleguide',
   getParentRoute: () => AppRoute,
 } as any)
+const AppIdeasIndexRoute = AppIdeasIndexRouteImport.update({
+  id: '/ideas/',
+  path: '/ideas/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIdeasIdeaIdRoute = AppIdeasIdeaIdRouteImport.update({
+  id: '/ideas/$ideaId',
+  path: '/ideas/$ideaId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
   '/builds': typeof AppBuildsRoute
-  '/ideas': typeof AppIdeasRoute
   '/journal': typeof AppJournalRoute
   '/search': typeof AppSearchRoute
   '/styleguide': typeof AppStyleguideRoute
+  '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/ideas/': typeof AppIdeasIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/builds': typeof AppBuildsRoute
-  '/ideas': typeof AppIdeasRoute
   '/journal': typeof AppJournalRoute
   '/search': typeof AppSearchRoute
   '/styleguide': typeof AppStyleguideRoute
   '/': typeof AppIndexRoute
+  '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/ideas': typeof AppIdeasIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/builds': typeof AppBuildsRoute
-  '/_app/ideas': typeof AppIdeasRoute
   '/_app/journal': typeof AppJournalRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/_app/ideas/': typeof AppIdeasIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -93,29 +102,32 @@ export interface FileRouteTypes {
     | '/'
     | '/sign-in'
     | '/builds'
-    | '/ideas'
     | '/journal'
     | '/search'
     | '/styleguide'
+    | '/ideas/$ideaId'
+    | '/ideas/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/sign-in'
     | '/builds'
-    | '/ideas'
     | '/journal'
     | '/search'
     | '/styleguide'
     | '/'
+    | '/ideas/$ideaId'
+    | '/ideas'
   id:
     | '__root__'
     | '/_app'
     | '/sign-in'
     | '/_app/builds'
-    | '/_app/ideas'
     | '/_app/journal'
     | '/_app/search'
     | '/_app/styleguide'
     | '/_app/'
+    | '/_app/ideas/$ideaId'
+    | '/_app/ideas/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -153,13 +165,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBuildsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/ideas': {
-      id: '/_app/ideas'
-      path: '/ideas'
-      fullPath: '/ideas'
-      preLoaderRoute: typeof AppIdeasRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/journal': {
       id: '/_app/journal'
       path: '/journal'
@@ -181,25 +186,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppStyleguideRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ideas/': {
+      id: '/_app/ideas/'
+      path: '/ideas'
+      fullPath: '/ideas/'
+      preLoaderRoute: typeof AppIdeasIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ideas/$ideaId': {
+      id: '/_app/ideas/$ideaId'
+      path: '/ideas/$ideaId'
+      fullPath: '/ideas/$ideaId'
+      preLoaderRoute: typeof AppIdeasIdeaIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppBuildsRoute: typeof AppBuildsRoute
-  AppIdeasRoute: typeof AppIdeasRoute
   AppJournalRoute: typeof AppJournalRoute
   AppSearchRoute: typeof AppSearchRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
+  AppIdeasIndexRoute: typeof AppIdeasIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppBuildsRoute: AppBuildsRoute,
-  AppIdeasRoute: AppIdeasRoute,
   AppJournalRoute: AppJournalRoute,
   AppSearchRoute: AppSearchRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppIndexRoute: AppIndexRoute,
+  AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,
+  AppIdeasIndexRoute: AppIdeasIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

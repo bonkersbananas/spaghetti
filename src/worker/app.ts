@@ -7,7 +7,9 @@ import { readSession } from "./auth/session.ts";
 import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
+import { itemRoutes } from "./routes/items.ts";
 import { peopleRoutes } from "./routes/people.ts";
+import { photoRoutes } from "./routes/photos.ts";
 import { sessionRoutes } from "./routes/session.ts";
 
 /** Everything under /api except signing in needs a session. */
@@ -32,6 +34,8 @@ export const app = new Hono<AppEnv>()
   .route("/session", sessionRoutes)
   .use(requireUser)
   .route("/people", peopleRoutes)
+  .route("/items", itemRoutes)
+  .route("/photos", photoRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))
   .onError((err, c) => {
     if (err instanceof HTTPException) {

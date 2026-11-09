@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { SEED_IDS } from "./seed/ideas.ts";
 
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
@@ -12,6 +13,8 @@ export interface Shot {
   width?: 390 | 1440;
   /** Runs after the page loads, to open a sheet or reach a state. */
   prepare?: (page: Page) => Promise<void>;
+  /** Runs after the screenshot, to undo what prepare changed for the next width. */
+  cleanup?: (page: Page) => Promise<void>;
 }
 
 /**
@@ -29,7 +32,28 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await page.getByRole("button", { name: "New idea" }).first().click();
-      await page.getByRole("dialog").waitFor();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await page.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
+      await sheet.getByRole("textbox", { name: "Note" }).fill("Tugboat, take two: a flatter hull and a bigger funnel");
+      await sheet.getByRole("button", { name: "Remove Photo 1" }).waitFor();
+      await page.waitForTimeout(400);
+      await sheet.getByRole("textbox", { name: "Note" }).blur();
+    },
+  },
+  { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  {
+    name: "undo",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.goto(`/ideas/${SEED_IDS.tugboat}`);
+      await page.getByRole("button", { name: "Delete idea" }).first().click();
+      await page.getByText("Idea deleted").waitFor();
+      await page.locator("h1").first().waitFor();
+    },
+    cleanup: async (page) => {
+      await page.getByRole("button", { name: "Undo" }).click();
+      await page.getByRole("link", { name: /Bath tugboat/ }).waitFor();
     },
   },
   {

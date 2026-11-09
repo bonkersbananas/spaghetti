@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
+<defs>
+<linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cdbda6"/><stop offset="1" stop-color="#a8957b"/></linearGradient>
+<linearGradient id="desk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b98a5a"/><stop offset=".5" stop-color="#a1703f"/><stop offset="1" stop-color="#7c5230"/></linearGradient>
+<filter id="woodgrain" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".003 .06" numOctaves="3" seed="12"/><feColorMatrix values="0 0 0 0 .3  0 0 0 0 .16  0 0 0 0 .06  0 0 0 -1.6 1"/><feComposite in2="SourceAlpha" operator="in"/></filter>
+<filter id="grain" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="5"/><feColorMatrix values=".33 .33 .33 0 0  .33 .33 .33 0 0  .33 .33 .33 0 0  0 0 0 0 .07"/></filter>
+<filter id="b3"><feGaussianBlur stdDeviation="3"/></filter>
+<filter id="b8" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8"/></filter>
+<filter id="b18" x="-40%" y="-100%" width="180%" height="300%"><feGaussianBlur stdDeviation="18"/></filter>
+<filter id="b40" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="40"/></filter>
+<filter id="white"><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/></filter>
+<pattern id="layers" width="8" height="5" patternUnits="userSpaceOnUse"><rect width="8" height="1.4" fill="#fff" opacity=".07"/><rect y="2.5" width="8" height="1.2" fill="#000" opacity=".2"/></pattern>
+<linearGradient id="base" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6a6a6c"/><stop offset=".35" stop-color="#4a4a4d"/><stop offset="1" stop-color="#232325"/></linearGradient>
+<linearGradient id="char" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2a2a2c"/><stop offset=".3" stop-color="#5b5b5e"/><stop offset=".55" stop-color="#3a3a3c"/><stop offset="1" stop-color="#1c1c1e"/></linearGradient>
+<linearGradient id="shell" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b9ab95"/><stop offset=".35" stop-color="#f1e8da"/><stop offset="1" stop-color="#bfb19b"/></linearGradient>
+<linearGradient id="pad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a2e1e"/><stop offset=".5" stop-color="#7a4c32"/><stop offset="1" stop-color="#3e2618"/></linearGradient>
+<linearGradient id="band" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5a3c"/><stop offset="1" stop-color="#4e301f"/></linearGradient>
+<linearGradient id="metal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8d8a85"/><stop offset=".4" stop-color="#e2ded6"/><stop offset="1" stop-color="#6f6b66"/></linearGradient>
+<radialGradient id="lamp" cx=".78" cy=".12" r=".7"><stop offset="0" stop-color="#ffe6b8" stop-opacity=".55"/><stop offset=".6" stop-color="#ffe6b8" stop-opacity="0"/></radialGradient>
+<radialGradient id="vig" cx=".5" cy=".5" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></radialGradient>
+<mask id="standmask"><use href="#stand" filter="url(#white)"/></mask>
+</defs>
+<rect width="900" height="1200" fill="url(#wall)"/>
+<g filter="url(#b40)"><rect x="-40" y="160" width="300" height="420" rx="10" fill="#2b2a2a" opacity=".85"/><circle cx="740" cy="170" r="110" fill="#fff1cf"/><circle cx="780" cy="560" r="90" fill="#6f7d55"/><circle cx="840" cy="470" r="70" fill="#59683f"/></g>
+<path d="M0 760 L900 740 L900 1200 L0 1200Z" fill="url(#desk)"/>
+<path d="M0 760 L900 740 L900 1200 L0 1200Z" fill="#000" filter="url(#woodgrain)"/>
+<path d="M0 760 L900 740" stroke="#d8b086" stroke-width="3" opacity=".7"/>
+<ellipse cx="500" cy="1020" rx="270" ry="54" fill="#2a170a" opacity=".55" filter="url(#b18)"/>
+<ellipse cx="470" cy="1008" rx="200" ry="26" fill="#1a0e06" opacity=".6" filter="url(#b8)"/>
+<g id="stand">
+<ellipse cx="450" cy="1004" rx="196" ry="44" fill="#1d1d1f"/>
+<path d="M254 984 L254 1004 A196 44 0 0 0 646 1004 L646 984Z" fill="url(#base)"/>
+<ellipse cx="450" cy="984" rx="196" ry="44" fill="#4b4b4e"/>
+<ellipse cx="440" cy="978" rx="150" ry="28" fill="#5a5a5d"/>
+<path d="M450 985 C560 860 330 620 450 330" fill="none" stroke="#2c2c2e" stroke-width="64"/>
+<ellipse cx="452" cy="982" rx="58" ry="16" fill="#2a2a2c"/>
+<path d="M436 965 C540 860 314 620 436 340" fill="none" stroke="#5e5e61" stroke-width="16" stroke-linecap="round" opacity=".8" filter="url(#b3)"/>
+<path d="M330 352 Q450 300 570 352" fill="none" stroke="#2e2e30" stroke-width="44" stroke-linecap="round"/>
+<path d="M336 340 Q450 292 564 340" fill="none" stroke="#6a6a6d" stroke-width="10" stroke-linecap="round" opacity=".7" filter="url(#b3)"/>
+</g>
+<rect width="900" height="1200" fill="url(#layers)" mask="url(#standmask)"/>
+<path d="M300 352 Q450 296 600 352" fill="none" stroke="#000" stroke-width="20" opacity=".35" filter="url(#b8)"/>
+<path d="M286 470 L286 380 Q290 262 450 256 Q610 262 614 380 L614 470" fill="none" stroke="url(#metal)" stroke-width="14"/>
+<path d="M300 400 Q300 284 450 278 Q600 284 600 400" fill="none" stroke="url(#band)" stroke-width="34" stroke-linecap="round"/>
+<path d="M312 380 Q316 296 450 292 Q584 296 588 380" fill="none" stroke="#c9946c" stroke-width="2" stroke-dasharray="7 6" opacity=".7"/>
+<path d="M300 400 Q300 284 450 278" fill="none" stroke="#c08560" stroke-width="6" opacity=".4" filter="url(#b3)"/>
+<rect x="264" y="440" width="44" height="40" rx="10" fill="url(#metal)"/>
+<rect x="592" y="440" width="44" height="40" rx="10" fill="url(#metal)"/>
+<ellipse cx="312" cy="580" rx="34" ry="104" fill="url(#pad)"/>
+<ellipse cx="588" cy="580" rx="34" ry="104" fill="url(#pad)"/>
+<ellipse cx="268" cy="580" rx="50" ry="112" fill="url(#shell)"/>
+<ellipse cx="632" cy="580" rx="50" ry="112" fill="url(#shell)"/>
+<ellipse cx="258" cy="560" rx="16" ry="70" fill="#fff" opacity=".35" filter="url(#b8)"/>
+<ellipse cx="624" cy="560" rx="14" ry="70" fill="#fff" opacity=".25" filter="url(#b8)"/>
+<ellipse cx="268" cy="580" rx="36" ry="84" fill="none" stroke="#a89a84" stroke-width="3" opacity=".7"/><ellipse cx="632" cy="580" rx="36" ry="84" fill="none" stroke="#a89a84" stroke-width="3" opacity=".7"/>
+<rect width="900" height="1200" fill="url(#lamp)"/>
+<rect width="900" height="1200" fill="url(#vig)"/>
+<rect width="900" height="1200" filter="url(#grain)"/>
+</svg>

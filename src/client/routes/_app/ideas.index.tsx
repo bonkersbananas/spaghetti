@@ -1,0 +1,74 @@
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { IdeaCard } from "@/components/ideas/IdeaCard";
+import { EmptyPot } from "@/components/illustrations";
+import { PageHeader } from "@/components/shell/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PlusIcon } from "@/components/ui/icons";
+import { CardSkeleton } from "@/components/ui/Skeleton";
+import { useCapture } from "@/lib/capture";
+import { useIdeas } from "@/lib/items";
+import { peopleQuery } from "@/lib/queries";
+import { useIsDesktop } from "@/lib/use-media-query";
+
+export const Route = createFileRoute("/_app/ideas/")({
+  component: Ideas,
+});
+
+/** The grid both pages of ideas share: two columns on phones, more on desktop. */
+const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
+
+function Ideas() {
+  const { items, isPending } = useIdeas();
+  const { data: people } = useQuery(peopleQuery);
+  const { landed } = useCapture();
+  const byId = new Map(people?.map((person) => [person.id, person]));
+
+  return (
+    <>
+      <PageHeader title="Ideas" subtitle="The inbox. Every print starts as a half-thought." />
+      {isPending ? (
+        <div className={grid} aria-hidden>
+          {Array.from({ length: 8 }, (_, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity.
+            <CardSkeleton key={index} aspect="portrait" />
+          ))}
+        </div>
+      ) : items.length ? (
+        <ul className={grid} aria-label="Ideas">
+          {items.map((item) => (
+            <IdeaCard key={item.id} item={item} person={byId.get(item.createdBy)} landing={item.id === landed} />
+          ))}
+        </ul>
+      ) : (
+        <IdeasEmpty />
+      )}
+    </>
+  );
+}
+
+function IdeasEmpty() {
+  const { setOpen } = useCapture();
+  // On desktop the sidebar's "New idea" is the screen's one primary action.
+  const isDesktop = useIsDesktop();
+  return (
+    <EmptyState
+      className="py-10 md:py-20"
+      illustration={<EmptyPot />}
+      title="Nothing simmering yet"
+      action={
+        <Button
+          variant={isDesktop ? "secondary" : "primary"}
+          icon={PlusIcon}
+          shortcut={["C"]}
+          onClick={() => setOpen(true)}
+        >
+          Capture an idea
+        </Button>
+      }
+    >
+      Snap a photo of something that could be printed, or jot down a line. Titles can wait; tidy up later.
+    </EmptyState>
+  );
+}

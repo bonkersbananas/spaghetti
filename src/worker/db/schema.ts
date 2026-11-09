@@ -32,3 +32,66 @@ export const sessions = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+
+/**
+ * Where an item is in its life. Phase 2 has ideas only; a build is the same
+ * record moved on (phase 3 adds print attempts that point at it).
+ */
+export const ITEM_STAGES = ["idea", "building", "done", "shelved"] as const;
+export type ItemStage = (typeof ITEM_STAGES)[number];
+
+/**
+ * An idea, and later the build it grows into. Ids are made by the client, so
+ * a capture can be shown, queued and retried before the server has it.
+ * Deleting sets `deletedAt` (undo clears it); the daily purge removes rows
+ * and their photos for good after a while.
+ */
+export const items = sqliteTable(
+  "items",
+  {
+    id: text("id").primaryKey(),
+    stage: text("stage").$type<ItemStage>().notNull().default("idea"),
+    title: text("title"),
+    note: text("note").notNull().default(""),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("items_stage_created_idx").on(table.stage, table.createdAt)],
+);
+
+/**
+ * Photos, stored in R2 as two WebP or JPEG variants made in the browser:
+ * `photos/<id>/large` (about 2048 px) and `photos/<id>/thumb` (about 480 px).
+ * Every photo belongs to an item; phase 3 adds an optional attempt.
+ */
+export const photos = sqliteTable(
+  "photos",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    /** Order within the item; the lowest is the cover. */
+    position: integer("position").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    /** The photo's average color (#rrggbb), shown while it loads. */
+    color: text("color").notNull(),
+    contentType: text("content_type").notNull(),
+    /** When the picture was taken, from its EXIF data, if the browser could read it. */
+    takenAt: integer("taken_at", { mode: "timestamp_ms" }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("photos_item_idx").on(table.itemId, table.position)],
+);
+
+export type Item = typeof items.$inferSelect;
+export type Photo = typeof photos.$inferSelect;

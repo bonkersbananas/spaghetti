@@ -39,5 +39,28 @@ export async function signIn(username: string, password: string): Promise<string
 
 /** Storage is shared by the tests in a file: start each one empty. */
 export async function resetDb() {
-  await env.DB.batch([env.DB.prepare("DELETE FROM sessions"), env.DB.prepare("DELETE FROM users")]);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM photos"),
+    env.DB.prepare("DELETE FROM items"),
+    env.DB.prepare("DELETE FROM sessions"),
+    env.DB.prepare("DELETE FROM users"),
+  ]);
+}
+
+/** Uploads a photo's two variants the way the browser does. */
+export function uploadPhoto(
+  itemId: string,
+  photoId: string,
+  cookie: string,
+  fields: Record<string, string> = {},
+  type = "image/webp",
+) {
+  const form = new FormData();
+  form.set("width", "2048");
+  form.set("height", "1536");
+  form.set("color", "#A08060");
+  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  form.set("large", new File([new Uint8Array([1, 2, 3, 4])], "large.webp", { type }));
+  form.set("thumb", new File([new Uint8Array([5, 6])], "thumb.webp", { type }));
+  return request(`/api/items/${itemId}/photos/${photoId}`, { method: "PUT", body: form, cookie });
 }

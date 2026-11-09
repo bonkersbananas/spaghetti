@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+<defs>
+<linearGradient id="wall" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#efe7da"/><stop offset="1" stop-color="#d3c7b4"/></linearGradient>
+<linearGradient id="desk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2dbd0"/><stop offset="1" stop-color="#c4bbad"/></linearGradient>
+<linearGradient id="mat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8d8a86"/><stop offset="1" stop-color="#6c6965"/></linearGradient>
+<filter id="felt" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="3" seed="14"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 -1.8 1.1"/><feComposite in2="SourceAlpha" operator="in"/></filter>
+<filter id="grain" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="13"/><feColorMatrix values=".33 .33 .33 0 0  .33 .33 .33 0 0  .33 .33 .33 0 0  0 0 0 0 .07"/></filter>
+<filter id="b3"><feGaussianBlur stdDeviation="3"/></filter>
+<filter id="b8" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8"/></filter>
+<filter id="b18" x="-40%" y="-60%" width="180%" height="220%"><feGaussianBlur stdDeviation="18"/></filter>
+<filter id="b34" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="34"/></filter>
+<linearGradient id="screen" x1="0" y1="0" x2=".4" y2="1"><stop offset="0" stop-color="#3b3f6e"/><stop offset=".45" stop-color="#8a6a9a"/><stop offset=".75" stop-color="#e59a7a"/><stop offset="1" stop-color="#f6c98e"/></linearGradient>
+<linearGradient id="frame" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8f9399"/><stop offset=".5" stop-color="#d7dade"/><stop offset="1" stop-color="#6a6e74"/></linearGradient>
+<linearGradient id="glare" x1="0" y1="0" x2="1" y2="1"><stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".42" stop-color="#fff" stop-opacity=".16"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<linearGradient id="petg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4f0" stop-opacity=".8"/><stop offset=".5" stop-color="#2f8fd4" stop-opacity=".55"/><stop offset="1" stop-color="#1663a8" stop-opacity=".75"/></linearGradient>
+<linearGradient id="petgSide" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6fbcec" stop-opacity=".55"/><stop offset="1" stop-color="#1d6fb4" stop-opacity=".7"/></linearGradient>
+<linearGradient id="petgTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe6ff" stop-opacity=".9"/><stop offset="1" stop-color="#5aaee6" stop-opacity=".6"/></linearGradient>
+<pattern id="layers" width="8" height="4.5" patternUnits="userSpaceOnUse"><rect width="8" height="1.3" fill="#0a3c6e" opacity=".22"/><rect y="2.4" width="8" height="1" fill="#fff" opacity=".22"/></pattern>
+<radialGradient id="caustic" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#b9e4ff" stop-opacity=".8"/><stop offset="1" stop-color="#5ab0f0" stop-opacity="0"/></radialGradient>
+<radialGradient id="light" cx=".15" cy=".05" r="1"><stop offset="0" stop-color="#fff7e6" stop-opacity=".45"/><stop offset=".6" stop-color="#fff7e6" stop-opacity="0"/></radialGradient>
+<radialGradient id="vig" cx=".5" cy=".5" r=".75"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".32"/></radialGradient>
+</defs>
+<rect width="1200" height="900" fill="url(#wall)"/>
+<g filter="url(#b34)"><rect x="90" y="300" width="150" height="230" rx="20" fill="#c86b4a"/><rect x="230" y="360" width="50" height="100" rx="25" fill="none" stroke="#b55c3e" stroke-width="22"/><circle cx="1010" cy="250" r="140" fill="#7c9466"/><circle cx="1100" cy="330" r="110" fill="#5f7a4e"/><rect x="980" y="380" width="120" height="160" fill="#d9d2c4"/><circle cx="420" cy="80" r="90" fill="#fffdf4"/></g>
+<path d="M0 540 L1200 520 L1200 900 L0 900Z" fill="url(#desk)"/>
+<path d="M0 540 L1200 520" stroke="#f7f2ea" stroke-width="3"/>
+<path d="M180 600 L1120 584 L1200 900 L60 900Z" fill="url(#mat)"/>
+<path d="M180 600 L1120 584 L1200 900 L60 900Z" fill="#000" filter="url(#felt)" opacity=".18"/>
+<path d="M180 600 L1120 584" stroke="#a7a39e" stroke-width="2"/>
+<ellipse cx="760" cy="704" rx="300" ry="40" fill="#1a1e2a" opacity=".5" filter="url(#b18)"/>
+<path d="M540 700 L860 688 L900 730 L580 744Z" fill="url(#caustic)" opacity=".7" filter="url(#b8)"/>
+<ellipse cx="910" cy="712" rx="50" ry="9" fill="#d6f0ff" opacity=".55" filter="url(#b3)"/>
+<path d="M556 664 L812 654 L858 322 L608 330Z" fill="url(#petgSide)"/>
+<path d="M812 654 L858 322 L884 328 L840 660Z" fill="url(#petgTop)"/>
+<path d="M812 654 L858 322 L884 328 L840 660Z" fill="url(#layers)"/>
+<path d="M858 322 L884 328" stroke="#e6f6ff" stroke-width="4" stroke-linecap="round"/>
+<path d="M486 682 L860 668 L880 690 L500 706Z" fill="url(#petgTop)"/>
+<path d="M500 706 L880 690 L880 712 L500 730Z" fill="url(#petg)"/>
+<path d="M500 706 L880 690 L880 712 L500 730Z" fill="url(#layers)"/>
+<g transform="translate(18 0) rotate(-2 660 420)">
+<rect x="512" y="162" width="290" height="530" rx="44" fill="#000" opacity=".25" filter="url(#b8)" transform="translate(16 6)"/>
+<rect x="508" y="150" width="290" height="530" rx="44" fill="url(#frame)"/>
+<rect x="514" y="156" width="278" height="518" rx="39" fill="#121318"/>
+<rect x="526" y="168" width="254" height="494" rx="30" fill="url(#screen)"/>
+<path d="M526 520 Q600 470 660 500 Q720 530 780 480 L780 632 Q780 662 750 662 L556 662 Q526 662 526 632Z" fill="#3b3354" opacity=".55"/>
+<path d="M526 580 Q620 540 700 570 Q750 588 780 560 L780 632 Q780 662 750 662 L556 662 Q526 662 526 632Z" fill="#2a2440" opacity=".6"/>
+<circle cx="700" cy="330" r="26" fill="#ffe6c4" opacity=".7"/>
+<rect x="622" y="180" width="62" height="18" rx="9" fill="#05060a"/>
+<rect x="526" y="168" width="254" height="494" rx="30" fill="url(#glare)"/>
+<rect x="509" y="151" width="288" height="528" rx="43" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2"/>
+</g>
+<path d="M486 636 L868 622 L874 680 L492 696Z" fill="url(#petg)"/>
+<path d="M486 636 L868 622 L874 680 L492 696Z" fill="url(#layers)"/>
+<path d="M868 622 L884 630 L890 686 L874 680Z" fill="#2f8fd4" opacity=".7"/>
+<path d="M486 636 L868 622" stroke="#e0f4ff" stroke-width="5" stroke-linecap="round" opacity=".9"/>
+<path d="M492 694 L874 678" stroke="#0e4f8a" stroke-width="3" opacity=".6"/>
+<path d="M520 656 L850 644" stroke="#d6f0ff" stroke-width="3" opacity=".35"/>
+<rect width="1200" height="900" fill="url(#light)"/>
+<rect width="1200" height="900" fill="url(#vig)"/>
+<rect width="1200" height="900" filter="url(#grain)"/>
+</svg>

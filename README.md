@@ -6,7 +6,7 @@ It runs on Cloudflare Workers with D1 and R2, and just as well entirely locally 
 
 - **Client:** React 19 SPA built with Vite, TanStack Router and Query, Tailwind CSS v4 with design tokens, `motion`, `vaul`, `sonner`.
 - **Server:** a Hono Worker serving the JSON API under `/api`; the client is served as Workers static assets with SPA fallback.
-- **Data:** D1 through Drizzle ORM (migrations in `migrations/`), photos in the R2 bucket bound as `PHOTOS` (from phase 2).
+- **Data:** D1 through Drizzle ORM (migrations in `migrations/`), photos in the R2 bucket bound as `PHOTOS`.
 - **Design:** [docs/design.md](docs/design.md), live at `/styleguide` once signed in.
 
 ## Run it locally
@@ -54,6 +54,12 @@ pnpm screenshots ideas capture   # only some
 ```
 
 It starts the app on a seeded throwaway database, signs in and writes PNGs to `screenshots/` (gitignored). The list of screens is in `scripts/screenshot-routes.ts`.
+
+## Photos and deleting
+
+Photos are resized in the browser (a 2048 px and a 600 px variant, WebP or JPEG, re-encoded so no EXIF location leaves the phone) and stored in R2 as `photos/<id>/large` and `photos/<id>/thumb`. The Worker serves them to signed-in people only, with year-long immutable caching. Captures wait in the browser's IndexedDB until the server has them, so closing the tab mid-upload loses nothing.
+
+Deleting an idea or a photo only marks it deleted, so Undo is a restore. A daily cron trigger (04:00 UTC, `triggers` in `wrangler.jsonc`) removes what was deleted more than 30 days ago, R2 objects first. Cron triggers only fire on Cloudflare: locally and in the container, deleted things stay in the database until it is deployed (or until you run the purge yourself with `wrangler dev --test-scheduled` and a request to `/__scheduled`).
 
 ## Run it in a container
 

@@ -8,10 +8,11 @@
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { type Browser, chromium } from "@playwright/test";
+import { type Browser, chromium, request } from "@playwright/test";
 import { SEED_USERS, seedThrowawayState, startDevServer } from "./lib/local-app.ts";
 import { root } from "./lib/wrangler.ts";
 import { shots } from "./screenshot-routes.ts";
+import { seedIdeas } from "./seed/ideas.ts";
 
 const viewports = [
   { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
@@ -29,6 +30,7 @@ let browser: Browser | undefined;
 
 try {
   browser = await chromium.launch();
+  await seed(browser);
   for (const viewport of viewports) {
     const { width, height, ...device } = viewport;
     const context = await browser.newContext({
@@ -75,6 +77,7 @@ async function capture(page: import("@playwright/test").Page, shot: (typeof shot
   await page.waitForTimeout(600);
   const file = join(outDir, `${shot.name}-${width}.png`);
   await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
+  await shot.cleanup?.(page);
   console.log(`  ${shot.name}-${width}.png`);
 }
 
@@ -91,4 +94,24 @@ async function loadAllImages(page: import("@playwright/test").Page, name: string
     return images.filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src);
   });
   if (broken.length) throw new Error(`${name}: images failed to load:\n${broken.join("\n")}`);
+}
+
+/** Fills the throwaway database with a dozen ideas, captured by both people. */
+async function seed(browser: Browser) {
+  if (!server) return;
+  const [alex, sam] = await Promise.all(
+    SEED_USERS.map(async (user) => {
+      const context = await request.newContext({ baseURL: server.url });
+      const response = await context.post("/api/session", {
+        data: { username: user.username, password: user.password },
+        headers: { Origin: server.url },
+      });
+      if (!response.ok()) throw new Error(`Signing in ${user.username} failed: ${response.status()}`);
+      return context;
+    }),
+  );
+  if (!alex || !sam) throw new Error("Seeding needs both people");
+  await seedIdeas(browser, { alex, sam }, server.url);
+  await Promise.all([alex.dispose(), sam.dispose()]);
+  console.log("  seeded ideas");
 }

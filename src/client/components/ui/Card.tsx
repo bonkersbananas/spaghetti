@@ -1,22 +1,28 @@
 import type { Person } from "@shared/api";
+import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "./Avatar";
-import { ImageIcon } from "./icons";
+import { ImageIcon, NoteIcon } from "./icons";
+import { Photo } from "./Photo";
 
 export interface CardProps {
-  /** The photo leads. Without one, the card shows a soft placeholder. */
-  photo?: { src: string; alt: string };
+  /** The photo leads. Without one, the note fills its place as a note card. */
+  photo?: { src: string; alt: string; color?: string };
   /** Optional: ideas don't need a title. Falls back to the note. */
-  title?: string;
+  title?: string | null;
   note?: string;
   /** Chips over the photo's bottom edge: status, material. */
   chips?: ReactNode;
+  /** Top right of the photo, such as how many photos there are. */
+  badge?: ReactNode;
   /** Small line under the title: "2 attempts · 3 days ago". */
   meta?: ReactNode;
   person?: Pick<Person, "name" | "color">;
-  /** "tall" for portrait photos in masonry-like grids. */
-  aspect?: "landscape" | "square" | "tall";
+  /** "portrait" (4:5) suits grids of prints; "tall" is 3:4. */
+  aspect?: "landscape" | "square" | "portrait" | "tall";
+  /** Where the card leads (a TanStack Router link). */
+  link?: LinkProps;
   onClick?: () => void;
   className?: string;
 }
@@ -24,40 +30,59 @@ export interface CardProps {
 const aspects = {
   landscape: "aspect-4/3",
   square: "aspect-square",
+  portrait: "aspect-4/5",
   tall: "aspect-3/4",
 };
 
 /**
  * The photo-first card: prints are physical, so the picture is the content
- * and the text supports it.
+ * and the text supports it. Without a photo it becomes a quiet note card: the
+ * note sits where the photo would, on paper, in the same grid.
  */
-export function Card({ photo, title, note, chips, meta, person, aspect = "landscape", onClick, className }: CardProps) {
-  const heading = title || note;
-  const Root = onClick ? "button" : "article";
-  return (
-    <Root
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
-      className={cn(
-        "group bg-cream shadow-soft flex w-full flex-col rounded-lg p-1.5 text-left",
-        onClick && "pressable focus-ring hover:shadow-raised cursor-pointer",
-        className,
-      )}
-    >
-      <div className={cn("bg-well relative w-full overflow-hidden rounded-md", aspects[aspect])}>
+export function Card({
+  photo,
+  title,
+  note,
+  chips,
+  badge,
+  meta,
+  person,
+  aspect = "landscape",
+  link,
+  onClick,
+  className,
+}: CardProps) {
+  const noteCard = !photo && !!note;
+  // A note card already shows its note; below a photo the note stands in for a title.
+  const heading = title || (noteCard ? null : note);
+  const rootClass = cn(
+    "group bg-cream shadow-soft flex w-full flex-col rounded-lg p-1.5 text-left",
+    (onClick || link) && "pressable focus-ring hover:shadow-raised cursor-pointer",
+    className,
+  );
+
+  const content = (
+    <>
+      <div className={cn("relative w-full overflow-hidden rounded-md", aspects[aspect])}>
         {photo ? (
-          <img
+          <Photo
             src={photo.src}
             alt={photo.alt}
-            loading="lazy"
-            decoding="async"
-            className="duration-slow size-full object-cover transition-transform ease-out group-hover:scale-[1.02]"
+            color={photo.color}
+            className="size-full"
+            imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
+        ) : noteCard ? (
+          <div className="paper-grain bg-paper relative flex size-full flex-col gap-2 p-3.5 md:p-4">
+            <NoteIcon size={18} className="text-ink-ghost shrink-0" aria-hidden />
+            <p className="text-body text-ink-soft line-clamp-8 min-h-0 break-words whitespace-pre-line">{note}</p>
+          </div>
         ) : (
-          <div className="text-ink-ghost flex size-full items-center justify-center">
+          <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
             <ImageIcon size={32} weight="light" aria-hidden />
           </div>
         )}
+        {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
       <div className="flex items-start gap-2.5 px-2 pt-2.5 pb-2">
@@ -65,7 +90,7 @@ export function Card({ photo, title, note, chips, meta, person, aspect = "landsc
           {heading ? (
             <h3
               className={cn(
-                "text-body text-ink line-clamp-2 font-semibold",
+                "text-body text-ink line-clamp-2 font-semibold break-words",
                 // Notes standing in for a title read as text, not as a heading.
                 !title && "font-sans font-medium",
               )}
@@ -73,12 +98,37 @@ export function Card({ photo, title, note, chips, meta, person, aspect = "landsc
               {heading}
             </h3>
           ) : (
-            <h3 className="text-body text-ink-faint font-sans font-medium italic">Untitled</h3>
+            !noteCard && !photo && <h3 className="text-body text-ink-faint font-sans font-medium italic">Untitled</h3>
           )}
-          {meta && <p className="text-small text-ink-faint mt-0.5 line-clamp-2">{meta}</p>}
+          {meta && <p className={cn("text-small text-ink-faint line-clamp-2", heading && "mt-0.5")}>{meta}</p>}
         </div>
         {person && <Avatar person={person} size="xs" className="mt-0.5" />}
       </div>
+    </>
+  );
+
+  if (link) {
+    return (
+      <Link {...link} className={rootClass}>
+        {content}
+      </Link>
+    );
+  }
+  const Root = onClick ? "button" : "article";
+  return (
+    <Root type={onClick ? "button" : undefined} onClick={onClick} className={rootClass}>
+      {content}
     </Root>
+  );
+}
+
+/** "3" with a stack icon: an item has more photos than its cover. */
+export function PhotoCountBadge({ count }: { count: number }) {
+  return (
+    <span className="rounded-pill bg-ink/60 text-caption text-paper inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
+      <ImageIcon size={13} weight="bold" aria-hidden />
+      {count}
+      <span className="sr-only">photos</span>
+    </span>
   );
 }

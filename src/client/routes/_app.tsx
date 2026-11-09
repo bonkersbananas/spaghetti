@@ -1,10 +1,14 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
+import { DropOverlay } from "@/components/shell/DropOverlay";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { sections } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
-import { CaptureProvider, useCapture } from "@/lib/capture";
+import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
+import { connectOutbox } from "@/lib/items";
 import { sessionQuery } from "@/lib/queries";
 
 /** The signed-in app: sidebar on desktop, tab bar on phones. */
@@ -28,7 +32,11 @@ function AppLayout() {
 
 function Shell() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { setOpen } = useCapture();
+  const dragging = useGlobalCapture();
+  // Sends captures still waiting from this visit or an earlier one.
+  useEffect(() => connectOutbox(queryClient), [queryClient]);
   useHotkeys({
     c: () => setOpen(true),
     ...Object.fromEntries(sections.map((s) => [s.hotkey, () => navigate({ to: s.to })])),
@@ -44,6 +52,7 @@ function Shell() {
       </main>
       <TabBar />
       <CaptureSheet />
+      <DropOverlay visible={dragging} />
     </div>
   );
 }

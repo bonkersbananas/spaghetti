@@ -53,7 +53,7 @@
       }
     },
     {
-      "includes": ["src/client/components/illustrations/**", "src/client/assets/**"],
+      "includes": ["src/client/components/illustrations/**", "src/client/assets/**", "scripts/seed/**"],
       "linter": {
         "rules": {
           "a11y": {

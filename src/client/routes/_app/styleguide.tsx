@@ -8,16 +8,20 @@ import { EmptyPot, Mark, NoodleSearch, OpenNotebook, SpoolStrand } from "@/compo
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Avatar, AvatarStack } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { Chip, ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { NoteField } from "@/components/ui/NoteField";
+import { Photo } from "@/components/ui/Photo";
+import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";
 import { Sheet } from "@/components/ui/Sheet";
 import { CardSkeleton, RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
+import { ProgressRing, UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 
 export const Route = createFileRoute("/_app/styleguide")({
@@ -40,6 +44,7 @@ const toc = [
   ["chips", "Chips"],
   ["avatars", "Avatars"],
   ["cards", "Cards"],
+  ["photos", "Photos"],
   ["sheets", "Sheets & toasts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
@@ -78,6 +83,7 @@ function Styleguide() {
           <ChipSection />
           <AvatarSection />
           <CardSection />
+          <PhotoSection />
           <SheetSection />
           <EmptySection />
           <SkeletonSection />
@@ -438,6 +444,9 @@ function FieldSection() {
   const [title, setTitle] = useState("Cable clip for the desk");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [note, setNote] = useState("Needs to fit a 6 mm cable. Try PETG so it flexes without snapping.");
+  const [linkedNote, setLinkedNote] = useState(
+    "Remix of https://www.printables.com/model/123-cable-clip with a wider mouth.",
+  );
 
   function edit(setter: (value: string) => void, value: string) {
     setter(value);
@@ -470,13 +479,10 @@ function FieldSection() {
         </Panel>
         <Panel className="flex flex-col gap-3">
           <Label>Plain, for writing surfaces</Label>
-          <TextField
-            appearance="plain"
-            defaultValue="Articulated dragon"
-            aria-label="Title"
-            className="[&_input]:font-display [&_input]:text-headline"
-          />
-          <TextArea appearance="plain" aria-label="Note" placeholder="Jot it down…" minRows={4} />
+          <TextArea appearance="title" defaultValue="Articulated dragon" aria-label="Title" minRows={1} />
+          <TextArea appearance="plain" aria-label="Note" placeholder="Jot it down…" minRows={3} />
+          <Label>Note field: links stay clickable, tap the text to edit</Label>
+          <NoteField value={linkedNote} onChange={setLinkedNote} />
           <Label>Save states</Label>
           <div className="flex flex-wrap gap-5">
             <SaveStatus state="saving" />
@@ -565,10 +571,10 @@ function CardSection() {
           onClick={() => toast.message("Cards open their detail in a later phase")}
         />
         <Card
-          note="Hook for the AMS spool holder, the stock one rattles"
-          meta="Idea · yesterday"
+          note="Hook for the AMS spool holder, the stock one rattles. Check the clearance to the wall first."
+          meta="Yesterday"
           person={people[1]}
-          aspect="square"
+          aspect="portrait"
         />
         <Card
           photo={{ src: planterPhoto, alt: "A green planter with a small plant" }}
@@ -584,10 +590,66 @@ function CardSection() {
         <Card
           photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
           note="Spiral vase in silk PLA, maybe 0.6 nozzle"
-          meta="Idea · just now"
+          meta="Just now"
           person={people[0]}
-          aspect="tall"
+          aspect="portrait"
+          badge={<PhotoCountBadge count={3} />}
+          chips={<UploadBadge state="uploading" progress={0.64} />}
         />
+      </div>
+    </Section>
+  );
+}
+
+/* Photos ----------------------------------------------------------------- */
+
+/** A photo's average color is data, measured from its pixels, not a design token. */
+const SAMPLE_PHOTO_COLOR = "#867362"; // design-lint-ignore
+
+function PhotoSection() {
+  return (
+    <Section
+      id="photos"
+      title="Photos"
+      note="A photo shows its own average color while it loads, then fades in. Captures upload in the background: the badge says how far along they are, and “Not saved yet” while a retry waits."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel className="flex flex-col gap-4">
+          <Label>Photo: loading, then loaded</Label>
+          <div className="grid grid-cols-2 gap-3">
+            {/* What a loading photo shows: its own average color. */}
+            <div
+              role="img"
+              aria-label="A photo still loading"
+              className="aspect-4/3 rounded-md"
+              style={{ backgroundColor: SAMPLE_PHOTO_COLOR }} // design-lint-ignore
+            />
+            <Photo src={dragonPhoto} alt="A red dragon" className="aspect-4/3 rounded-md" />
+          </div>
+          <Label>Upload badges</Label>
+          <div className="bg-paper-deep flex flex-wrap gap-2 rounded-md p-3">
+            <UploadBadge state="processing" />
+            <UploadBadge state="uploading" progress={0.42} />
+            <UploadBadge state="waiting" />
+            <span className="text-ink-soft inline-flex items-center gap-2">
+              <ProgressRing value={0.7} /> <ProgressRing value={null} />
+            </span>
+          </div>
+        </Panel>
+        <Panel className="flex flex-col gap-4">
+          <Label>Thumbnails and add tiles</Label>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <PhotoThumb src={planterPhoto} alt="Planter" onRemove={() => toast.message("Removed")} />
+            <PhotoThumb src={vasePhoto} alt="Vase" busy />
+            <AddPhotoTile size="md" icon={Icons.CameraIcon} label="Camera" />
+            <PhotoThumb size="sm" src={dragonPhoto} alt="Dragon" />
+            <AddPhotoTile size="sm" icon={Icons.PlusIcon} label="Add photos" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <AddPhotoTile icon={Icons.CameraIcon} label="Take photo" />
+            <AddPhotoTile icon={Icons.ImageIcon} label="From library" />
+          </div>
+        </Panel>
       </div>
     </Section>
   );
@@ -618,6 +680,19 @@ function SheetSection() {
           Delete with undo
         </Button>
         <Button onClick={() => toast.success("Saved to Ideas")}>Success toast</Button>
+        <Button onClick={() => toast.action("Saved to Ideas", { label: "View", onClick: () => undefined })}>
+          Toast with an action
+        </Button>
+        <Button
+          onClick={() =>
+            toast.delight(
+              "First one in the pot",
+              "Every print starts as an idea like this. Add more whenever they come.",
+            )
+          }
+        >
+          First idea (delight)
+        </Button>
       </Panel>
       <Sheet
         open={dialog}
