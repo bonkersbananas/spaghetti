@@ -257,3 +257,18 @@ describe("broken and foreign input", () => {
     expect(plateAt(readThreeMf(zip(files)), 0).name).toBe("&x;");
   });
 });
+
+describe("many plates", () => {
+  it("keeps the first plates and warns, instead of failing", () => {
+    const plates = Array.from(
+      { length: 80 },
+      (_, i) => `<plate><metadata key="index" value="${i + 1}"/><metadata key="prediction" value="60"/></plate>`,
+    ).join("");
+    const files = slicedFiles();
+    files["Metadata/slice_info.config"] = `<config>${plates}</config>`;
+    const r = readThreeMf(zip(files));
+    expect(r.kind).toBe("sliced");
+    expect(r.plates).toHaveLength(64);
+    expect(r.warnings.some((w) => w.includes("plates"))).toBe(true);
+  });
+});

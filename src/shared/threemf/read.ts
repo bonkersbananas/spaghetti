@@ -103,10 +103,15 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
 
   // Plates: model_settings (names, objects, project filaments), then slice_info (the slice).
   const plates = new Map<number, Plate>();
-  const plate = (index: number): Plate => {
+  let overflowed = false;
+  const plate = (index: number): Plate | undefined => {
     let p = plates.get(index);
     if (!p) {
-      if (plates.size >= MAX_PLATES) throw new Error("too many plates");
+      if (plates.size >= MAX_PLATES) {
+        if (!overflowed) warnings.push(`More than ${MAX_PLATES} plates; the rest are ignored`);
+        overflowed = true;
+        return undefined;
+      }
       p = { index, objects: [], filaments: [] };
       plates.set(index, p);
     }
@@ -132,6 +137,7 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
       const index = toInt(meta.get("plater_id")) ?? toInt(meta.get("index"));
       if (index === undefined || index < 1) continue;
       const p = plate(index);
+      if (!p) continue;
       const name = meta.get("plater_name");
       if (name) p.name = name;
       const bed = meta.get("bed_type");
@@ -162,8 +168,9 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
         warnings.push("A plate in slice_info.config has no valid index; skipped");
         continue;
       }
-      sliced = true;
       const p = plate(index);
+      if (!p) continue;
+      sliced = true;
       const seconds = toNum(meta.get("prediction"));
       if (seconds !== undefined) p.predictedSeconds = seconds;
       const grams = toNum(meta.get("weight"));
