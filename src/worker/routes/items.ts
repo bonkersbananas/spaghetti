@@ -91,7 +91,7 @@ function groupBy<T extends { itemId: string }>(rows: T[]): Map<string, T[]> {
  * items (more past D1's parameter limit). Photos of deleted attempts are left
  * out, so they come back when the attempt is restored.
  */
-async function loadItems(db: Db, where: ReturnType<typeof and>) {
+export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   const rows = await db.select().from(items).where(where).orderBy(desc(items.createdAt), desc(items.id));
   if (!rows.length) return [];
   const slices = chunked(rows.map((row) => row.id));

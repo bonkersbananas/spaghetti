@@ -9,8 +9,10 @@ import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
 import { itemRoutes } from "./routes/items.ts";
+import { journalRoutes } from "./routes/journal.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
+import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { tagRoutes } from "./routes/tags.ts";
 
@@ -41,6 +43,8 @@ export const app = new Hono<AppEnv>()
   .route("/attempts", attemptRoutes)
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)
+  .route("/journal", journalRoutes)
+  .route("/", searchRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))
   .onError((err, c) => {
     if (err instanceof HTTPException) {
