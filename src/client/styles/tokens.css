@@ -52,7 +52,9 @@
   --sg-shadow-float: 0 2px 6px rgb(80 50 20 / 0.06), 0 16px 48px rgb(80 50 20 / 0.16);
   --sg-shadow-well: inset 0 1px 2px rgb(80 50 20 / 0.07);
   --sg-shadow-bar: 0 -1px 0 rgb(43 36 32 / 0.05), 0 -8px 24px rgb(80 50 20 / 0.06);
-  --sg-ring: 0 0 0 3px rgb(200 70 42 / 0.28);
+  /* Focus is calm ink, never tomato: tomato means "the action" or "an error". */
+  --sg-ring: 0 0 0 1px rgb(43 36 32 / 0.32), 0 0 0 4px rgb(43 36 32 / 0.08);
+  --sg-ring-error: 0 0 0 1px rgb(168 56 28 / 0.6), 0 0 0 4px rgb(200 70 42 / 0.14);
 
   /* Type sizes: phone first, then desktop below. */
   --sg-text-caption: 0.75rem;
@@ -135,7 +137,8 @@
   --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 48px rgb(0 0 0 / 0.5);
   --sg-shadow-well: inset 0 1px 2px rgb(0 0 0 / 0.4);
   --sg-shadow-bar: 0 -1px 0 rgb(242 235 225 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
-  --sg-ring: 0 0 0 3px rgb(238 107 71 / 0.4);
+  --sg-ring: 0 0 0 1px rgb(242 235 225 / 0.4), 0 0 0 4px rgb(242 235 225 / 0.1);
+  --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(238 107 71 / 0.18);
 }
 
 @theme {
@@ -209,6 +212,7 @@
   --shadow-well: var(--sg-shadow-well);
   --shadow-bar: var(--sg-shadow-bar);
   --shadow-ring: var(--sg-ring);
+  --shadow-ring-error: var(--sg-ring-error);
 
   --ease-*: initial;
   --ease-out: var(--sg-ease-out);
@@ -247,7 +251,7 @@
   }
 }
 
-/* The one focus style: a soft tomato ring, only for keyboard focus. */
+/* The one focus style: a soft ink ring, only for keyboard focus. */
 @utility focus-ring {
   outline: none;
   &:focus-visible {

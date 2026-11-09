@@ -49,7 +49,7 @@ function FieldFrame({ id, label, hint, error, saveState, className, children }: 
 }
 
 const inputSurface =
-  "w-full rounded-md bg-ink/4 text-ink shadow-well focus:bg-cream placeholder:text-ink-ghost transition-[box-shadow,background-color] duration-fast ease-out focus:shadow-ring disabled:opacity-60";
+  "w-full rounded-md bg-ink/4 text-ink shadow-well placeholder:text-ink-ghost transition-shadow duration-fast ease-out focus:shadow-ring disabled:opacity-60";
 
 export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "size"> {
   label?: string;
@@ -88,7 +88,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
               ? cn(inputSurface, "text-body h-12 px-4 md:h-11")
               : "text-ink placeholder:text-ink-ghost w-full bg-transparent",
             IconComponent && "pl-11",
-            error && "shadow-ring",
+            error && "shadow-ring-error focus:shadow-ring-error",
           )}
           {...props}
         />
@@ -148,7 +148,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
           appearance === "surface"
             ? cn(inputSurface, "text-body px-4 py-3")
             : "text-lead text-ink placeholder:text-ink-ghost md:text-body w-full bg-transparent focus:shadow-none",
-          error && "shadow-ring",
+          error && "shadow-ring-error focus:shadow-ring-error",
         )}
         {...props}
       />

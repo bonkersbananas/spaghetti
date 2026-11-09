@@ -25,7 +25,7 @@ Use the semantic tokens as Tailwind classes (`bg-paper`, `text-ink-soft`, `fill-
 | `cream`                                        | Anything raised: cards, sheets, the tab bar.                                                       |
 | `well`                                         | Photo placeholders, skeletons. Fields use `bg-ink/4`, which reads as a well on paper and on cream. |
 | `ink` / `ink-soft` / `ink-faint` / `ink-ghost` | Headings and text / body and labels / meta and hints (AA on paper) / placeholders and disabled.    |
-| `tomato`                                       | The one action color. One primary (tomato) button per screen. Also the focus ring.                 |
+| `tomato`                                       | The one action color: one primary (tomato) button per screen. Also errors. Never focus.                 |
 | `basil`                                        | Success: a print that worked, "Saved".                                                             |
 | `semolina`                                     | Highlight and in-progress: printing now, selections.                                               |
 | `*-soft` / `*-ink`                             | Background and text pairs for chips and quiet states (`bg-basil-soft text-basil-ink`).             |
@@ -59,7 +59,7 @@ Use `tabular` for numbers that line up (temperatures, durations, weights).
 
 - Spacing is Tailwind's 4 px scale. Prefer generous space to dividers.
 - Phone pages: `px-5`, content clears the tab bar with `pb-tabbar`; the shell handles safe-area insets (`pt-safe`, `pb-safe`).
-- Desktop: the sidebar is `w-sidebar` (16 rem); content sits in `max-w-wide` (72 rem) with `px-12`; long text in `max-w-content` (45 rem).
+- Desktop: the sidebar is `w-sidebar` (16 rem); content sits in `max-w-wide` (72 rem) with `px-12`. A page with a single column of content (header text, fields, empty states) keeps it in one left-aligned `max-w-content` (45 rem) column, and empty states center within that column, not across the main area.
 - Radii: `rounded-xs` (6) for keys and tiny bits, `sm` (10) for small buttons and nav items, `md` (14) for buttons and fields, `lg` (20) for cards and tiles, `xl` (28) for sheets and big panels, `rounded-pill` / `rounded-full` for chips and avatars. Bigger things get softer corners.
 
 ## Elevation
@@ -81,7 +81,7 @@ A hairline (`bg-hairline`) is allowed only where a shadow can't work, such as be
 - Durations: `duration-instant` (90 ms, press), `duration-fast` (160 ms, hover and fades), `duration-base` (240 ms, sheets in), `duration-slow` (420 ms, entrances). Easing: `ease-out` for things arriving, `ease-in-out` for things leaving or looping.
 - In JS (`motion`), use `src/client/lib/motion.ts`: the same durations and easings, plus springs for things under a finger.
 - Everything tappable gets `pressable`: it shrinks to 97% while held.
-- Focus: `focus-ring`, a soft tomato ring for keyboard focus only.
+- Focus: `focus-ring` / `shadow-ring`, a calm ink ring (never tomato, which means action or error). Fields keep their fill when focused; a field with an error uses `shadow-ring-error`.
 - `prefers-reduced-motion` is respected globally (CSS) and by `<MotionConfig reducedMotion="user">`. Never rely on motion to convey meaning.
 - Motion never delays content: no entrance animation longer than `slow`, nothing on scroll.
 
@@ -98,7 +98,7 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **SaveStatus** — the quiet autosave indicator on its own.
 - **Sheet** — the one overlay. A bottom sheet (vaul) on phones; on desktop a centered `dialog` (quick tasks like capture) or a right `panel` (detail views).
 - **Toast** — `toast.undo(message, { onUndo })` after any delete. Also `toast.success`, `toast.error`, `toast.message`. Phones show toasts above the tab bar.
-- **EmptyState** — illustration, a title with a small pasta joke, one plain sentence on what goes here, one next step.
+- **EmptyState** — illustration, a title with a small pasta joke, one plain sentence on what goes here, one next step. It fills the page's `max-w-content` column. On desktop its button is `secondary` when the sidebar's "New idea" is already the screen's primary action; phones keep it primary.
 - **Card** — photo first, optional title (the note stands in), chips over the photo, meta line, author avatar.
 - **Chip / ToggleChip** — status and material labels in four tones; ToggleChip for filters.
 - **Avatar / AvatarStack** — initials on the person's color.

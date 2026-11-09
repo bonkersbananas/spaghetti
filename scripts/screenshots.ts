@@ -65,11 +65,30 @@ try {
 async function capture(page: import("@playwright/test").Page, shot: (typeof shots)[number], width: number) {
   if (shot.width && shot.width !== width) return;
   await page.goto(shot.path, { waitUntil: "networkidle" });
+  // Route chunks can still be rendering at network idle: wait for the screen's
+  // heading, so the images below are in the page before we load them.
+  await page.locator("h1").first().waitFor();
   await page.evaluate(() => document.fonts.ready);
   await shot.prepare?.(page);
+  await loadAllImages(page, shot.name);
   // Let entrance animations and sheets settle.
   await page.waitForTimeout(600);
   const file = join(outDir, `${shot.name}-${width}.png`);
   await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
   console.log(`  ${shot.name}-${width}.png`);
+}
+
+/**
+ * Full-page captures don't scroll, so lazy images below the fold would never
+ * load and cards would show empty blocks. Load every image eagerly, wait for
+ * it to decode, and fail on any that is broken rather than publish it.
+ */
+async function loadAllImages(page: import("@playwright/test").Page, name: string) {
+  const broken = await page.evaluate(async () => {
+    const images = Array.from(document.images);
+    for (const image of images) image.loading = "eager";
+    await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+    return images.filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src);
+  });
+  if (broken.length) throw new Error(`${name}: images failed to load:\n${broken.join("\n")}`);
 }

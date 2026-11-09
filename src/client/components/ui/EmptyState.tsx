@@ -23,11 +23,13 @@ export function EmptyState({ illustration, title, children, action, className }:
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: duration.slow, ease: ease.out }}
-      className={cn("mx-auto flex max-w-sm flex-col items-center px-6 text-center", className)}
+      // Sits in the page's content column (like the header and fields above
+      // it) and centers within that column, not across the whole main area.
+      className={cn("max-w-content flex w-full flex-col items-center text-center", className)}
     >
       <div className="mb-5">{illustration}</div>
-      <h2 className="text-headline text-ink">{title}</h2>
-      {children && <div className="text-body text-ink-soft mt-2">{children}</div>}
+      <h2 className="text-headline text-ink max-w-sm px-4">{title}</h2>
+      {children && <div className="text-body text-ink-soft mt-2 max-w-sm px-4">{children}</div>}
       {action && <div className="mt-6">{action}</div>}
     </motion.div>
   );

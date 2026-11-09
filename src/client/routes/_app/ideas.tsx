@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { useCapture } from "@/lib/capture";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/ideas")({
   component: Ideas,
@@ -12,6 +13,8 @@ export const Route = createFileRoute("/_app/ideas")({
 
 function Ideas() {
   const { setOpen } = useCapture();
+  // On desktop the sidebar's "New idea" is the screen's one primary action.
+  const isDesktop = useIsDesktop();
   return (
     <>
       <PageHeader title="Ideas" subtitle="The inbox. Every print starts as a half-thought." />
@@ -20,7 +23,12 @@ function Ideas() {
         illustration={<EmptyPot />}
         title="Nothing simmering yet"
         action={
-          <Button variant="primary" icon={PlusIcon} shortcut={["C"]} onClick={() => setOpen(true)}>
+          <Button
+            variant={isDesktop ? "secondary" : "primary"}
+            icon={PlusIcon}
+            shortcut={["C"]}
+            onClick={() => setOpen(true)}
+          >
             Capture an idea
           </Button>
         }

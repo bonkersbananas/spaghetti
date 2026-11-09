@@ -465,11 +465,7 @@ function FieldSection() {
             onChange={(e) => edit(setNote, e.target.value)}
             hint="Grows as you type."
           />
-          <TextField
-            label="Nozzle temperature"
-            defaultValue="300"
-            error="The X2D tops out at 350 °C, but 300 is very hot for PLA."
-          />
+          <TextField label="Nozzle temperature" defaultValue="320" error="The X2D tops out at 300 °C." />
           <TextField icon={Icons.SearchIcon} placeholder="Search…" aria-label="Search" />
         </Panel>
         <Panel className="flex flex-col gap-3">
