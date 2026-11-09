@@ -18,6 +18,8 @@ export function serviceWorker(): Plugin {
   return {
     name: "spaghetti:service-worker",
     apply: "build",
+    // After Vite's own plugins, so index.html is already in the bundle when its hash is taken.
+    enforce: "post",
     configResolved(config) {
       publicDir = config.publicDir;
     },
@@ -30,6 +32,10 @@ export function serviceWorker(): Plugin {
       // Built files have hashed names; public/ files don't, so their bytes count too.
       const hash = createHash("sha256").update(precache.join("\n")).update(source);
       for (const name of fromPublic) hash.update(readFileSync(join(publicDir, name)));
+      // The worker caches index.html at install, so a change to it alone (the inline theme script) must make a new version too.
+      const html = bundle["index.html"];
+      if (html?.type !== "asset") throw new Error("The service worker plugin needs index.html in the bundle");
+      hash.update(html.source);
       const version = hash.digest("hex").slice(0, 12);
       this.emitFile({
         type: "asset",
