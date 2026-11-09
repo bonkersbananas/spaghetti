@@ -2,7 +2,7 @@ import { type AttemptSettings, carryOver, describeChanges } from "@shared/attemp
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon, CheckIcon, UndoIcon, WorkedIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
@@ -110,10 +110,12 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
           <div className="flex flex-col gap-2.5 md:flex-row md:items-center">
             <p className="text-small text-ink-soft min-w-0 flex-1">
               <span className="sr-only">It would change: </span>
-              {changes
-                .slice(0, 4)
-                .map((change) => change.text)
-                .join(", ")}
+              {changes.slice(0, 4).map((change, index) => (
+                <Fragment key={change.key}>
+                  {index > 0 && ", "}
+                  <span className="whitespace-nowrap">{change.text}</span>
+                </Fragment>
+              ))}
               {changes.length > 4 && `, and ${changes.length - 4} more`}
             </p>
             <Button
