@@ -256,46 +256,64 @@ export const attemptRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const found = await findLive(db, c.req.param("id"));
     if (!found) return apiError(c, 404, "not_found", notFound);
-    const current = found.attempt;
     const now = new Date();
-    const note = mergeNote(current.note, body.note ?? "");
-    const finishing = current.outcome === null;
-    // The same outcome again (a retry, or the same answer) counts as finished: nothing new to say.
-    const finished = finishing || current.outcome === body.outcome;
-    const tags =
-      finished && body.outcome
-        ? {
-            failureTags:
-              body.outcome === "success" ? current.failureTags : unionTags(current.failureTags, body.failureTags ?? []),
-            successNotes:
-              body.outcome === "failed"
-                ? current.successNotes
-                : unionTags(current.successNotes, body.successNotes ?? []),
-          }
-        : {};
-    const [attempt] = await db
-      .update(attempts)
-      .set({
-        note,
-        ...tags,
-        ...(finishing
+    let current = found.attempt;
+    // The write only goes through if the attempt is still as it was read (its outcome and note): if another
+    // device's finish or edit landed in between, read again and decide again, so no one's outcome is replaced.
+    for (let tries = 0; tries < 4; tries++) {
+      const note = mergeNote(current.note, body.note ?? "");
+      const finishing = current.outcome === null;
+      // The same outcome again (a retry, or the same answer) counts as finished: nothing new to say.
+      const finished = finishing || current.outcome === body.outcome;
+      const tags =
+        finished && body.outcome
           ? {
-              outcome: body.outcome,
-              finishedAt: new Date(
-                Math.min(Math.max(body.finishedAt ?? now.getTime(), current.printedAt.getTime()), now.getTime()),
-              ),
-              finishedBy: c.var.user.id,
+              failureTags:
+                body.outcome === "success"
+                  ? current.failureTags
+                  : unionTags(current.failureTags, body.failureTags ?? []),
+              successNotes:
+                body.outcome === "failed"
+                  ? current.successNotes
+                  : unionTags(current.successNotes, body.successNotes ?? []),
             }
-          : {}),
-        updatedAt: note !== current.note || finishing ? now : current.updatedAt,
-      })
-      .where(eq(attempts.id, current.id))
-      .returning();
-    if (!attempt) return apiError(c, 404, "not_found", notFound);
-    if (finishing || note !== current.note) {
-      await db.update(items).set({ updatedAt: now }).where(eq(items.id, current.itemId));
+          : {};
+      const [attempt] = await db
+        .update(attempts)
+        .set({
+          note,
+          ...tags,
+          ...(finishing
+            ? {
+                outcome: body.outcome,
+                finishedAt: new Date(
+                  Math.min(Math.max(body.finishedAt ?? now.getTime(), current.printedAt.getTime()), now.getTime()),
+                ),
+                finishedBy: c.var.user.id,
+              }
+            : {}),
+          updatedAt: note !== current.note || finishing ? now : current.updatedAt,
+        })
+        .where(
+          and(
+            eq(attempts.id, current.id),
+            isNull(attempts.deletedAt),
+            eq(attempts.note, current.note),
+            current.outcome === null ? isNull(attempts.outcome) : eq(attempts.outcome, current.outcome),
+          ),
+        )
+        .returning();
+      if (attempt) {
+        if (finishing || note !== current.note) {
+          await db.update(items).set({ updatedAt: now }).where(eq(items.id, current.itemId));
+        }
+        return c.json<FinishAttemptResponse>({ attempt: await loadAttempt(db, attempt), finished });
+      }
+      const again = await findLive(db, current.id);
+      if (!again) return apiError(c, 404, "not_found", notFound);
+      current = again.attempt;
     }
-    return c.json<FinishAttemptResponse>({ attempt: await loadAttempt(db, attempt), finished });
+    return apiError(c, 409, "conflict", "That attempt keeps changing. Try again in a moment.");
   })
 
   /** Hides the attempt and its photos at once; restore is the undo. */
