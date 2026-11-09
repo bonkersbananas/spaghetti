@@ -187,6 +187,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@cloudflare/workers-types@5.20261108.1)(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       hono:
         specifier: ^4.13.17
         version: 4.13.17
@@ -1867,6 +1870,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   framer-motion@14.10.1:
     resolution: {integrity: sha512-hT8WLczAcreOHG4EHymMtATztwUc3al1/88/stal3tpxYkMefGNzIPHHgFFHW3iLnrNY36BrKKJDuT2V7o8Tfw==}
@@ -3654,6 +3660,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.3: {}
 
   framer-motion@14.10.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
