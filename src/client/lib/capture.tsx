@@ -147,7 +147,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       try {
         localStorage.setItem(FIRST_KEY, "1");
       } catch {}
-      toast.message("First one in the pot", "Every print starts as an idea like this. Add more whenever they come.");
+      toast.delight("First one in the pot", "Every print starts as an idea like this. Add more whenever they come.");
     }
     return itemId;
   }, [draft, queryClient, setDraft]);

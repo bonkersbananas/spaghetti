@@ -1,6 +1,6 @@
 import { Toaster as SonnerToaster, toast as sonnerToast } from "sonner";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { CheckCircleIcon, WarningIcon } from "./icons";
+import { CheckCircleIcon, SparkleIcon, WarningIcon } from "./icons";
 
 /** Mount once, at the root. Phones: above the tab bar. Desktop: bottom right. */
 export function Toaster() {
@@ -35,6 +35,9 @@ export const toast = {
   message: (message: string, description?: string) => sonnerToast(message, { description }),
   success: (message: string, description?: string) => sonnerToast.success(message, { description }),
   error: (message: string, description?: string) => sonnerToast.error(message, { description }),
+  /** One of the rare moments of delight, such as the very first idea. */
+  delight: (message: string, description?: string) =>
+    sonnerToast(message, { description, icon: <SparkleIcon size={18} weight="fill" />, duration: 5000 }),
   /** A toast with one action, such as "View" after saving from another screen. */
   action: (message: string, action: { label: string; onClick: () => void }, description?: string) =>
     sonnerToast(message, { description, action }),

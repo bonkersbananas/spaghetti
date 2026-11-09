@@ -97,9 +97,13 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **TextField / TextArea** — built for autosave: pass `saveState` to show "Saving… / Saved" beside the label instead of a save button. `appearance="plain"` for writing surfaces that read as text. TextArea grows with its content.
 - **SaveStatus** — the quiet autosave indicator on its own.
 - **Sheet** — the one overlay. A bottom sheet (vaul) on phones; on desktop a centered `dialog` (quick tasks like capture) or a right `panel` (detail views).
-- **Toast** — `toast.undo(message, { onUndo })` after any delete. Also `toast.success`, `toast.error`, `toast.message`. Phones show toasts above the tab bar.
+- **Toast** — `toast.undo(message, { onUndo })` after any delete. Also `toast.success`, `toast.error`, `toast.message`, `toast.action` (one button, such as "View") and `toast.delight` (a sparkle, for the rare moment worth celebrating). Phones show toasts above the tab bar.
 - **EmptyState** — illustration, a title with a small pasta joke, one plain sentence on what goes here, one next step. It fills the page's `max-w-content` column. On desktop its button is `secondary` when the sidebar's "New idea" is already the screen's primary action; phones keep it primary.
-- **Card** — photo first, optional title (the note stands in), chips over the photo, meta line, author avatar.
+- **Card** — photo first, optional title (the note stands in), chips over the photo, a `badge` top right (`PhotoCountBadge`), meta line, author avatar. Without a photo it is a **note card**: the note sits on paper where the photo would be, in the same grid. Pass `link` to make it a router link. Grids of prints use `aspect="portrait"` (4:5).
+- **Photo** — a framed image that shows the photo's own average color while it loads, then fades in. `fit="contain"` in viewers (never crop a print people look at closely), `cover` in grids.
+- **UploadBadge / ProgressRing** — on a photo still on its way to the server: "Saving 42%" with a ring, or "Not saved yet" (semolina, not tomato: it retries on its own).
+- **PhotoThumb / AddPhotoTile** — square thumbnails with a remove button, and the wells to tap for more photos (`lg` when there are none yet, `md` and `sm` at the end of a row). `useFilePicker` gives the hidden input: `camera` opens the camera directly on phones.
+- **NoteField** — a note that reads as text with clickable links and becomes a growing textarea when tapped. TextArea also has `appearance="title"` for an editable heading.
 - **Chip / ToggleChip** — status and material labels in four tones; ToggleChip for filters.
 - **Avatar / AvatarStack** — initials on the person's color.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
@@ -111,6 +115,14 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Phone (< 768 px):** a page header with a large title and the account avatar; a bottom tab bar (Ideas, Builds, capture, Journal, Search) with the capture button in the middle.
 - **Desktop:** a fixed left sidebar on `paper-deep` with the mark, a "New idea" button, the four sections with keyboard hints, the styleguide and the signed-in person.
 - **Keyboard (desktop):** `C` capture, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search. Shortcuts are ignored while typing or while a sheet is open.
+- **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
+- **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
+
+## Ideas
+
+- **Capture** saves at once: the sheet closes, the idea lands at the top of the inbox (with a small spring) and its photos upload in the background with progress on the card. Nothing waits on the network.
+- **The inbox** is a grid of 4:5 cards, newest first: two columns on phones, three, then four on desktop. Text-only ideas are note cards in the same grid. The author is a small avatar, the time is relative ("2 h ago").
+- **Delight**, in small doses: the first idea ever gets a "First one in the pot" toast, once per device; new cards land with a quick spring.
 
 ## Voice
 
