@@ -185,6 +185,16 @@ describe("photos", () => {
     ]);
   });
 
+  it("brings a deleted photo back when it is uploaded again", async () => {
+    const item = await createItem();
+    const photoId = crypto.randomUUID();
+    await uploadPhoto(item.id, photoId, cookie);
+    await request(`/api/photos/${photoId}`, { method: "DELETE", cookie });
+    expect((await list())[0]?.photos).toEqual([]);
+    expect((await uploadPhoto(item.id, photoId, cookie)).status).toBe(200);
+    expect((await list())[0]?.photos.map((p) => p.id)).toEqual([photoId]);
+  });
+
   it("refuses other formats, bad fields and photos for missing ideas", async () => {
     const item = await createItem();
     const photoId = crypto.randomUUID();

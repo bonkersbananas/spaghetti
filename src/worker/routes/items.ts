@@ -226,7 +226,14 @@ export const itemRoutes = new Hono<AppEnv>()
       c.env.PHOTOS.put(photoKey(photoId, "thumb"), thumb.stream(), { httpMetadata }),
     ]);
 
-    if (existing) return c.json<PhotoResponse>({ photo: toApiPhoto(existing) });
+    if (existing) {
+      // An upload means the client wants the photo shown: one deleted meanwhile
+      // (removed, then brought back with undo while its upload was in flight) returns.
+      if (existing.deletedAt) {
+        await c.var.db.update(photos).set({ deletedAt: null }).where(eq(photos.id, photoId));
+      }
+      return c.json<PhotoResponse>({ photo: toApiPhoto(existing) });
+    }
 
     const { width, height, color, takenAt } = fields.data;
     let position = fields.data.position;
