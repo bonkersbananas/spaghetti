@@ -128,12 +128,12 @@
   animation: sg-steam 3.2s var(--sg-ease-in-out) infinite;
 }
 
-/* Toasts (sonner), restyled with tokens. */
+/* Toasts (sonner), restyled with tokens. The toaster ancestor outranks sonner's own injected styles. */
 [data-sonner-toaster] {
   --width: 22rem;
   font-family: var(--font-sans);
 }
-[data-sonner-toast][data-styled="true"] {
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
   background: var(--sg-ink);
   color: var(--sg-paper);
   border: none;
@@ -144,10 +144,14 @@
   line-height: var(--sg-text-small-lh);
   gap: 0.75rem;
 }
-[data-sonner-toast][data-styled="true"] [data-icon] {
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-description] {
+  color: var(--sg-paper);
+  opacity: 0.7;
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-icon] {
   color: var(--sg-semolina);
 }
-[data-sonner-toast][data-styled="true"] [data-button] {
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
   background: rgb(255 250 243 / 0.12);
   color: var(--sg-paper);
   border-radius: var(--radius-sm);
@@ -157,10 +161,10 @@
   padding: 0 0.75rem;
   transition: background-color var(--sg-duration-fast) var(--sg-ease-out);
 }
-[data-sonner-toast][data-styled="true"] [data-button]:hover {
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:hover {
   background: rgb(255 250 243 / 0.2);
 }
-[data-theme="dark"] [data-sonner-toast][data-styled="true"] [data-button] {
+[data-theme="dark"] [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
   background: rgb(27 23 20 / 0.12);
   color: var(--sg-paper);
 }

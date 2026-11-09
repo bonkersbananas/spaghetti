@@ -102,8 +102,8 @@ export interface TextAreaProps extends ComponentPropsWithRef<"textarea"> {
   hint?: ReactNode;
   error?: string;
   saveState?: SaveState;
-  /** "plain" for writing surfaces such as notes: no well, just text. */
-  appearance?: "surface" | "plain";
+  /** "plain" for writing surfaces such as notes: no well, just text. "title" for an editable heading. */
+  appearance?: "surface" | "plain" | "title";
   minRows?: number;
 }
 
@@ -145,9 +145,11 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         }}
         className={cn(
           "resize-none overflow-hidden",
-          appearance === "surface"
-            ? cn(inputSurface, "text-body px-4 py-3")
-            : "text-lead text-ink placeholder:text-ink-ghost md:text-body w-full bg-transparent focus:shadow-none",
+          appearance === "surface" && cn(inputSurface, "text-body px-4 py-3"),
+          appearance === "plain" &&
+            "text-lead text-ink placeholder:text-ink-ghost md:text-body w-full bg-transparent focus:shadow-none",
+          appearance === "title" &&
+            "font-display text-headline text-ink placeholder:text-ink-ghost w-full bg-transparent font-semibold focus:shadow-none",
           error && "shadow-ring-error focus:shadow-ring-error",
         )}
         {...props}

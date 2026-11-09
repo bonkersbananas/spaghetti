@@ -35,6 +35,9 @@ export const toast = {
   message: (message: string, description?: string) => sonnerToast(message, { description }),
   success: (message: string, description?: string) => sonnerToast.success(message, { description }),
   error: (message: string, description?: string) => sonnerToast.error(message, { description }),
+  /** A toast with one action, such as "View" after saving from another screen. */
+  action: (message: string, action: { label: string; onClick: () => void }, description?: string) =>
+    sonnerToast(message, { description, action }),
   undo: (message: string, { onUndo, description, duration = 6000 }: UndoOptions) =>
     sonnerToast(message, {
       description,

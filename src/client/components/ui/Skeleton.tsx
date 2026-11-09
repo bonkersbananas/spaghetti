@@ -8,11 +8,13 @@ export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden className={cn("sg-skeleton", !className?.includes("rounded-") && "rounded-sm", className)} />;
 }
 
-/** Skeleton of a photo Card, for grids that are loading. */
-export function CardSkeleton() {
+const aspects = { landscape: "aspect-4/3", portrait: "aspect-4/5" };
+
+/** Skeleton of a photo Card, for grids that are loading. Match the Card's aspect. */
+export function CardSkeleton({ aspect = "landscape" }: { aspect?: keyof typeof aspects }) {
   return (
-    <div className="bg-cream shadow-soft flex flex-col gap-3 rounded-lg p-2" aria-hidden>
-      <Skeleton className="aspect-4/3 w-full rounded-md" />
+    <div className="bg-cream shadow-soft flex flex-col gap-3 rounded-lg p-1.5" aria-hidden>
+      <Skeleton className={cn("w-full rounded-md", aspects[aspect])} />
       <div className="flex flex-col gap-2 px-2 pb-2">
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-3 w-1/2" />
