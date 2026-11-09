@@ -205,7 +205,7 @@ function AppearanceSection() {
             sidebar's account menu on desktop.
           </p>
         </Panel>
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Offline notice</Label>
           <OfflineBanner waiting={0} />
           <OfflineBanner waiting={2} />
@@ -388,7 +388,7 @@ function MotionSection() {
       title="Motion"
       note="Quick and soft: ease-out for things arriving, a small press on everything tappable, nothing that delays reading. Reduced-motion settings turn movement off."
     >
-      <Panel className="flex flex-col gap-4">
+      <Panel className="flex min-w-0 flex-col gap-4">
         <div>
           <Button size="sm" onClick={() => setOn((v) => !v)}>
             {on ? "Back" : "Play"}
@@ -767,7 +767,7 @@ function PhotoSection() {
       note="A photo shows its own average color while it loads, then fades in. Captures upload in the background: the badge says how far along they are, and “Not saved yet” while a retry waits."
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Photo: loading, then loaded</Label>
           <div className="grid grid-cols-2 gap-3">
             {/* What a loading photo shows: its own average color. */}
@@ -789,7 +789,7 @@ function PhotoSection() {
             </span>
           </div>
         </Panel>
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Thumbnails and add tiles</Label>
           <div className="flex flex-wrap items-center gap-2.5">
             <PhotoThumb src={planterPhoto} alt="Planter" onRemove={() => toast.message("Removed")} />
@@ -855,7 +855,7 @@ function SearchSection() {
       note="Chip rows for filters and suggestions, a filter column on desktop, and matched words highlighted."
     >
       <div className="grid gap-6 lg:grid-cols-2">
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>ChipRow: scrolls sideways on phones, wraps on desktop</Label>
           <ChipRow label="Filters">
             {[
@@ -886,7 +886,7 @@ function SearchSection() {
             ))}
           </FilterGroup>
         </Panel>
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Highlight: the words a search matched (“petg warp”)</Label>
           <p className="text-body text-ink-soft">
             <Highlight text="Corners warped off the cool plate. PETG wants the textured sheet." terms={terms} />
