@@ -1,0 +1,272 @@
+/*
+ * Spaghetti design tokens. The single source of truth for color, type, space,
+ * radii, elevation and motion. docs/design.md explains how to use them.
+ *
+ * Raw values live in :root (light) and [data-theme="dark"]. The @theme block
+ * below maps them to Tailwind utilities (bg-paper, text-ink, shadow-raised…)
+ * and removes Tailwind's default palette, type scale, radii and shadows, so
+ * only these tokens can be used.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces: paper is the page, cream is anything raised above it. */
+  --sg-paper: #f6f1e8;
+  --sg-paper-deep: #eee6d9;
+  --sg-cream: #fffcf7;
+  --sg-well: #ebe3d5;
+
+  /* Ink */
+  --sg-ink: #2b2420;
+  --sg-ink-soft: #5e544b;
+  --sg-ink-faint: #72665c;
+  --sg-ink-ghost: #b4a99d;
+  --sg-hairline: rgb(43 36 32 / 0.08);
+  --sg-scrim: rgb(43 30 20 / 0.32);
+
+  /* Accents: used with restraint. Tomato acts; basil confirms; semolina highlights. */
+  --sg-tomato: #c8462a;
+  --sg-tomato-strong: #b03b20;
+  --sg-tomato-soft: #f9e1d6;
+  --sg-tomato-ink: #a8381c;
+  --sg-basil: #3f6e3b;
+  --sg-basil-soft: #dfebd6;
+  --sg-basil-ink: #3e6b3a;
+  --sg-semolina: #e3ae45;
+  --sg-semolina-soft: #f6e6c1;
+  --sg-semolina-ink: #7f5b12;
+  --sg-on-accent: #fffaf3;
+
+  /* People: each person picks one. Text on them uses --sg-on-accent. */
+  --sg-person-tomato: #c8462a;
+  --sg-person-basil: #3f6e3b;
+  --sg-person-semolina: #b9861f;
+  --sg-person-plum: #8e5b86;
+  --sg-person-sea: #3c7489;
+  --sg-person-clay: #985c35;
+
+  /* Elevation: soft, warm shadows instead of borders. */
+  --sg-shadow-soft: 0 1px 1px rgb(80 50 20 / 0.04), 0 2px 6px rgb(80 50 20 / 0.05);
+  --sg-shadow-raised: 0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08);
+  --sg-shadow-float: 0 2px 6px rgb(80 50 20 / 0.06), 0 16px 48px rgb(80 50 20 / 0.16);
+  --sg-shadow-well: inset 0 1px 2px rgb(80 50 20 / 0.07);
+  --sg-shadow-bar: 0 -1px 0 rgb(43 36 32 / 0.05), 0 -8px 24px rgb(80 50 20 / 0.06);
+  --sg-ring: 0 0 0 3px rgb(200 70 42 / 0.28);
+
+  /* Type sizes: phone first, then desktop below. */
+  --sg-text-caption: 0.75rem;
+  --sg-text-caption-lh: 1rem;
+  --sg-text-small: 0.875rem;
+  --sg-text-small-lh: 1.25rem;
+  --sg-text-body: 1rem;
+  --sg-text-body-lh: 1.5rem;
+  --sg-text-lead: 1.125rem;
+  --sg-text-lead-lh: 1.625rem;
+  --sg-text-title: 1.25rem;
+  --sg-text-title-lh: 1.625rem;
+  --sg-text-headline: 1.75rem;
+  --sg-text-headline-lh: 2.125rem;
+  --sg-text-display: 2.25rem;
+  --sg-text-display-lh: 2.5rem;
+
+  /* Layout */
+  --sg-tabbar-height: 4.25rem;
+  --sg-sidebar-width: 16rem;
+  --sg-content-width: 45rem;
+  --sg-wide-width: 72rem;
+  --sg-safe-top: env(safe-area-inset-top, 0px);
+  --sg-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Motion */
+  --sg-duration-instant: 90ms;
+  --sg-duration-fast: 160ms;
+  --sg-duration-base: 240ms;
+  --sg-duration-slow: 420ms;
+  --sg-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --sg-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --sg-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --sg-press-scale: 0.97;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --sg-text-small: 0.8125rem;
+    --sg-text-small-lh: 1.125rem;
+    --sg-text-body: 0.9375rem;
+    --sg-text-body-lh: 1.4375rem;
+    --sg-text-lead: 1.0625rem;
+    --sg-text-lead-lh: 1.625rem;
+    --sg-text-title: 1.25rem;
+    --sg-text-title-lh: 1.75rem;
+    --sg-text-headline: 1.875rem;
+    --sg-text-headline-lh: 2.25rem;
+    --sg-text-display: 2.75rem;
+    --sg-text-display-lh: 3rem;
+  }
+}
+
+/* Dark theme: defined now so it is a switch later, not a rewrite. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --sg-paper: #1b1714;
+  --sg-paper-deep: #151210;
+  --sg-cream: #25201c;
+  --sg-well: #120f0d;
+  --sg-ink: #f2ebe1;
+  --sg-ink-soft: #cdc1b4;
+  --sg-ink-faint: #a69a8e;
+  --sg-ink-ghost: #6b6158;
+  --sg-hairline: rgb(242 235 225 / 0.08);
+  --sg-scrim: rgb(0 0 0 / 0.5);
+  --sg-tomato: #ee6b47;
+  --sg-tomato-strong: #f4835f;
+  --sg-tomato-soft: #3d2219;
+  --sg-tomato-ink: #f59a7c;
+  --sg-basil: #79a872;
+  --sg-basil-soft: #23301f;
+  --sg-basil-ink: #9cc794;
+  --sg-semolina: #e8b955;
+  --sg-semolina-soft: #3a2f17;
+  --sg-semolina-ink: #f0cd7f;
+  --sg-on-accent: #1b1714;
+  --sg-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3);
+  --sg-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
+  --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 48px rgb(0 0 0 / 0.5);
+  --sg-shadow-well: inset 0 1px 2px rgb(0 0 0 / 0.4);
+  --sg-shadow-bar: 0 -1px 0 rgb(242 235 225 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
+  --sg-ring: 0 0 0 3px rgb(238 107 71 / 0.4);
+}
+
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-paper: var(--sg-paper);
+  --color-paper-deep: var(--sg-paper-deep);
+  --color-cream: var(--sg-cream);
+  --color-well: var(--sg-well);
+  --color-ink: var(--sg-ink);
+  --color-ink-soft: var(--sg-ink-soft);
+  --color-ink-faint: var(--sg-ink-faint);
+  --color-ink-ghost: var(--sg-ink-ghost);
+  --color-hairline: var(--sg-hairline);
+  --color-scrim: var(--sg-scrim);
+  --color-tomato: var(--sg-tomato);
+  --color-tomato-strong: var(--sg-tomato-strong);
+  --color-tomato-soft: var(--sg-tomato-soft);
+  --color-tomato-ink: var(--sg-tomato-ink);
+  --color-basil: var(--sg-basil);
+  --color-basil-soft: var(--sg-basil-soft);
+  --color-basil-ink: var(--sg-basil-ink);
+  --color-semolina: var(--sg-semolina);
+  --color-semolina-soft: var(--sg-semolina-soft);
+  --color-semolina-ink: var(--sg-semolina-ink);
+  --color-on-accent: var(--sg-on-accent);
+  --color-person-tomato: var(--sg-person-tomato);
+  --color-person-basil: var(--sg-person-basil);
+  --color-person-semolina: var(--sg-person-semolina);
+  --color-person-plum: var(--sg-person-plum);
+  --color-person-sea: var(--sg-person-sea);
+  --color-person-clay: var(--sg-person-clay);
+
+  --font-*: initial;
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
+  --font-display--font-variation-settings: "SOFT" 100, "WONK" 0;
+
+  --text-*: initial;
+  --text-caption: var(--sg-text-caption);
+  --text-caption--line-height: var(--sg-text-caption-lh);
+  --text-small: var(--sg-text-small);
+  --text-small--line-height: var(--sg-text-small-lh);
+  --text-body: var(--sg-text-body);
+  --text-body--line-height: var(--sg-text-body-lh);
+  --text-lead: var(--sg-text-lead);
+  --text-lead--line-height: var(--sg-text-lead-lh);
+  --text-title: var(--sg-text-title);
+  --text-title--line-height: var(--sg-text-title-lh);
+  --text-title--letter-spacing: -0.01em;
+  --text-headline: var(--sg-text-headline);
+  --text-headline--line-height: var(--sg-text-headline-lh);
+  --text-headline--letter-spacing: -0.02em;
+  --text-display: var(--sg-text-display);
+  --text-display--line-height: var(--sg-text-display-lh);
+  --text-display--letter-spacing: -0.025em;
+
+  --radius-*: initial;
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-pill: 999px;
+
+  --shadow-*: initial;
+  --shadow-soft: var(--sg-shadow-soft);
+  --shadow-raised: var(--sg-shadow-raised);
+  --shadow-float: var(--sg-shadow-float);
+  --shadow-well: var(--sg-shadow-well);
+  --shadow-bar: var(--sg-shadow-bar);
+  --shadow-ring: var(--sg-ring);
+
+  --ease-*: initial;
+  --ease-out: var(--sg-ease-out);
+  --ease-in-out: var(--sg-ease-in-out);
+  --ease-bounce: var(--sg-ease-bounce);
+
+  --spacing-tabbar: var(--sg-tabbar-height);
+  --spacing-sidebar: var(--sg-sidebar-width);
+  --container-content: var(--sg-content-width);
+  --container-wide: var(--sg-wide-width);
+}
+
+/* Durations as utilities: duration-instant, duration-fast, duration-base, duration-slow. */
+@utility duration-instant {
+  transition-duration: var(--sg-duration-instant);
+}
+@utility duration-fast {
+  transition-duration: var(--sg-duration-fast);
+}
+@utility duration-base {
+  transition-duration: var(--sg-duration-base);
+}
+@utility duration-slow {
+  transition-duration: var(--sg-duration-slow);
+}
+
+/* Tactile press: anything tappable shrinks a touch while held. */
+@utility pressable {
+  transition-property: transform, background-color, color, box-shadow, opacity;
+  transition-duration: var(--sg-duration-fast);
+  transition-timing-function: var(--sg-ease-out);
+  -webkit-tap-highlight-color: transparent;
+  &:active:not(:disabled) {
+    transform: scale(var(--sg-press-scale));
+    transition-duration: var(--sg-duration-instant);
+  }
+}
+
+/* The one focus style: a soft tomato ring, only for keyboard focus. */
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow: var(--sg-ring);
+  }
+}
+
+@utility pt-safe {
+  padding-top: var(--sg-safe-top);
+}
+@utility pb-safe {
+  padding-bottom: var(--sg-safe-bottom);
+}
+@utility pb-tabbar {
+  padding-bottom: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom) + 1.5rem);
+}
+@utility h-tabbar-safe {
+  height: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom));
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
