@@ -39,7 +39,7 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
 }
 
 const selectedTones: Record<ChipTone, string> = {
-  neutral: "bg-ink text-paper",
+  neutral: "bg-select text-on-select",
   tomato: "bg-tomato-soft text-tomato-ink ring-1 ring-inset ring-tomato/40",
   basil: "bg-basil-soft text-basil-ink ring-1 ring-inset ring-basil/40",
   semolina: "bg-semolina-soft text-semolina-ink ring-1 ring-inset ring-semolina/50",

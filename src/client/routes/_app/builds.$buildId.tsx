@@ -55,7 +55,7 @@ const back = { to: "/builds", label: "Builds" } as const;
 
 function BuildDetail() {
   const { buildId } = Route.useParams();
-  const { item, isPending } = useItem(buildId);
+  const { item, isPending, error } = useItem(buildId);
   const navigate = useNavigate();
   const isIdea = item?.stage === "idea";
   // Taken back to an idea (undo, or on the other phone): it lives under Ideas again.
@@ -80,7 +80,7 @@ function BuildDetail() {
         <EmptyState
           className="py-10 md:py-20"
           illustration={<EmptyPot />}
-          title="This one boiled over"
+          title={error ? "This one is out of reach" : "This one boiled over"}
           action={
             <Link to="/builds" className="focus-ring rounded-md">
               <Button variant="secondary" tabIndex={-1}>
@@ -89,7 +89,9 @@ function BuildDetail() {
             </Link>
           }
         >
-          This build was deleted, or it never made it here.
+          {error
+            ? "It can't load without a connection. It will be here when you're back."
+            : "This build was deleted, or it never made it here."}
         </EmptyState>
       )}
     </>
@@ -306,7 +308,7 @@ function Build({ item }: { item: ItemView }) {
             <h2 id="story" className="text-headline text-ink">
               Attempts
               {item.attempts.length > 0 && (
-                <span className="text-small text-ink-ghost tabular ml-2 align-middle font-sans font-semibold">
+                <span className="text-small text-ink-faint tabular ml-2 align-middle font-sans font-semibold">
                   {item.attempts.length}
                 </span>
               )}

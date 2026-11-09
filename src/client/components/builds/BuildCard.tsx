@@ -57,7 +57,7 @@ export function BuildCard({ item, person }: { item: ItemView; person?: Person })
           last ? (
             <OutcomeChip outcome={last.outcome} className="shadow-soft" />
           ) : (
-            <Chip className="bg-cream/90 shadow-soft">Not printed yet</Chip>
+            <Chip className="bg-veil text-on-veil backdrop-blur-md">Not printed yet</Chip>
           )
         }
         meta={activityLine(item)}

@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_app/ideas/$ideaId")({
 
 function IdeaDetail() {
   const { ideaId } = Route.useParams();
-  const { item, isPending } = useItem(ideaId);
+  const { item, isPending, error } = useItem(ideaId);
   const navigate = useNavigate();
   const isBuild = !!item && item.stage !== "idea";
   // It grew into a build (here or on the other phone): that's where it lives now.
@@ -56,7 +56,7 @@ function IdeaDetail() {
         <EmptyState
           className="py-10 md:py-20"
           illustration={<EmptyPot />}
-          title="This one boiled over"
+          title={error ? "This one is out of reach" : "This one boiled over"}
           action={
             <Link to="/ideas" className="focus-ring rounded-md">
               <Button variant="secondary" tabIndex={-1}>
@@ -65,7 +65,9 @@ function IdeaDetail() {
             </Link>
           }
         >
-          This idea was deleted, or it never made it here.
+          {error
+            ? "It can't load without a connection. It will be here when you're back."
+            : "This idea was deleted, or it never made it here."}
         </EmptyState>
       )}
     </>

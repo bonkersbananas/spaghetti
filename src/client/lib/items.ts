@@ -255,7 +255,7 @@ function useList(list: ItemList) {
     const fromServer = server.map((item) => withOutbox(item, state)).filter((item) => listOf(item.stage) === list);
     return [...pending, ...fromServer].sort((a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1));
   }, [query.data, state, list]);
-  return { items, isPending: query.isPending && !state.entries.length, error: query.error };
+  return { items, isPending: query.isPending && !state.entries.length, error: query.error, refetch: query.refetch };
 }
 
 /**
@@ -292,7 +292,7 @@ export function useItem(id: string) {
     if (pendingEntry) return fromEntry(pendingEntry, state);
     return query.data ? withOutbox(query.data, state) : query.data;
   }, [pendingEntry, query.data, state]);
-  return { item, isPending: !item && query.isPending };
+  return { item, isPending: !item && query.isPending, error: query.error };
 }
 
 /** Saves a title or note change; used by the detail screen's autosave. */

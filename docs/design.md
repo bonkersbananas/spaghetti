@@ -23,7 +23,10 @@ Use the semantic tokens as Tailwind classes (`bg-paper`, `text-ink-soft`, `fill-
 | `paper`                                        | The page background.                                                                               |
 | `paper-deep`                                   | The desktop sidebar, recessed areas.                                                               |
 | `cream`                                        | Anything raised: cards, sheets, the tab bar.                                                       |
+| `lifted`                                       | Sheets, dialogs and menus. The same as `cream` by day, a step lighter at night.                    |
 | `well`                                         | Photo placeholders, skeletons. Fields use `bg-ink/4`, which reads as a well on paper and on cream. |
+| `veil` / `veil-strong` / `on-veil`             | Badges and buttons drawn over photos: dark glass, cream text, in both themes.                      |
+| `select` / `on-select`, `toast` / `toast-fg`   | A selected chip; toasts. Both invert the page by day and settle into surfaces at night.            |
 | `ink` / `ink-soft` / `ink-faint` / `ink-ghost` | Headings and text / body and labels / meta and hints (AA on paper) / placeholders and disabled.    |
 | `tomato`                                       | The one action color: one primary (tomato) button per screen. Also errors. Never focus.                 |
 | `basil`                                        | Success: a print that worked, "Saved".                                                             |
@@ -33,7 +36,60 @@ Use the semantic tokens as Tailwind classes (`bg-paper`, `text-ink-soft`, `fill-
 
 Accents are spice, not sauce: most of a screen is paper, cream and ink.
 
-**Dark mode** is defined (`[data-theme="dark"]` in tokens.css) but not switched on yet. Because everything uses tokens, turning it on is a matter of setting the attribute; check new tokens in both themes.
+### Dark mode
+
+Light, dark or system, chosen in the account sheet (phone) or the sidebar's account menu (desktop) and remembered per device (`localStorage`, key `sg-theme`). `lib/theme.ts` puts the result on `<html data-theme>`; a tiny inline script in `index.html` does the same before the first paint, so there is no flash. Everything is built on tokens, so a new component gets a dark mode for free: check it in both with the switch on `/styleguide`.
+
+The night version is the same kitchen notebook with the lights down:
+
+- **Surfaces are warm browns**, never black or grey: paper `#1b1714`, cards `cream` a step lighter, sheets and menus (`lifted`) another step. `well` and `paper-deep` go darker, because they are recessed.
+- **Ink is soft cream**, not white (`#ece4d9`), with the same four steps.
+- **Accents keep their hue and lose the glow.** Tomato stays the deep daytime tomato on fills (cream text on it is AA); only text and icons on dark surfaces use the lighter `tomato-ink`. Basil and semolina are a touch deeper; their `-soft` and `-ink` pairs are swapped for dark backgrounds with light text.
+- **Elevation is lifting, not shadow.** Shadows barely show on dark, so cards, buttons and sheets get a lighter surface and a faint lit top edge (an inset highlight in `shadow-soft`/`raised`/`float`); hovered cards use `bg-lifted`.
+- **Things over photos** (count badges, upload badges, remove buttons) use `veil` / `on-veil`: dark glass with cream text in both themes, because a photo is the same photo at night. Photos sit on a dark frame, never a glaring one.
+- **Toasts** are dark chips by day and a lifted surface at night (`toast` / `toast-fg`), so they don't glow. A **selected chip** is `select` / `on-select`.
+- **The app mark** (`mark-tile`, `mark-stroke`) never changes: it is an icon. Illustration ground shadows use `shade`.
+- **Outside the page:** the `theme-color` meta follows the theme (browser toolbar and Android status bar), and the `<link rel="manifest">` switches to `manifest-dark.webmanifest` (same icons, dark `background_color` for the splash) when the app is dark. iOS draws a standalone app's status bar from the system appearance, not from the page, so an app theme that differs from the system one can show a mismatched bar there.
+
+### Contrast
+
+WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons and large UI. Every pair the app uses is listed in `scripts/lib/contrast.ts`, measured against the real token values, and `test/unit/contrast.test.ts` fails if any drops below AA in either theme. `node scripts/lib/contrast.ts` prints the table below. `ink-ghost` is for disabled controls and decoration only, never for text people must read (placeholders use `ink-faint`).
+
+| Pair | Needs | Light | Dark |
+| --- | --- | --- | --- |
+| Body text | 4.5:1 | 13.6 | 14.1 |
+| Body text on cards | 4.5:1 | 14.9 | 12.8 |
+| Body text on sheets | 4.5:1 | 14.9 | 11.5 |
+| Labels and body copy | 4.5:1 | 6.6 | 9.4 |
+| Labels on cards | 4.5:1 | 7.2 | 8.5 |
+| Meta and hints | 4.5:1 | 5.1 | 6.0 |
+| Meta on cards | 4.5:1 | 5.6 | 5.4 |
+| Meta on sheets | 4.5:1 | 5.6 | 4.9 |
+| Meta on the sidebar | 4.5:1 | 4.7 | 6.3 |
+| Text typed in a field | 4.5:1 | 13.8 | 11.6 |
+| Placeholder in a field | 4.5:1 | 5.2 | 4.9 |
+| Error text | 4.5:1 | 5.7 | 8.3 |
+| Error text on cards | 4.5:1 | 6.3 | 7.5 |
+| Active tab label | 4.5:1 | 6.3 | 7.5 |
+| Tomato chip | 4.5:1 | 5.2 | 6.9 |
+| Basil chip | 4.5:1 | 5.0 | 7.3 |
+| Semolina chip | 4.5:1 | 5.0 | 8.4 |
+| Neutral chip | 4.5:1 | 5.9 | 8.2 |
+| Selected chip | 4.5:1 | 13.6 | 11.4 |
+| Primary button | 4.5:1 | 4.6 | 4.6 |
+| Primary button, hovered | 4.5:1 | 5.8 | 5.8 |
+| Badge over a white photo | 4.5:1 | 4.6 | 4.6 |
+| Toast | 4.5:1 | 13.6 | 10.0 |
+| Initials on tomato avatar | 4.5:1 | 4.6 | 4.6 |
+| Initials on basil avatar | 4.5:1 | 5.8 | 5.8 |
+| Initials on semolina avatar | 4.5:1 | 4.5 | 4.5 |
+| Initials on plum avatar | 4.5:1 | 5.1 | 5.1 |
+| Initials on sea avatar | 4.5:1 | 5.0 | 5.0 |
+| Initials on clay avatar | 4.5:1 | 5.2 | 5.2 |
+| Active icon (tomato) on the sidebar | 3:1 | 3.9 | 3.9 |
+| Basil icon on cards | 3:1 | 5.9 | 5.3 |
+
+Badges over photos are measured against a white photo, the worst case.
 
 ## Type
 
@@ -72,6 +128,8 @@ Surfaces are separated by soft, warm shadows, not borders.
 | `shadow-soft`   | Cards and secondary buttons at rest.         |
 | `shadow-raised` | Hover, the sign-in card, the capture button. |
 | `shadow-float`  | Sheets, dialogs, toasts.                     |
+
+In dark mode the same classes lift instead: a lighter surface and a faint lit top edge, not a darker shadow.
 | `shadow-bar`    | The phone tab bar (casts upward).            |
 
 A hairline (`bg-hairline`) is allowed only where a shadow can't work, such as between rows inside one surface.
@@ -113,6 +171,9 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Avatar / AvatarStack** — initials on the person's color.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
 - **Kbd** — keyboard hints, hidden on phones.
+- **SegmentedControl** — pick one of a few short options (appearance: light, dark, system): a recessed channel with a lifted thumb, real radio inputs underneath. `ThemeSwitch` (shell) is the appearance one.
+- **Popover** — a small floating panel for desktop menus, such as the sidebar's account menu. Tasks use Sheet.
+- **OfflineNotice** (shell) — a quiet strip at the top of the page while the server can't be reached, with how many captures are waiting. The only place the app complains about the connection.
 - **Illustrations** (`components/illustrations`) — 160×120 spot illustrations: ink outlines at 2.5 px, round caps, one tinted circle behind, one or two accent fills. The `Mark` is the app icon: a twirl of spaghetti on a tomato tile.
 
 ## App shell
@@ -149,3 +210,13 @@ Short, warm, plain. Second person, sentence case, no exclamation marks. A pasta 
 2. If a screen needs something the system lacks, add it to the system (a token or a component in `components/ui`), document it here, and show it in `/styleguide`.
 3. Design both layouts: check every screen at 390 px and 1440 px with `pnpm screenshots`, and look at the result before calling it done.
 4. Loading is a skeleton, saving is automatic, deleting is undoable.
+
+## Offline
+
+Spaghetti opens and captures without a connection. The build ships a small hand-written service worker (`src/sw/sw.js`, assembled by `scripts/vite-service-worker.ts`; `vite dev` has none):
+
+- It **precaches the app shell**: `index.html`, scripts, styles, fonts, icons and both manifests, versioned by a hash of the build. The app opens instantly, with or without signal.
+- **`/api` is never cached**, except photos (`/api/photos/:id/thumb|large`, which never change once saved): photos already seen show offline. Everything else goes to the network every time, so nobody sees another person's stale edits as current. Offline, the inbox says the pot is out of reach rather than showing old data. Signing out clears the photo cache.
+- **Captures** keep working: the app opens as the person last signed in (remembered locally; the server checks again as soon as it can, and a 401 signs out), a capture goes into the IndexedDB outbox, and it is sent when the connection is back. The `OfflineNotice` is the one place that says so; `lib/connection.ts` decides (the browser's `online` flag, failed requests, and a quiet `/api/health` probe).
+- **Updates** install in the background. A quiet "A new version is ready" toast offers Refresh; otherwise the new version takes over after every tab has been closed. Nothing captured is lost either way.
+- **Install:** `manifest.webmanifest` (`id`, standalone, any and maskable icons) and `manifest-dark.webmanifest`, which the page swaps in when dark so a dark install gets a dark splash.

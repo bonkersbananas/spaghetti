@@ -19,7 +19,7 @@ export function DropOverlay({ visible }: { visible: boolean }) {
             initial={{ scale: 0.96, y: 6 }}
             animate={{ scale: 1, y: 0 }}
             transition={{ duration: duration.base, ease: ease.out }}
-            className="bg-cream shadow-float flex flex-col items-center gap-3 rounded-xl px-12 py-10 text-center"
+            className="bg-lifted shadow-float flex flex-col items-center gap-3 rounded-xl px-12 py-10 text-center"
           >
             <span className="bg-semolina-soft text-semolina-ink flex size-14 items-center justify-center rounded-full">
               <DropIcon size={28} aria-hidden />

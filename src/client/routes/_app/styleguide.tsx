@@ -9,7 +9,9 @@ import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
 import { TagPicker } from "@/components/builds/TagPicker";
 import { EmptyPot, Mark, NoodleSearch, OpenNotebook, SpoolStrand } from "@/components/illustrations";
+import { OfflineBanner } from "@/components/shell/OfflineNotice";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { ThemeSwitch } from "@/components/shell/ThemeSwitch";
 import { Avatar, AvatarStack } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
@@ -42,6 +44,7 @@ export const Route = createFileRoute("/_app/styleguide")({
  */
 const toc = [
   ["color", "Color"],
+  ["appearance", "Dark & offline"],
   ["type", "Type"],
   ["space", "Space & radii"],
   ["elevation", "Elevation"],
@@ -83,6 +86,7 @@ function Styleguide() {
         </nav>
         <div className="flex min-w-0 flex-1 flex-col gap-16 pb-10">
           <ColorSection />
+          <AppearanceSection />
           <TypeSection />
           <SpaceSection />
           <ElevationSection />
@@ -131,7 +135,8 @@ const swatchGroups: Array<{ label: string; swatches: Array<[token: string, class
     swatches: [
       ["paper", "bg-paper", "The page"],
       ["paper-deep", "bg-paper-deep", "Sidebar, recessed areas"],
-      ["cream", "bg-cream", "Cards, sheets, fields"],
+      ["cream", "bg-cream", "Cards, the tab bar, fields"],
+      ["lifted", "bg-lifted", "Sheets, dialogs, menus"],
       ["well", "bg-well", "Photo placeholders, skeletons"],
     ],
   },
@@ -142,6 +147,17 @@ const swatchGroups: Array<{ label: string; swatches: Array<[token: string, class
       ["ink-soft", "bg-ink-soft", "Body copy, labels"],
       ["ink-faint", "bg-ink-faint", "Meta, hints (AA on paper)"],
       ["ink-ghost", "bg-ink-ghost", "Placeholders, disabled"],
+    ],
+  },
+  {
+    label: "Over photos and inverse",
+    swatches: [
+      ["veil", "bg-veil", "Badges and buttons on photos"],
+      ["veil-strong", "bg-veil-strong", "Upload badge, remove buttons"],
+      ["select", "bg-select", "A selected chip"],
+      ["toast", "bg-toast", "Toasts"],
+      ["scrim", "bg-scrim", "Behind sheets"],
+      ["hairline", "bg-hairline", "Between rows, rarely"],
     ],
   },
   {
@@ -167,6 +183,34 @@ const swatchGroups: Array<{ label: string; swatches: Array<[token: string, class
     ],
   },
 ];
+
+function AppearanceSection() {
+  return (
+    <Section
+      id="appearance"
+      title="Dark & offline"
+      note="Every token has a dark value, so every screen has a night version. Switch here to check a component in both. In the dark, elevation comes from lighter surfaces and a lit top edge rather than shadow."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel className="flex flex-col gap-6">
+          <ThemeSwitch />
+          <p className="text-small text-ink-faint">
+            Light, dark or follow the system, remembered per device. It lives in the account sheet on phones and the
+            sidebar's account menu on desktop.
+          </p>
+        </Panel>
+        <Panel className="flex flex-col gap-4">
+          <Label>Offline notice</Label>
+          <OfflineBanner waiting={0} />
+          <OfflineBanner waiting={2} />
+          <p className="text-small text-ink-faint">
+            The one quiet place that says there is no connection. Captures wait in the outbox on this device.
+          </p>
+        </Panel>
+      </div>
+    </Section>
+  );
+}
 
 function ColorSection() {
   return (

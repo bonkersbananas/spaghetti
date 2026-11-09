@@ -57,7 +57,7 @@ export function Card({
   const heading = title || (noteCard ? null : note);
   const rootClass = cn(
     "group bg-cream shadow-soft flex w-full flex-col rounded-lg p-1.5 text-left",
-    (onClick || link) && "pressable focus-ring hover:shadow-raised cursor-pointer",
+    (onClick || link) && "pressable focus-ring hover:shadow-raised hover:bg-lifted cursor-pointer",
     className,
   );
 
@@ -125,7 +125,7 @@ export function Card({
 /** "3" with a stack icon: an item has more photos than its cover. */
 export function PhotoCountBadge({ count }: { count: number }) {
   return (
-    <span className="rounded-pill bg-ink/60 text-caption text-paper inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
+    <span className="rounded-pill bg-veil text-caption text-on-veil inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
       <ImageIcon size={13} weight="bold" aria-hidden />
       {count}
       <span className="sr-only">photos</span>

@@ -53,6 +53,15 @@ export const toast = {
   /** A toast with one action, such as "View" after saving from another screen. */
   action: (message: string, action: { label: string; onClick: () => void }, description?: string) =>
     sonnerToast(message, { description, action }),
+  /** A new version of the app is installed and waiting: stays until it is taken or dismissed. */
+  update: (onRefresh: () => void) =>
+    sonnerToast("A new version is ready", {
+      id: "app-update",
+      description: "Refresh to get it. Nothing you captured is lost.",
+      duration: Number.POSITIVE_INFINITY,
+      dismissible: true,
+      action: { label: "Refresh", onClick: onRefresh },
+    }),
   undo: (message: string, { onUndo, description, duration = 6000 }: UndoOptions) =>
     sonnerToast(message, {
       description,

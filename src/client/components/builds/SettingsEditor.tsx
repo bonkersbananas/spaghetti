@@ -206,6 +206,7 @@ export function SettingsEditor({ value, onChange, outcome, className }: Settings
       <Group title="Nozzle">
         <SegmentedControl<Nozzle>
           label="Nozzle"
+          labelHidden
           size="sm"
           options={[
             { value: "main", label: "Main" },

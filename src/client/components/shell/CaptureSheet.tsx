@@ -174,6 +174,7 @@ export function CaptureSheet() {
         {auto.kind !== "idea" && (
           <SegmentedControl
             label="Where it goes"
+            labelHidden
             size="sm"
             options={[
               {

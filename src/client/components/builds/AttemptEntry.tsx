@@ -220,7 +220,7 @@ function EntryPhoto({
         />
       )}
       {more > 0 && (
-        <span className="bg-ink/45 text-title text-paper absolute inset-0 flex items-center justify-center font-semibold">
+        <span className="bg-veil text-title text-on-veil absolute inset-0 flex items-center justify-center font-semibold">
           +{more}
         </span>
       )}

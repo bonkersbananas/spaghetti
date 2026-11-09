@@ -107,7 +107,7 @@ function Section({
   return (
     <section className="flex flex-col gap-4 md:gap-5">
       <h2 className={quiet ? "text-title text-ink-soft" : "text-headline text-ink"}>
-        {title} <span className="text-ink-ghost text-small tabular align-middle font-sans font-semibold">{count}</span>
+        {title} <span className="text-ink-faint text-small tabular align-middle font-sans font-semibold">{count}</span>
       </h2>
       {children}
     </section>

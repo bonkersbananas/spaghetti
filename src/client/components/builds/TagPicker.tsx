@@ -83,7 +83,7 @@ export function TagPicker({ kind, value, onChange, label, visible = 8, className
                 setAdding(false);
               }
             }}
-            className="rounded-pill bg-ink/4 shadow-well text-small text-ink placeholder:text-ink-ghost focus:shadow-ring h-9 w-44 px-3.5 font-semibold md:h-8"
+            className="rounded-pill bg-ink/4 shadow-well text-small text-ink placeholder:text-ink-faint focus:shadow-ring h-9 w-44 px-3.5 font-semibold md:h-8"
           />
         ) : (
           <ToggleChip

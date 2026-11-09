@@ -59,7 +59,8 @@ test("signs in, browses the four sections, opens capture and signs out", async (
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   } else {
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
   }
   await expect(page).toHaveURL(/\/sign-in/);
   await page.goto("/ideas");

@@ -15,15 +15,29 @@
   --sg-paper: #f6f1e8;
   --sg-paper-deep: #eee6d9;
   --sg-cream: #fffcf7;
+  /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
+  --sg-lifted: #fffcf7;
   --sg-well: #ebe3d5;
 
   /* Ink */
   --sg-ink: #2b2420;
   --sg-ink-soft: #5e544b;
-  --sg-ink-faint: #72665c;
+  --sg-ink-faint: #6f645a;
   --sg-ink-ghost: #b4a99d;
   --sg-hairline: rgb(43 36 32 / 0.08);
   --sg-scrim: rgb(43 30 20 / 0.32);
+  /* Things drawn over photos (badges, remove buttons) are dark glass in both themes: a photo is the same photo at night. */
+  --sg-veil: rgb(32 24 18 / 0.62);
+  --sg-veil-strong: rgb(32 24 18 / 0.8);
+  --sg-on-veil: #fff8ee;
+  /* A selected chip, the inverse of the page. */
+  --sg-select: #2b2420;
+  --sg-on-select: #f6f1e8;
+  /* Toasts are dark chips in light mode and a lifted surface in dark mode. */
+  --sg-toast: #2b2420;
+  --sg-toast-fg: #f6f1e8;
+  /* The ground shadow under illustrations. */
+  --sg-shade: rgb(43 36 32 / 0.06);
 
   /* Accents: used with restraint. Tomato acts; basil confirms; semolina highlights. */
   --sg-tomato: #c8462a;
@@ -37,11 +51,14 @@
   --sg-semolina-soft: #f6e6c1;
   --sg-semolina-ink: #7f5b12;
   --sg-on-accent: #fffaf3;
+  /* The app mark never changes with the theme: it is an icon. */
+  --sg-mark-tile: #c8462a;
+  --sg-mark-stroke: #fffaf3;
 
   /* People: each person picks one. Text on them uses --sg-on-accent. */
   --sg-person-tomato: #c8462a;
   --sg-person-basil: #3f6e3b;
-  --sg-person-semolina: #b9861f;
+  --sg-person-semolina: #946d17;
   --sg-person-plum: #8e5b86;
   --sg-person-sea: #3c7489;
   --sg-person-clay: #985c35;
@@ -110,37 +127,48 @@
   }
 }
 
-/* Dark theme: defined now so it is a switch later, not a rewrite. */
+/*
+ * Dark theme: the same kitchen notebook with the lights down. Surfaces are
+ * warm browns, never black or grey; ink is soft cream rather than white;
+ * accents keep their hue but sit a little deeper so they read without
+ * glowing. Elevation works by lifting (lighter surfaces and a lit top edge)
+ * instead of by shadow. Applied by lib/theme.ts, which sets data-theme on
+ * <html> from the person's choice or the system setting.
+ */
 [data-theme="dark"] {
   color-scheme: dark;
   --sg-paper: #1b1714;
   --sg-paper-deep: #151210;
   --sg-cream: #25201c;
+  --sg-lifted: #2e2823;
   --sg-well: #120f0d;
-  --sg-ink: #f2ebe1;
-  --sg-ink-soft: #cdc1b4;
-  --sg-ink-faint: #a69a8e;
+  --sg-ink: #ece4d9;
+  --sg-ink-soft: #c6bab0;
+  --sg-ink-faint: #a09488;
   --sg-ink-ghost: #6b6158;
-  --sg-hairline: rgb(242 235 225 / 0.08);
-  --sg-scrim: rgb(0 0 0 / 0.5);
-  --sg-tomato: #ee6b47;
-  --sg-tomato-strong: #f4835f;
-  --sg-tomato-soft: #3d2219;
+  --sg-hairline: rgb(236 228 217 / 0.08);
+  --sg-scrim: rgb(12 8 5 / 0.6);
+  --sg-select: #d8cdc0;
+  --sg-on-select: #1b1714;
+  --sg-toast: #3a322b;
+  --sg-toast-fg: #ece4d9;
+  --sg-shade: rgb(0 0 0 / 0.3);
+  /* Tomato stays the deep tomato of the daytime fills (cream text on it is AA); only text on dark surfaces gets lighter. */
+  --sg-tomato-soft: #3b2219;
   --sg-tomato-ink: #f59a7c;
-  --sg-basil: #79a872;
-  --sg-basil-soft: #23301f;
+  --sg-basil: #6f9f69;
+  --sg-basil-soft: #232f20;
   --sg-basil-ink: #9cc794;
-  --sg-semolina: #e8b955;
-  --sg-semolina-soft: #3a2f17;
-  --sg-semolina-ink: #f0cd7f;
-  --sg-on-accent: #1b1714;
-  --sg-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3);
-  --sg-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
-  --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 48px rgb(0 0 0 / 0.5);
-  --sg-shadow-well: inset 0 1px 2px rgb(0 0 0 / 0.4);
-  --sg-shadow-bar: 0 -1px 0 rgb(242 235 225 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
-  --sg-ring: 0 0 0 1px rgb(242 235 225 / 0.4), 0 0 0 4px rgb(242 235 225 / 0.1);
-  --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(238 107 71 / 0.18);
+  --sg-semolina: #dcae4f;
+  --sg-semolina-soft: #3a2f18;
+  --sg-semolina-ink: #eccb7f;
+  --sg-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 236 214 / 0.045);
+  --sg-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 236 214 / 0.07);
+  --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.3), 0 20px 56px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 236 214 / 0.08);
+  --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
+  --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
+  --sg-ring: 0 0 0 1px rgb(236 228 217 / 0.42), 0 0 0 4px rgb(236 228 217 / 0.1);
+  --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(245 154 124 / 0.16);
 }
 
 @theme {
@@ -150,6 +178,7 @@
   --color-paper: var(--sg-paper);
   --color-paper-deep: var(--sg-paper-deep);
   --color-cream: var(--sg-cream);
+  --color-lifted: var(--sg-lifted);
   --color-well: var(--sg-well);
   --color-ink: var(--sg-ink);
   --color-ink-soft: var(--sg-ink-soft);
@@ -157,6 +186,14 @@
   --color-ink-ghost: var(--sg-ink-ghost);
   --color-hairline: var(--sg-hairline);
   --color-scrim: var(--sg-scrim);
+  --color-veil: var(--sg-veil);
+  --color-veil-strong: var(--sg-veil-strong);
+  --color-on-veil: var(--sg-on-veil);
+  --color-select: var(--sg-select);
+  --color-on-select: var(--sg-on-select);
+  --color-toast: var(--sg-toast);
+  --color-toast-fg: var(--sg-toast-fg);
+  --color-shade: var(--sg-shade);
   --color-tomato: var(--sg-tomato);
   --color-tomato-strong: var(--sg-tomato-strong);
   --color-tomato-soft: var(--sg-tomato-soft);
@@ -168,6 +205,8 @@
   --color-semolina-soft: var(--sg-semolina-soft);
   --color-semolina-ink: var(--sg-semolina-ink);
   --color-on-accent: var(--sg-on-accent);
+  --color-mark-tile: var(--sg-mark-tile);
+  --color-mark-stroke: var(--sg-mark-stroke);
   --color-person-tomato: var(--sg-person-tomato);
   --color-person-basil: var(--sg-person-basil);
   --color-person-semolina: var(--sg-person-semolina);
