@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    name: Playwright smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium-headless-shell
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+  docker:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t spaghetti:ci .
+      - name: Run it and check the API, the SPA and persistence
+        run: |
+          docker run -d --name spaghetti -p 8787:8787 -v spaghetti-data:/data spaghetti:ci
+          for i in $(seq 1 60); do curl -fs localhost:8787/api/health && break; sleep 1; done
+          curl -fs localhost:8787/api/health
+          curl -fs -H 'Sec-Fetch-Mode: navigate' localhost:8787/ideas | grep -q '<div id="root">'
+          docker exec -e SPAGHETTI_PASSWORD=ci-password-123 spaghetti \
+            node scripts/user-add.ts --username ci --name CI --color basil
+          curl -fs -X POST localhost:8787/api/session -H 'Origin: http://localhost:8787' \
+            -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
+          docker restart spaghetti
+          for i in $(seq 1 60); do curl -fs localhost:8787/api/health && break; sleep 1; done
+          curl -fs -X POST localhost:8787/api/session -H 'Origin: http://localhost:8787' \
+            -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
+      - if: failure()
+        run: docker logs spaghetti

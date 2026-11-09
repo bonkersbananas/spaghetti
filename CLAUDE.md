@@ -1,0 +1,1 @@
+Read [AGENTS.md](AGENTS.md) first: it describes the code layout, how to add routes, endpoints, migrations and components, and the design rules. Before writing UI, read [docs/design.md](docs/design.md).

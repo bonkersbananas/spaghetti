@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spaghetti",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-11-01",
+  // The client is built by Vite and served as static assets. Client routes
+  // fall back to index.html; /api/* always reaches the Worker first.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "spaghetti",
+      // Local development and the container use this placeholder. Before the
+      // first `wrangler deploy`, replace it with the id that
+      // `wrangler d1 create spaghetti` prints (see README, "Deploying").
+      "database_id": "00000000-0000-4000-8000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      // Photos, from phase 2. Images are resized in the browser before upload.
+      "binding": "PHOTOS",
+      "bucket_name": "spaghetti-photos"
+    }
+  ],
+  "observability": { "enabled": true }
+}

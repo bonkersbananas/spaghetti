@@ -1,0 +1,98 @@
+import * as Dialog from "@radix-ui/react-dialog";
+import type { ReactNode } from "react";
+import { Drawer } from "vaul";
+import { cn } from "@/lib/cn";
+import { useIsDesktop } from "@/lib/use-media-query";
+import { IconButton } from "./Button";
+import { CloseIcon } from "./icons";
+
+export interface SheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description?: ReactNode;
+  /** Sticky actions at the bottom (phone) or footer (desktop). */
+  footer?: ReactNode;
+  /**
+   * How it appears on desktop: a centered "dialog" for quick, focused tasks
+   * (capture), or a "panel" sliding in from the right for detail views.
+   * On phones it is always a bottom sheet.
+   */
+  desktop?: "dialog" | "panel";
+  children: ReactNode;
+}
+
+/**
+ * The one overlay. Bottom sheet on phones (drag down to dismiss, thumb-reach
+ * actions), dialog or side panel on desktop. Never an "are you sure?" box:
+ * deletes use an undo toast instead.
+ */
+export function Sheet(props: SheetProps) {
+  const isDesktop = useIsDesktop();
+  return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
+}
+
+function PhoneSheet({ open, onOpenChange, title, description, footer, children }: SheetProps) {
+  return (
+    <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
+      <Drawer.Portal>
+        <Drawer.Overlay className="bg-scrim fixed inset-0 z-40" />
+        <Drawer.Content className="bg-cream shadow-float fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-xl focus:outline-none">
+          <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
+          <div className="px-5 pt-2 pb-1">
+            <Drawer.Title className="font-display text-title text-ink font-semibold">{title}</Drawer.Title>
+            {description ? (
+              <Drawer.Description className="text-small text-ink-faint mt-0.5">{description}</Drawer.Description>
+            ) : (
+              <Drawer.Description className="sr-only">{title}</Drawer.Description>
+            )}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-4">{children}</div>
+          {footer && (
+            <div className="flex shrink-0 items-center gap-3 px-5 pt-2 pb-[max(1rem,var(--sg-safe-bottom))]">
+              {footer}
+            </div>
+          )}
+          {!footer && <div className="pb-safe" />}
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
+  );
+}
+
+function DesktopSheet({ open, onOpenChange, title, description, footer, desktop = "dialog", children }: SheetProps) {
+  const isPanel = desktop === "panel";
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
+        <Dialog.Content
+          className={cn(
+            "bg-cream shadow-float fixed z-50 flex flex-col focus:outline-none",
+            isPanel
+              ? "sg-panel inset-y-3 right-3 w-full max-w-md rounded-xl"
+              : "sg-dialog top-[14vh] left-1/2 max-h-[72vh] w-full max-w-xl -translate-x-1/2 rounded-xl",
+          )}
+        >
+          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-1">
+            <div>
+              <Dialog.Title className="font-display text-title text-ink font-semibold">{title}</Dialog.Title>
+              {description ? (
+                <Dialog.Description className="text-small text-ink-faint mt-0.5">{description}</Dialog.Description>
+              ) : (
+                <Dialog.Description className="sr-only">{title}</Dialog.Description>
+              )}
+            </div>
+            <Dialog.Close asChild>
+              <IconButton icon={CloseIcon} label="Close" size="sm" className="-mt-0.5 -mr-2" />
+            </Dialog.Close>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-3 pb-5">{children}</div>
+          {footer && (
+            <div className="bg-paper/60 flex shrink-0 items-center gap-3 rounded-b-xl px-6 py-3.5">{footer}</div>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
