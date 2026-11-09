@@ -33,11 +33,27 @@ export function Chip({ tone = "neutral", icon: IconComponent, children, classNam
 interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
   selected: boolean;
   icon?: Icon;
+  /** How it looks when picked: ink (filters), or a tone for tags (a failure in tomato, a success in basil). */
+  tone?: ChipTone;
   children: ReactNode;
 }
 
+const selectedTones: Record<ChipTone, string> = {
+  neutral: "bg-select text-on-select",
+  tomato: "bg-tomato-soft text-tomato-ink ring-1 ring-inset ring-tomato/40",
+  basil: "bg-basil-soft text-basil-ink ring-1 ring-inset ring-basil/40",
+  semolina: "bg-semolina-soft text-semolina-ink ring-1 ring-inset ring-semolina/50",
+};
+
 /** A chip people tap to filter or pick. */
-export function ToggleChip({ selected, icon: IconComponent, children, className, ...props }: ToggleChipProps) {
+export function ToggleChip({
+  selected,
+  icon: IconComponent,
+  tone = "neutral",
+  children,
+  className,
+  ...props
+}: ToggleChipProps) {
   return (
     <button
       type="button"
@@ -45,7 +61,7 @@ export function ToggleChip({ selected, icon: IconComponent, children, className,
       className={cn(
         base,
         "pressable focus-ring h-9 px-3.5 md:h-8",
-        selected ? "bg-select text-on-select" : "bg-cream text-ink-soft shadow-soft hover:text-ink",
+        selected ? selectedTones[tone] : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
       {...props}

@@ -1,9 +1,13 @@
 import type { Person } from "@shared/api";
+import type { Outcome } from "@shared/attempts";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
+import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
+import { TagPicker } from "@/components/builds/TagPicker";
 import { EmptyPot, Mark, NoodleSearch, OpenNotebook, SpoolStrand } from "@/components/illustrations";
 import { OfflineBanner } from "@/components/shell/OfflineNotice";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -12,19 +16,23 @@ import { Avatar, AvatarStack } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { Chip, ToggleChip } from "@/components/ui/Chip";
+import { Disclosure } from "@/components/ui/Disclosure";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TextArea, TextField } from "@/components/ui/Field";
+import { DurationField, NumberField, TextArea, TextField } from "@/components/ui/Field";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { CardSkeleton, RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import { Swatch, SwatchPicker } from "@/components/ui/Swatch";
 import { toast } from "@/components/ui/Toast";
 import { ProgressRing, UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
+import type { AttemptView } from "@/lib/items";
 
 export const Route = createFileRoute("/_app/styleguide")({
   component: Styleguide,
@@ -44,10 +52,12 @@ const toc = [
   ["icons", "Icons"],
   ["buttons", "Buttons"],
   ["fields", "Fields"],
+  ["controls", "Controls"],
   ["chips", "Chips"],
   ["avatars", "Avatars"],
   ["cards", "Cards"],
   ["photos", "Photos"],
+  ["builds", "Builds & attempts"],
   ["sheets", "Sheets & toasts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
@@ -84,10 +94,12 @@ function Styleguide() {
           <IconSection />
           <ButtonSection />
           <FieldSection />
+          <ControlSection />
           <ChipSection />
           <AvatarSection />
           <CardSection />
           <PhotoSection />
+          <BuildsSection />
           <SheetSection />
           <EmptySection />
           <SkeletonSection />
@@ -539,10 +551,82 @@ function FieldSection() {
   );
 }
 
+/* Controls --------------------------------------------------------------- */
+
+function ControlSection() {
+  const [nozzle, setNozzle] = useState<"main" | "auxiliary">("main");
+  const [bed, setBed] = useState<number | undefined>(60);
+  const [layer, setLayer] = useState<number | undefined>(0.2);
+  const [minutes, setMinutes] = useState<number | undefined>(130);
+  const [color, setColor] = useState<string | undefined>(SAMPLE_COLOR);
+  const [open, setOpen] = useState(false);
+  return (
+    <Section
+      id="controls"
+      title="Controls"
+      note="For print settings: choices side by side, numbers with their units, a filament's color, and detail tucked behind one tap."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel className="flex flex-col gap-5">
+          <Label>Segmented control (arrow keys move)</Label>
+          <SegmentedControl
+            label="Nozzle"
+            options={[
+              { value: "main", label: "Main" },
+              { value: "auxiliary", label: "Auxiliary" },
+            ]}
+            value={nozzle}
+            onChange={setNozzle}
+            className="w-full"
+          />
+          <Label>Number, decimal and duration fields</Label>
+          <div className="grid grid-cols-3 gap-2.5">
+            <NumberField size="sm" label="Bed" suffix="°C" min={0} max={150} value={bed} onChange={setBed} />
+            <NumberField size="sm" label="Layer" suffix="mm" decimal value={layer} onChange={setLayer} />
+            <DurationField size="sm" label="Time" placeholder="2h 10" value={minutes} onChange={setMinutes} />
+          </div>
+          <Label>Filament color: a swatch, and a picker to tap</Label>
+          <div className="flex items-center gap-3">
+            <SwatchPicker value={color} onChange={setColor} />
+            <SwatchPicker value={undefined} onChange={setColor} label="No color yet" />
+            <span className="text-small text-ink-soft inline-flex items-center gap-1.5">
+              <Swatch color={color} /> Jade white PLA
+            </span>
+          </div>
+        </Panel>
+        <Panel className="flex flex-col gap-5">
+          <Label>Disclosure</Label>
+          <Disclosure
+            open={open}
+            onOpenChange={setOpen}
+            title="Settings"
+            icon={Icons.SettingsIcon}
+            summary="Same as attempt 2 · PLA · 0.20 mm · bed 60 °C"
+          >
+            <p className="text-body text-ink-soft">The optional detail lives here, out of the way of the quick path.</p>
+          </Disclosure>
+          <Label>Action bar (phones)</Label>
+          <p className="text-body text-ink-soft">
+            <code className="text-small">ActionBar</code> puts a screen's main action within thumb reach, on top of the
+            tab bar, such as "Log attempt" on a build. Hidden on desktop, where the action sits in the page; toasts move
+            up above it.
+          </p>
+          <div className="bg-paper-deep rounded-md p-3">
+            <Button variant="primary" size="lg" icon={Icons.PlusIcon} fullWidth>
+              Log attempt
+            </Button>
+          </div>
+        </Panel>
+      </div>
+    </Section>
+  );
+}
+
 /* Chips ------------------------------------------------------------------ */
 
 function ChipSection() {
   const [selected, setSelected] = useState("PLA");
+  const [tags, setTags] = useState(["warping"]);
   return (
     <Section id="chips" title="Chips" note="Labels for status and materials; toggle chips for filters.">
       <Panel className="flex flex-col gap-5">
@@ -566,6 +650,25 @@ function ChipSection() {
               {m}
             </ToggleChip>
           ))}
+        </div>
+        <Label>Toned toggle chips, for tags</Label>
+        <div className="flex flex-wrap gap-2">
+          {["warping", "stringing"].map((tag) => (
+            <ToggleChip
+              key={tag}
+              tone="tomato"
+              selected={tags.includes(tag)}
+              onClick={() => setTags(tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag])}
+            >
+              {tag === "warping" ? "Warping" : "Stringing"}
+            </ToggleChip>
+          ))}
+          <ToggleChip tone="basil" selected>
+            Great first layer
+          </ToggleChip>
+          <ToggleChip tone="semolina" selected icon={Icons.DriedIcon}>
+            Dried
+          </ToggleChip>
         </div>
       </Panel>
     </Section>
@@ -694,6 +797,94 @@ function PhotoSection() {
             <AddPhotoTile icon={Icons.ImageIcon} label="From library" />
           </div>
         </Panel>
+      </div>
+    </Section>
+  );
+}
+
+/* Builds & attempts ------------------------------------------------------ */
+
+const SAMPLE_COLOR = "#f2c230"; // design-lint-ignore: a filament color is data
+
+const sampleAttempt: AttemptView = {
+  id: "sample-attempt",
+  itemId: "sample-build",
+  number: 2,
+  pending: false,
+  outcome: "partial",
+  printedAt: Date.now() - 26 * 60 * 60 * 1000,
+  finishedAt: Date.now() - 23 * 60 * 60 * 1000,
+  note: "Stayed down this time, but the stern corners curled up a little.",
+  failureTags: ["warping"],
+  successNotes: ["great-first-layer"],
+  settings: {
+    filaments: [{ type: "PLA", brand: "Bambu", colorHex: SAMPLE_COLOR, colorName: "Sunflower yellow", amsSlot: "A2" }],
+    bedType: "Textured PEI Plate",
+    layerHeight: 0.2,
+    infillDensity: 15,
+    brim: true,
+    nozzleTemperature: 220,
+    bedTemperature: 60,
+    actualMinutes: 197,
+  },
+  changes: [
+    { key: "bedType", text: "Smooth PEI → Textured PEI plate" },
+    { key: "brim", text: "added a brim" },
+    { key: "bedTemperature", text: "bed 55 → 60 °C" },
+  ],
+  createdBy: "a",
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
+function BuildsSection() {
+  const [outcome, setOutcome] = useState<Outcome | null>("failed");
+  const [failureTags, setFailureTags] = useState(["spaghetti"]);
+  return (
+    <Section
+      id="builds"
+      title="Builds & attempts"
+      note="Logging an attempt next to the printer: the outcome is one big tap, tags and settings one more. A failed print is spaghetti, recorded with the same care as a success: soft tomato, never an error."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel className="flex flex-col gap-5">
+          <Label>Outcome picker</Label>
+          <OutcomePicker value={outcome} onChange={setOutcome} />
+          <Label>Outcome chips</Label>
+          <div className="flex flex-wrap gap-2">
+            <OutcomeChip outcome={null} />
+            <OutcomeChip outcome="success" />
+            <OutcomeChip outcome="partial" />
+            <OutcomeChip outcome="failed" />
+          </div>
+          <TagPicker
+            kind="failure"
+            label="Tag picker: what went wrong?"
+            value={failureTags}
+            onChange={setFailureTags}
+            visible={6}
+          />
+        </Panel>
+        <div className="flex flex-col gap-4">
+          <Label>Attempt in a build's timeline</Label>
+          <ol className="flex flex-col">
+            <AttemptEntry
+              attempt={sampleAttempt}
+              photos={[]}
+              person={people[1]}
+              first
+              last
+              onOpen={() => toast.message("Opens the attempt")}
+            />
+          </ol>
+          <Label>New build tiles</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <AddPhotoTile size="card" icon={Icons.PlusIcon} label="New build" />
+            <div className="flex flex-col justify-end">
+              <AddPhotoTile size="row" icon={Icons.PlusIcon} label="New build" />
+            </div>
+          </div>
+        </div>
       </div>
     </Section>
   );

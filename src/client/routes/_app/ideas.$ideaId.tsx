@@ -1,23 +1,26 @@
-import { fullTime, relativeTime } from "@shared/time";
+import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { EmptyPot } from "@/components/illustrations";
+import { DetailBar } from "@/components/shell/DetailBar";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { BackIcon, CameraIcon, ImageIcon, TrashIcon } from "@/components/ui/icons";
-import { Kbd } from "@/components/ui/Kbd";
+import { BuildsIcon, TrashIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
-import { AddPhotoTile, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { startBuild } from "@/lib/builds";
+import { useCaptureHere } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
-import { addPhotosToItem, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
+import { deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
 import { peopleQuery } from "@/lib/queries";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -29,12 +32,18 @@ export const Route = createFileRoute("/_app/ideas/$ideaId")({
 function IdeaDetail() {
   const { ideaId } = Route.useParams();
   const { item, isPending, error } = useItem(ideaId);
-  if (item) return <Idea key={item.id} item={item} />;
+  const navigate = useNavigate();
+  const isBuild = !!item && item.stage !== "idea";
+  // It grew into a build (here or on the other phone): that's where it lives now.
+  useEffect(() => {
+    if (isBuild) void navigate({ to: "/builds/$buildId", params: { buildId: ideaId }, replace: true });
+  }, [isBuild, ideaId, navigate]);
+  if (item && !isBuild) return <Idea key={item.id} item={item} />;
   return (
     <>
       <h1 className="sr-only">Idea</h1>
-      <DetailBar />
-      {isPending ? (
+      <DetailBar back={back} />
+      {isPending || isBuild ? (
         <div className="flex flex-col gap-6 md:flex-row md:gap-10" aria-hidden>
           <Skeleton className="-mx-5 aspect-4/3 rounded-none md:mx-0 md:flex-3 md:rounded-xl" />
           <div className="flex flex-col gap-3 md:flex-2">
@@ -65,27 +74,14 @@ function IdeaDetail() {
   );
 }
 
-/** The top of a detail screen: a clear way back, and the screen's actions. */
-function DetailBar({ children }: { children?: React.ReactNode }) {
-  return (
-    <div className="bg-paper/90 sticky top-0 z-20 -mx-5 mb-0 flex h-14 items-center justify-between gap-2 px-2 backdrop-blur-xl md:static md:mx-0 md:mb-6 md:h-auto md:bg-transparent md:px-0 md:pt-8 md:backdrop-blur-none">
-      <Link
-        to="/ideas"
-        className="pressable focus-ring text-body text-ink-soft hover:text-ink flex h-11 items-center gap-1 rounded-md pr-3 pl-1.5 font-semibold md:h-9 md:pl-1"
-      >
-        <BackIcon size={22} weight="bold" aria-hidden />
-        Ideas
-        <Kbd keys={["Esc"]} className="ml-1.5" />
-      </Link>
-      <div className="flex items-center gap-1">{children}</div>
-    </div>
-  );
-}
+const back = { to: "/ideas", label: "Ideas" } as const;
 
 function Idea({ item }: { item: ItemView }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const isDesktop = useIsDesktop();
   const { data: people } = useQuery(peopleQuery);
+  useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
 
   const [title, setTitle] = useState(item.title ?? "");
@@ -94,13 +90,14 @@ function Idea({ item }: { item: ItemView }) {
     saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note }),
   );
 
-  const [selectedId, setSelectedId] = useState(item.photos[0]?.id);
+  const photos = item.photos.filter((photo) => !photo.attemptId);
+  const [selectedId, setSelectedId] = useState(photos[0]?.id);
   const selectedIndex = Math.max(
     0,
-    item.photos.findIndex((photo) => photo.id === selectedId),
+    photos.findIndex((photo) => photo.id === selectedId),
   );
   const select = (index: number) => {
-    const photo = item.photos[Math.max(0, Math.min(item.photos.length - 1, index))];
+    const photo = photos[Math.max(0, Math.min(photos.length - 1, index))];
     if (photo) setSelectedId(photo.id);
   };
 
@@ -109,30 +106,41 @@ function Idea({ item }: { item: ItemView }) {
     void navigate({ to: "/ideas" });
   }
 
+  function build() {
+    startBuild(queryClient, item);
+    void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
+  }
+
   useHotkeys({
     escape: () => void navigate({ to: "/ideas" }),
     arrowleft: () => select(selectedIndex - 1),
     arrowright: () => select(selectedIndex + 1),
     backspace: remove,
     delete: remove,
+    b: build,
   });
 
-  const hasPhotos = item.photos.length > 0;
+  const hasPhotos = photos.length > 0;
   const alt = photoAlt({ title, note });
 
   return (
     <article className="pb-6">
       <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
-      <DetailBar>
+      <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
         <IconButton icon={TrashIcon} label="Delete idea" onClick={remove} aria-keyshortcuts="Backspace Delete" />
+        {isDesktop && (
+          <Button variant="primary" icon={BuildsIcon} shortcut={["B"]} onClick={build} className="ml-2">
+            Start building
+          </Button>
+        )}
       </DetailBar>
 
       <div className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10" : "max-w-content"}>
         {hasPhotos && (
           <div className="flex flex-col gap-4 md:sticky md:top-8 md:min-w-0 md:flex-3">
             <PhotoViewer
-              photos={item.photos}
+              photos={photos}
               index={selectedIndex}
               onIndexChange={select}
               alt={alt}
@@ -140,8 +148,8 @@ function Idea({ item }: { item: ItemView }) {
             />
             <PhotoStrip
               itemId={item.id}
-              photos={item.photos}
-              selectedId={item.photos[selectedIndex]?.id}
+              photos={photos}
+              selectedId={photos[selectedIndex]?.id}
               onSelect={setSelectedId}
             />
           </div>
@@ -171,32 +179,19 @@ function Idea({ item }: { item: ItemView }) {
             <p>
               {person ? `${person.name.split(" ")[0]} captured this` : "Captured"}{" "}
               <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
-                {relativeTime(item.createdAt).toLowerCase()}
+                {inlineTime(item.createdAt)}
               </time>
             </p>
           </div>
         </div>
       </div>
+      {!isDesktop && (
+        <ActionBar>
+          <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth onClick={build}>
+            Start building
+          </Button>
+        </ActionBar>
+      )}
     </article>
-  );
-}
-
-/** A note-only idea: one tap to give it its first photos. */
-function AddFirstPhotos({ itemId }: { itemId: string }) {
-  const isDesktop = useIsDesktop();
-  const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(itemId, files) });
-  const library = useFilePicker({ multiple: true, onFiles: (files) => addPhotosToItem(itemId, files) });
-  return (
-    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-1">
-      {camera.input}
-      {library.input}
-      {!isDesktop && <AddPhotoTile icon={CameraIcon} label="Take photo" onClick={camera.open} />}
-      <AddPhotoTile
-        icon={ImageIcon}
-        label={isDesktop ? "Add photos" : "From library"}
-        onClick={library.open}
-        className="col-span-1"
-      />
-    </div>
   );
 }

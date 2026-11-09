@@ -24,6 +24,12 @@ export function relativeTime(time: number, now = Date.now()): string {
   });
 }
 
+/** relativeTime for the middle of a sentence: "started yesterday", "done 12 Oct". */
+export function inlineTime(time: number, now = Date.now()): string {
+  const text = relativeTime(time, now);
+  return text === "Just now" || text === "Yesterday" ? text.toLowerCase() : text;
+}
+
 /** "Saturday 31 October 2026, 18:04", for the detail screen. */
 export function fullTime(time: number): string {
   return new Date(time).toLocaleString(undefined, {

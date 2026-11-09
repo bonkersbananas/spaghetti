@@ -13,6 +13,7 @@ import { type Browser, chromium, request } from "@playwright/test";
 import { SEED_USERS, seedThrowawayState, startDevServer } from "./lib/local-app.ts";
 import { root } from "./lib/wrangler.ts";
 import { shots } from "./screenshot-routes.ts";
+import { seedBuilds } from "./seed/builds.ts";
 import { seedIdeas } from "./seed/ideas.ts";
 
 const viewports = [
@@ -101,7 +102,7 @@ async function loadAllImages(page: import("@playwright/test").Page, name: string
   if (broken.length) throw new Error(`${name}: images failed to load:\n${broken.join("\n")}`);
 }
 
-/** Fills the throwaway database with a dozen ideas, captured by both people. */
+/** Fills the throwaway database with a dozen ideas, captured by both people, some grown into builds. */
 async function seed(browser: Browser) {
   if (!server) return;
   const [alex, sam] = await Promise.all(
@@ -117,6 +118,7 @@ async function seed(browser: Browser) {
   );
   if (!alex || !sam) throw new Error("Seeding needs both people");
   await seedIdeas(browser, { alex, sam }, server.url);
+  await seedBuilds(browser, { alex, sam }, server.url, state.dir);
   await Promise.all([alex.dispose(), sam.dispose()]);
-  console.log("  seeded ideas");
+  console.log("  seeded ideas and builds");
 }

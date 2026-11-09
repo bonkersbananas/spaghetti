@@ -27,6 +27,11 @@ const DAY = 24 * HOUR;
 export const SEED_IDS = {
   deskTidy: "5eed0000-0000-4000-8000-000000000006",
   tugboat: "5eed0000-0000-4000-8000-000000000002",
+  headphoneStand: "5eed0000-0000-4000-8000-000000000004",
+  planter: "5eed0000-0000-4000-8000-000000000005",
+  desiccantHook: "5eed0000-0000-4000-8000-000000000008",
+  lithophane: "5eed0000-0000-4000-8000-000000000009",
+  spoolHolder: "5eed0000-0000-4000-8000-000000000010",
 };
 
 export const SEED_IDEAS: SeedIdea[] = [
@@ -40,7 +45,7 @@ export const SEED_IDEAS: SeedIdea[] = [
   {
     id: SEED_IDS.tugboat,
     by: "alex",
-    ago: 2 * HOUR,
+    ago: 3 * DAY + 2 * HOUR,
     title: "Bath tugboat for Mila",
     note: "Chunky enough for small hands. Print the hull in two halves so it floats upright?",
     photos: [{ file: "tugboat.svg", color: "#867362" }],
@@ -53,17 +58,17 @@ export const SEED_IDEAS: SeedIdea[] = [
     photos: [],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000004",
+    id: SEED_IDS.headphoneStand,
     by: "sam",
-    ago: DAY + 3 * HOUR,
+    ago: 6 * DAY + 3 * HOUR,
     title: "Headphone stand",
     note: "Charcoal matte PLA. Needs a heavier base, or rubber feet.",
     photos: [{ file: "headphone-stand.svg", color: "#98846c" }],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000005",
+    id: SEED_IDS.planter,
     by: "alex",
-    ago: DAY + 6 * HOUR,
+    ago: 11 * DAY + 6 * HOUR,
     title: "Self-watering planter",
     note: "Terracotta PLA with a water window. Seal the reservoir with two extra walls.",
     photos: [{ file: "planter-self-watering.svg", color: "#c7c0af" }],
@@ -87,7 +92,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     photos: [{ file: "gear-set.svg", color: "#5f7058" }],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000008",
+    id: SEED_IDS.desiccantHook,
     by: "sam",
     ago: 4 * DAY,
     title: "Hook for the desiccant bag",
@@ -95,7 +100,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     photos: [{ file: "ams-hook.svg", color: "#c3ab8e" }],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000009",
+    id: SEED_IDS.lithophane,
     by: "alex",
     ago: 5 * DAY,
     title: "Lithophane lamp",
@@ -103,7 +108,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     photos: [{ file: "lithophane-lamp.svg", color: "#584230" }],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000010",
+    id: SEED_IDS.spoolHolder,
     by: "sam",
     ago: 7 * DAY,
     note: "Roller spool holder for the shelf above the printer, so the AMS isn't the only home for spools.",
@@ -126,12 +131,21 @@ export const SEED_IDEAS: SeedIdea[] = [
   },
 ];
 
+/** A different shot of the same drawing: a crop of its viewBox, and a CSS filter for light. */
+export interface PhotoVariant {
+  /** x, y, width, height in the drawing's viewBox units. */
+  crop?: [number, number, number, number];
+  filter?: string;
+}
+
 /** Renders an SVG stand-in at a given long edge as JPEG. */
-async function render(
+export async function render(
   browser: Browser,
-  svg: string,
+  source: string,
   longEdge: number,
+  variant: PhotoVariant = {},
 ): Promise<{ jpeg: Buffer; width: number; height: number }> {
+  const svg = variant.crop ? source.replace(/viewBox="[^"]+"/, `viewBox="${variant.crop.join(" ")}"`) : source;
   const [, , vbWidth = 1200, vbHeight = 900] = (svg.match(/viewBox="([^"]+)"/)?.[1] ?? "0 0 1200 900")
     .split(/\s+/)
     .map(Number);
@@ -140,7 +154,7 @@ async function render(
   const height = Math.round(vbHeight * scale);
   const page = await browser.newPage({ viewport: { width, height } });
   await page.setContent(
-    `<style>html,body{margin:0}svg{display:block;width:${width}px;height:${height}px}</style>${svg}`,
+    `<style>html,body{margin:0;overflow:hidden}svg{display:block;width:${width}px;height:${height}px;filter:${variant.filter ?? "none"}}</style>${svg}`,
   );
   const jpeg = await page.screenshot({ type: "jpeg", quality: 82 });
   await page.close();

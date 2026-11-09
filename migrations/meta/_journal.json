@@ -15,6 +15,13 @@
       "when": 1794258823197,
       "tag": "0001_items-and-photos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794261105543,
+      "tag": "0002_builds-and-attempts",
+      "breakpoints": true
     }
   ]
 }

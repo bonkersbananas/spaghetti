@@ -12,10 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppBuildsRouteImport } from './routes/_app/builds'
 import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
+import { Route as AppBuildsIndexRouteImport } from './routes/_app/builds.index'
+import { Route as AppBuildsBuildIdRouteImport } from './routes/_app/builds.$buildId'
 import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
 import { Route as AppIdeasIdeaIdRouteImport } from './routes/_app/ideas.$ideaId'
 
@@ -33,11 +34,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppBuildsRoute = AppBuildsRouteImport.update({
-  id: '/builds',
-  path: '/builds',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppJournalRoute = AppJournalRouteImport.update({
   id: '/journal',
   path: '/journal',
@@ -51,6 +47,16 @@ const AppSearchRoute = AppSearchRouteImport.update({
 const AppStyleguideRoute = AppStyleguideRouteImport.update({
   id: '/styleguide',
   path: '/styleguide',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBuildsIndexRoute = AppBuildsIndexRouteImport.update({
+  id: '/builds/',
+  path: '/builds/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBuildsBuildIdRoute = AppBuildsBuildIdRouteImport.update({
+  id: '/builds/$buildId',
+  path: '/builds/$buildId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppIdeasIndexRoute = AppIdeasIndexRouteImport.update({
@@ -67,33 +73,36 @@ const AppIdeasIdeaIdRoute = AppIdeasIdeaIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
-  '/builds': typeof AppBuildsRoute
   '/journal': typeof AppJournalRoute
   '/search': typeof AppSearchRoute
   '/styleguide': typeof AppStyleguideRoute
+  '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/builds/': typeof AppBuildsIndexRoute
   '/ideas/': typeof AppIdeasIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
-  '/builds': typeof AppBuildsRoute
   '/journal': typeof AppJournalRoute
   '/search': typeof AppSearchRoute
   '/styleguide': typeof AppStyleguideRoute
   '/': typeof AppIndexRoute
+  '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/builds': typeof AppBuildsIndexRoute
   '/ideas': typeof AppIdeasIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
-  '/_app/builds': typeof AppBuildsRoute
   '/_app/journal': typeof AppJournalRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/_app/builds/': typeof AppBuildsIndexRoute
   '/_app/ideas/': typeof AppIdeasIndexRoute
 }
 export interface FileRouteTypes {
@@ -101,32 +110,35 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/sign-in'
-    | '/builds'
     | '/journal'
     | '/search'
     | '/styleguide'
+    | '/builds/$buildId'
     | '/ideas/$ideaId'
+    | '/builds/'
     | '/ideas/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/sign-in'
-    | '/builds'
     | '/journal'
     | '/search'
     | '/styleguide'
     | '/'
+    | '/builds/$buildId'
     | '/ideas/$ideaId'
+    | '/builds'
     | '/ideas'
   id:
     | '__root__'
     | '/_app'
     | '/sign-in'
-    | '/_app/builds'
     | '/_app/journal'
     | '/_app/search'
     | '/_app/styleguide'
     | '/_app/'
+    | '/_app/builds/$buildId'
     | '/_app/ideas/$ideaId'
+    | '/_app/builds/'
     | '/_app/ideas/'
   fileRoutesById: FileRoutesById
 }
@@ -158,13 +170,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/builds': {
-      id: '/_app/builds'
-      path: '/builds'
-      fullPath: '/builds'
-      preLoaderRoute: typeof AppBuildsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/journal': {
       id: '/_app/journal'
       path: '/journal'
@@ -186,6 +191,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppStyleguideRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/builds/': {
+      id: '/_app/builds/'
+      path: '/builds'
+      fullPath: '/builds/'
+      preLoaderRoute: typeof AppBuildsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/builds/$buildId': {
+      id: '/_app/builds/$buildId'
+      path: '/builds/$buildId'
+      fullPath: '/builds/$buildId'
+      preLoaderRoute: typeof AppBuildsBuildIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/ideas/': {
       id: '/_app/ideas/'
       path: '/ideas'
@@ -204,22 +223,24 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
-  AppBuildsRoute: typeof AppBuildsRoute
   AppJournalRoute: typeof AppJournalRoute
   AppSearchRoute: typeof AppSearchRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
   AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
+  AppBuildsIndexRoute: typeof AppBuildsIndexRoute
   AppIdeasIndexRoute: typeof AppIdeasIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppBuildsRoute: AppBuildsRoute,
   AppJournalRoute: AppJournalRoute,
   AppSearchRoute: AppSearchRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppIndexRoute: AppIndexRoute,
+  AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,
   AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,
+  AppBuildsIndexRoute: AppBuildsIndexRoute,
   AppIdeasIndexRoute: AppIdeasIndexRoute,
 }
 

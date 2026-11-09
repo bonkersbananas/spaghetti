@@ -1,8 +1,11 @@
+import type { ItemStage } from "@shared/api";
+import type { Outcome } from "@shared/attempts";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
+import { saveAttemptChanges } from "./builds";
 import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
-import { ideasQuery } from "./items";
+import { cachedItem, type ItemView, ideasQuery, saveItemChanges } from "./items";
 import { outbox } from "./outbox";
 import { setPreview } from "./previews";
 import { sessionQuery } from "./queries";
@@ -27,8 +30,22 @@ interface CaptureContextValue {
   openWith: (input: { files?: Iterable<File>; text?: string }) => void;
   /** Saves the capture to the outbox and closes the sheet at once. Returns the new id. */
   save: () => string | null;
+  /** Adds the capture to an item or an attempt. Returns false when there was nothing to add. */
+  saveTo: (target: Exclude<CaptureTarget, { kind: "idea" }>) => boolean;
   /** The idea saved last in this visit, so the inbox can welcome it. */
   landed: string | null;
+  /** The idea or build on screen: captures go there while it shows. */
+  pageItem: PageItem | null;
+  setPageItem: (item: PageItem | null) => void;
+}
+
+/** What the capture sheet needs to know about the idea or build on screen. */
+export interface PageItem {
+  id: string;
+  title: string | null;
+  stage: ItemStage;
+  /** Its attempt still printing, if any. */
+  printing?: { attemptId: string; number: number };
 }
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
@@ -50,31 +67,14 @@ export function imageFiles(files: Iterable<File>): File[] {
   );
 }
 
-/** Holds the capture sheet's state, so any screen can open it. */
-export function CaptureProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraftState] = useState(storedDraft);
+/**
+ * Photos picked for something not saved yet (a capture, an attempt): shown
+ * at once from the device and resized in the background while you type.
+ */
+export function useDraftPhotos() {
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
-  const [landed, setLanded] = useState<string | null>(null);
-  // The welcome animation plays once, on the inbox the capture lands in.
-  useEffect(() => {
-    if (!landed) return;
-    const timer = setTimeout(() => setLanded(null), 1500);
-    return () => clearTimeout(timer);
-  }, [landed]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
-
-  const setDraft = useCallback((value: string) => {
-    setDraftState(value);
-    try {
-      if (value) localStorage.setItem(DRAFT_KEY, value);
-      else localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      // Private mode: the draft lives in memory only.
-    }
-  }, []);
 
   const addFiles = useCallback((files: Iterable<File>) => {
     const added = imageFiles(files).map((file) => ({ id: crypto.randomUUID(), file }));
@@ -100,6 +100,41 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
 
   const removePhoto = useCallback((id: string) => {
     setPhotos((current) => current.filter((photo) => photo.id !== id));
+  }, []);
+
+  const clear = useCallback(() => setPhotos([]), []);
+  return { photos, photosRef, addFiles, removePhoto, clear };
+}
+
+/** Where a capture goes: a new idea, the item on screen, or the print running now. */
+export type CaptureTarget =
+  | { kind: "idea" }
+  | { kind: "item"; itemId: string }
+  | { kind: "attempt"; itemId: string; attemptId: string; outcome?: Outcome | null };
+
+/** Holds the capture sheet's state, so any screen can open it. */
+export function CaptureProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraftState] = useState(storedDraft);
+  const { photos, photosRef, addFiles, removePhoto, clear: clearPhotos } = useDraftPhotos();
+  // The idea or build on screen, which captures go to while it shows.
+  const [pageItem, setPageItem] = useState<PageItem | null>(null);
+  const [landed, setLanded] = useState<string | null>(null);
+  // The welcome animation plays once, on the inbox the capture lands in.
+  useEffect(() => {
+    if (!landed) return;
+    const timer = setTimeout(() => setLanded(null), 1500);
+    return () => clearTimeout(timer);
+  }, [landed]);
+  const setDraft = useCallback((value: string) => {
+    setDraftState(value);
+    try {
+      if (value) localStorage.setItem(DRAFT_KEY, value);
+      else localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Private mode: the draft lives in memory only.
+    }
   }, []);
 
   const openWith = useCallback(
@@ -140,7 +175,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       queuedAt: now,
     });
     setDraft("");
-    setPhotos([]);
+    clearPhotos();
     setOpen(false);
     setLanded(itemId);
     if (firstEver) {
@@ -150,11 +185,79 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       toast.delight("First one in the pot", "Every print starts as an idea like this. Add more whenever they come.");
     }
     return itemId;
-  }, [draft, queryClient, setDraft]);
+  }, [draft, queryClient, setDraft, photosRef, clearPhotos]);
+
+  /**
+   * Adds the capture to an item or attempt instead of making an idea: its
+   * photos join it (uploading in the background), its note is added to the
+   * item's notes or the attempt's line, and an outcome finishes the attempt.
+   */
+  const saveTo = useCallback(
+    (target: Exclude<CaptureTarget, { kind: "idea" }>) => {
+      const note = draft.trim();
+      const current = photosRef.current;
+      if (!note && !current.length && !(target.kind === "attempt" && target.outcome)) return false;
+      if (current.length) {
+        void outbox.add({
+          itemId: target.itemId,
+          photos: current.map((photo) => ({
+            id: photo.id,
+            ...(target.kind === "attempt" ? { attemptId: target.attemptId } : {}),
+            ...(photo.processed ? { processed: photo.processed } : { file: photo.file }),
+          })),
+          queuedAt: Date.now(),
+        });
+      }
+      const item = cachedItem(queryClient, target.itemId);
+      if (target.kind === "item" && note) {
+        const before = item?.note.trimEnd() ?? "";
+        void saveItemChanges(queryClient, target.itemId, { note: before ? `${before}\n\n${note}` : note }).catch(() =>
+          toast.error("Couldn't add the note", "It's still in the capture sheet's draft."),
+        );
+      }
+      if (target.kind === "attempt") {
+        const attempt =
+          item?.attempts.find((a) => a.id === target.attemptId) ??
+          outbox
+            .getSnapshot()
+            .entries.flatMap((entry) => entry.attempts ?? [])
+            .find((a) => a.id === target.attemptId);
+        const before = attempt?.note.trim() ?? "";
+        const changes = {
+          ...(note ? { note: before ? `${before} ${note}` : note } : {}),
+          ...(target.outcome ? { outcome: target.outcome } : {}),
+        };
+        if (Object.keys(changes).length) {
+          void saveAttemptChanges(queryClient, target.itemId, target.attemptId, changes).catch(() =>
+            toast.error("Couldn't save that to the attempt", "Open the build and try again."),
+          );
+        }
+      }
+      setDraft("");
+      clearPhotos();
+      setOpen(false);
+      return true;
+    },
+    [draft, queryClient, setDraft, photosRef, clearPhotos],
+  );
 
   const value = useMemo(
-    () => ({ open, setOpen, draft, setDraft, photos, addFiles, removePhoto, openWith, save, landed }),
-    [open, draft, setDraft, photos, addFiles, removePhoto, openWith, save, landed],
+    () => ({
+      open,
+      setOpen,
+      draft,
+      setDraft,
+      photos,
+      addFiles,
+      removePhoto,
+      openWith,
+      save,
+      saveTo,
+      landed,
+      pageItem,
+      setPageItem,
+    }),
+    [open, draft, setDraft, photos, addFiles, removePhoto, openWith, save, saveTo, landed, pageItem],
   );
   return <CaptureContext value={value}>{children}</CaptureContext>;
 }
@@ -173,6 +276,24 @@ export function useCapture(): CaptureContextValue {
   const value = useContext(CaptureContext);
   if (!value) throw new Error("useCapture must be used inside <CaptureProvider>");
   return value;
+}
+
+/** An idea's or build's page: while it shows, capturing, pasting and dropping add to it. */
+export function useCaptureHere(item: Pick<ItemView, "id" | "title" | "stage" | "attempts">) {
+  const { setPageItem } = useCapture();
+  const printing = item.attempts.findLast((attempt) => attempt.outcome === null);
+  const { id, title, stage } = item;
+  const attemptId = printing?.id;
+  const number = printing?.number;
+  useEffect(() => {
+    setPageItem({
+      id,
+      title,
+      stage,
+      ...(attemptId && number ? { printing: { attemptId, number } } : {}),
+    });
+  }, [id, title, stage, attemptId, number, setPageItem]);
+  useEffect(() => () => setPageItem(null), [setPageItem]);
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
