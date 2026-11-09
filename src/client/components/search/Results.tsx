@@ -5,12 +5,12 @@ import { inlineTime, relativeTime } from "@shared/time";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { forwardRef, type ReactNode } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
+import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
 import { Chip } from "@/components/ui/Chip";
 import { Highlight } from "@/components/ui/Highlight";
 import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
-import { Swatch } from "@/components/ui/Swatch";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { photoSrc } from "@/lib/previews";
@@ -122,31 +122,16 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
         </span>
       )}
       {(filaments.length > 0 || settings.length > 0) && (
-        <span className="text-small text-ink-faint tabular flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          {filaments.map((filament, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position.
-            <span key={index} className="text-ink-soft inline-flex items-center gap-1.5 font-medium">
-              <Swatch color={filament.colorHex} />
-              <Highlight
-                text={[filament.colorName, filament.brand, filament.type].filter(Boolean).join(" ") || "Filament"}
-                terms={terms}
-              />
-              <span className="text-ink-ghost" aria-hidden>
-                ·
-              </span>
-            </span>
-          ))}
-          {settings.map((part, index) => (
-            <span key={part} className="whitespace-nowrap">
-              {index > 0 && (
-                <span className="text-ink-ghost" aria-hidden>
-                  ·{" "}
-                </span>
-              )}
-              <Highlight text={part} terms={terms} />
-            </span>
-          ))}
-        </span>
+        <SettingsLine
+          filaments={filaments}
+          parts={settings}
+          name={(filament) =>
+            [filament.colorName, filament.brand, filament.type].filter(Boolean).join(" ") || "Filament"
+          }
+          renderText={(text) => <Highlight text={text} terms={terms} />}
+          className="text-small text-ink-faint"
+          filamentClassName="text-ink-soft"
+        />
       )}
     </ResultRow>
   );

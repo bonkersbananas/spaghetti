@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon, CheckIcon, UndoIcon, WorkedIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { duration, ease } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
@@ -75,10 +76,10 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
               <WorkedIcon size={14} weight="fill" aria-hidden />
               Worked last time
             </span>
-            <span className="text-small text-ink truncate font-semibold">
-              {where}
-              <span className="text-ink-faint font-medium"> · {inlineTime(show.attempt.printedAt)}</span>
-            </span>
+            <MetaList className="text-small">
+              <span className="text-ink font-semibold">{where}</span>
+              <span className="text-ink-faint font-medium whitespace-nowrap">{inlineTime(show.attempt.printedAt)}</span>
+            </MetaList>
             <SettingsLine
               filaments={show.attempt.settings.filaments ?? []}
               parts={parts}

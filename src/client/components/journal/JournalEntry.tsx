@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { PhotoCountBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -128,9 +129,11 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           </div>
         )}
         <div className="flex items-baseline gap-2">
-          <h3 className="text-body text-ink min-w-0 font-sans">
-            <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
-            <span className="text-small text-ink-faint font-medium whitespace-nowrap"> · attempt {index + 1}</span>
+          <h3 className="text-body text-ink min-w-0 flex-1 font-sans">
+            <MetaList>
+              <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
+              <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
+            </MetaList>
           </h3>
           {photo && <Meta at={attempt.printedAt} time={time} person={person} />}
         </div>
@@ -235,21 +238,21 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
         </span>
       )}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span
-          className={cn(
-            "text-small flex items-center gap-1.5 font-semibold",
-            finished ? "text-basil-ink" : "text-ink-faint",
-          )}
-        >
-          <EventIcon size={15} weight={finished ? "fill" : "regular"} aria-hidden />
-          {event.label(item)}
-          <span className="text-ink-faint tabular font-medium">
-            ·{" "}
-            <time dateTime={new Date(entry.at).toISOString()} title={fullTime(entry.at)}>
-              {when === "time" ? clock(entry.at) : weekday(entry.at)}
-            </time>
+        <MetaList className="text-small">
+          <span
+            className={cn("flex items-center gap-1.5 font-semibold", finished ? "text-basil-ink" : "text-ink-faint")}
+          >
+            <EventIcon size={15} weight={finished ? "fill" : "regular"} aria-hidden />
+            {event.label(item)}
           </span>
-        </span>
+          <time
+            dateTime={new Date(entry.at).toISOString()}
+            title={fullTime(entry.at)}
+            className="text-ink-faint tabular font-medium whitespace-nowrap"
+          >
+            {when === "time" ? clock(entry.at) : weekday(entry.at)}
+          </time>
+        </MetaList>
         <span
           className={cn(
             "text-body truncate",

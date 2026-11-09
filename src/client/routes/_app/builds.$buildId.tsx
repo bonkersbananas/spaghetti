@@ -32,6 +32,7 @@ import {
   SparkleIcon,
   TrashIcon,
 } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -285,15 +286,20 @@ function Build({ item }: { item: ItemView }) {
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
               <StageChip item={item} printing={!!printing} celebrate={justFinished} />
-              <p className="text-small text-ink-faint">
-                {item.stage === "done" && item.finishedAt
-                  ? `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
-                  : item.stage === "shelved" && item.finishedAt
-                    ? `Shelved ${inlineTime(item.finishedAt)}`
-                    : item.attempts.length
-                      ? `${attemptsWord} · started ${inlineTime(started)}`
-                      : `Started ${inlineTime(started)}`}
-              </p>
+              <div className="text-small text-ink-faint">
+                {item.stage === "done" && item.finishedAt ? (
+                  `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
+                ) : item.stage === "shelved" && item.finishedAt ? (
+                  `Shelved ${inlineTime(item.finishedAt)}`
+                ) : item.attempts.length ? (
+                  <MetaList>
+                    <span className="whitespace-nowrap">{attemptsWord}</span>
+                    <span className="whitespace-nowrap">started {inlineTime(started)}</span>
+                  </MetaList>
+                ) : (
+                  `Started ${inlineTime(started)}`
+                )}
+              </div>
               {!active && !isDesktop && (
                 <Button variant="quiet" size="sm" icon={ReopenIcon} onClick={() => reopenBuild(queryClient, item)}>
                   {item.stage === "done" ? "Reopen" : "Back on the bed"}

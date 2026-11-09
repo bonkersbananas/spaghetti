@@ -24,6 +24,7 @@ import { ChipDivider, ChipRow, FilterGroup } from "@/components/ui/FilterChips";
 import { Highlight } from "@/components/ui/Highlight";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
@@ -890,6 +891,16 @@ function SearchSection() {
           <p className="text-body text-ink-soft">
             <Highlight text="Corners warped off the cool plate. PETG wants the textured sheet." terms={terms} />
           </p>
+          <Label>MetaList: a dot never begins or ends a line (narrow it to see)</Label>
+          <div className="bg-ink/4 w-56 rounded-sm p-2">
+            <MetaList className="text-small text-ink-faint">
+              <span>Black PETG</span>
+              <span>0.20 mm</span>
+              <span>15% infill</span>
+              <span>Cool Plate</span>
+              <span className="whitespace-nowrap">nozzle 245 °C</span>
+            </MetaList>
+          </div>
           <Label>A month heading in the journal</Label>
           <div className="flex flex-col gap-1">
             <span className="text-caption text-ink-faint font-semibold tracking-wider uppercase">October</span>
