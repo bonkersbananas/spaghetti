@@ -564,3 +564,23 @@ describe("finishing a print that was queued on a device", () => {
     expect((await finish(attempt.id, { outcome: null })).status).toBe(400);
   });
 });
+
+describe("finishing with tags already on the attempt", () => {
+  it("adds to the tags that are there, and the guard on them still matches an unchanged attempt", async () => {
+    const item = await createItem({ stage: "building" });
+    const attempt = await logAttempt(item.id, { outcome: null, failureTags: ["warping"] });
+    const response = await request(`/api/attempts/${attempt.id}/finish`, {
+      method: "POST",
+      cookie,
+      json: { outcome: "partial", failureTags: ["stringing"], successNotes: ["nice-surface"] },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json<{ attempt: Attempt; finished: boolean }>();
+    expect(body.finished).toBe(true);
+    expect(body.attempt).toMatchObject({
+      outcome: "partial",
+      failureTags: ["warping", "stringing"],
+      successNotes: ["nice-surface"],
+    });
+  });
+});

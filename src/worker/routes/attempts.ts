@@ -258,7 +258,7 @@ export const attemptRoutes = new Hono<AppEnv>()
     if (!found) return apiError(c, 404, "not_found", notFound);
     const now = new Date();
     let current = found.attempt;
-    // The write only goes through if the attempt is still as it was read (its outcome and note): if another
+    // The write only goes through if the attempt is still as it was read (its outcome, note and tags): if another
     // device's finish or edit landed in between, read again and decide again, so no one's outcome is replaced.
     for (let tries = 0; tries < 4; tries++) {
       const note = mergeNote(current.note, body.note ?? "");
@@ -299,6 +299,8 @@ export const attemptRoutes = new Hono<AppEnv>()
             eq(attempts.id, current.id),
             isNull(attempts.deletedAt),
             eq(attempts.note, current.note),
+            eq(attempts.failureTags, current.failureTags),
+            eq(attempts.successNotes, current.successNotes),
             current.outcome === null ? isNull(attempts.outcome) : eq(attempts.outcome, current.outcome),
           ),
         )
