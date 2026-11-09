@@ -268,6 +268,8 @@ function LogAttempt({
       <form
         onSubmit={(event) => event.preventDefault()}
         onKeyDown={(event) => {
+          // The note handles its own Enter (and logs from there): don't log twice.
+          if (event.defaultPrevented) return;
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && draft.outcome) {
             event.preventDefault();
             save(draft.outcome);
