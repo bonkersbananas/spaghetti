@@ -15,7 +15,7 @@ import { useLastSeen } from "@/lib/persist";
  */
 export function OfflineNotice() {
   const online = useOnline();
-  const waiting = useOutbox().entries.length;
+  const { waiting, finishes } = useWaiting();
   const seenAt = useLastSeen();
   return (
     <div
@@ -26,10 +26,25 @@ export function OfflineNotice() {
       )}
     >
       <div className="overflow-hidden">
-        {!online && <OfflineBanner waiting={waiting} seenAt={seenAt} className="mt-3 md:mt-6" />}
+        {!online && <OfflineBanner waiting={waiting} finishes={finishes} seenAt={seenAt} className="mt-3 md:mt-6" />}
       </div>
     </div>
   );
+}
+
+/** What the outbox holds: captures (anything but a finish and the photos that go with it) and finished prints. */
+function useWaiting() {
+  const { entries } = useOutbox();
+  let finishes = 0;
+  let waiting = 0;
+  for (const entry of entries) {
+    const finishing = new Set((entry.finishes ?? []).map((finish) => finish.attemptId));
+    finishes += finishing.size;
+    const capture =
+      entry.create || entry.attempts?.length || entry.photos.some((photo) => !finishing.has(photo.attemptId ?? ""));
+    if (capture) waiting += 1;
+  }
+  return { waiting, finishes };
 }
 
 /** "2 h ago" stays right while the strip is open. */
@@ -49,17 +64,24 @@ function useMinuteClock() {
  */
 export function OfflineBanner({
   waiting,
+  finishes = 0,
   seenAt,
   className,
 }: {
   waiting: number;
+  /** Prints finished here, queued to be sent. */
+  finishes?: number;
   /** When the data on screen last came from the server. */
   seenAt?: number | null;
   className?: string;
 }) {
   const now = useMinuteClock();
-  const captures = waiting
-    ? `${waiting === 1 ? "1 capture is" : `${waiting} captures are`} waiting on this device.`
+  const queued = [
+    waiting > 0 && `${waiting} ${waiting === 1 ? "capture" : "captures"}`,
+    finishes > 0 && `${finishes} finished ${finishes === 1 ? "print" : "prints"}`,
+  ].filter(Boolean);
+  const captures = queued.length
+    ? `${queued.join(" and ")} ${waiting + finishes === 1 ? "is" : "are"} waiting on this device.`
     : "Captures wait on this device until you're back.";
   return (
     <div

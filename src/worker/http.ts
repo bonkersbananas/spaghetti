@@ -41,6 +41,7 @@ export function toApiAttempt(attempt: Attempt, previous: Attempt | null | undefi
     settings: attempt.settings,
     changes: previous ? describeChanges(previous.settings, attempt.settings) : [],
     createdBy: attempt.createdBy,
+    finishedBy: attempt.finishedBy,
     createdAt: attempt.createdAt.getTime(),
     updatedAt: attempt.updatedAt.getTime(),
   };

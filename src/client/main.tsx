@@ -10,11 +10,17 @@ import { createRoot } from "react-dom/client";
 import { registerServiceWorker } from "./lib/offline";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
 import { initTheme } from "./lib/theme";
+import { warmPhotosFor } from "./lib/warm-photos";
 import { routeTree } from "./routeTree.gen";
 
 const queryClient = new QueryClient({
   // Only answers from the server date what was seen (optimistic edits don't).
-  queryCache: new QueryCache({ onSuccess: (_data, query) => recordFetch(query) }),
+  queryCache: new QueryCache({
+    onSuccess: (data, query) => {
+      recordFetch(query);
+      warmPhotosFor(query.queryKey, data);
+    },
+  }),
   defaultOptions: {
     // "always": without a connection a query fails at once and the screen can say so,
     // rather than waiting forever behind a skeleton.

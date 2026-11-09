@@ -206,6 +206,35 @@ export function logAttempt(item: Pick<ItemView, "id">, draft: AttemptDraft, crea
   return id;
 }
 
+/** What someone added to a note in a form that started from `base`: the rest after it, or all of it if it was rewritten. */
+function addedNote(base: string, next: string): string {
+  const before = base.trim();
+  const after = next.trim();
+  if (after === before) return "";
+  return before && after.startsWith(before) ? after.slice(before.length).trim() : after;
+}
+
+/**
+ * Finishes a print that is saved on the server while it can't be reached: the
+ * finish waits in the outbox (outcome, when, note and tags) and goes up with
+ * its photos when the connection is back. The server only fills what is empty,
+ * so it can't overwrite what someone else did meanwhile.
+ */
+export function queueFinish(
+  itemId: string,
+  attempt: Pick<AttemptView, "id" | "note">,
+  draft: { outcome: Outcome; note: string; failureTags: string[]; successNotes: string[] },
+) {
+  void outbox.addFinish(itemId, {
+    attemptId: attempt.id,
+    outcome: draft.outcome,
+    finishedAt: Date.now(),
+    note: addedNote(attempt.note, draft.note),
+    failureTags: draft.failureTags,
+    successNotes: draft.successNotes,
+  });
+}
+
 /** Saves edits to an attempt (autosave): the cache first, then the server or the outbox. */
 export async function saveAttemptChanges(
   queryClient: QueryClient,

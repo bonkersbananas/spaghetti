@@ -31,6 +31,7 @@ src/
     lib/                  api client, queries, hotkeys, motion tokens, hooks
       items.ts            item queries, cache helpers, delete/restore, useIdeas/useBuilds (server + outbox)
       builds.ts           stage changes, logging and editing attempts, tags, hero and final photos
+      warm-photos.ts      quietly fetches photos into the service worker's cache for offline use
       persist.ts          query cache saved to IndexedDB for offline reading (PERSISTED_ROOTS), "last seen" times
       read-only.ts        useReadOnly / canEdit: saved things aren't editable offline
       outbox.ts           IndexedDB queue that creates items and uploads photos, with retries
@@ -109,6 +110,7 @@ Never edit a migration that has been merged; add a new one.
 ### Builds and attempts
 
 - A build is an item with `stage` building, done or shelved (`startedAt`, `finishedAt`, and `coverPhotoId` for the final photo). `PATCH /api/items/:id { stage }` moves it and sets those dates; moving back to `idea` is the undo of "start building". The client keeps ideas and builds in two cached lists (`ideasQuery`, `buildsQuery`); `patchCachedItem` moves an item between them when its stage changes.
+- A print finished with no connection goes through the outbox as a `finish` (`outbox.addFinish`, `POST /api/attempts/:id/finish`): the server only fills what is empty and keeps someone else's outcome; `finishedBy` on the attempt says who finished it.
 - Attempts (`attempts` table) belong to an item; logging one on an idea makes it a build. `outcome` is null while printing. `settings` is one JSON object (`AttemptSettings` in `src/shared/attempts.ts`) whose names match the .3mf reader's output, so phase 5 can prefill it. Without `settings`, the server copies the previous attempt's ("same as last time", minus results such as actual time or where it failed); the client prefills the sheet the same way with `carryOver`. Each attempt comes back with `changes`, from `describeChanges`, which the client recomputes for optimistic edits.
 - Photos may belong to an attempt (`attemptId`); they are still the item's photos, and hidden while their attempt is deleted. New attempts go through the outbox, before their photos, so a photo never uploads ahead of its attempt.
 - Failure tags and success notes are slugs; the built-in ones are in `src/shared/attempts.ts` (from docs/printer.md), people's own in the `tags` table (`/api/tags`). Labels can change without a migration.

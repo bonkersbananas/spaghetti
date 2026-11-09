@@ -14,7 +14,6 @@ import { cn } from "@/lib/cn";
 import type { AttemptView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
-import { useReadOnly } from "@/lib/read-only";
 import { OutcomeChip, outcomeDots } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
 import { filamentLabel, formatMinutes, summarizeResults, summarizeSettings } from "./settings";
@@ -44,7 +43,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 ) {
   const failureOptions = useTagOptions("failure");
   const successOptions = useTagOptions("success");
-  const readOnly = useReadOnly(attempt.pending);
   const printing = attempt.outcome === null;
   const settings = summarizeSettings(attempt.settings);
   const results = summarizeResults(attempt.settings);
@@ -177,7 +175,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                     ? `Should be done ${doneBy(attempt.printedAt, attempt.settings.estimatedMinutes)}`
                     : "On the bed now"}
                 </span>
-                <Button size="sm" variant="secondary" disabled={readOnly} onClick={onFinish} className="ml-auto">
+                <Button size="sm" variant="secondary" onClick={onFinish} className="ml-auto">
                   Finish
                 </Button>
               </div>

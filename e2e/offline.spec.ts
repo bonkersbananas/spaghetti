@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { expect, type Page, request, test } from "@playwright/test";
+import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 // These run against the production build (the dev server has no service worker).
@@ -174,7 +176,8 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   await expect(notice).toBeHidden();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveJSProperty("readOnly", false);
 
-  // Signing out forgets all of it.
+  // Signing out forgets all of it (after clearing the test's data, which needs the session).
+  await clearIdeas(page);
   await page.goto("/ideas");
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -183,6 +186,218 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   await context.setOffline(true);
   await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Spaghetti" })).toBeVisible();
+});
+
+const tugboat = readFileSync("e2e/fixtures/tugboat.jpg");
+
+/** Puts a photo on an item (or one of its attempts) through the API, as the app's own upload does. */
+async function addPhoto(page: Page, itemId: string, attemptId?: string) {
+  const id = crypto.randomUUID();
+  const file = (name: string) => ({ name, mimeType: "image/jpeg", buffer: tugboat });
+  const response = await page.request.put(`/api/items/${itemId}/photos/${id}`, {
+    headers: { Origin: new URL(page.url()).origin },
+    multipart: {
+      width: "1200",
+      height: "800",
+      color: "#c07040",
+      ...(attemptId ? { attemptId } : {}),
+      large: file("large"),
+      thumb: file("thumb"),
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return id;
+}
+
+const cachedPhotos = (page: Page) =>
+  page.evaluate(async () =>
+    (await (await caches.open("sg-photos")).keys()).map((request) => new URL(request.url).pathname),
+  );
+
+/** Every picture in the main area has loaded (none is a flat color block). */
+const picturesLoaded = (page: Page) =>
+  page.evaluate(() => {
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>("main img"));
+    return images.length > 0 && images.every((img) => img.complete && img.naturalWidth > 0);
+  });
+
+test("photos seen online, and the thumbnails below the fold, show with no connection on the inbox, builds and a build", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const headers = { Origin: new URL(page.url()).origin };
+
+  // Forty ideas with a photo each (the last ones are far below the fold on a phone), and a build with photos.
+  const ideaPhotos: string[] = [];
+  for (let n = 0; n < 40; n++) {
+    const id = crypto.randomUUID();
+    await page.request.post("/api/items", { headers, data: { id, title: `Idea ${n}` } });
+    ideaPhotos.push(await addPhoto(page, id));
+  }
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Tugboat", stage: "building" } });
+  const cover = await addPhoto(page, buildId);
+  const attemptId = crypto.randomUUID();
+  await page.request.post(`/api/items/${buildId}/attempts`, { headers, data: { id: attemptId, outcome: "success" } });
+  const attemptPhoto = await addPhoto(page, buildId, attemptId);
+
+  // Only looked at as lists and one build page; nothing scrolled.
+  await page.goto("/ideas");
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link")).toHaveCount(40);
+  // The prefetch runs in the background of this page, so it is left to finish before moving on.
+  const missing = async (paths: string[]) => {
+    const have = new Set(await cachedPhotos(page));
+    return paths.filter((path) => !have.has(path));
+  };
+  await expect.poll(() => missing(ideaPhotos.map((id) => `/api/photos/${id}/thumb`))).toEqual([]);
+  await page.goto("/builds");
+  await expect(page.getByRole("link", { name: /Tugboat/ }).first()).toBeVisible();
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Tugboat");
+  await expect.poll(() => picturesLoaded(page)).toBe(true);
+  // The prefetch has fetched the cover and the attempt's large photo too.
+  await expect
+    .poll(() =>
+      missing([`/api/photos/${cover}/thumb`, `/api/photos/${cover}/large`, `/api/photos/${attemptPhoto}/large`]),
+    )
+    .toEqual([]);
+
+  await context.setOffline(true);
+  await page.goto("/ideas");
+  await expect(page.getByRole("status").filter({ hasText: "Showing what you saw" })).toBeVisible();
+  const last = page.getByRole("list", { name: "Ideas" }).getByRole("link").last();
+  await last.scrollIntoViewIfNeeded();
+  await expect.poll(() => picturesLoaded(page)).toBe(true);
+  await page.reload();
+  await page.getByRole("list", { name: "Ideas" }).getByRole("link").last().scrollIntoViewIfNeeded();
+  await expect.poll(() => picturesLoaded(page)).toBe(true);
+
+  await page.goto("/builds");
+  await expect(page.getByRole("link", { name: /Tugboat/ }).first()).toBeVisible();
+  await expect.poll(() => picturesLoaded(page)).toBe(true);
+
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Tugboat");
+  await expect.poll(() => picturesLoaded(page)).toBe(true);
+});
+
+/** A build whose attempt 1 failed and attempt 2 is still printing, opened online and then read with no signal. */
+async function printingBuild(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const buildId = crypto.randomUUID();
+  const printing = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Cable chain", stage: "building" } });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: "failed", note: "Let go of the bed", printedAt: Date.now() - 3_600_000 },
+  });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: { id: printing, outcome: null, note: "Brim on" },
+  });
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("list", { name: "Attempts, newest first" }).getByRole("listitem")).toHaveCount(2);
+  await expect.poll(() => cacheHolds(page, "Brim on")).toBe(true);
+  return { buildId, printing, headers };
+}
+
+const serverAttempt = async (page: Page, buildId: string, id: string) =>
+  (await (await page.request.get(`/api/items/${buildId}`)).json()).item.attempts.find(
+    (a: { id: string }) => a.id === id,
+  );
+
+test("finishes a print that is printing with no signal: outcome, note and photo wait in the outbox and go up when it's back", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const { buildId, printing } = await printingBuild(page);
+
+  await context.setOffline(true);
+  await page.reload();
+  const notice = page.getByRole("status").filter({ hasText: "Offline" });
+  await expect(notice).toContainText("Showing what you saw");
+  // The main action is there, not greyed out.
+  const finish = page.getByRole("button", { name: "Finish attempt 2" });
+  await expect(finish).toBeEnabled();
+  await finish.click();
+  const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
+  await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
+  await expect(sheet.getByRole("img", { name: "Attempt photo 1" })).toBeVisible();
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  await sheet.getByRole("textbox", { name: "Note" }).press("End");
+  await sheet.getByRole("textbox", { name: "Note" }).pressSequentially(" and a hotter bed");
+  // What isn't about finishing stays read-only.
+  await expect(sheet.getByRole("button", { name: "Delete" })).toBeDisabled();
+  await sheet.getByRole("button", { name: "Finish attempt" }).click();
+  await expect(sheet).toBeHidden();
+
+  // It shows as finished at once, and the strip says it is waiting.
+  const story = page.getByRole("list", { name: "Attempts, newest first" });
+  await expect(story.getByRole("listitem").first()).toContainText("Brim on · and a hotter bed");
+  await expect(story.getByRole("listitem").first()).toContainText("Worked");
+  await expect(notice).toContainText("1 finished print is waiting");
+  expect((await serverAttempt(page, buildId, printing)).outcome).toBeNull();
+
+  // Back online: it lands, with its photo.
+  await context.setOffline(false);
+  await expect.poll(async () => (await serverAttempt(page, buildId, printing)).outcome).toBe("success");
+  const landed = await serverAttempt(page, buildId, printing);
+  expect(landed.note).toBe("Brim on · and a hotter bed");
+  expect(landed.finishedBy).toBeTruthy();
+  await expect
+    .poll(async () => {
+      const { item } = await (await page.request.get(`/api/items/${buildId}`)).json();
+      return item.photos.filter((p: { attemptId: string }) => p.attemptId === printing).length;
+    })
+    .toBe(1);
+  await expect(notice).toBeHidden();
+});
+
+test("a finish queued offline keeps the other person's outcome, adds the photo and note, and says so", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const { buildId, printing } = await printingBuild(page);
+
+  await context.setOffline(true);
+  await page.reload();
+  await page.getByRole("button", { name: "Finish attempt 2" }).click();
+  const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
+  await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
+  await expect(sheet.getByRole("img", { name: "Attempt photo 1" })).toBeVisible();
+  await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+  await sheet.getByRole("textbox", { name: "Note" }).press("End");
+  await sheet.getByRole("textbox", { name: "Note" }).pressSequentially(" then it let go");
+  await sheet.getByRole("button", { name: "Finish attempt" }).click();
+  await expect(sheet).toBeHidden();
+
+  // Meanwhile Sam finishes it from the other phone.
+  const sam = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL ?? "" } });
+  expect(
+    (await sam.post("/api/session", { data: { username: SEED_USERS[1].username, password: SEED_PASSWORD } })).ok(),
+  ).toBe(true);
+  expect((await sam.patch(`/api/attempts/${printing}`, { data: { outcome: "success" } })).ok()).toBe(true);
+  await sam.dispose();
+
+  await context.setOffline(false);
+  await expect(page.getByText("Sam had already finished attempt 2")).toBeVisible();
+  await expect(page.getByText("Your photo and note were added.")).toBeVisible();
+  await expect.poll(async () => (await serverAttempt(page, buildId, printing)).note).toBe("Brim on · then it let go");
+  const landed = await serverAttempt(page, buildId, printing);
+  expect(landed.outcome).toBe("success");
+  await expect
+    .poll(async () => {
+      const { item } = await (await page.request.get(`/api/items/${buildId}`)).json();
+      return item.photos.filter((p: { attemptId: string }) => p.attemptId === printing).length;
+    })
+    .toBe(1);
 });
 
 test("is installable: manifests for both themes, maskable icons, and a worker that precaches the shell", async ({

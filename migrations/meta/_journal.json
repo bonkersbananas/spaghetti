@@ -22,6 +22,13 @@
       "when": 1794261105543,
       "tag": "0002_builds-and-attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794266395615,
+      "tag": "0003_attempt-finished-by",
+      "breakpoints": true
     }
   ]
 }

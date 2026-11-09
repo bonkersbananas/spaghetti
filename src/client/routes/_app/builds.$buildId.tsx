@@ -137,13 +137,7 @@ function Build({ item }: { item: ItemView }) {
   const printing = story.find((attempt) => attempt.outcome === null);
   const [sheet, setSheet] = useState<{ open: boolean; attemptId: string | null }>({ open: false, attemptId: null });
   const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId });
-  // Finishing a saved print changes it on the server: it waits for the connection (logging a new attempt doesn't).
-  const offline = useReadOnly();
-  const finishLocked = !!printing && offline && !printing.pending;
-  const primary = () => {
-    if (printing && !canEdit(printing.pending)) return;
-    openSheet(printing?.id ?? null);
-  };
+  const primary = () => openSheet(printing?.id ?? null);
   const [selected, setSelected] = useState<string | null>(null);
   const selectedIndex = story.findIndex((attempt) => attempt.id === selected);
   const entryRefs = useRef(new Map<string, HTMLLIElement>());
@@ -333,13 +327,7 @@ function Build({ item }: { item: ItemView }) {
               )}
             </h2>
             {isDesktop && (
-              <Button
-                variant="primary"
-                icon={printing ? CheckIcon : PlusIcon}
-                shortcut={["A"]}
-                disabled={finishLocked}
-                onClick={primary}
-              >
+              <Button variant="primary" icon={printing ? CheckIcon : PlusIcon} shortcut={["A"]} onClick={primary}>
                 {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
               </Button>
             )}
@@ -397,14 +385,7 @@ function Build({ item }: { item: ItemView }) {
 
       {!isDesktop && (active || printing) && (
         <ActionBar>
-          <Button
-            variant="primary"
-            size="lg"
-            icon={printing ? CheckIcon : PlusIcon}
-            fullWidth
-            disabled={finishLocked}
-            onClick={primary}
-          >
+          <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
             {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
           </Button>
         </ActionBar>

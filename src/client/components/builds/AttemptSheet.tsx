@@ -1,7 +1,7 @@
 import { type AttemptSettings, carryOver, describeChanges, type Outcome } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea, TextField } from "@/components/ui/Field";
@@ -10,7 +10,7 @@ import { Kbd } from "@/components/ui/Kbd";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Sheet } from "@/components/ui/Sheet";
-import { type AttemptDraft, deleteAttempt, logAttempt, saveAttemptChanges } from "@/lib/builds";
+import { type AttemptDraft, deleteAttempt, logAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
 import { useDraftPhotos } from "@/lib/capture";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
@@ -46,7 +46,14 @@ export function AttemptSheet({ item, attemptId, open, onOpenChange, initialOutco
   }, [open, attemptId, attempt, onOpenChange]);
   if (attemptId) {
     return attempt ? (
-      <EditAttempt key={attempt.id} item={item} attempt={attempt} open={open} onOpenChange={onOpenChange} />
+      // A finish queued on this device remounts it, so it starts again from the finished attempt rather than autosaving its draft.
+      <EditAttempt
+        key={`${attempt.id}${attempt.finishQueued ? ":queued" : ""}`}
+        item={item}
+        attempt={attempt}
+        open={open}
+        onOpenChange={onOpenChange}
+      />
     ) : null;
   }
   return <LogAttempt item={item} open={open} onOpenChange={onOpenChange} initialOutcome={initialOutcome} />;
@@ -109,8 +116,11 @@ interface FieldsProps {
   outcomeLabel: string;
   /** Enter in the note, on desktop: log the attempt. */
   onEnter?: () => void;
-  /** A saved attempt, seen without a connection: the fields show what was written and can't be changed. */
-  readOnly?: boolean;
+  /**
+   * A saved attempt, seen without a connection: "all" shows what was written and changes nothing;
+   * "finish" (a print still printing) lets the outcome, note and tags be filled in, to be sent later.
+   */
+  readOnly?: "all" | "finish";
 }
 
 function AttemptFields(props: FieldsProps) {
@@ -130,15 +140,17 @@ function AttemptFields(props: FieldsProps) {
 
   return (
     <div className="flex flex-col gap-5" data-capture>
-      <fieldset disabled={props.readOnly} className="contents">
+      <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
           <OutcomePicker value={outcome} onChange={props.onOutcome} />
         </div>
+      </fieldset>
+      <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>
       {props.photos}
-      <fieldset disabled={props.readOnly} className="contents">
+      <fieldset disabled={props.readOnly === "all"} className="contents">
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
           aria-label="Note"
@@ -168,6 +180,8 @@ function AttemptFields(props: FieldsProps) {
         {(outcome === "success" || outcome === "partial") && (
           <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
         )}
+      </fieldset>
+      <fieldset disabled={!!props.readOnly} className="contents">
         <Disclosure
           open={settingsOpen || !!props.readOnly}
           onOpenChange={setSettingsOpen}
@@ -350,7 +364,10 @@ function EditAttempt({
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
-  const readOnly = useReadOnly(attempt.pending);
+  const offline = useReadOnly(attempt.pending);
+  const printing = attempt.outcome === null;
+  // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
+  const readOnly = offline ? (printing ? "finish" : "all") : undefined;
   const [value, setValue] = useState({
     outcome: attempt.outcome,
     printedAt: attempt.printedAt,
@@ -359,9 +376,15 @@ function EditAttempt({
     successNotes: attempt.successNotes,
     settings: attempt.settings,
   });
-  const saveState = useAutosave(value, (changes) => saveAttemptChanges(queryClient, item.id, attempt.id, changes), {
-    delay: 500,
-  });
+  // While finishing offline nothing autosaves: what was typed waits for the finish button (or for the
+  // connection, when it comes back and the usual autosave takes over).
+  const held = useRef(value);
+  if (readOnly !== "finish") held.current = value;
+  const saveState = useAutosave(
+    readOnly === "finish" ? held.current : value,
+    (changes) => saveAttemptChanges(queryClient, item.id, attempt.id, changes),
+    { delay: 500 },
+  );
   const change = (next: Partial<typeof value>) => setValue((current) => ({ ...current, ...next }));
   const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(item.id, files, attempt.id) });
   const library = useFilePicker({
@@ -370,7 +393,6 @@ function EditAttempt({
   });
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const previous = item.attempts[attempt.number - 2];
-  const printing = attempt.outcome === null;
 
   return (
     <Sheet
@@ -390,7 +412,7 @@ function EditAttempt({
             variant="quiet"
             icon={TrashIcon}
             size={isDesktop ? "md" : "lg"}
-            disabled={readOnly}
+            disabled={!!readOnly}
             onClick={() => {
               deleteAttempt(queryClient, item.id, attempt);
               onOpenChange(false);
@@ -403,9 +425,13 @@ function EditAttempt({
           <Button
             variant={printing && !value.outcome ? "secondary" : "primary"}
             size={isDesktop ? "md" : "lg"}
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              if (readOnly === "finish" && value.outcome)
+                queueFinish(item.id, attempt, { ...value, outcome: value.outcome });
+              onOpenChange(false);
+            }}
           >
-            Done
+            {readOnly === "finish" && value.outcome ? "Finish attempt" : "Done"}
           </Button>
         </>
       }
@@ -436,7 +462,7 @@ function EditAttempt({
                 alt={`Attempt photo ${index + 1}`}
                 color={photo.color || undefined}
                 busy={!!photo.upload}
-                onRemove={readOnly && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
+                onRemove={offline && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
             ))}
             {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
