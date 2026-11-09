@@ -7,10 +7,12 @@ import { readSession } from "./auth/session.ts";
 import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
+import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { sessionRoutes } from "./routes/session.ts";
+import { tagRoutes } from "./routes/tags.ts";
 
 /** Everything under /api except signing in needs a session. */
 const requireUser = createMiddleware<AppEnv>(async (c, next) => {
@@ -35,7 +37,10 @@ export const app = new Hono<AppEnv>()
   .use(requireUser)
   .route("/people", peopleRoutes)
   .route("/items", itemRoutes)
+  .route("/items", itemAttemptRoutes)
+  .route("/attempts", attemptRoutes)
   .route("/photos", photoRoutes)
+  .route("/tags", tagRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))
   .onError((err, c) => {
     if (err instanceof HTTPException) {

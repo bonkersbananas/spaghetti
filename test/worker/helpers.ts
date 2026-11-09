@@ -41,6 +41,8 @@ export async function signIn(username: string, password: string): Promise<string
 export async function resetDb() {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM photos"),
+    env.DB.prepare("DELETE FROM attempts"),
+    env.DB.prepare("DELETE FROM tags"),
     env.DB.prepare("DELETE FROM items"),
     env.DB.prepare("DELETE FROM sessions"),
     env.DB.prepare("DELETE FROM users"),

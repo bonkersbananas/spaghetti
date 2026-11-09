@@ -1,3 +1,4 @@
+import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
 import type { PersonColor } from "./people.ts";
 
 /** A person as the client sees them: never includes credentials. */
@@ -33,11 +34,39 @@ export interface Photo {
   color: string;
   /** Epoch ms from the photo's EXIF data, when there was any. */
   takenAt: number | null;
+  /** The print attempt it shows, or null for the item's own photos. */
+  attemptId: string | null;
   createdBy: string;
   createdAt: number;
 }
 
-/** An idea (phase 2), later a build. Titles are optional. */
+/**
+ * One go at printing a build. Printing while `outcome` is null; finished with
+ * an outcome, now or later.
+ */
+export interface Attempt {
+  id: string;
+  itemId: string;
+  outcome: Outcome | null;
+  /** When it was printed (or started printing), epoch ms. */
+  printedAt: number;
+  /** When an outcome was given. */
+  finishedAt: number | null;
+  /** The one-line note. */
+  note: string;
+  /** Slugs of failure tags (built in or people's own). */
+  failureTags: string[];
+  /** Slugs of success notes. */
+  successNotes: string[];
+  settings: AttemptSettings;
+  /** What changed since the attempt before it; empty for the first. */
+  changes: SettingChange[];
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** An idea, and the build it grows into: one record that moves through stages. Titles are optional. */
 export interface Item {
   id: string;
   stage: ItemStage;
@@ -47,8 +76,16 @@ export interface Item {
   createdBy: string;
   createdAt: number;
   updatedAt: number;
-  /** In order: the first is the cover. */
+  /** When it became a build. */
+  startedAt: number | null;
+  /** When it was marked done or shelved. */
+  finishedAt: number | null;
+  /** The final photo, picked when a build is finished. */
+  coverPhotoId: string | null;
+  /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */
   photos: Photo[];
+  /** Oldest first: the first is attempt 1. Always empty for ideas. */
+  attempts: Attempt[];
 }
 
 export interface ItemsResponse {
@@ -70,12 +107,69 @@ export interface CreateItemRequest {
   note?: string;
   /** When it was captured (epoch ms), which can be before an offline upload. */
   createdAt?: number;
+  /** "building" for a build started from scratch. */
+  stage?: "idea" | "building";
 }
 
 /** PATCH /api/items/:id */
 export interface UpdateItemRequest {
   title?: string | null;
   note?: string;
+  /** Moves an idea to a build, finishes or shelves it, or takes that back. */
+  stage?: ItemStage;
+  /** One of the item's photos, or null. */
+  coverPhotoId?: string | null;
+}
+
+/**
+ * POST /api/items/:id/attempts. The client picks the id. Without `settings`,
+ * the attempt starts from the previous attempt's ("same as last time").
+ * Logging an attempt on an idea makes it a build.
+ */
+export interface CreateAttemptRequest {
+  id: string;
+  /** Left out or null: still printing. */
+  outcome?: Outcome | null;
+  printedAt?: number;
+  note?: string;
+  failureTags?: string[];
+  successNotes?: string[];
+  settings?: AttemptSettings;
+}
+
+/** PATCH /api/attempts/:id. `settings` replaces the whole object. */
+export interface UpdateAttemptRequest {
+  outcome?: Outcome | null;
+  printedAt?: number;
+  note?: string;
+  failureTags?: string[];
+  successNotes?: string[];
+  settings?: AttemptSettings;
+}
+
+export interface AttemptResponse {
+  attempt: Attempt;
+}
+
+/** A failure tag or success note someone added; the built-in ones live in shared/attempts.ts. */
+export interface Tag {
+  kind: TagKind;
+  slug: string;
+  label: string;
+}
+
+export interface TagsResponse {
+  tags: Tag[];
+}
+
+/** POST /api/tags. The slug is made from the label; adding one that exists returns it. */
+export interface CreateTagRequest {
+  kind: TagKind;
+  label: string;
+}
+
+export interface TagResponse {
+  tag: Tag;
 }
 
 /** PUT /api/items/:id/photos/order */
