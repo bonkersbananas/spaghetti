@@ -31,6 +31,8 @@ src/
     lib/                  api client, queries, hotkeys, motion tokens, hooks
       items.ts            item queries, cache helpers, delete/restore, useIdeas/useBuilds (server + outbox)
       builds.ts           stage changes, logging and editing attempts, tags, hero and final photos
+      persist.ts          query cache saved to IndexedDB for offline reading (PERSISTED_ROOTS), "last seen" times
+      read-only.ts        useReadOnly / canEdit: saved things aren't editable offline
       outbox.ts           IndexedDB queue that creates items and uploads photos, with retries
       images.ts           in-browser resizing (createImageBitmap + canvas), WebP/JPEG, average color
       capture.tsx         capture state, paste and drop

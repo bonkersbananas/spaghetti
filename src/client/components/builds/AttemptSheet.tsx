@@ -15,6 +15,7 @@ import { useDraftPhotos } from "@/lib/capture";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
+import { useReadOnly } from "@/lib/read-only";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { OutcomePicker } from "./Outcome";
@@ -108,6 +109,8 @@ interface FieldsProps {
   outcomeLabel: string;
   /** Enter in the note, on desktop: log the attempt. */
   onEnter?: () => void;
+  /** A saved attempt, seen without a connection: the fields show what was written and can't be changed. */
+  readOnly?: boolean;
 }
 
 function AttemptFields(props: FieldsProps) {
@@ -127,50 +130,54 @@ function AttemptFields(props: FieldsProps) {
 
   return (
     <div className="flex flex-col gap-5" data-capture>
-      <div className="flex flex-col gap-3">
-        <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
-        <OutcomePicker value={outcome} onChange={props.onOutcome} />
-      </div>
-      {props.when}
+      <fieldset disabled={props.readOnly} className="contents">
+        <div className="flex flex-col gap-3">
+          <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
+          <OutcomePicker value={outcome} onChange={props.onOutcome} />
+        </div>
+        {props.when}
+      </fieldset>
       {props.photos}
-      {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
-      <TextArea
-        aria-label="Note"
-        minRows={1}
-        placeholder={
-          outcome === "failed"
-            ? "What went wrong? One line is plenty."
-            : outcome === "success"
-              ? "What made it work? One line is plenty."
-              : "A line about this attempt"
-        }
-        maxLength={500}
-        enterKeyHint="done"
-        value={props.note}
-        onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-          // Enter logs the attempt on desktop (when it can be logged); on a phone it puts the keyboard away.
-          event.preventDefault();
-          if (isDesktop && props.onEnter) props.onEnter();
-          else event.currentTarget.blur();
-        }}
-      />
-      {(outcome === "failed" || outcome === "partial") && (
-        <TagPicker kind="failure" label="What went wrong?" value={props.failureTags} onChange={props.onFailureTags} />
-      )}
-      {(outcome === "success" || outcome === "partial") && (
-        <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
-      )}
-      <Disclosure
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        title="Settings"
-        icon={SettingsIcon}
-        summary={settingsSummary}
-      >
-        <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} />
-      </Disclosure>
+      <fieldset disabled={props.readOnly} className="contents">
+        {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
+        <TextArea
+          aria-label="Note"
+          minRows={1}
+          placeholder={
+            outcome === "failed"
+              ? "What went wrong? One line is plenty."
+              : outcome === "success"
+                ? "What made it work? One line is plenty."
+                : "A line about this attempt"
+          }
+          maxLength={500}
+          enterKeyHint="done"
+          value={props.note}
+          onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+            // Enter logs the attempt on desktop (when it can be logged); on a phone it puts the keyboard away.
+            event.preventDefault();
+            if (isDesktop && props.onEnter) props.onEnter();
+            else event.currentTarget.blur();
+          }}
+        />
+        {(outcome === "failed" || outcome === "partial") && (
+          <TagPicker kind="failure" label="What went wrong?" value={props.failureTags} onChange={props.onFailureTags} />
+        )}
+        {(outcome === "success" || outcome === "partial") && (
+          <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
+        )}
+        <Disclosure
+          open={settingsOpen || !!props.readOnly}
+          onOpenChange={setSettingsOpen}
+          title="Settings"
+          icon={SettingsIcon}
+          summary={settingsSummary}
+        >
+          <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} />
+        </Disclosure>
+      </fieldset>
     </div>
   );
 }
@@ -343,6 +350,7 @@ function EditAttempt({
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
+  const readOnly = useReadOnly(attempt.pending);
   const [value, setValue] = useState({
     outcome: attempt.outcome,
     printedAt: attempt.printedAt,
@@ -382,6 +390,7 @@ function EditAttempt({
             variant="quiet"
             icon={TrashIcon}
             size={isDesktop ? "md" : "lg"}
+            disabled={readOnly}
             onClick={() => {
               deleteAttempt(queryClient, item.id, attempt);
               onOpenChange(false);
@@ -405,6 +414,7 @@ function EditAttempt({
       {library.input}
       <AttemptFields
         outcomeLabel={printing ? "Finished? How did it go?" : "How did it go?"}
+        readOnly={readOnly}
         outcome={value.outcome}
         onOutcome={(outcome) => change({ outcome })}
         note={value.note}
@@ -426,7 +436,7 @@ function EditAttempt({
                 alt={`Attempt photo ${index + 1}`}
                 color={photo.color || undefined}
                 busy={!!photo.upload}
-                onRemove={() => removePhoto(queryClient, photo)}
+                onRemove={readOnly && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
             ))}
             {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}

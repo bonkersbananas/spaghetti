@@ -80,6 +80,103 @@ test("never serves the API from a cache, but keeps photos already seen", async (
   expect(items).toBe("unreachable");
 });
 
+/** Whether the persisted query cache (IndexedDB) holds the text, or anything at all when none is given. */
+const cacheHolds = (page: Page, text?: string) =>
+  page.evaluate(
+    (needle) =>
+      new Promise<boolean>((resolve) => {
+        const open = indexedDB.open("spaghetti-cache");
+        open.onerror = () => resolve(false);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains("queries")) return resolve(false);
+          const all = db.transaction("queries").objectStore("queries").getAll();
+          all.onsuccess = () => resolve(needle ? JSON.stringify(all.result).includes(needle) : all.result.length > 0);
+          all.onerror = () => resolve(false);
+        };
+      }),
+    text,
+  );
+
+test("shows a build and the inbox as last seen with no connection, read-only, and sign-out forgets them", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const headers = { Origin: new URL(page.url()).origin };
+
+  // A build with two attempts, and an idea, as the other person might have left them.
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Cable chain", stage: "building" } });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: "failed", note: "Let go of the bed at 40%", settings: { bedTemp: 55 } },
+  });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: {
+      id: crypto.randomUUID(),
+      outcome: "success",
+      note: "Brim and a hotter bed did it",
+      settings: { bedTemp: 60 },
+    },
+  });
+  await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title: "Spool holder" } });
+
+  // Looked at once, online.
+  await page.goto("/ideas");
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toContainText("Spool holder");
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  const attempts = page.getByRole("list", { name: "Attempts, newest first" });
+  await expect(attempts.getByRole("listitem")).toHaveCount(2);
+  await expect.poll(() => cacheHolds(page, "Brim and a hotter bed did it")).toBe(true);
+  await expect.poll(() => cacheHolds(page, "Spool holder")).toBe(true);
+  // Nothing in the notice while the connection is there.
+  await expect(page.getByRole("status").filter({ hasText: "Showing what you saw" })).toHaveCount(0);
+
+  // Reloaded with no signal, as next to the printer.
+  await context.setOffline(true);
+  await page.reload();
+  const notice = page.getByRole("status").filter({ hasText: "Offline" });
+  await expect(notice).toContainText("Showing what you saw");
+  await expect(notice).toContainText("read-only");
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await expect(attempts.getByRole("listitem")).toHaveCount(2);
+  await expect(attempts).toContainText("Brim and a hotter bed did it");
+  await expect(page.getByText("What worked · attempt 2")).toBeVisible();
+  // Saved fields don't pretend to save.
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveJSProperty("readOnly", true);
+  await expect(page.getByRole("button", { name: "Finish build" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Delete build" })).toBeDisabled();
+  // Logging an attempt still works.
+  await expect(page.getByRole("button", { name: "Log attempt" })).toBeEnabled();
+
+  // The inbox, opened offline from the same visit.
+  await page.goto("/ideas");
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toContainText("Spool holder");
+  await expect(notice).toContainText("Showing what you saw");
+
+  // The connection is back; the other person has renamed the build meanwhile. The marker goes, and the server's title replaces what was kept.
+  await context.setOffline(false);
+  await page.request.patch(`/api/items/${buildId}`, { headers, data: { title: "Cable chain v2" } });
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain v2");
+  await expect(notice).toBeHidden();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveJSProperty("readOnly", false);
+
+  // Signing out forgets all of it.
+  await page.goto("/ideas");
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/sign-in/);
+  await expect.poll(() => cacheHolds(page)).toBe(false);
+  await context.setOffline(true);
+  await page.goto("/ideas");
+  await expect(page.getByRole("heading", { level: 1, name: "Spaghetti" })).toBeVisible();
+});
+
 test("is installable: manifests for both themes, maskable icons, and a worker that precaches the shell", async ({
   page,
 }) => {

@@ -1,10 +1,12 @@
 import { toast } from "@/components/ui/Toast";
+import { clearPersistedQueries } from "./persist";
 
 /** The service worker's cache of photos already seen (src/sw/sw.js). */
 const PHOTO_CACHE = "sg-photos";
 
 /** Forgets what was kept for offline use. Signing out calls it: the next person to use this device sees none of it. */
 export async function clearOfflineData() {
+  await clearPersistedQueries();
   try {
     await caches.delete(PHOTO_CACHE);
   } catch {

@@ -24,6 +24,7 @@ import { ApiError, api } from "./api";
 import type { DraftPhoto } from "./capture";
 import { type AttemptView, cachedItem, type ItemView, type PhotoView, patchCachedItem, useBuilds } from "./items";
 import { outbox, type PendingAttemptChanges } from "./outbox";
+import { canEdit } from "./read-only";
 
 /** The fields of a stage change, as the server sets them. */
 function stageFields(item: Pick<Item, "startedAt">, stage: ItemStage, now = Date.now()) {
@@ -76,6 +77,7 @@ async function changeStage(
 
 /** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
 export function startBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   void changeStage(queryClient, item.id, "building");
   toast.undo("Moved to Builds", {
     description: "Same idea, same photos. Log the first attempt when it prints.",
@@ -125,6 +127,7 @@ export function newestPhoto(item: Pick<ItemView, "photos">): PhotoView | undefin
  * some spaghetti to get there earns a small moment of delight.
  */
 export function finishBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const previousCover = item.coverPhotoId;
   const final = finalPhotoGuess(item);
   void changeStage(queryClient, item.id, "done", final && !final.upload ? { coverPhotoId: final.id } : {});
@@ -143,6 +146,7 @@ export function finishBuild(queryClient: QueryClient, item: ItemView) {
 }
 
 export function shelveBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const before = item.stage;
   void changeStage(queryClient, item.id, "shelved");
   toast.undo("Shelved", {
@@ -153,6 +157,7 @@ export function shelveBuild(queryClient: QueryClient, item: ItemView) {
 
 /** Back on the bed: a done or shelved build becomes active again. */
 export function reopenBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const before = item.stage;
   void changeStage(queryClient, item.id, "building");
   toast.undo("Back on the bed", { onUndo: () => void changeStage(queryClient, item.id, before) });
@@ -239,6 +244,7 @@ export async function saveAttemptChanges(
 
 /** Deletes an attempt and its photos at once, with Undo. */
 export function deleteAttempt(queryClient: QueryClient, itemId: string, attempt: AttemptView) {
+  if (!canEdit(attempt.pending)) return;
   const pending = outbox.removeAttempt(attempt.id);
   const queuedPhotos = pending ? [] : outbox.dropAttemptPhotos(attempt.id);
   let removed: { attempt: Attempt; photos: Photo[] } | undefined;

@@ -6,6 +6,7 @@ import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTi
 import { cn } from "@/lib/cn";
 import { addPhotosToItem, type PhotoView, removePhoto, reorderPhotos } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
+import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 interface PhotoStripProps {
@@ -23,6 +24,8 @@ interface PhotoStripProps {
 export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripProps) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
+  // Saved photos can't be moved or removed without a connection; adding more waits in the outbox.
+  const offline = useReadOnly();
   const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(itemId, files) });
   const library = useFilePicker({ multiple: true, onFiles: (files) => addPhotosToItem(itemId, files) });
   const ids = photos.map((photo) => photo.id);
@@ -50,6 +53,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripP
 
   function move(photoId: string, by: number) {
     const from = order.indexOf(photoId);
+    if (offline) return;
     const to = from + by;
     if (to < 0 || to >= order.length) return;
     const next = [...order];
@@ -79,7 +83,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripP
             <Reorder.Item
               key={id}
               value={id}
-              drag={photo.upload ? false : "x"}
+              drag={photo.upload || offline ? false : "x"}
               onDragStart={() => setDragging(true)}
               onDragEnd={() => {
                 setDragging(false);
@@ -115,7 +119,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripP
                   busy={!!photo.upload}
                 />
               </button>
-              {selected && (
+              {selected && (!offline || photo.upload) && (
                 <button
                   type="button"
                   onClick={() => removePhoto(queryClient, photo)}

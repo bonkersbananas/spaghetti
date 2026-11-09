@@ -95,7 +95,20 @@ export const shots: Shot[] = [
     // After the photos have loaded, so they are in the page when the connection goes.
     beforeShot: async (page) => {
       await page.context().setOffline(true);
-      await page.getByRole("status").filter({ hasText: "Offline" }).waitFor();
+      await page.getByRole("status").filter({ hasText: "Showing what you saw" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
+    },
+  },
+  {
+    // A build opened online, then read with no connection: what was last seen, marked as such and read-only.
+    name: "offline-build",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    fullPage: true,
+    beforeShot: async (page) => {
+      await page.context().setOffline(true);
+      await page.getByRole("status").filter({ hasText: "Showing what you saw" }).waitFor();
     },
     cleanup: async (page) => {
       await page.context().setOffline(false);

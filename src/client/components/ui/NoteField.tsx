@@ -8,6 +8,8 @@ interface NoteFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  /** Shown as text only, with its links: no way to start editing (offline, for saved notes). */
+  readOnly?: boolean;
   className?: string;
 }
 
@@ -16,11 +18,19 @@ interface NoteFieldProps {
  * growing textarea when you tap or click it (Escape or leaving it turns it
  * back). Pairs with autosave: there is no save button.
  */
-export function NoteField({ value, onChange, placeholder = "Add a note…", label = "Note", className }: NoteFieldProps) {
+export function NoteField({
+  value,
+  onChange,
+  placeholder = "Add a note…",
+  label = "Note",
+  readOnly,
+  className,
+}: NoteFieldProps) {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  if (editing || !value.trim()) {
+  if (readOnly && !value.trim()) return null;
+  if (!readOnly && (editing || !value.trim())) {
     return (
       <TextArea
         ref={(el) => {
@@ -52,12 +62,14 @@ export function NoteField({ value, onChange, placeholder = "Add a note…", labe
   return (
     <div className={cn("relative", className)}>
       {/* The whole note is a button to start editing; links sit above it and stay clickable. */}
-      <button
-        type="button"
-        aria-label={`Edit ${label.toLowerCase()}`}
-        onClick={() => setEditing(true)}
-        className="focus-ring absolute -inset-1.5 cursor-text rounded-sm"
-      />
+      {!readOnly && (
+        <button
+          type="button"
+          aria-label={`Edit ${label.toLowerCase()}`}
+          onClick={() => setEditing(true)}
+          className="focus-ring absolute -inset-1.5 cursor-text rounded-sm"
+        />
+      )}
       <p className="text-lead text-ink md:text-body pointer-events-none relative break-words whitespace-pre-wrap">
         {linkify(
           value,

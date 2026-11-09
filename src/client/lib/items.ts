@@ -12,6 +12,7 @@ import {
   type UploadProgress,
   useOutbox,
 } from "./outbox";
+import { canEdit } from "./read-only";
 
 /** Ideas live in one list, builds (building, done, shelved) in the other. */
 export type ItemList = "ideas" | "builds";
@@ -279,11 +280,19 @@ export function useItem(id: string) {
   const query = useQuery({
     ...itemQuery(id),
     enabled: !pendingEntry,
-    // Opened from a list: show what the list already has, at once.
+    // Opened from a list: show what the list already has, at once, as old as the list is
+    // (so a list restored from the device is asked about again rather than trusted as fresh).
     initialData: () => {
       for (const list of LISTS) {
         const found = queryClient.getQueryData<Item[]>(itemKeys.list(list))?.find((item) => item.id === id);
         if (found) return found;
+      }
+      return undefined;
+    },
+    initialDataUpdatedAt: () => {
+      for (const list of LISTS) {
+        const state = queryClient.getQueryState<Item[]>(itemKeys.list(list));
+        if (state?.data?.some((item) => item.id === id)) return state.dataUpdatedAt;
       }
       return undefined;
     },
@@ -317,6 +326,7 @@ export async function saveItemChanges(
  * doesn't have yet, which simply leave the outbox.
  */
 export function deleteItem(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const noun = item.stage === "idea" ? "idea" : "build";
   const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
   const pendingEntry = outbox.remove(item.id);
@@ -356,6 +366,7 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
 
 /** Removes one photo at once, with Undo. */
 export function removePhoto(queryClient: QueryClient, photo: PhotoView) {
+  if (!canEdit(!!photo.upload)) return;
   const pending = outbox.removePhoto(photo.id);
   let removed: Photo | undefined;
   patchCachedItem(queryClient, photo.itemId, (item) => {
