@@ -4,6 +4,7 @@ import {
   byPrintTime,
   carryOver,
   describeChanges,
+  plateName,
   slugify,
   tagLabel,
 } from "../../src/shared/attempts.ts";
@@ -27,7 +28,9 @@ describe("describeChanges", () => {
     expect(texts({ layerHeight: 0.2 }, { layerHeight: 0.16 })).toEqual(["layers 0.20 → 0.16 mm"]);
     expect(texts({}, { infillDensity: 15 })).toEqual(["infill 15%"]);
     expect(texts({ nozzleTemperature: 220 }, {})).toEqual(["no nozzle temperature"]);
-    expect(texts({ bedType: "Textured PEI Plate" }, { bedType: "Cool Plate" })).toEqual(["Textured PEI → Cool plate"]);
+    expect(texts({ bedType: "Textured PEI Plate" }, { bedType: "Cool Plate" })).toEqual(["Textured PEI → Cool Plate"]);
+    expect(texts({}, { bedType: "Smooth PEI Plate" })).toEqual(["Smooth PEI plate"]);
+    expect(texts({}, { bedType: "Engineering Plate" })).toEqual(["Engineering Plate"]);
     expect(texts({ processPreset: "0.20mm Standard @BBL X2D" }, { processPreset: "0.16mm Optimal @BBL X2D" })).toEqual([
       "0.20mm Standard → 0.16mm Optimal",
     ]);
@@ -126,5 +129,17 @@ describe("byPrintTime", () => {
     ];
     expect(byPrintTime(list).map((attempt) => attempt.id)).toEqual(["d", "a", "b", "c"]);
     expect(list[0]?.id).toBe("c");
+  });
+});
+
+describe("plateName", () => {
+  it("drops 'Plate' only where the name says enough without it", () => {
+    expect(plateName("Textured PEI Plate")).toBe("Textured PEI");
+    expect(plateName("Smooth PEI Plate")).toBe("Smooth PEI");
+    expect(plateName("Cool Plate")).toBe("Cool Plate");
+    expect(plateName("Engineering Plate")).toBe("Engineering Plate");
+    expect(plateName("High Temp Plate")).toBe("High Temp Plate");
+    expect(plateName("Supertack Plate")).toBe("Supertack Plate");
+    expect(plateName("Garolite")).toBe("Garolite");
   });
 });

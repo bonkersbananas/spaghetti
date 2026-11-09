@@ -184,8 +184,14 @@ export interface SettingChange {
 
 const num = (value: number) => String(Number(value.toFixed(2)));
 const mm2 = (value: number) => value.toFixed(2);
-/** "Textured PEI Plate" → "Textured PEI". */
-export const shortPlate = (bed: string) => bed.replace(/\s+plate$/i, "");
+/**
+ * A plate as people say it: "Textured PEI Plate" → "Textured PEI", but
+ * "Cool Plate" stays whole (plain "Cool" reads as a temperature).
+ */
+export const plateName = (bed: string) => {
+  const short = bed.trim().replace(/\s+plate$/i, "");
+  return /\bPEI$/i.test(short) ? short : bed.trim();
+};
 /** "0.20mm Standard @BBL X2D" → "0.20mm Standard". */
 export const shortPreset = (preset: string) => preset.replace(/\s*@.*$/, "");
 
@@ -264,7 +270,13 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
   const changes: Array<SettingChange | null> = [
     ...filamentChanges(before.filaments, after.filaments),
     textChange("bedType", before.bedType, after.bedType, (a, b) =>
-      b ? (a ? `${shortPlate(a)} → ${shortPlate(b)} plate` : `${shortPlate(b)} plate`) : "no plate set",
+      b
+        ? a
+          ? `${plateName(a)} → ${plateName(b)}`
+          : /plate$/i.test(plateName(b))
+            ? plateName(b)
+            : `${plateName(b)} plate`
+        : "no plate set",
     ),
     textChange("nozzle", before.nozzle, after.nozzle, (a, b) =>
       b ? (a ? `${a} → ${b} nozzle` : `${b} nozzle`) : "no nozzle set",

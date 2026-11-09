@@ -1,5 +1,6 @@
 import type { AttemptFilament } from "@shared/attempts";
-import { Fragment } from "react";
+import type { ReactNode } from "react";
+import { MetaList } from "@/components/ui/MetaList";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
 
@@ -12,37 +13,36 @@ interface SettingsLineProps {
   className?: string;
   /** Filament names stand out a little more than the rest. */
   filamentClassName?: string;
+  /** How each piece of text is drawn, such as with search matches highlighted. */
+  renderText?: (text: string) => ReactNode;
 }
 
 /**
  * An attempt's settings in one quiet line: each filament with its swatch,
- * then the rest, with a separator only between pieces.
+ * then the rest, dot-separated (a MetaList, so no dot begins or ends a line).
  */
-export function SettingsLine({ filaments, parts, name, className, filamentClassName }: SettingsLineProps) {
-  const pieces = [
-    ...filaments.map((filament, index) => (
-      // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position.
-      <span key={`f${index}`} className={cn("inline-flex items-center gap-1.5 font-medium", filamentClassName)}>
-        <Swatch color={filament.colorHex} />
-        {name(filament)}
-      </span>
-    )),
-    ...parts.map((part) => <span key={part}>{part}</span>),
-  ];
-  if (!pieces.length) return null;
+export function SettingsLine({
+  filaments,
+  parts,
+  name,
+  className,
+  filamentClassName,
+  renderText = (text) => text,
+}: SettingsLineProps) {
   return (
-    <span className={cn("tabular flex flex-wrap items-center gap-x-1.5 gap-y-1", className)}>
-      {pieces.map((piece, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the pieces are a fixed list for this render.
-        <Fragment key={index}>
-          {index > 0 && (
-            <span className="text-ink-ghost" aria-hidden>
-              ·
-            </span>
-          )}
-          {piece}
-        </Fragment>
+    <MetaList className={cn("tabular", className)}>
+      {filaments.map((filament, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position.
+        <span key={`f${index}`} className={cn("inline-flex items-center gap-1.5 font-medium", filamentClassName)}>
+          <Swatch color={filament.colorHex} />
+          {renderText(name(filament))}
+        </span>
       ))}
-    </span>
+      {parts.map((part) => (
+        <span key={part} className="whitespace-nowrap">
+          {renderText(part)}
+        </span>
+      ))}
+    </MetaList>
   );
 }

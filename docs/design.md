@@ -76,6 +76,7 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | Semolina chip | 4.5:1 | 5.0 | 8.4 |
 | Neutral chip | 4.5:1 | 5.9 | 8.2 |
 | Selected chip | 4.5:1 | 13.6 | 11.4 |
+| Search match | 4.5:1 | 12.4 | 10.4 |
 | Primary button | 4.5:1 | 4.6 | 4.6 |
 | Primary button, hovered | 4.5:1 | 5.8 | 5.8 |
 | Badge over a white photo | 4.5:1 | 4.6 | 4.6 |
@@ -168,6 +169,9 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Swatch / SwatchPicker** — a filament's color as a round chip, and a 44 px well that opens the device's color picker with common filament colors first. The color is data, so it is the one inline style allowed.
 - **Disclosure** — optional detail behind one tap, with a one-line summary while closed (an attempt's settings).
 - **ActionBar** — a screen's main action within thumb reach on phones, sitting on the tab bar ("Log attempt", "Start building"). Hidden on desktop, where the action lives in the page. Toasts move up above it while it shows.
+- **ChipRow / ChipDivider / FilterGroup** — rows of filter or suggestion chips: on phones a row scrolls sideways edge to edge (with a thin divider between kinds of chips), on desktop it wraps. `FilterGroup` is one kind of filter in a desktop filter column, a caption over its chips.
+- **MetaList** — a line of short pieces with a dot between them ("Black PETG · 0.20 mm · Cool Plate"): settings lines, "attempt 3 · 2 h ago", what changed. It wraps cleanly: a dot never begins or ends a line (each piece carries its dot in a gutter the row clips). Use it for every dot-separated line; `SettingsLine` is built on it.
+- **Highlight** — text with the words a search matched on a semolina highlight, like a pen stroke. A tag chip that matched gets a ring instead.
 - **Avatar / AvatarStack** — initials on the person's color.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
 - **Kbd** — keyboard hints, hidden on phones.
@@ -195,10 +199,30 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **One record, many stages.** An idea becomes a build in one tap ("Start building", `B` on desktop) and keeps its photos and notes; it lives under Builds from then on. A build can also start from scratch.
 - **The builds list** puts what's on the bed first, printing before the rest, each card with its newest photo and how the last attempt went (an outcome chip over the photo). Done and shelved builds sit below as quieter rows.
 - **A build** leads with its best photo (the final print once done), then its story: attempts newest first, each on a thread whose dot is the outcome's color. Each attempt says what changed since the one before ("bed 55 → 60 °C", "added a brim") on a semolina highlight: this is how the app answers "what worked". A "What worked" card repeats the latest attempt that came out right. Desktop puts the build and the story side by side; `A` logs an attempt (or finishes the one printing), arrow keys or `J`/`K` move through attempts, `Enter` opens one.
+- **Plates** are named the way people say them: "Textured PEI" and "Smooth PEI", but "Cool Plate", "Engineering Plate", "High Temp Plate" in full (a bare "Cool" reads as a temperature). `plateName` in `shared/attempts.ts`.
 - **Outcomes** are Worked (basil), Partly (semolina) and Spaghetti (tomato, soft): a failure is not an error. Printing is semolina with a gentle pulse.
 - **The attempt sheet** (bottom sheet on phones, right panel on desktop) asks only for the outcome, in three big buttons; the time is now. Photos, a one-line note, failure tags (when it didn't work), success notes (when it did) and settings are one tap away. A new attempt starts from the attempt before's settings, so people change only what they try differently. "Still printing" saves it now to finish later.
 - **Finishing** a build is one action, with undo; it picks the final photo (the newest photo of the last attempt that worked). A build that had spaghetti gets the one delight toast, "Al dente", with a sparkle on the Done chip.
 - **Capture follows its context**: on an idea's or a build's page it adds there (photos join it, the note goes into its notes); while something prints it adds to that print and can finish it. "New idea" is always one tap away in the sheet.
+
+## Journal
+
+- **Everything that happened, newest first:** print attempts as photo-led cards, and quieter rows for ideas captured and builds started, finished (a bigger photo, in basil) or shelved. A spaghetti attempt is the same card as a success: its outcome chip over the photo and its failure tags in plain view.
+- **Grouping:** months, each with a quiet heading that sums it up in one line ("9 prints, 3 spaghetti, headphone stand finished"), the journal's one moment of delight. Inside a month, the last seven days get day headings ("Today", "Thursday"); further back, quieter week headings.
+- **Filters are chips kept in the URL** (`/journal?outcome=failures&material=PETG&person=sam`), so a filtered journal can be bookmarked. "Only failures" (spaghetti and partly) comes first: a wall of lessons. Outcome and material show only attempts.
+- **Phone:** one column of big entries; the filters are a row that scrolls sideways. **Desktop:** the feed with a sticky filter column on the right (from 1280 px; a chip row below that). `J` and `K` move through entries, `Enter` opens one (an attempt opens its build with that attempt picked).
+- Pages of 30 load before the end comes into view, and months far off screen skip layout (`render-lazy`), so a year of prints stays fast.
+
+## Search
+
+- **One box finds everything:** ideas, builds and attempts by title, notes, failure tags and success notes, filament type, brand and color, plate, profile and supports. Every word must match, each as the start of a word ("pet warp"); short material names (PLA, PA, PC, ABS) match whole words only.
+- **As you type:** results follow the box after a short pause and the last results stay on screen, dimmed, until the next arrive. Never a spinner page. Results come grouped (builds, attempts, ideas), photo first, matched words highlighted.
+- **Before typing:** recent searches on this device and the tags and materials used most. Filter chips (outcome, material, tag, person) narrow results, and work without words too.
+- **Keyboard:** `/` focuses the box from anywhere, arrow keys move through results, `Enter` opens. On phones the Search tab opens with the keyboard up.
+
+## What worked last time
+
+The attempt sheet offers the best match from history above the settings: the latest attempt that worked with the same material (the build's own first), with its photo, key settings and what would change, and **Use these settings** to start from them in one tap (with Undo). The spool stays the one already chosen; only the plate, temperatures and the rest change. It stays out of the way when nothing matches, or when the attempt already starts from those settings.
 
 ## Voice
 
@@ -217,7 +241,7 @@ Spaghetti opens and captures without a connection. The build ships a small hand-
 
 - It **precaches the app shell**: `index.html`, scripts, styles, fonts, icons and both manifests, versioned by a hash of the build. The app opens instantly, with or without signal.
 - **`/api` is never cached by the service worker**, except photos (`/api/photos/:id/thumb|large`, which never change once saved): photos already seen show offline. Everything else goes to the network every time, so nobody sees another person's stale edits as current. Signing out clears the photo cache.
-- **What was last seen is kept on the device, read-only.** The client persists its TanStack Query cache to IndexedDB (`lib/persist.ts`, database `spaghetti-cache`): the ideas and builds lists, every item page opened (with its attempts, so "what worked" is there), tags and people. Only the roots in `PERSISTED_ROOTS` are saved: a new screen that should open offline adds its query's first key there. The copy is capped (40 item pages, about 3 MB, 7 days) and dropped on sign-out, like the photo cache, and when someone else signs in. With nothing kept (a first visit offline), the inbox still says the pot is out of reach.
+- **What was last seen is kept on the device, read-only.** The client persists its TanStack Query cache to IndexedDB (`lib/persist.ts`, database `spaghetti-cache`): the ideas and builds lists, every item page opened (with its attempts, so "what worked" is there), tags and people, and the last results of the journal, search, its filter facets and "what worked" suggestions (the most recent 12, 10 and 20 of those). Only the roots in `PERSISTED_ROOTS` are saved: a new screen that should open offline adds its query's first key there. The copy is capped (40 item pages and the per-group limits above, about 3 MB, 7 days) and dropped on sign-out, like the photo cache, and when someone else signs in. With nothing kept (a first visit offline), the inbox still says the pot is out of reach.
   - Online nothing changes: restored data only fills the screen until the network answers (every restored query is refetched at once, and an item page opened from a restored list counts as exactly as old as the list). Offline, or when a request fails, it stays.
   - Never current: the `OfflineNotice` says "Showing what you saw 2 h ago" over it. The time is when the server last answered that query (`recordFetch` on a successful fetch, saved with the copy), not when it was last edited here, and it only moves when a fresh fetch replaces the data.
   - Read-only: a field or action that changes something saved on the server (title and note, stage changes, deleting, removing or reordering photos, editing a saved attempt) is disabled or read-only offline (`useReadOnly`, `canEdit` in `lib/read-only.ts`), with the notice as the one place that says why. Things still waiting in the outbox stay editable, and captures, logging attempts and adding photos keep working through the outbox. Queuing edits of saved fields was left out on purpose: another person may have changed the same field, and a late write would silently overwrite theirs.

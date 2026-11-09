@@ -6,6 +6,7 @@ import { photoAlt } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -31,10 +32,10 @@ function activityLine(item: ItemView) {
     );
   }
   return (
-    <>
-      Attempt {last.number} ·{" "}
+    <MetaList>
+      <span className="whitespace-nowrap">Attempt {last.number}</span>
       <span className="whitespace-nowrap">{relativeTime(last.finishedAt ?? last.printedAt)}</span>
-    </>
+    </MetaList>
   );
 }
 

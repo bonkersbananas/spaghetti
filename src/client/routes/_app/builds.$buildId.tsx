@@ -32,6 +32,7 @@ import {
   SparkleIcon,
   TrashIcon,
 } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -47,8 +48,11 @@ import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
-  validateSearch: (search: Record<string, unknown>): { new?: boolean } =>
-    search.new === true || search.new === "true" ? { new: true } : {},
+  validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string } => ({
+    ...(search.new === true || search.new === "true" ? { new: true } : {}),
+    // Opened from the journal or search: that attempt is picked and in view.
+    ...(typeof search.attempt === "string" && search.attempt ? { attempt: search.attempt } : {}),
+  }),
   component: BuildDetail,
 });
 
@@ -104,7 +108,7 @@ function Build({ item }: { item: ItemView }) {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
-  const { new: isNew } = Route.useSearch();
+  const { new: isNew, attempt: linkedAttempt } = Route.useSearch();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
@@ -138,7 +142,13 @@ function Build({ item }: { item: ItemView }) {
   const [sheet, setSheet] = useState<{ open: boolean; attemptId: string | null }>({ open: false, attemptId: null });
   const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId });
   const primary = () => openSheet(printing?.id ?? null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(linkedAttempt ?? null);
+  // Came here for one attempt: bring it into view.
+  useEffect(() => {
+    if (!linkedAttempt) return;
+    setSelected(linkedAttempt);
+    requestAnimationFrame(() => entryRefs.current.get(linkedAttempt)?.scrollIntoView({ block: "center" }));
+  }, [linkedAttempt]);
   const selectedIndex = story.findIndex((attempt) => attempt.id === selected);
   const entryRefs = useRef(new Map<string, HTMLLIElement>());
   const moveSelection = (by: number) => {
@@ -282,15 +292,20 @@ function Build({ item }: { item: ItemView }) {
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
               <StageChip item={item} printing={!!printing} celebrate={justFinished} />
-              <p className="text-small text-ink-faint">
-                {item.stage === "done" && item.finishedAt
-                  ? `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
-                  : item.stage === "shelved" && item.finishedAt
-                    ? `Shelved ${inlineTime(item.finishedAt)}`
-                    : item.attempts.length
-                      ? `${attemptsWord} · started ${inlineTime(started)}`
-                      : `Started ${inlineTime(started)}`}
-              </p>
+              <div className="text-small text-ink-faint">
+                {item.stage === "done" && item.finishedAt ? (
+                  `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
+                ) : item.stage === "shelved" && item.finishedAt ? (
+                  `Shelved ${inlineTime(item.finishedAt)}`
+                ) : item.attempts.length ? (
+                  <MetaList>
+                    <span className="whitespace-nowrap">{attemptsWord}</span>
+                    <span className="whitespace-nowrap">started {inlineTime(started)}</span>
+                  </MetaList>
+                ) : (
+                  `Started ${inlineTime(started)}`
+                )}
+              </div>
               {!active && !isDesktop && (
                 <Button
                   variant="quiet"

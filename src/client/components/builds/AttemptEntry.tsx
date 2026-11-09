@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CheckIcon, SameAgainIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { useTagOptions } from "@/lib/builds";
@@ -99,17 +100,17 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             {attempt.changes.length > 0 && (
               <p className="text-small text-ink-soft flex items-start gap-1.5">
                 <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
-                <span>
-                  <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
-                  {attempt.changes.map((change, index) => (
-                    <span key={change.key}>
-                      {index > 0 && <span className="text-ink-ghost"> · </span>}
-                      <span className="bg-semolina-soft/70 text-ink inline-block max-w-full rounded-xs px-1 font-medium whitespace-nowrap">
-                        {change.text}
-                      </span>
+                <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
+                <MetaList className="flex-1">
+                  {attempt.changes.map((change) => (
+                    <span
+                      key={change.key}
+                      className="bg-semolina-soft/70 text-ink max-w-full rounded-xs px-1 font-medium whitespace-nowrap"
+                    >
+                      {change.text}
                     </span>
                   ))}
-                </span>
+                </MetaList>
               </p>
             )}
 

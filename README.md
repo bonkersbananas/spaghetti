@@ -61,6 +61,20 @@ Photos are resized in the browser (a 2048 px and a 600 px variant, WebP or JPEG,
 
 Deleting an idea or a photo only marks it deleted, so Undo is a restore. A daily cron trigger (04:00 UTC, `triggers` in `wrangler.jsonc`) removes what was deleted more than 30 days ago, R2 objects first. Cron triggers only fire on Cloudflare: locally and in the container, deleted things stay in the database until it is deployed (or until you run the purge yourself with `wrangler dev --test-scheduled` and a request to `/__scheduled`).
 
+## Search and backups
+
+Search uses SQLite's FTS5 full-text index in D1 (`migrations/0003_search.sql`): one index over ideas, builds and print attempts (their notes, failure tags, success notes, filaments and settings), kept up to date by triggers, with prefix matching as you type. It works the same locally, in the container and on Cloudflare.
+
+One limit: `wrangler d1 export` refuses a database with a virtual table such as this one ("cannot export databases with Virtual Tables (fts5)"). Back up with the script instead, which exports every ordinary table and appends the SQL that rebuilds the index:
+
+```sh
+pnpm db:export                      # local database → spaghetti-<date>.sql
+pnpm db:export --remote             # the deployed one
+pnpm exec wrangler d1 execute DB --remote --file spaghetti-2026-11-09.sql   # restore into an empty database
+```
+
+In the container, back up the `/data` volume as before.
+
 ## Run it in a container
 
 The image builds the app and runs it on workerd with `wrangler dev` in local mode; D1 and R2 state persist in the `/data` volume. No Cloudflare account is needed.

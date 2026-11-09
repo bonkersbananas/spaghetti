@@ -7,6 +7,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { CalendarIcon, CameraIcon, ImageIcon, PlusIcon, SettingsIcon, TrashIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { MetaList } from "@/components/ui/MetaList";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Sheet } from "@/components/ui/Sheet";
@@ -22,6 +23,7 @@ import { OutcomePicker } from "./Outcome";
 import { SettingsEditor } from "./SettingsEditor";
 import { summarizeSettings } from "./settings";
 import { TagPicker } from "./TagPicker";
+import { WhatWorkedSuggestion } from "./WhatWorkedSuggestion";
 
 interface AttemptSheetProps {
   item: ItemView;
@@ -121,6 +123,8 @@ interface FieldsProps {
    * "finish" (a print still printing) lets the outcome, note and tags be filled in, to be sent later.
    */
   readOnly?: "all" | "finish";
+  /** Shown above the settings: "what worked last time", for a new attempt. */
+  suggestion?: ReactNode;
 }
 
 function AttemptFields(props: FieldsProps) {
@@ -132,11 +136,26 @@ function AttemptFields(props: FieldsProps) {
   const filamentNames = (settings.filaments ?? [])
     .map((f) => [f.brand, f.type].filter(Boolean).join(" "))
     .filter(Boolean);
-  const settingsSummary = previous
-    ? changes.length
-      ? `Changed from attempt ${previous.number}: ${changes.map((c) => c.text).join(", ")}`
-      : `Same as attempt ${previous.number}${summary.length ? ` · ${[...filamentNames, ...summary].slice(0, 4).join(" · ")}` : ""}`
-    : [...filamentNames, ...summary].join(" · ") || "Filament, plate, temperatures, times. All optional.";
+  const pieces = [...filamentNames, ...summary];
+  const settingsSummary: ReactNode = previous ? (
+    changes.length ? (
+      `Changed from attempt ${previous.number}: ${changes.map((c) => c.text).join(", ")}`
+    ) : (
+      <MetaList>
+        {[`Same as attempt ${previous.number}`, ...pieces.slice(0, 4)].map((piece) => (
+          <span key={piece}>{piece}</span>
+        ))}
+      </MetaList>
+    )
+  ) : pieces.length ? (
+    <MetaList>
+      {pieces.map((piece) => (
+        <span key={piece}>{piece}</span>
+      ))}
+    </MetaList>
+  ) : (
+    "Filament, plate, temperatures, times. All optional."
+  );
 
   return (
     <div className="flex flex-col gap-5" data-capture>
@@ -181,6 +200,7 @@ function AttemptFields(props: FieldsProps) {
           <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
         )}
       </fieldset>
+      {props.suggestion}
       <fieldset disabled={!!props.readOnly} className="contents">
         <Disclosure
           open={settingsOpen || !!props.readOnly}
@@ -315,6 +335,13 @@ function LogAttempt({
           settings={draft.settings}
           onSettings={(settings) => change({ settings })}
           previous={previous}
+          suggestion={
+            <WhatWorkedSuggestion
+              itemId={item.id}
+              settings={draft.settings}
+              onUse={(settings) => change({ settings })}
+            />
+          }
           when={
             <WhenField
               value={when}

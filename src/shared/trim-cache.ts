@@ -10,33 +10,52 @@ export interface CachedClient<Q extends CachedQuery> {
 }
 
 /**
- * Keeps what is saved for offline reading within bounds: every list stays,
- * item pages are limited to the `maxDetails` most recently fetched, and
- * the oldest of those go first while the copy is over `maxBytes`. Returns null
- * when even the lists alone are too big (the earlier copy is then left alone).
+ * The group a query is capped with: item pages ("items-detail"), or the
+ * first key of anything else ("search", "journal"…). The two item lists have
+ * no group: they always stay.
+ */
+export function cacheGroup(query: Pick<CachedQuery, "queryKey">): string | null {
+  const [root, second] = query.queryKey;
+  if (root === "items") return second === "detail" ? "items-detail" : null;
+  return String(root);
+}
+
+/**
+ * Keeps what is saved for offline reading within bounds: the item lists
+ * always stay, every other group keeps its `limits[group]` most recently
+ * fetched queries (none given: all), and the oldest of the capped ones go
+ * first while the copy is over `maxBytes`. Returns null when what can't be
+ * dropped is already too big (the earlier copy is then left alone).
  */
 export function trimCache<Q extends CachedQuery, C extends CachedClient<Q>>(
   client: C,
   fetchedAt: ReadonlyMap<string, number>,
-  { maxDetails, maxBytes }: { maxDetails: number; maxBytes: number },
+  { limits, maxBytes }: { limits: Readonly<Record<string, number>>; maxBytes: number },
 ): C | null {
   const queries = client.clientState.queries;
-  const isDetail = (query: Q) => query.queryKey[1] === "detail";
   const when = (query: Q) => fetchedAt.get(query.queryHash) ?? query.state.dataUpdatedAt;
-  const details = queries
-    .filter(isDetail)
-    .sort((a, b) => when(b) - when(a))
-    .slice(0, maxDetails);
-  const keep = new Set<Q>([...queries.filter((query) => !isDetail(query)), ...details]);
+  const keep = new Set<Q>(queries);
+  const droppable: Q[] = [];
+  const groups = new Map<string, Q[]>();
+  for (const query of queries) {
+    const group = cacheGroup(query);
+    if (group !== null && group in limits) groups.set(group, [...(groups.get(group) ?? []), query]);
+  }
+  for (const [group, members] of groups) {
+    const newest = members.sort((a, b) => when(b) - when(a));
+    for (const extra of newest.slice(limits[group] ?? newest.length)) keep.delete(extra);
+    droppable.push(...newest.slice(0, limits[group] ?? newest.length));
+  }
   const build = (): C => ({
     ...client,
     clientState: { ...client.clientState, queries: queries.filter((query) => keep.has(query)) },
   });
   let next = build();
   let size = JSON.stringify(next).length;
-  for (const detail of [...details].reverse()) {
+  // Oldest first, across groups.
+  for (const query of droppable.sort((a, b) => when(a) - when(b))) {
     if (size <= maxBytes) break;
-    keep.delete(detail);
+    keep.delete(query);
     next = build();
     size = JSON.stringify(next).length;
   }

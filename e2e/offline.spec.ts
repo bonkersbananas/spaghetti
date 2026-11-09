@@ -135,6 +135,12 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   await expect(attempts.getByRole("listitem")).toHaveCount(2);
   await expect.poll(() => cacheHolds(page, "Brim and a hotter bed did it")).toBe(true);
   await expect.poll(() => cacheHolds(page, "Spool holder")).toBe(true);
+  // The journal, looked at once online (its last results are kept like the rest).
+  await page.goto("/journal");
+  await expect(page.getByText("Brim and a hotter bed did it").first()).toBeVisible();
+  await expect.poll(() => cacheHolds(page, '"journal"')).toBe(true);
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   // Nothing in the notice while the connection is there.
   await expect(page.getByRole("status").filter({ hasText: "Showing what you saw" })).toHaveCount(0);
 
@@ -166,6 +172,11 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   // The inbox, opened offline from the same visit.
   await page.goto("/ideas");
   await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toContainText("Spool holder");
+  await expect(notice).toContainText("Showing what you saw");
+
+  // The journal, from what was last seen.
+  await page.goto("/journal");
+  await expect(page.getByText("Brim and a hotter bed did it").first()).toBeVisible();
   await expect(notice).toContainText("Showing what you saw");
 
   // The connection is back; the other person has renamed the build meanwhile. The marker goes, and the server's title replaces what was kept.

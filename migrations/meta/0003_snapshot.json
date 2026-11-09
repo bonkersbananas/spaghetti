@@ -1,8 +1,8 @@
 {
+  "id": "ff7d93f6-dcdb-42fb-af39-f68ad244c548",
+  "prevId": "1db2da61-ec1e-4eee-b38d-176e5831e1d2",
   "version": "6",
   "dialect": "sqlite",
-  "id": "15e3a607-a30f-412c-994d-34265f4257c1",
-  "prevId": "1db2da61-ec1e-4eee-b38d-176e5831e1d2",
   "tables": {
     "attempts": {
       "name": "attempts",
@@ -81,13 +81,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "finished_by": {
-          "name": "finished_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -124,41 +117,28 @@
         "attempts_item_id_items_id_fk": {
           "name": "attempts_item_id_items_id_fk",
           "tableFrom": "attempts",
-          "tableTo": "items",
           "columnsFrom": [
             "item_id"
           ],
+          "tableTo": "items",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "attempts_created_by_users_id_fk": {
           "name": "attempts_created_by_users_id_fk",
           "tableFrom": "attempts",
-          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "attempts_finished_by_users_id_fk": {
-          "name": "attempts_finished_by_users_id_fk",
-          "tableFrom": "attempts",
           "tableTo": "users",
-          "columnsFrom": [
-            "finished_by"
-          ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -262,15 +242,15 @@
         "items_created_by_users_id_fk": {
           "name": "items_created_by_users_id_fk",
           "tableFrom": "items",
-          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -379,41 +359,41 @@
         "photos_item_id_items_id_fk": {
           "name": "photos_item_id_items_id_fk",
           "tableFrom": "photos",
-          "tableTo": "items",
           "columnsFrom": [
             "item_id"
           ],
+          "tableTo": "items",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "photos_created_by_users_id_fk": {
           "name": "photos_created_by_users_id_fk",
           "tableFrom": "photos",
-          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "photos_attempt_id_attempts_id_fk": {
           "name": "photos_attempt_id_attempts_id_fk",
           "tableFrom": "photos",
-          "tableTo": "attempts",
           "columnsFrom": [
             "attempt_id"
           ],
+          "tableTo": "attempts",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -479,15 +459,15 @@
         "sessions_user_id_users_id_fk": {
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
-          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -538,15 +518,15 @@
         "tags_created_by_users_id_fk": {
           "name": "tags_created_by_users_id_fk",
           "tableFrom": "tags",
-          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -625,9 +605,9 @@
   "views": {},
   "enums": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "indexes": {}

@@ -92,6 +92,7 @@ export const pairs: Pair[] = [
   { label: "Semolina chip", fg: "semolina-ink", bg: "semolina-soft", min: 4.5 },
   { label: "Neutral chip", fg: "ink-soft", bg: "ink/0.06", under: "paper", min: 4.5 },
   { label: "Selected chip", fg: "on-select", bg: "select", min: 4.5 },
+  { label: "Search match", fg: "ink", bg: "semolina-soft", min: 4.5 },
   { label: "Primary button", fg: "on-accent", bg: "tomato", min: 4.5 },
   { label: "Primary button, hovered", fg: "on-accent", bg: "tomato-strong", min: 4.5 },
   { label: "Badge over a white photo", fg: "on-veil", bg: "veil", under: "#ffffff", min: 4.5 },

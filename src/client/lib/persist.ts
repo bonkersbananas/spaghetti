@@ -18,16 +18,16 @@ import { rememberedUser } from "./queries";
  * Only the roots listed here are kept. A new screen that should open offline
  * adds its query's first key to `PERSISTED_ROOTS`.
  */
-export const PERSISTED_ROOTS = ["items", "tags", "people"] as const;
+export const PERSISTED_ROOTS = ["items", "tags", "people", "journal", "facets", "search", "what-worked"] as const;
 /** The roots that are "what you saw" (the offline strip dates them); tags and people are support data. */
-const SEEN_ROOTS = ["items"];
+const SEEN_ROOTS = ["items", "journal", "search"];
 
 /** Bump when the shape of cached data changes: older copies are dropped, not misread. */
 const CACHE_VERSION = "1";
 /** Forget what was seen this long ago. */
 export const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
-/** Item pages kept besides the lists (the lists hold every item already, so these are the most recently opened). */
-const MAX_DETAILS = 40;
+/** How many of each kept besides the item lists (which hold every item already): the most recently fetched. */
+const LIMITS = { "items-detail": 40, journal: 12, search: 10, "what-worked": 20 };
 /** A rough ceiling on what is written (JSON characters). Past it, the oldest item pages go first. */
 const MAX_BYTES = 3_000_000;
 
@@ -78,7 +78,7 @@ export const persister: Persister = {
       const user = rememberedUser();
       // Signed out (or the session ended): nothing of theirs stays behind.
       if (!user) return store.clear();
-      const trimmed = trimCache(client, fetchedAt, { maxDetails: MAX_DETAILS, maxBytes: MAX_BYTES });
+      const trimmed = trimCache(client, fetchedAt, { limits: LIMITS, maxBytes: MAX_BYTES });
       if (!trimmed) return;
       const hashes = new Set(trimmed.clientState.queries.map((q) => q.queryHash));
       await store.put({

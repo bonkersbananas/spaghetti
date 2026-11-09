@@ -49,7 +49,42 @@ export const shots: Shot[] = [
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
+  {
+    // Further back: a month that sums itself up, grouped by week.
+    name: "journal-months",
+    path: "/journal",
+    prepare: async (page) => {
+      const heading = page.getByRole("heading", { level: 2 }).nth(1);
+      await heading.waitFor();
+      await heading.evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -24));
+    },
+  },
+  { name: "journal-failures", path: "/journal?outcome=failures" },
   { name: "search", path: "/search" },
+  {
+    name: "search-results",
+    path: "/search?q=PETG%20warping",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Attempts" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // "What worked last time" in the attempt sheet: PETG that warped, offered the PETG that didn't.
+    name: "what-worked",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const suggestion = page.getByRole("dialog").getByRole("region", { name: "What worked last time" });
+      await suggestion.waitFor();
+      await page.waitForTimeout(400);
+      await suggestion.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   {
     name: "capture",
     path: "/ideas",

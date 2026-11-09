@@ -1,4 +1,4 @@
-import { type AttemptFilament, type AttemptSettings, shortPlate, shortPreset } from "@shared/attempts";
+import { type AttemptFilament, type AttemptSettings, plateName, shortPreset } from "@shared/attempts";
 import { formatDuration as formatMinutes } from "@/components/ui/Field";
 
 export { formatMinutes };
@@ -22,7 +22,7 @@ export function summarizeSettings(settings: AttemptSettings): string[] {
   const layer = settings.layerHeight === undefined ? undefined : decimals(settings.layerHeight, 2);
   if (layer && !settings.processPreset?.startsWith(`${layer}mm`)) parts.push(`${layer} mm`);
   if (settings.infillDensity !== undefined) parts.push(`${settings.infillDensity}% infill`);
-  if (settings.bedType) parts.push(shortPlate(settings.bedType));
+  if (settings.bedType) parts.push(plateName(settings.bedType));
   if (settings.nozzle === "auxiliary") parts.push("aux nozzle");
   if (settings.nozzleDiameter !== undefined && settings.nozzleDiameter !== 0.4) {
     parts.push(`${settings.nozzleDiameter} mm nozzle`);

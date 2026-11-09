@@ -1,4 +1,5 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
+import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { PersonColor } from "./people.ts";
 
 /** A person as the client sees them: never includes credentials. */
@@ -195,6 +196,83 @@ export interface CreateTagRequest {
 
 export interface TagResponse {
   tag: Tag;
+}
+
+/** One thing that happened, in the journal. */
+export interface JournalEntry {
+  /** Unique within the journal: "attempt:<id>", "finished:<item id>"… */
+  key: string;
+  kind: JournalKind;
+  itemId: string;
+  /** For kind "attempt". */
+  attemptId: string | null;
+  /** When it happened, epoch ms. */
+  at: number;
+  /** Who logged the attempt or captured the item. */
+  by: string;
+}
+
+/**
+ * GET /api/journal?outcome=&material=&person=&cursor=. Newest first, a page at
+ * a time; `items` holds every item the entries mention, with their attempts
+ * and photos.
+ */
+export interface JournalResponse {
+  entries: JournalEntry[];
+  items: Item[];
+  /** Pass as `cursor` for the next page; null at the end. */
+  next: string | null;
+}
+
+/** GET /api/journal/summary?from=&to= (epoch ms, the month in local time). */
+export interface JournalSummaryResponse {
+  summary: JournalSummary;
+}
+
+/** What has been used and tagged, most often first: filter chips and search suggestions. */
+export interface FacetsResponse {
+  /** Filament types, uppercase ("PLA", "PETG"). */
+  materials: Array<{ value: string; count: number }>;
+  tags: Array<{ kind: TagKind; slug: string; count: number }>;
+}
+
+/** An attempt without "what changed" (search results and suggestions show it on its own). */
+export type AttemptSummary = Omit<Attempt, "changes">;
+
+/** An attempt found by search or offered as "what worked last time". */
+export interface AttemptHit {
+  attempt: AttemptSummary;
+  /** Its number in its build: 1 for the first. */
+  number: number;
+  item: { id: string; title: string | null; stage: ItemStage };
+  /** The attempt's first photo, else its build's. */
+  photo: Photo | null;
+}
+
+/** An idea or a build found by search. */
+export interface ItemHit {
+  item: Pick<Item, "id" | "stage" | "title" | "note" | "createdBy" | "createdAt" | "startedAt" | "finishedAt">;
+  /** How many attempts it has, and how the last one went. */
+  attempts: number;
+  lastOutcome: Outcome | null;
+  /** The part of a long note that matched, with SNIPPET_OPEN/CLOSE around matched words. */
+  snippet: string | null;
+  photo: Photo | null;
+}
+
+/** GET /api/search?q=&outcome=&material=&tag=&person= */
+export interface SearchResponse {
+  builds: ItemHit[];
+  ideas: ItemHit[];
+  attempts: AttemptHit[];
+}
+
+/**
+ * GET /api/what-worked?item=&material=: the latest attempts that worked with
+ * this material, the build's own first.
+ */
+export interface WhatWorkedResponse {
+  matches: Array<AttemptHit & { sameBuild: boolean }>;
 }
 
 /** PUT /api/items/:id/photos/order */
