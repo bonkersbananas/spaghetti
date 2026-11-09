@@ -7,7 +7,7 @@ Background for agents building printer-aware features. Spaghetti **understands**
 - **[confirmed]** appears in at least two independent sources or an official page.
 - **[uncertain]** comes from a single source, sources conflict, or it is from memory of file formats and unverified against the X2D specifically.
 - The X2D launched in April 2026. Most sources are retailer listings and early reviews; Bambu's own pages (bambulab.com, wiki.bambulab.com) blocked or did not return to our fetcher, so **verify against Bambu's wiki before building anything that hinges on a single number**.
-- Before parsing files, unzip a real `.gcode.3mf` from this printer and check the key names below. The file-format section is the part most likely to drift.
+- Section 3 (file formats) is confirmed against the slicers' source, but not yet against a real file from the X2D: when you get one, run it through `readThreeMf` and check.
 
 Sources:
 
@@ -19,6 +19,7 @@ Sources:
 - [DEV: What's inside a Bambu/Orca 3MF](https://dev.to/joyfunc/whats-actually-inside-a-bambuorca-3mf-24p0)
 - [Printago: 3MF file format](https://printago.io/blog/3mf-file-format)
 - [BambuStudio wiki: command-line usage](https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage)
+- [Bambu Studio source: bbs_3mf.cpp](https://github.com/bambulab/BambuStudio/blob/master/src/libslic3r/Format/bbs_3mf.cpp) and [Orca Slicer source: bbs_3mf.cpp](https://github.com/SoftFever/OrcaSlicer/blob/main/src/libslic3r/Format/bbs_3mf.cpp)
 
 ## 1. The printer
 
@@ -66,25 +67,53 @@ Sources:
 
 ## 3. What a `.3mf` / `.gcode.3mf` holds
 
-A 3mf is a ZIP; unzip it locally and read it with no network. A *project* `.3mf` is saved before slicing; a sliced `.gcode.3mf` also holds G-code and per-plate stats. Sources are community write-ups, not Bambu documentation, and the file list varies by slicer version.
+A 3mf is a ZIP; unzip it locally and read it with no network. A *project* `.3mf` is saved before slicing; a sliced `.gcode.3mf` also holds G-code and per-plate stats. **[confirmed]** against the writers in Bambu Studio's and Orca Slicer's source (`src/libslic3r/Format/bbs_3mf.cpp`, `bbs_3mf.hpp`, `GCode/ThumbnailData.hpp`, `PrintConfig.cpp`); the file list still varies by slicer version. Not checked against a file from the X2D itself.
 
 | Path in archive | Format | Contents useful to Spaghetti |
 |---|---|---|
-| `Metadata/plate_N.png` | PNG | Plate thumbnail (N from 1). Also `plate_N_small.png`, `plate_no_light_N.png`, `top_N.png`, `pick_N.png` in some versions **[uncertain]**. Best source for a "photo of what was meant to print" |
-| `Metadata/slice_info.config` | XML | Per-plate stats. `<plate>` metadata: `index`, `prediction` (seconds), `weight` (grams). Each `<filament>` has `id`, `type`, `color`, `used_m`, `used_g`. Only filaments used on that plate appear, so this beats the project-wide list |
-| `Metadata/plate_N.json` | JSON | Per-plate layout: `bbox_all`, `bbox_objects`, filament ids/colors, bed type, nozzle diameter, layer height, first-layer info. Exact key names **[uncertain]** |
-| `Metadata/project_settings.config` | JSON | All slicer settings (500+ keys). Known: `layer_height` (a string), `filament_colour` (array of hex; note the British spelling), `filament_type` (array), `filament_cost`. Likely, from the slicer's naming: `sparse_infill_density`, `sparse_infill_pattern`, `wall_loops`, `enable_support`, `support_type`, `nozzle_temperature`, `hot_plate_temp` / `textured_plate_temp`, `curr_bed_type`, `printer_model`, `print_settings_id`, `filament_settings_id` **[uncertain, verify on a real file]**. Vector options are arrays, one entry per filament |
-| `Metadata/model_settings.config` | XML | Object names and per-object overrides, `<plate>` blocks with `plater_id` / `plater_name`, and which objects sit on which plate (`object_id`, `instance_id`) |
-| `Metadata/plate_N.gcode` (+ `.md5`) | text | G-code. Its header comments repeat time, weight and filament usage; only in sliced files. Large, so read lazily |
-| `3D/3dmodel.model`, `3D/Objects/*.model` | XML | Geometry and the object-to-plate assembly. Metadata such as title, designer and `BambuStudio:3mfVersion` may sit in the top-level model's `<metadata>` |
+| `Metadata/plate_N.png` | PNG | Plate thumbnail (N from 1). Also `plate_no_light_N.png`, `top_N.png`, `pick_N.png` (the picking map, not for display); `plate_N_small.png` is not written by the sources we read. `model_settings.config` names the thumbnail in its `thumbnail_file` entry. Best source for a "photo of what was meant to print" |
+| `Metadata/slice_info.config` | XML | Written only when the plate was sliced. `<config>` holds a `<header>` (client type/version) and one `<plate>` per sliced plate. A plate holds `<metadata key= value=>` entries (`index` from 1, `prediction` in seconds, `weight` in grams, `nozzle_diameters`, `printer_model_id`, `support_used`, `outside`, `timelapse_type`, `first_layer_time`, `filament_maps`, …), `<object identify_id name skipped/>` and `<filament id tray_info_idx type color used_m used_g …/>`. Only filaments used on that plate appear, so this beats the project-wide list. `<warning msg level error_code/>` carries slicer warnings |
+| `Metadata/plate_N.json` | JSON | Layout for the printer's object-skipping view. Keys: `bbox_all`, `bbox_objects` (`name`, `bbox`, `area`, `layer_height`), `filament_ids`, `filament_colors`, `is_seq_print`, `first_extruder`, `nozzle_diameter` (a float32, so `0.4000000059604645`), `bed_type`, `first_layer_time`, `version` |
+| `Metadata/project_settings.config` | JSON | All slicer settings (500+ keys), all values strings or arrays of strings. Scalars: `layer_height`, `initial_layer_print_height`, `sparse_infill_density` (`"15%"`), `sparse_infill_pattern`, `wall_loops`, `enable_support` (`"0"`/`"1"`), `support_type`, `printer_model`, `printer_settings_id`, `print_settings_id`, `curr_bed_type` (`"Textured PEI Plate"`, `"Cool Plate"`, `"Engineering Plate"`, `"High Temp Plate"`, `"Supertack Plate"`). Per filament, one entry each: `filament_type`, `filament_colour` (British spelling), `filament_settings_id`, `nozzle_temperature`, `nozzle_temperature_initial_layer`, and the bed temperature of each plate type: `cool_plate_temp`, `eng_plate_temp`, `hot_plate_temp`, `textured_plate_temp`. `nozzle_diameter` is per extruder |
+| `Metadata/model_settings.config` | XML | `<object id>` with `<metadata key="name">` and `extruder` (the project filament number, from 1), `<part>`s, and one `<plate>` per plate: `plater_id`, `plater_name` (empty unless named), `locked`, `bed_type`, `thumbnail_file`, and `<model_instance>`s that point at objects by `object_id` |
+| `Metadata/plate_N.gcode` (+ `.md5`) | text | G-code. Its header comments repeat time, weight and filament usage; only in sliced files. Large, so never read whole |
+| `3D/3dmodel.model`, `3D/Objects/*.model` | XML | Geometry and the object-to-plate assembly. The top-level model's `<metadata name="Application">` says who wrote the file (`BambuStudio-02.01.00.00`, `OrcaSlicer-2.3.1`) |
 | `[Content_Types].xml`, `_rels/.rels` | XML | Standard 3MF plumbing |
 
 Guidance for the parser:
 
 - Parse defensively: every key optional, unknown keys ignored, and a failure must never block logging an attempt.
-- Orca Slicer writes a near-identical layout, but keys can differ between slicers and versions.
+- Orca Slicer writes the same layout and key names (checked in its source); versions add keys rather than rename them.
 - Reading `.gcode.3mf` also lets us offer "estimated time vs actual" for free.
 - Never write back into the user's 3mf.
+
+### Reading .3mf files
+
+`src/shared/threemf/` reads these files in the browser (or a Worker): no network, no DOM, only `fflate` for the zip. Import from `@shared/threemf/index.ts`.
+
+```ts
+import { readThreeMf, readThreeMfFile } from "@shared/threemf/index.ts";
+
+const result = await readThreeMfFile(file); // a dropped File/Blob; readThreeMf(bytes) is the sync form
+```
+
+`ThreeMfResult` (see `types.ts`):
+
+- `kind`: `"sliced"` (has `slice_info.config`), `"project"` (plates or settings, never sliced) or `"unknown"` (foreign or broken).
+- `slicer?`: `{ name, version }` from the model's Application metadata.
+- `plates[]`: `index`, `name?`, `thumbnail?` (`{ bytes, mediaType }`, sniffed from the bytes), `predictedSeconds?`, `weightGrams?`, `objects[]` (`name`, `skipped?`), `filaments[]` (`slot`, `type?`, `colorHex?` as `#rrggbb`, `profile?`, `usedGrams?`, `usedMeters?`), `bedType?`, `nozzleDiameter?`, `supportUsed?`.
+- `settings`: `printerModel`, `printerPreset`, `processPreset`, `layerHeight`, `initialLayerHeight`, `infillDensity` (percent), `infillPattern`, `wallLoops`, `supportEnabled`, `supportType`, `nozzleTemperature[]`, `nozzleTemperatureInitialLayer[]`, `bedTemperature[]` (for the selected bed type; all per project filament), `bedType`, `nozzleDiameter`. All optional.
+- `warnings[]`: why something is missing. The reader never throws.
+
+Safety: each entry is inflated as a stream and dropped as soon as it passes its cap (a few MB for config files, 4 MB for images), so a zip bomb costs little. G-code and geometry are never unpacked; only the first 16 KB of `3D/3dmodel.model` is read.
+
+What it can't know:
+
+- **Which physical AMS slot a filament ended up in.** `PlateFilament.slot` is the *project* filament number (from 1), not a slot like A2; the AMS mapping is made when the user presses Print and no file records it. The UI should let the person say it.
+- **Actual print time, success or failure.** Only the slicer's estimate is in the file; the real outcome comes from the person.
+- **Settings are the project's, not per-object.** Per-object and per-layer-range overrides (a different infill on one part, say) are ignored, and with several printers or process presets in one project only the first entry is read.
+- **Project files have no slice.** Their plate filaments are a guess from each object's assigned extruder, with no grams or meters, and there is no time or weight.
+- **Unrecognised files.** Other slicers' 3mf files (PrusaSlicer, Cura, CAD tools) give `kind: "unknown"`; the PrusaSlicer layout is different and not read.
 
 ## 4. Local-only printer state (background only)
 
