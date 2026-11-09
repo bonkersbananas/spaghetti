@@ -153,6 +153,14 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   // Logging an attempt still works.
   await expect(page.getByRole("button", { name: "Log attempt" })).toBeEnabled();
 
+  // Reloaded offline again: the failed refetch must not have wiped what was kept.
+  // (The refetch retries once after a second, and the copy is written at most once a second.)
+  await page.waitForTimeout(3500);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await expect(attempts.getByRole("listitem")).toHaveCount(2);
+  await expect(notice).toContainText("Showing what you saw");
+
   // The inbox, opened offline from the same visit.
   await page.goto("/ideas");
   await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toContainText("Spool holder");

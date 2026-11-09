@@ -54,13 +54,14 @@ export function recordFetch(query: { queryHash: string }) {
   changed();
 }
 
-/** Which queries are saved: successful ones under the listed roots. */
+/**
+ * Which queries are saved: any under the listed roots that hold data. Not only
+ * the successful ones: a refetch that fails (every one does offline) sets the
+ * status to "error" but keeps the data, and dropping it here would wipe the
+ * saved copy the next time the cache is written.
+ */
 export function shouldPersist(query: Query) {
-  return (
-    query.state.status === "success" &&
-    query.state.data != null &&
-    (PERSISTED_ROOTS as readonly unknown[]).includes(query.queryKey[0])
-  );
+  return query.state.data != null && (PERSISTED_ROOTS as readonly unknown[]).includes(query.queryKey[0]);
 }
 
 /** Writes go one after another, so a sign-out's clear can't be overtaken by a save. */
