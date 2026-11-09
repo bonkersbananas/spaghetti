@@ -20,7 +20,7 @@ import {
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import type { DraftPhoto } from "./capture";
 import { type AttemptView, cachedItem, type ItemView, type PhotoView, patchCachedItem, useBuilds } from "./items";
 import { outbox, type PendingAttemptChanges } from "./outbox";
@@ -251,23 +251,36 @@ export function deleteAttempt(queryClient: QueryClient, itemId: string, attempt:
       photos: item.photos.filter((photo) => photo.attemptId !== attempt.id),
     };
   });
-  const deleted = removed
-    ? api(`/attempts/${attempt.id}`, { method: "DELETE" }).catch(() => undefined)
-    : Promise.resolve(undefined);
+  const putBack = (restore: { attempt: Attempt; photos: Photo[] }) =>
+    patchCachedItem(queryClient, itemId, (item) => ({
+      ...item,
+      attempts: [...item.attempts.filter((a) => a.id !== restore.attempt.id), restore.attempt],
+      photos: [...item.photos.filter((photo) => photo.attemptId !== restore.attempt.id), ...restore.photos].sort(
+        (a, b) => a.position - b.position || a.createdAt - b.createdAt,
+      ),
+    }));
+  const toRestore = removed;
+  const deleted = toRestore
+    ? api(`/attempts/${attempt.id}`, { method: "DELETE" }).then(
+        () => true,
+        (error) => {
+          // Already gone on the server: that's what was asked.
+          if (error instanceof ApiError && error.status === 404) return true;
+          putBack(toRestore);
+          outbox.restorePhotos(itemId, queuedPhotos);
+          toast.error(`Couldn't delete attempt ${attempt.number}`, "It's back where it was.");
+          return false;
+        },
+      )
+    : Promise.resolve(true);
 
   toast.undo(`Attempt ${attempt.number} deleted`, {
     onUndo: async () => {
       if (pending) outbox.restoreAttempt(pending);
-      if (!removed) return;
-      const restore = removed;
-      patchCachedItem(queryClient, itemId, (item) => ({
-        ...item,
-        attempts: [...item.attempts.filter((a) => a.id !== restore.attempt.id), restore.attempt],
-        photos: [...item.photos.filter((photo) => photo.attemptId !== restore.attempt.id), ...restore.photos].sort(
-          (a, b) => a.position - b.position || a.createdAt - b.createdAt,
-        ),
-      }));
-      await deleted;
+      if (!toRestore) return;
+      // The delete failed and the attempt is back already.
+      if (!(await deleted)) return;
+      putBack(toRestore);
       try {
         await api<AttemptResponse>(`/attempts/${attempt.id}/restore`, { method: "POST" });
         // Photos still on this device go up once the attempt is back.

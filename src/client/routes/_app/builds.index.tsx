@@ -43,17 +43,7 @@ function Builds() {
 
   return (
     <>
-      <PageHeader
-        title="Builds"
-        subtitle="From idea to finished print, attempt by attempt."
-        actions={
-          items.length > 0 && (
-            <Button icon={PlusIcon} onClick={newBuild}>
-              New build
-            </Button>
-          )
-        }
-      />
+      <PageHeader title="Builds" subtitle="From idea to finished print, attempt by attempt." />
       {isPending ? (
         <div className={grid} aria-hidden>
           {Array.from({ length: 4 }, (_, index) => (

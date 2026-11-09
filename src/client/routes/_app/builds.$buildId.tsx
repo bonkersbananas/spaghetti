@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { OutcomeChip } from "@/components/builds/Outcome";
+import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { photoAlt } from "@/components/ideas/IdeaCard";
@@ -34,7 +35,6 @@ import {
 import { NoteField } from "@/components/ui/NoteField";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { Swatch } from "@/components/ui/Swatch";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
@@ -442,21 +442,13 @@ function WhatWorked({ attempt, onOpen }: { attempt: AttemptView; onOpen: () => v
       <span className="text-caption text-basil-ink font-semibold tracking-wider uppercase">
         What worked · attempt {attempt.number}
       </span>
-      {(filaments.length > 0 || settings.length > 0) && (
-        <span className="text-small text-ink-soft tabular flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          {filaments.map((filament, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position.
-            <span key={index} className="text-ink inline-flex items-center gap-1.5 font-medium">
-              <Swatch color={filament.colorHex} />
-              {filamentLabel(filament)}
-              <span className="text-ink-ghost" aria-hidden>
-                ·
-              </span>
-            </span>
-          ))}
-          {settings.join(" · ")}
-        </span>
-      )}
+      <SettingsLine
+        filaments={filaments}
+        parts={settings}
+        name={filamentLabel}
+        className="text-small text-ink-soft"
+        filamentClassName="text-ink"
+      />
       {attempt.note && <span className="text-body text-ink">{attempt.note}</span>}
       {attempt.successNotes.length > 0 && (
         <span className="flex flex-wrap gap-1.5">

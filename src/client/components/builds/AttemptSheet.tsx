@@ -4,7 +4,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { TextField } from "@/components/ui/Field";
+import { TextArea, TextField } from "@/components/ui/Field";
 import { CalendarIcon, CameraIcon, ImageIcon, PlusIcon, SettingsIcon, TrashIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
@@ -106,10 +106,13 @@ interface FieldsProps {
   photos: ReactNode;
   /** Shown above the outcome while printing. */
   outcomeLabel: string;
+  /** Enter in the note, on desktop: log the attempt. */
+  onEnter?: () => void;
 }
 
 function AttemptFields(props: FieldsProps) {
   const { outcome, previous, settings } = props;
+  const isDesktop = useIsDesktop();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const changes = previous ? describeChanges(previous.settings, settings) : [];
   const summary = summarizeSettings(settings);
@@ -130,8 +133,10 @@ function AttemptFields(props: FieldsProps) {
       </div>
       {props.when}
       {props.photos}
-      <TextField
+      {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
+      <TextArea
         aria-label="Note"
+        minRows={1}
         placeholder={
           outcome === "failed"
             ? "What went wrong? One line is plenty."
@@ -142,7 +147,14 @@ function AttemptFields(props: FieldsProps) {
         maxLength={500}
         enterKeyHint="done"
         value={props.note}
-        onChange={(event) => props.onNote(event.target.value)}
+        onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+          // Enter logs the attempt on desktop (when it can be logged); on a phone it puts the keyboard away.
+          event.preventDefault();
+          if (isDesktop && props.onEnter) props.onEnter();
+          else event.currentTarget.blur();
+        }}
       />
       {(outcome === "failed" || outcome === "partial") && (
         <TagPicker kind="failure" label="What went wrong?" value={props.failureTags} onChange={props.onFailureTags} />
@@ -230,7 +242,7 @@ function LogAttempt({
         <>
           {isDesktop && (
             <span className="text-caption text-ink-faint mr-auto inline-flex items-center gap-1.5">
-              <Kbd keys={["⌘", "Enter"]} /> logs it
+              <Kbd keys={["Enter"]} /> logs it
             </span>
           )}
           <Button
@@ -266,6 +278,9 @@ function LogAttempt({
         {library.input}
         <AttemptFields
           outcomeLabel="How did it go?"
+          onEnter={() => {
+            if (draft.outcome) save(draft.outcome);
+          }}
           outcome={draft.outcome}
           onOutcome={(outcome) => change({ outcome })}
           note={draft.note}

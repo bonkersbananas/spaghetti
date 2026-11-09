@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CheckIcon, SameAgainIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
-import { Swatch } from "@/components/ui/Swatch";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -16,6 +15,7 @@ import type { AttemptView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { OutcomeChip, outcomeDots } from "./Outcome";
+import { SettingsLine } from "./SettingsLine";
 import { filamentLabel, formatMinutes, summarizeResults, summarizeSettings } from "./settings";
 
 interface AttemptEntryProps {
@@ -157,19 +157,15 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             )}
 
             {(filaments.length > 0 || settings.length > 0 || results.length > 0) && (
-              <p className="text-small text-ink-faint tabular flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                {filaments.map((filament, index) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position.
-                  <span key={index} className="text-ink-soft inline-flex items-center gap-1.5 font-medium">
-                    <Swatch color={filament.colorHex} />
-                    {[filament.colorName, filament.type].filter(Boolean).join(" ") || filamentLabel(filament)}
-                    <span className="text-ink-ghost" aria-hidden>
-                      ·
-                    </span>
-                  </span>
-                ))}
-                {[...settings, ...results].join(" · ")}
-              </p>
+              <SettingsLine
+                filaments={filaments}
+                parts={[...settings, ...results]}
+                name={(filament) =>
+                  [filament.colorName, filament.type].filter(Boolean).join(" ") || filamentLabel(filament)
+                }
+                className="text-small text-ink-faint"
+                filamentClassName="text-ink-soft"
+              />
             )}
 
             {printing && onFinish && (

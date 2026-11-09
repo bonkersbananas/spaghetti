@@ -327,7 +327,8 @@ class Outbox {
           title: create.title,
           note: create.note,
           createdAt: create.createdAt,
-          stage: create.stage === "idea" ? "idea" : "building",
+          // A capture is an idea unless it says otherwise; a build finished offline is created as a build.
+          stage: (create.stage ?? "idea") === "idea" ? "idea" : "building",
         },
       }));
     } catch (error) {
