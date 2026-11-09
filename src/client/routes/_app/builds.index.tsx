@@ -35,6 +35,7 @@ function Builds() {
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   const newBuild = useNewBuild();
+  const isDesktop = useIsDesktop();
 
   const active = items.filter((item) => item.stage === "building").sort(byActivity);
   const done = items.filter((item) => item.stage === "done").sort(byFinished);
@@ -70,12 +71,11 @@ function Builds() {
                 <BuildCard key={item.id} item={item} person={byId.get(item.createdBy)} />
               ))}
               <li className="col-span-2 list-none md:col-span-1">
-                <AddPhotoTile
-                  icon={PlusIcon}
-                  label="New build"
-                  onClick={newBuild}
-                  className="h-16 w-full flex-row gap-2 rounded-lg md:aspect-4/5 md:h-auto md:flex-col"
-                />
+                {isDesktop ? (
+                  <AddPhotoTile size="card" icon={PlusIcon} label="New build" onClick={newBuild} />
+                ) : (
+                  <AddPhotoTile size="row" icon={PlusIcon} label="New build" onClick={newBuild} />
+                )}
               </li>
             </ul>
           </Section>

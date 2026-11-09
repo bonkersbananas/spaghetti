@@ -7,8 +7,11 @@ import { ProgressRing } from "./UploadBadge";
 interface AddPhotoTileProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
   icon: Icon;
   label: string;
-  /** "lg" is the big empty-state tile; "md" and "sm" end a row of photos (sm shows only the icon). */
-  size?: "lg" | "md" | "sm";
+  /**
+   * "lg" is the big empty-state tile; "md" and "sm" end a row of photos (sm shows only the icon);
+   * "row" is a full-width strip with the icon beside the label; "card" fills a 4:5 grid cell.
+   */
+  size?: "lg" | "md" | "sm" | "row" | "card";
 }
 
 /** A well to tap (or drop on) to add photos. */
@@ -25,15 +28,23 @@ export const AddPhotoTile = forwardRef<HTMLButtonElement, AddPhotoTileProps>(fun
         size === "lg" && "h-28 gap-2",
         size === "md" && "text-caption size-24 gap-1 rounded-md font-semibold",
         size === "sm" && "size-16 rounded-md",
+        size === "row" && "h-16 w-full flex-row gap-2",
+        size === "card" && "aspect-4/5 w-full gap-2",
         className,
       )}
       aria-label={size === "sm" ? label : undefined}
       title={size === "sm" ? label : undefined}
       {...props}
     >
-      <IconComponent size={size === "lg" ? 28 : 22} aria-hidden />
+      <IconComponent size={size === "lg" || size === "card" ? 28 : size === "row" ? 20 : 22} aria-hidden />
       {size !== "sm" && (
-        <span className={cn(size === "lg" ? "text-small font-semibold" : "px-1 text-center leading-tight")}>
+        <span
+          className={cn(
+            size === "lg" || size === "row" || size === "card"
+              ? "text-small font-semibold"
+              : "px-1 text-center leading-tight",
+          )}
+        >
           {label}
         </span>
       )}

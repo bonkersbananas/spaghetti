@@ -248,7 +248,7 @@ export function SettingsEditor({ value, onChange, outcome, className }: Settings
               selected={!!value.brim}
               tone="semolina"
               onClick={() => set("brim", value.brim ? undefined : true)}
-              className="h-11 self-start md:h-9"
+              className="self-start"
             >
               {value.brim ? "Brim on" : "No brim"}
             </ToggleChip>

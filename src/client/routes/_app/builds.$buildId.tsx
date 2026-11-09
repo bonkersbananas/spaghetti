@@ -156,25 +156,31 @@ function Build({ item }: { item: ItemView }) {
     void navigate({ to: "/builds" });
   }
 
+  const deleteSelectedOrBuild = () => {
+    const attempt = story[selectedIndex];
+    if (attempt) {
+      deleteAttempt(queryClient, item.id, attempt);
+      setSelected(null);
+    } else remove();
+  };
   useHotkeys({
     escape: () => (selected ? setSelected(null) : void navigate({ to: "/builds" })),
     a: primary,
-    arrowdown: () => moveSelection(1),
-    arrowup: () => moveSelection(-1),
-    j: () => moveSelection(1),
-    k: () => moveSelection(-1),
-    enter: () => {
-      if (selected) openSheet(selected);
-    },
-    arrowleft: () => selectPhoto(photoIndex - 1),
-    arrowright: () => selectPhoto(photoIndex + 1),
-    backspace: () => {
-      const attempt = story[selectedIndex];
-      if (attempt) {
-        deleteAttempt(queryClient, item.id, attempt);
-        setSelected(null);
-      } else remove();
-    },
+    // Only bound when they do something, so Enter on a button and arrow-key scrolling keep working.
+    ...(story.length
+      ? {
+          arrowdown: () => moveSelection(1),
+          arrowup: () => moveSelection(-1),
+          j: () => moveSelection(1),
+          k: () => moveSelection(-1),
+        }
+      : {}),
+    ...(selected ? { enter: () => openSheet(selected) } : {}),
+    ...(gallery.length > 1
+      ? { arrowleft: () => selectPhoto(photoIndex - 1), arrowright: () => selectPhoto(photoIndex + 1) }
+      : {}),
+    backspace: deleteSelectedOrBuild,
+    delete: deleteSelectedOrBuild,
   });
 
   // The moment a build that took some failing gets marked done.

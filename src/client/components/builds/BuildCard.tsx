@@ -20,11 +20,22 @@ export function lastActivity(item: ItemView): number {
   return Math.max(last?.printedAt ?? 0, last?.finishedAt ?? 0, item.startedAt ?? item.createdAt);
 }
 
-/** "Attempt 3 · 2 h ago", "Started yesterday". */
-function activityLine(item: ItemView): string {
+/** "Attempt 3 · 2 h ago", "Started yesterday". The time never breaks across lines. */
+function activityLine(item: ItemView) {
   const last = item.attempts.at(-1);
-  if (!last) return `Started ${inlineTime(item.startedAt ?? item.createdAt)}`;
-  return `Attempt ${last.number} · ${relativeTime(last.finishedAt ?? last.printedAt)}`;
+  if (!last) {
+    return (
+      <>
+        Started <span className="whitespace-nowrap">{inlineTime(item.startedAt ?? item.createdAt)}</span>
+      </>
+    );
+  }
+  return (
+    <>
+      Attempt {last.number} ·{" "}
+      <span className="whitespace-nowrap">{relativeTime(last.finishedAt ?? last.printedAt)}</span>
+    </>
+  );
 }
 
 /**
