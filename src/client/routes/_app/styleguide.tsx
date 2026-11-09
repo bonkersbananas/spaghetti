@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
+import { searchTerms } from "@shared/search";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import dragonPhoto from "@/assets/samples/dragon.svg";
@@ -19,6 +20,8 @@ import { Chip, ToggleChip } from "@/components/ui/Chip";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DurationField, NumberField, TextArea, TextField } from "@/components/ui/Field";
+import { ChipDivider, ChipRow, FilterGroup } from "@/components/ui/FilterChips";
+import { Highlight } from "@/components/ui/Highlight";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { NoteField } from "@/components/ui/NoteField";
@@ -58,6 +61,7 @@ const toc = [
   ["cards", "Cards"],
   ["photos", "Photos"],
   ["builds", "Builds & attempts"],
+  ["search", "Journal & search"],
   ["sheets", "Sheets & toasts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
@@ -100,6 +104,7 @@ function Styleguide() {
           <CardSection />
           <PhotoSection />
           <BuildsSection />
+          <SearchSection />
           <SheetSection />
           <EmptySection />
           <SkeletonSection />
@@ -836,6 +841,65 @@ const sampleAttempt: AttemptView = {
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };
+
+/* Journal & search ------------------------------------------------------- */
+
+function SearchSection() {
+  const [outcome, setOutcome] = useState<string | null>("failures");
+  const terms = searchTerms("petg warp");
+  return (
+    <Section
+      id="search"
+      title="Journal & search"
+      note="Chip rows for filters and suggestions, a filter column on desktop, and matched words highlighted."
+    >
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel className="flex flex-col gap-4">
+          <Label>ChipRow: scrolls sideways on phones, wraps on desktop</Label>
+          <ChipRow label="Filters">
+            {[
+              ["failures", "Only failures", Icons.LessonsIcon, "tomato"],
+              ["success", "Worked", Icons.WorkedIcon, "basil"],
+            ].map(([value, label, icon, tone]) => (
+              <ToggleChip
+                key={value as string}
+                selected={outcome === value}
+                icon={icon as Icons.Icon}
+                tone={tone as "tomato" | "basil"}
+                onClick={() => setOutcome(outcome === value ? null : (value as string))}
+              >
+                {label as string}
+              </ToggleChip>
+            ))}
+            <ChipDivider />
+            <ToggleChip selected={false}>PETG</ToggleChip>
+            <ToggleChip selected={false}>PLA</ToggleChip>
+          </ChipRow>
+          <Label>FilterGroup, in the desktop filter column</Label>
+          <FilterGroup label="Who">
+            {people.map((person) => (
+              <ToggleChip key={person.id} selected={person.id === "b"} className="pl-1.5">
+                <Avatar person={person} size="xs" />
+                {person.name.split(" ")[0]}
+              </ToggleChip>
+            ))}
+          </FilterGroup>
+        </Panel>
+        <Panel className="flex flex-col gap-4">
+          <Label>Highlight: the words a search matched (“petg warp”)</Label>
+          <p className="text-body text-ink-soft">
+            <Highlight text="Corners warped off the cool plate. PETG wants the textured sheet." terms={terms} />
+          </p>
+          <Label>A month heading in the journal</Label>
+          <div className="flex flex-col gap-1">
+            <span className="text-caption text-ink-faint font-semibold tracking-wider uppercase">October</span>
+            <span className="font-display text-title text-ink-soft">5 prints, 1 spaghetti, phone stand finished</span>
+          </div>
+        </Panel>
+      </div>
+    </Section>
+  );
+}
 
 function BuildsSection() {
   const [outcome, setOutcome] = useState<Outcome | null>("failed");

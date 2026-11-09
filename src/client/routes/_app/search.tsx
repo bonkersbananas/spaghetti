@@ -248,7 +248,12 @@ function Search() {
             />
           )}
         </div>
-        <aside aria-label="Filters" className="sticky top-10 hidden w-60 shrink-0 xl:block">
+        {/* Before a search the suggestions offer the same tags: the column keeps its place, empty. */}
+        <aside
+          aria-label="Filters"
+          aria-hidden={!searching || undefined}
+          className={cn("sticky top-10 hidden w-60 shrink-0 xl:block", !searching && "invisible")}
+        >
           <Filters layout="column" tags value={filters} onChange={setFilters} />
         </aside>
       </div>

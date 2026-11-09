@@ -136,7 +136,16 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
               </span>
             </span>
           ))}
-          <Highlight text={settings.join(" · ")} terms={terms} />
+          {settings.map((part, index) => (
+            <span key={part} className="whitespace-nowrap">
+              {index > 0 && (
+                <span className="text-ink-ghost" aria-hidden>
+                  ·{" "}
+                </span>
+              )}
+              <Highlight text={part} terms={terms} />
+            </span>
+          ))}
         </span>
       )}
     </ResultRow>
