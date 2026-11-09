@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!src/client/routeTree.gen.ts", "!worker-configuration.d.ts", "!migrations/meta"]
+    "includes": ["**", "!src/client/routeTree.gen.ts", "!worker-configuration.d.ts", "!migrations/meta", "!**/*.md"]
   },
   "formatter": {
     "enabled": true,
