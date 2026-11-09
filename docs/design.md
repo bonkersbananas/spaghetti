@@ -76,6 +76,7 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | Semolina chip | 4.5:1 | 5.0 | 8.4 |
 | Neutral chip | 4.5:1 | 5.9 | 8.2 |
 | Selected chip | 4.5:1 | 13.6 | 11.4 |
+| Search match | 4.5:1 | 12.4 | 10.4 |
 | Primary button | 4.5:1 | 4.6 | 4.6 |
 | Primary button, hovered | 4.5:1 | 5.8 | 5.8 |
 | Badge over a white photo | 4.5:1 | 4.6 | 4.6 |
@@ -168,6 +169,9 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Swatch / SwatchPicker** — a filament's color as a round chip, and a 44 px well that opens the device's color picker with common filament colors first. The color is data, so it is the one inline style allowed.
 - **Disclosure** — optional detail behind one tap, with a one-line summary while closed (an attempt's settings).
 - **ActionBar** — a screen's main action within thumb reach on phones, sitting on the tab bar ("Log attempt", "Start building"). Hidden on desktop, where the action lives in the page. Toasts move up above it while it shows.
+- **ChipRow / ChipDivider / FilterGroup** — rows of filter or suggestion chips: on phones a row scrolls sideways edge to edge (with a thin divider between kinds of chips), on desktop it wraps. `FilterGroup` is one kind of filter in a desktop filter column, a caption over its chips.
+- **MetaList** — a line of short pieces with a dot between them ("Black PETG · 0.20 mm · Cool Plate"): settings lines, "attempt 3 · 2 h ago", what changed. It wraps cleanly: a dot never begins or ends a line (each piece carries its dot in a gutter the row clips). Use it for every dot-separated line; `SettingsLine` is built on it.
+- **Highlight** — text with the words a search matched on a semolina highlight, like a pen stroke. A tag chip that matched gets a ring instead.
 - **Avatar / AvatarStack** — initials on the person's color.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
 - **Kbd** — keyboard hints, hidden on phones.
@@ -195,10 +199,30 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **One record, many stages.** An idea becomes a build in one tap ("Start building", `B` on desktop) and keeps its photos and notes; it lives under Builds from then on. A build can also start from scratch.
 - **The builds list** puts what's on the bed first, printing before the rest, each card with its newest photo and how the last attempt went (an outcome chip over the photo). Done and shelved builds sit below as quieter rows.
 - **A build** leads with its best photo (the final print once done), then its story: attempts newest first, each on a thread whose dot is the outcome's color. Each attempt says what changed since the one before ("bed 55 → 60 °C", "added a brim") on a semolina highlight: this is how the app answers "what worked". A "What worked" card repeats the latest attempt that came out right. Desktop puts the build and the story side by side; `A` logs an attempt (or finishes the one printing), arrow keys or `J`/`K` move through attempts, `Enter` opens one.
+- **Plates** are named the way people say them: "Textured PEI" and "Smooth PEI", but "Cool Plate", "Engineering Plate", "High Temp Plate" in full (a bare "Cool" reads as a temperature). `plateName` in `shared/attempts.ts`.
 - **Outcomes** are Worked (basil), Partly (semolina) and Spaghetti (tomato, soft): a failure is not an error. Printing is semolina with a gentle pulse.
 - **The attempt sheet** (bottom sheet on phones, right panel on desktop) asks only for the outcome, in three big buttons; the time is now. Photos, a one-line note, failure tags (when it didn't work), success notes (when it did) and settings are one tap away. A new attempt starts from the attempt before's settings, so people change only what they try differently. "Still printing" saves it now to finish later.
 - **Finishing** a build is one action, with undo; it picks the final photo (the newest photo of the last attempt that worked). A build that had spaghetti gets the one delight toast, "Al dente", with a sparkle on the Done chip.
 - **Capture follows its context**: on an idea's or a build's page it adds there (photos join it, the note goes into its notes); while something prints it adds to that print and can finish it. "New idea" is always one tap away in the sheet.
+
+## Journal
+
+- **Everything that happened, newest first:** print attempts as photo-led cards, and quieter rows for ideas captured and builds started, finished (a bigger photo, in basil) or shelved. A spaghetti attempt is the same card as a success: its outcome chip over the photo and its failure tags in plain view.
+- **Grouping:** months, each with a quiet heading that sums it up in one line ("9 prints, 3 spaghetti, headphone stand finished"), the journal's one moment of delight. Inside a month, the last seven days get day headings ("Today", "Thursday"); further back, quieter week headings.
+- **Filters are chips kept in the URL** (`/journal?outcome=failures&material=PETG&person=sam`), so a filtered journal can be bookmarked. "Only failures" (spaghetti and partly) comes first: a wall of lessons. Outcome and material show only attempts.
+- **Phone:** one column of big entries; the filters are a row that scrolls sideways. **Desktop:** the feed with a sticky filter column on the right (from 1280 px; a chip row below that). `J` and `K` move through entries, `Enter` opens one (an attempt opens its build with that attempt picked).
+- Pages of 30 load before the end comes into view, and months far off screen skip layout (`render-lazy`), so a year of prints stays fast.
+
+## Search
+
+- **One box finds everything:** ideas, builds and attempts by title, notes, failure tags and success notes, filament type, brand and color, plate, profile and supports. Every word must match, each as the start of a word ("pet warp"); short material names (PLA, PA, PC, ABS) match whole words only.
+- **As you type:** results follow the box after a short pause and the last results stay on screen, dimmed, until the next arrive. Never a spinner page. Results come grouped (builds, attempts, ideas), photo first, matched words highlighted.
+- **Before typing:** recent searches on this device and the tags and materials used most. Filter chips (outcome, material, tag, person) narrow results, and work without words too.
+- **Keyboard:** `/` focuses the box from anywhere, arrow keys move through results, `Enter` opens. On phones the Search tab opens with the keyboard up.
+
+## What worked last time
+
+The attempt sheet offers the best match from history above the settings: the latest attempt that worked with the same material (the build's own first), with its photo, key settings and what would change, and **Use these settings** to start from them in one tap (with Undo). The spool stays the one already chosen; only the plate, temperatures and the rest change. It stays out of the way when nothing matches, or when the attempt already starts from those settings.
 
 ## Voice
 

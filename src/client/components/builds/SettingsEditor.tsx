@@ -7,7 +7,7 @@ import {
   NOZZLE_DIAMETERS,
   type Nozzle,
   type Outcome,
-  shortPlate,
+  plateName,
 } from "@shared/attempts";
 import { type ReactNode, useId } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -199,7 +199,7 @@ export function SettingsEditor({ value, onChange, outcome, className }: Settings
           options={BED_TYPES as readonly string[]}
           value={value.bedType}
           onChange={(bedType) => set("bedType", bedType)}
-          format={shortPlate}
+          format={plateName}
         />
       </Group>
 

@@ -32,6 +32,7 @@ export const SEED_IDS = {
   desiccantHook: "5eed0000-0000-4000-8000-000000000008",
   lithophane: "5eed0000-0000-4000-8000-000000000009",
   spoolHolder: "5eed0000-0000-4000-8000-000000000010",
+  cableChain: "5eed0000-0000-4000-8000-000000000012",
 };
 
 export const SEED_IDEAS: SeedIdea[] = [
@@ -123,10 +124,26 @@ export const SEED_IDEAS: SeedIdea[] = [
     photos: [],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000012",
+    id: SEED_IDS.cableChain,
     by: "sam",
     ago: 12 * DAY,
-    note: "Cable chain for the back of the X2D? Check the clearance to the wall first.",
+    title: "Cable chain",
+    note: "For the back of the X2D. Check the clearance to the wall first.",
+    photos: [],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000013",
+    by: "sam",
+    ago: 47 * DAY,
+    note: "Bag clips for the coffee, with a little spoon holder on the side.",
+    photos: [],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000014",
+    by: "alex",
+    ago: 71 * DAY,
+    title: "Wall mount for the router",
+    note: "Keyhole slots, 160 mm apart. Leave room for the cables underneath.",
     photos: [],
   },
 ];

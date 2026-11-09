@@ -11,6 +11,7 @@ import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { sessionQuery } from "@/lib/queries";
+import { focusSearch } from "@/lib/search";
 
 /** The signed-in app: sidebar on desktop, tab bar on phones. */
 export const Route = createFileRoute("/_app")({
@@ -40,7 +41,16 @@ function Shell() {
   useEffect(() => connectOutbox(queryClient), [queryClient]);
   useHotkeys({
     c: () => setOpen(true),
-    ...Object.fromEntries(sections.map((s) => [s.hotkey, () => navigate({ to: s.to })])),
+    ...Object.fromEntries(
+      sections.map((s) => [
+        s.hotkey,
+        () => {
+          void navigate({ to: s.to });
+          // "/" focuses the search box from anywhere, also when search is already open.
+          if (s.to === "/search") focusSearch();
+        },
+      ]),
+    ),
   });
 
   return (

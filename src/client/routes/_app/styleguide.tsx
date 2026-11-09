@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
+import { searchTerms } from "@shared/search";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import dragonPhoto from "@/assets/samples/dragon.svg";
@@ -19,8 +20,11 @@ import { Chip, ToggleChip } from "@/components/ui/Chip";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DurationField, NumberField, TextArea, TextField } from "@/components/ui/Field";
+import { ChipDivider, ChipRow, FilterGroup } from "@/components/ui/FilterChips";
+import { Highlight } from "@/components/ui/Highlight";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
@@ -58,6 +62,7 @@ const toc = [
   ["cards", "Cards"],
   ["photos", "Photos"],
   ["builds", "Builds & attempts"],
+  ["search", "Journal & search"],
   ["sheets", "Sheets & toasts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
@@ -100,6 +105,7 @@ function Styleguide() {
           <CardSection />
           <PhotoSection />
           <BuildsSection />
+          <SearchSection />
           <SheetSection />
           <EmptySection />
           <SkeletonSection />
@@ -199,7 +205,7 @@ function AppearanceSection() {
             sidebar's account menu on desktop.
           </p>
         </Panel>
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Offline notice</Label>
           <OfflineBanner waiting={0} />
           <OfflineBanner waiting={2} />
@@ -382,7 +388,7 @@ function MotionSection() {
       title="Motion"
       note="Quick and soft: ease-out for things arriving, a small press on everything tappable, nothing that delays reading. Reduced-motion settings turn movement off."
     >
-      <Panel className="flex flex-col gap-4">
+      <Panel className="flex min-w-0 flex-col gap-4">
         <div>
           <Button size="sm" onClick={() => setOn((v) => !v)}>
             {on ? "Back" : "Play"}
@@ -761,7 +767,7 @@ function PhotoSection() {
       note="A photo shows its own average color while it loads, then fades in. Captures upload in the background: the badge says how far along they are, and “Not saved yet” while a retry waits."
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Photo: loading, then loaded</Label>
           <div className="grid grid-cols-2 gap-3">
             {/* What a loading photo shows: its own average color. */}
@@ -783,7 +789,7 @@ function PhotoSection() {
             </span>
           </div>
         </Panel>
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Thumbnails and add tiles</Label>
           <div className="flex flex-wrap items-center gap-2.5">
             <PhotoThumb src={planterPhoto} alt="Planter" onRemove={() => toast.message("Removed")} />
@@ -836,6 +842,75 @@ const sampleAttempt: AttemptView = {
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };
+
+/* Journal & search ------------------------------------------------------- */
+
+function SearchSection() {
+  const [outcome, setOutcome] = useState<string | null>("failures");
+  const terms = searchTerms("petg warp");
+  return (
+    <Section
+      id="search"
+      title="Journal & search"
+      note="Chip rows for filters and suggestions, a filter column on desktop, and matched words highlighted."
+    >
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel className="flex min-w-0 flex-col gap-4">
+          <Label>ChipRow: scrolls sideways on phones, wraps on desktop</Label>
+          <ChipRow label="Filters">
+            {[
+              ["failures", "Only failures", Icons.LessonsIcon, "tomato"],
+              ["success", "Worked", Icons.WorkedIcon, "basil"],
+            ].map(([value, label, icon, tone]) => (
+              <ToggleChip
+                key={value as string}
+                selected={outcome === value}
+                icon={icon as Icons.Icon}
+                tone={tone as "tomato" | "basil"}
+                onClick={() => setOutcome(outcome === value ? null : (value as string))}
+              >
+                {label as string}
+              </ToggleChip>
+            ))}
+            <ChipDivider />
+            <ToggleChip selected={false}>PETG</ToggleChip>
+            <ToggleChip selected={false}>PLA</ToggleChip>
+          </ChipRow>
+          <Label>FilterGroup, in the desktop filter column</Label>
+          <FilterGroup label="Who">
+            {people.map((person) => (
+              <ToggleChip key={person.id} selected={person.id === "b"} className="pl-1.5">
+                <Avatar person={person} size="xs" />
+                {person.name.split(" ")[0]}
+              </ToggleChip>
+            ))}
+          </FilterGroup>
+        </Panel>
+        <Panel className="flex min-w-0 flex-col gap-4">
+          <Label>Highlight: the words a search matched (“petg warp”)</Label>
+          <p className="text-body text-ink-soft">
+            <Highlight text="Corners warped off the cool plate. PETG wants the textured sheet." terms={terms} />
+          </p>
+          <Label>MetaList: a dot never begins or ends a line (narrow it to see)</Label>
+          <div className="bg-ink/4 w-56 rounded-sm p-2">
+            <MetaList className="text-small text-ink-faint">
+              <span>Black PETG</span>
+              <span>0.20 mm</span>
+              <span>15% infill</span>
+              <span>Cool Plate</span>
+              <span className="whitespace-nowrap">nozzle 245 °C</span>
+            </MetaList>
+          </div>
+          <Label>A month heading in the journal</Label>
+          <div className="flex flex-col gap-1">
+            <span className="text-caption text-ink-faint font-semibold tracking-wider uppercase">October</span>
+            <span className="font-display text-title text-ink-soft">5 prints, 1 spaghetti, phone stand finished</span>
+          </div>
+        </Panel>
+      </div>
+    </Section>
+  );
+}
 
 function BuildsSection() {
   const [outcome, setOutcome] = useState<Outcome | null>("failed");

@@ -24,6 +24,7 @@
     "types": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --local",
+    "db:export": "node scripts/db-export.ts",
     "user:add": "node scripts/user-add.ts"
   },
   "dependencies": {
