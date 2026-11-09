@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Spaghetti</title>
     <meta name="description" content="Our 3D printing notebook: ideas, builds and every attempt, good or spaghetti." />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f6f1e8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -13,6 +14,20 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Sets the theme before the first paint, so a dark night never opens on a white flash. Keep in step with src/client/lib/theme.ts. -->
+    <script>
+      (() => {
+        try {
+          const choice = localStorage.getItem("sg-theme");
+          const dark = choice === "dark" || (choice !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+          if (dark) {
+            document.querySelector('meta[name="theme-color"]').content = "#1b1714";
+            document.querySelector('link[rel="manifest"]').href = "/manifest-dark.webmanifest";
+          }
+        } catch {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

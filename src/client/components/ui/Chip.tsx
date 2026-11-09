@@ -45,7 +45,7 @@ export function ToggleChip({ selected, icon: IconComponent, children, className,
       className={cn(
         base,
         "pressable focus-ring h-9 px-3.5 md:h-8",
-        selected ? "bg-ink text-paper" : "bg-cream text-ink-soft shadow-soft hover:text-ink",
+        selected ? "bg-select text-on-select" : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
       {...props}

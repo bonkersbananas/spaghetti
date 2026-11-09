@@ -1,4 +1,4 @@
-import type { PeopleResponse, SessionResponse } from "@shared/api";
+import type { PeopleResponse, Person, SessionResponse } from "@shared/api";
 import { queryOptions } from "@tanstack/react-query";
 import { ApiError, api } from "./api";
 
@@ -7,10 +7,19 @@ export const sessionQuery = queryOptions({
   queryKey: ["session"],
   queryFn: async () => {
     try {
-      return (await api<SessionResponse>("/session")).user;
+      const { user } = await api<SessionResponse>("/session");
+      rememberUser(user);
+      return user;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) return null;
-      throw error;
+      if (error instanceof ApiError) {
+        if (error.status !== 401) throw error;
+        rememberUser(null);
+        return null;
+      }
+      // No connection: the app opens as the person who was signed in, so a
+      // capture next to the printer works. The server checks the session again
+      // as soon as it can be reached, and a 401 then signs them out.
+      return rememberedUser();
     }
   },
   staleTime: 5 * 60 * 1000,
@@ -22,3 +31,24 @@ export const peopleQuery = queryOptions({
   queryFn: async () => (await api<PeopleResponse>("/people")).people,
   staleTime: 60 * 60 * 1000,
 });
+
+const USER_KEY = "sg-user";
+
+/** Who signed in on this device, kept so the app can open without a connection. */
+function rememberedUser(): Person | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as Person | null) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberUser(user: Person | null) {
+  try {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_KEY);
+  } catch {
+    // Private mode: the app just needs a connection to open.
+  }
+}

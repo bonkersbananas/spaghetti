@@ -21,7 +21,7 @@ export function UploadBadge({ state, progress = 0, className }: UploadBadgeProps
       role="status"
       className={cn(
         "rounded-pill text-caption inline-flex h-7 items-center gap-1.5 pr-2.5 pl-1.5 font-semibold backdrop-blur-md",
-        waiting ? "bg-semolina-soft/95 text-semolina-ink" : "bg-ink/70 text-paper",
+        waiting ? "bg-semolina-soft/95 text-semolina-ink" : "bg-veil-strong text-on-veil",
         className,
       )}
     >

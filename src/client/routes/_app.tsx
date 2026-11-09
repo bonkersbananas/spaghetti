@@ -3,6 +3,7 @@ import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-
 import { useEffect } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
+import { OfflineNotice } from "@/components/shell/OfflineNotice";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { sections } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
@@ -47,6 +48,7 @@ function Shell() {
       <Sidebar />
       <main className="pt-safe md:pl-sidebar">
         <div className="max-w-wide pb-tabbar mx-auto w-full px-5 md:px-12 md:pb-16">
+          <OfflineNotice />
           <Outlet />
         </div>
       </main>

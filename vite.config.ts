@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { serviceWorker } from "./scripts/vite-service-worker.ts";
 
 // SPAGHETTI_STATE_DIR points local D1/R2 state elsewhere (the screenshot
 // harness and e2e tests use a throwaway directory). Default: .wrangler/state,
@@ -20,6 +21,7 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
+    serviceWorker(),
     cloudflare({ persistState: stateDir ? { path: stateDir } : true }),
   ],
   resolve: {

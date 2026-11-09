@@ -49,7 +49,7 @@ function FieldFrame({ id, label, hint, error, saveState, className, children }: 
 }
 
 const inputSurface =
-  "w-full rounded-md bg-ink/4 text-ink shadow-well placeholder:text-ink-ghost transition-shadow duration-fast ease-out focus:shadow-ring disabled:opacity-60";
+  "w-full rounded-md bg-ink/4 text-ink shadow-well placeholder:text-ink-faint transition-shadow duration-fast ease-out focus:shadow-ring disabled:opacity-60";
 
 export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "size"> {
   label?: string;
@@ -86,7 +86,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           className={cn(
             appearance === "surface"
               ? cn(inputSurface, "text-body h-12 px-4 md:h-11")
-              : "text-ink placeholder:text-ink-ghost w-full bg-transparent",
+              : "text-ink placeholder:text-ink-faint w-full bg-transparent",
             IconComponent && "pl-11",
             error && "shadow-ring-error focus:shadow-ring-error",
           )}
@@ -147,9 +147,9 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
           "resize-none overflow-hidden",
           appearance === "surface" && cn(inputSurface, "text-body px-4 py-3"),
           appearance === "plain" &&
-            "text-lead text-ink placeholder:text-ink-ghost md:text-body w-full bg-transparent focus:shadow-none",
+            "text-lead text-ink placeholder:text-ink-faint md:text-body w-full bg-transparent focus:shadow-none",
           appearance === "title" &&
-            "font-display text-headline text-ink placeholder:text-ink-ghost w-full bg-transparent font-semibold focus:shadow-none",
+            "font-display text-headline text-ink placeholder:text-ink-faint w-full bg-transparent font-semibold focus:shadow-none",
           error && "shadow-ring-error focus:shadow-ring-error",
         )}
         {...props}

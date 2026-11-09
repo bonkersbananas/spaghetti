@@ -25,17 +25,51 @@ export interface DevServer {
   stop: () => void;
 }
 
+/**
+ * Serves the built app (run `pnpm build` first) on workerd with wrangler,
+ * the way the container does: this is the one that has a service worker.
+ */
+export async function startBuiltServer({ port, stateDir }: { port: number; stateDir: string }): Promise<DevServer> {
+  return waitForServer(
+    spawn(
+      join(root, "node_modules/.bin/wrangler"),
+      [
+        "dev",
+        "--local",
+        "--ip",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--persist-to",
+        stateDir,
+        "--show-interactive-dev-session=false",
+        "--live-reload=false",
+      ],
+      {
+        cwd: root,
+        env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    ),
+    port,
+    "The built app",
+  );
+}
+
 /** Starts `vite` (the Worker in workerd plus the client) on given state. */
 export async function startDevServer({ port, stateDir }: { port: number; stateDir: string }): Promise<DevServer> {
-  const child: ChildProcess = spawn(
-    join(root, "node_modules/.bin/vite"),
-    ["--port", String(port), "--strictPort", "--host", "127.0.0.1"],
-    {
+  return waitForServer(
+    spawn(join(root, "node_modules/.bin/vite"), ["--port", String(port), "--strictPort", "--host", "127.0.0.1"], {
       cwd: root,
       env: { ...process.env, SPAGHETTI_STATE_DIR: stateDir, BROWSER: "none" },
       stdio: ["ignore", "pipe", "pipe"],
-    },
+    }),
+    port,
+    "The dev server",
   );
+}
+
+async function waitForServer(child: ChildProcess, port: number, name: string): Promise<DevServer> {
   let output = "";
   child.stdout?.on("data", (chunk) => (output += chunk));
   child.stderr?.on("data", (chunk) => (output += chunk));
@@ -44,7 +78,7 @@ export async function startDevServer({ port, stateDir }: { port: number; stateDi
 
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`The dev server exited:\n${output}`);
+    if (child.exitCode !== null) throw new Error(`${name} exited:\n${output}`);
     try {
       const response = await fetch(`${url}/api/health`);
       if (response.ok) return { url, stop };
@@ -54,5 +88,5 @@ export async function startDevServer({ port, stateDir }: { port: number; stateDi
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   stop();
-  throw new Error(`The dev server didn't start within a minute:\n${output}`);
+  throw new Error(`${name} didn't start within a minute:\n${output}`);
 }

@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_app/ideas/")({
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 function Ideas() {
-  const { items, isPending } = useIdeas();
+  const { items, isPending, error, refetch } = useIdeas();
   const { data: people } = useQuery(peopleQuery);
   const { landed } = useCapture();
   const byId = new Map(people?.map((person) => [person.id, person]));
@@ -41,10 +41,30 @@ function Ideas() {
             <IdeaCard key={item.id} item={item} person={byId.get(item.createdBy)} landing={item.id === landed} />
           ))}
         </ul>
+      ) : error ? (
+        <IdeasUnreachable onRetry={() => void refetch()} />
       ) : (
         <IdeasEmpty />
       )}
     </>
+  );
+}
+
+/** The server can't be reached and there is nothing to show yet. The offline strip above says why. */
+function IdeasUnreachable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <EmptyState
+      className="py-10 md:py-20"
+      illustration={<EmptyPot />}
+      title="The pot is out of reach"
+      action={
+        <Button variant="secondary" onClick={onRetry}>
+          Try again
+        </Button>
+      }
+    >
+      Your ideas will be here when the connection is back. Anything you capture meanwhile is kept on this device.
+    </EmptyState>
   );
 }
 

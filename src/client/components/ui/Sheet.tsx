@@ -37,7 +37,7 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, children }
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
       <Drawer.Portal>
         <Drawer.Overlay className="bg-scrim fixed inset-0 z-40" />
-        <Drawer.Content className="bg-cream shadow-float fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-xl focus:outline-none">
+        <Drawer.Content className="bg-lifted shadow-float fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-xl focus:outline-none">
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
           <div className="px-5 pt-2 pb-1">
             <Drawer.Title className="font-display text-title text-ink font-semibold">{title}</Drawer.Title>
@@ -68,7 +68,7 @@ function DesktopSheet({ open, onOpenChange, title, description, footer, desktop 
         <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
         <Dialog.Content
           className={cn(
-            "bg-cream shadow-float fixed z-50 flex flex-col focus:outline-none",
+            "bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel
               ? "sg-panel inset-y-3 right-3 w-full max-w-md rounded-xl"
               : "sg-dialog top-[14vh] left-1/2 max-h-[72vh] w-full max-w-xl -translate-x-1/2 rounded-xl",

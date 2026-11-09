@@ -145,7 +145,7 @@ export function useIdeas() {
       (a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1),
     );
   }, [query.data, state]);
-  return { items, isPending: query.isPending && !state.entries.length, error: query.error };
+  return { items, isPending: query.isPending && !state.entries.length, error: query.error, refetch: query.refetch };
 }
 
 /** One item, from the outbox if the server doesn't have it yet. */
@@ -163,7 +163,7 @@ export function useItem(id: string) {
     if (pendingEntry) return fromEntry(pendingEntry, state);
     return query.data ? withOutbox(query.data, state) : query.data;
   }, [pendingEntry, query.data, state]);
-  return { item, isPending: !item && query.isPending };
+  return { item, isPending: !item && query.isPending, error: query.error };
 }
 
 /** Saves a title or note change; used by the detail screen's autosave. */
