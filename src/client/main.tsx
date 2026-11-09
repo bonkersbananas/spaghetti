@@ -6,11 +6,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { registerServiceWorker } from "./lib/offline";
+import { initTheme } from "./lib/theme";
 import { routeTree } from "./routeTree.gen";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 },
+    // "always": without a connection a query fails at once and the screen can say so,
+    // rather than waiting forever behind a skeleton.
+    queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1, networkMode: "always" },
   },
 });
 
@@ -27,6 +31,9 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
+
+initTheme();
+registerServiceWorker();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root is missing from index.html");

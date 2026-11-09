@@ -59,7 +59,7 @@ export function PhotoThumb({ src, alt, color, size = "md", busy, onRemove, class
     <div className={cn("relative shrink-0", size === "md" ? "size-24" : "size-16", className)}>
       <Photo src={src} alt={alt} color={color} eager className="shadow-soft size-full rounded-md" />
       {busy && (
-        <span className="bg-ink/55 text-paper absolute bottom-1.5 left-1.5 flex size-6 items-center justify-center rounded-full backdrop-blur-md">
+        <span className="bg-veil text-on-veil absolute bottom-1.5 left-1.5 flex size-6 items-center justify-center rounded-full backdrop-blur-md">
           <ProgressRing value={null} className="size-3.5" />
         </span>
       )}
@@ -68,7 +68,7 @@ export function PhotoThumb({ src, alt, color, size = "md", busy, onRemove, class
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${alt}`}
-          className="pressable focus-ring bg-ink/60 text-paper hover:bg-ink/80 absolute top-1 right-1 flex size-7 items-center justify-center rounded-full backdrop-blur-md"
+          className="pressable focus-ring bg-veil text-on-veil hover:bg-veil-strong absolute top-1 right-1 flex size-7 items-center justify-center rounded-full backdrop-blur-md"
         >
           <CloseIcon size={14} weight="bold" aria-hidden />
         </button>

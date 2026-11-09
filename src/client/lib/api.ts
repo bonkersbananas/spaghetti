@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from "@shared/api";
+import { reportReachable, reportUnreachable } from "./connection";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -15,16 +16,24 @@ export class ApiError extends Error {
 /** Fetches JSON from the Worker's /api. Throws ApiError on any non-2xx. */
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
-  const response = await fetch(`/api${path}`, {
-    credentials: "same-origin",
-    ...rest,
-    headers: {
-      Accept: "application/json",
-      ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      credentials: "same-origin",
+      ...rest,
+      headers: {
+        Accept: "application/json",
+        ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+      body: json !== undefined ? JSON.stringify(json) : rest.body,
+    });
+  } catch (error) {
+    // fetch only rejects when the request never got an answer.
+    reportUnreachable();
+    throw error;
+  }
+  reportReachable();
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => null);
   if (!response.ok) {

@@ -1,13 +1,26 @@
 /**
- * The server Playwright tests run against: a seeded throwaway local D1 and
- * the Vite dev server (the Worker in workerd). Stops and cleans up on exit.
+ * The servers Playwright tests run against, each on a seeded throwaway local
+ * D1. By default the Vite dev server (the Worker in workerd). With
+ * E2E_BUILT=1 the production build on workerd, which is the one with a
+ * service worker (the offline tests). Stops and cleans up on exit.
  */
-import { seedThrowawayState, startDevServer } from "./lib/local-app.ts";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
+import { seedThrowawayState, startBuiltServer, startDevServer } from "./lib/local-app.ts";
+import { root } from "./lib/wrangler.ts";
 
-const port = Number(process.env.PORT ?? 5174);
+const built = process.env.E2E_BUILT === "1";
+const port = Number(process.env.PORT ?? (built ? 5175 : 5174));
 const state = await seedThrowawayState();
-const server = await startDevServer({ port, stateDir: state.dir });
-console.log(`e2e server ready on ${server.url}`);
+
+if (built) {
+  const build = spawnSync(join(root, "node_modules/.bin/vite"), ["build"], { cwd: root, stdio: "inherit" });
+  if (build.status !== 0) process.exit(build.status ?? 1);
+}
+const server = built
+  ? await startBuiltServer({ port, stateDir: state.dir })
+  : await startDevServer({ port, stateDir: state.dir });
+console.log(`e2e ${built ? "built app" : "dev"} server ready on ${server.url}`);
 
 function shutdown() {
   server.stop();

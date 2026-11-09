@@ -1,6 +1,7 @@
 import type { Item, ItemResponse, Photo, PhotoResponse } from "@shared/api";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
+import { isOnline, reportReachable, reportUnreachable, subscribeConnection } from "./connection";
 import { openStore } from "./idb";
 import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
 import { setPreview } from "./previews";
@@ -104,7 +105,9 @@ class Outbox {
   async resume() {
     if (this.resumed) return;
     this.resumed = true;
-    window.addEventListener("online", () => this.retryNow());
+    subscribeConnection(() => {
+      if (isOnline()) this.retryNow();
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") this.retryNow();
     });
@@ -332,8 +335,14 @@ function send(url: string, body: FormData, onProgress: (fraction: number) => voi
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(event.loaded / event.total);
     };
-    xhr.onload = () => resolve({ status: xhr.status, body: xhr.responseText });
-    xhr.onerror = () => reject(new RetryLater());
+    xhr.onload = () => {
+      reportReachable();
+      resolve({ status: xhr.status, body: xhr.responseText });
+    };
+    xhr.onerror = () => {
+      reportUnreachable();
+      reject(new RetryLater());
+    };
     xhr.ontimeout = () => reject(new RetryLater());
     xhr.timeout = 120_000;
     xhr.send(body);

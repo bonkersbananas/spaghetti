@@ -11,7 +11,7 @@ import { EyeIcon, EyeSlashIcon } from "@/components/ui/icons";
 import { ApiError, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { ease, spring } from "@/lib/motion";
-import { sessionQuery } from "@/lib/queries";
+import { rememberUser, sessionQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: z.object({ redirect: z.string().optional() }),
@@ -40,6 +40,7 @@ function SignIn() {
     mutationFn: () => api<SessionResponse>("/session", { method: "POST", json: { username, password } }),
     onSuccess: async ({ user }) => {
       queryClient.setQueryData(sessionQuery.queryKey, user);
+      rememberUser(user);
       await navigate({ href: safeRedirect(redirectTo), replace: true });
     },
     onError: () => setAttempt((n) => n + 1),

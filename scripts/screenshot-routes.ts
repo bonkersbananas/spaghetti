@@ -7,12 +7,16 @@ export interface Shot {
   path: string;
   /** Take it signed out (sign-in screen). */
   signedOut?: boolean;
+  /** Only this element (a CSS selector), scrolled into view. */
+  selector?: string;
   /** The whole scrollable page, not just the viewport. */
   fullPage?: boolean;
   /** Only at this width, for screens that exist on one layout. */
   width?: 390 | 1440;
   /** Runs after the page loads, to open a sheet or reach a state. */
   prepare?: (page: Page) => Promise<void>;
+  /** Runs after every image has loaded, right before the screenshot. */
+  beforeShot?: (page: Page) => Promise<void>;
   /** Runs after the screenshot, to undo what prepare changed for the next width. */
   cleanup?: (page: Page) => Promise<void>;
 }
@@ -65,5 +69,29 @@ export const shots: Shot[] = [
       await page.getByRole("dialog").waitFor();
     },
   },
+  {
+    // The one quiet place that says there is no connection (needs the signed-in app open).
+    name: "offline",
+    path: "/ideas",
+    // After the photos have loaded, so they are in the page when the connection goes.
+    beforeShot: async (page) => {
+      await page.context().setOffline(true);
+      await page.getByRole("status").filter({ hasText: "Offline" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
+    },
+  },
+  {
+    // The account sheet / menu, where the theme is chosen.
+    name: "appearance",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await page.getByRole("radio", { name: "System" }).waitFor();
+    },
+  },
   { name: "styleguide", path: "/styleguide", fullPage: true },
+  { name: "styleguide-color", path: "/styleguide", selector: "#color" },
 ];
