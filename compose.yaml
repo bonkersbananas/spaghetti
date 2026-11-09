@@ -1,0 +1,12 @@
+# docker compose up -d, then: docker compose exec app node scripts/user-add.ts
+services:
+  app:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - spaghetti-data:/data
+    restart: unless-stopped
+
+volumes:
+  spaghetti-data:

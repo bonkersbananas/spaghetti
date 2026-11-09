@@ -55,7 +55,7 @@ try {
     }
     await context.close();
   }
-  console.log(`✓ ${selected.length * viewports.length} screenshots in ${outDir}`);
+  console.log(`✓ Screenshots in ${outDir}`);
 } finally {
   await browser?.close();
   server.stop();
@@ -63,6 +63,7 @@ try {
 }
 
 async function capture(page: import("@playwright/test").Page, shot: (typeof shots)[number], width: number) {
+  if (shot.width && shot.width !== width) return;
   await page.goto(shot.path, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
   await shot.prepare?.(page);

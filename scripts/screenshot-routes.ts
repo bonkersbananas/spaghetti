@@ -8,6 +8,8 @@ export interface Shot {
   signedOut?: boolean;
   /** The whole scrollable page, not just the viewport. */
   fullPage?: boolean;
+  /** Only at this width, for screens that exist on one layout. */
+  width?: 390 | 1440;
   /** Runs after the page loads, to open a sheet or reach a state. */
   prepare?: (page: Page) => Promise<void>;
 }
@@ -33,12 +35,10 @@ export const shots: Shot[] = [
   {
     name: "account",
     path: "/ideas",
+    width: 390,
     prepare: async (page) => {
-      const account = page.getByRole("button", { name: "Account" });
-      if (await account.isVisible()) {
-        await account.click();
-        await page.getByRole("dialog").waitFor();
-      }
+      await page.getByRole("button", { name: "Account" }).click();
+      await page.getByRole("dialog").waitFor();
     },
   },
   { name: "styleguide", path: "/styleguide", fullPage: true },
