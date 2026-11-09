@@ -245,7 +245,12 @@ describe("facets", () => {
   it("counts materials and tags in use, most used first", async () => {
     const build = await createItem({ stage: "building" });
     await logAttempt(build.id, { outcome: "failed", failureTags: ["warping", "stringing"], settings: petg });
-    await logAttempt(build.id, { outcome: "failed", failureTags: ["warping"], settings: petg });
+    // Same material, another spool: still one PETG.
+    await logAttempt(build.id, {
+      outcome: "failed",
+      failureTags: ["warping"],
+      settings: { filaments: [{ type: "petg", brand: "Polymaker", colorName: "Teal" }] },
+    });
     await logAttempt(build.id, {
       outcome: "success",
       successNotes: ["nice-surface"],

@@ -21,6 +21,7 @@ import { OutcomePicker } from "./Outcome";
 import { SettingsEditor } from "./SettingsEditor";
 import { summarizeSettings } from "./settings";
 import { TagPicker } from "./TagPicker";
+import { WhatWorkedSuggestion } from "./WhatWorkedSuggestion";
 
 interface AttemptSheetProps {
   item: ItemView;
@@ -108,6 +109,8 @@ interface FieldsProps {
   outcomeLabel: string;
   /** Enter in the note, on desktop: log the attempt. */
   onEnter?: () => void;
+  /** Shown above the settings: "what worked last time", for a new attempt. */
+  suggestion?: ReactNode;
 }
 
 function AttemptFields(props: FieldsProps) {
@@ -162,6 +165,7 @@ function AttemptFields(props: FieldsProps) {
       {(outcome === "success" || outcome === "partial") && (
         <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
       )}
+      {props.suggestion}
       <Disclosure
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -294,6 +298,13 @@ function LogAttempt({
           settings={draft.settings}
           onSettings={(settings) => change({ settings })}
           previous={previous}
+          suggestion={
+            <WhatWorkedSuggestion
+              itemId={item.id}
+              settings={draft.settings}
+              onUse={(settings) => change({ settings })}
+            />
+          }
           when={
             <WhenField
               value={when}

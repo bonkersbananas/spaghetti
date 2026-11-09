@@ -283,11 +283,12 @@ export const searchRoutes = new Hono<AppEnv>()
   .get("/facets", async (c) => {
     const live = "a.deleted_at IS NULL AND i.deleted_at IS NULL";
     const [materials, tagRows] = await Promise.all([
-      all<{ value: string; count: number }>(c.env, {
-        sql: `SELECT upper(trim(json_extract(f.value, '$.type'))) AS value, count(DISTINCT a.id) AS count
+      all<{ material: string; count: number }>(c.env, {
+        // Named "material", not "value": GROUP BY would read json_each's own value column.
+        sql: `SELECT upper(trim(json_extract(f.value, '$.type'))) AS material, count(DISTINCT a.id) AS count
           FROM attempts AS a JOIN items AS i ON i.id = a.item_id, json_each(a.settings, '$.filaments') AS f
           WHERE ${live} AND trim(coalesce(json_extract(f.value, '$.type'), '')) != ''
-          GROUP BY value ORDER BY count DESC, value LIMIT 12`,
+          GROUP BY material ORDER BY count DESC, material LIMIT 12`,
         params: [],
       }),
       all<{ kind: TagKind; slug: string; count: number }>(c.env, {
@@ -299,7 +300,10 @@ export const searchRoutes = new Hono<AppEnv>()
         params: [],
       }),
     ]);
-    return c.json<FacetsResponse>({ materials, tags: tagRows });
+    return c.json<FacetsResponse>({
+      materials: materials.map((row) => ({ value: row.material, count: row.count })),
+      tags: tagRows,
+    });
   })
 
   /**

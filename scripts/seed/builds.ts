@@ -43,6 +43,8 @@ interface SeedAttempt {
 interface SeedBuild {
   id: string;
   by: By;
+  /** Made here rather than grown from a seed idea: when, and as what. */
+  create?: { title: string; note?: string; createdAgo: number; asIdea?: boolean };
   stage: "building" | "done" | "shelved";
   startedAgo: number;
   finishedAgo?: number;
@@ -54,6 +56,8 @@ export const SEED_BUILD_IDS = {
   tugboat: SEED_IDS.tugboat,
   headphoneStand: SEED_IDS.headphoneStand,
   tugboatSpaghetti: "5eed0000-0000-4000-8000-0000000a0001",
+  /** PETG that warped: its next attempt is offered what worked for the desiccant hook. */
+  cableChain: SEED_IDS.cableChain,
 };
 
 const yellowPla = { type: "PLA", brand: "Bambu", colorHex: "#f2c230", colorName: "Sunflower yellow", amsSlot: "A2" };
@@ -329,6 +333,366 @@ export const SEED_BUILDS: SeedBuild[] = [
   },
 ];
 
+const black = { type: "PLA", brand: "Bambu", colorHex: "#1d1d1f", colorName: "Black", amsSlot: "A3" };
+const tealPetg = { type: "PETG", brand: "Polymaker", colorHex: "#2c8a87", colorName: "Teal", amsSlot: "B2" };
+const bluePetg = { type: "PETG", brand: "Bambu", colorHex: "#2f6f9f", colorName: "Blue", amsSlot: "A4" };
+
+/**
+ * Builds from the months before, so the journal reaches back a season:
+ * finished ones with their spaghetti along the way, and one on the shelf.
+ */
+const OLDER_BUILDS: SeedBuild[] = [
+  {
+    id: "5eed0000-0000-4000-8000-000000000101",
+    by: "alex",
+    create: {
+      title: "Cable clips for the desk",
+      note: "Snap-on clips for the desk edge, 18 mm board.",
+      createdAgo: 100 * DAY,
+      asIdea: true,
+    },
+    stage: "done",
+    startedAgo: 97 * DAY,
+    finishedAgo: 94 * DAY + 20 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0101",
+        by: "alex",
+        ago: 96 * DAY,
+        outcome: "failed",
+        finishedAfter: 50 * MIN,
+        note: "Clips popped off the cool plate one by one. Spaghetti salad.",
+        failureTags: ["spaghetti", "bed-adhesion"],
+        settings: {
+          filaments: [black],
+          bedType: "Cool Plate",
+          layerHeight: 0.2,
+          infillDensity: 20,
+          nozzleTemperature: 220,
+          bedTemperature: 35,
+          failedAtPercent: 30,
+        },
+        photos: [
+          { file: "spaghetti-fail.svg", color: "#6d675f", crop: [100, 80, 900, 675], filter: "hue-rotate(10deg)" },
+        ],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0102",
+        by: "alex",
+        ago: 95 * DAY,
+        outcome: "success",
+        finishedAfter: 55 * MIN,
+        note: "Textured sheet and 55 °C: every clip stayed put.",
+        successNotes: ["great-first-layer", "would-print-again"],
+        settings: {
+          filaments: [black],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 20,
+          nozzleTemperature: 220,
+          bedTemperature: 55,
+          actualMinutes: 52,
+          weightGrams: 18,
+        },
+        photos: [{ file: "cable-clips.svg", color: "#a5967e" }],
+      },
+    ],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000102",
+    by: "sam",
+    create: { title: "Planetary gear set", note: "Print-in-place, for the shelf.", createdAgo: 80 * DAY, asIdea: true },
+    stage: "done",
+    startedAgo: 78 * DAY,
+    finishedAgo: 75 * DAY + 20 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0201",
+        by: "sam",
+        ago: 77 * DAY,
+        outcome: "partial",
+        finishedAfter: 3 * HOUR,
+        note: "Ring gear shifted a layer near the top; the planets still turn.",
+        failureTags: ["layer-shift"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#00ae42", colorName: "Bambu green", amsSlot: "A2" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.16,
+          infillDensity: 15,
+          processPreset: "0.16mm Optimal @BBL X2D",
+          nozzleTemperature: 220,
+          bedTemperature: 55,
+          failedAtPercent: 88,
+        },
+        photos: [{ file: "gear-set.svg", color: "#5f7058", crop: [200, 150, 800, 600], filter: "brightness(0.94)" }],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0202",
+        by: "sam",
+        ago: 76 * DAY,
+        outcome: "success",
+        finishedAfter: 3 * HOUR,
+        note: "Silent profile, no shift. Turns smoothly straight off the plate.",
+        successNotes: ["strong-and-tight-fit", "settings-worth-reusing"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#00ae42", colorName: "Bambu green", amsSlot: "A2" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.16,
+          infillDensity: 15,
+          processPreset: "0.16mm Silent @BBL X2D",
+          nozzleTemperature: 220,
+          bedTemperature: 55,
+          actualMinutes: 176,
+          weightGrams: 44,
+        },
+        photos: [{ file: "gear-set.svg", color: "#5f7058" }],
+      },
+    ],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000103",
+    by: "sam",
+    create: { title: "Filament swatch box", createdAgo: 62 * DAY },
+    stage: "done",
+    startedAgo: 62 * DAY,
+    finishedAgo: 57 * DAY + 20 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0301",
+        by: "sam",
+        ago: 61 * DAY,
+        outcome: "failed",
+        finishedAfter: 2 * HOUR,
+        note: "Corners peeled off the cool plate. PETG wants the textured sheet.",
+        failureTags: ["warping", "bed-adhesion"],
+        settings: {
+          filaments: [tealPetg],
+          bedType: "Cool Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          nozzleTemperature: 245,
+          bedTemperature: 70,
+          failedAtPercent: 22,
+        },
+        photos: [
+          {
+            file: "spaghetti-fail.svg",
+            color: "#706a63",
+            crop: [300, 200, 800, 600],
+            filter: "hue-rotate(140deg) saturate(0.7)",
+          },
+        ],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0302",
+        by: "sam",
+        ago: 60 * DAY,
+        outcome: "partial",
+        finishedAfter: 4 * HOUR,
+        note: "Stuck down now, but the long walls still warp a hair at the ends.",
+        failureTags: ["warping"],
+        successNotes: ["great-first-layer"],
+        settings: {
+          filaments: [tealPetg],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          brim: true,
+          nozzleTemperature: 245,
+          bedTemperature: 80,
+        },
+        photos: [
+          {
+            file: "drawer-organizer.svg",
+            color: "#a59a86",
+            crop: [150, 120, 900, 675],
+            filter: "hue-rotate(120deg) saturate(0.8)",
+          },
+        ],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0303",
+        by: "alex",
+        ago: 58 * DAY,
+        outcome: "success",
+        finishedAfter: 4 * HOUR,
+        note: "Dried the spool and closed the door: flat as a board.",
+        successNotes: ["dried-filament-helped", "great-first-layer"],
+        settings: {
+          filaments: [tealPetg],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          brim: true,
+          nozzleTemperature: 245,
+          bedTemperature: 80,
+          chamberTemperature: 35,
+          filamentDried: true,
+          actualMinutes: 236,
+          weightGrams: 131,
+        },
+        photos: [{ file: "drawer-organizer.svg", color: "#a59a86", filter: "hue-rotate(120deg) saturate(0.8)" }],
+      },
+    ],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000104",
+    by: "alex",
+    create: {
+      title: "Phone stand in blue PETG",
+      note: "Matches the desk. Angle it for video calls.",
+      createdAgo: 40 * DAY,
+      asIdea: true,
+    },
+    stage: "done",
+    startedAgo: 36 * DAY,
+    finishedAgo: 32 * DAY + 20 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0401",
+        by: "alex",
+        ago: 35 * DAY,
+        outcome: "failed",
+        finishedAfter: 90 * MIN,
+        note: "Hairy everywhere and it popped like popcorn. The spool was damp.",
+        failureTags: ["stringing", "wet-filament"],
+        settings: {
+          filaments: [bluePetg],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 20,
+          nozzleTemperature: 255,
+          bedTemperature: 70,
+        },
+        photos: [
+          {
+            file: "phone-stand.svg",
+            color: "#9c968f",
+            crop: [250, 180, 760, 570],
+            filter: "contrast(1.1) brightness(0.9)",
+          },
+        ],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0402",
+        by: "sam",
+        ago: 33 * DAY,
+        outcome: "success",
+        finishedAfter: 95 * MIN,
+        note: "Dried it overnight and dropped to 245 °C. Clean.",
+        successNotes: ["dried-filament-helped", "nice-surface"],
+        settings: {
+          filaments: [bluePetg],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 20,
+          nozzleTemperature: 245,
+          bedTemperature: 70,
+          filamentDried: true,
+          actualMinutes: 92,
+          weightGrams: 58,
+        },
+        photos: [{ file: "phone-stand.svg", color: "#aca69f" }],
+      },
+    ],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000105",
+    by: "sam",
+    create: { title: "Drawer bins, 42 mm grid", createdAgo: 26 * DAY },
+    stage: "done",
+    startedAgo: 26 * DAY,
+    finishedAgo: 24 * DAY,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0501",
+        by: "sam",
+        ago: 25 * DAY,
+        outcome: "success",
+        finishedAfter: 5 * HOUR,
+        note: "Six bins in one go, all square.",
+        successNotes: ["fast-profile-ok"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#8e9089", colorName: "Gray", amsSlot: "A1" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.24,
+          infillDensity: 10,
+          processPreset: "0.24mm Draft @BBL X2D",
+          nozzleTemperature: 220,
+          bedTemperature: 55,
+          actualMinutes: 288,
+          weightGrams: 210,
+        },
+        photos: [{ file: "drawer-organizer.svg", color: "#c1b198" }],
+      },
+    ],
+  },
+  {
+    id: "5eed0000-0000-4000-8000-000000000106",
+    by: "alex",
+    create: { title: "Spiral vase lampshade", note: "Silk PLA, vase mode.", createdAgo: 22 * DAY, asIdea: true },
+    stage: "shelved",
+    startedAgo: 21 * DAY,
+    finishedAgo: 19 * DAY,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0601",
+        by: "alex",
+        ago: 20 * DAY,
+        outcome: "partial",
+        finishedAfter: 3 * HOUR,
+        note: "Seam zigzags all the way up. Shelved until the slicer's scarf seam lands.",
+        failureTags: ["seam-or-banding"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Eryone", colorHex: "#c9a46b", colorName: "Silk gold" }],
+          bedType: "Smooth PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 0,
+          nozzleTemperature: 225,
+          bedTemperature: 55,
+        },
+        photos: [
+          {
+            file: "lithophane-lamp.svg",
+            color: "#6b5238",
+            crop: [150, 250, 600, 800],
+            filter: "sepia(0.4) brightness(1.1)",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: SEED_IDS.cableChain,
+    by: "sam",
+    stage: "building",
+    startedAgo: 3 * DAY + 2 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0701",
+        by: "sam",
+        ago: 3 * DAY,
+        outcome: "failed",
+        finishedAfter: 70 * MIN,
+        note: "Links curled up at the ends and the last row let go.",
+        failureTags: ["warping", "bed-adhesion"],
+        settings: {
+          filaments: [{ type: "PETG", brand: "Bambu", colorHex: "#1d1d1f", colorName: "Black", amsSlot: "B3" }],
+          bedType: "Cool Plate",
+          layerHeight: 0.2,
+          infillDensity: 25,
+          nozzleTemperature: 240,
+          bedTemperature: 65,
+          failedAtPercent: 64,
+        },
+        photos: [
+          { file: "spaghetti-fail.svg", color: "#6a645d", crop: [420, 260, 640, 480], filter: "grayscale(0.4)" },
+        ],
+      },
+    ],
+  },
+];
+
 /** Logs the attempts through the API, then backdates the dates the API sets to "now". */
 export async function seedBuilds(
   browser: Browser,
@@ -339,7 +703,15 @@ export async function seedBuilds(
   const now = Date.now();
   const headers = { Origin: origin };
   const sql: string[] = [];
-  for (const build of SEED_BUILDS) {
+  for (const build of [...SEED_BUILDS, ...OLDER_BUILDS]) {
+    if (build.create) {
+      const { title, note = "", createdAgo, asIdea } = build.create;
+      const created = await requests[build.by].post("/api/items", {
+        headers,
+        data: { id: build.id, title, note, createdAt: now - createdAgo, stage: asIdea ? "idea" : "building" },
+      });
+      if (!created.ok()) throw new Error(`Seeding build ${build.id} failed: ${created.status()}`);
+    }
     for (const attempt of build.attempts) {
       const request = requests[attempt.by];
       const created = await request.post(`/api/items/${build.id}/attempts`, {

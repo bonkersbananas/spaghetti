@@ -146,6 +146,7 @@ function midSentence(title: string): string {
 
 /**
  * The month in one quiet line: "14 prints, 3 spaghetti, tugboat finished".
+ * Two finished builds are named when their names are short, else counted.
  * Empty when nothing was printed or finished.
  */
 export function summaryLine(summary: JournalSummary): string {
@@ -155,7 +156,7 @@ export function summaryLine(summary: JournalSummary): string {
   const titled = summary.finished.map((build) => build.title?.trim()).filter((title): title is string => !!title);
   if (summary.finished.length === 1) {
     parts.push(`${titled[0] ? midSentence(titled[0]) : "1 build"} finished`);
-  } else if (summary.finished.length === 2 && titled.length === 2) {
+  } else if (summary.finished.length === 2 && titled.length === 2 && titled.join("").length <= 36) {
     parts.push(`${midSentence(titled[0] ?? "")} and ${midSentence(titled[1] ?? "")} finished`);
   } else if (summary.finished.length > 1) {
     parts.push(`${summary.finished.length} builds finished`);

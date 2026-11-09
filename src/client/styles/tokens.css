@@ -319,3 +319,15 @@
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
+/* Rows that scroll sideways on phones (chip rows) without a scrollbar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+/* Long feeds (the journal): the browser skips laying out what is far off screen. */
+@utility render-lazy {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40rem;
+}
