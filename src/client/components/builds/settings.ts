@@ -22,6 +22,8 @@ export function summarizeSettings(settings: AttemptSettings): string[] {
   const layer = settings.layerHeight === undefined ? undefined : decimals(settings.layerHeight, 2);
   if (layer && !settings.processPreset?.startsWith(`${layer}mm`)) parts.push(`${layer} mm`);
   if (settings.infillDensity !== undefined) parts.push(`${settings.infillDensity}% infill`);
+  if (settings.wallLoops !== undefined)
+    parts.push(`${settings.wallLoops} ${settings.wallLoops === 1 ? "wall" : "walls"}`);
   if (settings.bedType) parts.push(plateName(settings.bedType));
   if (settings.nozzle === "auxiliary") parts.push("aux nozzle");
   if (settings.nozzleDiameter !== undefined && settings.nozzleDiameter !== 0.4) {

@@ -194,6 +194,7 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     itemId,
     finishedAt: attempt.outcome ? attempt.createdAt : null,
     changes: [],
+    file: null,
     updatedAt: attempt.createdAt,
   };
 }

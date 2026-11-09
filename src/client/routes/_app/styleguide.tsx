@@ -823,6 +823,7 @@ const sampleAttempt: AttemptView = {
   note: "Stayed down this time, but the stern corners curled up a little.",
   failureTags: ["warping"],
   successNotes: ["great-first-layer"],
+  file: null,
   settings: {
     filaments: [{ type: "PLA", brand: "Bambu", colorHex: SAMPLE_COLOR, colorName: "Sunflower yellow", amsSlot: "A2" }],
     bedType: "Textured PEI Plate",

@@ -11,6 +11,7 @@ import {
 import type { Db } from "../db/index.ts";
 import {
   type Attempt,
+  attemptFiles,
   attempts,
   ITEM_STAGES,
   type Item,
@@ -116,6 +117,17 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   ]);
   const attemptsByItem = groupBy<Attempt>(attemptSlices.flat());
   const liveAttempts = new Set(attemptSlices.flat().map((attempt) => attempt.id));
+  const fileRows = (
+    await Promise.all(
+      chunked([...liveAttempts]).map((ids) =>
+        db
+          .select()
+          .from(attemptFiles)
+          .where(and(inArray(attemptFiles.attemptId, ids), isNull(attemptFiles.deletedAt))),
+      ),
+    )
+  ).flat();
+  const files = new Map(fileRows.map((file) => [file.attemptId, file]));
   const photosByItem = groupBy<Photo>(
     photoSlices.flat().filter((photo) => photo.attemptId === null || liveAttempts.has(photo.attemptId)),
   );
@@ -123,7 +135,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     const itemPhotos = photosByItem.get(row.id) ?? [];
     // A cover that was removed (or whose attempt was) reads as none, and returns with undo.
     const coverPhotoId = itemPhotos.some((photo) => photo.id === row.coverPhotoId) ? row.coverPhotoId : null;
-    return toApiItem({ ...row, coverPhotoId }, itemPhotos, attemptsByItem.get(row.id) ?? []);
+    return toApiItem({ ...row, coverPhotoId }, itemPhotos, attemptsByItem.get(row.id) ?? [], files);
   });
 }
 

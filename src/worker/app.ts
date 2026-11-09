@@ -8,12 +8,15 @@ import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
+import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { journalRoutes } from "./routes/journal.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
+import { printerRoutes } from "./routes/printer.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
+import { spoolRoutes } from "./routes/spools.ts";
 import { tagRoutes } from "./routes/tags.ts";
 
 /** Everything under /api except signing in needs a session. */
@@ -41,6 +44,10 @@ export const app = new Hono<AppEnv>()
   .route("/items", itemRoutes)
   .route("/items", itemAttemptRoutes)
   .route("/attempts", attemptRoutes)
+  .route("/attempts", attemptFileRoutes)
+  .route("/files", fileRoutes)
+  .route("/spools", spoolRoutes)
+  .route("/printer", printerRoutes)
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)
   .route("/journal", journalRoutes)
