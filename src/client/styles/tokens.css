@@ -74,6 +74,8 @@
 
   /* Layout */
   --sg-tabbar-height: 4.25rem;
+  /* A screen's own action bar on phones, which sits on the tab bar. */
+  --sg-actionbar-height: 4.75rem;
   --sg-sidebar-width: 16rem;
   --sg-content-width: 45rem;
   --sg-wide-width: 72rem;
@@ -220,6 +222,7 @@
   --ease-bounce: var(--sg-ease-bounce);
 
   --spacing-tabbar: var(--sg-tabbar-height);
+  --spacing-actionbar: var(--sg-actionbar-height);
   --spacing-sidebar: var(--sg-sidebar-width);
   --container-content: var(--sg-content-width);
   --container-wide: var(--sg-wide-width);
@@ -267,6 +270,9 @@
 }
 @utility pb-tabbar {
   padding-bottom: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom) + 1.5rem);
+}
+@utility bottom-tabbar {
+  bottom: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom));
 }
 @utility h-tabbar-safe {
   height: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom));

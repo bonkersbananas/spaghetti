@@ -1,4 +1,5 @@
-import type { Item, ItemResponse, Photo, PhotoResponse } from "@shared/api";
+import type { Attempt, AttemptResponse, Item, ItemResponse, ItemStage, Photo, PhotoResponse } from "@shared/api";
+import type { AttemptSettings, Outcome } from "@shared/attempts";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
 import { openStore } from "./idb";
@@ -12,13 +13,34 @@ export interface PendingPhoto {
   position?: number;
   file?: Blob;
   processed?: ProcessedPhoto;
+  /** The print attempt it belongs to, if any. */
+  attemptId?: string;
 }
+
+/** A print attempt waiting to reach the server. Its photos wait behind it. */
+export interface PendingAttempt {
+  id: string;
+  outcome: Outcome | null;
+  printedAt: number;
+  note: string;
+  failureTags: string[];
+  successNotes: string[];
+  settings: AttemptSettings;
+  createdBy: string;
+  createdAt: number;
+}
+
+export type PendingAttemptChanges = Partial<
+  Pick<PendingAttempt, "outcome" | "printedAt" | "note" | "failureTags" | "successNotes" | "settings">
+>;
 
 /** Everything still to send for one item. Kept in IndexedDB until the server has it. */
 export interface OutboxEntry {
   itemId: string;
   /** Present until the item exists on the server. */
-  create?: { title: string | null; note: string; createdAt: number; createdBy: string };
+  create?: { title: string | null; note: string; createdAt: number; createdBy: string; stage?: ItemStage };
+  /** Attempts to log, sent after the item and before the photos. */
+  attempts?: PendingAttempt[];
   photos: PendingPhoto[];
   queuedAt: number;
 }
@@ -40,6 +62,7 @@ export interface OutboxState {
 
 export interface OutboxHandlers {
   itemSaved: (item: Item) => void;
+  attemptSaved: (attempt: Attempt) => void;
   photoSaved: (photo: Photo) => void;
   /** A photo that can never be uploaded (unreadable, refused). */
   photoDropped: (message: string) => void;
@@ -66,6 +89,7 @@ class Outbox {
   /** Removed while their request was in flight: undone on the server when it lands. */
   private cancelledItems = new Set<string>();
   private cancelledPhotos = new Set<string>();
+  private cancelledAttempts = new Set<string>();
   handlers: Partial<OutboxHandlers> = {};
 
   subscribe = (listener: () => void) => {
@@ -122,8 +146,14 @@ class Outbox {
   async add(entry: OutboxEntry) {
     for (const photo of entry.photos) registerPreview(photo);
     const existing = this.entry(entry.itemId);
+    const attempts = [...(existing?.attempts ?? []), ...(entry.attempts ?? [])];
     const merged: OutboxEntry = existing
-      ? { ...existing, create: existing.create ?? entry.create, photos: [...existing.photos, ...entry.photos] }
+      ? {
+          ...existing,
+          create: existing.create ?? entry.create,
+          ...(attempts.length ? { attempts } : {}),
+          photos: [...existing.photos, ...entry.photos],
+        }
       : entry;
     if (existing) this.setEntries(this.state.entries.map((e) => (e.itemId === entry.itemId ? merged : e)));
     else this.setEntries([...this.state.entries, merged]);
@@ -137,6 +167,7 @@ class Outbox {
     if (!entry) return undefined;
     this.cancelledItems.add(itemId);
     for (const photo of entry.photos) this.cancelledPhotos.add(photo.id);
+    for (const attempt of entry.attempts ?? []) this.cancelledAttempts.add(attempt.id);
     this.setEntries(this.state.entries.filter((e) => e.itemId !== itemId));
     void this.store.delete(itemId).catch(() => undefined);
     return entry;
@@ -146,6 +177,7 @@ class Outbox {
   restore(entry: OutboxEntry) {
     this.cancelledItems.delete(entry.itemId);
     for (const photo of entry.photos) this.cancelledPhotos.delete(photo.id);
+    for (const attempt of entry.attempts ?? []) this.cancelledAttempts.delete(attempt.id);
     void this.add(entry);
   }
 
@@ -170,11 +202,72 @@ class Outbox {
    * Edits an item the server doesn't have yet. Returns false once it does,
    * and the caller saves the change through the API instead.
    */
-  updatePending(itemId: string, changes: { title?: string | null; note?: string }): boolean {
+  updatePending(itemId: string, changes: { title?: string | null; note?: string; stage?: ItemStage }): boolean {
     const entry = this.entry(itemId);
     if (!entry?.create) return false;
     void this.save({ ...entry, create: { ...entry.create, ...changes } });
     return true;
+  }
+
+  private entryWithAttempt(attemptId: string) {
+    return this.state.entries.find((entry) => entry.attempts?.some((attempt) => attempt.id === attemptId));
+  }
+
+  /** Edits an attempt the server doesn't have yet; false once it does. */
+  updatePendingAttempt(attemptId: string, changes: PendingAttemptChanges): boolean {
+    const entry = this.entryWithAttempt(attemptId);
+    if (!entry) return false;
+    void this.save({
+      ...entry,
+      attempts: entry.attempts?.map((attempt) => (attempt.id === attemptId ? { ...attempt, ...changes } : attempt)),
+    });
+    return true;
+  }
+
+  /** Takes a pending attempt and its photos out (deleted). Returns them, for undo. */
+  removeAttempt(attemptId: string): { itemId: string; attempt: PendingAttempt; photos: PendingPhoto[] } | undefined {
+    const entry = this.entryWithAttempt(attemptId);
+    const attempt = entry?.attempts?.find((a) => a.id === attemptId);
+    if (!entry || !attempt) return undefined;
+    this.cancelledAttempts.add(attemptId);
+    const photos = entry.photos.filter((photo) => photo.attemptId === attemptId);
+    for (const photo of photos) this.cancelledPhotos.add(photo.id);
+    void this.save({
+      ...entry,
+      attempts: entry.attempts?.filter((a) => a.id !== attemptId),
+      photos: entry.photos.filter((photo) => photo.attemptId !== attemptId),
+    });
+    return { itemId: entry.itemId, attempt, photos };
+  }
+
+  restoreAttempt(removed: { itemId: string; attempt: PendingAttempt; photos: PendingPhoto[] }) {
+    this.cancelledAttempts.delete(removed.attempt.id);
+    for (const photo of removed.photos) this.cancelledPhotos.delete(photo.id);
+    void this.add({
+      itemId: removed.itemId,
+      attempts: [removed.attempt],
+      photos: removed.photos,
+      queuedAt: Date.now(),
+    });
+  }
+
+  /** Photos of an attempt still on this device, which a delete on the server can't reach. */
+  dropAttemptPhotos(attemptId: string): PendingPhoto[] {
+    const dropped: PendingPhoto[] = [];
+    for (const entry of this.state.entries) {
+      const photos = entry.photos.filter((photo) => photo.attemptId === attemptId);
+      if (!photos.length) continue;
+      dropped.push(...photos);
+      for (const photo of photos) this.cancelledPhotos.add(photo.id);
+      void this.save({ ...entry, photos: entry.photos.filter((photo) => photo.attemptId !== attemptId) });
+    }
+    return dropped;
+  }
+
+  restorePhotos(itemId: string, photos: PendingPhoto[]) {
+    if (!photos.length) return;
+    for (const photo of photos) this.cancelledPhotos.delete(photo.id);
+    void this.add({ itemId, photos, queuedAt: Date.now() });
   }
 
   isPending(itemId: string) {
@@ -197,6 +290,7 @@ class Outbox {
         const entry = this.state.entries[0];
         if (!entry) break;
         if (entry.create) await this.createItem(entry);
+        else if (entry.attempts?.[0]) await this.createAttempt(entry, entry.attempts[0]);
         else if (entry.photos[0]) await this.uploadPhoto(entry, entry.photos[0]);
         else this.finish(entry.itemId);
         this.attempt = 0;
@@ -228,7 +322,13 @@ class Outbox {
     try {
       ({ item } = await api<ItemResponse>("/items", {
         method: "POST",
-        json: { id: entry.itemId, title: create.title, note: create.note, createdAt: create.createdAt },
+        json: {
+          id: entry.itemId,
+          title: create.title,
+          note: create.note,
+          createdAt: create.createdAt,
+          stage: create.stage === "idea" ? "idea" : "building",
+        },
       }));
     } catch (error) {
       // Deleted elsewhere before it got here: nothing left to send.
@@ -242,15 +342,80 @@ class Outbox {
     }
     // Edits made meanwhile went into the entry; send them now.
     const current = this.entry(entry.itemId);
-    if (current?.create && (current.create.note !== item.note || current.create.title !== item.title)) {
+    const stage = current?.create?.stage ?? "idea";
+    if (
+      current?.create &&
+      (current.create.note !== item.note || current.create.title !== item.title || stage !== item.stage)
+    ) {
       ({ item } = await api<ItemResponse>(`/items/${entry.itemId}`, {
         method: "PATCH",
-        json: { title: current.create.title, note: current.create.note },
+        json: { title: current.create.title, note: current.create.note, stage },
       }).catch(() => ({ item })));
     }
     this.handlers.itemSaved?.(item);
     const latest = this.entry(entry.itemId);
     if (latest) await this.save({ ...latest, create: undefined });
+  }
+
+  private async createAttempt(entry: OutboxEntry, pending: PendingAttempt) {
+    let attempt: Attempt;
+    try {
+      ({ attempt } = await api<AttemptResponse>(`/items/${entry.itemId}/attempts`, {
+        method: "POST",
+        json: {
+          id: pending.id,
+          outcome: pending.outcome,
+          printedAt: pending.printedAt,
+          note: pending.note,
+          failureTags: pending.failureTags,
+          successNotes: pending.successNotes,
+          settings: pending.settings,
+        },
+      }));
+    } catch (error) {
+      if (error instanceof ApiError && [400, 404, 409].includes(error.status)) {
+        // Its build was deleted meanwhile, or the attempt can't be read: its photos can't go anywhere.
+        this.dropAttempt(entry.itemId, pending.id);
+        if (error.status === 400) this.handlers.photoDropped?.("An attempt couldn't be saved.");
+        return;
+      }
+      throw new RetryLater();
+    }
+    if (this.cancelledAttempts.has(pending.id)) {
+      await api(`/attempts/${pending.id}`, { method: "DELETE" }).catch(() => undefined);
+      this.dropAttempt(entry.itemId, pending.id);
+      return;
+    }
+    // Edits made while it was on its way.
+    const current = this.entry(entry.itemId)?.attempts?.find((a) => a.id === pending.id);
+    if (current && current !== pending) {
+      ({ attempt } = await api<AttemptResponse>(`/attempts/${pending.id}`, {
+        method: "PATCH",
+        json: {
+          outcome: current.outcome,
+          printedAt: current.printedAt,
+          note: current.note,
+          failureTags: current.failureTags,
+          successNotes: current.successNotes,
+          settings: current.settings,
+        },
+      }).catch(() => ({ attempt })));
+    }
+    this.handlers.attemptSaved?.(attempt);
+    const latest = this.entry(entry.itemId);
+    if (latest) await this.save({ ...latest, attempts: latest.attempts?.filter((a) => a.id !== pending.id) });
+  }
+
+  /** Forgets an attempt and the photos queued behind it. */
+  private dropAttempt(itemId: string, attemptId: string) {
+    const latest = this.entry(itemId);
+    if (!latest) return;
+    for (const photo of latest.photos) if (photo.attemptId === attemptId) this.setProgress(photo.id, null);
+    void this.save({
+      ...latest,
+      attempts: latest.attempts?.filter((a) => a.id !== attemptId),
+      photos: latest.photos.filter((photo) => photo.attemptId !== attemptId),
+    });
   }
 
   private async uploadPhoto(entry: OutboxEntry, pending: PendingPhoto) {
@@ -271,7 +436,9 @@ class Outbox {
       if (latest) {
         await this.save({
           ...latest,
-          photos: latest.photos.map((p) => (p.id === pending.id ? { id: p.id, position: p.position, processed } : p)),
+          photos: latest.photos.map((p) =>
+            p.id === pending.id ? { id: p.id, position: p.position, attemptId: p.attemptId, processed } : p,
+          ),
         });
       }
     }
@@ -282,6 +449,7 @@ class Outbox {
     form.set("color", processed.color);
     if (processed.takenAt) form.set("takenAt", String(processed.takenAt));
     if (pending.position !== undefined) form.set("position", String(pending.position));
+    if (pending.attemptId) form.set("attemptId", pending.attemptId);
     form.set("large", processed.large, "large");
     form.set("thumb", processed.thumb, "thumb");
 
@@ -290,7 +458,7 @@ class Outbox {
       this.setProgress(pending.id, { status: "uploading", progress }),
     );
     if (response.status === 404 || response.status === 409) {
-      // Its idea was deleted meanwhile.
+      // Its item or attempt was deleted meanwhile.
       this.dropPhoto(entry.itemId, pending.id);
       return;
     }

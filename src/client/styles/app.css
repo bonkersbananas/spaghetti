@@ -169,6 +169,25 @@
   color: var(--sg-paper);
 }
 
+/* The rare delight toast: its sparkle turns once as it arrives. */
+@keyframes sg-sparkle {
+  0% {
+    transform: scale(0.4) rotate(-40deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.25) rotate(12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+[data-sonner-toaster] [data-sonner-toast].sg-delight [data-icon] {
+  animation: sg-sparkle var(--sg-duration-slow) var(--sg-ease-bounce) both;
+  animation-delay: var(--sg-duration-fast);
+}
+
 /* vaul: keep the page behind a sheet from scaling oddly on our paper. */
 [data-vaul-drawer] {
   touch-action: none;

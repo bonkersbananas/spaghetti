@@ -9,7 +9,10 @@ export function Toaster() {
     <SonnerToaster
       position={isDesktop ? "bottom-right" : "bottom-center"}
       offset={isDesktop ? 24 : undefined}
-      mobileOffset={{ bottom: "calc(var(--sg-tabbar-height) + var(--sg-safe-bottom) + 0.75rem)" }}
+      // --sg-actionbar-offset is set while a screen shows its ActionBar, so toasts never cover it.
+      mobileOffset={{
+        bottom: "calc(var(--sg-tabbar-height) + var(--sg-safe-bottom) + var(--sg-actionbar-offset, 0rem) + 0.75rem)",
+      }}
       gap={8}
       icons={{
         success: <CheckCircleIcon size={18} weight="fill" />,
@@ -35,9 +38,18 @@ export const toast = {
   message: (message: string, description?: string) => sonnerToast(message, { description }),
   success: (message: string, description?: string) => sonnerToast.success(message, { description }),
   error: (message: string, description?: string) => sonnerToast.error(message, { description }),
-  /** One of the rare moments of delight, such as the very first idea. */
-  delight: (message: string, description?: string) =>
-    sonnerToast(message, { description, icon: <SparkleIcon size={18} weight="fill" />, duration: 5000 }),
+  /**
+   * One of the rare moments of delight, such as the very first idea or a
+   * build finished after some spaghetti. It can carry one action (Undo).
+   */
+  delight: (message: string, description?: string, action?: { label: string; onClick: () => void }) =>
+    sonnerToast(message, {
+      description,
+      action,
+      icon: <SparkleIcon size={18} weight="fill" />,
+      duration: action ? 7000 : 5000,
+      className: "sg-delight",
+    }),
   /** A toast with one action, such as "View" after saving from another screen. */
   action: (message: string, action: { label: string; onClick: () => void }, description?: string) =>
     sonnerToast(message, { description, action }),

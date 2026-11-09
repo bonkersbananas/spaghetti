@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 
 export interface Shot {
@@ -24,7 +25,25 @@ export interface Shot {
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   { name: "ideas", path: "/ideas" },
-  { name: "builds", path: "/builds" },
+  { name: "builds", path: "/builds", fullPage: true },
+  { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  {
+    name: "attempt",
+    path: `/builds/${SEED_IDS.desiccantHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await sheet.getByRole("button", { name: "Bed adhesion" }).click();
+      await sheet.getByRole("button", { name: "Warping" }).click();
+      await sheet.getByRole("textbox", { name: "Note" }).fill("Corner lifted at layer 30, then it was all noodles.");
+      await sheet.getByRole("textbox", { name: "Note" }).blur();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
   { name: "search", path: "/search" },
   {
@@ -46,14 +65,14 @@ export const shots: Shot[] = [
     name: "undo",
     path: "/ideas",
     prepare: async (page) => {
-      await page.goto(`/ideas/${SEED_IDS.tugboat}`);
+      await page.goto(`/ideas/${SEED_IDS.deskTidy}`);
       await page.getByRole("button", { name: "Delete idea" }).first().click();
       await page.getByText("Idea deleted").waitFor();
       await page.locator("h1").first().waitFor();
     },
     cleanup: async (page) => {
       await page.getByRole("button", { name: "Undo" }).click();
-      await page.getByRole("link", { name: /Bath tugboat/ }).waitFor();
+      await page.getByRole("link", { name: /Desk tidy-up/ }).waitFor();
     },
   },
   {

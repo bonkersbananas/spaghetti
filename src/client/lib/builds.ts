@@ -1,0 +1,332 @@
+import type {
+  Attempt,
+  AttemptResponse,
+  Item,
+  ItemResponse,
+  ItemStage,
+  Photo,
+  Tag,
+  TagResponse,
+  TagsResponse,
+} from "@shared/api";
+import {
+  type AttemptSettings,
+  BUILT_IN_TAGS,
+  type Outcome,
+  slugify,
+  type TagDefinition,
+  type TagKind,
+} from "@shared/attempts";
+import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { toast } from "@/components/ui/Toast";
+import { api } from "./api";
+import type { DraftPhoto } from "./capture";
+import { type AttemptView, cachedItem, type ItemView, type PhotoView, patchCachedItem, useBuilds } from "./items";
+import { outbox, type PendingAttemptChanges } from "./outbox";
+
+/** The fields of a stage change, as the server sets them. */
+function stageFields(item: Pick<Item, "startedAt">, stage: ItemStage, now = Date.now()) {
+  switch (stage) {
+    case "idea":
+      return { stage, startedAt: null, finishedAt: null };
+    case "building":
+      return { stage, startedAt: item.startedAt ?? now, finishedAt: null };
+    default:
+      return { stage, startedAt: item.startedAt ?? now, finishedAt: now };
+  }
+}
+
+/** Moves an item to another stage at once; the server follows, and a failure puts it back. */
+async function changeStage(
+  queryClient: QueryClient,
+  id: string,
+  stage: ItemStage,
+  extra: { coverPhotoId?: string | null } = {},
+) {
+  const before = cachedItem(queryClient, id);
+  patchCachedItem(queryClient, id, (item) => ({ ...item, ...stageFields(item, stage), ...extra }));
+  if (outbox.updatePending(id, { stage })) return;
+  try {
+    const { item: saved } = await api<ItemResponse>(`/items/${id}`, {
+      method: "PATCH",
+      json: { stage, ...extra },
+    });
+    patchCachedItem(queryClient, id, (item) => ({
+      ...item,
+      stage: saved.stage,
+      startedAt: saved.startedAt,
+      finishedAt: saved.finishedAt,
+      coverPhotoId: saved.coverPhotoId,
+      updatedAt: saved.updatedAt,
+    }));
+  } catch {
+    if (before) {
+      patchCachedItem(queryClient, id, (item) => ({
+        ...item,
+        stage: before.stage,
+        startedAt: before.startedAt,
+        finishedAt: before.finishedAt,
+        coverPhotoId: before.coverPhotoId,
+      }));
+    }
+    toast.error("Couldn't save that change", "It's back the way it was. Try again in a moment.");
+  }
+}
+
+/** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
+export function startBuild(queryClient: QueryClient, item: ItemView) {
+  void changeStage(queryClient, item.id, "building");
+  toast.undo("Moved to Builds", {
+    description: "Same idea, same photos. Log the first attempt when it prints.",
+    onUndo: () => void changeStage(queryClient, item.id, "idea"),
+  });
+}
+
+/** A build from scratch, with nothing in it yet. Returns its id. */
+export function createBuild(createdBy: string): string {
+  const itemId = crypto.randomUUID();
+  const now = Date.now();
+  void outbox.add({
+    itemId,
+    create: { title: null, note: "", createdAt: now, createdBy, stage: "building" },
+    photos: [],
+    queuedAt: now,
+  });
+  return itemId;
+}
+
+const newest = <T extends Photo>(photos: T[]) =>
+  photos.reduce<T | undefined>((best, photo) => (!best || photo.createdAt > best.createdAt ? photo : best), undefined);
+
+/**
+ * The photo a build leads with: its final photo once done, else its own
+ * cover (from the idea), else the newest photo of its best attempt.
+ */
+export function heroPhoto(item: Pick<ItemView, "photos" | "attempts" | "coverPhotoId">): PhotoView | undefined {
+  const cover = item.coverPhotoId ? item.photos.find((photo) => photo.id === item.coverPhotoId) : undefined;
+  return cover ?? item.photos.find((photo) => !photo.attemptId) ?? finalPhotoGuess(item);
+}
+
+/** The newest photo of the latest attempt that worked, else the newest of any attempt. */
+export function finalPhotoGuess(item: Pick<ItemView, "photos" | "attempts">): PhotoView | undefined {
+  const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
+  const workedPhotos = worked ? item.photos.filter((photo) => photo.attemptId === worked.id) : [];
+  return newest(workedPhotos) ?? newest(item.photos.filter((photo) => photo.attemptId)) ?? item.photos[0];
+}
+
+/** The newest photo of anything in the build: what the builds list shows for work in progress. */
+export function newestPhoto(item: Pick<ItemView, "photos">): PhotoView | undefined {
+  return newest(item.photos);
+}
+
+/**
+ * Marks a build done, with its final photo, in one action. A build that took
+ * some spaghetti to get there earns a small moment of delight.
+ */
+export function finishBuild(queryClient: QueryClient, item: ItemView) {
+  const previousCover = item.coverPhotoId;
+  const final = finalPhotoGuess(item);
+  void changeStage(queryClient, item.id, "done", final && !final.upload ? { coverPhotoId: final.id } : {});
+  const undo = () => void changeStage(queryClient, item.id, "building", { coverPhotoId: previousCover });
+  const failures = item.attempts.filter((attempt) => attempt.outcome === "failed").length;
+  if (failures > 0) {
+    const tries = item.attempts.length;
+    toast.delight(
+      "Al dente",
+      `Done in ${tries} attempts, ${failures === 1 ? "one" : failures} of them spaghetti. Worth every strand.`,
+      { label: "Undo", onClick: undo },
+    );
+  } else {
+    toast.undo("Build done", { description: item.title ?? undefined, onUndo: undo });
+  }
+}
+
+export function shelveBuild(queryClient: QueryClient, item: ItemView) {
+  const before = item.stage;
+  void changeStage(queryClient, item.id, "shelved");
+  toast.undo("Shelved", {
+    description: "It waits under Builds whenever you want to pick it up again.",
+    onUndo: () => void changeStage(queryClient, item.id, before),
+  });
+}
+
+/** Back on the bed: a done or shelved build becomes active again. */
+export function reopenBuild(queryClient: QueryClient, item: ItemView) {
+  const before = item.stage;
+  void changeStage(queryClient, item.id, "building");
+  toast.undo("Back on the bed", { onUndo: () => void changeStage(queryClient, item.id, before) });
+}
+
+/** What the attempt sheet hands over when someone logs an attempt. */
+export interface AttemptDraft {
+  outcome: Outcome | null;
+  printedAt: number;
+  note: string;
+  failureTags: string[];
+  successNotes: string[];
+  settings: AttemptSettings;
+  photos: DraftPhoto[];
+}
+
+/**
+ * Logs an attempt: it shows at once, and the outbox sends it and then its
+ * photos in the background, retrying until the server has them.
+ */
+export function logAttempt(item: Pick<ItemView, "id">, draft: AttemptDraft, createdBy: string): string {
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  void outbox.add({
+    itemId: item.id,
+    attempts: [
+      {
+        id,
+        outcome: draft.outcome,
+        printedAt: Math.min(draft.printedAt, now),
+        note: draft.note.trim(),
+        failureTags: draft.outcome && draft.outcome !== "success" ? draft.failureTags : [],
+        successNotes: draft.outcome && draft.outcome !== "failed" ? draft.successNotes : [],
+        settings: draft.settings,
+        createdBy,
+        createdAt: now,
+      },
+    ],
+    photos: draft.photos.map((photo) => ({
+      id: photo.id,
+      attemptId: id,
+      ...(photo.processed ? { processed: photo.processed } : { file: photo.file }),
+    })),
+    queuedAt: now,
+  });
+  return id;
+}
+
+/** Saves edits to an attempt (autosave): the cache first, then the server or the outbox. */
+export async function saveAttemptChanges(
+  queryClient: QueryClient,
+  itemId: string,
+  attemptId: string,
+  changes: PendingAttemptChanges,
+) {
+  const now = Date.now();
+  patchCachedItem(queryClient, itemId, (item) => ({
+    ...item,
+    attempts: item.attempts.map((attempt) =>
+      attempt.id === attemptId
+        ? {
+            ...attempt,
+            ...changes,
+            finishedAt:
+              changes.outcome === undefined ? attempt.finishedAt : changes.outcome ? (attempt.finishedAt ?? now) : null,
+          }
+        : attempt,
+    ),
+  }));
+  if (outbox.updatePendingAttempt(attemptId, changes)) return;
+  const { attempt: saved } = await api<AttemptResponse>(`/attempts/${attemptId}`, {
+    method: "PATCH",
+    json: changes,
+    keepalive: true,
+  });
+  // Only what the server works out itself: later local edits stay.
+  patchCachedItem(queryClient, itemId, (item) => ({
+    ...item,
+    attempts: item.attempts.map((attempt) =>
+      attempt.id === attemptId ? { ...attempt, finishedAt: saved.finishedAt, updatedAt: saved.updatedAt } : attempt,
+    ),
+  }));
+}
+
+/** Deletes an attempt and its photos at once, with Undo. */
+export function deleteAttempt(queryClient: QueryClient, itemId: string, attempt: AttemptView) {
+  const pending = outbox.removeAttempt(attempt.id);
+  const queuedPhotos = pending ? [] : outbox.dropAttemptPhotos(attempt.id);
+  let removed: { attempt: Attempt; photos: Photo[] } | undefined;
+  patchCachedItem(queryClient, itemId, (item) => {
+    const found = item.attempts.find((a) => a.id === attempt.id);
+    if (found) removed = { attempt: found, photos: item.photos.filter((photo) => photo.attemptId === attempt.id) };
+    return {
+      ...item,
+      attempts: item.attempts.filter((a) => a.id !== attempt.id),
+      photos: item.photos.filter((photo) => photo.attemptId !== attempt.id),
+    };
+  });
+  const deleted = removed
+    ? api(`/attempts/${attempt.id}`, { method: "DELETE" }).catch(() => undefined)
+    : Promise.resolve(undefined);
+
+  toast.undo(`Attempt ${attempt.number} deleted`, {
+    onUndo: async () => {
+      if (pending) outbox.restoreAttempt(pending);
+      if (!removed) return;
+      const restore = removed;
+      patchCachedItem(queryClient, itemId, (item) => ({
+        ...item,
+        attempts: [...item.attempts.filter((a) => a.id !== restore.attempt.id), restore.attempt],
+        photos: [...item.photos.filter((photo) => photo.attemptId !== restore.attempt.id), ...restore.photos].sort(
+          (a, b) => a.position - b.position || a.createdAt - b.createdAt,
+        ),
+      }));
+      await deleted;
+      try {
+        await api<AttemptResponse>(`/attempts/${attempt.id}/restore`, { method: "POST" });
+        // Photos still on this device go up once the attempt is back.
+        outbox.restorePhotos(itemId, queuedPhotos);
+      } catch {
+        toast.error("Couldn't bring the attempt back", "Try again in a moment.");
+      }
+    },
+  });
+}
+
+/** The print running right now, if any: the newest attempt still printing, across builds. */
+export function usePrintingNow(): { item: ItemView; attempt: AttemptView } | null {
+  const { items } = useBuilds();
+  return useMemo(() => findPrinting(items), [items]);
+}
+
+export function findPrinting(items: ItemView[]): { item: ItemView; attempt: AttemptView } | null {
+  let found: { item: ItemView; attempt: AttemptView } | null = null;
+  for (const item of items) {
+    if (item.stage !== "building") continue;
+    for (const attempt of item.attempts) {
+      if (attempt.outcome !== null) continue;
+      if (!found || attempt.printedAt > found.attempt.printedAt) found = { item, attempt };
+    }
+  }
+  return found;
+}
+
+/** Failure tags and success notes people added themselves. */
+export const tagsQuery = queryOptions({
+  queryKey: ["tags"] as const,
+  queryFn: async () => (await api<TagsResponse>("/tags")).tags,
+  staleTime: 5 * 60_000,
+});
+
+/** Built-in tags first, then people's own, for one kind. */
+export function useTagOptions(kind: TagKind): TagDefinition[] {
+  const { data } = useQuery(tagsQuery);
+  return useMemo(() => {
+    const builtIn = BUILT_IN_TAGS[kind];
+    const own = (data ?? []).filter((tag) => tag.kind === kind && !builtIn.some((b) => b.slug === tag.slug));
+    return [...builtIn, ...own.map(({ slug, label }) => ({ slug, label }))];
+  }, [data, kind]);
+}
+
+/** Adds someone's own tag on the fly; returns its slug, or null when the label has nothing usable. */
+export function addTag(queryClient: QueryClient, kind: TagKind, label: string): string | null {
+  const trimmed = label.trim().slice(0, 40);
+  const slug = slugify(trimmed);
+  if (!slug) return null;
+  if (BUILT_IN_TAGS[kind].some((tag) => tag.slug === slug)) return slug;
+  queryClient.setQueryData<Tag[]>(tagsQuery.queryKey, (tags) =>
+    tags?.some((tag) => tag.kind === kind && tag.slug === slug)
+      ? tags
+      : [...(tags ?? []), { kind, slug, label: trimmed }],
+  );
+  void api<TagResponse>("/tags", { method: "POST", json: { kind, label: trimmed } }).catch(() =>
+    toast.error("Couldn't save that tag", "It's on this attempt, but won't be offered next time."),
+  );
+  return slug;
+}

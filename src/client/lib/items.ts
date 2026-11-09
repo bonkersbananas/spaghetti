@@ -1,20 +1,39 @@
-import type { Item, ItemResponse, ItemsResponse, Photo, PhotoResponse } from "@shared/api";
+import type { Attempt, Item, ItemResponse, ItemStage, ItemsResponse, Photo, PhotoResponse } from "@shared/api";
+import { byPrintTime, describeChanges } from "@shared/attempts";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
-import { type OutboxEntry, type OutboxState, outbox, type UploadProgress, useOutbox } from "./outbox";
+import {
+  type OutboxEntry,
+  type OutboxState,
+  outbox,
+  type PendingAttempt,
+  type UploadProgress,
+  useOutbox,
+} from "./outbox";
+
+/** Ideas live in one list, builds (building, done, shelved) in the other. */
+export type ItemList = "ideas" | "builds";
+export const listOf = (stage: ItemStage): ItemList => (stage === "idea" ? "ideas" : "builds");
+const LISTS: ItemList[] = ["ideas", "builds"];
 
 export const itemKeys = {
   all: ["items"] as const,
-  list: (stage: Item["stage"]) => ["items", "list", stage] as const,
+  list: (list: ItemList) => ["items", "list", list] as const,
   detail: (id: string) => ["items", "detail", id] as const,
 };
 
 /** The ideas inbox, newest first. */
 export const ideasQuery = queryOptions({
-  queryKey: itemKeys.list("idea"),
+  queryKey: itemKeys.list("ideas"),
   queryFn: async () => (await api<ItemsResponse>("/items?stage=idea")).items,
+});
+
+/** Every build, whatever its stage; the builds screen sorts and groups them. */
+export const buildsQuery = queryOptions({
+  queryKey: itemKeys.list("builds"),
+  queryFn: async () => (await api<ItemsResponse>("/items?stage=building,done,shelved")).items,
 });
 
 export function itemQuery(id: string) {
@@ -37,35 +56,89 @@ export interface PhotoView extends Photo {
   upload?: UploadProgress | { status: "queued"; progress: 0 };
 }
 
-export interface ItemView extends Omit<Item, "photos"> {
-  photos: PhotoView[];
+/** An attempt as the UI shows it, numbered from the first print. */
+export interface AttemptView extends Attempt {
+  /** 1 for the first attempt. */
+  number: number;
   /** The server doesn't have it yet. */
   pending: boolean;
 }
 
-const sortPhotos = (photos: Photo[]) =>
+export interface ItemView extends Omit<Item, "photos" | "attempts"> {
+  photos: PhotoView[];
+  /** Oldest first. */
+  attempts: AttemptView[];
+  /** The server doesn't have it yet. */
+  pending: boolean;
+}
+
+const sortPhotos = <T extends Photo>(photos: T[]) =>
   [...photos].sort((a, b) => a.position - b.position || a.createdAt - b.createdAt);
 
-/** Applies a change to an item wherever it is cached: its list and its detail. */
+/** Numbers attempts and works out what changed between them, as the server does. */
+export function viewAttempts(attempts: Attempt[], pendingIds: ReadonlySet<string> = new Set()): AttemptView[] {
+  const ordered = byPrintTime(attempts);
+  return ordered.map((attempt, index) => {
+    const before = ordered[index - 1];
+    return {
+      ...attempt,
+      changes: before ? describeChanges(before.settings, attempt.settings) : [],
+      number: index + 1,
+      pending: pendingIds.has(attempt.id),
+    };
+  });
+}
+
+const sortByNewest = (items: Item[]) => items.sort((a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1));
+
+/**
+ * Applies a change to an item wherever it is cached: its list and its
+ * detail. A change of stage moves it from the ideas to the builds or back.
+ */
 export function patchCachedItem(queryClient: QueryClient, id: string, change: (item: Item) => Item | null) {
-  queryClient.setQueriesData<Item[]>({ queryKey: ["items", "list"] }, (items) =>
-    items?.flatMap((item) => {
-      if (item.id !== id) return [item];
-      const next = change(item);
-      return next ? [next] : [];
-    }),
+  let moved: Item | undefined;
+  for (const list of LISTS) {
+    queryClient.setQueryData<Item[]>(itemKeys.list(list), (items) =>
+      items?.flatMap((item) => {
+        if (item.id !== id) return [item];
+        const next = change(item);
+        if (!next) return [];
+        if (listOf(next.stage) === list) return [next];
+        moved = next;
+        return [];
+      }),
+    );
+  }
+  const detail = queryClient.setQueryData<Item | null>(itemKeys.detail(id), (item) => (item ? change(item) : item));
+  // Make sure it is in the list it now belongs to (the detail copy is the fresher one).
+  const target = detail ?? moved;
+  if (!target) return;
+  queryClient.setQueryData<Item[]>(itemKeys.list(listOf(target.stage)), (items) =>
+    items && !items.some((item) => item.id === id) ? sortByNewest([...items, target]) : items,
   );
-  queryClient.setQueryData<Item | null>(itemKeys.detail(id), (item) => (item ? change(item) : item));
 }
 
 /** Puts an item into its list (newest first) and its detail cache. */
 export function insertCachedItem(queryClient: QueryClient, item: Item) {
-  queryClient.setQueryData<Item[]>(itemKeys.list(item.stage), (items) => {
-    if (!items) return items;
-    const rest = items.filter((existing) => existing.id !== item.id);
-    return [...rest, item].sort((a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1));
-  });
+  for (const list of LISTS) {
+    queryClient.setQueryData<Item[]>(itemKeys.list(list), (items) => {
+      if (!items) return items;
+      const rest = items.filter((existing) => existing.id !== item.id);
+      return list === listOf(item.stage) ? sortByNewest([...rest, item]) : rest;
+    });
+  }
   queryClient.setQueryData(itemKeys.detail(item.id), item);
+}
+
+/** Finds an item in the cache: its detail, else whichever list holds it. */
+export function cachedItem(queryClient: QueryClient, id: string): Item | undefined {
+  const detail = queryClient.getQueryData<Item | null>(itemKeys.detail(id));
+  if (detail) return detail;
+  for (const list of LISTS) {
+    const found = queryClient.getQueryData<Item[]>(itemKeys.list(list))?.find((item) => item.id === id);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 /** Keeps the caches in step with what the outbox delivers. */
@@ -76,6 +149,14 @@ export function connectOutbox(queryClient: QueryClient) {
       const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
       insertCachedItem(queryClient, cached ? { ...item, title: cached.title, note: cached.note } : item);
     },
+    attemptSaved: (attempt) =>
+      patchCachedItem(queryClient, attempt.itemId, (item) => ({
+        ...item,
+        // Logging an attempt makes an idea a build, on the server too.
+        stage: item.stage === "idea" ? "building" : item.stage,
+        startedAt: item.startedAt ?? attempt.createdAt,
+        attempts: [...item.attempts.filter((a) => a.id !== attempt.id), attempt],
+      })),
     photoSaved: (photo) =>
       patchCachedItem(queryClient, photo.itemId, (item) => ({
         ...item,
@@ -95,6 +176,7 @@ function pendingPhotos(entry: OutboxEntry | undefined, state: OutboxState, after
     .map((photo, index) => ({
       id: photo.id,
       itemId: entry.itemId,
+      attemptId: photo.attemptId ?? null,
       position: photo.position ?? last + 1 + index,
       width: photo.processed?.width ?? 4,
       height: photo.processed?.height ?? 3,
@@ -106,33 +188,62 @@ function pendingPhotos(entry: OutboxEntry | undefined, state: OutboxState, after
     }));
 }
 
+function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
+  return {
+    ...attempt,
+    itemId,
+    finishedAt: attempt.outcome ? attempt.createdAt : null,
+    changes: [],
+    updatedAt: attempt.createdAt,
+  };
+}
+
+function withAttempts(itemId: string, attempts: Attempt[], entry: OutboxEntry | undefined): AttemptView[] {
+  if (!entry?.attempts?.length) return viewAttempts(attempts);
+  const known = new Set(attempts.map((attempt) => attempt.id));
+  const pending = entry.attempts.filter((attempt) => !known.has(attempt.id));
+  return viewAttempts(
+    [...attempts, ...pending.map((attempt) => fromPendingAttempt(itemId, attempt))],
+    new Set(pending.map((attempt) => attempt.id)),
+  );
+}
+
 function withOutbox(item: Item, state: OutboxState): ItemView {
   const entry = state.entries.find((e) => e.itemId === item.id);
   const photos = [...item.photos, ...pendingPhotos(entry, state, item.photos)];
-  return { ...item, photos: entry ? sortPhotos(photos) : photos, pending: false };
+  return {
+    ...item,
+    // A pending attempt on an idea makes it a build straight away, as the server will.
+    stage: item.stage === "idea" && entry?.attempts?.length ? "building" : item.stage,
+    photos: entry ? sortPhotos(photos) : photos,
+    attempts: withAttempts(item.id, item.attempts, entry),
+    pending: false,
+  };
 }
 
 function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
   if (!entry.create) return null;
+  const stage = entry.create.stage ?? (entry.attempts?.length ? "building" : "idea");
   return {
     id: entry.itemId,
-    stage: "idea",
+    stage,
     title: entry.create.title,
     note: entry.create.note,
     createdBy: entry.create.createdBy,
     createdAt: entry.create.createdAt,
     updatedAt: entry.create.createdAt,
+    startedAt: stage === "idea" ? null : entry.create.createdAt,
+    finishedAt: null,
+    coverPhotoId: null,
     photos: sortPhotos(pendingPhotos(entry, state, [])),
+    attempts: withAttempts(entry.itemId, [], entry),
     pending: true,
   };
 }
 
-/**
- * The inbox as people see it: what the server has, plus captures still on
- * their way there (shown at once, with the local photo and upload progress).
- */
-export function useIdeas() {
-  const query = useQuery(ideasQuery);
+/** Server items plus what the outbox still holds for one list, newest first. */
+function useList(list: ItemList) {
+  const query = useQuery(list === "ideas" ? ideasQuery : buildsQuery);
   const state = useOutbox();
   const items = useMemo(() => {
     const server = query.data ?? [];
@@ -140,12 +251,24 @@ export function useIdeas() {
     const pending = state.entries
       .filter((entry) => !onServer.has(entry.itemId))
       .map((entry) => fromEntry(entry, state))
-      .filter((item): item is ItemView => item !== null);
-    return [...pending, ...server.map((item) => withOutbox(item, state))].sort(
-      (a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1),
-    );
-  }, [query.data, state]);
+      .filter((item): item is ItemView => item !== null && listOf(item.stage) === list);
+    const fromServer = server.map((item) => withOutbox(item, state)).filter((item) => listOf(item.stage) === list);
+    return [...pending, ...fromServer].sort((a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1));
+  }, [query.data, state, list]);
   return { items, isPending: query.isPending && !state.entries.length, error: query.error };
+}
+
+/**
+ * The inbox as people see it: what the server has, plus captures still on
+ * their way there (shown at once, with the local photo and upload progress).
+ */
+export function useIdeas() {
+  return useList("ideas");
+}
+
+/** Every build, including ones still on their way to the server. */
+export function useBuilds() {
+  return useList("builds");
 }
 
 /** One item, from the outbox if the server doesn't have it yet. */
@@ -156,8 +279,14 @@ export function useItem(id: string) {
   const query = useQuery({
     ...itemQuery(id),
     enabled: !pendingEntry,
-    // Opened from the inbox: show what the list already has, at once.
-    initialData: () => queryClient.getQueryData<Item[]>(itemKeys.list("idea"))?.find((item) => item.id === id),
+    // Opened from a list: show what the list already has, at once.
+    initialData: () => {
+      for (const list of LISTS) {
+        const found = queryClient.getQueryData<Item[]>(itemKeys.list(list))?.find((item) => item.id === id);
+        if (found) return found;
+      }
+      return undefined;
+    },
   });
   const item = useMemo(() => {
     if (pendingEntry) return fromEntry(pendingEntry, state);
@@ -188,6 +317,7 @@ export async function saveItemChanges(
  * doesn't have yet, which simply leave the outbox.
  */
 export function deleteItem(queryClient: QueryClient, item: ItemView) {
+  const noun = item.stage === "idea" ? "idea" : "build";
   const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
   const pendingEntry = outbox.remove(item.id);
   const onServer = !pendingEntry?.create;
@@ -195,14 +325,14 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
   const deleted = onServer
     ? api(`/items/${item.id}`, { method: "DELETE" }).catch((error) => {
         if (error instanceof ApiError && error.status === 404) return;
-        toast.error("Couldn't delete that idea", "It's back where it was.");
+        toast.error(`Couldn't delete that ${noun}`, "It's back where it was.");
         if (cached) insertCachedItem(queryClient, cached);
         if (pendingEntry) outbox.restore(pendingEntry);
         throw error;
       })
     : Promise.resolve();
 
-  toast.undo("Idea deleted", {
+  toast.undo(noun === "idea" ? "Idea deleted" : "Build deleted", {
     description: item.title || undefined,
     onUndo: async () => {
       if (pendingEntry) outbox.restore(pendingEntry);
@@ -219,7 +349,7 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
       } catch {
         toast.error("Couldn't bring it back", "Try again in a moment.");
       }
-      void queryClient.invalidateQueries({ queryKey: itemKeys.list("idea") });
+      void queryClient.invalidateQueries({ queryKey: itemKeys.list(listOf(item.stage)) });
     },
   });
 }
@@ -273,12 +403,15 @@ export async function reorderPhotos(queryClient: QueryClient, itemId: string, ph
   }
 }
 
-/** Adds photos to an existing item: they show at once and upload in the background. */
-export function addPhotosToItem(itemId: string, files: File[]) {
+/**
+ * Adds photos to an existing item, or to one of its attempts: they show at
+ * once and upload in the background.
+ */
+export function addPhotosToItem(itemId: string, files: File[], attemptId?: string) {
   if (!files.length) return;
   void outbox.add({
     itemId,
-    photos: files.map((file) => ({ id: crypto.randomUUID(), file })),
+    photos: files.map((file) => ({ id: crypto.randomUUID(), file, ...(attemptId ? { attemptId } : {}) })),
     queuedAt: Date.now(),
   });
 }
