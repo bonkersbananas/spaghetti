@@ -27,5 +27,8 @@
       "bucket_name": "spaghetti-photos"
     }
   ],
+  // Daily at 04:00 UTC: removes ideas and photos deleted more than 30 days
+  // ago, with their R2 objects (src/worker/photos.ts, purgeDeleted).
+  "triggers": { "crons": ["0 4 * * *"] },
   "observability": { "enabled": true }
 }
