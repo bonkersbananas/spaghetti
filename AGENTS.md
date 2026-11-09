@@ -33,7 +33,10 @@ src/
       images.ts           in-browser resizing (createImageBitmap + canvas), WebP/JPEG, average color
       capture.tsx         capture state, paste and drop
     styles/tokens.css     every design token (light and dark)
+    lib/theme.ts          light / dark / system, applied to <html data-theme>
+    lib/offline.ts, connection.ts   service worker registration, "is the server reachable"
     styles/app.css        base styles, keyframes, third-party restyling
+  sw/sw.js                the service worker (precaches the shell; built into /sw.js by scripts/vite-service-worker.ts)
   worker/                 the Worker
     index.ts              entry: exports the Hono app
     app.ts                middleware and route mounting
@@ -60,8 +63,8 @@ pnpm user:add       # add or update one of the two people (local; --remote when 
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop
-pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/
+pnpm test:e2e       # Playwright, phone and desktop; offline tests run against the production build
+pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark for dark mode)
 pnpm build && pnpm start   # the built app on workerd, as the container runs it
 ```
 
@@ -105,7 +108,7 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 
 ### Add a component or token
 
-1. Shared UI goes in `src/client/components/ui/`, built only from tokens. If you need a new color, size, shadow or duration, add it to `styles/tokens.css` (light and dark) and to the `@theme` block.
+1. Shared UI goes in `src/client/components/ui/`, built only from tokens. If you need a new color, size, shadow or duration, add it to `styles/tokens.css` (light **and dark**) and to the `@theme` block. New text/surface pairs go into `scripts/lib/contrast.ts`, which `pnpm test` checks for WCAG AA in both themes. Look at your component in dark mode (the switch on `/styleguide`).
 2. Show it in `routes/_app/styleguide.tsx`, in the matching section or a new one (add it to `toc`).
 3. Document it in `docs/design.md`.
 4. Icons: add the Phosphor icon to `components/ui/icons.tsx` and import it from there.

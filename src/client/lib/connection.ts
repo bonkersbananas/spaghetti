@@ -31,7 +31,10 @@ function scheduleProbe() {
 }
 
 /** A request got an answer from the server (any status). */
-export const reportReachable = () => set(true);
+export const reportReachable = () => {
+  // A response that finished just after the browser lost its network was already on its way.
+  if (navigator.onLine) set(true);
+};
 /** A request failed before it reached the server. */
 export const reportUnreachable = () => set(false);
 

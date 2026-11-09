@@ -5,6 +5,7 @@
  *
  *   pnpm screenshots              # every screen
  *   pnpm screenshots ideas capture  # only these
+ *   pnpm screenshots --dark         # in dark mode (the system setting), files named ideas-dark-390.png
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -19,7 +20,8 @@ const viewports = [
   { width: 1440, height: 900, deviceScaleFactor: 2, isMobile: false, hasTouch: false },
 ];
 
-const only = process.argv.slice(2);
+const dark = process.argv.includes("--dark");
+const only = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
 const selected = only.length ? shots.filter((s) => only.includes(s.name)) : shots;
 const outDir = join(root, "screenshots");
 mkdirSync(outDir, { recursive: true });
@@ -38,6 +40,7 @@ try {
       ...device,
       baseURL: server.url,
       reducedMotion: "reduce",
+      colorScheme: dark ? "dark" : "light",
     });
     const page = await context.newPage();
     const user = SEED_USERS[0];
@@ -73,12 +76,14 @@ async function capture(page: import("@playwright/test").Page, shot: (typeof shot
   await page.evaluate(() => document.fonts.ready);
   await shot.prepare?.(page);
   await loadAllImages(page, shot.name);
+  await shot.beforeShot?.(page);
   // Let entrance animations and sheets settle.
   await page.waitForTimeout(600);
-  const file = join(outDir, `${shot.name}-${width}.png`);
-  await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
+  const file = join(outDir, `${shot.name}${dark ? "-dark" : ""}-${width}.png`);
+  if (shot.selector) await page.locator(shot.selector).screenshot({ path: file });
+  else await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
   await shot.cleanup?.(page);
-  console.log(`  ${shot.name}-${width}.png`);
+  console.log(`  ${shot.name}${dark ? "-dark" : ""}-${width}.png`);
 }
 
 /**
