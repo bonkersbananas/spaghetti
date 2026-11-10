@@ -27,11 +27,7 @@ export function MenuGroup({ size = "md", label, className, children }: MenuGroup
     <SizeContext value={size}>
       <Tag
         aria-label={label}
-        className={cn(
-          "flex flex-col",
-          size === "md" ? "bg-paper overflow-hidden rounded-lg" : "-mx-2 gap-0.5",
-          className,
-        )}
+        className={cn("flex flex-col", size === "md" ? "bg-paper rounded-lg" : "-mx-2 gap-0.5", className)}
       >
         {children}
       </Tag>
@@ -52,7 +48,7 @@ type MenuItemProps = MenuItemBase &
   );
 
 /**
- * One row of a MenuGroup: an icon, a label and, in a sheet, an arrow. A link
+ * One row of a MenuGroup: an icon, a label and, in a sheet, an arrow on links (a row that opens another sheet has none). A link
  * when given `to`, otherwise a button (it opens a sheet or signs out). Pass
  * props through so PopoverClose (asChild) can wrap it.
  */
@@ -61,7 +57,7 @@ export function MenuItem({ icon: IconComponent, children, className, ...rest }: 
   const classes = cn(
     "pressable focus-ring group flex w-full items-center text-left",
     size === "md"
-      ? "text-body text-ink hover:bg-ink/4 not-first:before:bg-hairline relative min-h-14 gap-3.5 px-4 font-semibold not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-13 not-first:before:h-px"
+      ? "text-body text-ink hover:bg-ink/4 not-first:before:bg-hairline relative min-h-14 gap-3.5 px-4 font-semibold not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-13 not-first:before:h-px first:rounded-t-lg last:rounded-b-lg"
       : "text-body text-ink-soft hover:bg-ink/5 hover:text-ink h-9 gap-2.5 rounded-sm px-2 font-medium",
     className,
   );
@@ -73,7 +69,9 @@ export function MenuItem({ icon: IconComponent, children, className, ...rest }: 
         aria-hidden
       />
       <span className="min-w-0 flex-1">{children}</span>
-      {size === "md" && <ArrowRightIcon size={18} className="text-ink-ghost shrink-0" aria-hidden />}
+      {size === "md" && rest.to !== undefined && (
+        <ArrowRightIcon size={18} className="text-ink-ghost shrink-0" aria-hidden />
+      )}
     </>
   );
   if (rest.to !== undefined) {

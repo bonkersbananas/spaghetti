@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
+import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -45,14 +46,17 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               ))
             : [0, 1].map((i) => <RowSkeleton key={i} />)}
         </ul>
-        <MenuGroup label="Workshop" className="mt-4">
+        <Overline as="h3" className="mt-6 mb-2 block">
+          Workshop
+        </Overline>
+        <MenuGroup label="Workshop">
           {workshop.map(({ to, label, icon }) => (
             <MenuItem key={to} to={to} icon={icon} onClick={() => onOpenChange(false)}>
               {label}
             </MenuItem>
           ))}
         </MenuGroup>
-        <MenuGroup className="mt-5">
+        <MenuGroup className="mt-6">
           <MenuItem to="/agents" icon={AgentIcon} onClick={() => onOpenChange(false)}>
             Agents
           </MenuItem>
