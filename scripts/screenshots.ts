@@ -6,11 +6,13 @@
  *   pnpm screenshots              # every screen
  *   pnpm screenshots ideas capture  # only these
  *   pnpm screenshots --dark         # in dark mode (the system setting), files named ideas-dark-390.png
+ *   pnpm screenshots --built        # on the production build (service worker included): what offline screens really show
  */
+import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { type Browser, chromium, request } from "@playwright/test";
-import { SEED_USERS, seedThrowawayState, startDevServer } from "./lib/local-app.ts";
+import { SEED_USERS, seedThrowawayState, startBuiltServer, startDevServer } from "./lib/local-app.ts";
 import { root } from "./lib/wrangler.ts";
 import { shots } from "./screenshot-routes.ts";
 import { seedBuilds } from "./seed/builds.ts";
@@ -22,13 +24,19 @@ const viewports = [
 ];
 
 const dark = process.argv.includes("--dark");
+const built = process.argv.includes("--built");
 const only = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
 const selected = only.length ? shots.filter((s) => only.includes(s.name)) : shots;
 const outDir = join(root, "screenshots");
 mkdirSync(outDir, { recursive: true });
 
 const state = await seedThrowawayState();
-const server = await startDevServer({ port: 5180 + Math.floor(Math.random() * 100), stateDir: state.dir });
+if (built) {
+  const build = spawnSync(join(root, "node_modules/.bin/vite"), ["build"], { cwd: root, stdio: "inherit" });
+  if (build.status !== 0) process.exit(build.status ?? 1);
+}
+const start = built ? startBuiltServer : startDevServer;
+const server = await start({ port: 5180 + Math.floor(Math.random() * 100), stateDir: state.dir });
 let browser: Browser | undefined;
 
 try {
@@ -42,6 +50,7 @@ try {
       baseURL: server.url,
       reducedMotion: "reduce",
       colorScheme: dark ? "dark" : "light",
+      serviceWorkers: "allow",
     });
     const page = await context.newPage();
     const user = SEED_USERS[0];
@@ -71,6 +80,8 @@ try {
 async function capture(page: import("@playwright/test").Page, shot: (typeof shots)[number], width: number) {
   if (shot.width && shot.width !== width) return;
   await page.goto(shot.path, { waitUntil: "networkidle" });
+  // The built app: the service worker must be in charge, or photos can't come from its cache once offline.
+  if (built) await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   // Route chunks can still be rendering at network idle: wait for the screen's
   // heading, so the images below are in the page before we load them.
   await page.locator("h1").first().waitFor();

@@ -9,10 +9,10 @@ export async function signIn(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
 }
 
-/** Removes every idea through the API, so the next test starts with an empty inbox. */
+/** Removes every idea and build through the API, so the next test starts with an empty inbox. */
 export async function clearIdeas(page: Page) {
   const origin = new URL(page.url()).origin;
-  const response = await page.request.get("/api/items");
+  const response = await page.request.get("/api/items?stage=idea,building,done,shelved");
   if (!response.ok()) return;
   const { items } = await response.json();
   for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: origin } });

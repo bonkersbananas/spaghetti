@@ -22,7 +22,8 @@ import { useCaptureHere } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
 import { peopleQuery } from "@/lib/queries";
-import { useAutosave } from "@/lib/use-autosave";
+import { canEdit, useReadOnly } from "@/lib/read-only";
+import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/ideas/$ideaId")({
@@ -80,12 +81,15 @@ function Idea({ item }: { item: ItemView }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
+  const readOnly = useReadOnly(item.pending);
   const { data: people } = useQuery(peopleQuery);
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
 
   const [title, setTitle] = useState(item.title ?? "");
   const [note, setNote] = useState(item.note);
+  useFollowServer(item.title ?? "", title, setTitle);
+  useFollowServer(item.note, note, setNote);
   const saveState = useAutosave({ title, note }, (value) =>
     saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note }),
   );
@@ -102,11 +106,13 @@ function Idea({ item }: { item: ItemView }) {
   };
 
   function remove() {
+    if (!canEdit(item.pending)) return;
     deleteItem(queryClient, item);
     void navigate({ to: "/ideas" });
   }
 
   function build() {
+    if (!canEdit(item.pending)) return;
     startBuild(queryClient, item);
     void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
   }
@@ -128,9 +134,22 @@ function Idea({ item }: { item: ItemView }) {
       <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
-        <IconButton icon={TrashIcon} label="Delete idea" onClick={remove} aria-keyshortcuts="Backspace Delete" />
+        <IconButton
+          icon={TrashIcon}
+          label="Delete idea"
+          onClick={remove}
+          disabled={readOnly}
+          aria-keyshortcuts="Backspace Delete"
+        />
         {isDesktop && (
-          <Button variant="primary" icon={BuildsIcon} shortcut={["B"]} onClick={build} className="ml-2">
+          <Button
+            variant="primary"
+            icon={BuildsIcon}
+            shortcut={["B"]}
+            onClick={build}
+            disabled={readOnly}
+            className="ml-2"
+          >
             Start building
           </Button>
         )}
@@ -163,6 +182,7 @@ function Idea({ item }: { item: ItemView }) {
             placeholder="Untitled idea"
             minRows={1}
             maxLength={200}
+            readOnly={readOnly}
             value={title}
             onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
             onKeyDown={(event) => {
@@ -172,7 +192,12 @@ function Idea({ item }: { item: ItemView }) {
               }
             }}
           />
-          <NoteField value={note} onChange={setNote} placeholder="Add a note: a link, a measurement, a half-thought…" />
+          <NoteField
+            value={note}
+            onChange={setNote}
+            readOnly={readOnly}
+            placeholder="Add a note: a link, a measurement, a half-thought…"
+          />
 
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
             {person && <Avatar person={person} size="sm" />}
@@ -187,7 +212,7 @@ function Idea({ item }: { item: ItemView }) {
       </div>
       {!isDesktop && (
         <ActionBar>
-          <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth onClick={build}>
+          <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>
             Start building
           </Button>
         </ActionBar>

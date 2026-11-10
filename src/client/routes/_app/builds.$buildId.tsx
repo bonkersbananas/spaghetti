@@ -43,7 +43,8 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { type AttemptView, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { peopleQuery } from "@/lib/queries";
-import { useAutosave } from "@/lib/use-autosave";
+import { canEdit, useReadOnly } from "@/lib/read-only";
+import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
@@ -106,6 +107,7 @@ function Build({ item }: { item: ItemView }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
+  const readOnly = useReadOnly(item.pending);
   const { new: isNew, attempt: linkedAttempt } = Route.useSearch();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
@@ -113,18 +115,12 @@ function Build({ item }: { item: ItemView }) {
 
   const [title, setTitle] = useState(item.title ?? "");
   const [note, setNote] = useState(item.note);
-  // Notes added from the capture sheet arrive from outside: show them.
-  const lastNote = useRef(item.note);
-  useEffect(() => {
-    if (item.note !== lastNote.current) {
-      lastNote.current = item.note;
-      setNote(item.note);
-    }
-  }, [item.note]);
-  const saveState = useAutosave({ title, note }, (value) => {
-    lastNote.current = value.note;
-    return saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note });
-  });
+  // Notes added from the capture sheet, or edits by the other person, arrive from outside: show them.
+  useFollowServer(item.title ?? "", title, setTitle);
+  useFollowServer(item.note, note, setNote);
+  const saveState = useAutosave({ title, note }, (value) =>
+    saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note }),
+  );
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
@@ -164,6 +160,7 @@ function Build({ item }: { item: ItemView }) {
 
   const active = item.stage === "building";
   function remove() {
+    if (!canEdit(item.pending)) return;
     deleteItem(queryClient, item);
     void navigate({ to: "/builds" });
   }
@@ -171,6 +168,7 @@ function Build({ item }: { item: ItemView }) {
   const deleteSelectedOrBuild = () => {
     const attempt = story[selectedIndex];
     if (attempt) {
+      if (!canEdit(attempt.pending)) return;
       deleteAttempt(queryClient, item.id, attempt);
       setSelected(null);
     } else remove();
@@ -214,15 +212,15 @@ function Build({ item }: { item: ItemView }) {
     <>
       {active ? (
         <>
-          <Button variant="quiet" icon={ShelveIcon} onClick={() => shelveBuild(queryClient, item)}>
+          <Button variant="quiet" icon={ShelveIcon} disabled={readOnly} onClick={() => shelveBuild(queryClient, item)}>
             Shelve
           </Button>
-          <Button icon={FinishIcon} onClick={() => finishBuild(queryClient, item)}>
+          <Button icon={FinishIcon} disabled={readOnly} onClick={() => finishBuild(queryClient, item)}>
             Finish build
           </Button>
         </>
       ) : (
-        <Button icon={ReopenIcon} onClick={() => reopenBuild(queryClient, item)}>
+        <Button icon={ReopenIcon} disabled={readOnly} onClick={() => reopenBuild(queryClient, item)}>
           {item.stage === "done" ? "Reopen" : "Back on the bed"}
         </Button>
       )}
@@ -237,9 +235,16 @@ function Build({ item }: { item: ItemView }) {
         {isDesktop ? (
           <span className="mr-2 flex items-center gap-2">{stageActions}</span>
         ) : (
-          active && <IconButton icon={ShelveIcon} label="Shelve build" onClick={() => shelveBuild(queryClient, item)} />
+          active && (
+            <IconButton
+              icon={ShelveIcon}
+              label="Shelve build"
+              disabled={readOnly}
+              onClick={() => shelveBuild(queryClient, item)}
+            />
+          )
         )}
-        <IconButton icon={TrashIcon} label="Delete build" onClick={remove} />
+        <IconButton icon={TrashIcon} label="Delete build" disabled={readOnly} onClick={remove} />
       </DetailBar>
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
@@ -275,6 +280,7 @@ function Build({ item }: { item: ItemView }) {
               maxLength={200}
               // A new build from scratch: name it first (or don't).
               autoFocus={isNew && isDesktop && !item.title}
+              readOnly={readOnly}
               value={title}
               onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
               onKeyDown={(event) => {
@@ -301,7 +307,13 @@ function Build({ item }: { item: ItemView }) {
                 )}
               </div>
               {!active && !isDesktop && (
-                <Button variant="quiet" size="sm" icon={ReopenIcon} onClick={() => reopenBuild(queryClient, item)}>
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  icon={ReopenIcon}
+                  disabled={readOnly}
+                  onClick={() => reopenBuild(queryClient, item)}
+                >
                   {item.stage === "done" ? "Reopen" : "Back on the bed"}
                 </Button>
               )}
@@ -309,6 +321,7 @@ function Build({ item }: { item: ItemView }) {
             <NoteField
               value={note}
               onChange={setNote}
+              readOnly={readOnly}
               placeholder="Notes for the whole build: the plan, a link, what to try next…"
               className="mt-1"
             />

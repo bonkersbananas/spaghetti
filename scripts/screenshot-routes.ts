@@ -128,10 +128,18 @@ export const shots: Shot[] = [
     name: "offline",
     path: "/ideas",
     // After the photos have loaded, so they are in the page when the connection goes.
-    beforeShot: async (page) => {
-      await page.context().setOffline(true);
-      await page.getByRole("status").filter({ hasText: "Offline" }).waitFor();
+    beforeShot: goOffline,
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
     },
+  },
+  {
+    // A build opened online, then read with no connection: what was last seen, marked as such and read-only,
+    // with the one thing that is still possible at the printer, finishing the print.
+    name: "offline-build",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    fullPage: true,
+    beforeShot: goOffline,
     cleanup: async (page) => {
       await page.context().setOffline(false);
     },
@@ -149,3 +157,69 @@ export const shots: Shot[] = [
   { name: "styleguide", path: "/styleguide", fullPage: true },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
 ];
+
+/**
+ * Goes offline the way a phone loses signal. On the built app (which has the
+ * service worker) the page is reloaded too, so photos come from the worker's
+ * cache and the data from the saved copy, as they would next to the printer.
+ */
+async function goOffline(page: Page) {
+  await page.context().setOffline(true);
+  if (await page.evaluate(() => !!navigator.serviceWorker?.controller)) {
+    await page.reload({ waitUntil: "load" });
+    await page.locator("h1").first().waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    const broken = await page.evaluate(async () => {
+      const images = Array.from(document.images);
+      for (const image of images) image.loading = "eager";
+      await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+      return images.filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src);
+    });
+    if (broken.length) throw new Error(`Offline screen has pictures that didn't load:\n${broken.join("\n")}`);
+  }
+  await page.getByRole("status").filter({ hasText: "Showing what you saw" }).waitFor();
+}
+
+/** On the tugboat build (attempt 3 is printing): open the finish sheet offline and fill it in. */
+async function fillFinish(page: Page) {
+  await goOffline(page);
+  await page.getByRole("button", { name: "Finish attempt 3" }).first().click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  const note = sheet.getByRole("textbox", { name: "Note" });
+  await note.press("End");
+  await note.pressSequentially(" Came off clean.");
+  await note.blur();
+  return sheet;
+}
+
+// Last: the queued finish stays offline and unsent, so nothing after it would work.
+shots.push(
+  ...([
+    {
+      // The finish sheet, filled in with no signal.
+      name: "offline-finish",
+      path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+      beforeShot: async (page) => {
+        await fillFinish(page);
+      },
+      cleanup: async (page) => {
+        // Leave the page before the connection returns: a half-filled sheet would autosave its draft then.
+        await page.goto("about:blank");
+        await page.context().setOffline(false);
+      },
+    },
+    {
+      // After "Finish attempt": finished on this device, waiting to be sent. Last, and it stays offline, so it never reaches the server.
+      name: "offline-finish-queued",
+      path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+      fullPage: true,
+      beforeShot: async (page) => {
+        const sheet = await fillFinish(page);
+        await sheet.getByRole("button", { name: "Finish attempt" }).click();
+        await sheet.waitFor({ state: "hidden" });
+        await page.getByRole("status").filter({ hasText: "finished print is waiting" }).waitFor();
+      },
+    },
+  ] as Shot[]),
+);

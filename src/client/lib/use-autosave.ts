@@ -62,3 +62,18 @@ export function useAutosave<T>(value: T, save: (value: T) => Promise<void>, { de
 
   return state;
 }
+
+/**
+ * Keeps a field that autosaves in step with the server's copy of it: when
+ * the server's value changes (the other person edited it, or what was kept on
+ * the device has just been replaced by a fresh answer), the field follows,
+ * unless the person has typed something of their own since.
+ */
+export function useFollowServer(server: string, local: string, setLocal: (value: string) => void) {
+  const seen = useRef(server);
+  useEffect(() => {
+    if (server === seen.current) return;
+    if (local === seen.current) setLocal(server);
+    seen.current = server;
+  }, [server, local, setLocal]);
+}
