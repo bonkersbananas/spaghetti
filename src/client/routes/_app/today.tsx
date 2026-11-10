@@ -1,5 +1,6 @@
 import type { Item, Person } from "@shared/api";
 import { monthLabel, summaryLine } from "@shared/journal";
+import { backBurnerIdea } from "@shared/today";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -7,7 +8,7 @@ import { PrintingCard } from "@/components/builds/PrintingCard";
 import { EmptyPot } from "@/components/illustrations";
 import { itemName } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { BackBurner, backBurnerIdea } from "@/components/today/BackBurner";
+import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";

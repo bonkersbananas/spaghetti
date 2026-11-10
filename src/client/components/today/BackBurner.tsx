@@ -13,39 +13,6 @@ import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 
-/** Ideas this old are candidates for the back burner. */
-const OLD_DAYS = 14;
-const DAY = 24 * 60 * 60 * 1000;
-
-/** YYYY-MM-DD in local time: the same for both people all day, and different tomorrow. */
-export const localDay = (time: number) => {
-  const date = new Date(time);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-};
-
-/** A small, stable hash of a string (FNV-1a). */
-function hash(text: string): number {
-  let value = 0x811c9dc5;
-  for (let index = 0; index < text.length; index++) {
-    value ^= text.charCodeAt(index);
-    value = Math.imul(value, 0x01000193) >>> 0;
-  }
-  return value;
-}
-
-/**
- * One old idea comes back each day, so the inbox doesn't become a graveyard. The pick is the day's hash modulo
- * the candidates (oldest first, ties by id), so both people see the same idea all day, whatever order their
- * lists are in.
- */
-export function backBurnerIdea(ideas: ItemView[], now = Date.now()): ItemView | undefined {
-  const candidates = ideas
-    .filter((idea) => idea.stage === "idea" && !idea.pending && now - idea.createdAt > OLD_DAYS * DAY)
-    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
-  if (candidates.length === 0) return undefined;
-  return candidates[hash(localDay(now)) % candidates.length];
-}
-
 /** An old idea, with a way to start building it. Nothing is drawn when no idea is old enough. */
 export function BackBurner({ idea, person }: { idea: ItemView | undefined; person?: Person }) {
   const queryClient = useQueryClient();
