@@ -1,33 +1,21 @@
+import type { Person } from "@shared/api";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Mark } from "@/components/illustrations";
-import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import {
-  AgentIcon,
-  BellIcon,
-  CaretUpDownIcon,
-  KeyIcon,
-  PaletteIcon,
-  PlusIcon,
-  SearchIcon,
-  SignOutIcon,
-} from "@/components/ui/icons";
+import { PlusIcon, SearchIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
-import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
-import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
-import { useSignOut } from "@/lib/use-sign-out";
-import { ChangePasswordSheet } from "./ChangePasswordSheet";
-import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
+import { useWhenIdle } from "@/lib/when-idle";
+import { AccountButton } from "./AccountButton";
+import { AccountMenu, loadAccountMenu } from "./lazy-account";
 import { NowPrinting } from "./NowPrinting";
 import { sections, workshop } from "./sections";
-import { ThemeSwitch } from "./ThemeSwitch";
 
 const itemClass =
   "pressable focus-ring group flex h-9 items-center gap-3 rounded-sm px-3 text-body font-medium text-ink-soft hover:bg-ink/5 hover:text-ink data-[status=active]:bg-cream data-[status=active]:text-ink data-[status=active]:shadow-soft";
@@ -36,10 +24,7 @@ const itemClass =
 export function Sidebar() {
   const { setOpen } = useCapture();
   const { data: user } = useSuspenseQuery(sessionQuery);
-  const signOut = useSignOut();
   const { setPaletteOpen } = usePalette();
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [notifying, setNotifying] = useState(false);
 
   return (
     <aside className="paper-grain w-sidebar bg-paper-deep fixed inset-y-0 left-0 hidden flex-col px-3 pt-5 pb-3 md:flex">
@@ -116,59 +101,27 @@ export function Sidebar() {
 
       <div className="mt-auto flex flex-col">
         <NowPrinting />
-        {user && (
-          <Popover
-            label="Account"
-            side="top"
-            align="start"
-            trigger={
-              <button
-                type="button"
-                className="pressable focus-ring hover:bg-ink/5 data-[state=open]:bg-ink/5 mt-2 flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left"
-              >
-                <Avatar person={user} size="sm" decorative />
-                <span className="text-small text-ink min-w-0 flex-1 truncate font-semibold">{user.name}</span>
-                <CaretUpDownIcon size={16} className="text-ink-faint" aria-hidden />
-                <span className="sr-only">Account menu</span>
-              </button>
-            }
-          >
-            <div className="flex flex-col gap-3">
-              <ThemeSwitch />
-              <MenuGroup size="sm">
-                <PopoverClose asChild>
-                  <MenuItem to="/agents" icon={AgentIcon}>
-                    Agents
-                  </MenuItem>
-                </PopoverClose>
-                <PopoverClose asChild>
-                  <MenuItem icon={BellIcon} onClick={() => setNotifying(true)}>
-                    Notifications
-                  </MenuItem>
-                </PopoverClose>
-                <PopoverClose asChild>
-                  <MenuItem icon={KeyIcon} onClick={() => setChangingPassword(true)}>
-                    Change password
-                  </MenuItem>
-                </PopoverClose>
-              </MenuGroup>
-              <div className="bg-hairline h-px" />
-              <MenuGroup size="sm">
-                <PopoverClose asChild>
-                  <MenuItem to="/styleguide" icon={PaletteIcon}>
-                    Styleguide
-                  </MenuItem>
-                </PopoverClose>
-                <MenuItem icon={SignOutIcon} onClick={signOut}>
-                  Sign out
-                </MenuItem>
-              </MenuGroup>
-            </div>
-          </Popover>
-        )}
-        {user && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
-        {user && <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />}
+        {user && <SidebarAccount user={user} />}
       </div>
     </aside>
+  );
+}
+
+/**
+ * The account button, and the menu it opens: theme, agents, notifications, password, sign out. The menu's code
+ * (the popover, the theme switch, the password sheet) is rarely needed, so it arrives while the browser is idle
+ * after the first screen, or when the button is pressed first; until then a look-alike button stands in.
+ */
+function SidebarAccount({ user }: { user: Person }) {
+  const [wanted, setWanted] = useState<"warm" | "open" | null>(null);
+  useWhenIdle(() => {
+    void loadAccountMenu().then(() => setWanted((current) => current ?? "warm"));
+  });
+  const stand = <AccountButton user={user} onClick={() => setWanted("open")} />;
+  if (!wanted) return stand;
+  return (
+    <Suspense fallback={stand}>
+      <AccountMenu user={user} defaultOpen={wanted === "open"} />
+    </Suspense>
   );
 }

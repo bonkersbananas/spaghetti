@@ -1,11 +1,12 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
 import { sessionQuery } from "@/lib/queries";
-import { AccountSheet } from "./AccountSheet";
+import { useWhenIdle } from "@/lib/when-idle";
+import { LazyAccountSheet, loadAccountSheet } from "./lazy-account";
 
 interface PageHeaderProps {
   title: string;
@@ -24,6 +25,10 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, actions, search = true }: PageHeaderProps) {
   const { data: user } = useSuspenseQuery(sessionQuery);
   const [accountOpen, setAccountOpen] = useState(false);
+  // The sheet's code arrives while the browser is idle (or on the first press), and the sheet mounts once asked for.
+  const [accountMounted, setAccountMounted] = useState(false);
+  if (accountOpen && !accountMounted) setAccountMounted(true);
+  useWhenIdle(() => void loadAccountSheet());
 
   return (
     <header className="pt-5 pb-6 md:pt-14 md:pb-10">
@@ -37,7 +42,12 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
             </Link>
           )}
           {user && (
-            <button type="button" onClick={() => setAccountOpen(true)} className="pressable focus-ring rounded-full">
+            <button
+              type="button"
+              onPointerDown={() => void loadAccountSheet()}
+              onClick={() => setAccountOpen(true)}
+              className="pressable focus-ring rounded-full"
+            >
               <Avatar person={user} size="md" decorative />
               <span className="sr-only">Account</span>
             </button>
@@ -45,7 +55,11 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
         </div>
       </div>
       {subtitle && <p className="max-w-content text-body text-ink-faint mt-1">{subtitle}</p>}
-      {user && <AccountSheet open={accountOpen} onOpenChange={setAccountOpen} />}
+      {user && accountMounted && (
+        <Suspense fallback={null}>
+          <LazyAccountSheet open={accountOpen} onOpenChange={setAccountOpen} />
+        </Suspense>
+      )}
     </header>
   );
 }
