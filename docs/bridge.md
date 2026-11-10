@@ -46,7 +46,7 @@ Five settings, from environment variables or a JSON file (`pnpm bridge --config 
 | `BRIDGE_PRINTER_HOST` | `printerHost` | the printer's IP address |
 | `BRIDGE_PRINTER_SERIAL` | `serial` | its serial number |
 | `BRIDGE_PRINTER_ACCESS_CODE` | `accessCode` | the LAN access code |
-| `BRIDGE_APP_URL` | `appUrl` | where Spaghetti is, e.g. `https://spaghetti.example.com` or `http://192.168.1.5:8787` |
+| `BRIDGE_APP_URL` | `appUrl` | where Spaghetti is, e.g. `https://spaghetti.day` or `http://192.168.1.5:8787` |
 | `BRIDGE_TOKEN` | `token` | the agent token (`spg_…`) |
 
 Optional: `BRIDGE_DATA_DIR` (state and queue; default `./.bridge`, `/data` in Docker), `BRIDGE_CAMERA=off` (no camera frames), `BRIDGE_FFMPEG` (path to ffmpeg), `BRIDGE_MQTT_URL` (default `mqtts://<host>:8883`).

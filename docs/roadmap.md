@@ -2,7 +2,7 @@
 
 **The autopilot's plan on fctl is the live version of this plan; this file is a copy, kept in the repository so agents can see what the phases and pull request numbers in commit messages refer to, and it can be behind.** When your pull request finishes an item here, tick it in the same pull request. Settled decisions, including the "no"s, are in [decisions/](decisions/README.md).
 
-**Where it stands:** v1 is built and merged (PRs #1–#12): capture, ideas, builds and attempts, journal and search with "what worked last time", Pantry, Printer page, .3mf files, dark mode, offline, command palette, and an accessibility and performance pass. Deploying waits for the Cloudflare token, which Carl Oscar will give when it's ready.
+**Where it stands:** v1 is built and merged (PRs #1–#12): capture, ideas, builds and attempts, journal and search with "what worked last time", Pantry, Printer page, .3mf files, dark mode, offline, command palette, and an accessibility and performance pass. It is deployed at https://spaghetti.day (docs/deploy.md).
 
 **Direction (Carl Oscar, 10 Nov):** implement the UI improvements spec in its suggested order, make the repo better for agents, then the features and the agent-facing service below. The ideas come from another agent's review; add more as building goes on.
 
@@ -16,7 +16,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] §5 Pantry (rims, AMS remaining, fill discs, desktop list view; #17) and §6 Journal (one icon per row, plate pictures, printing progress, compact rows; #19), side by side
 - [x] §3 Build page: summary under the notes, aligned attempt photos, compare two attempts (#23)
 - [x] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar) (#29)
-- [ ] §4 Idea page (proportions, link cards and a preview endpoint) and §8 Motion (photo transitions, outcome tap, reflow, stepping between attempts)
+- [ ] §4 Idea page (proportions, link cards and a preview endpoint) and §8 Motion (photo transitions, outcome tap, reflow, stepping between attempts): all done in #25 except the reflow when a print finishes, which is on Today's printing card and waits for the Today screen
 
 ## Now: agents in the repo
 
@@ -31,7 +31,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [ ] Parts and quantities ("print the hull in two halves")
 - [ ] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
 - [ ] Passkeys, and adding people in the app instead of the command line
-- [ ] Filament accounting: grams from slicer files update what's left, "not enough for this print", a shopping list (decided: [grams, automatically](decisions/0009-filament-tracked-in-grams.md); a spool starts at 1 kg, each attempt's slicer grams come off it, failed prints in proportion to how far they got, levels follow and stay correctable)
+- [x] Filament accounting: grams from slicer files update what's left, "not enough for this print", a shopping list (decided: [grams, automatically](decisions/0009-filament-tracked-in-grams.md); a spool starts at 1 kg, each attempt's slicer grams come off it, failed prints in proportion to how far they got, levels follow and stay correctable)
 - [x] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (#22: the program, its routes and [docs/bridge.md](bridge.md); #24: the app side, "off the bed · how did it go?", the printer's live progress and the bridge line and unknown-tray prompt on the Printer page) (decided: [optional and read-only](decisions/0010-optional-read-only-printer-bridge.md); a small program on a home computer using LAN mode, local MQTT, FTP and the camera, never Bambu's cloud and never a command to the printer)
 
 ## Next: agents using the service
@@ -46,7 +46,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 
 ## Deploy
 
-- [ ] When the Cloudflare token arrives: create D1 and R2, migrate, deploy to workers.dev, add the two people, one-step `pnpm deploy` (see [no CI deploys](decisions/0011-no-ci-deploys.md))
+- [x] Deployed to https://spaghetti.day with D1 and R2; one-step `pnpm ship`. Adding the two people is the last step (see [no CI deploys](decisions/0011-no-ci-deploys.md))
 
 ## Done (v1)
 

@@ -342,7 +342,21 @@ export interface Spool {
   /** #rrggbb */
   colorHex: string | null;
   finish: string | null;
+  /**
+   * The level. With gram data (`gramsLeft` not null) it is derived from the grams over `netGrams`, whatever was
+   * set by hand or reported by the AMS; without, it is the hand-set (or AMS) level.
+   */
   remaining: Remaining;
+  /** What it held when new; null: no gram data (decision 0009). */
+  netGrams: number | null;
+  /** What the empty spool weighs, for weighing on a scale. */
+  tareGrams: number | null;
+  /** About how many grams are left: the latest weighing (else the net weight) minus what finished attempts used since. Null without gram data. */
+  gramsLeft: number | null;
+  /** Some of what was counted since was a guess (a failed print). */
+  gramsApproximate: boolean;
+  /** The last weighing, epoch ms. */
+  weighedAt: number | null;
   note: string;
   /** When it was last dried, epoch ms. */
   driedAt: number | null;
@@ -374,10 +388,63 @@ export interface CreateSpoolRequest {
   colorHex?: string | null;
   finish?: string | null;
   remaining?: Remaining;
+  /** Grams when new (Bambu spools: 1000). */
+  netGrams?: number | null;
+  tareGrams?: number | null;
   note?: string;
   driedAt?: number | null;
   trayUuid?: string | null;
   createdAt?: number;
+}
+
+/** PUT /api/spools/:id/weight: what it held when new, and what the empty spool weighs. Either can be null to clear (back to a hand-set level). */
+export interface SpoolWeightRequest {
+  netGrams?: number | null;
+  tareGrams?: number | null;
+}
+
+/**
+ * POST /api/spools/:id/weighings. Give what the scale said (`onScale`, the empty spool's `tareGrams` is
+ * taken off) or the filament left (`gramsLeft`). The client picks the id; a retry is the same weighing.
+ */
+export interface WeighSpoolRequest {
+  id: string;
+  onScale?: number;
+  gramsLeft?: number;
+  /** Remember what the empty spool weighs. */
+  tareGrams?: number | null;
+  /** Epoch ms; defaults to now. */
+  at?: number;
+}
+
+export interface SpoolWeighing {
+  id: string;
+  gramsLeft: number;
+  onScale: number | null;
+  at: number;
+}
+
+/** One print that took filament off a spool. */
+export interface SpoolUsageEntry {
+  attemptId: string;
+  itemId: string;
+  /** The build's title (null: untitled). */
+  title: string | null;
+  /** The attempt's number in its build. */
+  number: number;
+  outcome: Outcome;
+  grams: number;
+  /** A failed print counted by a guess. */
+  approximate: boolean;
+  at: number;
+  /** Whether it came off the grams left (false: it finished before the last weighing, which already included it). */
+  counted: boolean;
+}
+
+/** GET /api/spools/:id/usage: what used it, newest first, and its weighings. */
+export interface SpoolUsageResponse {
+  usage: SpoolUsageEntry[];
+  weighings: SpoolWeighing[];
 }
 
 /** PATCH /api/spools/:id */
@@ -442,4 +509,11 @@ export const PHOTO_CONTENT_TYPES = ["image/webp", "image/jpeg"] as const;
 
 export function photoUrl(id: string, variant: PhotoVariant): string {
   return `/api/photos/${id}/${variant}`;
+}
+
+/** GET /api/links/preview?url=: what a link's page calls itself, when it could be read (null when not). */
+export interface LinkPreviewResponse {
+  url: string;
+  title: string | null;
+  site: string | null;
 }

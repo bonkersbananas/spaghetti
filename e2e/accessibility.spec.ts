@@ -35,7 +35,11 @@ async function seed(page: Page): Promise<Seeded> {
   });
   await page.request.post("/api/items", {
     headers,
-    data: { id: ideaId, title: "Bath tugboat", note: "Chunky enough for small hands" },
+    data: {
+      id: ideaId,
+      title: "Bath tugboat",
+      note: "Chunky enough for small hands. Model: https://www.printables.com/model/42-drawer-bins",
+    },
   });
   await page.request.put(`/api/items/${ideaId}/photos/${crypto.randomUUID()}`, {
     headers,

@@ -5,6 +5,7 @@
  */
 import { type Browser, request } from "@playwright/test";
 import { SEED_USERS } from "../lib/local-app.ts";
+import { executeSql } from "../lib/wrangler.ts";
 import { seedBridge, seedBuilds } from "./builds.ts";
 import { seedIdeas } from "./ideas.ts";
 import { seedPantry } from "./pantry.ts";
@@ -51,6 +52,12 @@ export async function seedAll({
     await seedIdeas(browser, { alex, sam }, origin, now);
     await seedPantry(browser, alex, origin, stateDir, now);
     await seedBuilds(browser, { alex, sam }, origin, stateDir, now);
+    // What the link in the desk tidy-up note calls itself. The sandbox can't fetch pages, and a screenshot
+    // shouldn't depend on one: the preview cache is filled as if it had (stamped with the real clock, so it stays fresh).
+    executeSql(
+      `INSERT OR REPLACE INTO link_previews (url, title, site, failed, fetched_at) VALUES ('https://makerworld.com/en/models/drawer-bins', 'Drawer bins, 42 mm grid', 'MakerWorld', 0, ${Date.now()});`,
+      { persistTo: stateDir },
+    );
     await seedBridge(alex, origin);
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);

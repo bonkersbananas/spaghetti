@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
+import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { SectionHeading } from "@/components/ui/SectionHeading";
@@ -440,6 +441,7 @@ function Build({ item }: { item: ItemView }) {
               placeholder="Notes for the whole build: the plan, a link, what to try next…"
               className="mt-1"
             />
+            <NoteLinks note={note} />
           </div>
 
           <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} />
@@ -541,6 +543,10 @@ function Build({ item }: { item: ItemView }) {
         initialOutcome={sheet.outcome}
         open={sheet.open}
         onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
+        onStep={(attemptId) => {
+          setSheet((current) => ({ ...current, attemptId, file: null }));
+          setSelected(attemptId);
+        }}
       />
     </article>
   );

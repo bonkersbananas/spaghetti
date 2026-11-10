@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { BuildsIcon, TrashIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
+import { NoteLinks } from "@/components/ui/NoteLinks";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
@@ -47,9 +48,9 @@ function IdeaDetail() {
       <h1 className="sr-only">Idea</h1>
       <DetailBar back={back} />
       {isPending || isBuild ? (
-        <div className="flex flex-col gap-6 md:flex-row md:gap-10" aria-hidden>
-          <Skeleton className="-mx-5 aspect-4/3 rounded-none md:mx-0 md:flex-3 md:rounded-xl" />
-          <div className="flex flex-col gap-3 md:flex-2">
+        <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14" aria-hidden>
+          <Skeleton className="-mx-5 aspect-4/3 rounded-none md:mx-0 md:flex-2 md:rounded-xl" />
+          <div className="flex flex-col gap-3 md:flex-3">
             <Skeleton className="h-8 w-3/4" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-2/3" />
@@ -168,9 +169,13 @@ function Idea({ item }: { item: ItemView }) {
         )}
       </DetailBar>
 
-      <div className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10" : "max-w-content"}>
+      {/* The build page's proportions (photo two parts, text three), so an idea that becomes a build keeps its photo
+          where it was at the size it was, and the attempts take the side the text had. */}
+      <div
+        className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}
+      >
         {hasPhotos && (
-          <div className="flex flex-col gap-4 md:sticky md:top-8 md:min-w-0 md:flex-3">
+          <div className="flex flex-col gap-4 md:sticky md:top-8 md:min-w-0 md:flex-2">
             <PhotoViewer
               photos={photos}
               index={selectedIndex}
@@ -187,7 +192,7 @@ function Idea({ item }: { item: ItemView }) {
           </div>
         )}
 
-        <div className="flex min-w-0 flex-col gap-3 md:flex-2 md:pt-2">
+        <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
           {!hasPhotos && <AddFirstPhotos itemId={item.id} />}
           <TextArea
             appearance="title"
@@ -211,6 +216,7 @@ function Idea({ item }: { item: ItemView }) {
             readOnly={readOnly}
             placeholder="Add a note: a link, a measurement, a half-thought…"
           />
+          <NoteLinks note={note} />
 
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
             {person && <Avatar person={person} size="sm" via={via} />}

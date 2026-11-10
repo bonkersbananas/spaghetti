@@ -95,44 +95,13 @@ Or with Compose: `docker compose up -d`, then `docker compose exec app node scri
 
 Outside Docker, `pnpm build && pnpm start` does the same (state in `.wrangler/state`, or `SPAGHETTI_STATE_DIR`).
 
-The session cookie is marked `Secure` only when the app is reached over https, so plain http on a home network works. Put it behind https (a reverse proxy or a tunnel) before exposing it beyond your network.
+The session cookie is marked `Secure` only when the app is reached over https, so plain http on a home network works. Put it behind https (a reverse proxy or a tunnel) before exposing it beyond your network. On Cloudflare it is always https.
 
 ## Deploying to Cloudflare
 
-Nothing is deployed yet. When there is an API token (`CLOUDFLARE_API_TOKEN`, with Workers, D1 and R2 edit permissions, and `CLOUDFLARE_ACCOUNT_ID`):
+Spaghetti is live at https://spaghetti.day. Deploy with `pnpm ship` (build, remote migrations, `wrangler deploy`; pnpm's own `deploy` is a different command). It needs `CLOUDFLARE_API_TOKEN`. Everything about the setup, rollback, backups and adding people is in [docs/deploy.md](docs/deploy.md).
 
-1. Create the database and copy its id into `database_id` in `wrangler.jsonc` (replacing the all-zero placeholder):
-
-   ```sh
-   pnpm exec wrangler d1 create spaghetti
-   ```
-
-2. Create the photo bucket:
-
-   ```sh
-   pnpm exec wrangler r2 bucket create spaghetti-photos
-   ```
-
-3. Apply the migrations to the remote database:
-
-   ```sh
-   pnpm exec wrangler d1 migrations apply DB --remote
-   ```
-
-4. Build and deploy (the Vite build writes the deploy config that wrangler picks up):
-
-   ```sh
-   pnpm build
-   pnpm exec wrangler deploy
-   ```
-
-5. Add the two people to the deployed database:
-
-   ```sh
-   pnpm user:add --remote
-   ```
-
-From then on, a schema change is `pnpm db:generate`, then `wrangler d1 migrations apply DB --remote` before `wrangler deploy`.
+To host your own copy, create a D1 database and an R2 bucket with `wrangler d1 create` and `wrangler r2 bucket create`, put the database id and your domain in `wrangler.jsonc`, then run `pnpm ship`.
 
 ## Project layout
 

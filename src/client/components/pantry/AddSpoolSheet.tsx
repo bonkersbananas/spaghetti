@@ -1,4 +1,5 @@
 import type { Spool } from "@shared/api";
+import { DEFAULT_NET_GRAMS } from "@shared/ledger";
 import { BRANDS, FINISHES, finishLabel, nearestColorName, QUICK_COLORS, SPOOL_MATERIALS } from "@shared/spools";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
@@ -14,6 +15,7 @@ import { addSpool, type SpoolDraft } from "@/lib/pantry";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useObjectUrl } from "@/lib/use-object-url";
+import { WeightPicker } from "./WeightPicker";
 
 interface AddSpoolSheetProps {
   open: boolean;
@@ -32,6 +34,7 @@ const blank = (initial?: SpoolDraft): SpoolDraft => ({
   colorName: null,
   colorHex: null,
   finish: null,
+  netGrams: DEFAULT_NET_GRAMS,
   ...initial,
 });
 
@@ -233,6 +236,11 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
               </ToggleChip>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col">
+          <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">How much filament</legend>
+          <WeightPicker value={draft.netGrams ?? null} onChange={(netGrams) => change({ netGrams })} />
         </fieldset>
         <button type="submit" hidden />
       </form>

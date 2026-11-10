@@ -28,7 +28,7 @@ src/
       ui/                 the design system: Button, Field, Sheet, Toast, Card, Chip, Avatar, Skeleton, EmptyState, Kbd, icons
       illustrations/      empty-state spot illustrations and the app mark
       shell/              Sidebar, TabBar, PageHeader, CaptureSheet, DropOverlay, AccountSheet, CommandPalette, ShortcutOverlay, sections.ts (sections, the phone tabs and the workshop), NowPrinting (the sidebar's card)
-      pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, AddSpoolSheet
+      pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, SpoolRow, AddSpoolSheet, SpoolGrams (the hero figure, what used it), WeightSheets (weigh it, set the weight), WeightPicker, RunningLow
       ideas/              IdeaCard, PhotoViewer, PhotoStrip, AddFirstPhotos
       builds/             BuildCard, AttemptEntry, AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
       today/              the blocks of /today: InThePrinter, PickUpAgain, Lately, BackBurner (the print on the bed is builds/PrintingCard)
@@ -86,7 +86,8 @@ pnpm install
 pnpm run doctor     # checks Node, pnpm, the Playwright browser, wrangler, the local D1 and says how to fix each problem
 pnpm dev            # migrate local D1, then Vite + Worker on http://localhost:5173
 pnpm dev:seed       # the dev server on a throwaway database with the screenshot data (sign in as alex or sam, password spaghetti-al-dente), for exploring by hand
-pnpm user:add       # add or update one of the two people (local; --remote when deployed)
+pnpm user:add       # add or update one of the two people (local; --remote for https://spaghetti.day)
+pnpm ship           # build, apply remote migrations, deploy to spaghetti.day (docs/deploy.md; not `pnpm deploy`)
 pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api.md)
 pnpm lint           # Biome + design lint
 pnpm typecheck
@@ -140,7 +141,7 @@ If a wiring step can't find its place (a file moved), the command says what to a
 
 1. Change `src/worker/db/schema.ts`.
 2. `pnpm db:generate --name <what-changed>` writes `migrations/NNNN_<what-changed>.sql`. Read it; commit it with `migrations/meta/`.
-3. `pnpm db:migrate` applies it locally (`pnpm dev` does too). Tests apply all migrations automatically. Remote: `wrangler d1 migrations apply DB --remote` before deploying.
+3. `pnpm db:migrate` applies it locally (`pnpm dev` does too). Tests apply all migrations automatically. Remote: `pnpm ship` applies them before deploying (see docs/deploy.md).
 
 Never edit a migration that has been merged; add a new one.
 
@@ -162,6 +163,7 @@ Never edit a migration that has been merged; add a new one.
 ### Pantry, printer and slicer files
 
 - Spools (`spools`) are the filament library; `ams_slots` says which spool is in which slot ("A1" to "D4", "Ext"), one slot per spool; `printer` is one row (`x2d`) with the setup as JSON (`PrinterSetup` in `shared/spools.ts`). A spool's label photo is stored like other photos (`photos/<id>/…`, served by `/api/photos`), but its fields live on the spool row.
+- Filament in grams ([0009](docs/decisions/0009-filament-tracked-in-grams.md)): grams left are never stored, they are worked out from the net weight, the latest weighing (`spool_weighings`) and the finished attempts' `filaments[].grams` (`shared/ledger.ts` pure rules, `worker/ledger.ts` loading). Spools without gram data keep their hand-set level; with it, `remaining` is derived and a PATCHed one is ignored. Anything that changes an attempt's outcome, filaments or existence must refresh the `spools` queries (outbox handlers, `saveAttemptChanges`, `deleteAttempt`).
 - An attempt's filaments keep their plain values (type, brand, color) and add `spoolId` when picked from the pantry, so attempts read the same if the spool goes. `GET /api/spools/:id/attempts` finds them with `json_each` over the settings.
 - Slicer files (`attempt_files`, one live per attempt) are read in the browser (`shared/threemf`); the client sends what it read (`prefill`), the plate's PNG and, under `MAX_SLICER_FILE_BYTES`, the bytes, through the outbox behind the attempt (`files` in an outbox entry). R2 keys are `files/<id>/file` and `/thumb`, served at `/api/files/:id` and `/api/files/:id/thumb` only while the file, its attempt and its build are live. The purge removes them with their attempt.
 - The fields marked "from the file" are the ones still equal to `file.prefill` (`sameAsFile`, `filamentFromFile`).

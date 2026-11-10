@@ -1,13 +1,12 @@
 import type { Outcome } from "@shared/attempts";
 import { offTheBedLabel } from "@shared/print-progress";
-import { fullTime, relativeTime } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
-import { Sheet } from "@/components/ui/Sheet";
 import { deleteAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
@@ -28,6 +27,7 @@ export function EditAttempt({
   onOpenChange,
   initialOutcome,
   incomingFile,
+  footerHost,
 }: {
   item: ItemView;
   attempt: AttemptView;
@@ -36,6 +36,8 @@ export function EditAttempt({
   /** Picked on the card of a print that is off the bed: the attempt is finished with it as the sheet opens. */
   initialOutcome?: Outcome | null;
   incomingFile?: { file: File; key: number } | null;
+  /** Where the footer (Delete, the save state, Done) is drawn: the sheet's own footer. */
+  footerHost: HTMLElement | null;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -104,49 +106,40 @@ export function EditAttempt({
     }
   });
 
+  const footer = (
+    <>
+      <Button
+        variant="quiet"
+        icon={TrashIcon}
+        size={isDesktop ? "md" : "lg"}
+        disabled={!!readOnly}
+        onClick={() => {
+          deleteAttempt(queryClient, item.id, attempt);
+          onOpenChange(false);
+        }}
+        className="max-md:px-4"
+      >
+        Delete
+      </Button>
+      <SaveStatus state={saveState} className="ml-auto" />
+      <Button
+        variant={printing && !value.outcome ? "secondary" : "primary"}
+        size={isDesktop ? "md" : "lg"}
+        onClick={() => {
+          if (readOnly === "finish" && value.outcome)
+            queueFinish(item.id, attempt, { ...value, outcome: value.outcome });
+          onOpenChange(false);
+        }}
+      >
+        {readOnly === "finish" && value.outcome ? "Finish attempt" : "Done"}
+      </Button>
+    </>
+  );
+
   return (
-    <Sheet
-      open={open}
-      onOpenChange={onOpenChange}
-      desktop="panel"
-      title={printing ? `Finish attempt ${attempt.number}` : `Attempt ${attempt.number}`}
-      description={
-        <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
-          {printing ? "Started printing " : "Printed "}
-          {relativeTime(attempt.printedAt).toLowerCase()}
-          {printing && attempt.endedAt !== null && <> · {offTheBedLabel(attempt.endedAt).toLowerCase()}</>}
-        </time>
-      }
-      footer={
-        <>
-          <Button
-            variant="quiet"
-            icon={TrashIcon}
-            size={isDesktop ? "md" : "lg"}
-            disabled={!!readOnly}
-            onClick={() => {
-              deleteAttempt(queryClient, item.id, attempt);
-              onOpenChange(false);
-            }}
-            className="max-md:px-4"
-          >
-            Delete
-          </Button>
-          <SaveStatus state={saveState} className="ml-auto" />
-          <Button
-            variant={printing && !value.outcome ? "secondary" : "primary"}
-            size={isDesktop ? "md" : "lg"}
-            onClick={() => {
-              if (readOnly === "finish" && value.outcome)
-                queueFinish(item.id, attempt, { ...value, outcome: value.outcome });
-              onOpenChange(false);
-            }}
-          >
-            {readOnly === "finish" && value.outcome ? "Finish attempt" : "Done"}
-          </Button>
-        </>
-      }
-    >
+    <>
+      {/* The footer belongs to the sheet's frame, which stays put when stepping to another attempt: it is drawn there. */}
+      {footerHost && createPortal(footer, footerHost)}
       {camera.input}
       {library.input}
       {slicer.picker.input}
@@ -209,6 +202,6 @@ export function EditAttempt({
           </div>
         }
       />
-    </Sheet>
+    </>
   );
 }

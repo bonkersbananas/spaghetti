@@ -4,8 +4,11 @@ import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeLine } from "@/components/pantry/BridgeLine";
+import { RunningLow } from "@/components/pantry/RunningLow";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
+import { GramsHero } from "@/components/pantry/SpoolGrams";
 import { SpoolRow } from "@/components/pantry/SpoolRow";
+import { WeightPicker } from "@/components/pantry/WeightPicker";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { NumberField } from "@/components/ui/Field";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
@@ -27,6 +30,11 @@ const sampleSpool: Spool = {
   colorHex: SILK,
   finish: "silk",
   remaining: "half",
+  netGrams: 1000,
+  tareGrams: 250,
+  gramsLeft: 420,
+  gramsApproximate: true,
+  weighedAt: null,
   note: "",
   driedAt: null,
   photo: null,
@@ -39,6 +47,7 @@ const sampleSpool: Spool = {
 
 export function PantrySection() {
   const [nozzle, setNozzle] = useState<number | undefined>(310);
+  const [weight, setWeight] = useState<number | null>(1000);
   return (
     <Section
       id="pantry"
@@ -81,6 +90,12 @@ export function PantrySection() {
             <RemainingMeter remaining="low" showLabel />
             <RemainingMeter remaining="empty" showLabel />
           </div>
+          <Label>With grams (the level follows them)</Label>
+          <div className="flex flex-wrap gap-4">
+            <RemainingMeter remaining="full" gramsLeft={870} showLabel />
+            <RemainingMeter remaining="half" gramsLeft={420} showLabel />
+            <RemainingMeter remaining="low" gramsLeft={40} showLabel />
+          </div>
           <Label>A printer check, and a value from a slicer file</Label>
           <NumberField
             size="sm"
@@ -93,6 +108,29 @@ export function PantrySection() {
             className="max-w-48"
           />
           <Caution>TPU doesn't feed well through the AMS: the external spool is safer.</Caution>
+          <Label>Not enough for this print: advice, never a block</Label>
+          <Caution>Sunflower yellow has about 40 g left; this plate needs 66 g.</Caution>
+          <Label>What a spool held when new</Label>
+          <WeightPicker value={weight} onChange={setWeight} />
+          <Label>Grams left, the spool page's figure</Label>
+          <GramsHero spool={sampleSpool} onWeigh={() => undefined} onSetWeight={() => undefined} />
+          <Label>Running low (phones say "Share list")</Label>
+          <RunningLow
+            low={[
+              { spool: { ...sampleSpool, gramsLeft: 40, remaining: "low" }, needs: 66 },
+              {
+                spool: {
+                  ...sampleSpool,
+                  id: "sample-3",
+                  colorName: "Teal",
+                  colorHex: TEAL,
+                  gramsLeft: 0,
+                  remaining: "empty",
+                },
+                needs: null,
+              },
+            ]}
+          />
         </Panel>
         <div className="flex flex-col gap-4">
           <Label>A spool in the pantry</Label>
