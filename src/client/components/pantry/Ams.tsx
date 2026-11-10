@@ -84,7 +84,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
       <span
         className={cn(
           "flex min-w-0 flex-col",
-          shape === "bay" ? "w-full items-center text-center lg:flex-1 lg:items-start lg:text-left" : "flex-1",
+          shape === "bay" ? "w-full flex-1 items-center text-center lg:items-start lg:text-left" : "flex-1",
         )}
       >
         <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
@@ -129,7 +129,8 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
                 remaining={spool.remaining}
                 // A spool that is still loaded but empty says so in words at every width.
                 showLabel={spool.remaining === "empty" ? true : "lg"}
-                className="mt-1 self-center lg:mt-0.5 lg:self-start"
+                // Pinned to the bottom of the tile, so the four meters sit on one line when a name wraps.
+                className="mt-auto self-center pt-1 lg:mt-0.5 lg:self-start lg:pt-0"
               />
             )}
           </>
