@@ -56,7 +56,15 @@ export const shots: Shot[] = [
     name: "journal-months",
     path: "/journal",
     prepare: async (page) => {
-      const heading = page.getByRole("heading", { level: 2 }).nth(1);
+      // September is two months before the seed's date (SEED_NOW) and several
+      // pages down: the journal loads a page when its end scrolls into view,
+      // so scroll until the month is there rather than count on how many
+      // entries fit a page.
+      const heading = page.getByRole("heading", { level: 2, name: /September/ });
+      for (let step = 0; step < 12 && !(await heading.isVisible()); step++) {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await page.waitForTimeout(400);
+      }
       await heading.waitFor();
       await heading.evaluate((element) => element.scrollIntoView({ block: "start" }));
       await page.evaluate(() => window.scrollBy(0, -24));

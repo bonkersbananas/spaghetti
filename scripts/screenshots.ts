@@ -1,85 +1,148 @@
 /**
- * pnpm screenshots — starts the app on a seeded throwaway database, signs in
- * and saves each screen in scripts/screenshot-routes.ts at phone and desktop
- * width into ./screenshots (gitignored).
+ * pnpm screenshots — starts the app on a seeded throwaway database (the same
+ * seed as pnpm dev:seed), signs in and saves each screen in
+ * scripts/screenshot-routes.ts at phone and desktop width into ./screenshots
+ * (gitignored). A shot that fails doesn't stop the others: every failure is
+ * listed at the end and the exit code is 1.
  *
- *   pnpm screenshots              # every screen
+ *   pnpm screenshots                # every screen
  *   pnpm screenshots ideas capture  # only these
  *   pnpm screenshots --dark         # in dark mode (the system setting), files named ideas-dark-390.png
+ *   pnpm screenshots --both         # light and dark in one run
  *   pnpm screenshots --built        # on the production build (service worker included): what offline screens really show
+ *   pnpm screenshots --out DIR      # write somewhere else (default ./screenshots)
+ *   pnpm screenshots --scale 1      # device pixel ratio 1 at both widths (default 3 on the phone, 2 on the desktop)
+ *
+ * The browser's clock is fixed to the seed's date (SEED_NOW) and its time
+ * zone to UTC, so the pictures don't depend on the day they are taken.
+ * SPAGHETTI_BROWSER=/path/to/chromium uses an existing Chromium.
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { type Browser, chromium, request } from "@playwright/test";
-import { SEED_USERS, seedThrowawayState, startBuiltServer, startDevServer } from "./lib/local-app.ts";
+import { join, resolve } from "node:path";
+import { type Browser, type BrowserContext, chromium, type Page } from "@playwright/test";
+import { launchOptions } from "./lib/browser.ts";
+import { SEED_USERS } from "./lib/local-app.ts";
+import { startSeededApp } from "./lib/seeded-app.ts";
 import { root } from "./lib/wrangler.ts";
 import { shots } from "./screenshot-routes.ts";
-import { seedBuilds } from "./seed/builds.ts";
-import { seedIdeas } from "./seed/ideas.ts";
-import { seedPantry } from "./seed/pantry.ts";
+import { SEED_LOCALE, SEED_NOW } from "./seed/index.ts";
 
 const viewports = [
   { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
   { width: 1440, height: 900, deviceScaleFactor: 2, isMobile: false, hasTouch: false },
 ];
 
-const dark = process.argv.includes("--dark");
-const built = process.argv.includes("--built");
-const only = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
+const argv = process.argv.slice(2);
+const option = (name: string) => {
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] : undefined;
+};
+const optionValues = new Set(["--out", "--scale"].flatMap((name) => (option(name) ? [option(name)] : [])));
+const themes: Array<"light" | "dark"> = argv.includes("--both")
+  ? ["light", "dark"]
+  : argv.includes("--dark")
+    ? ["dark"]
+    : ["light"];
+const built = argv.includes("--built");
+const scale = option("--scale") ? Number(option("--scale")) : undefined;
+if (scale !== undefined && !(scale > 0)) throw new Error("--scale needs a number such as 1 or 2.");
+const only = argv.filter((arg) => !arg.startsWith("--") && !optionValues.has(arg));
+const unknown = only.filter((name) => !shots.some((shot) => shot.name === name));
+if (unknown.length)
+  throw new Error(`No screen called ${unknown.join(", ")}. Screens: ${shots.map((s) => s.name).join(", ")}`);
 const selected = only.length ? shots.filter((s) => only.includes(s.name)) : shots;
-const outDir = join(root, "screenshots");
+const outDir = resolve(option("--out") ?? join(root, "screenshots"));
 mkdirSync(outDir, { recursive: true });
 
-const state = await seedThrowawayState();
 if (built) {
   const build = spawnSync(join(root, "node_modules/.bin/vite"), ["build"], { cwd: root, stdio: "inherit" });
   if (build.status !== 0) process.exit(build.status ?? 1);
 }
-const start = built ? startBuiltServer : startDevServer;
-const server = await start({ port: 5180 + Math.floor(Math.random() * 100), stateDir: state.dir });
+const app = await startSeededApp({
+  port: 5180 + Math.floor(Math.random() * 100),
+  built,
+  now: SEED_NOW,
+  log: (message) => console.log(`  ${message}`),
+});
 let browser: Browser | undefined;
+const failures: string[] = [];
+let taken = 0;
 
 try {
-  browser = await chromium.launch();
-  await seed(browser);
-  for (const viewport of viewports) {
-    const { width, height, ...device } = viewport;
-    const context = await browser.newContext({
-      viewport: { width, height },
-      ...device,
-      baseURL: server.url,
-      reducedMotion: "reduce",
-      colorScheme: dark ? "dark" : "light",
-      serviceWorkers: "allow",
-    });
-    const page = await context.newPage();
-    const user = SEED_USERS[0];
+  browser = await chromium.launch(launchOptions());
+  for (const theme of themes) {
+    for (const viewport of viewports) {
+      const { width, height, ...device } = viewport;
+      const context = await browser.newContext({
+        viewport: { width, height },
+        ...device,
+        ...(scale ? { deviceScaleFactor: scale } : {}),
+        ...SEED_LOCALE,
+        baseURL: app.url,
+        reducedMotion: "reduce",
+        colorScheme: theme,
+        serviceWorkers: "allow",
+      });
+      context.setDefaultTimeout(20_000);
+      await context.clock.setFixedTime(SEED_NOW);
+      let page = await context.newPage();
+      const user = SEED_USERS[0];
 
-    for (const shot of selected.filter((s) => s.signedOut)) {
-      await capture(page, shot, width);
+      for (const shot of selected.filter((s) => s.signedOut)) {
+        page = await attempt(context, page, shot, width, theme);
+      }
+
+      const response = await page.request.post("/api/session", {
+        data: { username: user.username, password: user.password },
+        headers: { Origin: app.url },
+      });
+      if (!response.ok()) throw new Error(`Signing in failed: ${response.status()}`);
+
+      for (const shot of selected.filter((s) => !s.signedOut)) {
+        page = await attempt(context, page, shot, width, theme);
+      }
+      await context.close();
     }
-
-    const response = await page.request.post("/api/session", {
-      data: { username: user.username, password: user.password },
-      headers: { Origin: server.url },
-    });
-    if (!response.ok()) throw new Error(`Signing in failed: ${response.status()}`);
-
-    for (const shot of selected.filter((s) => !s.signedOut)) {
-      await capture(page, shot, width);
-    }
-    await context.close();
   }
-  console.log(`✓ Screenshots in ${outDir}`);
 } finally {
   await browser?.close();
-  server.stop();
-  state.cleanup();
+  app.stop();
 }
 
-async function capture(page: import("@playwright/test").Page, shot: (typeof shots)[number], width: number) {
-  if (shot.width && shot.width !== width) return;
+console.log(`\n${taken} screenshots in ${outDir}`);
+if (failures.length) {
+  console.error(`\n✗ ${failures.length} failed:\n${failures.map((failure) => `  - ${failure}`).join("\n")}`);
+  process.exitCode = 1;
+}
+
+/** Takes one shot; if it fails, notes why and gives the next shot a fresh page. */
+async function attempt(
+  context: BrowserContext,
+  page: Page,
+  shot: (typeof shots)[number],
+  width: number,
+  theme: "light" | "dark",
+): Promise<Page> {
+  const label = `${shot.name}${theme === "dark" ? "-dark" : ""}-${width}`;
+  if (shot.width && shot.width !== width) return page;
+  try {
+    await capture(page, shot, width, theme);
+    taken++;
+    return page;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const reason = message.split("\n").slice(0, 3).join(" ").slice(0, 300);
+    failures.push(`${label}: ${reason}`);
+    console.error(`  ✗ ${label}: ${reason}`);
+    // A failed shot may leave a sheet open or the browser offline: start the next one clean.
+    await context.setOffline(false).catch(() => undefined);
+    await page.close().catch(() => undefined);
+    return context.newPage();
+  }
+}
+
+async function capture(page: Page, shot: (typeof shots)[number], width: number, theme: "light" | "dark") {
   await page.goto(shot.path, { waitUntil: "networkidle" });
   // The built app: the service worker must be in charge, or photos can't come from its cache once offline.
   if (built) await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -92,11 +155,11 @@ async function capture(page: import("@playwright/test").Page, shot: (typeof shot
   await shot.beforeShot?.(page);
   // Let entrance animations and sheets settle.
   await page.waitForTimeout(600);
-  const file = join(outDir, `${shot.name}${dark ? "-dark" : ""}-${width}.png`);
+  const file = join(outDir, `${shot.name}${theme === "dark" ? "-dark" : ""}-${width}.png`);
   if (shot.selector) await page.locator(shot.selector).screenshot({ path: file });
   else await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
   await shot.cleanup?.(page);
-  console.log(`  ${shot.name}${dark ? "-dark" : ""}-${width}.png`);
+  console.log(`  ${shot.name}${theme === "dark" ? "-dark" : ""}-${width}.png`);
 }
 
 /**
@@ -104,7 +167,7 @@ async function capture(page: import("@playwright/test").Page, shot: (typeof shot
  * load and cards would show empty blocks. Load every image eagerly, wait for
  * it to decode, and fail on any that is broken rather than publish it.
  */
-async function loadAllImages(page: import("@playwright/test").Page, name: string) {
+async function loadAllImages(page: Page, name: string) {
   const broken = await page.evaluate(async () => {
     const images = Array.from(document.images);
     for (const image of images) image.loading = "eager";
@@ -112,26 +175,4 @@ async function loadAllImages(page: import("@playwright/test").Page, name: string
     return images.filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src);
   });
   if (broken.length) throw new Error(`${name}: images failed to load:\n${broken.join("\n")}`);
-}
-
-/** Fills the throwaway database with a dozen ideas, captured by both people, some grown into builds. */
-async function seed(browser: Browser) {
-  if (!server) return;
-  const [alex, sam] = await Promise.all(
-    SEED_USERS.map(async (user) => {
-      const context = await request.newContext({ baseURL: server.url });
-      const response = await context.post("/api/session", {
-        data: { username: user.username, password: user.password },
-        headers: { Origin: server.url },
-      });
-      if (!response.ok()) throw new Error(`Signing in ${user.username} failed: ${response.status()}`);
-      return context;
-    }),
-  );
-  if (!alex || !sam) throw new Error("Seeding needs both people");
-  await seedIdeas(browser, { alex, sam }, server.url);
-  await seedPantry(browser, alex, server.url, state.dir);
-  await seedBuilds(browser, { alex, sam }, server.url, state.dir);
-  await Promise.all([alex.dispose(), sam.dispose()]);
-  console.log("  seeded ideas, the pantry and builds");
 }
