@@ -142,7 +142,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   });
 }
 
-async function loadItem(db: Db, itemId: string) {
+export async function loadItem(db: Db, itemId: string) {
   const [item] = await loadItems(db, and(eq(items.id, itemId), isNull(items.deletedAt)));
   return item ?? null;
 }

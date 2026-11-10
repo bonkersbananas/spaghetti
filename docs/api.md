@@ -43,3 +43,8 @@ The change feed (`GET /api/changes?after=<cursor>`, see `src/shared/changes.ts`)
 ## Idempotent writes
 
 The client picks ids (UUIDs) for items, attempts, photos and files, so any write can be retried safely: a repeat returns the same thing and records no second change. Photos are uploaded already resized (WebP or JPEG, large and thumb); see "Items and photos" in `AGENTS.md`.
+
+## Also here
+
+- `GET /api/builds/:id/story.md`: a build's (or idea's) whole story as one markdown document, with `read`. Works for any item id.
+- `/mcp`: the MCP server, with the same tokens; see [mcp.md](mcp.md). It calls this API as the agent, so everything above applies to it.
