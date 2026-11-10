@@ -157,6 +157,8 @@ test("a print from the printer to the journal: attached file, progress, end, pho
     await printer.stop();
     rmSync(dir, { recursive: true, force: true });
     // Leave no working token or build behind.
+    for (const spool of (await (await request.get("/api/spools")).json()).spools)
+      await request.delete(`/api/spools/${spool.id}`, { headers: origin });
     const { agents } = await (await request.get("/api/agents")).json();
     for (const candidate of agents)
       for (const t of candidate.tokens)
