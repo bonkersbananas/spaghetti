@@ -57,11 +57,17 @@ const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1
  * A build in progress: its newest photo first (what came off the bed last),
  * how the last attempt went over it, and when.
  */
-export function BuildCard({ item, person }: { item: ItemView; person?: Person }) {
+export function BuildCard({ item, person, landing }: { item: ItemView; person?: Person; landing?: boolean }) {
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
   return (
-    <m.li layout="position" transition={spring.gentle} className="list-none">
+    <m.li
+      layout="position"
+      initial={landing ? { opacity: 0, scale: 0.9, y: -12 } : false}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={spring.gentle}
+      className="list-none"
+    >
       <Card
         link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
         aspect="portrait"

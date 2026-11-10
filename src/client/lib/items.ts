@@ -11,7 +11,7 @@ import type {
 } from "@shared/api";
 import { byPrintTime, describeChanges, mergeNote, unionTags } from "@shared/attempts";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
 import {
@@ -27,6 +27,7 @@ import {
 import { peopleQuery } from "./queries";
 import { canEdit } from "./read-only";
 import { forgetItem } from "./recent";
+import { useAutosave, useFollowServer } from "./use-autosave";
 
 /** Ideas live in one list, builds (building, done, shelved) in the other. */
 export type ItemList = "ideas" | "builds";
@@ -421,6 +422,36 @@ export async function saveItemChanges(
     keepalive: true,
   });
   patchCachedItem(queryClient, id, (cached) => ({ ...item, photos: cached.photos }));
+}
+
+/**
+ * The title and note of an idea or build, as fields that autosave. They follow the
+ * server's copy (the other person's edit, a note added from the capture sheet) until
+ * the person types in one, and a save sends only the field that was changed here:
+ * the one beside it may have been edited by the other person meanwhile, and
+ * sending its old text back would undo that.
+ */
+export function useItemFields(item: Pick<ItemView, "id" | "title" | "note">) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState(item.title ?? "");
+  const [note, setNote] = useState(item.note);
+  // What the server is known to have (as far as this screen has seen or sent).
+  const known = useRef({ title: item.title ?? "", note: item.note });
+  useFollowServer(item.title ?? "", title, setTitle, (value) => {
+    known.current.title = value;
+  });
+  useFollowServer(item.note, note, setNote, (value) => {
+    known.current.note = value;
+  });
+  const saveState = useAutosave({ title, note }, async (value) => {
+    const changes: { title?: string | null; note?: string } = {};
+    if (value.title !== known.current.title) changes.title = value.title.trim() || null;
+    if (value.note !== known.current.note) changes.note = value.note;
+    if (!Object.keys(changes).length) return;
+    await saveItemChanges(queryClient, item.id, changes);
+    known.current = { title: value.title, note: value.note };
+  });
+  return { title, setTitle, note, setNote, saveState };
 }
 
 /**

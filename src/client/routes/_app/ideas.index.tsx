@@ -10,6 +10,7 @@ import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { useIdeas } from "@/lib/items";
+import { useArrived } from "@/lib/live";
 import { peopleQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -24,6 +25,7 @@ function Ideas() {
   const { items, isPending, error, refetch } = useIdeas();
   const { data: people } = useQuery(peopleQuery);
   const { landed } = useCapture();
+  const arrived = useArrived();
   const byId = new Map(people?.map((person) => [person.id, person]));
 
   return (
@@ -39,7 +41,12 @@ function Ideas() {
       ) : items.length ? (
         <ul className={grid} aria-label="Ideas">
           {items.map((item) => (
-            <IdeaCard key={item.id} item={item} person={byId.get(item.createdBy)} landing={item.id === landed} />
+            <IdeaCard
+              key={item.id}
+              item={item}
+              person={byId.get(item.createdBy)}
+              landing={item.id === landed || arrived.has(item.id)}
+            />
           ))}
         </ul>
       ) : error ? (

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { Tag, TagResponse, TagsResponse } from "../../shared/api.ts";
 import { BUILT_IN_TAGS, slugify } from "../../shared/attempts.ts";
+import { actorOf, recordChange } from "../changes.ts";
 import { tags } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
@@ -36,11 +37,19 @@ export const tagRoutes = new Hono<AppEnv>()
     const builtIn = BUILT_IN_TAGS[kind].find((tag) => tag.slug === slug);
     if (builtIn) return c.json<TagResponse>({ tag: { kind, slug, label: builtIn.label } });
 
-    const [inserted] = await c.var.db
-      .insert(tags)
-      .values({ kind, slug, label, createdBy: c.var.user.id, createdAt: new Date() })
-      .onConflictDoNothing()
-      .returning();
+    const [[inserted]] = await c.var.db.batch([
+      c.var.db
+        .insert(tags)
+        .values({ kind, slug, label, createdBy: c.var.user.id, createdAt: new Date() })
+        .onConflictDoNothing()
+        .returning(),
+      recordChange(c.var.db, {
+        entity: "tag",
+        id: `${kind}:${slug}`,
+        action: "created",
+        actor: actorOf(c.var.user),
+      }),
+    ]);
     if (inserted) return c.json<TagResponse>({ tag: toTag(inserted) }, 201);
     const existing = await c.var.db
       .select()

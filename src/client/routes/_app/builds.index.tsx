@@ -12,6 +12,7 @@ import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { createBuild } from "@/lib/builds";
 import { type ItemView, useBuilds } from "@/lib/items";
+import { useArrived } from "@/lib/live";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -35,6 +36,7 @@ function Builds() {
   const { items, isPending } = useBuilds();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
+  const arrived = useArrived();
   const newBuild = useNewBuild();
   const isDesktop = useIsDesktop();
 
@@ -59,7 +61,7 @@ function Builds() {
           <Section title="On the bed" count={active.length}>
             <ul className={grid} aria-label="On the bed">
               {active.map((item) => (
-                <BuildCard key={item.id} item={item} person={byId.get(item.createdBy)} />
+                <BuildCard key={item.id} item={item} person={byId.get(item.createdBy)} landing={arrived.has(item.id)} />
               ))}
               <li className="col-span-2 list-none md:col-span-1">
                 {isDesktop ? (
