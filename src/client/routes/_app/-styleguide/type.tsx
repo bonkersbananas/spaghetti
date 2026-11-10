@@ -55,16 +55,16 @@ export function TypeSection() {
       <Panel className="flex flex-col gap-10">
         <PageSection
           id="specimen-headline"
-          title="Running low"
+          title="A page section"
           count={3}
           aside={<span className="text-small text-ink-faint">52 h of printing so far</span>}
         >
           <div className="bg-paper h-16 rounded-lg" />
         </PageSection>
-        <PageSection id="specimen-title" title="Done" size="title" count={7}>
+        <PageSection id="specimen-title" title="A quieter group" size="title" count={7}>
           <div className="bg-paper h-16 rounded-lg" />
         </PageSection>
-        <PageSection id="specimen-overline" title="Pick up again" size="overline">
+        <PageSection id="specimen-overline" title="A block on Today" size="overline">
           <div className="bg-paper h-16 rounded-lg" />
         </PageSection>
       </Panel>
