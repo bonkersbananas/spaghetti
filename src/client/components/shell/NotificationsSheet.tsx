@@ -49,7 +49,7 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
           disabled={!canTurnOn || device.turnOn.isPending || device.turnOff.isPending}
           hint={
             reason ??
-            (status === "off"
+            (status === "off" && device.permission === "default"
               ? "Your browser will ask for permission when you turn this on."
               : `Quiet from ${pad(QUIET_FROM_HOUR)} to ${pad(QUIET_TO_HOUR)}: those wait until morning.`)
           }

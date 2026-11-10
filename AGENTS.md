@@ -61,6 +61,7 @@ src/
     mcp/                  the MCP server at /mcp: protocol (index.ts), tools, photo reading (image.ts)
     changes.ts            recordChange / actorOf: the change feed's writer (see "Change feed" below)
     db/schema.ts          Drizzle schema: users, sessions, items, photos, attempts, tags, spools, ams_slots, printer, attempt_files
+    push/                 web push: webpush.ts (VAPID + aes128gcm on WebCrypto), nudges.ts (the cron's "how did it go?" rules)
     photos.ts             R2 keys (photos and slicer files) and the daily purge (scheduled handler in index.ts)
   shared/                 code both sides use (API types, the change feed (changes.ts), attempts and tags, spools and printer checks, journal grouping, search terms, keyboard shortcut registry, password hashing, person colors, EXIF, links, times)
     threemf/              the .3mf reader, and prefill.ts: a file's plate as attempt settings
@@ -201,6 +202,12 @@ Never edit a migration that has been merged; add a new one.
 - `/mcp` (`src/worker/mcp/`) is MCP over Streamable HTTP for agent tokens: hand-written, stateless, JSON only ([why](docs/decisions/0014-mcp-hand-written-stateless.md); usage in [docs/mcp.md](docs/mcp.md)). `src/worker/index.ts` routes it; `wrangler.jsonc` lists it under `run_worker_first`.
 - A tool is an entry in `mcp/tools.ts`: a zod input schema (its `.describe()` texts are what the model reads, in Spaghetti's words), and a `run` that calls the API through `ctx.call` with the caller's own token, so scopes, "via" and the change feed come for free. Don't read or write the database from a tool. A new tool needs its route to have a scope in `auth/scopes.ts`, and a case in `test/worker/mcp.test.ts`.
 - A build's story as markdown is `shared/story.ts` (`buildStory`), served at `GET /api/builds/:id/story.md` and by `get_build`.
+
+### Push notifications
+
+- Web Push for the "how did it go?" nudges ([0015](docs/decisions/0015-web-push-nudges.md), setup in [docs/deploy.md](docs/deploy.md)): `worker/push/webpush.ts` is VAPID plus aes128gcm on WebCrypto (unit-tested against RFC 8291's example), `worker/push/nudges.ts` runs from the 5-minute cron (`index.ts` tells the two schedules apart by `controller.cron`) and decides who is nudged when (`shared/push.ts` has the pure rules and the message text). Once per attempt and person is `push_nudges`' primary key, claimed before sending; devices are `push_subscriptions` (`routes/push.ts`, person-only).
+- The service worker (`src/sw/sw.js`) shows the push and answers its buttons through `POST /attempts/:id/finish`; offline it writes a finish into the outbox's IndexedDB itself and tells open pages (`outbox-changed`, handled by `outbox.pickUp()`). Its `answer-nudge` message is what e2e/push.spec.ts uses, since a test can't tap a button. The app side is `lib/push.ts` (`usePushDevice`) and `components/shell/NotificationsSheet.tsx`; permission is asked for only when the switch is turned on.
+- The private key is the `VAPID_PRIVATE_KEY` secret (typed in `worker/secrets.d.ts`); tests use a throwaway pair set in `vitest.config.ts`. The push e2e tests run on the production build (`push-desktop`, `push-phone` projects) because the dev server has no service worker.
 
 ### Keyboard shortcuts and the command palette
 

@@ -32,6 +32,7 @@
     "ship": "node scripts/ship.ts",
     "user:add": "node scripts/user-add.ts",
     "agent:add": "node scripts/agent-add.ts",
+    "vapid:generate": "node scripts/vapid-keys.ts",
     "bridge": "node bridge/index.ts"
   },
   "dependencies": {

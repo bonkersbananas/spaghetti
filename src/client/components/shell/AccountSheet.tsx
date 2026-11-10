@@ -72,6 +72,19 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <span className="text-small text-ink-faint font-medium">Claude, the printer bridge</span>
           <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
         </Link>
+        <button
+          type="button"
+          onClick={() => {
+            onOpenChange(false);
+            setNotifying(true);
+          }}
+          className="pressable focus-ring bg-paper text-body text-ink mt-4 flex w-full items-center gap-3 rounded-md px-4 py-3.5 text-left font-semibold"
+        >
+          <BellIcon size={22} className="text-ink-soft" aria-hidden />
+          <span className="flex-1">Notifications</span>
+          <span className="text-small text-ink-faint font-medium">When a print is done</span>
+          <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
+        </button>
         <ThemeSwitch className="mt-5" />
         <Link
           to="/styleguide"

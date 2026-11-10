@@ -78,8 +78,15 @@ async function showNudge(event) {
     icon: "/icon-192.png",
     data: { url: message?.url ?? "/ideas", attemptId: message?.attemptId, itemId: message?.itemId },
     // Android and desktop Chrome have buttons; iPhone has none, and tapping the notification opens the sheet.
-    actions: (message?.actions ?? []).slice(0, maxActions),
+    actions: pickActions(message?.actions ?? [], maxActions),
   });
+}
+
+/** Desktop Chrome shows two buttons, Android three: with two, keep the first and last (Worked, Spaghetti); Partly is one tap away in the sheet. */
+function pickActions(actions, max) {
+  if (actions.length <= max) return actions;
+  if (max <= 0) return [];
+  return max === 1 ? actions.slice(0, 1) : [...actions.slice(0, max - 1), actions[actions.length - 1]];
 }
 
 self.addEventListener("notificationclick", (event) => {

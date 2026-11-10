@@ -169,6 +169,7 @@ export function usePushDevice(enabled = true) {
 
   return {
     status,
+    permission,
     config: config.data,
     alsoOthers: mine?.alsoOthers ?? false,
     turnOn,

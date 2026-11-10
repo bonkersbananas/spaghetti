@@ -58,6 +58,20 @@ SPAGHETTI_PASSWORD="$SPAGHETTI_PASSWORD_XIXA" pnpm user:add --remote --username 
 
 `pnpm user:add --check --remote` writes nothing and only proves the token can reach the database.
 
+## Push notifications
+
+The "how did it go?" nudges ([0015](decisions/0015-web-push-nudges.md)) are Web Push signed with a VAPID key pair. The public half is `vars.VAPID_PUBLIC_KEY` in `wrangler.jsonc` (not secret); the private half is the `VAPID_PRIVATE_KEY` secret on the Worker, which `wrangler deploy` keeps. Without it the app works as before (subscribing still works, nothing is sent). To make or replace the pair (replacing it makes every device's subscription useless: people turn notifications on again):
+
+```sh
+pnpm vapid:generate --out /tmp/vapid.key        # writes the private key to the file (mode 600) and prints the public key
+pnpm exec wrangler secret put VAPID_PRIVATE_KEY < /tmp/vapid.key && rm /tmp/vapid.key
+# put the printed public key in wrangler.jsonc (vars.VAPID_PUBLIC_KEY), then `pnpm types` and `pnpm ship`
+```
+
+The script never prints the private key and refuses to overwrite a file. The deploy token can set secrets. For local development, `pnpm vapid:generate --dev-vars` appends a fresh pair (both lines) to `.dev.vars`, which is never committed; the dev server has no service worker, so a real subscription needs `pnpm build && pnpm start`, and a browser that can reach its push service (Chrome uses Google's).
+
+The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
+
 ## Where agents and the bridge point
 
 - MCP server: `https://spaghetti.day/mcp` ([mcp.md](mcp.md)).
