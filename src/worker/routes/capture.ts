@@ -4,8 +4,10 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { CaptureResponse } from "../../shared/api.ts";
 import { captureNote, captureTitle, MAX_CAPTURE_PHOTOS } from "../../shared/capture.ts";
+import { lonelyModelLink } from "../../shared/model-links.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { items, photos } from "../db/schema.ts";
+import { draftsEnabled, runDraft, startDraft } from "../draft/run.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { fromBase64, type ImageInfo, readImage } from "../mcp/image.ts";
@@ -22,10 +24,10 @@ const fields = z.object({
 });
 
 /** A stand-in for the average color: a browser works out the real one when it resizes the photo. */
-const NEUTRAL = "#a9a095";
+export const NEUTRAL = "#a9a095";
 
 /** A UUID made from the idea's id and the photo's place, the same every time. */
-async function photoIdFor(itemId: string, position: number): Promise<string> {
+export async function photoIdFor(itemId: string, position: number): Promise<string> {
   const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${itemId}:${position}`)));
   hash[6] = ((hash[6] ?? 0) & 0x0f) | 0x40;
   hash[8] = ((hash[8] ?? 0) & 0x3f) | 0x80;
@@ -138,6 +140,31 @@ async function readBody(c: Context<AppEnv>): Promise<Body> {
     );
   }
   return { fields: fields.parse(loose), files };
+}
+
+/**
+ * A capture that is just a model-page link gets drafted by Claude in the background (decision 0019): the idea is
+ * already saved and answered, this only asks. Only a person's session or their sharing token (capture scope and
+ * nothing else) may start one, never an agent that can do more; the cron picks the job up if waitUntil's 30 seconds
+ * run out first.
+ */
+async function draftFromLink(
+  c: Context<AppEnv>,
+  itemId: string,
+  note: string,
+  title: string | null,
+  photoCount: number,
+) {
+  const scopes = c.var.scopes;
+  const sharingToken = scopes?.length === 1 && scopes[0] === "capture";
+  if ((scopes && !sharingToken) || !draftsEnabled(c.env) || title || photoCount) return;
+  const found = lonelyModelLink(note);
+  if (!found || !(await startDraft(c.var.db, itemId, found.url, c.var.user))) return;
+  try {
+    c.executionCtx.waitUntil(runDraft(c.env, itemId, c.var.db));
+  } catch {
+    // No execution context (a test): the cron's fallback does it.
+  }
 }
 
 /** The sentence a Shortcut can show: what was saved, in a few words. */
@@ -258,6 +285,7 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
         .where(and(eq(items.id, itemId), afterChange)),
     ]);
   }
+  await draftFromLink(c, itemId, note, title, images.length);
   const link = `${new URL(c.req.url).origin}/ideas/${itemId}`;
   if (!wantsJson) return c.text(savedSentence(title, note, images.length), 201);
   return c.json<CaptureResponse>(

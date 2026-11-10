@@ -4,6 +4,8 @@ import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
 import type { BridgeStatusData } from "../../shared/bridge.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
+import type { DraftFailure, DraftFindings, ItemDraft } from "../../shared/draft.ts";
+import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 
@@ -213,6 +215,39 @@ export const linkPreviews = sqliteTable("link_previews", {
   failed: integer("failed", { mode: "boolean" }).notNull().default(false),
   fetchedAt: integer("fetched_at", { mode: "timestamp_ms" }).notNull(),
 });
+
+/**
+ * Claude's draft of an idea from a model page (decision 0019). One row per idea, made when the draft is asked
+ * for; `status` is "reading" until a worker has finished (`claimedAt` says which worker is on it, so the cron
+ * can pick up one that was lost), then "drafted" or "failed". `result` is what Claude wrote and `applied` which
+ * of the idea's empty fields it filled, so undo and the "drafted" mark know what to take back.
+ */
+export const itemDrafts = sqliteTable("item_drafts", {
+  itemId: text("item_id")
+    .primaryKey()
+    .references(() => items.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  site: text("site").$type<ModelSiteId>().notNull(),
+  status: text("status").$type<ItemDraft["status"]>().notNull(),
+  failure: text("failure").$type<DraftFailure>(),
+  /** When a worker took the job (null: nobody yet); a claim older than a few minutes is abandoned. */
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  /** How many times a worker took it, so a page that keeps timing out isn't tried for ever. */
+  tries: integer("tries").notNull().default(0),
+  result: text("result", { mode: "json" }).$type<DraftResult>(),
+  applied: text("applied", { mode: "json" }).$type<ItemDraft["applied"]>().notNull().default(sql`'[]'`),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  draftedAt: integer("drafted_at", { mode: "timestamp_ms" }),
+});
+
+/** One call to Claude, kept for the day's cap (the whole workspace shares it). */
+export const draftRuns = sqliteTable("draft_runs", {
+  id: text("id").primaryKey(),
+  itemId: text("item_id").notNull(),
+  at: integer("at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type ItemDraftRow = typeof itemDrafts.$inferSelect;
 
 export type Item = typeof items.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
@@ -508,3 +543,12 @@ export const upkeepLogs = sqliteTable(
   },
   (table) => [index("upkeep_logs_task_idx").on(table.taskId, table.doneAt)],
 );
+
+/** What Claude wrote for a draft: the text, the findings, and the pictures it pointed at. */
+export interface DraftResult {
+  title: string | null;
+  note: string | null;
+  findings: DraftFindings;
+  /** The photos it stored on the idea, so undo can take them off again. */
+  photoIds: string[];
+}

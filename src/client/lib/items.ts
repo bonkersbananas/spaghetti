@@ -354,6 +354,7 @@ function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
     forWhom: null,
     photos: sortPhotos(pendingPhotos(entry, state, [])),
     attempts: withAttempts(entry.itemId, [], entry),
+    draft: null,
     pending: true,
   };
 }
