@@ -10,6 +10,7 @@ import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 import { itemName } from "../journal/JournalEntry";
 
@@ -83,10 +84,12 @@ export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
 export function NowPrinting() {
   const { items } = useBuilds();
   const now = useNow();
+  // The sidebar is for desktop; on a phone its words would only sit hidden in the page.
+  const isDesktop = useIsDesktop();
   const onToday = useLocation({ select: (location) => location.pathname === "/today" });
   const printing = useMemo(() => printingAttempts(items, now), [items, now]);
   const first = printing[0];
-  const show = !!first && !onToday;
+  const show = !!first && !onToday && isDesktop;
 
   return (
     <AnimatePresence initial={false}>
