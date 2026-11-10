@@ -34,7 +34,7 @@ export function TabBar() {
       aria-label="Sections"
       className="bg-cream/92 pb-safe shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
     >
-      <div className="h-tabbar mx-auto flex max-w-lg items-stretch px-2">
+      <div className="h-tabbar-row mx-auto flex max-w-lg items-stretch px-2">
         <Tab {...today} />
         <Tab {...ideas} />
         <div className="flex flex-1 items-center justify-center">

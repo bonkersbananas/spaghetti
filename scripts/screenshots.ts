@@ -10,6 +10,7 @@
  *   pnpm screenshots --dark         # in dark mode (the system setting), files named ideas-dark-390.png
  *   pnpm screenshots --both         # light and dark in one run
  *   pnpm screenshots --built        # on the production build (service worker included): what offline screens really show
+ *   pnpm screenshots --iphone       # as the Home Screen app on an iPhone: standalone, 59 px top and 34 px bottom safe area (files named ideas-iphone-390.png)
  *   pnpm screenshots --out DIR      # write somewhere else (default ./screenshots)
  *   pnpm screenshots --scale 1      # device pixel ratio 1 at both widths (default 3 on the phone, 2 on the desktop)
  *
@@ -23,16 +24,19 @@ import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { type Browser, type BrowserContext, chromium, type Page } from "@playwright/test";
 import { launchOptions } from "./lib/browser.ts";
+import { simulateIphone } from "./lib/iphone.ts";
 import { SEED_USERS } from "./lib/local-app.ts";
 import { startSeededApp } from "./lib/seeded-app.ts";
 import { root } from "./lib/wrangler.ts";
 import { shots } from "./screenshot-routes.ts";
 import { SEED_LOCALE, SEED_NOW } from "./seed/index.ts";
 
-const viewports = [
+const allViewports = [
   { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
   { width: 1440, height: 900, deviceScaleFactor: 2, isMobile: false, hasTouch: false },
 ];
+// The iPhone insets only mean something on the phone.
+const viewports = process.argv.includes("--iphone") ? allViewports.slice(0, 1) : allViewports;
 
 const argv = process.argv.slice(2);
 const option = (name: string) => {
@@ -46,6 +50,7 @@ const themes: Array<"light" | "dark"> = argv.includes("--both")
     ? ["dark"]
     : ["light"];
 const built = argv.includes("--built");
+const iphone = argv.includes("--iphone");
 const scale = option("--scale") ? Number(option("--scale")) : undefined;
 if (scale !== undefined && !(scale > 0)) throw new Error("--scale needs a number such as 1 or 2.");
 const only = argv.filter((arg) => !arg.startsWith("--") && !optionValues.has(arg));
@@ -90,6 +95,7 @@ try {
           serviceWorkers: "allow",
         });
         context.setDefaultTimeout(20_000);
+        if (iphone) await simulateIphone(context);
         await context.clock.setFixedTime(SEED_NOW);
         let page = await context.newPage();
         const user = SEED_USERS[0];
@@ -131,7 +137,7 @@ async function attempt(
   width: number,
   theme: "light" | "dark",
 ): Promise<Page> {
-  const label = `${shot.name}${theme === "dark" ? "-dark" : ""}-${width}`;
+  const label = `${shot.name}${theme === "dark" ? "-dark" : ""}${iphone ? "-iphone" : ""}-${width}`;
   if (shot.width && shot.width !== width) return page;
   try {
     await capture(page, shot, width, theme);
@@ -162,11 +168,11 @@ async function capture(page: Page, shot: (typeof shots)[number], width: number, 
   await shot.beforeShot?.(page);
   // Let entrance animations and sheets settle.
   await page.waitForTimeout(600);
-  const file = join(outDir, `${shot.name}${theme === "dark" ? "-dark" : ""}-${width}.png`);
+  const file = join(outDir, `${shot.name}${theme === "dark" ? "-dark" : ""}${iphone ? "-iphone" : ""}-${width}.png`);
   if (shot.selector) await page.locator(shot.selector).screenshot({ path: file });
   else await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
   await shot.cleanup?.(page);
-  console.log(`  ${shot.name}${theme === "dark" ? "-dark" : ""}-${width}.png`);
+  console.log(`  ${shot.name}${theme === "dark" ? "-dark" : ""}${iphone ? "-iphone" : ""}-${width}.png`);
 }
 
 /**

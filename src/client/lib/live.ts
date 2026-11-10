@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
 import type { Change, ChangesResponse } from "@shared/changes";
+import { displayName } from "@shared/people";
 import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -112,7 +113,7 @@ function refreshAll(queryClient: QueryClient) {
 
 // --- the quiet word -------------------------------------------------------------------------------
 
-const firstName = (person?: Person) => person?.name.split(" ")[0] ?? "Someone";
+const firstName = (person?: Person) => displayName(person, "Someone");
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 /** The item or spool whose screen is open, from the path. */

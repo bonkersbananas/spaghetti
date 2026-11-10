@@ -21,12 +21,19 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
-      testIgnore: /(offline|performance|push|share)\.spec/,
+      testIgnore: /(offline|performance|push|share|safe-area)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
       name: "phone",
-      testIgnore: /(offline|performance|push|share)\.spec/,
+      testIgnore: /(offline|performance|push|share|safe-area)\.spec/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
+    {
+      // The phone as the Home Screen app on an iPhone: standalone, with the notch and home indicator
+      // insets (simulateIphone in scripts/lib/iphone.ts), which a plain 390 px window never has.
+      name: "iphone",
+      testMatch: /safe-area\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
     },
     {
