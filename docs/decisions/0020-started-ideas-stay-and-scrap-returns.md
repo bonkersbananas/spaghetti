@@ -1,4 +1,4 @@
-# 0019. Started ideas stay in Ideas, scrapping returns them, and deletes can be found
+# 0020. Started ideas stay in Ideas, scrapping returns them, and deletes can be found
 
 Status: Accepted (adds to 0006)
 

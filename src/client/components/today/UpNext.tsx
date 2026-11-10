@@ -2,8 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { IdeasIcon } from "@/components/ui/icons";
-import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
+import { Section } from "@/components/ui/Section";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
@@ -52,10 +52,7 @@ export function UpNext({ ideas }: { ideas: ItemView[] }) {
   const queue = upNextIdeas(ideas);
   if (queue.length === 0) return null;
   return (
-    <section aria-labelledby="today-upnext" className="flex flex-col gap-3">
-      <Overline as="h2" id="today-upnext">
-        Up next
-      </Overline>
+    <Section id="today-upnext" title="Up next" size="overline">
       <div className="flex flex-col gap-1">
         {queue.slice(0, FIRST).map((item) => (
           <Row key={item.id} item={item} />
@@ -68,6 +65,6 @@ export function UpNext({ ideas }: { ideas: ItemView[] }) {
           </Button>
         </Link>
       )}
-    </section>
+    </Section>
   );
 }

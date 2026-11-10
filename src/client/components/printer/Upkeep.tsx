@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
+import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { UpkeepMeter } from "@/components/ui/UpkeepMeter";
 import { useReadOnly } from "@/lib/read-only";
@@ -44,17 +45,17 @@ export function Upkeep() {
   const current = open && open.kind !== "new" ? tasks.find((task) => task.id === open.id) : undefined;
 
   return (
-    <section aria-labelledby="printer-upkeep" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id="printer-upkeep" className="text-title text-ink">
-          Upkeep
-        </h2>
-        {data && (
+    <Section
+      id="printer-upkeep"
+      title="Upkeep"
+      aside={
+        data && (
           <span className="text-small text-ink-faint tabular" data-testid="print-hours">
             {formatHours(data.printHours)} of printing so far
           </span>
-        )}
-      </div>
+        )
+      }
+    >
       {isPending ? (
         <Skeleton className="h-52 w-full rounded-xl" aria-hidden />
       ) : (
@@ -105,6 +106,6 @@ export function Upkeep() {
           <TaskSheet task={current ?? null} onOpenChange={(next) => !next && setOpen(null)} />
         )}
       </Suspense>
-    </section>
+    </Section>
   );
 }

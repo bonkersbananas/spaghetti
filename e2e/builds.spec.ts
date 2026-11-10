@@ -128,15 +128,17 @@ test("adds a capture to the print that's running and finishes it", async ({ page
   await page.request.post("/api/items", { headers, data: { id, title: "Tugboat", stage: "building" } });
   await page.request.post(`/api/items/${id}/attempts`, { headers, data: { id: attemptId, outcome: null } });
 
-  // Anywhere in the app, capture offers the print, with "New idea" a tap away.
+  // Anywhere in the app, capture opens on "New idea" and offers the print a tap away.
   await page.goto("/ideas");
   // The app has to be on screen before its shortcut does anything.
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
   if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
   else await page.keyboard.press("c");
-  const sheet = page.getByRole("dialog", { name: "Add to the print" });
-  await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("radio", { name: "New idea" })).toBeVisible();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("heading", { name: "New idea" })).toBeVisible();
+  await expect(sheet.getByRole("radio", { name: "New idea" })).toBeChecked();
+  await sheet.getByRole("radio", { name: "This print" }).click();
+  await expect(sheet.getByRole("heading", { name: "Add to the print" })).toBeVisible();
   await sheet.getByRole("textbox", { name: "Note" }).fill("Looks clean so far");
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("button", { name: "Finish print" }).click();
@@ -148,6 +150,23 @@ test("adds a capture to the print that's running and finishes it", async ({ page
       return [attempt.outcome, attempt.note];
     })
     .toEqual(["success", "Looks clean so far"]);
+});
+
+test("capture opens on a new idea on an idea's page, with this idea one tap away", async ({ page, isMobile }) => {
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Cable chain" } });
+  await page.goto(`/ideas/${id}`);
+  await expect(page.getByRole("button", { name: "Start building" })).toBeVisible();
+  if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
+  else await page.keyboard.press("c");
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("heading", { name: "New idea" })).toBeVisible();
+  const options = sheet.getByRole("radio");
+  await expect(options.first()).toHaveAccessibleName("New idea");
+  await expect(options.first()).toBeChecked();
+  await sheet.getByRole("radio", { name: "This idea" }).click();
+  await expect(sheet.getByRole("heading", { name: "Add to Cable chain" })).toBeVisible();
 });
 
 test("a print on the bed shows its progress only when there is an estimate", async ({ page }) => {

@@ -63,6 +63,10 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 - `DELETE /recipes/:id` and `POST /recipes/:id/restore`: soft delete and its undo, people only.
 - A recipe carries `source` (`attemptId`, `itemId`, `title`, `number`, `photo`) while that attempt and its build exist, else `null`.
 
+## Insights
+
+`GET /api/insights?year=2026&tz=-60` (read scope) is the year so far, computed from attempts and not stored: `{ insights: { year, prints, outcomes, months, byMaterial, byPlate, failures, longestBuilds, made, madeTotal } }`. `year` defaults to the current one and `tz` is the viewer's zone in minutes behind UTC (`Date.getTimezoneOffset()`), so a print late on New Year's Eve lands in their year. Each failure carries `fixes`: the changes (as phrases such as "a warmer bed") made right before an attempt of the same build that worked. `longestBuilds` (builds with three or more attempts this year) each carry a `photo` and the `outcomes` of their attempts, oldest first. `made` is the builds that had an attempt that worked this year, newest first, up to 36, each with its final photo (the cover if one was picked, else the newest picture of the attempt that worked); `madeTotal` counts them all. The logic is `src/shared/insights.ts`.
+
 ## Up next and "for"
 
 An idea can be queued as **Up next**: `upNext` on an item is its place in the queue (1 is first) or `null`. `PATCH /items/:id { "upNext": true }` puts it at the end, `false` or `null` takes it off, a number puts it at that place (the undo of taking it off). Only ideas are queued, and a stage change to a build takes the idea off the queue. `PUT /items/up-next/order { "ids": [...] }` sets the order (those first, in that order; queued ideas not listed follow) and answers with the queue. `forWhom` ("Mila", up to 80 characters, empty clears it) is optional and searchable. All of these are `capture` scope.
@@ -77,6 +81,19 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 ## Changing your own password
 
 `PUT /api/account/password` with `{ currentPassword, newPassword }` (person-only). The new password needs at least 10 characters and no other rule, and must differ from the current one. It signs out the person's **other** sessions and keeps the one making the request; the answer is `{ signedOut }`, how many devices that was. Errors: `400 too_short`, `400 same_password`, `403 wrong_password`, and `429 rate_limited` after five wrong current passwords in 15 minutes (counted per person in `password_failures`, cleared on success).
+
+## Drafting an idea from a model page (people only)
+
+Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
+
+- `GET /api/features`: `{ drafts: boolean }`, whether the key is set.
+- `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
+- `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
+- Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
+- It only fills empty fields: a title that is empty, a note that is only links, an idea without photos. Pictures come only from the three sites' image hosts (`src/shared/model-links.ts`), at most four, stored like an agent's photos (`needsResize`).
+- People only: no scope lists these routes, so a token gets `403 person_only`. `POST /api/capture` starts a draft by itself when the capture is just a model link, for a person's session or a token whose only scope is `capture` (the sharing Shortcut), never for an agent that can do more.
+- Every call is a row in `draft_runs` with its `outcome` and a `detail` (statuses and codes, no page content); how to read them is in [deploy.md](deploy.md). The page's title also goes into the link preview cache, so the note's link card shows it.
+- Capped at 30 Claude calls a day for the whole workspace (UTC days, `draft_runs`); past it a draft fails with `failure: "cap"`.
 
 ## Upkeep and drying
 

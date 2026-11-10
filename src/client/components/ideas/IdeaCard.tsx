@@ -118,7 +118,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
               ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
               : undefined
           }
-          title={item.title}
+          title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}
           badge={item.photos.length > 1 ? <PhotoCountBadge count={item.photos.length} /> : undefined}
@@ -130,7 +130,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
         />
       </div>
       {menu && !item.pending && (
-        <CardMenu menu={menu} name={item.title || item.note.split("\n")[0]?.slice(0, 40) || "this idea"} />
+        <CardMenu menu={menu} name={item.title || item.note.split("\n")[0]?.slice(0, 120) || "this idea"} />
       )}
     </m.li>
   );

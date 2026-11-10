@@ -8,7 +8,8 @@ import type {
   Person,
 } from "../shared/api.ts";
 import { byPrintTime, describeChanges } from "../shared/attempts.ts";
-import type { Attempt, AttemptFileRow, Item, Photo, User } from "./db/schema.ts";
+import type { Attempt, AttemptFileRow, Item, ItemDraftRow, Photo, User } from "./db/schema.ts";
+import { toApiDraft } from "./draft/run.ts";
 
 export function apiError(c: Context, status: ContentfulStatusCode, code: string, message: string) {
   return c.json({ error: { code, message } }, status);
@@ -101,6 +102,7 @@ export function toApiItem(
   itemPhotos: Photo[],
   itemAttempts: Attempt[] = [],
   files: FilesByAttempt = new Map(),
+  draft: ItemDraftRow | null = null,
 ): ApiItem {
   return {
     id: item.id,
@@ -118,5 +120,6 @@ export function toApiItem(
     forWhom: item.forWhom,
     photos: itemPhotos.map(toApiPhoto),
     attempts: toApiAttempts(itemAttempts, files),
+    draft: toApiDraft(draft),
   };
 }

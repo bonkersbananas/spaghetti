@@ -1,6 +1,7 @@
 import { type Browser, chromium } from "@playwright/test";
 import { seedAll } from "../seed/index.ts";
 import { launchOptions } from "./browser.ts";
+import { startFakeClaude } from "./fake-claude.ts";
 import { type DevServer, seedThrowawayState, startBuiltServer, startDevServer } from "./local-app.ts";
 
 export interface SeededApp extends DevServer {
@@ -31,13 +32,16 @@ export async function startSeededApp({
   const state = await seedThrowawayState();
   let server: DevServer | undefined;
   let browser: Browser | undefined;
+  // Drafting an idea from a model page asks a stand-in for Anthropic, so those screens can be shot.
+  const claude = await startFakeClaude(port + 100);
   try {
-    server = await (built ? startBuiltServer : startDevServer)({ port, stateDir: state.dir });
+    server = await (built ? startBuiltServer : startDevServer)({ port, stateDir: state.dir, claudeUrl: claude.url });
     log("seeding ideas, the pantry and builds…");
     browser = await chromium.launch(launchOptions());
     await seedAll({ browser, origin: server.url, stateDir: state.dir, now });
   } catch (error) {
     server?.stop();
+    claude.stop();
     state.cleanup();
     throw error;
   } finally {
@@ -49,6 +53,7 @@ export async function startSeededApp({
     stateDir: state.dir,
     stop: () => {
       running.stop();
+      claude.stop();
       state.cleanup();
     },
   };

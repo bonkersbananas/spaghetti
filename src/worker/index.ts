@@ -1,4 +1,5 @@
 import { app } from "./app.ts";
+import { resumeDrafts } from "./draft/run.ts";
 import { mcpRoutes } from "./mcp/index.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
@@ -36,6 +37,8 @@ export default {
     if (controller.cron === DAILY) ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
     else {
       ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
+      // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
+      ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));
       ctx.waitUntil(sendUpkeepNudge(env).then((result) => result.sent && console.log("upkeep nudged", result)));
     }
   },

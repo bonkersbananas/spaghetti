@@ -69,6 +69,7 @@ export const item = (id: string, fields: Partial<Item>): Item => ({
   forWhom: null,
   photos: [],
   attempts: [],
+  draft: null,
   ...fields,
 });
 
