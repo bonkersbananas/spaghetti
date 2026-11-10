@@ -2,7 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { ArrowRightIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, ArrowRightIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -56,6 +56,16 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           </Link>
         ))}
       </nav>
+      <Link
+        to="/agents"
+        onClick={() => onOpenChange(false)}
+        className="pressable focus-ring bg-paper text-body text-ink mt-4 flex items-center gap-3 rounded-md px-4 py-3.5 font-semibold"
+      >
+        <AgentIcon size={22} className="text-ink-soft" aria-hidden />
+        <span className="flex-1">Agents</span>
+        <span className="text-small text-ink-faint font-medium">Claude, the printer bridge</span>
+        <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
+      </Link>
       <ThemeSwitch className="mt-5" />
       <Link
         to="/styleguide"

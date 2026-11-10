@@ -66,8 +66,12 @@ export interface Attempt {
   /** The slicer file it was printed from, if one was added. */
   file: AttemptFile | null;
   createdBy: string;
+  /** The agent it was logged through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
+  createdVia: string | null;
   /** Who gave it its outcome; null while printing, and for attempts finished before this was kept. */
   finishedBy: string | null;
+  /** The agent that finished it, if any. */
+  finishedVia: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -111,6 +115,8 @@ export interface Item {
   note: string;
   /** The person who captured it. */
   createdBy: string;
+  /** The agent it was captured through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
+  createdVia: string | null;
   createdAt: number;
   updatedAt: number;
   /** When it became a build. */
@@ -244,6 +250,8 @@ export interface JournalEntry {
   at: number;
   /** Who logged the attempt or captured the item. */
   by: string;
+  /** The agent it was made through, if any. */
+  via: string | null;
 }
 
 /**
@@ -359,6 +367,13 @@ export type UpdateSpoolRequest = Partial<Omit<CreateSpoolRequest, "id" | "create
 /** GET /api/spools/:id/attempts: what was printed with it, newest first. */
 export interface SpoolAttemptsResponse {
   attempts: AttemptHit[];
+}
+
+/** PUT /api/printer: any part of the setup; what is left out stays as it is. */
+export interface UpdatePrinterRequest {
+  nozzles?: Partial<PrinterSetup["nozzles"]>;
+  plates?: string[];
+  amsUnits?: number;
 }
 
 /** GET /api/printer: how the printer is set up, and what is loaded where (slot → spool id). */

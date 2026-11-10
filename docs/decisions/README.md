@@ -17,6 +17,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0011](0011-no-ci-deploys.md) | No CI deploys | Accepted |
 | [0012](0012-one-printer-the-x2d.md) | One printer, the X2D | Accepted |
 | [0013](0013-bambu-studio-and-orca-files-only.md) | Only Bambu Studio and Orca files are read | Accepted |
+| [0014](0014-mcp-hand-written-stateless.md) | The MCP server is hand-written, stateless and calls the API | Accepted |
 
 ## Format
 

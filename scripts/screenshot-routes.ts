@@ -239,6 +239,20 @@ export const shots: Shot[] = [
     },
   },
   { name: "pantry", path: "/pantry", fullPage: true },
+  {
+    // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
+    name: "pantry-list",
+    path: "/pantry",
+    width: 1440,
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("radio", { name: "List" }).click();
+      await page.getByRole("list", { name: "PLA spools" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.getByRole("radio", { name: "Cards" }).click();
+    },
+  },
   // The design system's own pages for the building blocks: print progress and the outcome strip, spool rims.
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
@@ -256,6 +270,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
+  // A spool with no label photo: its hero is the disc itself (black, to check its rim in dark mode).
+  { name: "spool-black", path: `/pantry/${SEED_SPOOL_IDS.black}` },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
   { name: "printer", path: "/printer", fullPage: true },
   // pnpm new route adds its screens above this line.

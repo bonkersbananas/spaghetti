@@ -193,6 +193,24 @@ describe("printer and slots", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("saves only the parts it is sent, so two people's edits to different parts both stay", async () => {
+    const put = (json: unknown) => request("/api/printer", { method: "PUT", cookie, json });
+    // One person changes the AMS units, the other the auxiliary nozzle and the plates, each from a stale copy.
+    expect((await put({ amsUnits: 2 })).status).toBe(200);
+    expect((await put({ nozzles: { auxiliary: { diameter: 0.6, hardened: false } } })).status).toBe(200);
+    const response = await put({ plates: ["Cool Plate"] });
+    expect(response.status).toBe(200);
+    const expected = {
+      nozzles: { main: DEFAULT_PRINTER.nozzles.main, auxiliary: { diameter: 0.6, hardened: false } },
+      plates: ["Cool Plate"],
+      amsUnits: 2,
+    };
+    // The answer is the setup as the server now has it, not just what was sent.
+    expect((await response.json<PrinterResponse>()).setup).toEqual(expected);
+    expect((await getPrinter()).setup).toEqual(expected);
+    expect((await put({ nozzles: { main: { diameter: 5, hardened: true } } })).status).toBe(400);
+  });
+
   it("loads a spool into one slot at a time, and empties slots", async () => {
     const white = await addSpool({ colorName: "White" });
     const black = await addSpool({ colorName: "Black" });

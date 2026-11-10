@@ -6,7 +6,17 @@
  */
 
 /** What kind of thing changed. */
-export const CHANGE_ENTITIES = ["item", "attempt", "photo", "file", "spool", "slot", "printer", "tag"] as const;
+export const CHANGE_ENTITIES = [
+  "item",
+  "attempt",
+  "photo",
+  "file",
+  "spool",
+  "slot",
+  "printer",
+  "tag",
+  "agent",
+] as const;
 export type ChangeEntity = (typeof CHANGE_ENTITIES)[number];
 
 /** `updated` covers every edit (a stage move, a note, a photo order); `deleted` and `restored` are the soft delete and its undo. */

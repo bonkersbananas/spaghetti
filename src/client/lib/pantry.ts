@@ -4,6 +4,7 @@ import type {
   SpoolAttemptsResponse,
   SpoolResponse,
   SpoolsResponse,
+  UpdatePrinterRequest,
   UpdateSpoolRequest,
 } from "@shared/api";
 import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
@@ -222,14 +223,20 @@ export async function loadSlot(
   }
 }
 
-/** Saves the printer's setup (autosave): nozzles, plates, AMS units. */
-export async function savePrinterSetup(queryClient: QueryClient, setup: PrinterSetup) {
+/**
+ * Saves the part of the printer's setup that changed (autosave): a nozzle, the
+ * plates or the AMS units. Only that part goes to the server, so the other
+ * person's edit to another part stays; the answer is the setup as the server has it.
+ */
+export async function savePrinterSetup(queryClient: QueryClient, changes: UpdatePrinterRequest) {
   queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) =>
-    printer ? { ...printer, setup } : { setup, slots: {} },
+    printer
+      ? {
+          ...printer,
+          setup: { ...printer.setup, ...changes, nozzles: { ...printer.setup.nozzles, ...changes.nozzles } },
+        }
+      : printer,
   );
-  const saved = await api<PrinterResponse>("/printer", { method: "PUT", json: setup, keepalive: true });
-  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) => ({
-    setup: printer?.setup ?? saved.setup,
-    slots: saved.slots,
-  }));
+  const saved = await api<PrinterResponse>("/printer", { method: "PUT", json: changes, keepalive: true });
+  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, saved);
 }

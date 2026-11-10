@@ -42,7 +42,9 @@ const attempt = (id: string, itemId: string, fields: Partial<Attempt>): Attempt 
   changes: [],
   file: null,
   createdBy: "a",
+  createdVia: null,
   finishedBy: "a",
+  finishedVia: null,
   createdAt: now,
   updatedAt: now,
   ...fields,
@@ -54,6 +56,7 @@ const item = (id: string, fields: Partial<Item>): Item => ({
   title: null,
   note: "",
   createdBy: "a",
+  createdVia: null,
   createdAt: now - 10 * HOUR,
   updatedAt: now,
   startedAt: now - 9 * HOUR,
@@ -120,6 +123,7 @@ const entry = (kind: Entry["kind"], target: Item, attemptId: string | null = nul
   attemptId,
   at: now - 40 * MINUTE,
   by: "a",
+  via: null,
 });
 
 /** Samples draw their pictures from the sample SVGs, through the same preview cache that photos made on this device use. */

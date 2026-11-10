@@ -9,7 +9,7 @@ import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { EmptyPot } from "@/components/illustrations";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
@@ -17,6 +17,7 @@ import { BuildsIcon, TrashIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -86,6 +87,7 @@ function Idea({ item }: { item: ItemView }) {
   const { data: people } = useQuery(peopleQuery);
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
+  const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, saveState } = useItemFields(item);
 
@@ -211,12 +213,18 @@ function Idea({ item }: { item: ItemView }) {
           />
 
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
-            {person && <Avatar person={person} size="sm" />}
+            {person && <Avatar person={person} size="sm" via={via} />}
             <p>
               {person ? `${person.name.split(" ")[0]} captured this` : "Captured"}{" "}
               <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
                 {inlineTime(item.createdAt)}
               </time>
+              {via && (
+                <>
+                  {" "}
+                  <ViaText name={via} />
+                </>
+              )}
             </p>
           </div>
         </div>

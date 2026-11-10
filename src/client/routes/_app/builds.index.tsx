@@ -10,6 +10,7 @@ import { PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CardSkeleton } from "@/components/ui/Skeleton";
+import { useVia } from "@/lib/agents";
 import { createBuild } from "@/lib/builds";
 import { type ItemView, useBuilds } from "@/lib/items";
 import { useArrived } from "@/lib/live";
@@ -37,6 +38,7 @@ function Builds() {
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   const arrived = useArrived();
+  const via = useVia();
   const newBuild = useNewBuild();
   const isDesktop = useIsDesktop();
 
@@ -61,7 +63,13 @@ function Builds() {
           <Section title="On the bed" count={active.length}>
             <ul className={grid} aria-label="On the bed">
               {active.map((item) => (
-                <BuildCard key={item.id} item={item} person={byId.get(item.createdBy)} landing={arrived.has(item.id)} />
+                <BuildCard
+                  key={item.id}
+                  item={item}
+                  person={byId.get(item.createdBy)}
+                  via={via(item.createdVia)}
+                  landing={arrived.has(item.id)}
+                />
               ))}
               <li className="col-span-2 list-none md:col-span-1">
                 {isDesktop ? (

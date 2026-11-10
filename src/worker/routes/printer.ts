@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { PrinterResponse } from "../../shared/api.ts";
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
-import { actorOf, recordChange } from "../changes.ts";
+import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { amsSlots, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -12,14 +12,19 @@ import { apiError } from "../http.ts";
 const PRINTER_ID = "x2d";
 
 const nozzle = z.object({ diameter: z.number().min(0.1).max(2), hardened: z.boolean() });
+/**
+ * Any part of the setup: a nozzle, the plates, the AMS units. What isn't sent
+ * is kept as it is, so two people editing different parts never undo each other.
+ */
 const setupSchema = z.object({
-  nozzles: z.object({ main: nozzle, auxiliary: nozzle }),
+  nozzles: z.object({ main: nozzle, auxiliary: nozzle }).partial().optional(),
   plates: z
     .array(z.string().trim().min(1).max(60))
     .max(20)
-    .transform((list) => [...new Set(list)]),
-  amsUnits: z.number().int().min(0).max(X2D.maxAmsUnits),
-}) satisfies z.ZodType<PrinterSetup>;
+    .transform((list) => [...new Set(list)])
+    .optional(),
+  amsUnits: z.number().int().min(0).max(X2D.maxAmsUnits).optional(),
+});
 
 const setSlot = z.object({ spoolId: z.uuid().nullable() });
 
@@ -43,17 +48,23 @@ async function loadPrinter(db: Db): Promise<PrinterResponse> {
 export const printerRoutes = new Hono<AppEnv>()
   .get("/", async (c) => c.json<PrinterResponse>(await loadPrinter(c.var.db)))
 
-  /** Replaces the setup: nozzles fitted, plates owned, AMS units. */
+  /** Saves the setup: nozzles fitted, plates owned, AMS units. Whatever is sent replaces that part; the rest stays. */
   .put("/", async (c) => {
     const parsed = setupSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That setup couldn't be read.");
     const now = new Date();
+    const current = (await loadPrinter(c.var.db)).setup;
+    const setup: PrinterSetup = {
+      nozzles: { ...current.nozzles, ...parsed.data.nozzles },
+      plates: parsed.data.plates ?? current.plates,
+      amsUnits: parsed.data.amsUnits ?? current.amsUnits,
+    };
     await c.var.db.batch([
       c.var.db
         .insert(printer)
-        .values({ id: PRINTER_ID, setup: parsed.data, updatedAt: now })
-        .onConflictDoUpdate({ target: printer.id, set: { setup: parsed.data, updatedAt: now } }),
-      recordChange(c.var.db, { entity: "printer", id: PRINTER_ID, action: "updated", actor: actorOf(c.var.user) }),
+        .values({ id: PRINTER_ID, setup, updatedAt: now })
+        .onConflictDoUpdate({ target: printer.id, set: { setup, updatedAt: now } }),
+      recordChange(c.var.db, { entity: "printer", id: PRINTER_ID, action: "updated", actor: c.var.actor }),
     ]);
     return c.json<PrinterResponse>(await loadPrinter(c.var.db));
   })
@@ -73,7 +84,7 @@ export const printerRoutes = new Hono<AppEnv>()
       await db.batch([
         db.delete(amsSlots).where(eq(amsSlots.slot, slot)),
         // Only if the slot held something.
-        recordChange(db, { entity: "slot", id: slot, action: "updated", actor: actorOf(c.var.user) }),
+        recordChange(db, { entity: "slot", id: slot, action: "updated", actor: c.var.actor }),
       ]);
       return c.json<PrinterResponse>(await loadPrinter(db));
     }
@@ -91,7 +102,7 @@ export const printerRoutes = new Hono<AppEnv>()
         .insert(amsSlots)
         .values({ slot, spoolId, updatedBy: c.var.user.id, updatedAt: now })
         .onConflictDoUpdate({ target: amsSlots.slot, set: { spoolId, updatedBy: c.var.user.id, updatedAt: now } }),
-      recordChange(db, { entity: "slot", id: slot, action: "updated", actor: actorOf(c.var.user) }),
+      recordChange(db, { entity: "slot", id: slot, action: "updated", actor: c.var.actor }),
     ]);
     return c.json<PrinterResponse>(await loadPrinter(db));
   });

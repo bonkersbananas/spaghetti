@@ -62,7 +62,9 @@ const sampleAttempt: AttemptView = {
     { key: "bedTemperature", text: "bed 55 → 60 °C" },
   ],
   createdBy: "a",
+  createdVia: null,
   finishedBy: "a",
+  finishedVia: null,
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };

@@ -2,7 +2,7 @@ import { BED_TYPES, NOZZLE_DIAMETERS, type Nozzle, plateName } from "@shared/att
 import { type NozzleSetup, type PrinterSetup, X2D } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -22,7 +22,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
 import { useReadOnly } from "@/lib/read-only";
-import { useAutosave } from "@/lib/use-autosave";
+import { useLiveFields } from "@/lib/use-autosave";
 
 export const Route = createFileRoute("/_app/printer")({
   component: Printer,
@@ -82,22 +82,46 @@ const NOZZLE_NAMES: Record<Nozzle, { title: string; detail: string }> = {
   auxiliary: { title: "Auxiliary nozzle", detail: "Fed through a Bowden tube. Best for supports." },
 };
 
+/** The setup as the form's fields: each can be edited (and saved) on its own. */
+interface SetupFields extends Record<string, unknown> {
+  main: NozzleSetup;
+  auxiliary: NozzleSetup;
+  plates: string[];
+  amsUnits: number;
+}
+
 function Setup({ initial }: { initial: PrinterSetup }) {
   const queryClient = useQueryClient();
-  const [setup, setSetup] = useState<PrinterSetup>(initial);
-  const saveState = useAutosave(setup, (next) => savePrinterSetup(queryClient, next));
+  // Each part follows the server's copy (the other person's edit) except the one being edited here, and a
+  // save sends only the parts changed here.
+  const server = useMemo<SetupFields>(
+    () => ({
+      main: initial.nozzles.main,
+      auxiliary: initial.nozzles.auxiliary,
+      plates: initial.plates,
+      amsUnits: initial.amsUnits,
+    }),
+    [initial],
+  );
+  const { value, change, saveState } = useLiveFields<SetupFields>(server, ({ main, auxiliary, ...rest }) =>
+    savePrinterSetup(queryClient, {
+      ...rest,
+      ...(main || auxiliary ? { nozzles: { ...(main && { main }), ...(auxiliary && { auxiliary }) } } : {}),
+    }),
+  );
+  const setup: PrinterSetup = {
+    nozzles: { main: value.main, auxiliary: value.auxiliary },
+    plates: value.plates,
+    amsUnits: value.amsUnits,
+  };
   const [adding, setAdding] = useState<string | null>(null);
   // Offline, the setup is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
 
-  const setNozzle = (nozzle: Nozzle, change: Partial<NozzleSetup>) =>
-    setSetup((current) => ({
-      ...current,
-      nozzles: { ...current.nozzles, [nozzle]: { ...current.nozzles[nozzle], ...change } },
-    }));
+  const setNozzle = (nozzle: Nozzle, patch: Partial<NozzleSetup>) =>
+    change((current) => ({ [nozzle]: { ...current[nozzle], ...patch } }));
   const togglePlate = (plate: string) =>
-    setSetup((current) => ({
-      ...current,
+    change((current) => ({
       plates: current.plates.includes(plate) ? current.plates.filter((p) => p !== plate) : [...current.plates, plate],
     }));
   const units = setup.amsUnits;
@@ -210,7 +234,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               size="sm"
               label="One AMS unit fewer"
               disabled={units <= 0}
-              onClick={() => setSetup((current) => ({ ...current, amsUnits: Math.max(0, current.amsUnits - 1) }))}
+              onClick={() => change((current) => ({ amsUnits: Math.max(0, current.amsUnits - 1) }))}
             />
             <IconButton
               icon={PlusIcon}
@@ -218,9 +242,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               size="sm"
               label="One AMS unit more"
               disabled={units >= X2D.maxAmsUnits}
-              onClick={() =>
-                setSetup((current) => ({ ...current, amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))
-              }
+              onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
             />
           </div>
         </Section>

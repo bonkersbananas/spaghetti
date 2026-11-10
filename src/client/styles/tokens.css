@@ -225,6 +225,7 @@
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
   --font-display--font-variation-settings: "SOFT" 100, "WONK" 0;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --text-*: initial;
   --text-caption: var(--sg-text-caption);
