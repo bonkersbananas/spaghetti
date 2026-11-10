@@ -76,7 +76,7 @@ test("a print that is off the bed asks how it went, on the build, the builds lis
   await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
   const tag = sheet.getByRole("button", { name: /Spaghetti.*suggested/ });
   await expect(tag).toBeVisible();
-  await expect(sheet.getByText("The printer suggested that one.")).toBeVisible();
+  await expect(sheet.getByText("The printer suggested the marked one.")).toBeVisible();
   await expect.poll(async () => (await attemptOf(page, itemId, attemptId)).outcome, { timeout: 10_000 }).toBe("failed");
   expect(await attemptOf(page, itemId, attemptId)).toMatchObject({
     failureTags: ["spaghetti"],

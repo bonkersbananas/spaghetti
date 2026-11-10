@@ -393,7 +393,7 @@ function Build({ item }: { item: ItemView }) {
             </SectionHeading>
             {isDesktop && (
               <Button
-                variant="primary"
+                variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
                 icon={printing ? CheckIcon : PlusIcon}
                 shortcut={shortcutCaps("buildLog")}
                 onClick={primary}
@@ -454,7 +454,8 @@ function Build({ item }: { item: ItemView }) {
         </section>
       </div>
 
-      {!isDesktop && (active || printing) && (
+      {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
+      {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
         <ActionBar>
           <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
             {printing ? `Finish attempt ${printing.number}` : "Log attempt"}

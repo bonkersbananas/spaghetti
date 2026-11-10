@@ -289,6 +289,16 @@ export const shots: Shot[] = [
       await page.getByRole("dialog").getByText("suggested").first().waitFor();
     },
   },
+  {
+    name: "journal-off-bed",
+    path: "/journal",
+    prepare: async (page) => {
+      await page
+        .getByText(/how did it go\?/)
+        .first()
+        .scrollIntoViewIfNeeded();
+    },
+  },
   // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.

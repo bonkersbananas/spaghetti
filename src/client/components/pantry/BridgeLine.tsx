@@ -15,7 +15,7 @@ export function BridgeLine({ status, className }: { status?: BridgeStatus | null
   const now = useNow();
   const { state, text } = bridgeLine(status, now, (time) => relativeTime(time, now));
   return (
-    <p className={cn("text-small text-ink-faint flex items-center gap-2", className)} data-bridge={state}>
+    <p className={cn("text-small text-ink-faint mt-1 flex items-center gap-2", className)} data-bridge={state}>
       <span
         className={cn("size-2 shrink-0 rounded-full", state === "connected" ? "bg-basil" : "bg-ink/20")}
         aria-hidden

@@ -21,7 +21,7 @@ export function OffTheBed({ endedAt, onPick, className }: OffTheBedProps) {
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
       <p className="text-small text-ink-soft flex items-center gap-2">
-        <FinishIcon size={16} className="text-semolina-ink shrink-0" aria-hidden />
+        <FinishIcon size={16} className="text-ink-faint shrink-0" aria-hidden />
         <span>
           <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span> · how did it go?
         </span>

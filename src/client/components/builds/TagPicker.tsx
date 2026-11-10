@@ -51,13 +51,18 @@ export function TagPicker({ kind, value, onChange, label, suggested, visible = 8
   return (
     <fieldset className={cn("flex flex-col gap-2.5", className)}>
       <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">{label}</legend>
+      {suggested && value.includes(suggested) && (
+        <p className="text-small text-ink-faint -mt-1 px-0.5">
+          The printer suggested the marked one. Tap it to take it off.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {[...shown.map((option) => option.slug), ...unknown].map((slug) => {
           const selected = value.includes(slug);
           return (
             <ToggleChip key={slug} selected={selected} tone={tone} onClick={() => toggle(slug)}>
               {tagLabel(kind, slug, options)}
-              {slug === suggested && selected && <span className="font-normal opacity-80"> · suggested</span>}
+              {slug === suggested && selected && <span className="font-normal"> · suggested</span>}
             </ToggleChip>
           );
         })}
@@ -99,9 +104,6 @@ export function TagPicker({ kind, value, onChange, label, suggested, visible = 8
           </ToggleChip>
         )}
       </div>
-      {suggested && value.includes(suggested) && (
-        <p className="text-small text-ink-faint px-0.5">The printer suggested that one. Tap it to take it off.</p>
-      )}
     </fieldset>
   );
 }

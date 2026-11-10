@@ -104,7 +104,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
             // A bay is narrow on a phone: the name steps down a size and may take two lines, breaking between
             // words, rather than lose its end ("Sunflow…").
             shape === "bay"
-              ? "text-caption md:text-small line-clamp-2 break-words lg:line-clamp-1"
+              ? cn("text-caption md:text-small break-words", unknown && !spool ? "" : "line-clamp-2 lg:line-clamp-1")
               : "text-small truncate",
             spool ? "text-ink" : "text-ink-faint",
           )}
@@ -112,7 +112,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
           {spool ? (name?.title ?? spool.material) : unknown ? "Which spool?" : "Empty"}
         </span>
         {!spool && unknown && (
-          <span className="text-caption text-semolina-ink block w-full min-w-0 font-semibold">
+          <span className="text-caption text-ink-soft block w-full min-w-0 font-medium">
             Printer sees {unknown.material ?? "a spool"}
           </span>
         )}
