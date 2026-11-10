@@ -39,10 +39,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
-import { useHotkeys } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type AttemptView, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
 import { spring } from "@/lib/motion";
+import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
+import { itemName, useRememberItem } from "@/lib/recent";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -175,24 +177,59 @@ function Build({ item }: { item: ItemView }) {
       setSelected(null);
     } else remove();
   };
+  useScreenActions("This build", [
+    {
+      id: "log",
+      label: printing ? "Finish attempt" : "Log attempt",
+      icon: printing ? CheckIcon : PlusIcon,
+      shortcut: "buildLog",
+      keywords: "log attempt finish print outcome add",
+      run: primary,
+    },
+    ...(active
+      ? [
+          {
+            id: "finish",
+            label: "Finish build",
+            icon: FinishIcon,
+            keywords: "done complete mark",
+            run: () => finishBuild(queryClient, item),
+          },
+          {
+            id: "shelve",
+            label: "Shelve build",
+            icon: ShelveIcon,
+            keywords: "pause archive",
+            run: () => shelveBuild(queryClient, item),
+          },
+        ]
+      : [
+          {
+            id: "reopen",
+            label: item.stage === "done" ? "Reopen build" : "Back on the bed",
+            icon: ReopenIcon,
+            keywords: "resume restart unshelve",
+            run: () => reopenBuild(queryClient, item),
+          },
+        ]),
+  ]);
+  useRememberItem({
+    id: item.id,
+    kind: "build",
+    title: itemName(item, "build"),
+    photo: hero ? { id: hero.id, color: hero.color } : null,
+  });
+
   useHotkeys({
-    escape: () => (selected ? setSelected(null) : void navigate({ to: "/builds" })),
-    a: primary,
+    buildBack: () => (selected ? setSelected(null) : void navigate({ to: "/builds" })),
+    buildLog: primary,
     // Only bound when they do something, so Enter on a button and arrow-key scrolling keep working.
-    ...(story.length
-      ? {
-          arrowdown: () => moveSelection(1),
-          arrowup: () => moveSelection(-1),
-          j: () => moveSelection(1),
-          k: () => moveSelection(-1),
-        }
-      : {}),
-    ...(selected ? { enter: () => openSheet(selected) } : {}),
-    ...(gallery.length > 1
-      ? { arrowleft: () => selectPhoto(photoIndex - 1), arrowright: () => selectPhoto(photoIndex + 1) }
-      : {}),
-    backspace: deleteSelectedOrBuild,
-    delete: deleteSelectedOrBuild,
+    buildNext: story.length ? () => moveSelection(1) : undefined,
+    buildPrevious: story.length ? () => moveSelection(-1) : undefined,
+    buildOpen: selected ? () => openSheet(selected) : undefined,
+    buildPhotoPrevious: gallery.length > 1 ? () => selectPhoto(photoIndex - 1) : undefined,
+    buildPhotoNext: gallery.length > 1 ? () => selectPhoto(photoIndex + 1) : undefined,
+    buildDelete: deleteSelectedOrBuild,
   });
 
   // The moment a build that took some failing gets marked done.
@@ -329,7 +366,12 @@ function Build({ item }: { item: ItemView }) {
               )}
             </h2>
             {isDesktop && (
-              <Button variant="primary" icon={printing ? CheckIcon : PlusIcon} shortcut={["A"]} onClick={primary}>
+              <Button
+                variant="primary"
+                icon={printing ? CheckIcon : PlusIcon}
+                shortcut={shortcutCaps("buildLog")}
+                onClick={primary}
+              >
                 {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
               </Button>
             )}

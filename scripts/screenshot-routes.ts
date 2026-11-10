@@ -146,6 +146,65 @@ export const shots: Shot[] = [
       await page.getByRole("radio", { name: "System" }).waitFor();
     },
   },
+  {
+    // The command palette (⌘K, desktop): empty, with results, and with actions for the build on screen.
+    name: "palette-empty",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      // Two things opened first, so "Recent" has something to show.
+      await page.goto(`/ideas/${SEED_IDS.deskTidy}`);
+      await page.locator("h1").first().waitFor();
+      await page.goto(`/builds/${SEED_BUILD_IDS.headphoneStand}`);
+      await page.locator("h1").first().waitFor();
+      await page.goto("/ideas");
+      await page.locator("h1").first().waitFor();
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("option", { name: "Headphone stand", exact: true }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    name: "palette-results",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("stand");
+      await page.getByRole("option", { name: "Headphone stand", exact: true }).waitFor();
+      await page.getByRole("group", { name: "Builds" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    name: "palette-build",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("option", { name: "Log attempt" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    name: "shortcuts",
+    path: "/builds",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("?");
+      await page.getByRole("dialog", { name: "Keyboard shortcuts" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "styleguide", path: "/styleguide", fullPage: true },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
+  { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
 ];

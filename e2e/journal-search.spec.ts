@@ -142,6 +142,8 @@ test("starts an attempt from what worked last time", async ({ page, isMobile }) 
   ]);
 
   await page.goto(`/builds/${chain}`);
+  // The hotkeys exist once the build has rendered.
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   if (isMobile) await page.getByRole("button", { name: "Log attempt" }).click();
   else await page.keyboard.press("a");
   const sheet = page.getByRole("dialog", { name: "Attempt 2" });

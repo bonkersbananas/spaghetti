@@ -105,10 +105,11 @@ function Search() {
     remember();
     void navigate(result.link);
   };
+  // "/" (focus the box) is bound once, for the whole app, in the shell.
   useHotkeys({
-    "/": () => inputRef.current?.focus(),
-    ...(list.length ? { arrowdown: () => move(1), arrowup: () => move(-1) } : {}),
-    ...(active >= 0 ? { enter: () => open() } : {}),
+    searchNext: list.length ? () => move(1) : undefined,
+    searchPrevious: list.length ? () => move(-1) : undefined,
+    searchOpen: active >= 0 ? () => open() : undefined,
   });
 
   const setFilters = (next: FilterValues) =>

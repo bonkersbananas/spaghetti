@@ -3,10 +3,12 @@ import { Link } from "@tanstack/react-router";
 import { Mark } from "@/components/illustrations";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { CaretUpDownIcon, PaletteIcon, PlusIcon, SignOutIcon } from "@/components/ui/icons";
+import { CaretUpDownIcon, PaletteIcon, PlusIcon, SearchIcon, SignOutIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Popover } from "@/components/ui/Popover";
 import { useCapture } from "@/lib/capture";
+import { shortcutCaps } from "@/lib/hotkeys";
+import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { sections } from "./sections";
@@ -20,6 +22,7 @@ export function Sidebar() {
   const { setOpen } = useCapture();
   const { data: user } = useSuspenseQuery(sessionQuery);
   const signOut = useSignOut();
+  const { setPaletteOpen } = usePalette();
 
   return (
     <aside className="paper-grain w-sidebar bg-paper-deep fixed inset-y-0 left-0 hidden flex-col px-3 pt-5 pb-3 md:flex">
@@ -28,12 +31,29 @@ export function Sidebar() {
         <span className="font-display text-title text-ink font-semibold tracking-tight">Spaghetti</span>
       </Link>
 
-      <Button variant="primary" icon={PlusIcon} shortcut={["C"]} fullWidth onClick={() => setOpen(true)}>
+      <Button
+        variant="primary"
+        icon={PlusIcon}
+        shortcut={shortcutCaps("capture")}
+        fullWidth
+        onClick={() => setOpen(true)}
+      >
         New idea
       </Button>
 
-      <nav aria-label="Sections" className="mt-6 flex flex-col gap-0.5">
-        {sections.map(({ to, label, icon: Icon, keys }) => (
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        aria-keyshortcuts="Control+K Meta+K"
+        className="pressable focus-ring bg-ink/4 shadow-well text-small text-ink-faint hover:text-ink-soft mt-3 flex h-9 w-full items-center gap-2.5 rounded-md px-3 text-left"
+      >
+        <SearchIcon size={16} aria-hidden />
+        <span className="flex-1">Jump to…</span>
+        <Kbd keys={shortcutCaps("palette")} />
+      </button>
+
+      <nav aria-label="Sections" className="mt-5 flex flex-col gap-0.5">
+        {sections.map(({ to, label, icon: Icon, shortcut }) => (
           <Link key={to} to={to} className={itemClass}>
             {({ isActive }) => (
               <>
@@ -44,7 +64,10 @@ export function Sidebar() {
                   aria-hidden
                 />
                 <span className="flex-1">{label}</span>
-                <Kbd keys={keys} className="duration-fast opacity-60 transition-opacity group-hover:opacity-100" />
+                <Kbd
+                  keys={shortcutCaps(shortcut)}
+                  className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"
+                />
               </>
             )}
           </Link>

@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useCapture } from "@/lib/capture";
+import { shortcutCaps } from "@/lib/hotkeys";
 import { useIdeas } from "@/lib/items";
 import { peopleQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -81,7 +82,7 @@ function IdeasEmpty() {
         <Button
           variant={isDesktop ? "secondary" : "primary"}
           icon={PlusIcon}
-          shortcut={["C"]}
+          shortcut={shortcutCaps("capture")}
           onClick={() => setOpen(true)}
         >
           Capture an idea
