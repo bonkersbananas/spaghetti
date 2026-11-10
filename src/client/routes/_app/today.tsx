@@ -70,7 +70,8 @@ function Today() {
   const page = journal.data?.pages[0];
   const items = useMemo(() => new Map<string, Item>(page?.items.map((item) => [item.id, item])), [page]);
 
-  const onBed = useMemo(() => printingAttempts(builds.items, now), [builds.items, now]);
+  const live = printer.data?.bridge?.progress;
+  const onBed = useMemo(() => printingAttempts(builds.items, now, live), [builds.items, now, live]);
   const onBedIds = useMemo(() => new Set(onBed.map(({ attempt }) => attempt.id)), [onBed]);
   const waiting = useMemo(() => pickUpAgain(builds.items), [builds.items]);
   const queued = useMemo(() => upNextIdeas(ideas.items), [ideas.items]);
@@ -122,8 +123,9 @@ function Today() {
           On the bed
         </Overline>
         <div className="flex flex-col gap-4">
-          {onBed.map(({ item, attempt }) => (
+          {onBed.map(({ item, attempt }, index) => (
             <PrintingCard
+              compact={index > 0}
               key={attempt.id}
               item={item}
               attempt={attempt}

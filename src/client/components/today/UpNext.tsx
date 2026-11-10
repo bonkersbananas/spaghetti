@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
-import { ImageIcon } from "@/components/ui/icons";
+import { IdeasIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
@@ -31,7 +31,7 @@ function Row({ item }: { item: ItemView }) {
           <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
         ) : (
           <span className="bg-ink/5 text-ink-faint flex size-full items-center justify-center">
-            <ImageIcon size={22} />
+            <IdeasIcon size={22} />
           </span>
         )}
       </span>
