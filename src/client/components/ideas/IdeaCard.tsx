@@ -77,6 +77,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
       transition={spring.gentle}
       className="group/idea relative list-none"
     >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
       <div
         draggable={!!drag}
         onDragStart={
