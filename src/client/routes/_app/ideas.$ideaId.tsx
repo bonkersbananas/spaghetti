@@ -244,8 +244,8 @@ function Idea({ item }: { item: ItemView }) {
             readOnly={readOnly}
             placeholder="Add a note: a link, a measurement, a half-thought…"
           />
-          <NoteLinks note={note} />
           <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
+          <NoteLinks note={note} />
 
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
             {person && <Avatar person={person} size="sm" via={via} />}

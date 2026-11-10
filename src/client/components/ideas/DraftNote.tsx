@@ -31,19 +31,12 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
   const disabled = readOnly || item.pending;
 
   if (draft?.status === "reading") {
-    const hasWords = note.replace(/https?:\/\/\S+/g, "").trim().length > 0;
     return (
-      <div className="mt-1 flex flex-col gap-2.5" role="status">
+      <div className="mt-1" role="status">
         <p className="text-small text-ink-soft flex items-center gap-2">
-          <SparkleIcon size={16} weight="fill" className="text-tomato-ink sg-pulse" />
+          <SparkleIcon size={16} weight="fill" className="text-ink-soft sg-pulse" />
           Reading the {siteName(draft)} page…
         </p>
-        {!hasWords && (
-          <div className="flex flex-col gap-2" aria-hidden>
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        )}
       </div>
     );
   }
@@ -76,7 +69,7 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
         {untouched && (
           <p className="text-small text-ink-faint flex flex-wrap items-center gap-x-2">
             <span className="flex items-center gap-1.5">
-              <SparkleIcon size={14} weight="fill" aria-hidden className="text-tomato-ink" />
+              <SparkleIcon size={14} weight="fill" aria-hidden className="text-ink-soft" />
               Drafted by Claude from {siteName(draft)}
             </span>
             <Button
@@ -123,15 +116,15 @@ function FromThePage({ draft }: { draft: ItemDraft }) {
   const rows = ROWS.filter(([key]) => draft.findings?.[key]);
   if (!rows.length) return null;
   return (
-    <section aria-labelledby="from-the-page" className="bg-cream shadow-soft rounded-lg p-4">
+    <section aria-labelledby="from-the-page">
       <Overline as="h2" id="from-the-page">
         From the {siteName(draft)} page
       </Overline>
-      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+      <dl className="mt-2 grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1.5">
         {rows.map(([key, label]) => (
           <div key={key} className="contents">
             <dt className="text-small text-ink-faint">{label}</dt>
-            <dd className="text-body text-ink min-w-0 break-words">{draft.findings?.[key]}</dd>
+            <dd className="text-small text-ink min-w-0 break-words">{draft.findings?.[key]}</dd>
           </div>
         ))}
       </dl>

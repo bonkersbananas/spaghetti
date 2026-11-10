@@ -74,7 +74,7 @@ export async function draftSavedCapture(queryClient: QueryClient, item: Item) {
 /** The undo toast for a draft that filled the idea in: once per draft, on whichever device has the idea open. */
 export function announceDraft(queryClient: QueryClient, item: Pick<Item, "id" | "draft">) {
   const draft = item.draft;
-  if (!draft || draft.status !== "drafted" || !draft.applied.length || announced.has(item.id)) return;
+  if (draft?.status !== "drafted" || !draft.applied.length || announced.has(item.id)) return;
   announced.add(item.id);
   toast.undo(`Drafted from ${siteName(draft)}`, { onUndo: () => void undoDraft(queryClient, item.id) });
 }
