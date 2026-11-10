@@ -21,6 +21,9 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
+  const [asked, setAsked] = useState({ notifying: false, password: false });
+  if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
+  if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
 
   return (
     <>
@@ -84,8 +87,9 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
         </MenuGroup>
         <ThemeSwitch className="mt-6" />
       </Sheet>
-      <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />
-      <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
+      {/* Mounted once asked for, as in AccountMenu: a closed sheet mounting while this one opens looped. */}
+      {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
+      {asked.password && <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />}
     </>
   );
 }

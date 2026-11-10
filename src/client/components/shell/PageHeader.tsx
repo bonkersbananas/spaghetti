@@ -25,10 +25,12 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, actions, search = true }: PageHeaderProps) {
   const { data: user } = useSuspenseQuery(sessionQuery);
   const [accountOpen, setAccountOpen] = useState(false);
-  // The sheet's code arrives while the browser is idle (or on the first press), and the sheet mounts once asked for.
+  // The sheet's code arrives while the browser is idle (or at the first touch), and the sheet mounts closed as soon
+  // as it has, as it always did: a vaul sheet that mounts already open skips its entry and lays out wrong.
   const [accountMounted, setAccountMounted] = useState(false);
   if (accountOpen && !accountMounted) setAccountMounted(true);
-  useWhenIdle(() => void loadAccountSheet());
+  const mountAccount = () => void loadAccountSheet().then(() => setAccountMounted(true));
+  useWhenIdle(mountAccount);
 
   return (
     <header className="pt-5 pb-6 md:pt-14 md:pb-10">
@@ -44,7 +46,7 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
           {user && (
             <button
               type="button"
-              onPointerDown={() => void loadAccountSheet()}
+              onPointerDown={mountAccount}
               onClick={() => setAccountOpen(true)}
               className="pressable focus-ring rounded-full"
             >
