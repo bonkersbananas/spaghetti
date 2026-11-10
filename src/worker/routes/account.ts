@@ -1,4 +1,4 @@
-import { and, eq, gt, ne, sql } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { type ChangePasswordResponse, MIN_PASSWORD_LENGTH } from "../../shared/api.ts";
@@ -30,18 +30,20 @@ export const accountRoutes = new Hono<AppEnv>().put("/password", async (c) => {
 
   const db = c.var.db;
   const user = c.var.user;
-  const since = new Date(Date.now() - PASSWORD_WINDOW_MS);
-  const recent = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(passwordFailures)
-    .where(and(eq(passwordFailures.userId, user.id), gt(passwordFailures.at, since)))
-    .get();
-  if ((recent?.n ?? 0) >= PASSWORD_ATTEMPTS) {
+  // Each try is recorded before the slow check, in one statement that refuses once the window is full,
+  // so parallel guesses can't all read a low count first. A right password clears them below.
+  const now = Date.now();
+  const taken = await c.env.DB.prepare(
+    `INSERT INTO password_failures (user_id, at)
+     SELECT ?1, ?2 WHERE (SELECT count(*) FROM password_failures WHERE user_id = ?1 AND at > ?3) < ?4`,
+  )
+    .bind(user.id, now, now - PASSWORD_WINDOW_MS, PASSWORD_ATTEMPTS)
+    .run();
+  if (!taken.meta.changes) {
     return apiError(c, 429, "rate_limited", "Too many wrong passwords. Try again in a few minutes.");
   }
 
   if (!(await verifyPassword(currentPassword, user.passwordHash))) {
-    await db.insert(passwordFailures).values({ userId: user.id, at: new Date() });
     return apiError(c, 403, "wrong_password", "That isn't your current password.");
   }
   if (newPassword === currentPassword) {

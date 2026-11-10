@@ -216,6 +216,16 @@ describe("changing your own password", () => {
     await signIn("alex", "correct horse");
   });
 
+  it("holds parallel guesses to the same five", async () => {
+    const here = await signIn("alex", "correct horse");
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => change(here, "nope", "a brand new pot of pasta")),
+    );
+    const codes = results.map((r) => r.status);
+    expect(codes.filter((s) => s === 403)).toHaveLength(5);
+    expect(codes.filter((s) => s === 429)).toHaveLength(7);
+  });
+
   it("counts failures per person", async () => {
     await addUser("sam", "another horse", "Sam", "basil");
     const alex = await signIn("alex", "correct horse");
