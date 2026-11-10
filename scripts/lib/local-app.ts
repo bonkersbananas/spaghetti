@@ -29,7 +29,16 @@ export interface DevServer {
  * Serves the built app (run `pnpm build` first) on workerd with wrangler,
  * the way the container does: this is the one that has a service worker.
  */
-export async function startBuiltServer({ port, stateDir }: { port: number; stateDir: string }): Promise<DevServer> {
+/** Points the app's Claude (drafting from model pages) at a stand-in server (scripts/lib/fake-claude.ts). */
+export interface FakeClaude {
+  claudeUrl?: string;
+}
+
+export async function startBuiltServer({
+  port,
+  stateDir,
+  claudeUrl,
+}: { port: number; stateDir: string } & FakeClaude): Promise<DevServer> {
   return waitForServer(
     spawn(
       join(root, "node_modules/.bin/wrangler"),
@@ -44,6 +53,7 @@ export async function startBuiltServer({ port, stateDir }: { port: number; state
         stateDir,
         "--show-interactive-dev-session=false",
         "--live-reload=false",
+        ...(claudeUrl ? ["--var", "ANTHROPIC_API_KEY:sk-ant-fake", "--var", `ANTHROPIC_BASE_URL:${claudeUrl}`] : []),
       ],
       {
         cwd: root,
@@ -57,11 +67,20 @@ export async function startBuiltServer({ port, stateDir }: { port: number; state
 }
 
 /** Starts `vite` (the Worker in workerd plus the client) on given state. */
-export async function startDevServer({ port, stateDir }: { port: number; stateDir: string }): Promise<DevServer> {
+export async function startDevServer({
+  port,
+  stateDir,
+  claudeUrl,
+}: { port: number; stateDir: string } & FakeClaude): Promise<DevServer> {
   return waitForServer(
     spawn(join(root, "node_modules/.bin/vite"), ["--port", String(port), "--strictPort", "--host", "127.0.0.1"], {
       cwd: root,
-      env: { ...process.env, SPAGHETTI_STATE_DIR: stateDir, BROWSER: "none" },
+      env: {
+        ...process.env,
+        SPAGHETTI_STATE_DIR: stateDir,
+        BROWSER: "none",
+        ...(claudeUrl ? { SPAGHETTI_FAKE_CLAUDE: claudeUrl } : {}),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     }),
     port,

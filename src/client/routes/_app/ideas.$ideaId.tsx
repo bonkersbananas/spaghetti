@@ -2,8 +2,9 @@ import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
+import { DraftNote } from "@/components/ideas/DraftNote";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
@@ -24,6 +25,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
+import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
 import { useScreenActions } from "@/lib/palette";
@@ -96,6 +98,13 @@ function Idea({ item }: { item: ItemView }) {
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
 
+  // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
+  const draftStatus = useRef(item.draft?.status);
+  useEffect(() => {
+    if (draftStatus.current === "reading" && item.draft?.status === "drafted") announceDraft(queryClient, item);
+    draftStatus.current = item.draft?.status;
+  }, [item, queryClient]);
+
   const photos = item.photos.filter((photo) => !photo.attemptId);
   const [selectedId, setSelectedId] = useState(photos[0]?.id);
   const selectedIndex = Math.max(
@@ -145,6 +154,7 @@ function Idea({ item }: { item: ItemView }) {
   });
 
   const hasPhotos = photos.length > 0;
+  const reading = item.draft?.status === "reading";
   const alt = photoAlt({ title, note });
 
   return (
@@ -197,23 +207,29 @@ function Idea({ item }: { item: ItemView }) {
         )}
 
         <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
-          {!hasPhotos && <AddFirstPhotos itemId={item.id} />}
-          <TextArea
-            appearance="title"
-            aria-label="Title"
-            placeholder="Untitled idea"
-            minRows={1}
-            maxLength={200}
-            readOnly={readOnly}
-            value={title}
-            onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === "Escape") {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-            }}
-          />
+          {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
+          {!hasPhotos &&
+            (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
+          {reading && !title.trim() ? (
+            <Skeleton className="my-1.5 h-8 w-3/4" />
+          ) : (
+            <TextArea
+              appearance="title"
+              aria-label="Title"
+              placeholder="Untitled idea"
+              minRows={1}
+              maxLength={200}
+              readOnly={readOnly}
+              value={title}
+              onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "Escape") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          )}
           <ForField
             aria-label="For"
             value={forWhom}
@@ -235,6 +251,7 @@ function Idea({ item }: { item: ItemView }) {
             readOnly={readOnly}
             placeholder="Add a note: a link, a measurement, a half-thought…"
           />
+          <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
           <NoteLinks note={note} />
 
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
