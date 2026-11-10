@@ -57,8 +57,8 @@ test("with reduced motion nothing is named, so nothing travels", async ({ page }
   expect(await page.evaluate(() => document.querySelectorAll("[style*='hero-photo']").length)).toBe(0);
   // And the stylesheet turns every view-transition animation off, inside its reduced-motion rule.
   const off = await page.evaluate(() =>
-    [...document.styleSheets].some((sheet) =>
-      [...sheet.cssRules].some(
+    Array.from(document.styleSheets).some((sheet) =>
+      Array.from(sheet.cssRules).some(
         (rule) =>
           rule instanceof CSSMediaRule &&
           rule.media.mediaText.includes("prefers-reduced-motion") &&

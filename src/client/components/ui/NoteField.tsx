@@ -46,6 +46,8 @@ export function NoteField({
         minRows={2}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        // An empty note shows its field, and typing the first letter must not swap it for the read view under the finger.
+        onFocus={() => setEditing(true)}
         onBlur={() => setEditing(false)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {

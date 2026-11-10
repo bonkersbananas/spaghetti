@@ -104,3 +104,24 @@ test("the idea page gives the photo two parts and the text three, as the build p
   await page.waitForTimeout(400);
   expect(Math.abs((await widthOf(buildPhoto)) - ideaPhoto)).toBeLessThan(2);
 });
+
+test("typing an address asks for one preview, once the note has settled, not one per keystroke", async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Typing", note: "" } });
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/links/preview")) asked.push(request.url());
+  });
+  await page.goto(`/ideas/${id}`);
+  const note = page.getByRole("textbox", { name: "Note" });
+  await note.click();
+  await note.pressSequentially("Model: https://www.printables.com/model/42-drawer-bins", { delay: 40 });
+  // Still typing (a moment ago): no card yet, nothing asked.
+  expect(asked).toEqual([]);
+  const cards = page.getByRole("list", { name: "Links in the note" }).getByRole("link");
+  await expect(cards).toHaveCount(1, { timeout: 5000 });
+  await expect(cards).toHaveAttribute("href", "https://www.printables.com/model/42-drawer-bins");
+  await expect.poll(() => asked.length).toBe(1);
+  expect(decodeURIComponent(asked[0] ?? "")).toContain("https://www.printables.com/model/42-drawer-bins");
+});
