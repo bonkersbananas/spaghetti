@@ -64,7 +64,7 @@ test("the share target saves a shared link and photo as an idea, and the Capture
     { name: "clip.jpg", type: "image/jpeg", base64: readFileSync("e2e/fixtures/tugboat.jpg").toString("base64") },
   );
 
-  const sheet = page.getByRole("dialog", { name: "Captured" });
+  const sheet = page.getByRole("dialog", { name: "Into the pot" });
   await expect(sheet).toBeVisible();
   await expect(page).toHaveURL(/\/ideas$/);
   // Prefilled: the words and the link are in the note, the photo is shown.
@@ -94,7 +94,7 @@ test("a share made with no connection waits in the outbox and lands when it's ba
 
   await context.setOffline(true);
   await shareInto(page, { text: "Hook for the garage", url: "https://example.com/hook" });
-  const sheet = page.getByRole("dialog", { name: "Captured" });
+  const sheet = page.getByRole("dialog", { name: "Into the pot" });
   await expect(sheet).toBeVisible();
   expect(await serverIdeas(page).catch(() => [])).toHaveLength(0);
 
@@ -107,7 +107,7 @@ test("a link to /share with the page's title and URL (the bookmarklet) captures 
   await clearIdeas(page);
   const url = "https://example.com/model";
   await page.goto(`/share?title=${encodeURIComponent("A nice model")}&url=${encodeURIComponent(url)}`);
-  const sheet = page.getByRole("dialog", { name: "Captured" });
+  const sheet = page.getByRole("dialog", { name: "Into the pot" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("textbox", { name: "Add a word" })).toHaveValue(url);
   await expect.poll(async () => (await serverIdeas(page))[0]?.title).toBe("A nice model");

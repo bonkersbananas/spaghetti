@@ -238,7 +238,7 @@ export const shots: Shot[] = [
     name: "share-captured",
     path: `/share?title=${encodeURIComponent("Drawer bins, 42 mm grid")}&text=${encodeURIComponent("Saw this on the bus")}&url=${encodeURIComponent("https://makerworld.com/en/models/drawer-bins")}`,
     prepare: async (page) => {
-      const sheet = page.getByRole("dialog", { name: "Captured" });
+      const sheet = page.getByRole("dialog", { name: "Into the pot" });
       await sheet.waitFor();
       await sheet.getByText("Drawer bins, 42 mm grid").first().waitFor();
       await page.waitForTimeout(600);

@@ -119,9 +119,10 @@ export function ShareSetupSheet({ open, onOpenChange }: { open: boolean; onOpenC
         <>
           {token && (
             <Button
-              variant="quiet"
+              variant="primary"
               size={size}
               icon={copied ? CheckIcon : CopyIcon}
+              className="max-md:flex-1"
               onClick={async () => {
                 await copyText(recipesAsText(recipes));
                 setCopied(true);
@@ -130,7 +131,7 @@ export function ShareSetupSheet({ open, onOpenChange }: { open: boolean; onOpenC
               {copied ? "Copied" : "Copy all steps"}
             </Button>
           )}
-          <Button variant="secondary" size={size} onClick={() => onOpenChange(false)} className="max-md:flex-1">
+          <Button variant="quiet" size={size} onClick={() => onOpenChange(false)}>
             Done
           </Button>
         </>

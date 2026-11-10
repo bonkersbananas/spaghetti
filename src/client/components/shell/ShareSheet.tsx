@@ -33,8 +33,8 @@ function SharedIdea({ item, onClose }: { item: ItemView; onClose: () => void }) 
     <Sheet
       open
       onOpenChange={(next) => !next && onClose()}
-      title="Captured"
-      description="Saved to your ideas. Add a word if you like."
+      title="Into the pot"
+      description="Captured and saved to your ideas. Add a word if you like."
       footer={
         <>
           <Button
@@ -64,7 +64,7 @@ function SharedIdea({ item, onClose }: { item: ItemView; onClose: () => void }) 
           >
             <CheckIcon size={20} weight="bold" />
           </m.span>
-          <p className="text-body text-ink-soft min-w-0 flex-1 truncate">{item.title || "Untitled idea"}</p>
+          <p className="text-body text-ink-soft min-w-0 flex-1 truncate">Saved to your ideas</p>
           <SaveStatus state={fields.saveState} />
         </div>
         {photos.length > 0 && (
@@ -80,10 +80,9 @@ function SharedIdea({ item, onClose }: { item: ItemView; onClose: () => void }) 
           </div>
         )}
         <TextArea
-          appearance="plain"
           aria-label="Add a word"
           placeholder="Add a word: what it's for, what to try…"
-          minRows={3}
+          minRows={2}
           value={fields.note}
           onChange={(event) => fields.setNote(event.target.value)}
           autoFocus={isDesktop}

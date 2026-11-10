@@ -36,7 +36,7 @@ export function ShareCard() {
   return (
     <section
       aria-labelledby="share-heading"
-      className="bg-cream shadow-soft mb-6 flex max-w-2xl flex-col gap-4 rounded-lg p-5"
+      className="bg-cream shadow-soft max-w-content mb-6 flex flex-col gap-4 rounded-lg p-5"
     >
       <div className="flex items-start gap-3.5">
         <span
@@ -62,6 +62,7 @@ export function ShareCard() {
         </p>
         <Button
           variant="secondary"
+          size={isDesktop ? "md" : "lg"}
           className="self-start"
           disabled={readOnly}
           onClick={() => canEdit() && setSetup(true)}
