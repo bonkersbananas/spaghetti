@@ -132,6 +132,14 @@ export const SEED_IDEAS: SeedIdea[] = [
     photos: [],
   },
   {
+    // A short note, the way most get jotted next to the printer.
+    id: "5eed0000-0000-4000-8000-000000000015",
+    by: "alex",
+    ago: 3 * HOUR,
+    note: "Hook for the bike helmet",
+    photos: [],
+  },
+  {
     id: "5eed0000-0000-4000-8000-000000000013",
     by: "sam",
     ago: 47 * DAY,

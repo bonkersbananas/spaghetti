@@ -286,6 +286,7 @@ export const shots: Shot[] = [
   { name: "styleguide", path: "/styleguide", fullPage: true },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
+  { name: "styleguide-cards", path: "/styleguide", selector: "#cards" },
 ];
 
 /**

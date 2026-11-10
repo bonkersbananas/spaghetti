@@ -25,6 +25,7 @@ Use the semantic tokens as Tailwind classes (`bg-paper`, `text-ink-soft`, `fill-
 | `cream`                                        | Anything raised: cards, sheets, the tab bar.                                                       |
 | `lifted`                                       | Sheets, dialogs and menus. The same as `cream` by day, a step lighter at night.                    |
 | `well`                                         | Photo placeholders, skeletons. Fields use `bg-ink/4`, which reads as a well on paper and on cream. |
+| `note`                                         | A note card's face: paper by day, a step lifted at night, like an index card under the lamp.       |
 | `veil` / `veil-strong` / `on-veil`             | Badges and buttons drawn over photos: dark glass, cream text, in both themes.                      |
 | `select` / `on-select`, `toast` / `toast-fg`   | A selected chip; toasts. Both invert the page by day and settle into surfaces at night.            |
 | `ink` / `ink-soft` / `ink-faint` / `ink-ghost` | Headings and text / body and labels / meta and hints (AA on paper) / placeholders and disabled.    |
@@ -60,14 +61,17 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | Body text | 4.5:1 | 13.6 | 14.1 |
 | Body text on cards | 4.5:1 | 14.9 | 12.8 |
 | Body text on sheets | 4.5:1 | 14.9 | 11.5 |
+| A note on a note card | 4.5:1 | 13.6 | 11.5 |
 | Labels and body copy | 4.5:1 | 6.6 | 9.4 |
 | Labels on cards | 4.5:1 | 7.2 | 8.5 |
-| Meta and hints | 4.5:1 | 5.1 | 6.0 |
-| Meta on cards | 4.5:1 | 5.6 | 5.4 |
-| Meta on sheets | 4.5:1 | 5.6 | 4.9 |
-| Meta on the sidebar | 4.5:1 | 4.7 | 6.3 |
+| Meta and hints | 4.5:1 | 5.1 | 6.9 |
+| Meta on cards | 4.5:1 | 5.6 | 6.2 |
+| Meta on sheets | 4.5:1 | 5.6 | 5.6 |
+| Meta on the sidebar | 4.5:1 | 4.7 | 7.2 |
 | Text typed in a field | 4.5:1 | 13.8 | 11.6 |
-| Placeholder in a field | 4.5:1 | 5.2 | 4.9 |
+| Placeholder in a field | 4.5:1 | 5.2 | 5.6 |
+| Placeholder in a field on a sheet | 4.5:1 | 5.2 | 5.0 |
+| Hint in a hovered well on a sheet | 4.5:1 | 5.0 | 4.8 |
 | Error text | 4.5:1 | 5.7 | 8.3 |
 | Error text on cards | 4.5:1 | 6.3 | 7.5 |
 | Printer check | 4.5:1 | 5.5 | 11.4 |
@@ -165,7 +169,8 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Sheet** — the one overlay. A bottom sheet (vaul) on phones; on desktop a centered `dialog` (quick tasks like capture) or a right `panel` (detail views). Focus moves into it when it opens, stays there, and goes back to what opened it when it closes, also when it was opened from a shortcut or the palette.
 - **Toast** — `toast.undo(message, { onUndo })` after any delete. Also `toast.success`, `toast.error`, `toast.message`, `toast.action` (one button, such as "View") and `toast.delight` (a sparkle, for the rare moment worth celebrating). Phones show toasts above the tab bar.
 - **EmptyState** — illustration, a title with a small pasta joke, one plain sentence on what goes here, one next step. It fills the page's `max-w-content` column. On desktop its button is `secondary` when the sidebar's "New idea" is already the screen's primary action; phones keep it primary.
-- **Card** — photo first, optional title (the note stands in), chips over the photo, a `badge` top right (`PhotoCountBadge`), meta line, author avatar. Without a photo it is a **note card**: the note sits on paper where the photo would be, in the same grid. Pass `link` to make it a router link. Grids of prints use `aspect="portrait"` (4:5).
+- **Card** — photo first, optional title (the note stands in), chips over the photo, a `badge` top right (`PhotoCountBadge`), meta line, author avatar. Without a photo it is a **note card** (`NoteFace`): the note fills the picture's place like a line on an index card, in the same grid. Pass `link` to make it a router link. Grids of prints use `aspect="portrait"` (4:5).
+- **NoteFace** — a note in place of a photo: Fraunces under one faint tomato rule, on `bg-note` with the paper grain. It is set by length (`noteSize`): `xl` up to about 32 letters, `lg` up to 72, `md` up to 130, `sm` beyond, one step smaller when a word is too long for the line. The sizes (`text-note-*`) and margins (`p-note-inset`) are in container units, a share of the card's width, so a note wraps the same in two columns on a phone and four on desktop; the two smaller steps never go below 16 and 15 px. A note too long for its card fades out at the bottom (`fade-bottom`).
 - **Photo** — a framed image that shows the photo's own average color while it loads, then fades in. `fit="contain"` in viewers (never crop a print people look at closely), `cover` in grids.
 - **UploadBadge / ProgressRing** — on a photo still on its way to the server: "Saving 42%" with a ring, or "Not saved yet" (semolina, not tomato: it retries on its own).
 - **PhotoThumb / AddPhotoTile** — square thumbnails with a remove button, and the wells to tap for more photos (`lg` when there are none yet, `md` and `sm` at the end of a row, `card` to fill a 4:5 grid cell, `row` for a full-width strip). `useFilePicker` gives the hidden input: `camera` opens the camera directly on phones.
@@ -216,7 +221,7 @@ Desktop only. Phones have no palette and no shortcut list; their layouts are unt
 ## Ideas
 
 - **Capture** saves at once: the sheet closes, the idea lands at the top of the inbox (with a small spring) and its photos upload in the background with progress on the card. Nothing waits on the network.
-- **The inbox** is a grid of 4:5 cards, newest first: two columns on phones, three, then four on desktop. Text-only ideas are note cards in the same grid. The author is a small avatar, the time is relative ("2 h ago").
+- **The inbox** is a grid of 4:5 cards, newest first: two columns on phones, three, then four on desktop. Text-only ideas are note cards in the same grid, the note set large in Fraunces when it is short and smaller as it grows, so every card looks filled on purpose. The author is a small avatar, the time is relative ("2 h ago").
 - **Delight**, in small doses: the first idea ever gets a "First one in the pot" toast, once per device; new cards land with a quick spring.
 
 ## Builds and attempts

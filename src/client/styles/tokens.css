@@ -18,6 +18,8 @@
   /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
   --sg-lifted: #fffcf7;
   --sg-well: #ebe3d5;
+  /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
+  --sg-note: #f6f1e8;
 
   /* Ink */
   --sg-ink: #2b2420;
@@ -145,6 +147,7 @@
   --sg-cream: #25201c;
   --sg-lifted: #2e2823;
   --sg-well: #120f0d;
+  --sg-note: #2e2823;
   --sg-ink: #ece4d9;
   --sg-ink-soft: #c6bab0;
   --sg-ink-faint: #ab9f93;
@@ -183,6 +186,7 @@
   --color-cream: var(--sg-cream);
   --color-lifted: var(--sg-lifted);
   --color-well: var(--sg-well);
+  --color-note: var(--sg-note);
   --color-ink: var(--sg-ink);
   --color-ink-soft: var(--sg-ink-soft);
   --color-ink-faint: var(--sg-ink-faint);
@@ -241,6 +245,22 @@
   --text-display--line-height: var(--sg-text-display-lh);
   --text-display--letter-spacing: -0.025em;
 
+  /*
+   * Notes on note cards (NoteFace), in container units: a share of the card's
+   * width, so a note wraps the same on a phone and on desktop. The two smaller
+   * steps never drop below readable sizes on a phone's narrow card.
+   */
+  --text-note-xl: 16.5cqi;
+  --text-note-xl--line-height: 1.1;
+  --text-note-xl--letter-spacing: -0.015em;
+  --text-note-lg: 12.5cqi;
+  --text-note-lg--line-height: 1.15;
+  --text-note-lg--letter-spacing: -0.01em;
+  --text-note-md: max(1rem, 9.5cqi);
+  --text-note-md--line-height: 1.25;
+  --text-note-sm: max(0.9375rem, 7.5cqi);
+  --text-note-sm--line-height: 1.32;
+
   --radius-*: initial;
   --radius-xs: 0.375rem;
   --radius-sm: 0.625rem;
@@ -266,6 +286,9 @@
   --spacing-tabbar: var(--sg-tabbar-height);
   --spacing-actionbar: var(--sg-actionbar-height);
   --spacing-sidebar: var(--sg-sidebar-width);
+  /* A note card's margins and the gap under its rule, in container units like its type. */
+  --spacing-note-inset: 8cqi;
+  --spacing-note-rule: 6cqi;
   --container-content: var(--sg-content-width);
   --container-wide: var(--sg-wide-width);
 }
@@ -359,4 +382,9 @@
  */
 @utility scroll-fade {
   mask-image: linear-gradient(to bottom, transparent, black 0.75rem, black calc(100% - 0.75rem), transparent);
+}
+
+/* Text that may run past its box (a long note on a card) fades out at the bottom instead of being cut mid-line. */
+@utility fade-bottom {
+  mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
 }

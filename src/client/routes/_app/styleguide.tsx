@@ -781,6 +781,29 @@ function CardSection() {
           chips={<UploadBadge state="uploading" progress={0.64} />}
         />
       </div>
+      <div className="mt-10">
+        <Label>Note cards: the shorter the note, the larger it is set (NoteFace, by length)</Label>
+        <div className="grid grid-cols-2 items-start gap-3 md:grid-cols-4 md:gap-5">
+          <Card note="Hook for the bike helmet" meta="xl · up to 32 letters" aspect="portrait" />
+          <Card
+            note="Bag clips for the coffee, with a little spoon holder on the side."
+            meta="lg · up to 72"
+            aspect="portrait"
+          />
+          <Card
+            note="Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely."
+            meta="md · up to 130"
+            aspect="portrait"
+          />
+          <Card
+            note={
+              "Drawer bins on a 42 mm grid for the screws, the spare nozzles and the hex keys. Two heights, so the tall drivers stand up.\n\nLabels in a second color, swapped at the layer they start on."
+            }
+            meta="sm · longer, fades at the end"
+            aspect="portrait"
+          />
+        </div>
+      </div>
     </Section>
   );
 }
