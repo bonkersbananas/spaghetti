@@ -37,7 +37,7 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
       type="button"
       aria-label={`Options for ${name}`}
       onClick={isDesktop ? undefined : () => setOpen(true)}
-      className="pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink absolute right-1.5 bottom-1.5 flex size-10 items-center justify-center rounded-full transition-colors"
+      className="pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink absolute right-1 bottom-1 flex size-10 items-center justify-center rounded-full transition-colors"
     >
       <MoreIcon size={20} weight="bold" aria-hidden />
     </button>
