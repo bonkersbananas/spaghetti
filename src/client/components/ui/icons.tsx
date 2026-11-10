@@ -68,6 +68,7 @@ export {
   Ruler as RulerIcon,
   ScribbleLoop as SpaghettiIcon,
   SealCheck as WorkedIcon,
+  ShareNetwork as ShareIcon,
   ShieldCheck as HardenedIcon,
   SignOut as SignOutIcon,
   SlidersHorizontal as SettingsIcon,

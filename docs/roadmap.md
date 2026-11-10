@@ -27,7 +27,8 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
 - [ ] Push notifications: "Tugboat should be done, how did it go?" with outcome buttons on the notification
 - [ ] Insights and recipes: success rate by material and plate, which change fixed which failure, a year in review; promote a what-worked attempt to a named recipe on the spool's page
-- [ ] Richer ideas: an "Up next" queue, who it's for, comments between you two, a share target for the phone's share sheet (link previews come with spec §4)
+- [ ] Richer ideas: an "Up next" queue, who it's for, comments between you two (link previews come with spec §4)
+- [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [ ] Parts and quantities ("print the hull in two halves")
 - [ ] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
 - [ ] Passkeys, and adding people in the app instead of the command line (changing your own password is in the app: the account menu → Change password)

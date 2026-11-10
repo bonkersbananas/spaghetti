@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AgentSheet } from "@/components/agents/AgentSheet";
+import { ShareCard } from "@/components/agents/ShareCard";
 import { EmptyPot } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
@@ -50,6 +51,7 @@ function Agents() {
         // The empty state carries its own button.
         actions={!isPending && !mine.length ? undefined : newAgent}
       />
+      <ShareCard />
       {isPending ? (
         <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
           <RowSkeleton />

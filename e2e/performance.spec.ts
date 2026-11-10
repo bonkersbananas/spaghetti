@@ -23,12 +23,13 @@ const BUDGET_KB = {
   "/sign-in": 245,
   // Today pulls in the journal rows, the print card and the printer strip on top of what Ideas needs.
   "/today": 340,
-  "/ideas": 330,
+  // Sharing in (the share target's intake in the capture state) added about 2 kB to every signed-in screen.
+  "/ideas": 335,
   "/builds": 335,
   "/journal": 345,
   "/search": 345,
-  "/pantry": 340,
-  "/printer": 340,
+  "/pantry": 345,
+  "/printer": 345,
 } as const;
 
 /**

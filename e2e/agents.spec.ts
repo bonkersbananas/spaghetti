@@ -149,3 +149,45 @@ test("work done through an agent says so, quietly, and the page passes axe in bo
     await expect(page.getByRole("dialog")).toHaveCount(0);
   }
 });
+
+test("sets up sharing from iPhone: a capture-only key, in the steps ready to copy, and the bookmarklet", async ({
+  page,
+  isMobile,
+}) => {
+  await goToAgents(page, isMobile);
+  // The bookmarklet is for desktop browsers.
+  if (!isMobile) {
+    await expect(page.getByRole("link", { name: "Save to Spaghetti" })).toHaveAttribute("href", /^javascript:/);
+  } else {
+    await expect(page.getByRole("link", { name: "Save to Spaghetti" })).toBeHidden();
+  }
+
+  await page.getByRole("button", { name: "Set up sharing from iPhone" }).click();
+  const sheet = page.getByRole("dialog", { name: "Share from iPhone" });
+  const steps = sheet.getByTestId("share-setup");
+  await expect(steps).toContainText("Share to Spaghetti");
+  await expect(steps).toContainText("Share photo to Spaghetti");
+  await expect(steps).toContainText(`${new URL(page.url()).origin}/api/capture`);
+  const header =
+    (await steps
+      .getByText(/^Bearer spg_/)
+      .first()
+      .textContent()) ?? "";
+  const token = header.replace("Bearer ", "").trim();
+
+  // It can add ideas and nothing else.
+  const asToken = { Authorization: `Bearer ${token}` };
+  const captured = await page.request.post("/api/capture", { headers: asToken, data: { text: "From the Shortcut" } });
+  expect(captured.status()).toBe(201);
+  expect((await page.request.get("/api/items", { headers: asToken })).status()).toBe(403);
+  expect((await page.request.delete(`/api/items/${(await captured.json()).id}`, { headers: asToken })).status()).toBe(
+    403,
+  );
+
+  await page.waitForTimeout(500);
+  expect((await new AxeBuilder({ page }).include("[role=dialog]").analyze()).violations.map((v) => v.id)).toEqual([]);
+  await steps.getByRole("button", { name: "Copy address" }).first().click();
+  await expect(steps.getByRole("button", { name: "Copied" })).toBeVisible();
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await expect(sheet).toBeHidden();
+});
