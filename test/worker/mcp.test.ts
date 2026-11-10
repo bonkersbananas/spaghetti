@@ -114,6 +114,7 @@ describe("the MCP endpoint", () => {
       "what_worked",
       "get_build",
       "capture_idea",
+      "set_parts",
       "start_attempt",
       "log_attempt",
       "finish_attempt",
@@ -222,6 +223,41 @@ describe("tools, scopes and attribution", () => {
     expect((await callTool(made.token, "capture_idea", { photo_base64: btoa("not an image at all") })).text).toContain(
       "JPEG or WebP",
     );
+  });
+
+  it("set_parts adds parts and the attempt tools take their counts", async () => {
+    const owner = await makeAgent(["capture", "attempts", "read"]);
+    const build = field((await callTool(owner.token, "capture_idea", { title: "Tugboat" })).text, "build_id");
+    const set = await callTool(owner.token, "set_parts", {
+      build_id: build,
+      parts: [
+        { name: "Hull half", quantity: 2 },
+        { name: "Deck", quantity: 1 },
+      ],
+    });
+    expect(set.isError).toBe(false);
+    const { item } = await (await request(`/api/items/${build}`, { cookie })).json<ItemResponse>();
+    const hull = item.parts.find((part) => part.name === "Hull half");
+    expect(hull?.quantity).toBe(2);
+    const started = await callTool(owner.token, "start_attempt", {
+      build_id: build,
+      parts: [{ part_id: hull?.id, count: 2 }],
+    });
+    const finished = await callTool(owner.token, "finish_attempt", {
+      attempt_id: field(started.text, "attempt_id"),
+      outcome: "partial",
+      parts: [{ part_id: hull?.id, count: 1 }],
+    });
+    expect(finished.isError).toBe(false);
+    const logged = await callTool(owner.token, "log_attempt", {
+      build_id: build,
+      outcome: "success",
+      parts: [{ part_id: hull?.id, count: 1 }],
+    });
+    expect(logged.isError).toBe(false);
+    const story = await callTool(owner.token, "get_build", { build_id: build });
+    expect(story.text).toContain("- Hull half ×2: done");
+    expect(story.text).toContain("- Deck ×1: 0 of 1");
   });
 
   it("start_attempt, log_attempt and finish_attempt need attempts, and say via", async () => {

@@ -52,6 +52,7 @@ const sampleAttempt: AttemptView = {
   failureTags: ["warping"],
   successNotes: ["great-first-layer"],
   file: null,
+  parts: [],
   settings: {
     filaments: [{ type: "PLA", brand: "Bambu", colorHex: SAMPLE_COLOR, colorName: "Sunflower yellow", amsSlot: "A2" }],
     bedType: "Textured PEI Plate",
