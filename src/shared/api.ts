@@ -309,11 +309,12 @@ export interface JournalResponse {
   next: string | null;
 }
 
-/** GET /api/journal/summary?from=&to= (epoch ms, the month in local time). */
+/** GET /api/insights?year=&tz= (the year so far; tz is minutes behind UTC). */
 export interface InsightsResponse {
   insights: Insights;
 }
 
+/** GET /api/journal/summary?from=&to= (epoch ms, the month in local time). */
 export interface JournalSummaryResponse {
   summary: JournalSummary;
 }
