@@ -412,6 +412,15 @@ export const shots: Shot[] = [
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
   { name: "styleguide-cards", path: "/styleguide", selector: "#cards" },
+  {
+    name: "styleguide-journal",
+    path: "/styleguide",
+    selector: "#journal",
+    // The samples' pictures are put in the preview cache once the section has fetched them.
+    prepare: async (page) => {
+      await page.locator("#journal img").first().waitFor({ state: "attached" });
+    },
+  },
 ];
 
 /**

@@ -57,6 +57,20 @@
       "when": 1794299052063,
       "tag": "0007_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794304344773,
+      "tag": "0008_photo-needs-resize",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794305609036,
+      "tag": "0009_printer-bridge",
+      "breakpoints": true
     }
   ]
 }

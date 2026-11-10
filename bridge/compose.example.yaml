@@ -1,0 +1,22 @@
+# The printer bridge next to a Raspberry Pi's other services. Copy this file, fill in the five settings (or put them
+# in a .env file beside it), then:  docker compose -f compose.example.yaml up -d --build
+#
+# Build context is the repository root. On a Pi, build once on the Pi itself, or use `docker buildx` (see
+# bridge/Dockerfile) to build for arm64 on a bigger machine.
+services:
+  bridge:
+    build:
+      context: ..
+      dockerfile: bridge/Dockerfile
+    restart: unless-stopped
+    environment:
+      BRIDGE_PRINTER_HOST: 192.168.1.50 # the printer's IP address
+      BRIDGE_PRINTER_SERIAL: 00M00A000000000 # the printer's serial number
+      BRIDGE_PRINTER_ACCESS_CODE: ${PRINTER_ACCESS_CODE} # from the printer's screen; keep it in .env, not here
+      BRIDGE_APP_URL: https://spaghetti.example.com
+      BRIDGE_TOKEN: ${SPAGHETTI_TOKEN} # from: pnpm agent:add --name "Printer bridge" --scopes read,attempts,printer
+    volumes:
+      - bridge-data:/data # the state file and the queue: a restart never repeats an attempt
+
+volumes:
+  bridge-data:

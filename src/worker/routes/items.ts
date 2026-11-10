@@ -69,6 +69,14 @@ const photoFields = z.object({
   position: z.coerce.number().int().min(0).max(10_000).optional(),
   /** The print attempt the photo shows. */
   attemptId: id.optional(),
+  /**
+   * "1" from something that couldn't resize (an agent, the printer bridge): `large` and `thumb` are the same
+   * original. It is stored as is and flagged for the next browser to resize (see photos.needs_resize).
+   */
+  needsResize: z
+    .enum(["1", "true"])
+    .optional()
+    .transform((value) => value !== undefined),
 });
 
 /** D1 binds at most 100 parameters per query, so long id lists are looked up in slices. */
@@ -183,7 +191,8 @@ export const itemRoutes = new Hono<AppEnv>()
     const parsed = createItem.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
     // Capture adds ideas; an item that starts as a build is work on attempts.
-    if (parsed.data.stage === "building" && !canUse(c, "attempts")) return missingScope(c, ["attempts"]);
+    const starts = parsed.data.stage === "building";
+    if (!canUse(c, starts ? "attempts" : "capture")) return missingScope(c, [starts ? "attempts" : "capture"]);
     const now = Date.now();
     const { id: itemId, title: itemTitle, note: itemNote, createdAt, stage = "idea" } = parsed.data;
     // A capture made offline keeps the time it was made, but never one in the future.
@@ -390,11 +399,42 @@ export const itemRoutes = new Hono<AppEnv>()
     }
 
     const actor = c.var.actor;
+    const unresized = fields.data.needsResize;
+    // A retry of an upload that couldn't resize, after a browser already did: what the browser made stays.
+    if (existing && unresized && !existing.needsResize) return c.json<PhotoResponse>({ photo: toApiPhoto(existing) });
+    // Originals are marked in R2 so they are served without the "never changes" cache lifetime: they will be replaced.
     const httpMetadata = { contentType };
+    const customMetadata = unresized ? { provisional: "1" } : undefined;
     await Promise.all([
-      c.env.PHOTOS.put(photoKey(photoId, "large"), large.stream(), { httpMetadata }),
-      c.env.PHOTOS.put(photoKey(photoId, "thumb"), thumb.stream(), { httpMetadata }),
+      c.env.PHOTOS.put(photoKey(photoId, "large"), large.stream(), { httpMetadata, customMetadata }),
+      c.env.PHOTOS.put(photoKey(photoId, "thumb"), thumb.stream(), { httpMetadata, customMetadata }),
     ]);
+
+    if (existing?.needsResize && !unresized) {
+      // The browser's resized variants replace the original: its size, color and type are now the real ones.
+      // A second browser racing this one writes the same thing again and finds nothing left to flag.
+      const [replaced] = await c.var.db.batch([
+        c.var.db
+          .update(photos)
+          .set({
+            width: fields.data.width,
+            height: fields.data.height,
+            color: fields.data.color,
+            contentType,
+            needsResize: false,
+            resizeClaimedAt: null,
+          })
+          .where(and(eq(photos.id, photoId), eq(photos.needsResize, true)))
+          .returning(),
+        recordChange(c.var.db, { entity: "photo", id: photoId, itemId, action: "updated", actor }),
+        c.var.db
+          .update(items)
+          .set({ updatedAt: new Date() })
+          .where(and(eq(items.id, itemId), afterChange)),
+      ]);
+      const row = replaced[0] ?? (await c.var.db.select().from(photos).where(eq(photos.id, photoId)).get()) ?? existing;
+      return c.json<PhotoResponse>({ photo: toApiPhoto(row) });
+    }
 
     if (existing) {
       // An upload means the client wants the photo shown: one deleted meanwhile
@@ -438,6 +478,7 @@ export const itemRoutes = new Hono<AppEnv>()
           color,
           contentType,
           takenAt: takenAt ? new Date(takenAt) : null,
+          needsResize: unresized,
           attemptId,
           createdBy: c.var.user.id,
           createdAt: now,

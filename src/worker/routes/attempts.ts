@@ -64,13 +64,12 @@ export const settings = z.object({
 }) satisfies z.ZodType<AttemptSettings>;
 
 /** Tag slugs (built in or people's own), each once, in the order given. */
+const slug = z
+  .string()
+  .max(48)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 const slugs = z
-  .array(
-    z
-      .string()
-      .max(48)
-      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
-  )
+  .array(slug)
   .max(40)
   .transform((list) => [...new Set(list)]);
 
@@ -91,6 +90,8 @@ const createAttempt = z.object({
 const updateAttempt = z.object({
   outcome: outcome.optional(),
   printedAt: printedAt.optional(),
+  endedAt: z.number().int().positive().nullable().optional(),
+  suggestedFailureTag: slug.nullable().optional(),
   note: note.optional(),
   failureTags: slugs.optional(),
   successNotes: slugs.optional(),
@@ -233,7 +234,7 @@ export const attemptRoutes = new Hono<AppEnv>()
     const found = await findLive(db, c.req.param("id"));
     if (!found) return apiError(c, 404, "not_found", notFound);
     const current = found.attempt;
-    const { printedAt: printedTime, outcome: nextOutcome, ...changes } = parsed.data;
+    const { printedAt: printedTime, endedAt: endedTime, outcome: nextOutcome, ...changes } = parsed.data;
     const now = new Date();
     let finishedAt = current.finishedAt;
     let finishedBy = current.finishedBy;
@@ -255,6 +256,7 @@ export const attemptRoutes = new Hono<AppEnv>()
           ...changes,
           ...(nextOutcome !== undefined ? { outcome: nextOutcome } : {}),
           ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
+          ...(endedTime !== undefined ? { endedAt: endedTime === null ? null : notFuture(endedTime, now) } : {}),
           finishedAt,
           finishedBy,
           finishedVia,

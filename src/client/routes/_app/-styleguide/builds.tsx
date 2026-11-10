@@ -43,6 +43,8 @@ const sampleAttempt: AttemptView = {
   outcome: "partial",
   printedAt: Date.now() - 26 * 60 * 60 * 1000,
   finishedAt: Date.now() - 23 * 60 * 60 * 1000,
+  endedAt: null,
+  suggestedFailureTag: null,
   note: "Stayed down this time, but the stern corners curled up a little.",
   failureTags: ["warping"],
   successNotes: ["great-first-layer"],

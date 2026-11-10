@@ -54,6 +54,6 @@ Everything an agent writes is recorded as you, "via Claude for Alex" in the jour
 
 ## How it works
 
-`POST /mcp` takes one JSON-RPC message (or a batch) and answers with JSON: `initialize`, `ping`, `tools/list` and `tools/call`. `GET` and `DELETE` are `405` (there are no sessions or streams), a missing or revoked token is `401`. A tool never touches the database: it calls Spaghetti's own API with the caller's token, so scopes, validation, attribution and the change feed behave exactly as for any other request (`src/worker/mcp/`). Photos sent to `capture_idea` can't be resized on the Worker, so the one image is stored as both sizes (cap 12 MB), with a neutral placeholder colour.
+`POST /mcp` takes one JSON-RPC message (or a batch) and answers with JSON: `initialize`, `ping`, `tools/list` and `tools/call`. `GET` and `DELETE` are `405` (there are no sessions or streams), a missing or revoked token is `401`. A tool never touches the database: it calls Spaghetti's own API with the caller's token, so scopes, validation, attribution and the change feed behave exactly as for any other request (`src/worker/mcp/`). Photos sent to `capture_idea` can't be resized on the Worker, so the one image is stored as both sizes (cap 12 MB), with a neutral placeholder colour, and flagged: the next browser that opens the app resizes it quietly and replaces the copies (see decision 0004).
 
 Not built: OAuth (clients that insist on it can't connect yet; tokens only), server-sent events, and tools for deleting or editing past entries.

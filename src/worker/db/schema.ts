@@ -1,6 +1,7 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
+import type { BridgeStatusData } from "../../shared/bridge.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
@@ -90,6 +91,13 @@ export const attempts = sqliteTable(
     outcome: text("outcome").$type<Outcome>(),
     printedAt: integer("printed_at", { mode: "timestamp_ms" }).notNull(),
     finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+    /**
+     * When the print stopped on the printer (the printer bridge says so), before anyone said how it went.
+     * `finishedAt` stays "when an outcome was given".
+     */
+    endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+    /** A failure tag the printer suggests (a failed or cancelled print, spaghetti seen): a suggestion, never a verdict. */
+    suggestedFailureTag: text("suggested_failure_tag"),
     note: text("note").notNull().default(""),
     /** Slugs: built in (shared/attempts.ts) or from the tags table. */
     failureTags: text("failure_tags", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -138,6 +146,14 @@ export const photos = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
     /** The print attempt it shows, or null for the item's own photos. */
     attemptId: text("attempt_id").references(() => attempts.id, { onDelete: "cascade" }),
+    /**
+     * It arrived without a browser to resize it (an agent, later the printer bridge): the bytes in R2 are
+     * the original, stored as both variants, and `color` is a placeholder. The next signed-in browser
+     * that sees it resizes it and uploads the real variants, which clears this.
+     */
+    needsResize: integer("needs_resize", { mode: "boolean" }).notNull().default(false),
+    /** When a browser took the job of resizing it, so two people's browsers don't both do it. */
+    resizeClaimedAt: integer("resize_claimed_at", { mode: "timestamp_ms" }),
   },
   (table) => [index("photos_item_idx").on(table.itemId, table.position)],
 );
@@ -190,6 +206,8 @@ export const spools = sqliteTable(
     photoWidth: integer("photo_width"),
     photoHeight: integer("photo_height"),
     photoColor: text("photo_color"),
+    /** The RFID tray UUID of a Bambu spool, as the AMS reports it, so the printer bridge finds it again. */
+    trayUuid: text("tray_uuid"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -222,6 +240,16 @@ export const printer = sqliteTable("printer", {
   id: text("id").primaryKey(),
   setup: text("setup", { mode: "json" }).$type<PrinterSetup>().notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/**
+ * What the printer bridge last told the app: one row (id "bridge"). `status` holds the printer's progress and the
+ * trays it couldn't match to a spool; `lastSeenAt` moves with every message, so "last heard" is honest.
+ */
+export const bridge = sqliteTable("bridge", {
+  id: text("id").primaryKey(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
+  status: text("status", { mode: "json" }).$type<BridgeStatusData>().notNull(),
 });
 
 /**

@@ -28,6 +28,7 @@ export function toApiPhoto(photo: Photo): ApiPhoto {
     color: photo.color,
     takenAt: photo.takenAt?.getTime() ?? null,
     attemptId: photo.attemptId,
+    needsResize: photo.needsResize,
     createdBy: photo.createdBy,
     createdAt: photo.createdAt.getTime(),
   };
@@ -64,6 +65,8 @@ export function toApiAttempt(
     outcome: attempt.outcome,
     printedAt: attempt.printedAt.getTime(),
     finishedAt: attempt.finishedAt?.getTime() ?? null,
+    endedAt: attempt.endedAt?.getTime() ?? null,
+    suggestedFailureTag: attempt.suggestedFailureTag,
     note: attempt.note,
     failureTags: attempt.failureTags,
     successNotes: attempt.successNotes,

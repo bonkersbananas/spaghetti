@@ -26,9 +26,15 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-  e2e:
-    name: Playwright smoke test
+  # The Playwright suite runs in shards, each on its own runner with its own dev and built servers (the
+  # config starts both). `--shard=i/n` splits the tests; the projects and the test list are unchanged.
+  e2e-shards:
+    name: Playwright shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -38,13 +44,24 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium-headless-shell
-      - run: pnpm test:e2e
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
+
+  # One required check, whatever the number of shards: it passes when every shard did.
+  e2e:
+    name: Playwright smoke test
+    if: always()
+    needs: e2e-shards
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Shards: ${{ needs.e2e-shards.result }}"
+          test "${{ needs.e2e-shards.result }}" = "success"
 
   docker:
     name: Container image
@@ -68,3 +85,15 @@ jobs:
             -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
       - if: failure()
         run: docker logs spaghetti
+
+  bridge-image:
+    name: Bridge image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f bridge/Dockerfile -t spaghetti-bridge:ci .
+      - name: It starts, finds ffmpeg, and says what is missing
+        run: |
+          docker run --rm --entrypoint ffmpeg spaghetti-bridge:ci -version | head -1
+          ! docker run --rm spaghetti-bridge:ci 2>&1 | tee out.txt
+          grep -q "Missing settings" out.txt
