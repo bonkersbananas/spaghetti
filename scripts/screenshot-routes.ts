@@ -544,6 +544,26 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The capture sheet on an idea's page: it opens on New idea, with This idea one tap away.
+    name: "capture-on-idea",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The capture sheet on a build that is printing: New idea first, This print second.
+    name: "capture-on-printing-build",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // Shared into Spaghetti (the share target and the bookmarklet end here): saved already, with a word to add.
     name: "share-captured",
     path: `/share?title=${encodeURIComponent("Drawer bins, 42 mm grid")}&text=${encodeURIComponent("Saw this on the bus")}&url=${encodeURIComponent("https://makerworld.com/en/models/drawer-bins")}`,
