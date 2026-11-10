@@ -174,7 +174,9 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Highlight** — text with the words a search matched on a semolina highlight, like a pen stroke. A tag chip that matched gets a ring instead.
 - **Avatar / AvatarStack** — initials on the person's color.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
-- **Kbd** — keyboard hints, hidden on phones.
+- **Kbd** — keyboard hints, hidden on phones (`always` for the shortcut list).
+- **PaletteSurface / PaletteDialog** — the command palette: a search box over grouped rows (photo or icon, name, a line of meta, an outcome chip or the row's shortcut), the picked row on a quiet fill, key hints along the bottom. See Keyboard and the command palette.
+- **ShortcutList** — every shortcut from the registry, grouped by screen.
 - **SegmentedControl** — pick one of a few short options (appearance: light, dark, system): a recessed channel with a lifted thumb, real radio inputs underneath. `ThemeSwitch` (shell) is the appearance one.
 - **Popover** — a small floating panel for desktop menus, such as the sidebar's account menu. Tasks use Sheet.
 - **OfflineNotice** (shell) — a quiet strip at the top of the page while the server can't be reached, with how many captures are waiting and, over data kept from earlier, when it was last fetched. The only place the app complains about the connection.
@@ -184,9 +186,20 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 
 - **Phone (< 768 px):** a page header with a large title and the account avatar; a bottom tab bar (Ideas, Builds, capture, Journal, Search) with the capture button in the middle.
 - **Desktop:** a fixed left sidebar on `paper-deep` with the mark, a "New idea" button, the four sections with keyboard hints, the styleguide and the signed-in person.
-- **Keyboard (desktop):** `C` capture, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search. Shortcuts are ignored while typing or while a sheet is open.
+- **Keyboard (desktop):** `⌘K` (Ctrl+K elsewhere) the command palette, `?` the list of shortcuts, `C` capture, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search. Shortcuts are ignored while typing or while a sheet is open; only `⌘K` also works inside a field. Every shortcut is defined once in `src/shared/shortcuts.ts` (see Keyboard and the command palette below).
 - **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
 - **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
+
+## Keyboard and the command palette
+
+Desktop only. Phones have no palette and no shortcut list; their layouts are untouched.
+
+- **One registry.** `src/shared/shortcuts.ts` lists every shortcut: id, where it works (anywhere, an idea, a build, the journal, search, the palette), what it does and its keys (`"c"`, `"g i"`, `"mod+k"`, `"arrowdown"`). Screens bind handlers to ids (`useHotkeys({ buildLog: primary })`), the listener reads the keys from the registry, button hints come from `shortcutCaps(id)`, and the `?` overlay is generated from the same list. A new shortcut is one entry there plus a handler; a unit test fails if two shortcuts share a key on the same screen.
+- **Typing is safe.** Nothing fires while the focus is in a field (input, textarea, select, contenteditable) or a dialog is open. The exception is `⌘K`, which opens the palette from inside a note you are writing.
+- **The palette** (`⌘K`, or "Jump to…" at the top of the sidebar) opens at once, high on the screen, and never shows a spinner page. Before typing: what fits the screen first ("This build": log or finish an attempt, finish or shelve the build; "This idea": start building), then recent ideas and builds, then actions (new idea, switch theme, shortcuts, sign out) and "Go to" the sections. Typing narrows actions as you type and searches ideas, builds and attempts through the search API a beat later: builds, ideas and attempts with their photo thumbnails and outcome, the previous results dimmed until the new ones arrive. Arrow keys move, `Enter` opens or runs, `Esc` or `⌘K` closes. A row that starts a sheet runs after the palette has closed, so focus lands in the sheet.
+- **A screen offers actions** with `useScreenActions("This build", [...])` while it is shown; the palette reads them when it opens.
+- **`?`** opens a calm overlay with every shortcut in columns, grouped by screen, with alternatives side by side ("J or ↓").
+- Components: `PaletteSurface` and `PaletteDialog` (ui/Palette.tsx), `ShortcutList` (ui/ShortcutList.tsx); both are in the styleguide.
 
 ## Ideas
 

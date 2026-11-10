@@ -19,10 +19,12 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
-import { useHotkeys } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
+import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
+import { itemName, useRememberItem } from "@/lib/recent";
 import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -117,13 +119,29 @@ function Idea({ item }: { item: ItemView }) {
     void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
   }
 
+  useScreenActions("This idea", [
+    {
+      id: "build",
+      label: "Start building",
+      icon: BuildsIcon,
+      shortcut: "ideaBuild",
+      keywords: "build begin print move to builds",
+      run: build,
+    },
+  ]);
+  useRememberItem({
+    id: item.id,
+    kind: "idea",
+    title: itemName(item, "idea"),
+    photo: photos[0] ? { id: photos[0].id, color: photos[0].color } : null,
+  });
+
   useHotkeys({
-    escape: () => void navigate({ to: "/ideas" }),
-    arrowleft: () => select(selectedIndex - 1),
-    arrowright: () => select(selectedIndex + 1),
-    backspace: remove,
-    delete: remove,
-    b: build,
+    ideaBack: () => void navigate({ to: "/ideas" }),
+    ideaPhotoPrevious: () => select(selectedIndex - 1),
+    ideaPhotoNext: () => select(selectedIndex + 1),
+    ideaDelete: remove,
+    ideaBuild: build,
   });
 
   const hasPhotos = photos.length > 0;
@@ -145,7 +163,7 @@ function Idea({ item }: { item: ItemView }) {
           <Button
             variant="primary"
             icon={BuildsIcon}
-            shortcut={["B"]}
+            shortcut={shortcutCaps("ideaBuild")}
             onClick={build}
             disabled={readOnly}
             className="ml-2"
