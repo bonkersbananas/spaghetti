@@ -72,3 +72,19 @@ export function suggestedRecipeName(material: string | null, finish: string | nu
   const text = finish ? kind.charAt(0).toUpperCase() + kind.slice(1) : `${kind} recipe`;
   return text.slice(0, RECIPE_NAME_MAX);
 }
+
+/**
+ * The settings of a new attempt that starts from a recipe: the recipe's, on the spool already chosen when it is the
+ * recipe's material (its color and spool are this print's own), else with the recipe's own filament.
+ */
+export function startFromRecipe(
+  recipe: { settings: AttemptSettings; material: string },
+  current: AttemptSettings,
+): AttemptSettings {
+  const chosen = current.filaments ?? [];
+  const onSameMaterial = chosen.some((filament) => same(filament.type, recipe.material));
+  return {
+    ...recipe.settings,
+    ...(onSameMaterial ? { filaments: chosen.map((filament) => ({ ...filament })) } : {}),
+  };
+}

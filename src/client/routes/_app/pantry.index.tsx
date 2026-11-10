@@ -1,4 +1,5 @@
 import type { Spool } from "@shared/api";
+import { recipesFor } from "@shared/recipes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -8,6 +9,7 @@ import { AmsLoadout } from "@/components/pantry/Ams";
 import { RunningLow } from "@/components/pantry/RunningLow";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
 import { SpoolRow } from "@/components/pantry/SpoolRow";
+import { RecipeShelf } from "@/components/recipes/RecipeShelf";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
@@ -21,6 +23,7 @@ import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { loadSlot, spoolsQuery } from "@/lib/pantry";
 import { type PantryView, usePantryView } from "@/lib/pantry-view";
 import { canEdit, useReadOnly } from "@/lib/read-only";
+import { useRecipes } from "@/lib/recipes";
 import { useRunningLow } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -31,6 +34,17 @@ export const Route = createFileRoute("/_app/pantry/")({
 });
 
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5 xl:grid-cols-5";
+
+/** "Recipes for PLA": what worked on this material, under its spools. */
+function GroupRecipes({ material }: { material: string }) {
+  return (
+    <RecipeShelf
+      recipes={recipesFor(useRecipes(), { material })}
+      title={`Recipes for ${material}`}
+      heading="overline"
+    />
+  );
+}
 
 /** Spools grouped by material, the most stocked first; the empty ones last. */
 function groups(spools: Spool[]): Array<{ material: string; spools: Spool[] }> {
@@ -171,6 +185,7 @@ function Pantry() {
                     <SpoolRow key={spool.id} spool={spool} draggable={!readOnly} />
                   ))}
                 </ul>
+                <GroupRecipes material={group.material} />
               </section>
             ) : (
               <section
@@ -186,6 +201,7 @@ function Pantry() {
                     <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
                   ))}
                 </ul>
+                <GroupRecipes material={group.material} />
               </section>
             ),
           )}

@@ -27,6 +27,7 @@ export const PERSISTED_ROOTS = [
   "search",
   "what-worked",
   "spools",
+  "recipes",
   "printer",
   "agents",
   "link-preview",

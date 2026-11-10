@@ -1,4 +1,4 @@
-import type { AttemptHit, ItemHit } from "@shared/api";
+import type { AttemptHit, ItemHit, Recipe } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
@@ -6,7 +6,8 @@ import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-ro
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot, NoodleSearch } from "@/components/illustrations";
 import { Filters } from "@/components/journal/Filters";
-import { AttemptResult, attemptLink, ItemResult, itemLink } from "@/components/search/Results";
+import { RecipeSheet } from "@/components/recipes/RecipeSheet";
+import { AttemptResult, attemptLink, ItemResult, itemLink, RecipeResult } from "@/components/search/Results";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -37,7 +38,10 @@ export const Route = createFileRoute("/_app/search")({
 /** How long typing pauses before the search runs. */
 const DEBOUNCE_MS = 140;
 
-type Result = { kind: "item"; hit: ItemHit; link: LinkProps } | { kind: "attempt"; hit: AttemptHit; link: LinkProps };
+type Result =
+  | { kind: "item"; hit: ItemHit; link: LinkProps }
+  | { kind: "attempt"; hit: AttemptHit; link: LinkProps }
+  | { kind: "recipe"; hit: Recipe };
 
 function Search() {
   const { q = "", ...filters } = Route.useSearch();
@@ -79,6 +83,7 @@ function Search() {
   const list = useMemo<Result[]>(() => {
     if (!shown) return [];
     return [
+      ...shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })),
       ...shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
       ...shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) })),
       ...shown.ideas.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
@@ -89,7 +94,8 @@ function Search() {
   const [active, setActive] = useState(-1);
   // biome-ignore lint/correctness/useExhaustiveDependencies: new results start unpicked.
   useEffect(() => setActive(-1), [list]);
-  const refs = useRef<Array<HTMLAnchorElement | null>>([]);
+  const refs = useRef<Array<HTMLElement | null>>([]);
+  const [openRecipe, setOpenRecipe] = useState<string | null>(null);
   const move = (by: number) => {
     if (!list.length) return;
     const next = active === -1 ? (by > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, active + by));
@@ -104,7 +110,8 @@ function Search() {
     const result = list[index];
     if (!result) return;
     remember();
-    void navigate(result.link);
+    if (result.kind === "recipe") setOpenRecipe(result.hit.id);
+    else void navigate(result.link);
   };
   // "/" (focus the box) is bound once, for the whole app, in the shell.
   useHotkeys({
@@ -132,14 +139,34 @@ function Search() {
       selected: active === i,
       onHover: () => setActive(i),
       onOpen: remember,
-      ref: (el: HTMLAnchorElement | null) => {
+      ref: (el: HTMLElement | null) => {
         refs.current[i] = el;
       },
     };
     return (
-      <li key={result.kind === "attempt" ? result.hit.attempt.id : result.hit.item.id} className="list-none">
+      <li
+        key={
+          result.kind === "attempt"
+            ? result.hit.attempt.id
+            : result.kind === "recipe"
+              ? result.hit.id
+              : result.hit.item.id
+        }
+        className="list-none"
+      >
         {result.kind === "attempt" ? (
           <AttemptResult hit={result.hit} {...common} />
+        ) : result.kind === "recipe" ? (
+          <RecipeResult
+            recipe={result.hit}
+            terms={common.terms}
+            selected={common.selected}
+            onHover={common.onHover}
+            onOpen={() => {
+              common.onOpen();
+              setOpenRecipe(result.hit.id);
+            }}
+          />
         ) : (
           <ItemResult hit={result.hit} {...common} />
         )}
@@ -148,6 +175,7 @@ function Search() {
   };
   const groups: Array<[string, Result[]]> = shown
     ? [
+        ["Recipes", list.filter((r) => r.kind === "recipe")],
         ["Builds", list.filter((r) => r.kind === "item" && r.hit.item.stage !== "idea")],
         ["Attempts", list.filter((r) => r.kind === "attempt")],
         ["Ideas", list.filter((r) => r.kind === "item" && r.hit.item.stage === "idea")],
@@ -260,6 +288,7 @@ function Search() {
           <Filters layout="column" tags value={filters} onChange={setFilters} />
         </aside>
       </div>
+      <RecipeSheet recipeId={openRecipe} onOpenChange={(next) => !next && setOpenRecipe(null)} />
     </>
   );
 }

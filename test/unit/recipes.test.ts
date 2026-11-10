@@ -4,6 +4,7 @@ import {
   recipeSettings,
   recipesFor,
   settingsMaterial,
+  startFromRecipe,
   suggestedRecipeName,
 } from "../../src/shared/recipes.ts";
 import { searchTerms } from "../../src/shared/search.ts";
@@ -83,5 +84,30 @@ describe("suggestedRecipeName", () => {
     expect(suggestedRecipeName("PLA", "silk")).toBe("Silk PLA");
     expect(suggestedRecipeName("PETG", null)).toBe("PETG recipe");
     expect(suggestedRecipeName(null, null)).toBe("");
+  });
+});
+
+describe("startFromRecipe", () => {
+  const silk = {
+    material: "PLA",
+    settings: { filaments: [{ type: "PLA", colorName: "Gold" }], layerHeight: 0.16, brim: true },
+  };
+  it("takes the recipe's settings on the spool already chosen when the material matches", () => {
+    const chosen = {
+      filaments: [{ type: "pla", colorName: "Jade", spoolId: "s1" }],
+      layerHeight: 0.2,
+      bedTemperature: 60,
+    };
+    expect(startFromRecipe(silk, chosen)).toEqual({
+      filaments: [{ type: "pla", colorName: "Jade", spoolId: "s1" }],
+      layerHeight: 0.16,
+      brim: true,
+    });
+  });
+  it("brings the recipe's own filament when nothing of its material is chosen", () => {
+    expect(startFromRecipe(silk, { filaments: [{ type: "PETG" }] }).filaments).toEqual([
+      { type: "PLA", colorName: "Gold" },
+    ]);
+    expect(startFromRecipe(silk, {}).filaments).toEqual([{ type: "PLA", colorName: "Gold" }]);
   });
 });
