@@ -2,7 +2,7 @@ import type { Recipe } from "@shared/api";
 import { useState } from "react";
 import { RecipeCard } from "@/components/recipes/RecipeCard";
 import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePicker";
-import { RecipeResult } from "@/components/search/Results";
+import { RecipeResult } from "@/components/search/RecipeResult";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
 
 const now = Date.now();

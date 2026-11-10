@@ -3,11 +3,11 @@ import { tagLabel } from "@shared/attempts";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot, NoodleSearch } from "@/components/illustrations";
 import { Filters } from "@/components/journal/Filters";
 import { LazyRecipeSheet } from "@/components/recipes/LazyRecipeSheet";
-import { AttemptResult, attemptLink, ItemResult, itemLink, RecipeResult } from "@/components/search/Results";
+import { AttemptResult, attemptLink, ItemResult, itemLink } from "@/components/search/Results";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -24,6 +24,9 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { type Filters as FilterValues, facetsQuery, filterParams, hasFilters, readFilters } from "@/lib/journal";
 import { peopleQuery } from "@/lib/queries";
 import { forgetSearches, recentSearches, rememberSearch, SEARCH_BOX_ID, searchQuery } from "@/lib/search";
+
+/** Recipe results are drawn only when the search found one. */
+const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then((m) => ({ default: m.RecipeResult })));
 
 type SearchParams = FilterValues & { q?: string };
 
@@ -157,16 +160,18 @@ function Search() {
         {result.kind === "attempt" ? (
           <AttemptResult hit={result.hit} {...common} />
         ) : result.kind === "recipe" ? (
-          <RecipeResult
-            recipe={result.hit}
-            terms={common.terms}
-            selected={common.selected}
-            onHover={common.onHover}
-            onOpen={() => {
-              common.onOpen();
-              setOpenRecipe(result.hit.id);
-            }}
-          />
+          <Suspense fallback={<RowSkeleton />}>
+            <RecipeResult
+              recipe={result.hit}
+              terms={common.terms}
+              selected={common.selected}
+              onHover={common.onHover}
+              onOpen={() => {
+                common.onOpen();
+                setOpenRecipe(result.hit.id);
+              }}
+            />
+          </Suspense>
         ) : (
           <ItemResult hit={result.hit} {...common} />
         )}
