@@ -18,7 +18,8 @@ import {
   type TagDefinition,
   type TagKind,
 } from "@shared/attempts";
-import { isOffTheBed, printProgress } from "@shared/print-progress";
+import type { BridgeProgress } from "@shared/bridge";
+import { isOffTheBed, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -374,7 +375,12 @@ export function findPrinting(items: ItemView[]): { item: ItemView; attempt: Atte
  * done by now, then the newest), then the ones the printer says are off the bed and wait for "how did it go?".
  * Today lists them all; the sidebar shows the first.
  */
-export function printingAttempts(items: ItemView[], now = Date.now()): Array<{ item: ItemView; attempt: AttemptView }> {
+export function printingAttempts(
+  items: ItemView[],
+  now = Date.now(),
+  /** The bridge's report, when there is one: a print it follows is ranked by what the printer says, as its card shows. */
+  live?: BridgeProgress | null,
+): Array<{ item: ItemView; attempt: AttemptView }> {
   const found: Array<{ item: ItemView; attempt: AttemptView }> = [];
   for (const item of items) {
     if (item.stage !== "building") continue;
@@ -383,7 +389,10 @@ export function printingAttempts(items: ItemView[], now = Date.now()): Array<{ i
   const rank = (attempt: AttemptView) =>
     isOffTheBed(attempt)
       ? 2
-      : printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now).state === "due"
+      : (
+            (live?.attemptId === attempt.id ? livePrintProgress(live, now) : null) ??
+            printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
+          ).state === "due"
         ? 0
         : 1;
   return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || b.attempt.printedAt - a.attempt.printedAt);

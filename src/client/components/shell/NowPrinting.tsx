@@ -1,4 +1,5 @@
 import { isOffTheBed } from "@shared/print-progress";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo } from "react";
@@ -8,6 +9,7 @@ import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto, printingAttempts } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
+import { printerQuery } from "@/lib/pantry";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -87,7 +89,9 @@ export function NowPrinting() {
   // The sidebar is for desktop; on a phone its words would only sit hidden in the page.
   const isDesktop = useIsDesktop();
   const onToday = useLocation({ select: (location) => location.pathname === "/today" });
-  const printing = useMemo(() => printingAttempts(items, now), [items, now]);
+  // Ranked by what the printer says when the bridge reports, as Today and the card's own progress do.
+  const live = useQuery(printerQuery).data?.bridge?.progress;
+  const printing = useMemo(() => printingAttempts(items, now, live), [items, now, live]);
   const first = printing[0];
   const show = !!first && !onToday && isDesktop;
 
