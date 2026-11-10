@@ -76,13 +76,18 @@ describe("grams on a spool", () => {
       gramsLeft: 500,
       remaining: "full",
     });
-    const cleared = await request(`/api/spools/${other.id}/weight`, { method: "PUT", cookie, json: { netGrams: null } });
+    const cleared = await request(`/api/spools/${other.id}/weight`, {
+      method: "PUT",
+      cookie,
+      json: { netGrams: null },
+    });
     expect((await cleared.json<SpoolResponse>()).spool).toMatchObject({ gramsLeft: null, remaining: "low" });
-    expect((await request(`/api/spools/${other.id}/weight`, { method: "PUT", cookie, json: { netGrams: 0 } })).status).toBe(
-      400,
-    );
     expect(
-      (await request(`/api/spools/${crypto.randomUUID()}/weight`, { method: "PUT", cookie, json: { netGrams: 5 } })).status,
+      (await request(`/api/spools/${other.id}/weight`, { method: "PUT", cookie, json: { netGrams: 0 } })).status,
+    ).toBe(400);
+    expect(
+      (await request(`/api/spools/${crypto.randomUUID()}/weight`, { method: "PUT", cookie, json: { netGrams: 5 } }))
+        .status,
     ).toBe(404);
   });
 

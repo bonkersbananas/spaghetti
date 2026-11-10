@@ -362,10 +362,14 @@ describe("tools, scopes and attribution", () => {
     expect((await callTool(bridge.token, "load_slot", { slot: "Z9", spool_id: spoolId })).isError).toBe(true);
 
     const gramsSpool = uuid();
-    await request("/api/spools", { method: "POST", json: { id: gramsSpool, material: "PETG", netGrams: 1000 }, cookie });
-    expect((await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool, on_scale: 812, tare_grams: 250 })).text).toBe(
-      "Weighed: about 562 g left.",
-    );
+    await request("/api/spools", {
+      method: "POST",
+      json: { id: gramsSpool, material: "PETG", netGrams: 1000 },
+      cookie,
+    });
+    expect(
+      (await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool, on_scale: 812, tare_grams: 250 })).text,
+    ).toBe("Weighed: about 562 g left.");
     expect((await callTool(bridge.token, "list_spools")).text).toContain("about 562 g left");
     expect((await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool })).isError).toBe(true);
 

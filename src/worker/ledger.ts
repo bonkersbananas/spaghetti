@@ -48,7 +48,10 @@ export async function loadUsage(d1: D1Database, spoolId?: string): Promise<Spool
 
 export async function loadWeighings(db: Db, spoolIds?: readonly string[]): Promise<Map<string, Weighing[]>> {
   const rows = await (spoolIds
-    ? db.select().from(spoolWeighings).where(inArray(spoolWeighings.spoolId, [...spoolIds]))
+    ? db
+        .select()
+        .from(spoolWeighings)
+        .where(inArray(spoolWeighings.spoolId, [...spoolIds]))
     : db.select().from(spoolWeighings)
   ).orderBy(asc(spoolWeighings.weighedAt));
   const bySpool = new Map<string, Weighing[]>();
@@ -76,9 +79,15 @@ export async function gramsFor(
       const own = weighings.get(spool.id) ?? [];
       return [
         spool.id,
-        { ...spoolGrams(spool, own, usage.filter((entry) => entry.spoolId === spool.id)), weighings: own },
+        {
+          ...spoolGrams(
+            spool,
+            own,
+            usage.filter((entry) => entry.spoolId === spool.id),
+          ),
+          weighings: own,
+        },
       ];
     }),
   );
 }
-

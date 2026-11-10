@@ -19,7 +19,12 @@ const attempt = (fields: Partial<Parameters<typeof attemptUsage>[0]> = {}) => ({
   id: "t1",
   outcome: "success" as const,
   at: 1000,
-  settings: { filaments: [{ spoolId: A, grams: 66 }, { spoolId: B, grams: 12.5 }] },
+  settings: {
+    filaments: [
+      { spoolId: A, grams: 66 },
+      { spoolId: B, grams: 12.5 },
+    ],
+  },
   ...fields,
 });
 
@@ -52,11 +57,20 @@ describe("usage of an attempt", () => {
 
   it("falls back to the attempt's total for a lone filament, and adds a spool used twice", () => {
     expect(attemptUsage(attempt({ settings: { filaments: [{ spoolId: A }], weightGrams: 40 } }))[0]?.grams).toBe(40);
-    expect(attemptUsage(attempt({ settings: { filaments: [{ spoolId: A }, { spoolId: B }], weightGrams: 40 } }))).toEqual(
-      [],
-    );
     expect(
-      attemptUsage(attempt({ settings: { filaments: [{ spoolId: A, grams: 10 }, { spoolId: A, grams: 5 }] } })),
+      attemptUsage(attempt({ settings: { filaments: [{ spoolId: A }, { spoolId: B }], weightGrams: 40 } })),
+    ).toEqual([]);
+    expect(
+      attemptUsage(
+        attempt({
+          settings: {
+            filaments: [
+              { spoolId: A, grams: 10 },
+              { spoolId: A, grams: 5 },
+            ],
+          },
+        }),
+      ),
     ).toMatchObject([{ grams: 15 }]);
   });
 
@@ -163,7 +177,15 @@ describe("not enough for this print", () => {
   ];
 
   it("says which filament is short, and ignores spools without grams", () => {
-    const found = notEnough({ filaments: [{ spoolId: A, grams: 66 }, { spoolId: B, grams: 500 }] }, spools);
+    const found = notEnough(
+      {
+        filaments: [
+          { spoolId: A, grams: 66 },
+          { spoolId: B, grams: 500 },
+        ],
+      },
+      spools,
+    );
     expect(found).toHaveLength(1);
     expect(notEnoughText(found[0] as (typeof found)[number])).toBe(
       "Sunflower yellow has about 40 g left; this plate needs 66 g.",

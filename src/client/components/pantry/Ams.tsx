@@ -150,7 +150,9 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
           </>
         )}
       </span>
-      {spool && shape === "row" && <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel="lg" />}
+      {spool && shape === "row" && (
+        <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel="lg" />
+      )}
     </button>
   );
 }

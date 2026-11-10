@@ -193,21 +193,26 @@ export function cachedItem(queryClient: QueryClient, id: string): Item | undefin
 
 /** Keeps the caches in step with what the outbox delivers. */
 export function connectOutbox(queryClient: QueryClient) {
+  // What an attempt used comes off its spools on the server: ask for their grams again once it lands.
+  const spoolsMoved = () => void queryClient.invalidateQueries({ queryKey: ["spools"] });
   outbox.handlers = {
     itemSaved: (item) => {
       // Edits made on the server copy since win over the outbox's.
       const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
       insertCachedItem(queryClient, cached ? { ...item, title: cached.title, note: cached.note } : item);
     },
-    attemptSaved: (attempt) =>
+    attemptSaved: (attempt) => {
       patchCachedItem(queryClient, attempt.itemId, (item) => ({
         ...item,
         // Logging an attempt makes an idea a build, on the server too.
         stage: item.stage === "idea" ? "building" : item.stage,
         startedAt: item.startedAt ?? attempt.createdAt,
         attempts: [...item.attempts.filter((a) => a.id !== attempt.id), attempt],
-      })),
+      }));
+      if (attempt.outcome) spoolsMoved();
+    },
     attemptFinished: (attempt, { finished, pending, photos }) => {
+      spoolsMoved();
       patchCachedItem(queryClient, attempt.itemId, (item) => ({
         ...item,
         attempts: item.attempts.map((a) => (a.id === attempt.id ? attempt : a)),

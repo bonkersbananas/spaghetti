@@ -60,7 +60,11 @@ const weightBody = z.object({ netGrams: grams.nullable().optional(), tareGrams: 
 const weighBody = z
   .object({
     id,
-    onScale: z.number().min(0).max(MAX_SPOOL_GRAMS * 2).optional(),
+    onScale: z
+      .number()
+      .min(0)
+      .max(MAX_SPOOL_GRAMS * 2)
+      .optional(),
     gramsLeft: z.number().min(0).max(MAX_SPOOL_GRAMS).optional(),
     tareGrams: tare.nullable().optional(),
     at: z.number().int().positive().optional(),
