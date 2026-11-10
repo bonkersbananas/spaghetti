@@ -66,10 +66,12 @@ Write the note the way a friend would jot it in a kitchen notebook: plain, warm,
 export type AskResult = { ok: true; draft: ClaudeDraft } | { ok: false; failure: DraftFailure };
 
 /** Asks Claude to read one model page. Never throws: a failure is one of the honest reasons. */
-export async function askClaude(apiKey: string, url: string, site: ModelSite): Promise<AskResult> {
+export async function askClaude(apiKey: string, url: string, site: ModelSite, baseURL?: string): Promise<AskResult> {
   // A fresh client per call, with fetch looked up late, so a test can stub globalThis.fetch.
   const client = new Anthropic({
     apiKey,
+    // Only the e2e tests and screenshots set a base URL (a stand-in server).
+    ...(baseURL ? { baseURL } : {}),
     maxRetries: 0,
     timeout: TIMEOUT_MS,
     fetch: (input, init) => globalThis.fetch(input, init),

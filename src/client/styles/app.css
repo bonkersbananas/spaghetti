@@ -248,6 +248,16 @@
 .sg-fade-in {
   animation: sg-fade-in var(--sg-duration-fast) var(--sg-ease-out);
 }
+/* "Reading the page": the little sparkle breathes while Claude is on it. */
+@keyframes sg-pulse {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+}
+.sg-pulse {
+  animation: sg-pulse 1.8s ease-in-out infinite;
+}
 @keyframes sg-fade-out {
   to {
     opacity: 0;

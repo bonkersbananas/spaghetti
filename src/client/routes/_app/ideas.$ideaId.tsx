@@ -2,8 +2,9 @@ import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
+import { DraftNote } from "@/components/ideas/DraftNote";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
@@ -24,6 +25,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
+import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
 import { useScreenActions } from "@/lib/palette";
@@ -95,6 +97,13 @@ function Idea({ item }: { item: ItemView }) {
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+
+  // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
+  const draftStatus = useRef(item.draft?.status);
+  useEffect(() => {
+    if (draftStatus.current === "reading" && item.draft?.status === "drafted") announceDraft(queryClient, item);
+    draftStatus.current = item.draft?.status;
+  }, [item, queryClient]);
 
   const photos = item.photos.filter((photo) => !photo.attemptId);
   const [selectedId, setSelectedId] = useState(photos[0]?.id);
@@ -236,6 +245,7 @@ function Idea({ item }: { item: ItemView }) {
             placeholder="Add a note: a link, a measurement, a half-thought…"
           />
           <NoteLinks note={note} />
+          <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
 
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
             {person && <Avatar person={person} size="sm" via={via} />}

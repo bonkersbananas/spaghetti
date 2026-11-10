@@ -178,7 +178,9 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   await db.insert(draftRuns).values({ id: crypto.randomUUID(), itemId, at: new Date(now) });
 
   const site = modelSite(row.url);
-  const answer: AskResult = site ? await askClaude(apiKey, row.url, site.site) : { ok: false, failure: "unreadable" };
+  const answer: AskResult = site
+    ? await askClaude(apiKey, row.url, site.site, env.ANTHROPIC_BASE_URL?.trim())
+    : { ok: false, failure: "unreadable" };
   if (!answer.ok) return fail(db, row, answer.failure);
   const draft = answer.draft;
 

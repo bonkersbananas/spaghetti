@@ -200,6 +200,8 @@ export function connectOutbox(queryClient: QueryClient) {
       // Edits made on the server copy since win over the outbox's.
       const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
       insertCachedItem(queryClient, cached ? { ...item, title: cached.title, note: cached.note } : item);
+      // A capture that is just a model link is drafted by Claude in the background, once it is on the server.
+      void import("./drafts").then((drafts) => drafts.draftSavedCapture(queryClient, item));
     },
     attemptSaved: (attempt) => {
       patchCachedItem(queryClient, attempt.itemId, (item) => ({
