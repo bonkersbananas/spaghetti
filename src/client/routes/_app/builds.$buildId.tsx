@@ -498,61 +498,64 @@ function Build({ item }: { item: ItemView }) {
             )
           }
         >
-          {story.length === 0 ? (
-            <EmptyState
-              className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
-              illustration={<SpoolStrand />}
-              title="The water's still heating"
-            >
-              Log the first attempt when it comes off the bed, or start one now and finish it when the print is done.
-            </EmptyState>
-          ) : (
-            <ol aria-label="Attempts, newest first" className="flex flex-col">
-              <AnimatePresence initial={false}>
-                {story.map((attempt, index) => (
-                  <AttemptEntry
-                    key={attempt.id}
-                    ref={(el) => {
-                      if (el) entryRefs.current.set(attempt.id, el);
-                      else entryRefs.current.delete(attempt.id);
-                    }}
-                    attempt={attempt}
-                    photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
-                    person={byId.get(attempt.createdBy)}
-                    via={via(attempt.createdVia)}
-                    selected={attempt.id === selected}
-                    first={index === 0}
-                    onOpen={() => {
-                      setSelected(attempt.id);
-                      openSheet(attempt.id);
-                    }}
-                    onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                    reserveExtras={reserveExtras}
-                    onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
-                    onSaveRecipe={
-                      recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
-                        ? () => setSavingRecipe(recipeSource(attempt) ?? null)
-                        : undefined
-                    }
-                  />
-                ))}
-              </AnimatePresence>
-            </ol>
-          )}
+          {/* One child: the list and what follows it keep their own spacing, not the section's gap. */}
+          <div className="flex flex-col">
+            {story.length === 0 ? (
+              <EmptyState
+                className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
+                illustration={<SpoolStrand />}
+                title="The water's still heating"
+              >
+                Log the first attempt when it comes off the bed, or start one now and finish it when the print is done.
+              </EmptyState>
+            ) : (
+              <ol aria-label="Attempts, newest first" className="flex flex-col">
+                <AnimatePresence initial={false}>
+                  {story.map((attempt, index) => (
+                    <AttemptEntry
+                      key={attempt.id}
+                      ref={(el) => {
+                        if (el) entryRefs.current.set(attempt.id, el);
+                        else entryRefs.current.delete(attempt.id);
+                      }}
+                      attempt={attempt}
+                      photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
+                      person={byId.get(attempt.createdBy)}
+                      via={via(attempt.createdVia)}
+                      selected={attempt.id === selected}
+                      first={index === 0}
+                      onOpen={() => {
+                        setSelected(attempt.id);
+                        openSheet(attempt.id);
+                      }}
+                      onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                      reserveExtras={reserveExtras}
+                      onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
+                      onSaveRecipe={
+                        recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                          ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </AnimatePresence>
+              </ol>
+            )}
 
-          <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
-            <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-            {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
-            {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
-            <p>
-              {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
-              <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
-                {inlineTime(started)}
-              </time>
-            </p>
+            <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
+              <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
+              {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
+              {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
+              <p>
+                {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
+                <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
+                  {inlineTime(started)}
+                </time>
+              </p>
+            </div>
+
+            {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
           </div>
-
-          {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
         </Section>
       </div>
 
