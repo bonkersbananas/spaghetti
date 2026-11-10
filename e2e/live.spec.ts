@@ -149,7 +149,9 @@ test("a new idea from the other person lands in the inbox, and the list keeps it
   await expect(ideas.getByRole("link", { name: /Sam's spool holder/ })).toHaveCount(1);
   await expect(ideas.getByRole("link")).toHaveCount(15);
   // Their avatar is on the card, as on any idea (named by their full name).
-  await expect(ideas.getByRole("link", { name: /Sam's spool holder/ }).getByRole("img", { name: /^Sam/ })).toBeVisible();
+  await expect(
+    ideas.getByRole("link", { name: /Sam's spool holder/ }).getByRole("img", { name: /^Sam/ }),
+  ).toBeVisible();
   // Nobody asked for a toast for a card landing.
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
   // The card Alex was looking at stayed where it was.
