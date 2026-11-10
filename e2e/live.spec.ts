@@ -155,3 +155,68 @@ test("a new idea from the other person lands in the inbox, and the list keeps it
   expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThan(2);
   await samContext.close();
 });
+
+test("the spool page and the printer setup follow the other person's edits, and a save sends only what was changed here", async ({
+  page,
+  browser,
+}) => {
+  const samContext = await browser.newContext({ viewport: page.viewportSize(), baseURL: origin() });
+  const samPage = await samContext.newPage();
+  await signInAs(page, alex);
+  await signInAs(samPage, sam);
+  const headers = { Origin: origin() };
+  const spoolId = crypto.randomUUID();
+  const created = await page.request.post("/api/spools", {
+    headers,
+    data: { id: spoolId, material: "PLA", brand: "Bambu", colorName: "Jade white", remaining: "full" },
+  });
+  expect(created.ok()).toBe(true);
+  const spoolOnServer = async () =>
+    (await (await page.request.get("/api/spools")).json()).spools.find((spool: { id: string }) => spool.id === spoolId);
+
+  try {
+    // Alex has the spool open. Sam marks it low and writes a note, from his own screen.
+    await page.goto(`/pantry/${spoolId}`);
+    const brand = page.getByRole("textbox", { name: "Brand" });
+    await expect(brand).toHaveValue("Bambu");
+    const patched = await samPage.request.patch(`/api/spools/${spoolId}`, {
+      headers,
+      data: { remaining: "low", note: "Dry it first" },
+    });
+    expect(patched.ok()).toBe(true);
+
+    // Before Alex's screen has heard, Alex adds to the brand: that save carries the brand and nothing else.
+    await brand.focus();
+    await brand.press("End");
+    await brand.pressSequentially(" Eco");
+    await expect.poll(async () => (await spoolOnServer()).brand).toBe("Bambu Eco");
+    const after = await spoolOnServer();
+    expect(after.remaining).toBe("low");
+    expect(after.note).toBe("Dry it first");
+
+    // Alex's screen takes Sam's edits on its own, and what Alex typed stays.
+    await expect(page.getByRole("radio", { name: "Low" })).toBeChecked({ timeout: 25_000 });
+    await expect(brand).toHaveValue("Bambu Eco");
+
+    // The printer's setup works the same way, a part at a time.
+    await page.goto("/printer");
+    await expect(page.getByText("Combo · 1 AMS 2 Pro")).toBeVisible();
+    const sent = await samPage.request.put("/api/printer", { headers, data: { amsUnits: 2 } });
+    expect(sent.ok()).toBe(true);
+    await page.getByRole("button", { name: "Cool Plate" }).click();
+    await expect
+      .poll(async () => (await (await page.request.get("/api/printer")).json()).setup.plates)
+      .toContain("Cool Plate");
+    // Alex's save didn't undo Sam's change, and Alex's screen shows it.
+    expect((await (await page.request.get("/api/printer")).json()).setup.amsUnits).toBe(2);
+    await expect(page.getByText("Combo · 2 AMS 2 Pro")).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByRole("button", { name: "Cool Plate" })).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    await page.request.delete(`/api/spools/${spoolId}`, { headers });
+    await page.request.put("/api/printer", {
+      headers,
+      data: { amsUnits: 1, plates: ["Textured PEI Plate"] },
+    });
+    await samContext.close();
+  }
+});

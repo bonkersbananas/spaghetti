@@ -4,6 +4,7 @@ import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
+import { SpoolRow } from "@/components/pantry/SpoolRow";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { NumberField } from "@/components/ui/Field";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
@@ -110,6 +111,28 @@ export function PantrySection() {
               draggable={false}
             />
           </ul>
+          <Label>The pantry as a list (desktop): low first, empty last, no header row</Label>
+          <ul className="bg-cream shadow-soft overflow-hidden rounded-lg">
+            <SpoolRow
+              draggable={false}
+              spool={{ ...sampleSpool, id: "row-1", remaining: "low", driedAt: Date.now() - 12 * 24 * 3_600_000 }}
+            />
+            <SpoolRow
+              draggable={false}
+              spool={{ ...sampleSpool, id: "row-2", colorName: "Teal", colorHex: TEAL, finish: null, slot: null }}
+            />
+            <SpoolRow
+              draggable={false}
+              spool={{
+                ...sampleSpool,
+                id: "row-3",
+                colorName: "Jade white",
+                colorHex: WHITE,
+                slot: null,
+                remaining: "empty",
+              }}
+            />
+          </ul>
           <Label>A slicer file on an attempt, and how long it took</Label>
           <FileCard name="desk-clips.gcode.3mf" meta={["plate 1 of 2", "est. 1 h 12 min", "14 KB"]} download="#" />
           <EstimateLine estimated={72} actual={78} />
@@ -118,7 +141,7 @@ export function PantrySection() {
           </div>
         </div>
       </div>
-      <Label>The AMS as it is loaded here (live; the pantry changes it)</Label>
+      <Label>The AMS as it is loaded here (live): bays are columns below lg, rows from lg</Label>
       <AmsLoadout readOnly className="md:max-w-3xl" />
     </Section>
   );

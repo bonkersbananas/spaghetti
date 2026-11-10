@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveState } from "@/components/ui/SaveStatus";
 
 const RETRY_MS = [2000, 5000, 10_000, 30_000];
@@ -84,4 +84,62 @@ export function useFollowServer(
     }
     seen.current = server;
   }, [server, local, setLocal, onFollow]);
+}
+
+const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A form of fields that autosave and follow the server, for a screen with
+ * several (a spool, the printer's setup). Each field is its own:
+ *
+ * - a field the person has typed in keeps their text when the server's copy
+ *   changes under it (the other person's edit);
+ * - every other field takes the server's new value;
+ * - a save sends only the fields changed here, never the ones beside them,
+ *   which the other person may have edited meanwhile and would be undone.
+ *
+ * `server` is the current server copy (from the query); `save` gets just the
+ * changed fields. Returns the form's value, a function to change some fields
+ * (or compute the change from the current value), and the save state.
+ */
+export function useLiveFields<T extends Record<string, unknown>>(
+  server: T,
+  save: (changes: Partial<T>) => Promise<void>,
+) {
+  const [value, setValue] = useState<T>(server);
+  const latest = useRef(value);
+  latest.current = value;
+  // What the server is known to have (as far as this screen has seen or sent), and what it showed last time.
+  const known = useRef<T>(server);
+  const seen = useRef<T>(server);
+
+  useEffect(() => {
+    const followed: Partial<T> = {};
+    for (const key of Object.keys(server) as Array<keyof T>) {
+      if (same(server[key], seen.current[key])) continue;
+      // Untouched here since it last matched the server: follow. Otherwise it is the person's own text.
+      if (same(latest.current[key], seen.current[key])) followed[key] = server[key];
+    }
+    seen.current = server;
+    if (!Object.keys(followed).length) return;
+    known.current = { ...known.current, ...followed };
+    setValue((current) => ({ ...current, ...followed }));
+  }, [server]);
+
+  const change = useCallback((next: Partial<T> | ((current: T) => Partial<T>)) => {
+    setValue((current) => ({ ...current, ...(typeof next === "function" ? next(current) : next) }));
+  }, []);
+
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const saveState = useAutosave(value, async (sending) => {
+    const changes: Partial<T> = {};
+    for (const key of Object.keys(sending) as Array<keyof T>) {
+      if (!same(sending[key], known.current[key])) changes[key] = sending[key];
+    }
+    if (!Object.keys(changes).length) return;
+    await saveRef.current(changes);
+    known.current = { ...known.current, ...changes };
+  });
+  return { value, change, saveState };
 }

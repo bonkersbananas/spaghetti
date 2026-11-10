@@ -13,7 +13,7 @@ import {
 import { inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { AttemptResult } from "@/components/search/Results";
@@ -38,7 +38,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto, spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry";
 import { photoSrc } from "@/lib/previews";
 import { canEdit, useReadOnly } from "@/lib/read-only";
-import { useAutosave } from "@/lib/use-autosave";
+import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/pantry/$spoolId")({
@@ -97,23 +97,27 @@ function SpoolPage({ spool }: { spool: Spool }) {
   const isDesktop = useIsDesktop();
   const [allMaterials, setAllMaterials] = useState(false);
   const [allFinishes, setAllFinishes] = useState(false);
-  const [value, setValue] = useState<Editable>({
-    material: spool.material,
-    brand: spool.brand,
-    colorName: spool.colorName,
-    colorHex: spool.colorHex,
-    finish: spool.finish,
-    remaining: spool.remaining,
-    note: spool.note,
-    driedAt: spool.driedAt,
-  });
-  const change = (next: Partial<Editable>) => setValue((current) => ({ ...current, ...next }));
-  const saveState = useAutosave(value, (next) =>
+  // The fields follow the server's copy (the other person's edit) except the one being typed in, and a
+  // save sends only the fields changed here.
+  const server = useMemo<Editable>(
+    () => ({
+      material: spool.material,
+      brand: spool.brand,
+      colorName: spool.colorName,
+      colorHex: spool.colorHex,
+      finish: spool.finish,
+      remaining: spool.remaining,
+      note: spool.note,
+      driedAt: spool.driedAt,
+    }),
+    [spool],
+  );
+  const { value, change, saveState } = useLiveFields<Editable>(server, (changes) =>
     saveSpool(queryClient, spool.id, {
-      ...next,
-      material: next.material.trim() || spool.material,
-      brand: next.brand?.trim() || null,
-      colorName: next.colorName?.trim() || null,
+      ...changes,
+      ...(changes.material !== undefined && { material: changes.material.trim() || spool.material }),
+      ...(changes.brand !== undefined && { brand: changes.brand?.trim() || null }),
+      ...(changes.colorName !== undefined && { colorName: changes.colorName?.trim() || null }),
     }),
   );
   const [placing, setPlacing] = useState(false);

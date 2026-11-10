@@ -215,3 +215,59 @@ test("picks a spool from the pantry for an attempt's filament", async ({ page, i
   await expect(printed.getByRole("link", { name: /Lampshade · attempt 1/ })).toBeVisible();
   await expect(printed).toContainText("1 worked");
 });
+
+test("AMS bays say what is left, and the desktop list view is remembered", async ({ page, isMobile }) => {
+  const headers = { Origin: origin(page) };
+  const empty = await addSpoolByApi(page, {
+    material: "PLA",
+    colorName: "Gray",
+    colorHex: "#8e9089",
+    remaining: "empty",
+  });
+  const dried = await addSpoolByApi(page, {
+    material: "PETG",
+    colorName: "Blue",
+    colorHex: "#0a2989",
+    remaining: "half",
+    driedAt: Date.now() - 5 * 24 * 3_600_000,
+  });
+  await addSpoolByApi(page, { material: "PLA", colorName: "Sunflower yellow", colorHex: "#f0b323", remaining: "low" });
+  await page.request.put("/api/printer/slots/A1", { headers, data: { spoolId: empty } });
+  await page.request.put("/api/printer/slots/A2", { headers, data: { spoolId: dried } });
+
+  await page.goto("/pantry");
+  // An empty spool that is still loaded says so in words, at every width.
+  const bayA1 = page.getByRole("button", { name: /^A1 Gray/ });
+  await expect(bayA1.getByText("Empty", { exact: true })).toBeVisible();
+  // From lg the bay is a row with its level in words and when the spool was dried; below, a column with the bars.
+  const bayA2 = page.getByRole("button", { name: /^A2 Blue/ });
+  if (isMobile) {
+    // Screen-reader-only below lg: one pixel wide on screen, and the dried line isn't drawn at all.
+    const half = await bayA2.getByText("Half", { exact: true }).boundingBox();
+    expect(half?.width ?? 0).toBeLessThanOrEqual(1);
+    await expect(bayA2.getByText("5 d ago")).toBeHidden();
+  } else {
+    await expect(bayA2.getByText("Half", { exact: true })).toBeVisible();
+    await expect(bayA2.getByText("5 d ago")).toBeVisible();
+  }
+
+  if (isMobile) {
+    // Phones always show cards: no switch.
+    await expect(page.getByRole("radio", { name: "List" })).toHaveCount(0);
+    return;
+  }
+  // Cards first; the list is one choice away and survives a reload.
+  await expect(page.getByRole("radio", { name: "Cards" })).toBeChecked();
+  await page.getByRole("radio", { name: "List" }).click();
+  const pla = page.getByRole("list", { name: "PLA spools" });
+  await expect(pla.getByRole("link")).toHaveCount(2);
+  // Low first, and the empty ones last.
+  await expect(pla.getByRole("link").first()).toContainText("Sunflower yellow");
+  await expect(pla.getByRole("link").last()).toContainText("Gray");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "List" })).toBeChecked();
+  await expect(page.getByRole("list", { name: "PLA spools" }).getByRole("link")).toHaveCount(2);
+  expect(await page.evaluate(() => localStorage.getItem("sg-pantry-view"))).toBe("list");
+  await page.getByRole("radio", { name: "Cards" }).click();
+  expect(await page.evaluate(() => localStorage.getItem("sg-pantry-view"))).toBe("cards");
+});

@@ -1,9 +1,11 @@
 import type { Spool } from "@shared/api";
 import { amsUnitLetters, EXTERNAL_SLOT, spoolName, unitSlots } from "@shared/spools";
+import { daysAgo } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { PlusIcon } from "@/components/ui/icons";
+import { DriedIcon, PlusIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Sheet } from "@/components/ui/Sheet";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
@@ -73,12 +75,18 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
         !readOnly && "hover:bg-ink/6",
         over && "shadow-ring bg-semolina-soft/60",
         shape === "bay"
-          ? "flex-col items-center gap-2 px-1.5 pt-3 pb-2.5 md:px-2 md:pt-4"
+          ? // Tall on phones and laptops; from lg a row like the external holder, so the tile fills edge to edge.
+            "flex-col items-center gap-2 px-1.5 pt-3 pb-2.5 md:px-2 md:pt-4 lg:flex-row lg:gap-3 lg:px-3 lg:py-3 lg:text-left"
           : "w-full items-center gap-3 px-3 py-2.5 text-left",
       )}
     >
       <SpoolDisc color={spool?.colorHex} empty={!spool} size={shape === "bay" ? "lg" : "md"} />
-      <span className={cn("flex min-w-0 flex-col", shape === "bay" ? "w-full items-center text-center" : "flex-1")}>
+      <span
+        className={cn(
+          "flex min-w-0 flex-col",
+          shape === "bay" ? "w-full flex-1 items-center text-center lg:items-start lg:text-left" : "flex-1",
+        )}
+      >
         <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
           {slot === EXTERNAL_SLOT ? "External" : slot}
         </span>
@@ -87,19 +95,48 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
             "block w-full min-w-0 font-semibold",
             // A bay is narrow on a phone: the name steps down a size and may take two lines, breaking between
             // words, rather than lose its end ("Sunflow…").
-            shape === "bay" ? "text-caption md:text-small line-clamp-2 break-words" : "text-small truncate",
+            shape === "bay"
+              ? "text-caption md:text-small line-clamp-2 break-words lg:line-clamp-1"
+              : "text-small truncate",
             spool ? "text-ink" : "text-ink-faint",
           )}
         >
           {spool ? (name?.title ?? spool.material) : "Empty"}
         </span>
         {spool && (
-          <span className="text-caption text-ink-faint block w-full min-w-0 truncate">
-            {spool.colorName ? spool.material : (spool.brand ?? "")}
-          </span>
+          <>
+            <span
+              className={cn(
+                "text-caption text-ink-faint block w-full min-w-0 truncate",
+                // From lg, a dried spool says so beside its material (below).
+                shape === "bay" && !!spool.driedAt && "lg:hidden",
+              )}
+            >
+              {spool.colorName ? spool.material : (spool.brand ?? "")}
+            </span>
+            {shape === "bay" && spool.driedAt && (
+              <MetaList className="text-caption text-ink-faint hidden w-full lg:block">
+                <span>{spool.colorName ? spool.material : (spool.brand ?? "")}</span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <DriedIcon size={12} aria-hidden />
+                  <span className="sr-only">Dried </span>
+                  {daysAgo(spool.driedAt)}
+                </span>
+              </MetaList>
+            )}
+            {shape === "bay" && (
+              <RemainingMeter
+                remaining={spool.remaining}
+                // A spool that is still loaded but empty says so in words at every width.
+                showLabel={spool.remaining === "empty" ? true : "lg"}
+                // Pinned to the bottom of the tile, so the four meters sit on one line when a name wraps.
+                className="mt-auto self-center pt-1 lg:mt-0.5 lg:self-start lg:pt-0"
+              />
+            )}
+          </>
         )}
       </span>
-      {spool && shape === "row" && <RemainingMeter remaining={spool.remaining} />}
+      {spool && shape === "row" && <RemainingMeter remaining={spool.remaining} showLabel="lg" />}
     </button>
   );
 }

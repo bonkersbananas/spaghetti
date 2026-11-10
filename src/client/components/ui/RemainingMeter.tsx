@@ -16,7 +16,8 @@ export function RemainingMeter({
   className,
 }: {
   remaining: Remaining;
-  showLabel?: boolean;
+  /** The word beside the bars. "lg" shows it from the lg breakpoint (screen readers always hear it). */
+  showLabel?: boolean | "lg";
   className?: string;
 }) {
   return (
@@ -36,7 +37,11 @@ export function RemainingMeter({
           />
         ))}
       </span>
-      {showLabel ? REMAINING_LABELS[remaining] : <span className="sr-only">{REMAINING_LABELS[remaining]}</span>}
+      {showLabel === true ? (
+        REMAINING_LABELS[remaining]
+      ) : (
+        <span className={cn("sr-only", showLabel === "lg" && "lg:not-sr-only")}>{REMAINING_LABELS[remaining]}</span>
+      )}
     </span>
   );
 }

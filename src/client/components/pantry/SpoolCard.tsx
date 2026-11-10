@@ -41,9 +41,10 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
             </>
           ) : (
             <div className="bg-ink/3 flex size-full items-center justify-center">
+              {/* The spool fills three fifths of the well, at any card size. */}
               <SpoolDisc
                 color={spool.colorHex}
-                size="xl"
+                size="fill"
                 className="duration-base transition-transform group-hover:rotate-12"
               />
             </div>
