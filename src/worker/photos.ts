@@ -1,7 +1,8 @@
-import { and, inArray, isNotNull, lt, or } from "drizzle-orm";
+import { and, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { PhotoVariant } from "../shared/api.ts";
+import { CHANGES_KEEP_MS } from "../shared/changes.ts";
 import { getDb } from "./db/index.ts";
-import { attemptFiles, attempts, items, photos, spools } from "./db/schema.ts";
+import { attemptFiles, attempts, changes, items, photos, spools } from "./db/schema.ts";
 
 export function photoKey(photoId: string, variant: PhotoVariant): string {
   return `photos/${photoId}/${variant}`;
@@ -93,6 +94,11 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     .delete(items)
     .where(and(isNotNull(items.deletedAt), lt(items.deletedAt, cutoff)))
     .returning({ id: items.id });
+  // The change feed keeps a month: anyone who was away longer is told to reload everything.
+  // The newest row stays however old, so the cursor never goes back to a smaller number.
+  await db
+    .delete(changes)
+    .where(and(lt(changes.at, new Date(now - CHANGES_KEEP_MS)), lt(changes.seq, sql`(SELECT max(seq) FROM changes)`)));
   return {
     photos: doomed.length,
     files: doomedFiles.length,
