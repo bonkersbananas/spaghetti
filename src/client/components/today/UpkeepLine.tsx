@@ -18,7 +18,7 @@ export function UpkeepLine() {
   return (
     <Link
       to="/printer"
-      className="focus-ring text-small text-ink-soft hover:text-ink duration-fast flex items-center gap-2 rounded-md transition-colors"
+      className="focus-ring text-small text-ink-soft hover:text-ink duration-fast hover:bg-ink/4 -mx-2 flex min-h-11 items-center gap-2 rounded-md px-2 transition-colors"
     >
       <WrenchIcon size={16} className="shrink-0" aria-hidden />
       {line}

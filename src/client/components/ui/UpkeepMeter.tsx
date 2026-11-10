@@ -30,7 +30,7 @@ export function UpkeepMeter({
       <span
         className={cn(
           "duration-base block h-full rounded-full transition-[width] ease-out",
-          fraction >= 1 ? "bg-semolina" : "bg-basil",
+          fraction >= 1 ? "bg-semolina" : "bg-ink-soft",
         )}
         style={{ width: `${Math.max(filled * 100, filled > 0 ? 4 : 0)}%` }} // design-lint-ignore: a share of the bar is data
       />

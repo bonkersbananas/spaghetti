@@ -23,7 +23,13 @@ export function upkeepRowText(task: UpkeepTask): string {
     task.sinceHours,
     task.sinceDays,
   );
-  return task.due ? `${progress} · due` : progress;
+  if (!task.due) return progress;
+  const over =
+    task.by === "hours" && task.intervalHours
+      ? task.sinceHours - task.intervalHours
+      : task.sinceDays - (task.intervalDays ?? 0);
+  const unit = task.by === "hours" ? "print hours" : "days";
+  return `Due: ${Math.max(1, Math.floor(over))} ${unit} over`;
 }
 
 /**
