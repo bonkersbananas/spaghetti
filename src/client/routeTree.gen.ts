@@ -13,12 +13,14 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAgentsRouteImport } from './routes/_app/agents'
+import { Route as AppDeletedRouteImport } from './routes/_app/deleted'
 import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppPrinterRouteImport } from './routes/_app/printer'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppShareRouteImport } from './routes/_app/share'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
+import { Route as AppYearRouteImport } from './routes/_app/year'
 import { Route as AppBuildsIndexRouteImport } from './routes/_app/builds.index'
 import { Route as AppBuildsBuildIdRouteImport } from './routes/_app/builds.$buildId'
 import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
@@ -43,6 +45,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAgentsRoute = AppAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDeletedRoute = AppDeletedRouteImport.update({
+  id: '/deleted',
+  path: '/deleted',
   getParentRoute: () => AppRoute,
 } as any)
 const AppJournalRoute = AppJournalRouteImport.update({
@@ -73,6 +80,11 @@ const AppStyleguideRoute = AppStyleguideRouteImport.update({
 const AppTodayRoute = AppTodayRouteImport.update({
   id: '/today',
   path: '/today',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppYearRoute = AppYearRouteImport.update({
+  id: '/year',
+  path: '/year',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBuildsIndexRoute = AppBuildsIndexRouteImport.update({
@@ -110,12 +122,14 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
   '/agents': typeof AppAgentsRoute
+  '/deleted': typeof AppDeletedRoute
   '/journal': typeof AppJournalRoute
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/share': typeof AppShareRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
+  '/year': typeof AppYearRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
@@ -126,12 +140,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/agents': typeof AppAgentsRoute
+  '/deleted': typeof AppDeletedRoute
   '/journal': typeof AppJournalRoute
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/share': typeof AppShareRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
+  '/year': typeof AppYearRoute
   '/': typeof AppIndexRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
@@ -145,12 +161,14 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/agents': typeof AppAgentsRoute
+  '/_app/deleted': typeof AppDeletedRoute
   '/_app/journal': typeof AppJournalRoute
   '/_app/printer': typeof AppPrinterRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/share': typeof AppShareRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/today': typeof AppTodayRoute
+  '/_app/year': typeof AppYearRoute
   '/_app/': typeof AppIndexRoute
   '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
@@ -165,12 +183,14 @@ export interface FileRouteTypes {
     | '/'
     | '/sign-in'
     | '/agents'
+    | '/deleted'
     | '/journal'
     | '/printer'
     | '/search'
     | '/share'
     | '/styleguide'
     | '/today'
+    | '/year'
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
@@ -181,12 +201,14 @@ export interface FileRouteTypes {
   to:
     | '/sign-in'
     | '/agents'
+    | '/deleted'
     | '/journal'
     | '/printer'
     | '/search'
     | '/share'
     | '/styleguide'
     | '/today'
+    | '/year'
     | '/'
     | '/builds/$buildId'
     | '/ideas/$ideaId'
@@ -199,12 +221,14 @@ export interface FileRouteTypes {
     | '/_app'
     | '/sign-in'
     | '/_app/agents'
+    | '/_app/deleted'
     | '/_app/journal'
     | '/_app/printer'
     | '/_app/search'
     | '/_app/share'
     | '/_app/styleguide'
     | '/_app/today'
+    | '/_app/year'
     | '/_app/'
     | '/_app/builds/$buildId'
     | '/_app/ideas/$ideaId'
@@ -249,6 +273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgentsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/deleted': {
+      id: '/_app/deleted'
+      path: '/deleted'
+      fullPath: '/deleted'
+      preLoaderRoute: typeof AppDeletedRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/journal': {
       id: '/_app/journal'
       path: '/journal'
@@ -289,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/today'
       fullPath: '/today'
       preLoaderRoute: typeof AppTodayRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/year': {
+      id: '/_app/year'
+      path: '/year'
+      fullPath: '/year'
+      preLoaderRoute: typeof AppYearRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/builds/': {
@@ -338,12 +376,14 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAgentsRoute: typeof AppAgentsRoute
+  AppDeletedRoute: typeof AppDeletedRoute
   AppJournalRoute: typeof AppJournalRoute
   AppPrinterRoute: typeof AppPrinterRoute
   AppSearchRoute: typeof AppSearchRoute
   AppShareRoute: typeof AppShareRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppTodayRoute: typeof AppTodayRoute
+  AppYearRoute: typeof AppYearRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
   AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
@@ -355,12 +395,14 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgentsRoute: AppAgentsRoute,
+  AppDeletedRoute: AppDeletedRoute,
   AppJournalRoute: AppJournalRoute,
   AppPrinterRoute: AppPrinterRoute,
   AppSearchRoute: AppSearchRoute,
   AppShareRoute: AppShareRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppTodayRoute: AppTodayRoute,
+  AppYearRoute: AppYearRoute,
   AppIndexRoute: AppIndexRoute,
   AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,
   AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,

@@ -9,6 +9,7 @@ import {
   PHOTO_CONTENT_TYPES,
   type PhotoResponse,
 } from "../../shared/api.ts";
+import { beganAsIdea } from "../../shared/deleted.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
@@ -60,6 +61,13 @@ const updateItem = z.object({
 });
 const upNextOrder = z.object({ ids: z.array(id).max(500) });
 const reorder = z.object({ photoIds: z.array(id).max(200) });
+const unscrap = z.object({
+  stage: z.enum(["building", "done", "shelved"]),
+  startedAt: z.number().int().positive(),
+  finishedAt: z.number().int().positive().nullable(),
+  coverPhotoId: id.nullable(),
+  attemptIds: z.array(id).max(500),
+});
 /** `?stage=building,done,shelved`: one stage or several. */
 const listQuery = z.object({
   stage: z
@@ -373,6 +381,89 @@ export const itemRoutes = new Hono<AppEnv>()
     ]);
     if (!result.length) return apiError(c, 404, "not_found", notFound);
     return c.body(null, 204);
+  })
+
+  /**
+   * Scrapping a build that began as an idea: it goes back to Ideas (stage idea, not started) and its attempts
+   * are deleted with it (soft, like any delete). Anything else is refused: delete it instead.
+   */
+  .post("/:id/scrap", async (c) => {
+    if (!canUse(c, "attempts")) return missingScope(c, ["attempts"]);
+    const itemId = c.req.param("id");
+    const db = c.var.db;
+    const current = await db
+      .select()
+      .from(items)
+      .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
+      .get();
+    if (!current) return apiError(c, 404, "not_found", notFound);
+    if (
+      !beganAsIdea({
+        stage: current.stage,
+        createdAt: current.createdAt.getTime(),
+        startedAt: current.startedAt?.getTime() ?? null,
+      })
+    ) {
+      return apiError(c, 409, "not_an_idea", "That build didn't begin as an idea. Delete it instead.");
+    }
+    const now = new Date();
+    await db.batch([
+      db
+        .update(attempts)
+        .set({ deletedAt: now })
+        .where(and(eq(attempts.itemId, itemId), isNull(attempts.deletedAt))),
+      db
+        .update(items)
+        .set({ stage: "idea", startedAt: null, finishedAt: null, coverPhotoId: null, upNext: null, updatedAt: now })
+        .where(eq(items.id, itemId)),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
+    ]);
+    const item = await loadItem(db, itemId);
+    if (!item) return apiError(c, 404, "not_found", notFound);
+    return c.json<ItemResponse>({ item });
+  })
+
+  /** Undo for a scrap: the build comes back as the request describes, with the attempts it listed. */
+  .post("/:id/unscrap", async (c) => {
+    const parsed = unscrap.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    if (!canUse(c, "attempts")) return missingScope(c, ["attempts"]);
+    const itemId = c.req.param("id");
+    const db = c.var.db;
+    const { stage, startedAt, finishedAt, coverPhotoId, attemptIds } = parsed.data;
+    const now = new Date();
+    // One batch, so it is all or nothing: the attempts come back only while the item is a live idea (checked in
+    // the statement itself), then the item moves on, then the change is recorded only if that moved it.
+    const [, moved] = await db.batch([
+      db
+        .update(attempts)
+        .set({ deletedAt: null })
+        .where(
+          and(
+            eq(attempts.itemId, itemId),
+            inArray(attempts.id, attemptIds),
+            sql`exists (select 1 from items where id = ${itemId} and deleted_at is null and stage = 'idea')`,
+          ),
+        ),
+      db
+        .update(items)
+        .set({
+          stage,
+          startedAt: new Date(startedAt),
+          finishedAt: finishedAt === null ? null : new Date(finishedAt),
+          coverPhotoId,
+          upNext: null,
+          updatedAt: now,
+        })
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt), eq(items.stage, "idea")))
+        .returning({ id: items.id }),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
+    ]);
+    // Nothing was changed if the item wasn't a live idea: it is still deleted or already a build.
+    if (!moved.length) return apiError(c, 404, "not_found", goneForGood);
+    const item = await loadItem(db, itemId);
+    if (!item) return apiError(c, 404, "not_found", goneForGood);
+    return c.json<ItemResponse>({ item });
   })
 
   /** Undo for a delete: the item and its photos come back as they were. */
