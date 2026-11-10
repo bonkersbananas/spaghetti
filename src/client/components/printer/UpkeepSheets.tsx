@@ -12,7 +12,8 @@ import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTi
 import { Sheet } from "@/components/ui/Sheet";
 import { photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
-import { addUpkeep, deleteUpkeep, logUpkeep, updateUpkeep, upkeepQuery } from "@/lib/upkeep";
+import { upkeepQuery } from "@/lib/upkeep";
+import { addUpkeep, deleteUpkeep, logUpkeep, updateUpkeep } from "@/lib/upkeep-actions";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useObjectUrl } from "@/lib/use-object-url";
 

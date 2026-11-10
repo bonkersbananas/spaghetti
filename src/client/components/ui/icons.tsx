@@ -85,6 +85,5 @@ export {
   Trash as TrashIcon,
   WarningCircle as WarningIcon,
   WifiSlash as OfflineIcon,
-  Wrench as WrenchIcon,
   X as CloseIcon,
 } from "@phosphor-icons/react";

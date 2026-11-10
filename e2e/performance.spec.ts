@@ -105,6 +105,7 @@ test("each screen's first load stays within its JavaScript budget, without the r
     const { files, raw, gzip } = await scriptsLoadedBy(page, path, async () => {
       await expect(page.locator("h1").first()).toBeVisible();
     });
+    if (process.env.PERF_FILES) console.log(path, files.map((f) => f.split("/").pop()).join(" "));
     rows.push(`${path.padEnd(10)} ${raw.toFixed(0).padStart(5)} kB  ${gzip.toFixed(0).padStart(4)} kB gzip`);
     // The styleguide, the .3mf reader, the command palette and the shortcut list wait until they are needed
     // (nothing loads them until asked, except the palette's idle prefetch, switched off here).

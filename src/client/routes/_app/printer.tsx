@@ -3,15 +3,13 @@ import { DRYING_DAYS } from "@shared/drying";
 import { type NozzleSetup, type PrinterSetup, X2D } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { type ReactNode, useMemo, useState } from "react";
-import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
+import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { PrinterBridgeLine } from "@/components/pantry/BridgeLine";
-import { DryingTable } from "@/components/printer/DryingTable";
-import { Upkeep } from "@/components/printer/Upkeep";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
+import { Disclosure } from "@/components/ui/Disclosure";
 import {
   HardenedIcon,
   InfoIcon,
@@ -27,6 +25,14 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
 import { useReadOnly } from "@/lib/read-only";
 import { useLiveFields } from "@/lib/use-autosave";
+import { useIdle } from "@/lib/use-idle";
+
+const Upkeep = lazy(() => import("@/components/printer/Upkeep").then((m) => ({ default: m.Upkeep })));
+// Below the fold, or only after a tap: their own chunks, not part of the first load.
+const DryingTable = lazy(() => import("@/components/printer/DryingTable").then((m) => ({ default: m.DryingTable })));
+const AddSpoolSheet = lazy(() =>
+  import("@/components/pantry/AddSpoolSheet").then((m) => ({ default: m.AddSpoolSheet })),
+);
 
 export const Route = createFileRoute("/_app/printer")({
   component: Printer,
@@ -122,6 +128,11 @@ function Setup({ initial }: { initial: PrinterSetup }) {
     dryingDays: value.dryingDays,
   };
   const [adding, setAdding] = useState<string | null>(null);
+  const idle = useIdle();
+  const [dryingOpen, setDryingOpen] = useState(false);
+  // The add-a-spool sheet's code loads with the first tap and stays mounted after, so it can slide away.
+  const [sheetLoaded, setSheetLoaded] = useState(false);
+  if (adding !== null && !sheetLoaded) setSheetLoaded(true);
   // Offline, the setup is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
 
@@ -166,7 +177,13 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         <PrinterBridgeLine />
       </div>
 
-      <Upkeep />
+      {idle ? (
+        <Suspense fallback={<Skeleton className="h-52 w-full rounded-xl" aria-hidden />}>
+          <Upkeep />
+        </Suspense>
+      ) : (
+        <Skeleton className="h-52 w-full rounded-xl" aria-hidden />
+      )}
 
       <fieldset disabled={readOnly} className="contents">
         <Section title="Nozzles">
@@ -258,14 +275,21 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         </Section>
 
         <Section title="Staying dry">
-          <p className="text-small text-ink-soft -mt-2">
-            How many days a spool stays dry after drying, by material. Past that, Spaghetti says to dry it before
-            printing. Starting values are a guide, not Bambu's word: change them to what you see.
-          </p>
-          <DryingTable
-            days={{ ...DRYING_DAYS, ...value.dryingDays }}
-            onChange={(dryingDays) => change({ dryingDays })}
-          />
+          <Disclosure
+            open={dryingOpen}
+            onOpenChange={setDryingOpen}
+            title="Days each material stays dry"
+            summary="Past that, Spaghetti says to dry it before printing. Starting values are a guide, not Bambu's word."
+          >
+            {dryingOpen && (
+              <Suspense fallback={null}>
+                <DryingTable
+                  days={{ ...DRYING_DAYS, ...value.dryingDays }}
+                  onChange={(dryingDays) => change({ dryingDays })}
+                />
+              </Suspense>
+            )}
+          </Disclosure>
         </Section>
       </fieldset>
       <p className="text-small text-ink-faint flex items-start gap-2">
@@ -273,16 +297,22 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         These are the checks behind the gentle hints while logging an attempt: temperatures past the X2D's limits, TPU
         on the auxiliary nozzle or through the AMS, and abrasive filament on a nozzle that isn't hardened.
       </p>
-      <AddSpoolSheet
-        open={adding !== null}
-        onOpenChange={(open) => !open && setAdding(null)}
-        description={
-          adding ? `It goes straight into ${adding === "Ext" ? "the external holder" : `slot ${adding}`}.` : undefined
-        }
-        onAdded={(spool, saved) => {
-          if (adding) void loadSlot(queryClient, adding, spool.id, saved);
-        }}
-      />
+      {sheetLoaded && (
+        <Suspense fallback={null}>
+          <AddSpoolSheet
+            open={adding !== null}
+            onOpenChange={(open) => !open && setAdding(null)}
+            description={
+              adding
+                ? `It goes straight into ${adding === "Ext" ? "the external holder" : `slot ${adding}`}.`
+                : undefined
+            }
+            onAdded={(spool, saved) => {
+              if (adding) void loadSlot(queryClient, adding, spool.id, saved);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

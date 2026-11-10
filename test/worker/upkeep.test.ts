@@ -263,3 +263,9 @@ describe("the upkeep nudge", () => {
     expect(row?.nudged_at).toBeNull();
   });
 });
+
+describe("an empty change", () => {
+  it("is a 400, not a crash", async () => {
+    expect((await request("/api/printer/upkeep/plate", { method: "PATCH", cookie, json: {} })).status).toBe(400);
+  });
+});

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   attemptMinutes,
-  DEFAULT_UPKEEP,
   dueLine,
   type HoursAttempt,
   printHours,
@@ -9,6 +8,7 @@ import {
   sinceWords,
   upkeepStatus,
 } from "../../src/shared/upkeep.ts";
+import { DEFAULT_UPKEEP } from "../../src/shared/upkeep-defaults.ts";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

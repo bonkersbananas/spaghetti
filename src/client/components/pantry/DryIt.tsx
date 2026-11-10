@@ -1,30 +1,18 @@
 import type { Spool } from "@shared/api";
-import { DRY_IT, needsDrying } from "@shared/drying";
-import { DriedIcon } from "@/components/ui/icons";
-import { cn } from "@/lib/cn";
-import { useDryingDays } from "@/lib/upkeep";
-import { useNow } from "@/lib/use-now";
+import { lazy, Suspense } from "react";
+import { useIdle } from "@/lib/use-idle";
 
-/** Whether this spool is past its material's dry window (the printer's own numbers, else the starting ones). */
-export function useNeedsDrying(spool: Pick<Spool, "material" | "driedAt" | "createdAt" | "remaining">): boolean {
-  const days = useDryingDays();
-  const now = useNow(3_600_000);
-  return needsDrying(spool, now, days);
-}
+const View = lazy(() => import("./DryItView"));
 
-/** "Dry it before printing": a plain fact in the quiet ink, not a warning. Nothing when the spool is fine. */
-export function DryIt({
-  spool,
-  className,
-}: {
+/** "Dry it before printing" once the spool is known to be past its window: its rules load from an idle moment. */
+export function DryIt(props: {
   spool: Pick<Spool, "material" | "driedAt" | "createdAt" | "remaining">;
   className?: string;
 }) {
-  if (!useNeedsDrying(spool)) return null;
+  if (!useIdle()) return null;
   return (
-    <span className={cn("text-small text-ink-soft inline-flex items-center gap-1.5", className)}>
-      <DriedIcon size={14} aria-hidden />
-      {DRY_IT}
-    </span>
+    <Suspense fallback={null}>
+      <View {...props} />
+    </Suspense>
   );
 }

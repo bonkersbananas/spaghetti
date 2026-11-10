@@ -8,7 +8,8 @@ import {
   type UpkeepResponse,
   type UpkeepTask,
 } from "../../shared/api.ts";
-import { DEFAULT_UPKEEP, type HoursAttempt, printHours, sinceDone, upkeepStatus } from "../../shared/upkeep.ts";
+import { type HoursAttempt, printHours, sinceDone, upkeepStatus } from "../../shared/upkeep.ts";
+import { DEFAULT_UPKEEP } from "../../shared/upkeep-defaults.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { attempts, items, upkeepLogs, upkeepTasks } from "../db/schema.ts";
@@ -199,6 +200,7 @@ export const upkeepRoutes = new Hono<AppEnv>()
       .where(and(eq(upkeepTasks.id, taskId), isNull(upkeepTasks.deletedAt)))
       .get();
     if (!current) return apiError(c, 404, "not_found", notFound);
+    if (!Object.keys(parsed.data).length) return apiError(c, 400, "invalid", "Nothing to change.");
     const next = { ...current, ...parsed.data };
     if (!hasInterval(next)) return apiError(c, 400, "invalid", "A task needs an interval in print hours or days.");
     await db.batch([

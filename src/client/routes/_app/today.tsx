@@ -3,7 +3,7 @@ import { monthLabel, summaryLine } from "@shared/journal";
 import { backBurnerIdea } from "@shared/today";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { itemName } from "@/components/journal/JournalEntry";
@@ -12,7 +12,6 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
-import { UpkeepLine } from "@/components/today/UpkeepLine";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -27,7 +26,10 @@ import { journalQuery, summaryQuery } from "@/lib/journal";
 import { useScreenActions } from "@/lib/palette";
 import { printerQuery, spoolsQuery } from "@/lib/pantry";
 import { peopleQuery } from "@/lib/queries";
+import { useDueUpkeep } from "@/lib/upkeep";
 import { useNow } from "@/lib/use-now";
+
+const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
 
 export const Route = createFileRoute("/_app/today")({
   component: Today,
@@ -60,6 +62,7 @@ function Today() {
   const byId = useMemo(() => new Map<string, Person>(people?.map((person) => [person.id, person])), [people]);
   const printer = useQuery(printerQuery);
   const spools = useQuery(spoolsQuery);
+  const hasDueUpkeep = useDueUpkeep().length > 0;
 
   const month = thisMonth(now);
   const journal = useInfiniteQuery(journalQuery(everything));
@@ -136,7 +139,11 @@ function Today() {
     <>
       <PageHeader title="Today" subtitle={subtitle} />
       <div className="-mt-4 mb-6 empty:hidden">
-        <UpkeepLine />
+        {hasDueUpkeep && (
+          <Suspense fallback={null}>
+            <UpkeepLine />
+          </Suspense>
+        )}
       </div>
       {brandNew ? (
         <EmptyState
