@@ -24,6 +24,7 @@ export function ActionBar({ children, className }: ActionBarProps) {
     <>
       <div aria-hidden className="h-actionbar md:hidden" />
       <div
+        data-action-bar
         className={cn(
           "bottom-tabbar from-paper via-paper/95 fixed inset-x-0 z-20 bg-linear-to-t to-transparent px-5 pt-5 pb-3 md:hidden",
           className,

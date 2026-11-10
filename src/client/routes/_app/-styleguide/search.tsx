@@ -1,3 +1,4 @@
+import { displayName } from "@shared/people";
 import { searchTerms } from "@shared/search";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -45,7 +46,7 @@ export function SearchSection() {
             {people.map((person) => (
               <ToggleChip key={person.id} selected={person.id === "b"} className="pl-1.5">
                 <Avatar person={person} size="xs" />
-                {person.name.split(" ")[0]}
+                {displayName(person)}
               </ToggleChip>
             ))}
           </FilterGroup>

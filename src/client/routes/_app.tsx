@@ -5,6 +5,7 @@ import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
 import { Sidebar } from "@/components/shell/Sidebar";
+import { StatusBarCap } from "@/components/shell/StatusBarCap";
 import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
@@ -87,11 +88,12 @@ function Shell() {
     <div className="bg-paper min-h-dvh">
       <Sidebar />
       <main className="pt-safe md:pl-sidebar">
-        <div className="max-w-wide pb-tabbar mx-auto w-full px-5 md:px-12 md:pb-16">
+        <div className="max-w-wide pb-page mx-auto w-full px-5 md:px-12 md:pb-16">
           <OfflineNotice />
           <Outlet />
         </div>
       </main>
+      <StatusBarCap />
       <TabBar />
       <CaptureSheet />
       {shared && (

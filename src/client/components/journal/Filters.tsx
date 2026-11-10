@@ -1,6 +1,7 @@
 import type { Person } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { OUTCOME_FILTER_LABELS, OUTCOME_FILTERS, type OutcomeFilter } from "@shared/journal";
+import { displayName } from "@shared/people";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { outcomeIcons } from "@/components/builds/Outcome";
@@ -94,7 +95,7 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
     >
       <Avatar person={person} size="xs" decorative />
       <span className="sr-only">By </span>
-      {person.name.split(" ")[0]}
+      {displayName(person)}
     </ToggleChip>
   ));
   const clear = hasFilters(value) && (
