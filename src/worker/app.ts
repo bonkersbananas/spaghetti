@@ -15,6 +15,7 @@ import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
 import { captureRoutes } from "./routes/capture.ts";
 import { changeRoutes } from "./routes/changes.ts";
+import { deletedRoutes } from "./routes/deleted.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { journalRoutes } from "./routes/journal.ts";
@@ -96,6 +97,7 @@ export const app = new Hono<AppEnv>()
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)
   .route("/capture", captureRoutes)
+  .route("/deleted", deletedRoutes)
   .route("/items", itemRoutes)
   .route("/items", itemAttemptRoutes)
   .route("/attempts", attemptRoutes)
