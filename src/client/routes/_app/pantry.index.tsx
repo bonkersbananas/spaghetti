@@ -15,6 +15,7 @@ import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { loadSlot, spoolsQuery } from "@/lib/pantry";
+import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/pantry/")({
@@ -47,7 +48,9 @@ function Pantry() {
   const { data: spools, isPending } = useQuery(spoolsQuery);
   const { add } = Route.useSearch();
   const [adding, setAdding] = useState<{ open: boolean; slot: string | null }>({ open: !!add, slot: null });
-  const openAdd = (slot: string | null = null) => setAdding({ open: true, slot });
+  // Offline, the pantry is only for reading (see lib/read-only.ts).
+  const readOnly = useReadOnly();
+  const openAdd = (slot: string | null = null) => canEdit() && setAdding({ open: true, slot });
   useHotkeys({ pantryAdd: () => openAdd() });
 
   const loaded = spools?.filter((spool) => spool.slot).length ?? 0;
@@ -67,7 +70,13 @@ function Pantry() {
                 Printer
               </Button>
             </Link>
-            <Button variant="secondary" icon={PlusIcon} shortcut={shortcutCaps("pantryAdd")} onClick={() => openAdd()}>
+            <Button
+              variant="secondary"
+              icon={PlusIcon}
+              shortcut={shortcutCaps("pantryAdd")}
+              disabled={readOnly}
+              onClick={() => openAdd()}
+            >
               Add spool
             </Button>
           </>
@@ -89,7 +98,12 @@ function Pantry() {
           illustration={<PantryJar />}
           title="The pantry's bare"
           action={
-            <Button variant={isDesktop ? "secondary" : "primary"} icon={PlusIcon} onClick={() => openAdd()}>
+            <Button
+              variant={isDesktop ? "secondary" : "primary"}
+              icon={PlusIcon}
+              disabled={readOnly}
+              onClick={() => openAdd()}
+            >
               Add a spool
             </Button>
           }
@@ -108,7 +122,7 @@ function Pantry() {
                 <p className="text-small text-ink-faint">Drag a spool onto a slot, or click a slot to change it.</p>
               )}
             </div>
-            <AmsLoadout onAddSpool={(slot) => openAdd(slot)} />
+            <AmsLoadout readOnly={readOnly} onAddSpool={(slot) => openAdd(slot)} />
           </section>
           {groups(spools).map((group) => (
             <section
@@ -124,21 +138,27 @@ function Pantry() {
               </h2>
               <ul className={grid} aria-label={`${group.material} spools`}>
                 {group.spools.map((spool) => (
-                  <SpoolCard key={spool.id} spool={spool} draggable={isDesktop} />
+                  <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
                 ))}
               </ul>
             </section>
           ))}
           {isDesktop && (
             <div className={grid}>
-              <AddPhotoTile size="card" icon={PlusIcon} label="Add spool" onClick={() => openAdd()} />
+              <AddPhotoTile
+                size="card"
+                icon={PlusIcon}
+                label="Add spool"
+                disabled={readOnly}
+                onClick={() => openAdd()}
+              />
             </div>
           )}
         </div>
       )}
       {!isDesktop && (spools?.length ?? 0) > 0 && (
         <ActionBar>
-          <Button variant="primary" size="lg" icon={PlusIcon} fullWidth onClick={() => openAdd()}>
+          <Button variant="primary" size="lg" icon={PlusIcon} fullWidth disabled={readOnly} onClick={() => openAdd()}>
             Add spool
           </Button>
         </ActionBar>

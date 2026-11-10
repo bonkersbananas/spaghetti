@@ -20,6 +20,7 @@ import {
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
+import { useReadOnly } from "@/lib/read-only";
 import { useAutosave } from "@/lib/use-autosave";
 
 export const Route = createFileRoute("/_app/printer")({
@@ -85,6 +86,8 @@ function Setup({ initial }: { initial: PrinterSetup }) {
   const [setup, setSetup] = useState<PrinterSetup>(initial);
   const saveState = useAutosave(setup, (next) => savePrinterSetup(queryClient, next));
   const [adding, setAdding] = useState<string | null>(null);
+  // Offline, the setup is only for reading (see lib/read-only.ts).
+  const readOnly = useReadOnly();
 
   const setNozzle = (nozzle: Nozzle, change: Partial<NozzleSetup>) =>
     setSetup((current) => ({
@@ -130,100 +133,101 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         </div>
       </div>
 
-      <Section title="Nozzles">
-        <div className="grid gap-3 md:grid-cols-2">
-          {(["main", "auxiliary"] as const).map((nozzle) => {
-            const fitted = setup.nozzles[nozzle];
-            return (
-              <section
-                key={nozzle}
-                className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-4"
-                aria-label={NOZZLE_NAMES[nozzle].title}
-              >
-                <div className="flex flex-col">
-                  <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
-                  <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
-                </div>
-                {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-                <div className="flex flex-wrap gap-2" role="group" aria-label={`${NOZZLE_NAMES[nozzle].title} size`}>
-                  {NOZZLE_DIAMETERS.map((diameter) => (
-                    <ToggleChip
-                      key={diameter}
-                      selected={fitted.diameter === diameter}
-                      onClick={() => setNozzle(nozzle, { diameter })}
-                      className="tabular"
-                    >
-                      {diameter} mm
-                    </ToggleChip>
-                  ))}
-                </div>
-                <ToggleChip
-                  tone="basil"
-                  icon={HardenedIcon}
-                  selected={fitted.hardened}
-                  onClick={() => setNozzle(nozzle, { hardened: !fitted.hardened })}
-                  className="self-start"
+      <fieldset disabled={readOnly} className="contents">
+        <Section title="Nozzles">
+          <div className="grid gap-3 md:grid-cols-2">
+            {(["main", "auxiliary"] as const).map((nozzle) => {
+              const fitted = setup.nozzles[nozzle];
+              return (
+                <section
+                  key={nozzle}
+                  className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-4"
+                  aria-label={NOZZLE_NAMES[nozzle].title}
                 >
-                  {fitted.hardened ? "Hardened steel" : "Not hardened"}
+                  <div className="flex flex-col">
+                    <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
+                    <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
+                  </div>
+                  {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+                  <div className="flex flex-wrap gap-2" role="group" aria-label={`${NOZZLE_NAMES[nozzle].title} size`}>
+                    {NOZZLE_DIAMETERS.map((diameter) => (
+                      <ToggleChip
+                        key={diameter}
+                        selected={fitted.diameter === diameter}
+                        onClick={() => setNozzle(nozzle, { diameter })}
+                        className="tabular"
+                      >
+                        {diameter} mm
+                      </ToggleChip>
+                    ))}
+                  </div>
+                  <ToggleChip
+                    tone="basil"
+                    icon={HardenedIcon}
+                    selected={fitted.hardened}
+                    onClick={() => setNozzle(nozzle, { hardened: !fitted.hardened })}
+                    className="self-start"
+                  >
+                    {fitted.hardened ? "Hardened steel" : "Not hardened"}
+                  </ToggleChip>
+                </section>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section title="Plates you own">
+          {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
+            {[...BED_TYPES, ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate))].map(
+              (plate) => (
+                <ToggleChip key={plate} selected={setup.plates.includes(plate)} onClick={() => togglePlate(plate)}>
+                  {plateName(plate)}
                 </ToggleChip>
-              </section>
-            );
-          })}
-        </div>
-      </Section>
+              ),
+            )}
+          </div>
+        </Section>
 
-      <Section title="Plates you own">
-        {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
-          {[...BED_TYPES, ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate))].map(
-            (plate) => (
-              <ToggleChip key={plate} selected={setup.plates.includes(plate)} onClick={() => togglePlate(plate)}>
-                {plateName(plate)}
-              </ToggleChip>
-            ),
-          )}
-        </div>
-      </Section>
-
-      <Section
-        title="AMS"
-        aside={
-          <Link
-            to="/pantry"
-            className="focus-ring text-small text-ink-soft hover:text-ink inline-flex items-center gap-1.5 rounded-sm font-semibold"
-          >
-            <PantryIcon size={16} aria-hidden />
-            Pantry
-          </Link>
-        }
-      >
-        <AmsLoadout onAddSpool={setAdding} />
-        <div className="flex items-center gap-3">
-          <span className="text-small text-ink-soft flex-1">
-            {units === 1 ? "One AMS unit" : units === 0 ? "No AMS units" : `${units} AMS units`}, up to{" "}
-            {X2D.maxAmsUnits}.
-          </span>
-          <IconButton
-            icon={MinusIcon}
-            variant="secondary"
-            size="sm"
-            label="One AMS unit fewer"
-            disabled={units <= 0}
-            onClick={() => setSetup((current) => ({ ...current, amsUnits: Math.max(0, current.amsUnits - 1) }))}
-          />
-          <IconButton
-            icon={PlusIcon}
-            variant="secondary"
-            size="sm"
-            label="One AMS unit more"
-            disabled={units >= X2D.maxAmsUnits}
-            onClick={() =>
-              setSetup((current) => ({ ...current, amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))
-            }
-          />
-        </div>
-      </Section>
-
+        <Section
+          title="AMS"
+          aside={
+            <Link
+              to="/pantry"
+              className="focus-ring text-small text-ink-soft hover:text-ink inline-flex items-center gap-1.5 rounded-sm font-semibold"
+            >
+              <PantryIcon size={16} aria-hidden />
+              Pantry
+            </Link>
+          }
+        >
+          <AmsLoadout readOnly={readOnly} onAddSpool={setAdding} />
+          <div className="flex items-center gap-3">
+            <span className="text-small text-ink-soft flex-1">
+              {units === 1 ? "One AMS unit" : units === 0 ? "No AMS units" : `${units} AMS units`}, up to{" "}
+              {X2D.maxAmsUnits}.
+            </span>
+            <IconButton
+              icon={MinusIcon}
+              variant="secondary"
+              size="sm"
+              label="One AMS unit fewer"
+              disabled={units <= 0}
+              onClick={() => setSetup((current) => ({ ...current, amsUnits: Math.max(0, current.amsUnits - 1) }))}
+            />
+            <IconButton
+              icon={PlusIcon}
+              variant="secondary"
+              size="sm"
+              label="One AMS unit more"
+              disabled={units >= X2D.maxAmsUnits}
+              onClick={() =>
+                setSetup((current) => ({ ...current, amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))
+              }
+            />
+          </div>
+        </Section>
+      </fieldset>
       <p className="text-small text-ink-faint flex items-start gap-2">
         <InfoIcon size={16} className="mt-0.5 shrink-0" aria-hidden />
         These are the checks behind the gentle hints while logging an attempt: temperatures past the X2D's limits, TPU

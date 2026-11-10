@@ -36,6 +36,7 @@ import { SwatchPicker } from "@/components/ui/Swatch";
 import { useHotkeys } from "@/lib/hotkeys";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto, spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry";
 import { photoSrc } from "@/lib/previews";
+import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -119,8 +120,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
   });
   const library = useFilePicker({ onFiles: ([file]) => file && setSpoolPhoto(queryClient, spool.id, file) });
   const name = spoolName({ ...spool, ...value });
+  // Offline, the spool is only for reading (see lib/read-only.ts).
+  const readOnly = useReadOnly();
 
   const remove = () => {
+    if (!canEdit()) return;
     deleteSpool(queryClient, spool);
     void navigate({ to: "/pantry" });
   };
@@ -135,7 +139,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
       <h1 className="sr-only">{[name.title, name.detail].filter(Boolean).join(", ")}</h1>
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
-        <IconButton icon={TrashIcon} label="Take out of the pantry" onClick={remove} />
+        <IconButton icon={TrashIcon} label="Take out of the pantry" disabled={readOnly} onClick={remove} />
       </DetailBar>
       {camera.input}
       {library.input}
@@ -160,11 +164,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
           </div>
           <div className="flex gap-2">
             {!isDesktop && (
-              <Button variant="secondary" size="sm" icon={CameraIcon} onClick={camera.open}>
+              <Button variant="secondary" size="sm" icon={CameraIcon} disabled={readOnly} onClick={camera.open}>
                 {spool.photo ? "Retake" : "Snap the label"}
               </Button>
             )}
-            <Button variant="quiet" size="sm" icon={ImageIcon} onClick={library.open}>
+            <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
               {spool.photo ? "Another photo" : "Add a photo"}
             </Button>
           </div>
@@ -178,6 +182,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               placeholder={value.material}
               minRows={1}
               maxLength={60}
+              readOnly={readOnly}
               value={value.colorName ?? ""}
               onChange={(event) => change({ colorName: event.target.value.replace(/\n/g, " ") || null })}
               onKeyDown={(event) => {
@@ -194,110 +199,116 @@ function SpoolPage({ spool }: { spool: Spool }) {
             </MetaList>
           </div>
 
-          <div className="flex flex-col gap-2.5">
-            <span className="text-small text-ink-soft px-0.5 font-semibold">How much is left</span>
-            <SegmentedControl<Remaining>
-              label="How much is left"
-              labelHidden
-              options={REMAINING.map((level) => ({ value: level, label: REMAINING_LABELS[level] }))}
-              value={value.remaining}
-              onChange={(remaining) => change({ remaining })}
-              className="w-full md:max-w-md"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-small text-ink-soft font-semibold">In the printer</span>
-              <span className="text-body text-ink">
-                {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
-              </span>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>
-              {spool.slot ? "Move" : "Load it"}
-            </Button>
-            {spool.slot && (
-              <Button
-                variant="quiet"
-                size="sm"
-                onClick={() => spool.slot && void loadSlot(queryClient, spool.slot, null)}
-              >
-                Take out
-              </Button>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-small text-ink-soft font-semibold">Dried</span>
-              <span className="text-body text-ink">
-                {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
-              </span>
-            </div>
-            <ToggleChip
-              tone="semolina"
-              icon={DriedIcon}
-              selected={!!value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000}
-              onClick={() =>
-                change({
-                  driedAt: value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000 ? null : Date.now(),
-                })
-              }
-            >
-              Dried it today
-            </ToggleChip>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <span className="text-small text-ink-soft px-0.5 font-semibold">Material</span>
-            {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Material">
-              {materials.map((material) => (
-                <ToggleChip key={material} selected={value.material === material} onClick={() => change({ material })}>
-                  {material}
-                </ToggleChip>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-end gap-3">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-small text-ink-soft px-0.5 font-semibold">Color</span>
-              <SwatchPicker
-                value={value.colorHex ?? undefined}
-                onChange={(colorHex) => change({ colorHex })}
-                label="Color"
+          <fieldset disabled={readOnly} className="contents">
+            <div className="flex flex-col gap-2.5">
+              <span className="text-small text-ink-soft px-0.5 font-semibold">How much is left</span>
+              <SegmentedControl<Remaining>
+                label="How much is left"
+                labelHidden
+                options={REMAINING.map((level) => ({ value: level, label: REMAINING_LABELS[level] }))}
+                value={value.remaining}
+                onChange={(remaining) => change({ remaining })}
+                className="w-full md:max-w-md"
               />
             </div>
-            <TextField
-              size="sm"
-              label="Brand"
-              placeholder="Bambu, Polymaker…"
-              maxLength={60}
-              value={value.brand ?? ""}
-              onChange={(event) => change({ brand: event.target.value || null })}
-              className="flex-1"
-            />
-          </div>
 
-          <div className="flex flex-col gap-2.5">
-            <span className="text-small text-ink-soft px-0.5 font-semibold">Finish</span>
-            {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Finish">
-              {FINISHES.map((finish) => (
-                <ToggleChip
-                  key={finish}
-                  selected={value.finish === finish}
-                  onClick={() => change({ finish: value.finish === finish ? null : finish })}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-small text-ink-soft font-semibold">In the printer</span>
+                <span className="text-body text-ink">
+                  {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
+                </span>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>
+                {spool.slot ? "Move" : "Load it"}
+              </Button>
+              {spool.slot && (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  onClick={() => spool.slot && void loadSlot(queryClient, spool.slot, null)}
                 >
-                  {finishLabel(finish)}
-                </ToggleChip>
-              ))}
+                  Take out
+                </Button>
+              )}
             </div>
-          </div>
 
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-small text-ink-soft font-semibold">Dried</span>
+                <span className="text-body text-ink">
+                  {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
+                </span>
+              </div>
+              <ToggleChip
+                tone="semolina"
+                icon={DriedIcon}
+                selected={!!value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000}
+                onClick={() =>
+                  change({
+                    driedAt: value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000 ? null : Date.now(),
+                  })
+                }
+              >
+                Dried it today
+              </ToggleChip>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <span className="text-small text-ink-soft px-0.5 font-semibold">Material</span>
+              {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Material">
+                {materials.map((material) => (
+                  <ToggleChip
+                    key={material}
+                    selected={value.material === material}
+                    onClick={() => change({ material })}
+                  >
+                    {material}
+                  </ToggleChip>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-end gap-3">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-small text-ink-soft px-0.5 font-semibold">Color</span>
+                <SwatchPicker
+                  value={value.colorHex ?? undefined}
+                  onChange={(colorHex) => change({ colorHex })}
+                  label="Color"
+                />
+              </div>
+              <TextField
+                size="sm"
+                label="Brand"
+                placeholder="Bambu, Polymaker…"
+                maxLength={60}
+                value={value.brand ?? ""}
+                onChange={(event) => change({ brand: event.target.value || null })}
+                className="flex-1"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <span className="text-small text-ink-soft px-0.5 font-semibold">Finish</span>
+              {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Finish">
+                {FINISHES.map((finish) => (
+                  <ToggleChip
+                    key={finish}
+                    selected={value.finish === finish}
+                    onClick={() => change({ finish: value.finish === finish ? null : finish })}
+                  >
+                    {finishLabel(finish)}
+                  </ToggleChip>
+                ))}
+              </div>
+            </div>
+          </fieldset>
           <NoteField
             value={value.note}
+            readOnly={readOnly}
             onChange={(note) => change({ note })}
             placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
           />

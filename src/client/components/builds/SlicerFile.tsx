@@ -7,6 +7,7 @@ import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/
 import { MetaList } from "@/components/ui/MetaList";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
+import { useOnline } from "@/lib/connection";
 import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
 import { formatBytes, plateThumb, type SlicerFileDraft } from "@/lib/slicer-files";
@@ -175,7 +176,9 @@ export function UnknownFilaments({
   filaments: Array<{ index: number; filament: AttemptFilament }>;
   onAdd: (index: number) => void;
 }) {
-  if (!filaments.length) return null;
+  // Adding a spool needs the server; offline the filaments stay as the file said.
+  const online = useOnline();
+  if (!filaments.length || !online) return null;
   return (
     <div className="flex flex-col gap-2 px-0.5">
       <span className="text-small text-ink-faint">
