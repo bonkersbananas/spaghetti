@@ -8,12 +8,14 @@ import type {
   SearchResponse,
   SpoolResponse,
   SpoolsResponse,
+  UpkeepResponse,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
 import { FAILURE_TAGS, OUTCOME_LABELS, OUTCOMES, SUCCESS_NOTES } from "../../shared/attempts.ts";
 import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import { SLOT_PATTERN } from "../../shared/spools.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
+import { formatHours, sinceWords } from "../../shared/upkeep.ts";
 import { settings as attemptSettings } from "../routes/attempts.ts";
 import { fromBase64, fromUrl, readImage } from "./image.ts";
 
@@ -421,6 +423,59 @@ export const tools: Tool[] = [
       });
       if (!result.ok) return failure(result);
       return { text: args.spool_id ? `Loaded into ${args.slot}.` : `${args.slot} is now empty.` };
+    },
+  }),
+
+  tool({
+    name: "list_upkeep",
+    title: "List the printer's upkeep",
+    description:
+      "List the printer's maintenance tasks (clean the build plate, lubricate the rods, replace the air filter…), most due first, with how long since each was done, its interval in print hours and/or days, and a task_id for log_upkeep. Also the printer's running total of print hours. Needs the \"read\" scope.",
+    scopes: ["read"],
+    readOnly: true,
+    input: z.object({}),
+    async run(_args, ctx) {
+      const result = await ctx.call("/api/printer/upkeep");
+      if (!result.ok) return failure(result);
+      const { printHours, tasks } = result.json as UpkeepResponse;
+      const lines = tasks.map((task) => {
+        const every = [
+          task.intervalHours && `${task.intervalHours} print hours`,
+          task.intervalDays && `${task.intervalDays} days`,
+        ]
+          .filter(Boolean)
+          .join(" or ");
+        const last = task.lastDone
+          ? `last done ${new Date(task.lastDone.doneAt).toISOString().slice(0, 10)}`
+          : "never logged";
+        return `- ${task.name}: ${task.due ? "DUE, " : ""}${sinceWords(task, task.sinceHours, task.sinceDays)}, every ${every}, ${last} (task_id: ${task.id})`;
+      });
+      return {
+        text: `The printer has ${formatHours(printHours)} of print hours.\n\n${lines.length ? lines.join("\n") : "No upkeep tasks."}`,
+      };
+    },
+  }),
+
+  tool({
+    name: "log_upkeep",
+    title: "Log that upkeep was done",
+    description:
+      'Record that a maintenance task was done now (or at "at"): it resets the task and notes the printer\'s print hours at that moment. Optionally a note. Needs the "printer" scope.',
+    scopes: ["printer"],
+    readOnly: false,
+    input: z.object({
+      task_id: z.string().min(1).max(40).describe("A task_id from list_upkeep."),
+      note: z.string().max(2000).optional().describe("What was done, or what was found."),
+      at: z.iso.datetime({ offset: true }).optional().describe("When it was done, if not just now (ISO 8601)."),
+    }),
+    async run(args, ctx) {
+      const result = await ctx.call(`/api/printer/upkeep/${encodeURIComponent(args.task_id)}/done`, {
+        method: "POST",
+        json: { id: crypto.randomUUID(), note: args.note, at: args.at ? Date.parse(args.at) : undefined },
+      });
+      if (!result.ok) return failure(result);
+      const task = (result.json as UpkeepResponse).tasks.find((entry) => entry.id === args.task_id);
+      return { text: task ? `Logged: ${task.name}.` : "Logged." };
     },
   }),
 ];
