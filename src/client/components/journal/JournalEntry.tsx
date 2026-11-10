@@ -1,20 +1,29 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
-import { tagLabel } from "@shared/attempts";
+import { OUTCOME_LABELS, tagLabel } from "@shared/attempts";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { forwardRef } from "react";
-import { OutcomeChip } from "@/components/builds/Outcome";
+import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
-import { PhotoCountBadge } from "@/components/ui/Card";
+import { PhotoCountBadge, SlicerPreviewBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
+import {
+  BuildsIcon,
+  CheckIcon,
+  FinishIcon,
+  type Icon,
+  IdeasIcon,
+  PrintingIcon,
+  ShelveIcon,
+} from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
+import { PrintProgress } from "@/components/ui/PrintProgress";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
-import { photoSrc } from "@/lib/previews";
+import { fileThumbSrc, photoSrc } from "@/lib/previews";
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
 export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
@@ -63,16 +72,19 @@ interface JournalEntryProps {
   selected?: boolean;
   /** "time" under a day heading ("14:05"), "date" under a week heading ("Tue 27"). */
   when: "time" | "date";
+  /** One quiet row for every kind of entry, attempts included: Today's "Lately" uses it. */
+  compact?: boolean;
 }
 
 /**
  * One thing that happened. A print attempt is a card that leads with its
  * photo, and a spaghetti attempt gets the same care as a success: its failure
  * tags in plain view. Ideas captured and builds started, finished or shelved
- * are quieter rows between them.
+ * are quieter rows between them. With `compact`, attempts are rows too.
  */
 export const JournalEntry = forwardRef<HTMLAnchorElement, JournalEntryProps>(function JournalEntry(props, ref) {
-  return props.entry.kind === "attempt" ? <AttemptCard {...props} ref={ref} /> : <EventRow {...props} ref={ref} />;
+  if (props.entry.kind !== "attempt") return <EventRow {...props} ref={ref} />;
+  return props.compact ? <AttemptRow {...props} ref={ref} /> : <AttemptCard {...props} ref={ref} />;
 });
 
 const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function AttemptCard(
@@ -86,6 +98,9 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   if (!attempt) return null;
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const [photo] = photos;
+  // No photo yet, but the slicer's picture of the plate: shown in the photo's place and labeled as a preview.
+  const plate = !photo && attempt.file?.hasThumb ? attempt.file : undefined;
+  const picture = !!(photo || plate);
   const name = itemName(item);
   const filaments = attempt.settings.filaments ?? [];
   const settings = summarizeSettings(attempt.settings).slice(0, 3);
@@ -101,6 +116,23 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         selected && "shadow-ring hover:shadow-ring",
       )}
     >
+      {plate && (
+        // A render isn't a photo: on a phone it gets a shorter frame, so it doesn't take more room than the print would.
+        <div className="relative aspect-video shrink-0 overflow-hidden rounded-md md:aspect-4/3 md:w-2/5">
+          {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
+          <Photo
+            src={fileThumbSrc(plate.id)}
+            alt=""
+            fit="contain"
+            className="size-full p-3"
+            imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
+          />
+          <span className="absolute top-2 left-2">
+            <SlicerPreviewBadge />
+          </span>
+          <OutcomeChip outcome={attempt.outcome} className="shadow-soft absolute bottom-2 left-2" />
+        </div>
+      )}
       {photo && (
         <div className="relative aspect-4/3 shrink-0 overflow-hidden rounded-md md:w-2/5">
           <Photo
@@ -120,8 +152,8 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3">
-        {/* Without a photo, the outcome leads the card. */}
-        {!photo && (
+        {/* Without a picture, the outcome leads the card. */}
+        {!picture && (
           <div className="flex items-center gap-2">
             <OutcomeChip outcome={attempt.outcome} />
             <Meta at={attempt.printedAt} time={time} person={person} via={via} />
@@ -134,8 +166,11 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
               <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
             </MetaList>
           </h3>
-          {photo && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
+          {picture && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
         </div>
+        {attempt.outcome === null && (
+          <PrintProgress startedAt={attempt.printedAt} estimatedMinutes={attempt.settings.estimatedMinutes} />
+        )}
         {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
         {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
           <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
@@ -242,7 +277,8 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           <span
             className={cn("flex items-center gap-1.5 font-semibold", finished ? "text-basil-ink" : "text-ink-faint")}
           >
-            <EventIcon size={15} weight={finished ? "fill" : "regular"} aria-hidden />
+            {/* One icon per row: the tile has it when no photo fills the tile; with a photo this is the only mark of the kind. */}
+            {photo && <EventIcon size={15} weight={finished ? "fill" : "regular"} aria-hidden />}
             {event.label(item)}
           </span>
           <time
@@ -263,6 +299,88 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           {name.text}
         </span>
       </span>
+      {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
+    </Link>
+  );
+});
+
+const outcomeInk = {
+  success: "text-basil-ink",
+  partial: "text-semolina-ink",
+  failed: "text-tomato-ink",
+  printing: "text-semolina-ink",
+} as const;
+
+/**
+ * An attempt as one quiet row, like the event rows: a thumbnail (its photo, the
+ * plate's picture, or the build's icon), the outcome's icon and word in its
+ * ink with the time, then the build's name and "attempt 2".
+ */
+const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function AttemptRow(
+  { entry, item, person, via, selected, when },
+  ref,
+) {
+  const index = item.attempts.findIndex((a) => a.id === entry.attemptId);
+  const attempt = item.attempts[index];
+  if (!attempt) return null;
+  const [photo] = item.photos.filter((candidate) => candidate.attemptId === attempt.id);
+  const plate = !photo && attempt.file?.hasThumb ? attempt.file : undefined;
+  const name = itemName(item);
+  const OutcomeIcon = attempt.outcome ? outcomeIcons[attempt.outcome] : PrintingIcon;
+  const ink = outcomeInk[attempt.outcome ?? "printing"];
+  const estimated = attempt.outcome === null && attempt.settings.estimatedMinutes !== undefined;
+  return (
+    <Link
+      ref={ref}
+      {...entryLink(entry, item)}
+      aria-current={selected || undefined}
+      className={cn(
+        "pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5",
+        selected && "shadow-ring",
+      )}
+    >
+      {photo ? (
+        <Photo
+          src={photoSrc(photo.id, "thumb")}
+          alt=""
+          color={photo.color || undefined}
+          className="size-12 shrink-0 rounded-md"
+        />
+      ) : plate ? (
+        <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-12 shrink-0 rounded-md" />
+      ) : (
+        <span className="bg-ink/5 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md">
+          <BuildsIcon size={22} aria-hidden />
+        </span>
+      )}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <MetaList className="text-small">
+          <span className={cn("flex items-center gap-1.5 font-semibold", ink)}>
+            <OutcomeIcon size={15} aria-hidden />
+            {attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "Printing"}
+          </span>
+          <time
+            dateTime={new Date(attempt.printedAt).toISOString()}
+            title={fullTime(attempt.printedAt)}
+            className="text-ink-faint tabular font-medium whitespace-nowrap"
+          >
+            {when === "time" ? clock(attempt.printedAt) : weekday(attempt.printedAt)}
+          </time>
+        </MetaList>
+        <span className="text-body flex min-w-0 items-baseline gap-2">
+          <span className={cn("truncate", name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium")}>
+            {name.text}
+          </span>
+          <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
+        </span>
+      </span>
+      {estimated && (
+        <PrintProgress
+          variant="ring"
+          startedAt={attempt.printedAt}
+          estimatedMinutes={attempt.settings.estimatedMinutes}
+        />
+      )}
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
     </Link>
   );
