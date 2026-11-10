@@ -199,7 +199,8 @@ test("a row without a photo shows its icon once, and a print in progress shows h
   // The tile carries the icon: the label beside it has none.
   await expect(row.locator("svg")).toHaveCount(1);
 
-  const card = page.getByRole("link", { name: /Printing now/ });
+  // The build's "Started a build" row has its name too: only the attempt card says which attempt it is.
+  const card = page.getByRole("link", { name: /Printing now.*attempt 1/ });
   await expect(card.getByRole("progressbar", { name: "Print progress" })).toBeVisible();
   await expect(card.getByText(/min left/)).toBeVisible();
 });
