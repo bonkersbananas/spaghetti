@@ -1,17 +1,13 @@
-import type { Recipe, RecipeResponse, RecipesResponse } from "@shared/api";
+import type { Recipe, RecipeResponse } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { recipeSettings, settingsMaterial } from "@shared/recipes";
-import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
 import { spoolsQuery } from "./pantry";
+import { recipesQuery } from "./recipes-query";
 
-/** Every recipe, newest first. A pantry group, a spool and a build each pick theirs from this (`recipesFor`). */
-export const recipesQuery = queryOptions({
-  queryKey: ["recipes"] as const,
-  queryFn: async () => (await api<RecipesResponse>("/recipes")).recipes,
-  staleTime: 60_000,
-});
+export { recipesQuery };
 
 export function useRecipes(): Recipe[] {
   return useQuery(recipesQuery).data ?? [];
