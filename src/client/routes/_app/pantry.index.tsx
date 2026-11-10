@@ -1,4 +1,5 @@
 import type { Spool } from "@shared/api";
+import { recipesFor } from "@shared/recipes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
@@ -38,7 +39,7 @@ const GroupRecipes = lazy(() => import("@/components/recipes/GroupRecipes").then
 /** The recipes of a group, fetched as code only when the group has one (a pantry with none never loads them). */
 function GroupRecipesIfAny({ material }: { material: string }) {
   const { data } = useQuery(recipesQuery);
-  if (!data?.some((recipe) => recipe.material.trim().toUpperCase() === material)) return null;
+  if (!data || recipesFor(data, { material }).length === 0) return null;
   return (
     <Suspense fallback={null}>
       <GroupRecipes material={material} />
