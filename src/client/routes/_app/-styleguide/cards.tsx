@@ -4,6 +4,7 @@ import vasePhoto from "@/assets/samples/vase.svg";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
+import { LinkCard } from "@/components/ui/LinkCard";
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, people, Section } from "./shared";
@@ -76,6 +77,16 @@ export function CardSection() {
             meta="sm · longer, fades at the end"
             aspect="portrait"
           />
+        </div>
+      </div>
+      <div className="mt-10">
+        <Label>
+          Link cards, under a note: the page's title and site once known, the address until then (and for good when
+          there is none)
+        </Label>
+        <div className="max-w-content grid gap-2">
+          <LinkCard url="https://makerworld.com/en/models/drawer-bins" />
+          <LinkCard url="https://www.example.com/a/model/without-a-title-yet" />
         </div>
       </div>
     </Section>

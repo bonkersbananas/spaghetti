@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
+import { useHeroName } from "@/lib/hero";
 import type { PhotoView } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
@@ -20,6 +21,15 @@ interface PhotoViewerProps {
 function frameAspect(photo: PhotoView | undefined): number {
   if (!photo) return 4 / 3;
   return Math.min(4 / 3, Math.max(4 / 5, photo.width / photo.height));
+}
+
+/** One photo's frame in the carousel; it takes the hero transition's name when it is the photo that was tapped on a card. */
+function ViewerFigure({ photo, label, children }: { photo: PhotoView; label: string; children: ReactNode }) {
+  return (
+    <figure aria-label={label} style={useHeroName(photo.id)} className="relative h-full w-full shrink-0 snap-center">
+      {children}
+    </figure>
+  );
 }
 
 /**
@@ -59,11 +69,7 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
         style={{ aspectRatio: frameAspect(photos[0]), scrollbarWidth: "none" }}
       >
         {photos.map((photo, i) => (
-          <figure
-            key={photo.id}
-            aria-label={`${i + 1} of ${photos.length}`}
-            className="relative h-full w-full shrink-0 snap-center"
-          >
+          <ViewerFigure key={photo.id} photo={photo} label={`${i + 1} of ${photos.length}`}>
             <Photo
               src={photoSrc(photo.id, "large")}
               alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
@@ -79,7 +85,7 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
                 className="absolute bottom-3 left-3"
               />
             )}
-          </figure>
+          </ViewerFigure>
         ))}
       </div>
 

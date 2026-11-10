@@ -102,6 +102,7 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | A changed value in the compare sheet | 4.5:1 | 13.1 | 10.8 |
 | Same-in-both settings, opened, on a sheet | 4.5:1 | 6.8 | 7.1 |
 | Column names and labels in the compare sheet | 4.5:1 | 5.6 | 5.6 |
+| A link card's letter tile | 4.5:1 | 6.6 | 7.5 |
 | Attempt count on the outcome strip | 4.5:1 | 5.6 | 6.2 |
 
 Badges over photos are measured against a white photo, the worst case. The decorative rim on a spool (below) is the one thing that does not reach 3:1, by design: ink at 35% on a card measures 2.1:1 in light and 2.8:1 in dark (the old 15% rim measured 1.3 and 1.5). A spool's name is always written beside it, so the rim only has to make the disc easy to find, not carry meaning.
@@ -162,6 +163,9 @@ A hairline (`bg-hairline`) is allowed only where a shadow can't work, such as be
 - Focus: `focus-ring` / `shadow-ring`, a calm ink ring (never tomato, which means action or error). Fields keep their fill when focused; a field with an error uses `shadow-ring-error`.
 - `prefers-reduced-motion` is respected globally (CSS) and by `<MotionConfig reducedMotion="user">`. Never rely on motion to convey meaning.
 - Motion never delays content: no entrance animation longer than `slow`, nothing on scroll.
+- **A photo travels from its card to its page** (View Transitions, through the router's `viewTransition` on the links of `Card`, journal entries and search results; no polyfill, and browsers without the API just change page). Only one element may carry the transition name `hero-photo` at a time, because duplicate names cancel the whole transition and the journal can show one photo twice: so the name is not on every card but put, on tap, on the tapped card's photo frame (`heroClick`, `lib/hero.ts`), and the page it opens gives the same name to its hero photo while that is the same photo (`useHeroName`); both let go 800 ms later. When the hero is a different photo (a build card shows its newest photo, the page leads with the best), nothing is named and the page crossfades. `app.css` times the moving group at `--sg-duration-base` with `--sg-ease-out` and the rest of the page at `--sg-duration-fast`; with reduced motion every view-transition animation is `none`.
+- **An outcome answers the tap**: the picked icon in `OutcomePicker` springs from 0.8 to 1 (`spring.snappy`), only for a pick made there, and on phones that can vibrate `tap()` (`lib/haptics.ts`) gives a 10 ms buzz, never with reduced motion.
+- **Stepping between attempts**: with a saved attempt open and more than one in the build, the attempt sheet's header has "Previous attempt" and "Next attempt" (`IconButton size="sm"`, disabled at the ends; not while logging a new attempt). The frame (title, arrows, footer) stays put and the body crossfades over `duration-fast` (none with reduced motion); the attempt left autosaves as it unmounts, so stepping away mid-edit is safe. `Sheet` takes `headerActions` for this.
 
 ## Icons
 
@@ -232,6 +236,8 @@ Desktop only. Phones have no palette and no shortcut list; their layouts are unt
 
 - **Capture** saves at once: the sheet closes, the idea lands at the top of the inbox (with a small spring) and its photos upload in the background with progress on the card. Nothing waits on the network.
 - **The inbox** is a grid of 4:5 cards, newest first: two columns on phones, three, then four on desktop. Text-only ideas are note cards in the same grid, the note set large in Fraunces when it is short and smaller as it grows, so every card looks filled on purpose. The author is a small avatar, the time is relative ("2 h ago").
+- **An idea's page** has the build page's proportions: on desktop the photos take two parts and the text three (gaps `md:gap-10 lg:gap-14`), the text at a readable measure (`max-w-content`). An idea that grows into a build keeps its photo in the same place at the same size, and the attempts take the side the text had, so "Start building" reads as the page growing, not changing. Without photos, and on phones, nothing changes.
+- **Link cards** (`LinkCard`, `NoteLinks`): under the note on the idea and build pages, one card per distinct link in it, in order, three at most; the links in the note stay as they are. A card is a `bg-cream` link that opens in a new tab: the site's first letter on a tile, the page's title (two lines) and its site name, a small arrow top right. It shows at once with the short address, and the title fades in over `duration-fast` when it arrives; its height is fixed, so nothing jumps and there is no skeleton. No remote pictures in this version: they break offline, tell the other site about the visit and shift the layout. The title comes from `GET /api/links/preview` (`linkPreviewQuery`, a day fresh, kept for offline), which is people-only and strict about what it fetches (see docs/api.md).
 - **Delight**, in small doses: the first idea ever gets a "First one in the pot" toast, once per device; new cards land with a quick spring.
 
 ## Builds and attempts

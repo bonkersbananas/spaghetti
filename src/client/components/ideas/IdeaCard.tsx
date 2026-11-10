@@ -53,7 +53,11 @@ export function IdeaCard({ item, person, via, landing }: IdeaCardProps) {
         link={{ to: "/ideas/$ideaId", params: { ideaId: item.id } }}
         aspect="portrait"
         headingLevel={2}
-        photo={cover ? { src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color } : undefined}
+        photo={
+          cover
+            ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
+            : undefined
+        }
         title={item.title}
         // Links read better short on a card: printables.com/model/123.
         note={item.note ? shortenLinks(item.note) : undefined}

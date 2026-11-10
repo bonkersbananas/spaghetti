@@ -12,6 +12,7 @@ export {
   ArrowRight as ArrowRightIcon,
   ArrowsClockwise as SameAgainIcon,
   ArrowsOutCardinal as MoveIcon,
+  ArrowUpRight as ExternalIcon,
   ArrowUUpLeft as ReopenIcon,
   BookOpenText as JournalIcon,
   CalendarBlank as CalendarIcon,
