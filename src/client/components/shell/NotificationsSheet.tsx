@@ -99,8 +99,9 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
           <p className="text-caption text-ink-faint mb-2 font-semibold tracking-wider uppercase">What you'll get</p>
           <NotificationPreview title={example.title} body={example.body} actions={status !== "install"} />
           <p className="text-small text-ink-faint mt-2">
-            Tap Worked, Partly or Spaghetti to answer without opening the app, or tap the notification to add a photo
-            and a word.
+            {status === "install"
+              ? "Tap the notification to open the print and add a photo and a word."
+              : "On your lock screen, tap Worked, Partly or Spaghetti to answer without opening the app, or tap the notification to add a photo and a word."}
           </p>
         </div>
       </div>

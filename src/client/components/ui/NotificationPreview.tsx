@@ -22,7 +22,7 @@ export function NotificationPreview({
     <div
       role="img"
       aria-label={`Example notification: ${title}. ${body}`}
-      className={cn("bg-paper rounded-lg p-3.5", className)}
+      className={cn("bg-paper pointer-events-none rounded-lg p-3.5 select-none", className)}
     >
       <div className="flex items-start gap-3" aria-hidden>
         <Mark className="size-9 shrink-0" />
@@ -35,10 +35,7 @@ export function NotificationPreview({
       {actions && (
         <div className="mt-3 flex gap-2 pl-12" aria-hidden>
           {NUDGE_ACTIONS.map(({ action, title: label }) => (
-            <span
-              key={action}
-              className="text-small text-ink bg-lifted shadow-soft rounded-sm px-3 py-1.5 font-semibold"
-            >
+            <span key={action} className="text-small text-ink bg-ink/6 rounded-sm px-3 py-1.5 font-semibold">
               {label}
             </span>
           ))}

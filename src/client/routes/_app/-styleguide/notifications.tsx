@@ -23,7 +23,10 @@ export function NotificationSection() {
     >
       <div className="grid gap-4 md:grid-cols-2">
         <Panel className="flex flex-col gap-3">
-          <Label>Toggle (the whole row is the switch)</Label>
+          <Label>Toggle</Label>
+          <p className="text-small text-ink-faint">
+            The whole row is the switch. A reason it can't be turned on goes in the hint.
+          </p>
           <Toggle
             label="Notify this device"
             hint="Quiet from 22:00 to 07:00: those wait until morning."
@@ -44,7 +47,10 @@ export function NotificationSection() {
           <NotificationsSheet open={open} onOpenChange={setOpen} />
         </Panel>
         <Panel className="flex flex-col gap-4">
-          <Label>Notification preview (with buttons, and without: iPhone has none)</Label>
+          <Label>Notification preview</Label>
+          <p className="text-small text-ink-faint">
+            With the buttons Android and desktop Chrome add, and without: iPhone has none.
+          </p>
           <NotificationPreview title={off.title} body={off.body} />
           <NotificationPreview title={late.title} body={`Sam's print. How did it go?`} actions={false} />
         </Panel>
