@@ -242,7 +242,9 @@ export const tools: Tool[] = [
         form.set("height", String(image.height));
         // The average color is worked out in the browser; a neutral one stands in until then.
         form.set("color", "#a9a095");
-        // Nothing here can resize: the one image serves as both sizes.
+        // The next browser that sees the photo resizes it and replaces the two copies below.
+        form.set("needsResize", "1");
+        // Nothing here can resize: the one image serves as both sizes until a browser does it.
         const file = () => new File([image.bytes], "photo", { type: image.contentType });
         form.set("large", file());
         form.set("thumb", file());

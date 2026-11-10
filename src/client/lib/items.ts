@@ -251,6 +251,7 @@ function pendingPhotos(entry: OutboxEntry | undefined, state: OutboxState, after
       id: photo.id,
       itemId: entry.itemId,
       attemptId: photo.attemptId ?? null,
+      needsResize: false,
       position: photo.position ?? last + 1 + index,
       width: photo.processed?.width ?? 4,
       height: photo.processed?.height ?? 3,
