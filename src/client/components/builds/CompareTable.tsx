@@ -144,7 +144,9 @@ export function CompareTable({ older, newer }: { older: Compared; newer: Compare
         ) : (
           <p className="text-small text-ink-faint">
             {older.outcome === null || newer.outcome === null
-              ? "Still printing: the results come when it's done."
+              ? [older, newer].every((attempt) => attempt.outcome !== null || attempt.endedAt !== null)
+                ? "Off the bed: the results come once it's judged."
+                : "Still printing: the results come when it's done."
               : "No times or weights logged yet."}
           </p>
         )}

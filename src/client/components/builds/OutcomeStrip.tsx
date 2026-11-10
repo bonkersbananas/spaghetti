@@ -10,6 +10,8 @@ interface StripAttempt {
   number: number;
   /** Null while it is printing. */
   outcome: Outcome | null;
+  /** The printer bridge saw it stop and nobody has said how it went: off the bed, not printing. */
+  offBed?: boolean;
 }
 
 interface OutcomeStripProps {
@@ -20,11 +22,12 @@ interface OutcomeStripProps {
   className?: string;
 }
 
-const word = (outcome: Outcome | null) => (outcome ? OUTCOME_LABELS[outcome].toLowerCase() : "printing");
+const word = (attempt: StripAttempt) =>
+  attempt.outcome ? OUTCOME_LABELS[attempt.outcome].toLowerCase() : attempt.offBed ? "off the bed" : "printing";
 
 /** "3 attempts: spaghetti, partly, printing". */
 export function outcomeSentence(attempts: StripAttempt[]): string {
-  return `${attempts.length} ${attempts.length === 1 ? "attempt" : "attempts"}: ${attempts.map((a) => word(a.outcome)).join(", ")}`;
+  return `${attempts.length} ${attempts.length === 1 ? "attempt" : "attempts"}: ${attempts.map((a) => word(a)).join(", ")}`;
 }
 
 /**
@@ -55,10 +58,10 @@ export function OutcomeStrip({ attempts, onPick, className }: OutcomeStripProps)
           const dot = cn(
             "relative size-2.5 shrink-0 rounded-full",
             outcomeDots[attempt.outcome ?? "printing"],
-            attempt.outcome === null && "animate-pulse",
+            attempt.outcome === null && !attempt.offBed && "animate-pulse",
           );
           if (!onPick) return <span key={attempt.id} aria-hidden className={dot} />;
-          const name = `Attempt ${attempt.number}: ${word(attempt.outcome)}`;
+          const name = `Attempt ${attempt.number}: ${word(attempt)}`;
           return (
             <button
               key={attempt.id}

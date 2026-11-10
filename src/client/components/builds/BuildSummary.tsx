@@ -1,4 +1,5 @@
 import { summarizeBuild } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { MetaList } from "@/components/ui/MetaList";
@@ -39,7 +40,15 @@ export function BuildSummary({
     <section aria-label="Summary" className="mt-2 flex flex-col gap-2">
       <Overline as="h2">{open ? "So far" : "In all"}</Overline>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <OutcomeStrip attempts={attempts.map(({ id, number, outcome }) => ({ id, number, outcome }))} onPick={onPick} />
+        <OutcomeStrip
+          attempts={attempts.map(({ id, number, outcome, endedAt }) => ({
+            id,
+            number,
+            outcome,
+            offBed: isOffTheBed({ outcome, endedAt }),
+          }))}
+          onPick={onPick}
+        />
         <span className="text-small text-ink-soft">{summary.words}</span>
       </div>
       {figures.length > 0 && (
