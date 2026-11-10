@@ -15,7 +15,7 @@ const colors: Record<PersonColor, string> = {
 
 const sizes = {
   // Two letters fit in 24 px at this size and tracking; one letter (the old xs) lost half of "Carl Oscar".
-  xs: "size-6 text-caption tracking-normal",
+  xs: "size-6 text-micro tracking-normal",
   sm: "size-7 text-caption",
   md: "size-9 text-small",
   lg: "size-12 text-lead",
