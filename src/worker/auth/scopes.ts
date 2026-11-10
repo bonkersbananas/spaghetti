@@ -17,6 +17,7 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["POST", /^\/items$/, ["capture", "attempts"]],
   // The route narrows it: a stage move or a cover photo needs "attempts".
   ["PATCH", new RegExp(`^/items/${id}$`), ["capture", "attempts"]],
+  ["PUT", /^\/items\/up-next\/order$/, ["capture"]],
   ["PUT", new RegExp(`^/items/${id}/photos/order$`), ["capture"]],
   // The route narrows it: a photo of an attempt may come from "attempts", any other needs "capture".
   ["PUT", new RegExp(`^/items/${id}/photos/${id}$`), ["capture", "attempts"]],

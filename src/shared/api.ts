@@ -138,6 +138,10 @@ export interface Item {
   finishedAt: number | null;
   /** The final photo, picked when a build is finished. */
   coverPhotoId: string | null;
+  /** Its place in the Up next queue (1 is first), or null. Only ideas are queued; starting a build takes it off. */
+  upNext: number | null;
+  /** Who it is for ("Mila"), if anyone. */
+  forWhom: string | null;
   /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */
   photos: Photo[];
   /** Oldest first: the first is attempt 1. Always empty for ideas. */

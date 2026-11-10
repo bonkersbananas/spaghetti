@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, max, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, max, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -47,7 +47,17 @@ const updateItem = z.object({
   note: note.optional(),
   stage: z.enum(ITEM_STAGES).optional(),
   coverPhotoId: id.nullable().optional(),
+  /** true: at the end of the queue; false or null: off it; a number: that place (the undo of taking it off). */
+  upNext: z.union([z.boolean(), z.number().int().min(1).max(10_000), z.null()]).optional(),
+  /** Who it is for; empty clears it. */
+  forWhom: z
+    .string()
+    .max(80)
+    .transform((value) => value.trim() || null)
+    .nullable()
+    .optional(),
 });
+const upNextOrder = z.object({ ids: z.array(id).max(500) });
 const reorder = z.object({ photoIds: z.array(id).max(200) });
 /** `?stage=building,done,shelved`: one stage or several. */
 const listQuery = z.object({
@@ -155,6 +165,14 @@ export async function loadItem(db: Db, itemId: string) {
   return item ?? null;
 }
 
+/** The queue column for a requested change: the end of the queue is worked out by the database. */
+const upNextValue = (change: boolean | number | null) =>
+  change === true
+    ? sql<number>`(SELECT coalesce(max(up_next), 0) + 1 FROM items WHERE up_next IS NOT NULL)`
+    : change === false || change === null
+      ? null
+      : change;
+
 const notFound = "That isn't here any more.";
 const goneForGood = "That's gone for good.";
 
@@ -227,6 +245,44 @@ export const itemRoutes = new Hono<AppEnv>()
     return c.json<ItemResponse>({ item }, 201);
   })
 
+  /** The Up next queue's order: these ideas first, in this order; any queued one not mentioned keeps its turn after them. */
+  .put("/up-next/order", async (c) => {
+    const parsed = upNextOrder.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That order couldn't be read.");
+    if (!canUse(c, "capture")) return missingScope(c, ["capture"]);
+    const db = c.var.db;
+    const queued = await db
+      .select({ id: items.id })
+      .from(items)
+      .where(and(isNotNull(items.upNext), isNull(items.deletedAt)))
+      .orderBy(asc(items.upNext), asc(items.id));
+    const known = new Set(queued.map((row) => row.id));
+    const order = [
+      ...new Set(parsed.data.ids.filter((itemId) => known.has(itemId))),
+      ...queued.map((row) => row.id).filter((itemId) => !parsed.data.ids.includes(itemId)),
+    ];
+    if (order.length) {
+      const now = new Date();
+      await db.batch([
+        ...order.map((itemId, index) =>
+          db
+            .update(items)
+            .set({ upNext: index + 1, updatedAt: now })
+            .where(eq(items.id, itemId)),
+        ),
+        recordChange(db, {
+          entity: "item",
+          id: order[0] as string,
+          itemId: order[0] as string,
+          action: "updated",
+          actor: c.var.actor,
+        }),
+      ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    }
+    const list = await loadItems(db, and(isNull(items.deletedAt), isNotNull(items.upNext)));
+    return c.json<ItemsResponse>({ items: list.sort((a, b) => (a.upNext ?? 0) - (b.upNext ?? 0)) });
+  })
+
   .get("/:id", async (c) => {
     const item = await loadItem(c.var.db, c.req.param("id"));
     if (!item) return apiError(c, 404, "not_found", notFound);
@@ -236,12 +292,18 @@ export const itemRoutes = new Hono<AppEnv>()
   .patch("/:id", async (c) => {
     const parsed = updateItem.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That change couldn't be read.");
-    const { stage, coverPhotoId, ...changes } = parsed.data;
+    const { stage, coverPhotoId, upNext, ...changes } = parsed.data;
     // Title and note are "capture"; moving a build along or picking its final photo is work on its attempts.
     if ((stage !== undefined || coverPhotoId !== undefined) && !canUse(c, "attempts")) {
       return missingScope(c, ["attempts"]);
     }
-    if ((changes.title !== undefined || changes.note !== undefined) && !canUse(c, "capture")) {
+    if (
+      (changes.title !== undefined ||
+        changes.note !== undefined ||
+        changes.forWhom !== undefined ||
+        upNext !== undefined) &&
+      !canUse(c, "capture")
+    ) {
       return missingScope(c, ["capture"]);
     }
     const itemId = c.req.param("id");
@@ -276,6 +338,11 @@ export const itemRoutes = new Hono<AppEnv>()
         .set({
           ...changes,
           ...(stage ? stageDates(current, stage, now) : {}),
+          // Starting a build takes the idea off the queue (unless this same change puts it back: the undo).
+          ...(stage && stage !== "idea" ? { upNext: null } : {}),
+          ...(upNext !== undefined && (current.stage === "idea" || stage === "idea")
+            ? { upNext: upNextValue(upNext) }
+            : {}),
           ...(coverPhotoId !== undefined ? { coverPhotoId } : {}),
           updatedAt: now,
         })

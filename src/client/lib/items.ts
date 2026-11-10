@@ -350,6 +350,8 @@ function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
     startedAt: stage === "idea" ? null : entry.create.createdAt,
     finishedAt: null,
     coverPhotoId: null,
+    upNext: null,
+    forWhom: null,
     photos: sortPhotos(pendingPhotos(entry, state, [])),
     attempts: withAttempts(entry.itemId, [], entry),
     pending: true,
