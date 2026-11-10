@@ -190,6 +190,28 @@ describe("tools, scopes and attribution", () => {
     } finally {
       fetched.mockRestore();
     }
+    // A download with no (or a false) Content-Length is cut off at the cap, not buffered whole.
+    let sent = 0;
+    const endless = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              sent += 1;
+              controller.enqueue(new Uint8Array(1024 * 1024));
+            },
+          }),
+          { headers: { "Content-Length": "100" } },
+        ),
+    );
+    try {
+      const huge = await callTool(made.token, "capture_idea", { photo_url: "https://example.com/huge.jpg" });
+      expect(huge.isError).toBe(true);
+      expect(huge.text).toContain("too large");
+      expect(sent).toBeLessThan(20);
+    } finally {
+      endless.mockRestore();
+    }
     expect((await callTool(made.token, "capture_idea", { photo_url: "http://example.com/boat.jpg" })).text).toContain(
       "https",
     );

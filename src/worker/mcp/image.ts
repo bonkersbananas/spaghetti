@@ -1,5 +1,7 @@
 import { MAX_PHOTO_BYTES } from "../../shared/api.ts";
 
+const TOO_LARGE = "That photo is too large (over 12 MB).";
+
 /** What the API needs to know about a photo that wasn't resized in a browser. */
 export interface ImageInfo {
   bytes: Uint8Array;
@@ -46,7 +48,7 @@ function webpSize(b: Uint8Array): { width: number; height: number } | null {
 
 /** Reads a JPEG or WebP's type and size from its bytes. PNG and the rest are refused: the API stores JPEG and WebP. */
 export function readImage(bytes: Uint8Array): ImageInfo {
-  if (bytes.length > MAX_PHOTO_BYTES) throw new Error("That photo is too large (over 12 MB).");
+  if (bytes.length > MAX_PHOTO_BYTES) throw new Error(TOO_LARGE);
   let size: { width: number; height: number } | null = null;
   let contentType: ImageInfo["contentType"];
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
@@ -91,7 +93,27 @@ export async function fromUrl(url: string): Promise<Uint8Array> {
     throw new Error("The photo couldn't be fetched from that URL.");
   }
   if (!response.ok) throw new Error(`The photo URL answered ${response.status}.`);
-  if (Number(response.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES)
-    throw new Error("That photo is too large (over 12 MB).");
-  return new Uint8Array(await response.arrayBuffer());
+  if (Number(response.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES) throw new Error(TOO_LARGE);
+  // The header can be missing or wrong: the cap is enforced while reading, and the download stops there.
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("The photo URL sent nothing.");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_PHOTO_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error(TOO_LARGE);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
 }
