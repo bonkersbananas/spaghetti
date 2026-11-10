@@ -12,6 +12,7 @@ import { ElevationSection } from "./-styleguide/elevation";
 import { EmptySection } from "./-styleguide/empty";
 import { FieldSection } from "./-styleguide/fields";
 import { IconSection } from "./-styleguide/icons";
+import { JournalSection } from "./-styleguide/journal";
 import { MotionSection } from "./-styleguide/motion";
 import { PaletteSection } from "./-styleguide/palette";
 import { PantrySection } from "./-styleguide/pantry";
@@ -48,6 +49,7 @@ const toc = [
   ["builds", "Builds & attempts"],
   ["pantry", "Pantry & printer"],
   ["search", "Journal & search"],
+  ["journal", "Journal entries"],
   ["sheets", "Sheets & toasts"],
   ["palette", "Palette & shortcuts"],
   ["empty", "Empty states"],
@@ -88,6 +90,7 @@ function Styleguide() {
           <BuildsSection />
           <PantrySection />
           <SearchSection />
+          <JournalSection />
           <PaletteSection />
           <SheetSection />
           <EmptySection />

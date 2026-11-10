@@ -13,7 +13,8 @@
  *   pnpm screenshots --out DIR      # write somewhere else (default ./screenshots)
  *   pnpm screenshots --scale 1      # device pixel ratio 1 at both widths (default 3 on the phone, 2 on the desktop)
  *
- * The browser's clock is fixed to the seed's date (SEED_NOW) and its time
+ * Every theme and width is taken on its own freshly seeded app, so a shot that changes data (finishing a
+ * print) can't leave it for the next pass. The browser's clock is fixed to the seed's date (SEED_NOW) and its time
  * zone to UTC, so the pictures don't depend on the day they are taken.
  * SPAGHETTI_BROWSER=/path/to/chromium uses an existing Chromium; SCREENSHOT_PORT picks the server port.
  */
@@ -59,12 +60,7 @@ if (built) {
   const build = spawnSync(join(root, "node_modules/.bin/vite"), ["build"], { cwd: root, stdio: "inherit" });
   if (build.status !== 0) process.exit(build.status ?? 1);
 }
-const app = await startSeededApp({
-  port: Number(process.env.SCREENSHOT_PORT) || 5180 + Math.floor(Math.random() * 100),
-  built,
-  now: SEED_NOW,
-  log: (message) => console.log(`  ${message}`),
-});
+let port = Number(process.env.SCREENSHOT_PORT) || 5180 + Math.floor(Math.random() * 100);
 let browser: Browser | undefined;
 const failures: string[] = [];
 let taken = 0;
@@ -73,41 +69,52 @@ try {
   browser = await chromium.launch(launchOptions());
   for (const theme of themes) {
     for (const viewport of viewports) {
-      const { width, height, ...device } = viewport;
-      const context = await browser.newContext({
-        viewport: { width, height },
-        ...device,
-        ...(scale ? { deviceScaleFactor: scale } : {}),
-        ...SEED_LOCALE,
-        baseURL: app.url,
-        reducedMotion: "reduce",
-        colorScheme: theme,
-        serviceWorkers: "allow",
+      // Every pass gets its own freshly seeded app: a shot that changes data (finishing a print)
+      // must not leave it for the next width or theme, which would then look different from run to run.
+      const app = await startSeededApp({
+        port: port++,
+        built,
+        now: SEED_NOW,
+        log: (message) => console.log(`  ${message}`),
       });
-      context.setDefaultTimeout(20_000);
-      await context.clock.setFixedTime(SEED_NOW);
-      let page = await context.newPage();
-      const user = SEED_USERS[0];
+      try {
+        const { width, height, ...device } = viewport;
+        const context = await browser.newContext({
+          viewport: { width, height },
+          ...device,
+          ...(scale ? { deviceScaleFactor: scale } : {}),
+          ...SEED_LOCALE,
+          baseURL: app.url,
+          reducedMotion: "reduce",
+          colorScheme: theme,
+          serviceWorkers: "allow",
+        });
+        context.setDefaultTimeout(20_000);
+        await context.clock.setFixedTime(SEED_NOW);
+        let page = await context.newPage();
+        const user = SEED_USERS[0];
 
-      for (const shot of selected.filter((s) => s.signedOut)) {
-        page = await attempt(context, page, shot, width, theme);
+        for (const shot of selected.filter((s) => s.signedOut)) {
+          page = await attempt(context, page, shot, width, theme);
+        }
+
+        const response = await page.request.post("/api/session", {
+          data: { username: user.username, password: user.password },
+          headers: { Origin: app.url },
+        });
+        if (!response.ok()) throw new Error(`Signing in failed: ${response.status()}`);
+
+        for (const shot of selected.filter((s) => !s.signedOut)) {
+          page = await attempt(context, page, shot, width, theme);
+        }
+        await context.close();
+      } finally {
+        app.stop();
       }
-
-      const response = await page.request.post("/api/session", {
-        data: { username: user.username, password: user.password },
-        headers: { Origin: app.url },
-      });
-      if (!response.ok()) throw new Error(`Signing in failed: ${response.status()}`);
-
-      for (const shot of selected.filter((s) => !s.signedOut)) {
-        page = await attempt(context, page, shot, width, theme);
-      }
-      await context.close();
     }
   }
 } finally {
   await browser?.close();
-  app.stop();
 }
 
 console.log(`\n${taken} screenshots in ${outDir}`);

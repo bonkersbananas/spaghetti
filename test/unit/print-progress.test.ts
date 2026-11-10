@@ -23,6 +23,14 @@ describe("printProgress", () => {
     expect(result.fraction).toBeCloseTo(10 / 240);
   });
 
+  it("writes the time like the rest of the app: a single-digit hour has no leading zero", () => {
+    // Local 6:00 plus 3 h 5 min is 9:05, whatever the time zone.
+    const early = new Date(2026, 10, 10, 6, 0).getTime();
+    const label = printProgress(early, 185, early).label;
+    expect(label).toMatch(/^Done around 9[:.]05/);
+    expect(label).not.toMatch(/around 0/);
+  });
+
   it("switches to the countdown just under 90 minutes left", () => {
     expect(printProgress(start, 190, start + 101 * MINUTE).label).toBe("About 1 h 29 min left");
     expect(printProgress(start, 190, start + 100 * MINUTE).label).toMatch(/^Done around/);
