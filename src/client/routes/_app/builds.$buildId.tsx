@@ -326,7 +326,7 @@ function Build({ item }: { item: ItemView }) {
   const [openRecipe, setOpenRecipe] = useState<string | null>(null);
   const allRecipes = useRecipes();
   const recipeSource = (attempt: AttemptView): RecipeSourceAttempt | undefined =>
-    canBeRecipe(attempt) && !attempt.pending
+    canBeRecipe(attempt) && !attempt.pending && !readOnly
       ? { id: attempt.id, itemId: item.id, number: attempt.number, title: item.title, settings: attempt.settings }
       : undefined;
   const alt = photoAlt({ title, note });

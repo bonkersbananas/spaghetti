@@ -179,10 +179,7 @@ export const photos = sqliteTable(
   (table) => [index("photos_item_idx").on(table.itemId, table.position)],
 );
 
-/**
- * Failure tags and success notes people added to the built-in ones. The slug
- * is made from the label and is what attempts store.
- */
+/** Named settings of an attempt that worked (docs/decisions/0017). */
 export const recipes = sqliteTable("recipes", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -204,6 +201,10 @@ export const recipes = sqliteTable("recipes", {
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
 });
 
+/**
+ * Failure tags and success notes people added to the built-in ones. The slug
+ * is made from the label and is what attempts store.
+ */
 export const tags = sqliteTable(
   "tags",
   {
