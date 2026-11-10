@@ -6,15 +6,19 @@ import { PantryJar } from "@/components/illustrations";
 import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
+import { SpoolRow } from "@/components/pantry/SpoolRow";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon, PrinterIcon } from "@/components/ui/icons";
+import { Overline } from "@/components/ui/Overline";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { loadSlot, spoolsQuery } from "@/lib/pantry";
+import { type PantryView, usePantryView } from "@/lib/pantry-view";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -42,11 +46,19 @@ function groups(spools: Spool[]): Array<{ material: string; spools: Spool[] }> {
     .sort((a, b) => b.spools.length - a.spools.length || a.material.localeCompare(b.material));
 }
 
+/** In the list, what needs attention comes first: low, half, full, and the empty ones last. */
+const LIST_ORDER: Record<Spool["remaining"], number> = { low: 0, half: 1, full: 2, empty: 3 };
+const byRemaining = (a: Spool, b: Spool) =>
+  LIST_ORDER[a.remaining] - LIST_ORDER[b.remaining] || (a.colorName ?? "").localeCompare(b.colorName ?? "");
+
 function Pantry() {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const { data: spools, isPending } = useQuery(spoolsQuery);
   const { add } = Route.useSearch();
+  // Cards or a list, remembered on this device. Phones always show cards.
+  const [storedView, setView] = usePantryView();
+  const view: PantryView = isDesktop ? storedView : "cards";
   const [adding, setAdding] = useState<{ open: boolean; slot: string | null }>({ open: !!add, slot: null });
   // Offline, the pantry is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
@@ -122,22 +134,57 @@ function Pantry() {
             </div>
             <AmsLoadout readOnly={readOnly} onAddSpool={(slot) => openAdd(slot)} />
           </section>
-          {groups(spools).map((group) => (
-            <section
-              key={group.material}
-              aria-labelledby={`material-${group.material}`}
-              className="flex flex-col gap-4"
-            >
-              <SectionHeading id={`material-${group.material}`} size="title" count={group.spools.length}>
-                {group.material}
+          {isDesktop && (
+            <div className="-mb-6 flex items-center justify-between gap-4">
+              <SectionHeading id="all-spools" count={spools.length}>
+                All spools
               </SectionHeading>
-              <ul className={grid} aria-label={`${group.material} spools`}>
-                {group.spools.map((spool) => (
-                  <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
-                ))}
-              </ul>
-            </section>
-          ))}
+              <SegmentedControl<PantryView>
+                label="View"
+                labelHidden
+                options={[
+                  { value: "cards", label: "Cards" },
+                  { value: "list", label: "List" },
+                ]}
+                value={view}
+                onChange={setView}
+                className="w-48"
+              />
+            </div>
+          )}
+          {groups(spools).map((group) =>
+            view === "list" ? (
+              <section
+                key={group.material}
+                aria-labelledby={`material-${group.material}`}
+                className="flex flex-col gap-3"
+              >
+                <Overline id={`material-${group.material}`} as="h3" count={group.spools.length}>
+                  {group.material}
+                </Overline>
+                <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label={`${group.material} spools`}>
+                  {[...group.spools].sort(byRemaining).map((spool) => (
+                    <SpoolRow key={spool.id} spool={spool} draggable={!readOnly} />
+                  ))}
+                </ul>
+              </section>
+            ) : (
+              <section
+                key={group.material}
+                aria-labelledby={`material-${group.material}`}
+                className="flex flex-col gap-4"
+              >
+                <SectionHeading id={`material-${group.material}`} size="title" count={group.spools.length}>
+                  {group.material}
+                </SectionHeading>
+                <ul className={grid} aria-label={`${group.material} spools`}>
+                  {group.spools.map((spool) => (
+                    <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
+                  ))}
+                </ul>
+              </section>
+            ),
+          )}
         </div>
       )}
       {!isDesktop && (spools?.length ?? 0) > 0 && (

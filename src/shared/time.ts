@@ -49,3 +49,9 @@ export function formatDuration(minutes: number): string {
   if (!hours) return `${rest} min`;
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
+
+/** How long ago something was, in whole days, for a spool's "dried 12 d ago": "today", "1 d ago", "12 d ago". */
+export function daysAgo(time: number, now = Date.now()): string {
+  const days = Math.floor(Math.max(0, now - time) / DAY);
+  return days === 0 ? "today" : `${days} d ago`;
+}

@@ -146,7 +146,7 @@ Never edit a migration that has been merged; add a new one.
 - The change is written in the same D1 batch as the write: `db.batch([write, recordChange(db, {...}), ...])`. `recordChange` inserts only `WHERE changes() > 0`, so a write that did nothing (a retried capture, a second delete) records nothing, and statements after it can chain on `afterChange` (e.g. bump the item's `updatedAt` only if the change was recorded). A new write path must do this too; `test/worker/changes.test.ts` has one test per kind of write.
 - Photos, attempts and files carry the `itemId` they belong to; the pantry and the printer have none. The actor is `{ kind: "person", id }` from `actorOf(c.var.user)`; agents will use `kind: "agent"` with their name, so don't assume a user id.
 - The client (`lib/live.ts`, started in `_app.tsx`) polls every 10 s while the tab is visible and online, and at once on focus, on coming back to the tab and when the connection returns; the first answer only learns the feed's end. `refresh` maps changes to query keys: a new query root that other people's writes can change needs a case there. At most one quiet toast for the open screen; a deleted item closes its screen.
-- Autosaved fields must follow the server only when untouched (`useFollowServer`) and must send only what this screen changed (`useItemFields`), or they undo the other person's edit.
+- Autosaved fields must follow the server only when untouched (`useFollowServer`) and must send only what this screen changed (`useItemFields`; `useLiveFields` for a form of several fields, as on the spool page and the printer setup), or they undo the other person's edit.
 
 ### Keyboard shortcuts and the command palette
 

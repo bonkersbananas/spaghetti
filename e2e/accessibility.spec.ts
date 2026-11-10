@@ -143,6 +143,13 @@ for (const scheme of ["light", "dark"] as const) {
 
     await screen(page, "/pantry", "Pantry");
     await expectAccessible(page, "Pantry");
+    if (!isMobile) {
+      // The desktop list (phones always show cards); the choice is put back for the next theme.
+      await page.getByRole("radio", { name: "List" }).click();
+      await expect(page.getByRole("list", { name: "PETG spools" })).toBeVisible();
+      await expectAccessible(page, "Pantry as a list");
+      await page.getByRole("radio", { name: "Cards" }).click();
+    }
 
     await page.goto(`/pantry/${data.spoolId}`);
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
