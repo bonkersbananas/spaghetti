@@ -109,7 +109,8 @@ function AttemptPhotos({
   );
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="bg-paper-deep relative aspect-4/3 overflow-hidden rounded-md">
+      {/* 4:3, but never taller than 28% of the window on desktop: the photos stay whole, and "What changed" is in the first screen. */}
+      <div className="bg-paper-deep relative aspect-4/3 overflow-hidden rounded-md md:max-h-[28vh]">
         {fade ? (
           <AnimatePresence initial={false}>
             <m.div

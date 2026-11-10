@@ -79,6 +79,25 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A short 1280×720 laptop window: What changed may start just above the fold, never lower.
+    name: "compare-laptop",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    width: 1440,
+    prepare: async (page) => {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page
+        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.setViewportSize({ width: 1440, height: 900 });
+    },
+  },
+  {
     // The lower half of the comparison: what stayed the same (opened) and how each attempt went.
     name: "compare-details",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,

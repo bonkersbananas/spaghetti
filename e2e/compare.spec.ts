@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
@@ -145,4 +146,64 @@ test("the first attempt has nothing to compare with", async ({ page }) => {
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   await expect(page.locator(`[data-attempt-id="${ids[0]}"]`).getByRole("button", { name: /Compare/ })).toHaveCount(0);
+});
+
+test("on a laptop What changed is in the first screen of the compare sheet, photos and all", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Desktop layout");
+  const { id, ids } = await buildWithThreeAttempts(page);
+  const buffer = readFileSync("e2e/fixtures/tugboat.jpg");
+  // The newer attempt has two photos (the thumbnail row), the older one: worst case for the height.
+  for (const [attemptId, count] of [
+    [ids[0], 1],
+    [ids[1], 2],
+  ] as const) {
+    for (let index = 0; index < count; index++) {
+      const response = await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
+        headers: { Origin: origin(page) },
+        multipart: {
+          width: "1200",
+          height: "1600",
+          color: "#6b5a4a",
+          position: String(index),
+          attemptId: attemptId as string,
+          large: { name: "large.jpg", mimeType: "image/jpeg", buffer },
+          thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer },
+        },
+      });
+      expect(response.ok()).toBe(true);
+    }
+  }
+  // 1440×900, and a short 1280×720 laptop window.
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 720 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto(`/builds/${id}`);
+    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+    await page
+      .locator(`[data-attempt-id="${ids[1]}"]`)
+      .getByRole("button", { name: /Compare$/ })
+      .click();
+    const sheet = page.getByRole("dialog", { name: "Attempt 1 and attempt 2" });
+    await expect(sheet.getByRole("img", { name: "Attempt 2", exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    const changed = await sheet.getByRole("region", { name: "What changed" }).boundingBox();
+    const firstRow = await sheet.getByRole("row", { name: /Bed 55 °C 60 °C/ }).boundingBox();
+    expect(changed).not.toBeNull();
+    expect(firstRow).not.toBeNull();
+    // On 1440×900 the heading and its first row are in view; on the short window the section may start just above the fold.
+    expect(changed?.y ?? 9999).toBeLessThan(size.height);
+    if (size.height >= 900) expect((firstRow?.y ?? 9999) + (firstRow?.height ?? 0)).toBeLessThanOrEqual(size.height);
+    // The photos are whole, not cropped: contained in their frame.
+    const fit = await sheet
+      .getByRole("img", { name: "Attempt 2", exact: true })
+      .evaluate((img) => getComputedStyle(img).objectFit);
+    expect(fit).toBe("contain");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
 });
