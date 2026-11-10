@@ -1,21 +1,22 @@
-import { NUDGE_ACTIONS } from "@shared/push";
+import type { NUDGE_ACTIONS } from "@shared/push";
 import { Mark } from "@/components/illustrations";
 import { cn } from "@/lib/cn";
 
 /**
  * What a "how did it go?" notification looks like, drawn in the app's own style: a picture for the settings
- * and the styleguide, never the real thing (the system draws that). `actions` are the buttons Android and
- * desktop Chrome add; iPhone has none.
+ * and the styleguide, never the real thing (the system draws that). `actions` are the buttons this device
+ * adds: three on Android, two on desktop Chrome, none on iPhone.
  */
 export function NotificationPreview({
   title,
   body,
-  actions = true,
+  actions = [],
   className,
 }: {
   title: string;
   body: string;
-  actions?: boolean;
+  /** The buttons this device shows (`actionsFor`); none on iPhone. */
+  actions?: typeof NUDGE_ACTIONS;
   className?: string;
 }) {
   return (
@@ -32,9 +33,9 @@ export function NotificationPreview({
           <p className="text-small text-ink-soft">{body}</p>
         </div>
       </div>
-      {actions && (
+      {actions.length > 0 && (
         <div className="mt-3 flex gap-2 pl-12" aria-hidden>
-          {NUDGE_ACTIONS.map(({ action, title: label }) => (
+          {actions.map(({ action, title: label }) => (
             <span key={action} className="text-small text-ink bg-ink/6 rounded-sm px-3 py-1.5 font-semibold">
               {label}
             </span>

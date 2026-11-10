@@ -1,6 +1,6 @@
-import { nudgeMessage } from "@shared/push";
+import { actionsFor, answerHint, nudgeMessage } from "@shared/push";
 import { useState } from "react";
-import { NotificationsSheet } from "@/components/shell/NotificationsSheet";
+import { AddToHomeScreenHint, NotificationsSheet } from "@/components/shell/NotificationsSheet";
 import { Button } from "@/components/ui/Button";
 import { BellIcon } from "@/components/ui/icons";
 import { NotificationPreview } from "@/components/ui/NotificationPreview";
@@ -41,6 +41,8 @@ export function NotificationSection() {
             disabled
             onChange={() => undefined}
           />
+          <Label>iPhone in Safari: the switch is a hint</Label>
+          <AddToHomeScreenHint />
           <Button icon={BellIcon} className="mt-2 self-start" onClick={() => setOpen(true)}>
             Open the settings sheet
           </Button>
@@ -49,10 +51,18 @@ export function NotificationSection() {
         <Panel className="flex flex-col gap-4">
           <Label>Notification preview</Label>
           <p className="text-small text-ink-faint">
-            With the buttons Android and desktop Chrome add, and without: iPhone has none.
+            The buttons follow the device: three on Android, two on desktop Chrome, none on iPhone.
           </p>
-          <NotificationPreview title={off.title} body={off.body} />
-          <NotificationPreview title={late.title} body={`Sam's print. How did it go?`} actions={false} />
+          {(["android", "desktop", "ios"] as const).map((platform) => (
+            <div key={platform} className="flex flex-col gap-1.5">
+              <NotificationPreview
+                title={platform === "ios" ? late.title : off.title}
+                body={platform === "ios" ? late.body : off.body}
+                actions={actionsFor(platform)}
+              />
+              <p className="text-small text-ink-faint px-0.5">{answerHint(platform)}</p>
+            </div>
+          ))}
         </Panel>
       </div>
     </Section>

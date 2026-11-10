@@ -1,5 +1,5 @@
 import { fromBase64Url } from "@shared/base64url";
-import type { PushConfig, PushSubscriptionBody } from "@shared/push";
+import type { NotificationPlatform, PushConfig, PushSubscriptionBody } from "@shared/push";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
@@ -20,6 +20,12 @@ export type PushStatus =
 
 const supported = () =>
   typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+export function notificationPlatform(): NotificationPlatform {
+  if (typeof navigator === "undefined") return "desktop";
+  if (isApple()) return "ios";
+  return /Android/.test(navigator.userAgent) ? "android" : "desktop";
+}
 
 const isApple = () =>
   /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

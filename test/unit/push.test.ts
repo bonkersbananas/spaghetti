@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { attemptUrl, dueNudge, isQuietHour, isTimeZone, nudgeMessage } from "../../src/shared/push.ts";
+import {
+  actionsFor,
+  answerHint,
+  attemptUrl,
+  dueNudge,
+  isQuietHour,
+  isTimeZone,
+  nudgeMessage,
+} from "../../src/shared/push.ts";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -61,5 +69,19 @@ describe("nudgeMessage", () => {
     expect(attemptUrl("i-1", "a-1")).toBe("/builds/i-1?attempt=a-1&finish=1");
     expect(nudgeMessage("overdue", attempt, "", "Sam").title).toBe("A print should be done by now");
     expect(nudgeMessage("overdue", attempt, "Hook", "Sam").body).toBe("Sam's print. How did it go?");
+  });
+});
+
+describe("buttons by device", () => {
+  it("gives iPhone none, desktop Chrome Worked and Spaghetti, Android all three", () => {
+    expect(actionsFor("ios")).toEqual([]);
+    expect(actionsFor("desktop").map((a) => a.title)).toEqual(["Worked", "Spaghetti"]);
+    expect(actionsFor("android").map((a) => a.title)).toEqual(["Worked", "Partly", "Spaghetti"]);
+  });
+
+  it("says only what is true on the device", () => {
+    expect(answerHint("ios")).toBe("Tap the notification to answer, and add a photo while you're there.");
+    expect(answerHint("desktop")).toMatch(/^Worked or Spaghetti; Partly is in the sheet\./);
+    expect(answerHint("android")).toMatch(/^On your lock screen, tap Worked, Partly or Spaghetti/);
   });
 });

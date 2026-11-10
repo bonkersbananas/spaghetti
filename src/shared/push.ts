@@ -65,6 +65,24 @@ export const NUDGE_ACTIONS: Array<{ action: Outcome; title: string }> = [
   { action: "failed", title: "Spaghetti" },
 ];
 
+/** Where a notification is shown, which decides how many answer buttons it can have. */
+export type NotificationPlatform = "ios" | "android" | "desktop";
+
+/** iPhone has no buttons, Android three, desktop Chrome two (the first and last: Partly is one tap away in the sheet). */
+export function actionsFor(platform: NotificationPlatform): typeof NUDGE_ACTIONS {
+  if (platform === "ios") return [];
+  if (platform === "desktop") return [NUDGE_ACTIONS[0], NUDGE_ACTIONS[2]].filter((a) => a !== undefined);
+  return NUDGE_ACTIONS;
+}
+
+/** The line under the preview: only what is true on this device. */
+export function answerHint(platform: NotificationPlatform): string {
+  if (platform === "ios") return "Tap the notification to answer, and add a photo while you're there.";
+  if (platform === "desktop")
+    return "Worked or Spaghetti; Partly is in the sheet. Tap the notification to add a photo and a word.";
+  return "On your lock screen, tap Worked, Partly or Spaghetti to answer without opening the app, or tap the notification to add a photo and a word.";
+}
+
 /** What the service worker shows. `url` opens the attempt sheet; `actions` are for platforms that have buttons. */
 export interface PushMessage {
   kind: NudgeKind | "test";
