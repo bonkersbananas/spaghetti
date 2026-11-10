@@ -18,7 +18,7 @@ Authorization: Bearer spg_…
 - With an `Authorization` header only the token counts: an unknown, malformed or revoked one is `401 invalid_token`, never retried as a cookie. Revoking takes effect on the next request.
 - A token never needs CSRF headers (cookies do; a bearer header can't be sent cross-site by a browser).
 - Signed-out or no credentials: `401 signed_out`.
-- A token can **never** sign in, read the session, list or change agents and tokens, or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
+- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
 - `last_used` on a token moves at most every 5 minutes.
 
 ## Scopes
@@ -45,6 +45,8 @@ The change feed (`GET /api/changes?after=<cursor>`, see `src/shared/changes.ts`)
 The client picks ids (UUIDs) for items, attempts, photos and files, so any write can be retried safely: a repeat returns the same thing and records no second change. Photos are uploaded already resized (WebP or JPEG, large and thumb); see "Items and photos" in `AGENTS.md`.
 
 ## Also here
+
+- `GET /api/links/preview?url=…`: the title and site name of a link in a note (`{ url, title, site }`, the last two nullable), for the link cards. People only. https only, no IP addresses, `localhost`, one-word, `.local` or `.internal` hosts, credentials or ports; the name is resolved through Cloudflare's DNS-over-HTTPS first and refused if it points anywhere private; 3 seconds, 256 KB, `text/html`, three redirects at most with each hop checked the same way; only `og:title`, `<title>` and `og:site_name` are read. Cached in `link_previews` for 30 days, failures for one day.
 
 - `GET /api/builds/:id/story.md`: a build's (or idea's) whole story as one markdown document, with `read`. Works for any item id.
 - `/mcp`: the MCP server, with the same tokens; see [mcp.md](mcp.md). It calls this API as the agent, so everything above applies to it.

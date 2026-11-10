@@ -443,3 +443,10 @@ export const PHOTO_CONTENT_TYPES = ["image/webp", "image/jpeg"] as const;
 export function photoUrl(id: string, variant: PhotoVariant): string {
   return `/api/photos/${id}/${variant}`;
 }
+
+/** GET /api/links/preview?url=: what a link's page calls itself, when it could be read (null when not). */
+export interface LinkPreviewResponse {
+  url: string;
+  title: string | null;
+  site: string | null;
+}
