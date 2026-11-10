@@ -109,6 +109,15 @@ test("an outcome answers the tap with a short vibration, unless motion is reduce
     await expect(sheet.getByRole("radio", { name: "Worked" })).toBeChecked();
     const buzzes = await page.evaluate(() => (window as unknown as { buzzes: unknown[] }).buzzes);
     expect(buzzes).toEqual(reduced ? [] : [10]);
+    // The spring only scales the icon, and it rests at its own size (never left mid-way, with or without motion).
+    await page.waitForTimeout(600);
+    expect(
+      await sheet
+        .getByRole("radio", { name: "Worked" })
+        .locator("span")
+        .first()
+        .evaluate((el) => getComputedStyle(el).transform),
+    ).toBe("none");
     await page.keyboard.press("Escape");
   }
 });

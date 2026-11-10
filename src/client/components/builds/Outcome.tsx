@@ -76,7 +76,8 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
                 : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
             )}
           >
-            {/* Keyed on being picked, so the icon is new when it is, and answers the tap with a small spring. */}
+            {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
+                Keyed on being picked, so the icon is new when it is, and answers the tap with a small spring. */}
             <m.span
               key={selected ? "picked" : "idle"}
               initial={selected && picked ? { scale: 0.8 } : false}
@@ -84,7 +85,7 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
               transition={spring.snappy}
               className="flex"
             >
-              <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "duotone" : "regular"} aria-hidden />
+              <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
           </button>
