@@ -257,6 +257,10 @@ for (const scheme of ["light", "dark"] as const) {
     // Every specimen in the design system, not just a few sections.
     await screen(page, "/styleguide", "Styleguide");
     await expectAccessible(page, "The styleguide");
+    // The back burner's other specimen (one shows at a time).
+    await page.getByRole("radio", { name: "A photo" }).evaluate((input: HTMLInputElement) => input.click());
+    await expect(page.locator("#today").getByText("Articulated dragon").first()).toBeVisible();
+    await expectAccessible(page, "Styleguide: the back burner with a photo", "#today");
 
     await screen(page, "/pantry", "Pantry");
     await page.getByRole("button", { name: "Add spool" }).first().click();
