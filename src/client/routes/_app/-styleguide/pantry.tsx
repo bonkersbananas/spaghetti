@@ -10,6 +10,9 @@ import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
 
+const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
+const BLACK = "#1d1d1f"; // design-lint-ignore: a filament color is data
+const GREEN = "#00ae42"; // design-lint-ignore: a filament color is data
 const SILK = "#c9a46b"; // design-lint-ignore: a filament color is data
 
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
@@ -48,6 +51,25 @@ export function PantrySection() {
             <SpoolDisc color={SAMPLE_COLOR} size="lg" />
             <SpoolDisc color={SILK} size="xl" />
             <SpoolDisc empty size="lg" />
+          </div>
+          <Label>Rim: white and black show up on any surface (switch the theme to see both)</Label>
+          <div className="flex flex-wrap items-center gap-4">
+            {[WHITE, BLACK, GREEN].map((color) => (
+              <div key={color}>
+                <span className="bg-paper flex items-center gap-2 rounded-lg p-3">
+                  <SpoolDisc color={color} size="md" />
+                  <SpoolDisc color={color} size="xl" />
+                </span>
+              </div>
+            ))}
+          </div>
+          <Label>Fill: three fifths of a square parent</Label>
+          <div className="flex flex-wrap gap-3">
+            {[SILK, WHITE, BLACK].map((color) => (
+              <span key={color} className="bg-ink/3 grid size-28 place-items-center rounded-lg">
+                <SpoolDisc color={color} size="fill" />
+              </span>
+            ))}
           </div>
           <Label>What's left</Label>
           <div className="flex flex-wrap gap-4">

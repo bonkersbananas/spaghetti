@@ -4,8 +4,9 @@ import vasePhoto from "@/assets/samples/vase.svg";
 import * as Icons from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
+import { ProgressRing } from "@/components/ui/ProgressRing";
 import { toast } from "@/components/ui/Toast";
-import { ProgressRing, UploadBadge } from "@/components/ui/UploadBadge";
+import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, Panel, Section } from "./shared";
 
 /** A photo's average color is data, measured from its pixels, not a design token. */

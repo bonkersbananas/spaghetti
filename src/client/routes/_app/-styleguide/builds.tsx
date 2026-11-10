@@ -2,12 +2,36 @@ import type { Outcome } from "@shared/attempts";
 import { useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
+import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { TagPicker } from "@/components/builds/TagPicker";
 import * as Icons from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
+import { PrintProgress } from "@/components/ui/PrintProgress";
 import { toast } from "@/components/ui/Toast";
 import type { AttemptView } from "@/lib/items";
 import { Label, Panel, people, SAMPLE_COLOR, Section } from "./shared";
+
+const MINUTE = 60 * 1000;
+
+/** A print mid-way, one past its estimate, and one with no estimate to go by. */
+const progressSamples = [
+  { name: "Running", startedAt: Date.now() - 30 * MINUTE, estimatedMinutes: 75 },
+  { name: "Due", startedAt: Date.now() - 95 * MINUTE, estimatedMinutes: 90 },
+  { name: "Unknown", startedAt: Date.now() - 10 * MINUTE, estimatedMinutes: undefined },
+] as const;
+
+const sampleStrip = [
+  { id: "1", number: 1, outcome: "failed" },
+  { id: "2", number: 2, outcome: "partial" },
+  { id: "3", number: 3, outcome: "success" },
+  { id: "4", number: 4, outcome: null },
+] as const;
+
+const longStrip = Array.from({ length: 17 }, (_, index) => ({
+  id: String(index + 1),
+  number: index + 1,
+  outcome: index % 3 === 0 ? ("failed" as const) : index % 3 === 1 ? ("partial" as const) : ("success" as const),
+}));
 
 const sampleAttempt: AttemptView = {
   id: "sample-attempt",
@@ -62,6 +86,29 @@ export function BuildsSection() {
             <OutcomeChip outcome="success" />
             <OutcomeChip outcome="partial" />
             <OutcomeChip outcome="failed" />
+          </div>
+          <Label>Print progress: bar and ring, in three states</Label>
+          <div className="flex flex-col gap-4">
+            {progressSamples.map((sample) => (
+              <div key={sample.name} className="flex items-center gap-4">
+                <span className="text-small text-ink-faint w-20 shrink-0 font-medium">{sample.name}</span>
+                <PrintProgress
+                  startedAt={sample.startedAt}
+                  estimatedMinutes={sample.estimatedMinutes}
+                  className="flex-1"
+                />
+                <PrintProgress variant="ring" startedAt={sample.startedAt} estimatedMinutes={sample.estimatedMinutes} />
+              </div>
+            ))}
+          </div>
+          <p className="text-small text-ink-faint">
+            Without an estimate there is no bar and no ring: the app never draws progress it can't know.
+          </p>
+          <Label>Outcome strip: dots, oldest first</Label>
+          <div className="flex flex-col items-start gap-3">
+            <OutcomeStrip attempts={[...sampleStrip]} />
+            <OutcomeStrip attempts={[...sampleStrip]} onPick={(id) => toast.message(`Attempt ${id}`)} />
+            <OutcomeStrip attempts={longStrip} />
           </div>
           <TagPicker
             kind="failure"

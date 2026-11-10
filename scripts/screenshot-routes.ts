@@ -215,6 +215,9 @@ export const shots: Shot[] = [
     },
   },
   { name: "pantry", path: "/pantry", fullPage: true },
+  // The design system's own pages for the building blocks: print progress and the outcome strip, spool rims.
+  { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",
