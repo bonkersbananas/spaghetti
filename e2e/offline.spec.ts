@@ -27,9 +27,6 @@ test("opens with no connection after a first visit, and a capture made offline l
   await context.setOffline(true);
   await page.reload();
   // The app opens, still signed in, and says once that it is offline.
-  // Signing in lands on Today; these tests start from the inbox.
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-  await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
   const notice = page.getByRole("status").filter({ hasText: "Offline" });
   await expect(notice).toBeVisible();
@@ -468,4 +465,38 @@ test("shows the pantry as last seen with no connection, read-only", async ({ pag
     await context.setOffline(false);
     await page.request.delete(`/api/spools/${spoolId}`, { headers });
   }
+});
+
+test("Today opens with no connection from what was last seen, and a print can still be finished", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Bath tugboat", stage: "building" } });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: {
+      id: crypto.randomUUID(),
+      outcome: null,
+      printedAt: Date.now() - 20 * 60_000,
+      settings: { estimatedMinutes: 120 },
+    },
+  });
+
+  // Looked at once, online: its queries are kept on the device.
+  await page.goto("/today");
+  const bed = page.getByRole("region", { name: "On the bed" });
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
+  await expect.poll(() => cacheHolds(page, "Bath tugboat")).toBe(true);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("status").filter({ hasText: "Offline" })).toContainText("Showing what you saw");
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
+  // Finishing goes through the outbox, so it is still possible next to the printer.
+  await bed.getByRole("button", { name: "Finish" }).click();
+  await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
 });
