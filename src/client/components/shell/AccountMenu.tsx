@@ -6,7 +6,7 @@ import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useSignOut } from "@/lib/use-sign-out";
 import { AccountButton } from "./AccountButton";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhoto } from "./lazy-account";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** The sidebar's account menu (desktop), loaded on demand by the Sidebar. */
@@ -27,6 +27,10 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
         trigger={<AccountButton user={user} />}
       >
         <div className="flex flex-col gap-3">
+          <Suspense fallback={<div className="h-14" />}>
+            <ProfilePhoto />
+          </Suspense>
+          <div className="bg-hairline h-px" />
           <ThemeSwitch />
           <MenuGroup size="sm">
             <PopoverClose asChild>

@@ -10,7 +10,7 @@ import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhoto } from "./lazy-account";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -49,6 +49,9 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               ))
             : [0, 1].map((i) => <RowSkeleton key={i} />)}
         </ul>
+        <Suspense fallback={<div className="h-14" />}>
+          <ProfilePhoto />
+        </Suspense>
         <Overline as="h3" className="mt-6 mb-2 block">
           Workshop
         </Overline>

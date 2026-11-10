@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 export const people: Person[] = [
-  { id: "a", username: "alex", name: "Alex Rivera", color: "tomato" },
-  { id: "b", username: "sam", name: "Sam", color: "sea" },
+  { id: "a", username: "alex", name: "Alex Rivera", color: "tomato", photoUrl: null },
+  { id: "b", username: "sam", name: "Sam", color: "sea", photoUrl: null },
 ];
 
 export const SAMPLE_COLOR = "#f2c230"; // design-lint-ignore: a filament color is data

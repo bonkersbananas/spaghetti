@@ -2,6 +2,11 @@ import type { Person } from "@shared/api";
 import { AgentAvatar, Avatar, AvatarStack, ViaText } from "@/components/ui/Avatar";
 import { Panel, people, Section } from "./shared";
 
+/** A stand-in portrait: a data URL, so the specimen needs no server. */
+const SAMPLE_PHOTO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#e9c58a"/><circle cx="32" cy="26" r="11" fill="#b4764a"/><path d="M10 64c2-16 12-22 22-22s20 6 22 22z" fill="#5d7f6b"/></svg>', // design-lint-ignore: a sample picture is data
+)}`;
+
 export function AvatarSection() {
   return (
     <Section
@@ -19,6 +24,16 @@ export function AvatarSection() {
             <Avatar key={color} person={{ name: color, color }} size="sm" />
           ))}
         </div>
+      </Panel>
+      <Panel className="mt-4 flex flex-wrap items-center gap-6">
+        {(["xs", "sm", "md", "lg"] as const).map((size) => (
+          <Avatar key={size} person={{ ...(people[1] as Person), photoUrl: SAMPLE_PHOTO }} size={size} />
+        ))}
+        <Avatar person={{ ...(people[1] as Person), photoUrl: "/api/people/none/photo?v=missing" }} size="md" />
+        <p className="text-small text-ink-faint">
+          A profile picture covers the initials once it has loaded (fading in); the initials stay under it while it
+          loads, if it fails (right) and offline.
+        </p>
       </Panel>
       <Panel className="mt-4 flex flex-col gap-5">
         <div className="flex flex-wrap items-end gap-x-8 gap-y-4">

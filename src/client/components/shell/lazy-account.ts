@@ -9,3 +9,5 @@ export const AccountMenu = lazy(loadAccountMenu);
 export const ChangePasswordSheet = lazy(() =>
   import("./ChangePasswordSheet").then((module) => ({ default: module.ChangePasswordSheet })),
 );
+/** "Add a photo" and the crop sheet: their code loads when the account menu opens. */
+export const ProfilePhoto = lazy(() => import("./ProfilePhoto"));

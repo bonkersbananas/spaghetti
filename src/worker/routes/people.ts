@@ -31,7 +31,8 @@ export const peopleRoutes = new Hono<AppEnv>()
       .from(users)
       .where(eq(users.id, c.req.param("id")))
       .get();
-    const object = row?.key ? await c.env.PHOTOS.get(row.key, { onlyIf: c.req.raw.headers }) : null;
+    if (!row?.key) return apiError(c, 404, "not_found", "No picture here.");
+    const object = await c.env.PHOTOS.get(row.key, { onlyIf: c.req.raw.headers });
     if (!object) return apiError(c, 404, "not_found", "No picture here.");
     c.header("Cache-Control", IMMUTABLE);
     c.header("ETag", object.httpEtag);
