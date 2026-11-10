@@ -100,9 +100,12 @@ describe("computeInsights", () => {
   });
 
   it("builds the sentence", () => {
-    expect(fixSentence([{ phrase: "a brim", count: 3 }, { phrase: "a warmer bed", count: 2 }])).toBe(
-      "fixed 3 times by a brim and twice by a warmer bed",
-    );
+    expect(
+      fixSentence([
+        { phrase: "a brim", count: 3 },
+        { phrase: "a warmer bed", count: 2 },
+      ]),
+    ).toBe("fixed 3 times by a brim and twice by a warmer bed");
     expect(fixSentence([])).toBeNull();
   });
 });
