@@ -19,6 +19,7 @@ import {
   SignOutIcon,
   SunIcon,
   SystemThemeIcon,
+  TrashIcon,
 } from "@/components/ui/icons";
 import { PaletteDialog, type PaletteGroup, type PaletteRow, PaletteSurface } from "@/components/ui/Palette";
 import { useCapture } from "@/lib/capture";
@@ -153,6 +154,17 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
         () => void navigate({ to: "/styleguide" }),
         undefined,
         "go to open design tokens components kitchen tools",
+      ),
+    );
+    goTo.push(
+      action(
+        "go-/deleted",
+        "Go to",
+        "Recently deleted",
+        TrashIcon,
+        () => void navigate({ to: "/deleted" }),
+        undefined,
+        "go to open restore undo deleted trash bin",
       ),
     );
     const general = [

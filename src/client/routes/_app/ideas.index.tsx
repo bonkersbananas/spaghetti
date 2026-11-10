@@ -2,8 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
+import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
 import { EmptyPot } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
@@ -12,7 +14,7 @@ import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
-import { useIdeas } from "@/lib/items";
+import { useBuilds, useIdeas } from "@/lib/items";
 import { useArrived } from "@/lib/live";
 import { peopleQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
@@ -27,6 +29,9 @@ const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 function Ideas() {
   const { items, isPending, error, refetch } = useIdeas();
+  // Ideas that were started stay here, after the rest: they are the builds that began as an idea.
+  const { items: builds } = useBuilds();
+  const started = startedIdeas(builds);
   const { data: people } = useQuery(peopleQuery);
   const { landed } = useCapture();
   const arrived = useArrived();
@@ -84,8 +89,11 @@ function Ideas() {
             <CardSkeleton key={index} aspect="portrait" />
           ))}
         </div>
-      ) : items.length ? (
+      ) : items.length || started.length ? (
         <>
+          {!items.length && (
+            <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
+          )}
           {queue.length > 0 && (
             <section aria-labelledby="up-next-heading" className="mb-10">
               <SectionHeading id="up-next-heading" count={queue.length} className="mb-4">
@@ -106,12 +114,14 @@ function Ideas() {
               {rest.map((item) => card(item, -1))}
             </ul>
           )}
+          <StartedIdeas builds={builds} />
         </>
       ) : error ? (
         <IdeasUnreachable onRetry={() => void refetch()} />
       ) : (
         <IdeasEmpty />
       )}
+      {!isPending && <RecentlyDeletedLink />}
     </>
   );
 }

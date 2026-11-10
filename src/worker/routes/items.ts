@@ -9,6 +9,7 @@ import {
   PHOTO_CONTENT_TYPES,
   type PhotoResponse,
 } from "../../shared/api.ts";
+import { beganAsIdea } from "../../shared/deleted.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
@@ -25,7 +26,6 @@ import {
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiItem, toApiPhoto } from "../http.ts";
-import { beganAsIdea } from "../../shared/deleted.ts";
 import { photoKey } from "../photos.ts";
 
 const id = z.uuid();
@@ -74,8 +74,6 @@ const listQuery = z.object({
     .transform((value) => value.split(","))
     .pipe(z.array(z.enum(ITEM_STAGES)).min(1))
     .optional(),
-  /** "idea": only builds that began as an idea (captured first, started later): Ideas shows them after the rest. */
-  began: z.enum(["idea"]).optional(),
 });
 
 const photoFields = z.object({
@@ -210,11 +208,7 @@ export const itemRoutes = new Hono<AppEnv>()
     const stages = query.data.stage;
     const list = await loadItems(
       c.var.db,
-      and(
-        isNull(items.deletedAt),
-        stages ? inArray(items.stage, [...new Set(stages)]) : undefined,
-        query.data.began === "idea" ? sql`${items.startedAt} > ${items.createdAt}` : undefined,
-      ),
+      and(isNull(items.deletedAt), stages ? inArray(items.stage, [...new Set(stages)]) : undefined),
     );
     return c.json<ItemsResponse>({ items: list });
   })

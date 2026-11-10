@@ -1,6 +1,6 @@
 import type { Person } from "@shared/api";
 import { Suspense, useState } from "react";
-import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useSignOut } from "@/lib/use-sign-out";
@@ -47,6 +47,11 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
           </MenuGroup>
           <div className="bg-hairline h-px" />
           <MenuGroup size="sm">
+            <PopoverClose asChild>
+              <MenuItem to="/deleted" icon={TrashIcon}>
+                Recently deleted
+              </MenuItem>
+            </PopoverClose>
             <PopoverClose asChild>
               <MenuItem to="/styleguide" icon={PaletteIcon}>
                 Styleguide

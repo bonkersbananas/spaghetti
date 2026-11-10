@@ -33,23 +33,6 @@ async function attempt(itemId: string) {
   expect(response.status).toBe(201);
 }
 
-describe("started ideas", () => {
-  it("lists builds that began as an idea, and not builds from scratch", async () => {
-    const started = await start(await idea("Flexi hummingbird"));
-    const scratch = await request("/api/items", {
-      method: "POST",
-      cookie,
-      json: { id: crypto.randomUUID(), title: "From scratch", stage: "building" },
-    });
-    expect(scratch.status).toBe(201);
-    await idea("Still an idea");
-
-    const response = await request("/api/items?stage=building,done,shelved&began=idea", { cookie });
-    const { items } = await response.json<ItemsResponse>();
-    expect(items.map((item) => item.id)).toEqual([started.id]);
-  });
-});
-
 describe("scrapping a build", () => {
   it("sends a build that began as an idea back to Ideas, with its attempts deleted", async () => {
     const started = await start(await idea("Flexi hummingbird"));

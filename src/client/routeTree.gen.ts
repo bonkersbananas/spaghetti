@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAgentsRouteImport } from './routes/_app/agents'
+import { Route as AppDeletedRouteImport } from './routes/_app/deleted'
 import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppPrinterRouteImport } from './routes/_app/printer'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
@@ -43,6 +44,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAgentsRoute = AppAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDeletedRoute = AppDeletedRouteImport.update({
+  id: '/deleted',
+  path: '/deleted',
   getParentRoute: () => AppRoute,
 } as any)
 const AppJournalRoute = AppJournalRouteImport.update({
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
   '/agents': typeof AppAgentsRoute
+  '/deleted': typeof AppDeletedRoute
   '/journal': typeof AppJournalRoute
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/agents': typeof AppAgentsRoute
+  '/deleted': typeof AppDeletedRoute
   '/journal': typeof AppJournalRoute
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/agents': typeof AppAgentsRoute
+  '/_app/deleted': typeof AppDeletedRoute
   '/_app/journal': typeof AppJournalRoute
   '/_app/printer': typeof AppPrinterRoute
   '/_app/search': typeof AppSearchRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sign-in'
     | '/agents'
+    | '/deleted'
     | '/journal'
     | '/printer'
     | '/search'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
   to:
     | '/sign-in'
     | '/agents'
+    | '/deleted'
     | '/journal'
     | '/printer'
     | '/search'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/sign-in'
     | '/_app/agents'
+    | '/_app/deleted'
     | '/_app/journal'
     | '/_app/printer'
     | '/_app/search'
@@ -247,6 +259,13 @@ declare module '@tanstack/react-router' {
       path: '/agents'
       fullPath: '/agents'
       preLoaderRoute: typeof AppAgentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/deleted': {
+      id: '/_app/deleted'
+      path: '/deleted'
+      fullPath: '/deleted'
+      preLoaderRoute: typeof AppDeletedRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/journal': {
@@ -338,6 +357,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAgentsRoute: typeof AppAgentsRoute
+  AppDeletedRoute: typeof AppDeletedRoute
   AppJournalRoute: typeof AppJournalRoute
   AppPrinterRoute: typeof AppPrinterRoute
   AppSearchRoute: typeof AppSearchRoute
@@ -355,6 +375,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgentsRoute: AppAgentsRoute,
+  AppDeletedRoute: AppDeletedRoute,
   AppJournalRoute: AppJournalRoute,
   AppPrinterRoute: AppPrinterRoute,
   AppSearchRoute: AppSearchRoute,

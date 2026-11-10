@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { BuildCard, BuildRow, lastActivity } from "@/components/builds/BuildCard";
 import { SpoolStrand } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
@@ -100,6 +101,7 @@ function Builds() {
           )}
         </div>
       )}
+      {!isPending && <RecentlyDeletedLink />}
     </>
   );
 }

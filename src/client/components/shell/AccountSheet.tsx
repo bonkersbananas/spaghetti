@@ -2,7 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
@@ -80,6 +80,9 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             }}
           >
             Change password
+          </MenuItem>
+          <MenuItem to="/deleted" icon={TrashIcon} onClick={() => onOpenChange(false)}>
+            Recently deleted
           </MenuItem>
           <MenuItem to="/styleguide" icon={PaletteIcon} onClick={() => onOpenChange(false)}>
             Styleguide

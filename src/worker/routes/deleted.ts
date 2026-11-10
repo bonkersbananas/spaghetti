@@ -61,7 +61,14 @@ export const deletedRoutes = new Hono<AppEnv>().get("/", async (c) => {
     })
     .from(attempts)
     .innerJoin(items, eq(items.id, attempts.itemId))
-    .where(and(isNotNull(attempts.deletedAt), gt(attempts.deletedAt, since), isNull(items.deletedAt), ne(items.stage, "idea")))
+    .where(
+      and(
+        isNotNull(attempts.deletedAt),
+        gt(attempts.deletedAt, since),
+        isNull(items.deletedAt),
+        ne(items.stage, "idea"),
+      ),
+    )
     .orderBy(desc(attempts.deletedAt))
     .limit(LIMIT);
   // Attempts of a build scrapped back to an idea are not listed (stage idea): the build's undo toast restores them, and

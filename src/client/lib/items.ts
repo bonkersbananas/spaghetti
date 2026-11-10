@@ -8,6 +8,7 @@ import type {
   Person,
   Photo,
   PhotoResponse,
+  UnscrapRequest,
 } from "@shared/api";
 import { byPrintTime, describeChanges, mergeNote, unionTags } from "@shared/attempts";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -474,12 +475,34 @@ export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "fo
   return { title, setTitle, note, setNote, forWhom, setForWhom, saveState };
 }
 
+/** Builds made from the New build tile in this visit: if one is left untouched it removes itself (see discardIfUntouched). */
+const fresh = new Set<string>();
+export const markFresh = (id: string) => void fresh.add(id);
+
+/**
+ * A new build left with nothing in it (no title, note, photo, file or attempt) vanishes without a toast, the way a blank
+ * capture does: people open "New build" by a stray tap and then clean up. Only builds made here this visit count, and
+ * the empty ones aren't listed under Recently deleted either.
+ */
+export function discardIfUntouched(queryClient: QueryClient, item: ItemView) {
+  if (!fresh.has(item.id)) return;
+  const empty =
+    item.stage === "building" &&
+    !item.title?.trim() &&
+    !item.note.trim() &&
+    item.photos.length === 0 &&
+    item.attempts.length === 0;
+  if (!empty) return;
+  deleteItem(queryClient, item, { silent: true });
+}
+
 /**
  * Deletes an item at once and offers Undo. Works for items the server
  * doesn't have yet, which simply leave the outbox.
  */
-export function deleteItem(queryClient: QueryClient, item: ItemView) {
+export function deleteItem(queryClient: QueryClient, item: ItemView, { silent = false } = {}) {
   if (!canEdit(item.pending)) return;
+  fresh.delete(item.id);
   const noun = item.stage === "idea" ? "idea" : "build";
   const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
   const pendingEntry = outbox.remove(item.id);
@@ -490,6 +513,7 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
   const deleted = onServer
     ? api(`/items/${item.id}`, { method: "DELETE" }).catch((error) => {
         if (error instanceof ApiError && error.status === 404) return;
+        if (silent) return;
         toast.error(`Couldn't delete that ${noun}`, "It's back where it was.");
         if (cached) insertCachedItem(queryClient, cached);
         if (pendingEntry) outbox.restore(pendingEntry);
@@ -497,6 +521,7 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
       })
     : Promise.resolve();
 
+  if (silent) return;
   toast.undo(noun === "idea" ? "Idea deleted" : "Build deleted", {
     description: item.title || undefined,
     onUndo: async () => {
@@ -515,6 +540,57 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
         toast.error("Couldn't bring it back", "Try again in a moment.");
       }
       void queryClient.invalidateQueries({ queryKey: itemKeys.list(listOf(item.stage)) });
+    },
+  });
+}
+
+/**
+ * Scraps a build that began as an idea: it goes back to Ideas as an idea (its attempts are deleted with the
+ * build) instead of vanishing, and a toast offers Undo. The caller checks `beganAsIdea(item)`.
+ */
+export function scrapBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
+  const before = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id)) ?? null;
+  const name = item.title || item.note.split("\n").find((line) => line.trim()) || "The idea";
+  const snapshot: UnscrapRequest = {
+    stage: item.stage as UnscrapRequest["stage"],
+    startedAt: item.startedAt ?? item.createdAt,
+    finishedAt: item.finishedAt,
+    coverPhotoId: item.coverPhotoId,
+    attemptIds: item.attempts.map((attempt) => attempt.id),
+  };
+  patchCachedItem(queryClient, item.id, (cached) => ({
+    ...cached,
+    stage: "idea",
+    startedAt: null,
+    finishedAt: null,
+    coverPhotoId: null,
+    upNext: null,
+    attempts: [],
+  }));
+  const scrapped = api<ItemResponse>(`/items/${item.id}/scrap`, { method: "POST" }).then(({ item: saved }) => {
+    insertCachedItem(queryClient, saved);
+  });
+  scrapped.catch(() => {
+    toast.error("Couldn't scrap that build", "It's back where it was.");
+    if (before) insertCachedItem(queryClient, before);
+    void queryClient.invalidateQueries({ queryKey: itemKeys.all });
+  });
+
+  toast.undo("Build scrapped", {
+    description: `${name} is back in Ideas`,
+    onUndo: async () => {
+      try {
+        await scrapped;
+        const { item: restored } = await api<ItemResponse>(`/items/${item.id}/unscrap`, {
+          method: "POST",
+          json: snapshot,
+        });
+        insertCachedItem(queryClient, restored);
+      } catch {
+        toast.error("Couldn't bring it back", "Try again in a moment.");
+      }
+      void queryClient.invalidateQueries({ queryKey: itemKeys.all });
     },
   });
 }
