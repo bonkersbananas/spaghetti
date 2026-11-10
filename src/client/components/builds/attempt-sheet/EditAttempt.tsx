@@ -1,7 +1,8 @@
+import { fieldsFor, type SheetFields, type SheetValue, toChanges, toFields, toValue } from "@shared/attempt-fields";
 import type { Outcome } from "@shared/attempts";
 import { offTheBedLabel } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
@@ -12,7 +13,7 @@ import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 import { queueSlicerFile, removeSlicerFile } from "@/lib/slicer-files";
-import { useAutosave } from "@/lib/use-autosave";
+import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { EstimateLine, elapsedIfPlausible } from "../Estimate";
 import { SavedFileCard } from "../SlicerFile";
@@ -45,24 +46,27 @@ export function EditAttempt({
   const printing = attempt.outcome === null;
   // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
   const readOnly = offline ? (printing ? "finish" : "all") : undefined;
-  const [value, setValue] = useState({
-    outcome: attempt.outcome,
-    printedAt: attempt.printedAt,
-    note: attempt.note,
-    failureTags: attempt.failureTags,
-    successNotes: attempt.successNotes,
-    settings: attempt.settings,
-  });
-  // While finishing offline nothing autosaves: what was typed waits for the finish button (or for the
-  // connection, when it comes back and the usual autosave takes over).
-  const held = useRef(value);
-  if (readOnly !== "finish") held.current = value;
-  const saveState = useAutosave(
-    readOnly === "finish" ? held.current : value,
-    (changes) => saveAttemptChanges(queryClient, item.id, attempt.id, changes),
-    { delay: 500 },
+  // The fields follow the server's copy of the attempt (the other person's edit, the printer's report) except the
+  // one being typed in, and a save sends only the fields changed here: each setting is a field of its own, sent
+  // merged into the server's latest settings. While finishing offline nothing autosaves: what was typed waits for
+  // the finish button (or for the connection, when it comes back and the usual autosave takes over).
+  const server = useMemo(() => toFields(attempt), [attempt]);
+  const latestSettings = useRef(attempt.settings);
+  latestSettings.current = attempt.settings;
+  const {
+    value: fields,
+    change: changeFields,
+    saveState,
+  } = useLiveFields<SheetFields>(
+    server,
+    (changes) => {
+      const { changes: send, settingsMerge } = toChanges(changes, latestSettings.current);
+      return saveAttemptChanges(queryClient, item.id, attempt.id, send, settingsMerge);
+    },
+    { delay: 500, hold: readOnly === "finish" },
   );
-  const change = (next: Partial<typeof value>) => setValue((current) => ({ ...current, ...next }));
+  const value = useMemo(() => toValue(fields), [fields]);
+  const change = (next: Partial<SheetValue>) => changeFields((current) => fieldsFor(current, next));
   const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(item.id, files, attempt.id) });
   const library = useFilePicker({
     multiple: true,

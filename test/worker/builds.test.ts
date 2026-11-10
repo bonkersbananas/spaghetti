@@ -193,6 +193,51 @@ describe("attempts", () => {
     expect((await postAttempt(crypto.randomUUID())).status).toBe(404);
   });
 
+  it("changes only the settings it is told to, leaving the server's others alone", async () => {
+    const build = await createItem({ stage: "building" });
+    const attempt = await logAttempt(build.id, {
+      outcome: "partial",
+      settings: { bedTemperature: 60, layerHeight: 0.2, infillDensity: 15, brim: true },
+    });
+    const patch = async (json: Record<string, unknown>) => {
+      const response = await request(`/api/attempts/${attempt.id}`, { method: "PATCH", cookie, json });
+      expect(response.status).toBe(200);
+      return (await response.json<AttemptResponse>()).attempt;
+    };
+    // Someone else added a nozzle temperature since this screen loaded; this one changes the bed and removes the brim.
+    await patch({
+      settings: { bedTemperature: 60, layerHeight: 0.2, infillDensity: 15, brim: true, nozzleTemperature: 230 },
+    });
+    const merged = await patch({ settingsMerge: { set: { bedTemperature: 65 }, unset: ["brim"] } });
+    expect(merged.settings).toEqual({
+      bedTemperature: 65,
+      layerHeight: 0.2,
+      infillDensity: 15,
+      nozzleTemperature: 230,
+    });
+    // A merge alone changes nothing else, and a whole `settings` still replaces them all.
+    expect(merged).toMatchObject({ outcome: "partial" });
+    expect((await patch({ settingsMerge: { unset: ["layerHeight"] } })).settings).toEqual({
+      bedTemperature: 65,
+      infillDensity: 15,
+      nozzleTemperature: 230,
+    });
+    expect((await patch({ settings: { brim: true } })).settings).toEqual({ brim: true });
+    // What it may carry is still checked.
+    const bad = await request(`/api/attempts/${attempt.id}`, {
+      method: "PATCH",
+      cookie,
+      json: { settingsMerge: { set: { bedTemperature: 9999 } } },
+    });
+    expect(bad.status).toBe(400);
+    const unknown = await request(`/api/attempts/${attempt.id}`, {
+      method: "PATCH",
+      cookie,
+      json: { settingsMerge: { unset: ["notASetting"] } },
+    });
+    expect(unknown.status).toBe(400);
+  });
+
   it("is printing until it gets an outcome", async () => {
     const build = await createItem({ stage: "building" });
     const printing = await logAttempt(build.id, { note: "Benchy" });
