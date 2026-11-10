@@ -9,6 +9,8 @@ export interface PhotoProps {
   /** "cover" fills the frame (grids); "contain" shows the whole print (viewer). */
   fit?: "cover" | "contain";
   eager?: boolean;
+  /** The frame behind a photo that doesn't fill it: "well" (default) or the deeper paper of a viewer ("deep"). */
+  frame?: "well" | "deep";
   className?: string;
   imgClassName?: string;
 }
@@ -17,12 +19,12 @@ export interface PhotoProps {
  * A photo in a frame: its own color while it loads, then a quick fade. The
  * frame decides the size; the image never shifts the layout.
  */
-export function Photo({ src, alt, color, fit = "cover", eager, className, imgClassName }: PhotoProps) {
+export function Photo({ src, alt, color, fit = "cover", eager, frame = "well", className, imgClassName }: PhotoProps) {
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const loaded = loadedSrc === src;
   return (
     <div
-      className={cn("bg-well relative overflow-hidden", className)}
+      className={cn(frame === "deep" ? "bg-paper-deep" : "bg-well", "relative overflow-hidden", className)}
       // The photo's own color is data, not design.
       style={color && !loaded ? { backgroundColor: color } : undefined} // design-lint-ignore
     >
