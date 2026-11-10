@@ -1,5 +1,8 @@
 ALTER TABLE `items` ADD `up_next` integer;--> statement-breakpoint
-ALTER TABLE `items` ADD `for_whom` text;
+ALTER TABLE `items` ADD `for_whom` text;--> statement-breakpoint
+-- "For Mila" is searchable: it goes in the item row's tags column (a tag says more than a word in a note).
+DROP TRIGGER `search_items_insert`;
+--> statement-breakpoint
 CREATE TRIGGER `search_items_insert` AFTER INSERT ON `items` BEGIN
 	INSERT INTO search (kind, ref_id, item_id, title, body, tags)
 	VALUES ('item', NEW.id, NEW.id, coalesce(NEW.title, ''), NEW.note, coalesce(NEW.for_whom, ''));
