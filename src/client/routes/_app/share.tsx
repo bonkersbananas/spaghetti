@@ -1,20 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { z } from "zod";
 import { EmptyPot } from "@/components/illustrations";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
 import { useCapture } from "@/lib/capture";
 import { clearShare, readShare } from "@/lib/share";
 
-const search = z.object({
-  /** A share the service worker kept (the share target); also the new idea's id. */
-  id: z.uuid().optional().catch(undefined),
-  /** Or the words themselves (the bookmarklet, a link, a browser without the service worker). */
-  title: z.string().optional().catch(undefined),
-  text: z.string().optional().catch(undefined),
-  url: z.string().optional().catch(undefined),
-});
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+
+/** Checked by hand rather than with zod: route search checks load with the app, and zod would add 22 kB gzip to every screen. */
+function search(params: Record<string, unknown>): { id?: string; title?: string; text?: string; url?: string } {
+  const id = text(params.id);
+  return {
+    /** A share the service worker kept (the share target); also the new idea's id. */
+    ...(id && UUID.test(id) ? { id } : {}),
+    /** Or the words themselves (the bookmarklet, a link, a browser without the service worker). */
+    ...(text(params.title) !== undefined ? { title: text(params.title) } : {}),
+    ...(text(params.text) !== undefined ? { text: text(params.text) } : {}),
+    ...(text(params.url) !== undefined ? { url: text(params.url) } : {}),
+  };
+}
 
 export const Route = createFileRoute("/_app/share")({
   validateSearch: search,
