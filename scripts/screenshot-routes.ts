@@ -564,6 +564,30 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The same sheet with This idea picked: the title names the idea.
+    name: "capture-on-idea-here",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This idea" }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The same sheet with This print picked: the title and line name the print, and the outcome row shows.
+    name: "capture-on-printing-build-here",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This print" }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // Shared into Spaghetti (the share target and the bookmarklet end here): saved already, with a word to add.
     name: "share-captured",
     path: `/share?title=${encodeURIComponent("Drawer bins, 42 mm grid")}&text=${encodeURIComponent("Saw this on the bus")}&url=${encodeURIComponent("https://makerworld.com/en/models/drawer-bins")}`,
