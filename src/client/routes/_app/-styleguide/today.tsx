@@ -106,14 +106,6 @@ const oldIdea = view(
     createdAt: now - 36 * DAY,
   }),
 );
-const oldPhotoIdea = view(
-  item("sample-old-photo", {
-    stage: "idea",
-    title: "Articulated dragon",
-    photos: [photo("sample-dragon-photo", null)],
-    createdAt: now - 80 * DAY,
-  }),
-);
 
 export function TodaySection() {
   const ready = useSamplePictures();
@@ -149,7 +141,6 @@ export function TodaySection() {
             <Label>On the back burner: a note, and a photo</Label>
             <Panel className="flex flex-col gap-8">
               <BackBurner idea={oldIdea} person={alex} />
-              <BackBurner idea={oldPhotoIdea} person={sam} />
             </Panel>
           </div>
         </div>

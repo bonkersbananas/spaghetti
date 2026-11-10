@@ -118,12 +118,13 @@ export function PaletteSurface({
 
       <div
         id={listId}
-        role="listbox"
-        aria-label="Results"
-        aria-busy={pending || undefined}
+        // A listbox only while it has options (an empty one is invalid); the empty state is plain text.
+        {...(rowCount ? { role: "listbox", "aria-label": "Results" } : {})}
+        aria-busy={pending || stale || undefined}
         className={cn(
-          "duration-fast max-h-[min(26rem,56vh)] min-h-0 flex-1 overflow-y-auto p-2 transition-opacity",
-          stale && "opacity-60",
+          "max-h-[min(26rem,56vh)] min-h-0 flex-1 overflow-y-auto p-2",
+          // Earlier results wait for the new ones with their pictures dimmed; the words stay readable (AA contrast).
+          stale && "[&_img]:opacity-60 [&_img]:transition-opacity",
         )}
       >
         {groups.map((group) => (

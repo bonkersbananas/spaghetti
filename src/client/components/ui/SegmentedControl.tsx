@@ -48,7 +48,7 @@ export function SegmentedControl<T extends string>({
             <label
               key={optionValue}
               className={cn(
-                "pressable has-focus-visible:shadow-ring relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-sm font-semibold whitespace-nowrap",
+                "pressable has-focus-visible:shadow-ring touch-target relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-sm font-semibold whitespace-nowrap",
                 size === "md" ? "text-small h-10 md:h-8" : "text-small h-9 md:h-8",
                 selected ? "bg-lifted text-ink shadow-soft" : "text-ink-faint hover:text-ink",
               )}
