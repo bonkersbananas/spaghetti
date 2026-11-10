@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
 import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
@@ -9,6 +10,7 @@ import { Panel, Section } from "./shared";
 export function SheetSection() {
   const [dialog, setDialog] = useState(false);
   const [panel, setPanel] = useState(false);
+  const [password, setPassword] = useState(false);
   return (
     <Section
       id="sheets"
@@ -18,6 +20,9 @@ export function SheetSection() {
       <Panel className="flex flex-wrap gap-3">
         <Button onClick={() => setDialog(true)}>Open sheet (dialog)</Button>
         <Button onClick={() => setPanel(true)}>Open sheet (panel)</Button>
+        <Button icon={Icons.KeyIcon} onClick={() => setPassword(true)}>
+          Form sheet (change password)
+        </Button>
         <Button
           icon={Icons.TrashIcon}
           onClick={() =>
@@ -43,6 +48,7 @@ export function SheetSection() {
           First idea (delight)
         </Button>
       </Panel>
+      <ChangePasswordSheet open={password} onOpenChange={setPassword} />
       <Sheet
         open={dialog}
         onOpenChange={setDialog}

@@ -20,6 +20,8 @@ import { useIsDesktop } from "@/lib/use-media-query";
 // Desktop-only overlays, loaded once the app is idle rather than with the first screen.
 const loadPalette = () => import("@/components/shell/CommandPalette");
 const loadShortcuts = () => import("@/components/shell/ShortcutOverlay");
+// The "Captured" sheet only exists after something was shared in: its code comes then, not with every first load.
+const ShareSheet = lazy(() => import("@/components/shell/ShareSheet").then((m) => ({ default: m.ShareSheet })));
 const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })));
 const ShortcutOverlay = lazy(() => loadShortcuts().then((m) => ({ default: m.ShortcutOverlay })));
 
@@ -47,7 +49,7 @@ function AppLayout() {
 function Shell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setOpen } = useCapture();
+  const { setOpen, shared } = useCapture();
   const dragging = useGlobalCapture();
   // Sends captures still waiting from this visit or an earlier one.
   useEffect(() => connectOutbox(queryClient), [queryClient]);
@@ -85,6 +87,11 @@ function Shell() {
       </main>
       <TabBar />
       <CaptureSheet />
+      {shared && (
+        <Suspense fallback={null}>
+          <ShareSheet />
+        </Suspense>
+      )}
       {isDesktop && <DesktopOverlays />}
       <DropOverlay visible={dragging} />
     </div>

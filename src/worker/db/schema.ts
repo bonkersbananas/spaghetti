@@ -35,6 +35,22 @@ export const sessions = sqliteTable(
   (table) => [index("sessions_user_id_idx").on(table.userId)],
 );
 
+/**
+ * Wrong current passwords typed when changing one, per person, so the change-password route
+ * can't be used to guess. Rows older than the window are ignored and cleared on success.
+ */
+export const passwordFailures = sqliteTable(
+  "password_failures",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("password_failures_user_idx").on(table.userId, table.at)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 

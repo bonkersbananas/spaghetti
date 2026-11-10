@@ -54,6 +54,7 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM attempts"),
     env.DB.prepare("DELETE FROM tags"),
     env.DB.prepare("DELETE FROM items"),
+    env.DB.prepare("DELETE FROM password_failures"),
     env.DB.prepare("DELETE FROM sessions"),
     env.DB.prepare("DELETE FROM users"),
   ]);

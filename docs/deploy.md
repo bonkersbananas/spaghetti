@@ -49,7 +49,7 @@ This exports every table and the search index's own SQL (see `scripts/db-export.
 
 ## Adding or resetting a person
 
-Passwords come from an environment variable, never from the command line. Running the command again for an existing username changes their name, color and password and signs them out everywhere, which is also how a password is reset.
+Passwords come from an environment variable, never from the command line. Running the command again for an existing username changes their name, color and password and signs them out everywhere, which is how a forgotten password is reset. People change their own in the app (account menu → Change password).
 
 ```sh
 SPAGHETTI_PASSWORD="$SPAGHETTI_PASSWORD_KALASPUFF" pnpm user:add --remote --username kalaspuff --name "Carl Oscar" --color tomato

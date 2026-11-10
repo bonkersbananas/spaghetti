@@ -15,7 +15,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] §1 Shared building blocks (PrintProgress, SpoolDisc rim, OutcomeStrip) and §9 small polish, with the styleguide split per section first (#14)
 - [x] §5 Pantry (rims, AMS remaining, fill discs, desktop list view; #17) and §6 Journal (one icon per row, plate pictures, printing progress, compact rows; #19), side by side
 - [x] §3 Build page: summary under the notes, aligned attempt photos, compare two attempts (#23)
-- [ ] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar)
+- [x] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar) (#29)
 - [ ] §4 Idea page (proportions, link cards and a preview endpoint) and §8 Motion (photo transitions, outcome tap, reflow, stepping between attempts): all done in #25 except the reflow when a print finishes, which is on Today's printing card and waits for the Today screen
 
 ## Now: agents in the repo
@@ -27,12 +27,25 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
 - [ ] Push notifications: "Tugboat should be done, how did it go?" with outcome buttons on the notification
 - [ ] Insights and recipes: success rate by material and plate, which change fixed which failure, a year in review; promote a what-worked attempt to a named recipe on the spool's page
-- [ ] Richer ideas: an "Up next" queue, who it's for, comments between you two, a share target for the phone's share sheet (link previews come with spec §4)
+- [ ] Richer ideas: an "Up next" queue, who it's for, comments between you two (link previews come with spec §4)
+- [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [ ] Parts and quantities ("print the hull in two halves")
 - [ ] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
-- [ ] Passkeys, and adding people in the app instead of the command line
+- [ ] Passkeys, and adding people in the app instead of the command line (changing your own password is in the app: the account menu → Change password)
 - [x] Filament accounting: grams from slicer files update what's left, "not enough for this print", a shopping list (decided: [grams, automatically](decisions/0009-filament-tracked-in-grams.md); a spool starts at 1 kg, each attempt's slicer grams come off it, failed prints in proportion to how far they got, levels follow and stay correctable)
 - [x] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (#22: the program, its routes and [docs/bridge.md](bridge.md); #24: the app side, "off the bed · how did it go?", the printer's live progress and the bridge line and unknown-tray prompt on the Printer page) (decided: [optional and read-only](decisions/0010-optional-read-only-printer-bridge.md); a small program on a home computer using LAN mode, local MQTT, FTP and the camera, never Bambu's cloud and never a command to the printer)
+
+## Later: Claude in the app
+
+Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the Cloudflare dashboard and kept across `wrangler deploy`; locally it goes in `.dev.vars`, which is never committed. The features are hidden when the key is absent, so the app works fully without it. Both are for people only, with a per-day cap so a key can't run up a bill, and both use the official `@anthropic-ai/sdk` (fetch-based; check it bundles on workerd) with `claude-opus-5-5`.
+
+- [ ] **Import an idea from a model page:** paste a MakerWorld, Printables or Thingiverse link (or share it from the phone), and Spaghetti drafts the idea: a title, a short note, the source link, the model's pictures, the designer, the license, and suggested material and settings. The person tidies it up.
+  - Anthropic's server-side web fetch tool (`web_fetch_20260209`, `allowed_domains` limited to the model sites) reads the page, so the Worker never fetches arbitrary URLs for it. The draft comes back structured through `output_config.format` (a JSON schema); handle `stop_reason: "refusal"`.
+  - Pictures come from an allowlist of the sites' image CDNs and are stored with `needsResize`, so the next browser makes the thumbnails ([0004](decisions/0004-photos-resized-in-the-browser.md)).
+  - Agents may get an `import_idea` MCP tool later.
+- [ ] **Read a print from its photo:** when an attempt gets a photo (taken by hand, or the bridge's camera frame), Claude looks at it and *suggests* how it went (Worked, Partly or Spaghetti) and which failure tags fit, from the built-in list. Spaghetti, warping, layer shift, stringing and the rest each come with a short reason.
+  - It only ever suggests. Like the bridge's suggested tag (#24), the suggestion is pre-selected and clearly marked "suggested" in the attempt sheet, and the person confirms or changes it. It never sets an outcome on its own.
+  - It reads the attempt's large photo variant from R2 (already resized in the browser) and returns a structured output whose tags are an enum of the built-in tag slugs.
 
 ## Next: agents using the service
 

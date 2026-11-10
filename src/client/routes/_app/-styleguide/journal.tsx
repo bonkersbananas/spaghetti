@@ -11,7 +11,7 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const now = Date.now();
 
-const photo = (id: string, attemptId: string | null): Photo => ({
+export const photo = (id: string, attemptId: string | null): Photo => ({
   id,
   itemId: "sample",
   position: 0,
@@ -25,7 +25,7 @@ const photo = (id: string, attemptId: string | null): Photo => ({
   createdAt: now,
 });
 
-const attempt = (id: string, itemId: string, fields: Partial<Attempt>): Attempt => ({
+export const attempt = (id: string, itemId: string, fields: Partial<Attempt>): Attempt => ({
   id,
   itemId,
   outcome: "success",
@@ -53,7 +53,7 @@ const attempt = (id: string, itemId: string, fields: Partial<Attempt>): Attempt 
   ...fields,
 });
 
-const item = (id: string, fields: Partial<Item>): Item => ({
+export const item = (id: string, fields: Partial<Item>): Item => ({
   id,
   stage: "building",
   title: null,
@@ -72,7 +72,7 @@ const item = (id: string, fields: Partial<Item>): Item => ({
   ...fields,
 });
 
-const planFile = {
+export const planFile = {
   id: "sample-plate",
   name: "desk-clips.gcode.3mf",
   size: 14_000,
@@ -132,7 +132,7 @@ const entry = (kind: Entry["kind"], target: Item, attemptId: string | null = nul
 });
 
 /** Samples draw their pictures from the sample SVGs, through the same preview cache that photos made on this device use. */
-function useSamplePictures() {
+export function useSamplePictures() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
