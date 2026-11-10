@@ -1,6 +1,7 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
 import type { BridgeStatus } from "./bridge.ts";
 import type { ItemDraft } from "./draft.ts";
+import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { PersonColor } from "./people.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
@@ -320,6 +321,11 @@ export interface JournalResponse {
   items: Item[];
   /** Pass as `cursor` for the next page; null at the end. */
   next: string | null;
+}
+
+/** GET /api/insights?year=&tz= (the year so far; tz is minutes behind UTC). */
+export interface InsightsResponse {
+  insights: Insights;
 }
 
 /** GET /api/journal/summary?from=&to= (epoch ms, the month in local time). */

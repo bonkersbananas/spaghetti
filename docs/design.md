@@ -119,6 +119,7 @@ The scale has one set of names and two sets of sizes: phones read slightly large
 | Class           | Phone | Desktop | Use                                                  |
 | --------------- | ----- | ------- | ---------------------------------------------------- |
 | `text-display`  | 36    | 44      | Page titles                                          |
+| `text-figure`   | 56    | 96      | A few large figures on the Year so far (display face) |
 | `text-headline` | 28    | 30      | Section and empty-state titles                       |
 | `text-title`    | 20    | 20      | Sheet titles, card titles in detail                  |
 | `text-lead`     | 18    | 17      | Intros, writing surfaces on phones                   |
@@ -321,6 +322,15 @@ A recipe is "this is how we print silk PLA now": the settings of an attempt that
 - **Saving:** "Save as recipe" on a print that worked: in the attempt sheet (the name field opens in place, not a sheet in a sheet), on an attempt in the build's story, and on the What worked card. The name is already filled in from the spool's finish and the material and selected, so one tap saves.
 - **Where they show:** under the spool ("Recipes for silk PLA", matched by material and finish), under each Pantry material group ("Recipes for PLA"), in search as their own group (the card shows a *Recipe* chip), and on the What worked card when its material has one. A shelf with no recipes draws nothing.
 - **Starting from one:** "Start from a recipe" in a new attempt's sheet, beside What worked last time, opens compact cards; picking one fills in the settings (the spool already chosen stays) and the settings line then says "Same as recipe …" or "Changed from recipe …: bed 70 °C", the way it does against the previous attempt. Undo puts the settings back. Nothing is asked afterwards.
+
+## Year so far
+
+One screen (`/year`, linked quietly from the journal's first month line, "See the year") that says what a year adds up to in a few large figures and sentences, never a dashboard. The figures use `text-figure` (display face): prints, and the share that worked in basil. Right after them on phones (beside the rates on the desk) comes **What got made**: a mosaic (`Mosaic`) of the final photo of each build that worked this year, newest first, square thumbnails that open their build (four across on phones, three in a wider column on desktop, a dozen shown and the rest counted: "and 8 more"). The outcome colors are explained where they appear, with small dots in the sentence under the figures ("8 came out partly, and 7 turned to spaghetti"), so there is no legend. Then two quiet components built on the outcome colors in `tokens.css` and labelled in words for screen readers, with direct labels instead of a legend:
+
+- `MonthBars`: prints by month as stacked bars (worked at the bottom, spaghetti on top), the busiest month naming its count, empty months a faint tick, months still to come dimmed. No axis.
+- `RateRows`: success rate per group (material, plate) as a name, a basil bar and "83% worked · 12 prints".
+
+"What went wrong, and what helped" is sentences: each failure tag in the display face with its count and "Fixed twice by a brim and once by a warmer bed." (`fixSentence`; the changes come from `diffSettings` between a failed attempt and the next one that worked, `src/shared/insights.ts`). Nothing is interactive beyond links into the journal or search filtered to that slice. "Took the most tries" are photo rows: thumbnail, name, `OutcomeStrip` and the attempt count. Phones stack the sections in one column with the two figures side by side. Desktop (from 1024 px) gives the figures and the month bars the full width, then two columns: material, plate and what helped on the left, the mosaic and the photo rows on the right. The styleguide's "Year so far" shows both components.
 
 ## Accessibility
 

@@ -93,6 +93,8 @@
   --sg-text-headline-lh: 2.125rem;
   --sg-text-display: 2.25rem;
   --sg-text-display-lh: 2.5rem;
+  --sg-text-figure: 3.5rem;
+  --sg-text-figure-lh: 3.5rem;
 
   /* Layout */
   /* The tab bar's buttons; the bar itself also holds the home indicator's room below them. */
@@ -135,6 +137,8 @@
     --sg-text-headline-lh: 2.25rem;
     --sg-text-display: 2.75rem;
     --sg-text-display-lh: 3rem;
+    --sg-text-figure: 6rem;
+    --sg-text-figure-lh: 6rem;
   }
 }
 
@@ -253,6 +257,9 @@
   --text-display: var(--sg-text-display);
   --text-display--line-height: var(--sg-text-display-lh);
   --text-display--letter-spacing: -0.025em;
+  --text-figure: var(--sg-text-figure);
+  --text-figure--line-height: var(--sg-text-figure-lh);
+  --text-figure--letter-spacing: -0.03em;
 
   /*
    * Notes on note cards (NoteFace), in container units: a share of the card's

@@ -17,6 +17,7 @@ import { captureRoutes } from "./routes/capture.ts";
 import { changeRoutes } from "./routes/changes.ts";
 import { draftRoutes } from "./routes/drafts.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
+import { insightRoutes } from "./routes/insights.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { journalRoutes } from "./routes/journal.ts";
 import { linkRoutes } from "./routes/links.ts";
@@ -109,6 +110,7 @@ export const app = new Hono<AppEnv>()
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)
   .route("/journal", journalRoutes)
+  .route("/insights", insightRoutes)
   .route("/links", linkRoutes)
   .route("/builds", storyRoutes)
   .route("/", searchRoutes)
