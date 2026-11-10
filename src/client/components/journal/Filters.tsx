@@ -72,7 +72,7 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
       {material}
     </ToggleChip>
   ));
-  const tagChips = tagList.map((tag) => (
+  const tagChip = (tag: (typeof tagList)[number]) => (
     <ToggleChip
       key={`${tag.kind}-${tag.slug}`}
       selected={value.tag === tag.slug}
@@ -81,7 +81,10 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
     >
       {tagLabel(tag.kind, tag.slug, tag.kind === "failure" ? failureOptions : successOptions)}
     </ToggleChip>
-  ));
+  );
+  const tagChips = tagList.map(tagChip);
+  const wrongChips = tagList.filter((tag) => tag.kind === "failure").map(tagChip);
+  const rightChips = tagList.filter((tag) => tag.kind === "success").map(tagChip);
   const personChips = (people ?? []).map((person: Person) => (
     <ToggleChip
       key={person.id}
@@ -120,7 +123,8 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
     <div className="flex flex-col gap-6">
       <FilterGroup label="Outcome">{outcomeChips}</FilterGroup>
       {materialChips.length > 0 && <FilterGroup label="Material">{materialChips}</FilterGroup>}
-      {tags && tagChips.length > 0 && <FilterGroup label="Tags">{tagChips}</FilterGroup>}
+      {tags && wrongChips.length > 0 && <FilterGroup label="What went wrong">{wrongChips}</FilterGroup>}
+      {tags && rightChips.length > 0 && <FilterGroup label="What went right">{rightChips}</FilterGroup>}
       {personChips.length > 0 && <FilterGroup label="Who">{personChips}</FilterGroup>}
       {clear}
     </div>

@@ -61,6 +61,36 @@ export const QUICK_COLORS: ReadonlyArray<{ name: string; hex: string }> = [
   { name: "Beige", hex: "#d8c3a0" },
 ];
 
+export type ColorTone = "light" | "mid" | "dark";
+
+/** WCAG relative luminance of a #rgb or #rrggbb color, 0 (black) to 1 (white); null if it isn't one. */
+function luminance(hex: string): number | null {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  const digits =
+    (match[1] as string).length === 3 ? [...(match[1] as string)].map((d) => d + d).join("") : (match[1] as string);
+  const n = Number.parseInt(digits, 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * Whether a filament color is close to white or black, from its luminance:
+ * 0.70 and above is light, 0.05 and below is dark. A spool's rim is
+ * strengthened only when its tone would melt into the surface it sits on.
+ * Anything that isn't a hex color is "mid".
+ */
+export function colorTone(hex: string): ColorTone {
+  const value = luminance(hex);
+  if (value === null) return "mid";
+  if (value >= 0.7) return "light";
+  if (value <= 0.05) return "dark";
+  return "mid";
+}
+
 /** Materials offered as chips when adding a spool, most common first. */
 export const SPOOL_MATERIALS = ["PLA", "PETG", "ABS", "ASA", "TPU", "PLA-CF", "PETG-CF", "PA", "PC", "PVA"] as const;
 

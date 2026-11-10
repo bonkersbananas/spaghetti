@@ -92,9 +92,10 @@ export function Card({
           {heading ? (
             <Heading
               className={cn(
-                "text-body text-ink line-clamp-2 font-semibold break-words",
-                // Notes standing in for a title read as text, not as a heading.
-                !title && "font-sans font-medium",
+                "text-body text-ink font-semibold break-words",
+                // Notes standing in for a title read as text, not as a heading, and get a third line
+                // so they aren't cut off mid-thought. Real titles stay at two.
+                title ? "line-clamp-2" : "line-clamp-3 font-sans font-medium",
               )}
             >
               {heading}
