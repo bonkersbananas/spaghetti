@@ -18,20 +18,27 @@ test("signs in, browses the four sections, opens capture and signs out", async (
   await expect(page.getByRole("alert")).toHaveText("That name and password don't match.");
 
   await signIn(page);
-  await expect(page).toHaveURL(/\/ideas$/);
-  await expect(page.getByRole("heading", { name: "Nothing simmering yet" })).toBeVisible();
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByRole("heading", { name: "Nothing on the stove yet" })).toBeVisible();
 
+  // Phones have Today, Ideas, Builds and Journal as tabs; search is a button in every page header.
   const nav = page.getByRole("navigation", { name: "Sections" }).filter({ visible: true });
   for (const [label, emptyTitle] of [
+    ["Ideas", "Nothing simmering yet"],
     ["Builds", "Nothing on the bed"],
     ["Journal", "A clean notebook"],
     ["Search", "Nothing to untangle yet"],
-    ["Ideas", "Nothing simmering yet"],
+    ["Today", "Nothing on the stove yet"],
   ]) {
-    await nav.getByRole("link", { name: label }).click();
+    const link =
+      label === "Search" && isMobile
+        ? page.getByRole("link", { name: "Search" })
+        : nav.getByRole("link", { name: label });
+    await link.click();
     await expect(page.getByRole("heading", { level: 1, name: label })).toBeVisible();
     await expect(page.getByRole("heading", { name: emptyTitle })).toBeVisible();
   }
+  await page.goto("/ideas");
 
   // Capture: the tab bar button on phones, the C key on desktop.
   if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
@@ -71,7 +78,13 @@ test("desktop keyboard: G then a letter switches sections", async ({ page, isMob
   test.skip(isMobile, "phones have no keyboard shortcuts");
   await page.goto("/sign-in");
   await signIn(page);
-  await expect(page.getByRole("heading", { name: "Nothing simmering yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing on the stove yet" })).toBeVisible();
+  await page.keyboard.press("g");
+  await page.keyboard.press("i");
+  await expect(page).toHaveURL(/\/ideas$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("t");
+  await expect(page).toHaveURL(/\/today$/);
   await page.keyboard.press("g");
   await page.keyboard.press("j");
   await expect(page).toHaveURL(/\/journal$/);

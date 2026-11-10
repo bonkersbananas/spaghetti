@@ -27,6 +27,9 @@ test("opens with no connection after a first visit, and a capture made offline l
   await context.setOffline(true);
   await page.reload();
   // The app opens, still signed in, and says once that it is offline.
+  // Signing in lands on Today; these tests start from the inbox.
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
   const notice = page.getByRole("status").filter({ hasText: "Offline" });
   await expect(notice).toBeVisible();
