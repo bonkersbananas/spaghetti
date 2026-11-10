@@ -71,3 +71,26 @@ export function ToggleChip({
     </button>
   );
 }
+
+/**
+ * A long row of choices cut short: the first `visible` plus any that are
+ * picked, so a pick never hides, and the rest behind a "N more" chip
+ * (`MoreChip`). Pass `expanded` once that chip was tapped. Shared by the tag
+ * pickers and the spool page's Material and Finish rows.
+ */
+export function collapseChips<T>(
+  items: readonly T[],
+  { visible, picked, expanded }: { visible: number; picked: (item: T) => boolean; expanded: boolean },
+): { shown: T[]; hidden: number } {
+  const shown = expanded ? [...items] : items.filter((item, index) => index < visible || picked(item));
+  return { shown, hidden: items.length - shown.length };
+}
+
+/** "4 more": the chip that opens what `collapseChips` left out. */
+export function MoreChip({ hidden, onClick }: { hidden: number; onClick: () => void }) {
+  return (
+    <ToggleChip selected={false} onClick={onClick} className="text-ink-faint">
+      {hidden} more
+    </ToggleChip>
+  );
+}

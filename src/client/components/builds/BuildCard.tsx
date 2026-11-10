@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { printProgress } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
+import { useNow } from "@/lib/use-now";
 import { OutcomeChip } from "./Outcome";
 
 /** When anything last happened on a build: its newest attempt, or when it started. */
@@ -21,8 +23,12 @@ export function lastActivity(item: ItemView): number {
   return Math.max(last?.printedAt ?? 0, last?.finishedAt ?? 0, item.startedAt ?? item.createdAt);
 }
 
-/** "Attempt 3 · 2 h ago", "Started yesterday". The time never breaks across lines. */
-function activityLine(item: ItemView) {
+/**
+ * "Attempt 3 · 2 h ago", "Attempt 3 · about 45 min left" while it prints,
+ * "Started yesterday". The time never breaks across lines.
+ */
+function ActivityLine({ item }: { item: ItemView }) {
+  const now = useNow();
   const last = item.attempts.at(-1);
   if (!last) {
     return (
@@ -31,13 +37,21 @@ function activityLine(item: ItemView) {
       </>
     );
   }
+  // A print on the bed says how long is left (or that it should be done), not when it started.
+  const when =
+    last.outcome === null
+      ? lowerFirst(printProgress(last.printedAt, last.settings.estimatedMinutes, now).label)
+      : relativeTime(last.finishedAt ?? last.printedAt);
   return (
     <MetaList>
       <span className="whitespace-nowrap">Attempt {last.number}</span>
-      <span className="whitespace-nowrap">{relativeTime(last.finishedAt ?? last.printedAt)}</span>
+      {/* "done around 10:38 AM" may wrap in a narrow card; a relative time never does. */}
+      <span className={cn(last.outcome !== null && "whitespace-nowrap")}>{when}</span>
     </MetaList>
   );
 }
+
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
 /**
  * A build in progress: its newest photo first (what came off the bed last),
@@ -77,7 +91,7 @@ export function BuildCard({
             <Chip className="bg-veil text-on-veil backdrop-blur-md">Not printed yet</Chip>
           )
         }
-        meta={activityLine(item)}
+        meta={<ActivityLine item={item} />}
         person={person}
         via={via}
         className="h-full"

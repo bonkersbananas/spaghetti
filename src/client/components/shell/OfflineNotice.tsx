@@ -1,10 +1,10 @@
 import { inlineTime } from "@shared/time";
-import { useEffect, useState } from "react";
 import { OfflineIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useOnline } from "@/lib/connection";
 import { useOutbox } from "@/lib/outbox";
 import { useLastSeen } from "@/lib/persist";
+import { useNow } from "@/lib/use-now";
 
 /**
  * The one place the app says there is no connection: a quiet strip at the
@@ -47,16 +47,6 @@ function useWaiting() {
   return { waiting, finishes };
 }
 
-/** "2 h ago" stays right while the strip is open. */
-function useMinuteClock() {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
-
 /**
  * The strip itself: what the offline notice says, how many captures are
  * waiting and, over data kept from earlier, when it was last fetched. That
@@ -75,7 +65,7 @@ export function OfflineBanner({
   seenAt?: number | null;
   className?: string;
 }) {
-  const now = useMinuteClock();
+  const now = useNow();
   const queued = [
     waiting > 0 && `${waiting} ${waiting === 1 ? "capture" : "captures"}`,
     finishes > 0 && `${finishes} finished ${finishes === 1 ? "print" : "prints"}`,

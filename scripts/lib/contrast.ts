@@ -111,6 +111,10 @@ export const pairs: Pair[] = [
   { label: "Initials on clay avatar", fg: "on-accent", bg: "person-clay", min: 4.5 },
   { label: "Active icon (tomato) on the sidebar", fg: "tomato", bg: "paper-deep", min: 3 },
   { label: "Basil icon on cards", fg: "basil", bg: "cream", min: 3 },
+  { label: "Print progress label", fg: "ink-soft", bg: "cream", min: 4.5 },
+  { label: "Print progress label, due", fg: "semolina-ink", bg: "cream", min: 4.5 },
+  { label: "Print progress label on paper, due", fg: "semolina-ink", bg: "paper", min: 4.5 },
+  { label: "Attempt count on the outcome strip", fg: "ink-faint", bg: "cream", min: 4.5 },
 ];
 
 export function measure(theme: Theme, pair: Pair, tokens = readTokens()[theme]): number {

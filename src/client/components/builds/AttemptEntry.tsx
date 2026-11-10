@@ -9,6 +9,7 @@ import { Chip } from "@/components/ui/Chip";
 import { CheckIcon, SameAgainIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
+import { PrintProgress } from "@/components/ui/PrintProgress";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -19,7 +20,7 @@ import { EstimateLine } from "./Estimate";
 import { OutcomeChip, outcomeDots } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
 import { SavedFileCard } from "./SlicerFile";
-import { filamentLabel, formatMinutes, summarizeResults, summarizeSettings } from "./settings";
+import { filamentLabel, summarizeResults, summarizeSettings } from "./settings";
 
 interface AttemptEntryProps {
   attempt: AttemptView;
@@ -190,11 +191,11 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 
             {printing && onFinish && (
               <div className="pointer-events-auto flex items-center gap-3">
-                <span className="text-small text-ink-soft">
-                  {attempt.settings.estimatedMinutes
-                    ? `Should be done ${doneBy(attempt.printedAt, attempt.settings.estimatedMinutes)}`
-                    : "On the bed now"}
-                </span>
+                <PrintProgress
+                  startedAt={attempt.printedAt}
+                  estimatedMinutes={attempt.settings.estimatedMinutes}
+                  className="flex-1"
+                />
                 <Button size="sm" variant="secondary" onClick={onFinish} className="ml-auto">
                   Finish
                 </Button>
@@ -206,15 +207,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     </m.li>
   );
 });
-
-/** "around 16:40", or "in about 45 min" when it's close. */
-function doneBy(startedAt: number, minutes: number): string {
-  const end = startedAt + minutes * 60_000;
-  const left = end - Date.now();
-  if (left <= 0) return "by now";
-  if (left < 90 * 60_000) return `in about ${formatMinutes(Math.max(1, left / 60_000))}`;
-  return `around ${new Date(end).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
-}
 
 function EntryPhoto({
   photo,

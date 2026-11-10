@@ -151,6 +151,11 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, "/printer", /X2D|Printer/);
     await expectAccessible(page, "Printer");
 
+    // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
+    await screen(page, "/styleguide", "Styleguide");
+    await expectAccessible(page, "Styleguide: builds and attempts", "#builds");
+    await expectAccessible(page, "Styleguide: pantry and printer", "#pantry");
+
     // Sheets: capture, an attempt, and the account (phone) or account menu (desktop).
     await screen(page, "/ideas", "Ideas");
     await page.getByRole("button", { name: "New idea" }).first().click();
