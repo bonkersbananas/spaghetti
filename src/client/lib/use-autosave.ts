@@ -69,11 +69,19 @@ export function useAutosave<T>(value: T, save: (value: T) => Promise<void>, { de
  * the device has just been replaced by a fresh answer), the field follows,
  * unless the person has typed something of their own since.
  */
-export function useFollowServer(server: string, local: string, setLocal: (value: string) => void) {
+export function useFollowServer(
+  server: string,
+  local: string,
+  setLocal: (value: string) => void,
+  onFollow?: (value: string) => void,
+) {
   const seen = useRef(server);
   useEffect(() => {
     if (server === seen.current) return;
-    if (local === seen.current) setLocal(server);
+    if (local === seen.current) {
+      setLocal(server);
+      onFollow?.(server);
+    }
     seen.current = server;
-  }, [server, local, setLocal]);
+  }, [server, local, setLocal, onFollow]);
 }

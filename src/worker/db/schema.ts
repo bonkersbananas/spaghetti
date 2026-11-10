@@ -1,5 +1,6 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
+import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 
@@ -254,3 +255,28 @@ export const attemptFiles = sqliteTable(
 export type Spool = typeof spools.$inferSelect;
 export type AmsSlot = typeof amsSlots.$inferSelect;
 export type AttemptFileRow = typeof attemptFiles.$inferSelect;
+
+/**
+ * The change feed: one row for every write anyone made (`GET /api/changes`),
+ * written in the same D1 batch as the write itself, so it never misses a
+ * change or invents one. `seq` is the cursor. Rows are old news after
+ * CHANGES_KEEP_MS and are pruned by the daily cron.
+ */
+export const changes = sqliteTable(
+  "changes",
+  {
+    seq: integer("seq").primaryKey({ autoIncrement: true }),
+    /** What kind of thing changed: see CHANGE_ENTITIES in shared/changes.ts. */
+    entity: text("entity").$type<ChangeEntity>().notNull(),
+    /** The thing's id ("A1" for a slot, "failure:warping" for a tag). */
+    entityId: text("entity_id").notNull(),
+    /** The idea or build it belongs to (an item's own id for an item); null for the pantry and the printer. */
+    itemId: text("item_id"),
+    action: text("action").$type<ChangeAction>().notNull(),
+    /** Who did it: "person" with their user id; "agent" later, with the agent's name. */
+    actorKind: text("actor_kind").$type<ChangeActorKind>().notNull(),
+    actorId: text("actor_id").notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("changes_at_idx").on(table.at)],
+);

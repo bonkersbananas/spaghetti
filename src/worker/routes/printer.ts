@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { PrinterResponse } from "../../shared/api.ts";
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
+import { actorOf, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { amsSlots, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -47,10 +48,13 @@ export const printerRoutes = new Hono<AppEnv>()
     const parsed = setupSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That setup couldn't be read.");
     const now = new Date();
-    await c.var.db
-      .insert(printer)
-      .values({ id: PRINTER_ID, setup: parsed.data, updatedAt: now })
-      .onConflictDoUpdate({ target: printer.id, set: { setup: parsed.data, updatedAt: now } });
+    await c.var.db.batch([
+      c.var.db
+        .insert(printer)
+        .values({ id: PRINTER_ID, setup: parsed.data, updatedAt: now })
+        .onConflictDoUpdate({ target: printer.id, set: { setup: parsed.data, updatedAt: now } }),
+      recordChange(c.var.db, { entity: "printer", id: PRINTER_ID, action: "updated", actor: actorOf(c.var.user) }),
+    ]);
     return c.json<PrinterResponse>(await loadPrinter(c.var.db));
   })
 
@@ -66,7 +70,11 @@ export const printerRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const { spoolId } = parsed.data;
     if (!spoolId) {
-      await db.delete(amsSlots).where(eq(amsSlots.slot, slot));
+      await db.batch([
+        db.delete(amsSlots).where(eq(amsSlots.slot, slot)),
+        // Only if the slot held something.
+        recordChange(db, { entity: "slot", id: slot, action: "updated", actor: actorOf(c.var.user) }),
+      ]);
       return c.json<PrinterResponse>(await loadPrinter(db));
     }
     const spool = await db
@@ -83,6 +91,7 @@ export const printerRoutes = new Hono<AppEnv>()
         .insert(amsSlots)
         .values({ slot, spoolId, updatedBy: c.var.user.id, updatedAt: now })
         .onConflictDoUpdate({ target: amsSlots.slot, set: { spoolId, updatedBy: c.var.user.id, updatedAt: now } }),
+      recordChange(db, { entity: "slot", id: slot, action: "updated", actor: actorOf(c.var.user) }),
     ]);
     return c.json<PrinterResponse>(await loadPrinter(db));
   });

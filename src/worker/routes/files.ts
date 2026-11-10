@@ -1,7 +1,9 @@
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
 import { type AttemptResponse, MAX_FILE_THUMB_BYTES, MAX_SLICER_FILE_BYTES } from "../../shared/api.ts";
+import { actorOf, afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
 import { attemptFiles, attempts, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
@@ -104,7 +106,6 @@ export const attemptFileRoutes = new Hono<AppEnv>()
     );
     if (others.length) {
       await c.env.PHOTOS.delete(others.flatMap((row) => [fileKey(row.id, "file"), fileKey(row.id, "thumb")]));
-      for (const row of others) await db.delete(attemptFiles).where(eq(attemptFiles.id, row.id));
     }
 
     const values = {
@@ -118,21 +119,48 @@ export const attemptFileRoutes = new Hono<AppEnv>()
       prefill: fields.prefill,
       deletedAt: null,
     };
-    await db
-      .insert(attemptFiles)
-      .values({ id: fields.id, attemptId, ...values, createdBy: c.var.user.id, createdAt: new Date() })
-      .onConflictDoUpdate({ target: attemptFiles.id, set: values });
-    await db.update(items).set({ updatedAt: new Date() }).where(eq(items.id, found.attempt.itemId));
+    const itemId = found.attempt.itemId;
+    const statements: BatchItem<"sqlite">[] = [
+      // The files it replaces, then the new one, its change and the item's date: together.
+      ...others.map((row) => db.delete(attemptFiles).where(eq(attemptFiles.id, row.id))),
+      db
+        .insert(attemptFiles)
+        .values({ id: fields.id, attemptId, ...values, createdBy: c.var.user.id, createdAt: new Date() })
+        .onConflictDoUpdate({ target: attemptFiles.id, set: values }),
+      recordChange(db, {
+        entity: "file",
+        id: fields.id,
+        itemId,
+        action: existing ? "updated" : "created",
+        actor: actorOf(c.var.user),
+      }),
+      db
+        .update(items)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(items.id, itemId), afterChange)),
+    ];
+    await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, found.attempt) }, existing ? 200 : 201);
   })
 
   /** Takes the file off the attempt at once; restore is the undo. */
   .delete("/:id/file", async (c) => {
-    const [row] = await c.var.db
-      .update(attemptFiles)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(attemptFiles.attemptId, c.req.param("id")), isNull(attemptFiles.deletedAt)))
-      .returning({ id: attemptFiles.id });
+    const attemptId = c.req.param("id");
+    const db = c.var.db;
+    const [[row]] = await db.batch([
+      db
+        .update(attemptFiles)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(attemptFiles.attemptId, attemptId), isNull(attemptFiles.deletedAt)))
+        .returning({ id: attemptFiles.id }),
+      recordChange(db, {
+        entity: "file",
+        id: fileOfAttempt(attemptId),
+        itemId: itemOfAttempt(attemptId),
+        action: "deleted",
+        actor: actorOf(c.var.user),
+      }),
+    ]);
     if (!row) return apiError(c, 404, "not_found", "That attempt has no file.");
     return c.body(null, 204);
   })
@@ -141,11 +169,20 @@ export const attemptFileRoutes = new Hono<AppEnv>()
     const attemptId = c.req.param("id");
     const found = await liveAttempt(c, attemptId);
     if (!found) return apiError(c, 404, "not_found", "That attempt isn't here any more.");
-    const [row] = await c.var.db
-      .update(attemptFiles)
-      .set({ deletedAt: null })
-      .where(and(eq(attemptFiles.attemptId, attemptId), isNotNull(attemptFiles.deletedAt)))
-      .returning({ id: attemptFiles.id });
+    const [[row]] = await c.var.db.batch([
+      c.var.db
+        .update(attemptFiles)
+        .set({ deletedAt: null })
+        .where(and(eq(attemptFiles.attemptId, attemptId), isNotNull(attemptFiles.deletedAt)))
+        .returning({ id: attemptFiles.id }),
+      recordChange(c.var.db, {
+        entity: "file",
+        id: fileOfAttempt(attemptId),
+        itemId: found.attempt.itemId,
+        action: "restored",
+        actor: actorOf(c.var.user),
+      }),
+    ]);
     if (!row) return apiError(c, 404, "not_found", "That file is gone for good.");
     return c.json<AttemptResponse>({ attempt: await loadAttempt(c.var.db, found.attempt) });
   });
