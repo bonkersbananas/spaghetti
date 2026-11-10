@@ -24,6 +24,7 @@ import { sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { ChangePasswordSheet } from "./ChangePasswordSheet";
 import { NotificationsSheet } from "./NotificationsSheet";
+import { NowPrinting } from "./NowPrinting";
 import { sections, workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -41,7 +42,7 @@ export function Sidebar() {
 
   return (
     <aside className="paper-grain w-sidebar bg-paper-deep fixed inset-y-0 left-0 hidden flex-col px-3 pt-5 pb-3 md:flex">
-      <Link to="/ideas" className="focus-ring mb-6 flex items-center gap-2.5 rounded-sm px-2 py-1">
+      <Link to="/today" className="focus-ring mb-6 flex items-center gap-2.5 rounded-sm px-2 py-1">
         <Mark className="size-7" />
         <span className="font-display text-title text-ink font-semibold tracking-tight">Spaghetti</span>
       </Link>
@@ -112,20 +113,8 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-0.5">
-        <Link to="/styleguide" className={itemClass}>
-          {({ isActive }) => (
-            <>
-              <PaletteIcon
-                size={20}
-                weight={isActive ? "fill" : "regular"}
-                className={isActive ? "text-tomato" : "text-ink-faint"}
-                aria-hidden
-              />
-              <span className="text-small flex-1">Styleguide</span>
-            </>
-          )}
-        </Link>
+      <div className="mt-auto flex flex-col">
+        <NowPrinting />
         {user && (
           <Popover
             label="Account"
@@ -145,6 +134,13 @@ export function Sidebar() {
           >
             <div className="flex flex-col gap-4">
               <ThemeSwitch />
+              <PopoverClose asChild>
+                <Link to="/styleguide" className="focus-ring rounded-md">
+                  <Button variant="quiet" icon={PaletteIcon} fullWidth tabIndex={-1} className="justify-start">
+                    Styleguide
+                  </Button>
+                </Link>
+              </PopoverClose>
               <PopoverClose asChild>
                 <Link to="/agents" className="focus-ring rounded-md">
                   <Button variant="quiet" icon={AgentIcon} fullWidth tabIndex={-1} className="justify-start">

@@ -22,6 +22,7 @@ import { SearchSection } from "./-styleguide/search";
 import { SheetSection } from "./-styleguide/sheets";
 import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
+import { TodaySection } from "./-styleguide/today";
 import { TypeSection } from "./-styleguide/type";
 
 export const Route = createFileRoute("/_app/styleguide")({
@@ -51,6 +52,7 @@ const toc = [
   ["pantry", "Pantry & printer"],
   ["search", "Journal & search"],
   ["journal", "Journal entries"],
+  ["today", "Today"],
   ["sheets", "Sheets & toasts"],
   ["notifications", "Notifications"],
   ["palette", "Palette & shortcuts"],
@@ -93,6 +95,7 @@ function Styleguide() {
           <PantrySection />
           <SearchSection />
           <JournalSection />
+          <TodaySection />
           <PaletteSection />
           <SheetSection />
           <NotificationSection />

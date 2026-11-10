@@ -14,6 +14,7 @@ import {
   IdeasIcon,
   KeyboardIcon,
   MoonIcon,
+  PaletteIcon,
   PlusIcon,
   SignOutIcon,
   SunIcon,
@@ -140,6 +141,18 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
         },
         section.shortcut,
         `go to open ${section.to.slice(1)}`,
+      ),
+    );
+    // The styleguide has left the sidebar: it is one palette row away.
+    goTo.push(
+      action(
+        "go-/styleguide",
+        "Go to",
+        "Styleguide",
+        PaletteIcon,
+        () => void navigate({ to: "/styleguide" }),
+        undefined,
+        "go to open design tokens components kitchen tools",
       ),
     );
     const general = [

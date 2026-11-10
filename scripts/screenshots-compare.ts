@@ -75,6 +75,27 @@ const worktree = mkdtempSync(join(tmpdir(), "spaghetti-base-"));
 rmSync(worktree, { recursive: true });
 console.log(`Checking out ${ref} (${baseSha}) in ${worktree}`);
 git(["worktree", "add", "--detach", worktree, ref]);
+
+/** Takes the base worktree (with its node_modules, hundreds of MB) away. Safe to call twice. */
+let cleaned = false;
+function removeWorktree() {
+  if (cleaned) return;
+  cleaned = true;
+  spawnSync("git", ["worktree", "remove", "--force", worktree], { cwd: root });
+  rmSync(worktree, { recursive: true, force: true });
+  spawnSync("git", ["worktree", "prune"], { cwd: root });
+}
+// Whatever ends the run, the worktree goes: a normal end or a failure (the finally below), the process exiting,
+// or being stopped (Ctrl-C, a kill). A run stopped that way also stops the screenshot run it started.
+let running: ChildProcess | undefined;
+process.on("exit", removeWorktree);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    running?.kill("SIGTERM");
+    removeWorktree();
+    process.exit(128 + (signal === "SIGINT" ? 2 : signal === "SIGTERM" ? 15 : 1));
+  });
+}
 try {
   cpSync(join(root, "scripts"), join(worktree, "scripts"), { recursive: true });
   cpSync(join(root, "e2e/fixtures"), join(worktree, "e2e/fixtures"), { recursive: true });
@@ -99,8 +120,7 @@ try {
   if (baseRun.code !== 0) console.log(`  (the base had failures: those screens count as new if the branch took them)`);
   if (headRun.code !== 0) console.log(`  (this branch had failures: see above)`);
 } finally {
-  spawnSync("git", ["worktree", "remove", "--force", worktree], { cwd: root });
-  rmSync(worktree, { recursive: true, force: true });
+  removeWorktree();
 }
 
 interface Screen {
@@ -269,6 +289,10 @@ function run(prefix: string, cwd: string, args: string[], port: number): Promise
         for (const line of lines) if (/✗|failed|Error/.test(line)) console.log(`  [${prefix}] ${line.trim()}`);
       });
     }
-    child.on("close", (code) => resolveRun({ code: code ?? 1 }));
+    running = child;
+    child.on("close", (code) => {
+      running = undefined;
+      resolveRun({ code: code ?? 1 });
+    });
   });
 }

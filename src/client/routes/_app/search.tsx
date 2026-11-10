@@ -157,6 +157,7 @@ function Search() {
   return (
     <>
       <PageHeader
+        search={false}
         title="Search"
         subtitle="Find what worked last time."
         actions={
