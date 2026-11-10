@@ -9,7 +9,7 @@ import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { ChangePasswordSheet } from "./ChangePasswordSheet";
-import { NotificationsSheet } from "./NotificationsSheet";
+import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -108,7 +108,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
         </button>
       </Sheet>
-      <NotificationsSheet open={notifying} onOpenChange={setNotifying} />
+      <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />
       <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
     </>
   );

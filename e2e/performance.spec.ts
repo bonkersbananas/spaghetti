@@ -22,13 +22,14 @@ const origin = (page: Page) => new URL(page.url()).origin;
 const BUDGET_KB = {
   "/sign-in": 245,
   // Today pulls in the journal rows, the print card and the printer strip on top of what Ideas needs.
-  "/today": 340,
-  "/ideas": 330,
-  "/builds": 335,
+  "/today": 345,
+  // The shell grew a little for notifications (two menu rows, the service worker messages); the settings sheet itself loads on first open.
+  "/ideas": 335,
+  "/builds": 340,
   "/journal": 345,
   "/search": 345,
-  "/pantry": 340,
-  "/printer": 340,
+  "/pantry": 345,
+  "/printer": 345,
 } as const;
 
 /**

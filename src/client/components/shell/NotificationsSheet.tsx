@@ -7,7 +7,8 @@ import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import { Toggle } from "@/components/ui/Toggle";
 import { ApiError } from "@/lib/api";
-import { notificationPlatform, type PushStatus, usePushDevice } from "@/lib/push";
+import { notificationPlatform } from "@/lib/push";
+import { type PushStatus, usePushDevice } from "@/lib/push-device";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 
 const pad = (hour: number) => `${String(hour).padStart(2, "0")}:00`;

@@ -23,7 +23,7 @@ import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { ChangePasswordSheet } from "./ChangePasswordSheet";
-import { NotificationsSheet } from "./NotificationsSheet";
+import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
 import { NowPrinting } from "./NowPrinting";
 import { sections, workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -176,7 +176,7 @@ export function Sidebar() {
             </div>
           </Popover>
         )}
-        {user && <NotificationsSheet open={notifying} onOpenChange={setNotifying} />}
+        {user && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
         {user && <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />}
       </div>
     </aside>

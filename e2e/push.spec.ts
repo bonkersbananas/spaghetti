@@ -144,26 +144,27 @@ test("a notification's answer records the outcome through the service worker, an
   await waitForServiceWorker(page);
   const { itemId, attemptId } = await printing(page);
 
-  // What tapping "Partly" on the notification does.
-  const answer = (outcome: string) =>
-    page.evaluate(
-      async ({ attemptId, itemId, outcome }) => {
-        const registration = await navigator.serviceWorker.ready;
-        registration.active?.postMessage({
-          type: "answer-nudge",
-          nudge: { attemptId, itemId, url: `/builds/${itemId}?attempt=${attemptId}&finish=1` },
-          outcome,
-        });
-      },
-      { attemptId, itemId, outcome },
-    );
-  await answer("partial");
-  await expect.poll(() => outcomeOf(page, itemId, attemptId)).toBe("partial");
-
   // Tapping the notification itself opens the attempt sheet, once, and the address forgets the flag.
   await page.goto(`/builds/${itemId}?attempt=${attemptId}&finish=1`);
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page).not.toHaveURL(/finish=1/);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await waitForServiceWorker(page);
+
+  // What tapping "Partly" on the notification does.
+  await page.evaluate(
+    async ({ attemptId, itemId }) => {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({
+        type: "answer-nudge",
+        nudge: { attemptId, itemId, url: `/builds/${itemId}?attempt=${attemptId}&finish=1` },
+        outcome: "partial",
+      });
+    },
+    { attemptId, itemId },
+  );
+  await expect.poll(() => outcomeOf(page, itemId, attemptId)).toBe("partial");
 });
 
 test("with no connection the answer waits in the outbox and lands when the app is back", async ({ page, context }) => {
