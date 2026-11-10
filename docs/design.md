@@ -208,6 +208,7 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Kbd** — keyboard hints, hidden on phones (`always` for the shortcut list).
 - **PaletteSurface / PaletteDialog** — the command palette: a search box over grouped rows (photo or icon, name, a line of meta, an outcome chip or the row's shortcut), the picked row on a quiet fill, key hints along the bottom. See Keyboard and the command palette.
 - **ShortcutList** — every shortcut from the registry, grouped by screen.
+- **Change password** is a Sheet with a form, opened from the account menu (the popover on desktop, the account sheet on phones): current password, new password, one quiet "Show" toggle instead of a confirm field, a hidden username for password managers, and its submit button in the sheet footer. A wrong current password is said under its field and nothing typed is cleared.
 - **Popover** — a small floating panel for desktop menus, such as the sidebar's account menu. Tasks use Sheet.
 - **OfflineNotice** (shell) — a quiet strip at the top of the page while the server can't be reached, with how many captures are waiting and, over data kept from earlier, when it was last fetched. The only place the app complains about the connection.
 - **Illustrations** (`components/illustrations`) — 160×120 spot illustrations: ink outlines at 2.5 px, round caps, one tinted circle behind, one or two accent fills. The `Mark` is the app icon: a twirl of spaghetti on a tomato tile.
