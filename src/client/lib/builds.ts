@@ -267,6 +267,8 @@ export async function saveAttemptChanges(
     json: settingsMerge ? { ...rest, settingsMerge } : changes,
     keepalive: true,
   });
+  // The outcome, filaments or spools may have changed what a spool has left.
+  void queryClient.invalidateQueries({ queryKey: ["spools"] });
   // Only what the server works out itself: later local edits stay.
   patchCachedItem(queryClient, itemId, (item) => ({
     ...item,
@@ -302,7 +304,10 @@ export function deleteAttempt(queryClient: QueryClient, itemId: string, attempt:
   const toRestore = removed;
   const deleted = toRestore
     ? api(`/attempts/${attempt.id}`, { method: "DELETE" }).then(
-        () => true,
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["spools"] });
+          return true;
+        },
         (error) => {
           // Already gone on the server: that's what was asked.
           if (error instanceof ApiError && error.status === 404) return true;
@@ -323,6 +328,7 @@ export function deleteAttempt(queryClient: QueryClient, itemId: string, attempt:
       putBack(toRestore);
       try {
         await api<AttemptResponse>(`/attempts/${attempt.id}/restore`, { method: "POST" });
+        void queryClient.invalidateQueries({ queryKey: ["spools"] });
         // Photos still on this device go up once the attempt is back.
         outbox.restorePhotos(itemId, queuedPhotos);
       } catch {

@@ -16,6 +16,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { AmsLoadout } from "@/components/pantry/Ams";
+import { GramsHero, UsedBy } from "@/components/pantry/SpoolGrams";
+import { SetWeightSheet, WeighSheet } from "@/components/pantry/WeightSheets";
 import { AttemptResult } from "@/components/search/Results";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -121,6 +123,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
     }),
   );
   const [placing, setPlacing] = useState(false);
+  const [weighing, setWeighing] = useState(false);
+  const [settingWeight, setSettingWeight] = useState(false);
   const camera = useFilePicker({
     camera: true,
     onFiles: ([file]) => file && setSpoolPhoto(queryClient, spool.id, file),
@@ -219,17 +223,31 @@ function SpoolPage({ spool }: { spool: Spool }) {
           </div>
 
           <fieldset disabled={readOnly} className="contents">
-            <div className="flex flex-col gap-2.5">
-              <span className="text-small text-ink-soft px-0.5 font-semibold">How much is left</span>
-              <SegmentedControl<Remaining>
-                label="How much is left"
-                labelHidden
-                options={REMAINING.map((level) => ({ value: level, label: REMAINING_LABELS[level] }))}
-                value={value.remaining}
-                onChange={(remaining) => change({ remaining })}
-                className="w-full md:max-w-md"
+            {spool.gramsLeft !== null ? (
+              <GramsHero
+                spool={spool}
+                disabled={readOnly}
+                onWeigh={() => setWeighing(true)}
+                onSetWeight={() => setSettingWeight(true)}
               />
-            </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                <div className="flex min-h-8 items-center justify-between gap-3 md:max-w-md">
+                  <span className="text-small text-ink-soft px-0.5 font-semibold">How much is left</span>
+                  <Button variant="quiet" size="sm" onClick={() => setSettingWeight(true)}>
+                    Count in grams
+                  </Button>
+                </div>
+                <SegmentedControl<Remaining>
+                  label="How much is left"
+                  labelHidden
+                  options={REMAINING.map((level) => ({ value: level, label: REMAINING_LABELS[level] }))}
+                  value={value.remaining}
+                  onChange={(remaining) => change({ remaining })}
+                  className="w-full md:max-w-md"
+                />
+              </div>
+            )}
 
             {/* A label with its actions beside it, and what it says below at full width, so it never wraps under them. */}
             <div className="flex flex-col gap-0.5 md:max-w-md">
@@ -341,10 +359,13 @@ function SpoolPage({ spool }: { spool: Spool }) {
             placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
           />
 
+          <UsedBy spool={spool} />
           <PrintedWith spool={spool} />
         </div>
       </div>
 
+      <WeighSheet spool={spool} open={weighing} onOpenChange={setWeighing} />
+      <SetWeightSheet spool={spool} open={settingWeight} onOpenChange={setSettingWeight} />
       <Sheet
         open={placing}
         onOpenChange={setPlacing}

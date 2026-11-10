@@ -32,6 +32,8 @@ export interface AttemptFilament {
   amsSlot?: string;
   /** The spool on the shelf it came from, if picked from there. The values above stay, so the attempt reads the same without it. */
   spoolId?: string;
+  /** Grams of this filament the print uses, from the slicer file (the reader's PlateFilament.usedGrams). It is what comes off the spool. */
+  grams?: number;
 }
 
 export const NOZZLES = ["main", "auxiliary"] as const;
@@ -121,7 +123,8 @@ void _everySettingListed;
 export function carryOver(settings: AttemptSettings | undefined): AttemptSettings {
   const next: AttemptSettings = { ...settings };
   for (const key of RESULT_KEYS) delete next[key];
-  if (next.filaments) next.filaments = next.filaments.map((filament) => ({ ...filament }));
+  // What a file said this plate uses belongs to that attempt, not the next.
+  if (next.filaments) next.filaments = next.filaments.map(({ grams: _grams, ...filament }) => filament);
   return next;
 }
 

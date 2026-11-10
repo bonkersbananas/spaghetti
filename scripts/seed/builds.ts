@@ -76,8 +76,14 @@ export const SEED_BUILD_IDS = {
 };
 
 const yellowPla = { type: "PLA", brand: "Bambu", colorHex: "#f2c230", colorName: "Sunflower yellow", amsSlot: "A2" };
+const jadeWhite = { type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" };
+/** The tugboat's two filaments with the grams the slicer said each attempt needs (the spools count them down). */
+const tugboatFilaments = (yellow: number, jade: number) => [
+  { ...yellowPla, grams: yellow },
+  { ...jadeWhite, grams: jade },
+];
 const tugboatBase: AttemptSettings = {
-  filaments: [yellowPla, { type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
+  filaments: tugboatFilaments(54, 12),
   bedType: "Smooth PEI Plate",
   nozzle: "main",
   nozzleDiameter: 0.4,
@@ -118,7 +124,13 @@ export const SEED_BUILDS: SeedBuild[] = [
         finishedAfter: 3 * HOUR,
         note: "The hull let go of the plate halfway and the AMS kept feeding. A proud nest.",
         failureTags: ["spaghetti", "bed-adhesion"],
-        settings: { ...tugboatBase, failedAtPercent: 46, estimatedMinutes: 185, weightGrams: 64 },
+        settings: {
+          ...tugboatBase,
+          filaments: tugboatFilaments(52, 12),
+          failedAtPercent: 46,
+          estimatedMinutes: 185,
+          weightGrams: 64,
+        },
         photos: [{ file: "spaghetti-fail.svg", color: "#777065" }],
       },
       {
@@ -156,6 +168,7 @@ export const SEED_BUILDS: SeedBuild[] = [
         outcome: null,
         settings: {
           ...tugboatBase,
+          filaments: tugboatFilaments(66, 12),
           bedType: "Textured PEI Plate",
           bedTemperature: 65,
           chamberTemperature: 35,

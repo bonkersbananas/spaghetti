@@ -31,6 +31,7 @@ export function settingsFromFile(result: ThreeMfResult, plateIndex?: number): At
       const next: AttemptFilament = {};
       if (filament.type) next.type = filament.type;
       if (filament.colorHex) next.colorHex = filament.colorHex;
+      if (filament.usedGrams !== undefined && filament.usedGrams > 0) next.grams = round(filament.usedGrams, 1);
       if (filament.profile) next.profile = filament.profile.replace(/\s*@.*$/, "").trim() || filament.profile;
       return next;
     })

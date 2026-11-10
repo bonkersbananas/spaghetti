@@ -242,6 +242,20 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     json: { remaining: "half" },
   },
   {
+    name: "set a spool's weight",
+    scope: "printer",
+    method: "PUT",
+    path: `/api/spools/${spoolId}/weight`,
+    json: { netGrams: 1000 },
+  },
+  {
+    name: "weigh a spool",
+    scope: "printer",
+    method: "POST",
+    path: `/api/spools/${spoolId}/weighings`,
+    json: { id: uuid(), gramsLeft: 500 },
+  },
+  {
     name: "tell the app about the printer",
     scope: "printer",
     method: "PUT",

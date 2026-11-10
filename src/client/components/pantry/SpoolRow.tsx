@@ -38,7 +38,7 @@ export function SpoolRow({ spool, draggable = true }: { spool: Spool; draggable?
           </span>
         </span>
         <span className="w-24 shrink-0">
-          <RemainingMeter remaining={spool.remaining} showLabel />
+          <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel />
         </span>
         <span className="w-20 shrink-0">
           {spool.slot && (

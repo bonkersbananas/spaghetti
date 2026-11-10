@@ -9,6 +9,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import type { AttemptView } from "@/lib/items";
 import { usePrinterSetup } from "@/lib/pantry";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { NotEnoughNote } from "../NotEnoughNote";
 import { OutcomePicker } from "../Outcome";
 import { SettingsEditor } from "../SettingsEditor";
 import { summarizeSettings } from "../settings";
@@ -149,6 +150,8 @@ export function AttemptFields(props: FieldsProps) {
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>
+      {/* Nothing has come off the spool until the print is done: a heads-up only while it hasn't been. */}
+      {!outcome && <NotEnoughNote settings={settings} />}
       {props.suggestion}
       <div className="flex flex-col gap-2">
         <fieldset disabled={!!props.readOnly} className="contents">

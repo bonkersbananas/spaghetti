@@ -17,6 +17,7 @@ import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { AttemptTags } from "./AttemptTags";
 import { EstimateLine } from "./Estimate";
+import { NotEnoughNote } from "./NotEnoughNote";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, outcomeDots } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
@@ -202,6 +203,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 filamentClassName="text-ink-soft"
               />
             )}
+
+            {printing && <NotEnoughNote settings={attempt.settings} what="this print" />}
 
             {offBed && attempt.endedAt !== null && (
               <OffTheBed endedAt={attempt.endedAt} onPick={onFinish} className="pointer-events-auto" />

@@ -38,6 +38,7 @@ const filament = z.object({
   profile: words.optional(),
   amsSlot: z.string().trim().max(16).optional(),
   spoolId: z.uuid().optional(),
+  grams: between(0, 100_000).optional(),
 });
 
 /** Every field optional; unknown keys are dropped. */

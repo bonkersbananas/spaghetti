@@ -5,6 +5,7 @@ import { useState } from "react";
 import { PantryJar } from "@/components/illustrations";
 import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
 import { AmsLoadout } from "@/components/pantry/Ams";
+import { RunningLow } from "@/components/pantry/RunningLow";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
 import { SpoolRow } from "@/components/pantry/SpoolRow";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -20,6 +21,7 @@ import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { loadSlot, spoolsQuery } from "@/lib/pantry";
 import { type PantryView, usePantryView } from "@/lib/pantry-view";
 import { canEdit, useReadOnly } from "@/lib/read-only";
+import { useRunningLow } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/pantry/")({
@@ -56,6 +58,7 @@ function Pantry() {
   const isDesktop = useIsDesktop();
   const { data: spools, isPending } = useQuery(spoolsQuery);
   const { add } = Route.useSearch();
+  const { low } = useRunningLow();
   // Cards or a list, remembered on this device. Phones always show cards.
   const [storedView, setView] = usePantryView();
   const view: PantryView = isDesktop ? storedView : "cards";
@@ -134,6 +137,7 @@ function Pantry() {
             </div>
             <AmsLoadout readOnly={readOnly} onAddSpool={(slot) => openAdd(slot)} />
           </section>
+          <RunningLow low={low} />
           {isDesktop && (
             <div className="-mb-6 flex items-center justify-between gap-4">
               <SectionHeading id="all-spools" count={spools.length}>

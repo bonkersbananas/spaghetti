@@ -393,6 +393,34 @@ export const shots: Shot[] = [
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
   // A spool with no label photo: its hero is the disc itself (black, to check its rim in dark mode).
   { name: "spool-black", path: `/pantry/${SEED_SPOOL_IDS.black}` },
+  // Counted in grams: the figure, "Weigh it", and what used it (the tugboat's attempts, a weighing).
+  { name: "spool-grams", path: `/pantry/${SEED_SPOOL_IDS.sunflower}`, fullPage: true },
+  {
+    name: "spool-weigh",
+    path: `/pantry/${SEED_SPOOL_IDS.sunflower}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Weigh it" }).click();
+      const sheet = page.getByRole("dialog", { name: "Weigh it" });
+      await sheet.getByLabel("On the scale").fill("812");
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  // The print on the bed needs more Sunflower yellow than the spool has left.
+  {
+    name: "not-enough",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    selector: "li[data-attempt-id]:first-child",
+    beforeShot: async (page) => {
+      await page.getByTestId("not-enough").waitFor();
+      await page
+        .locator("li[data-attempt-id]:first-child")
+        .evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -90));
+    },
+  },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
   { name: "printer", path: "/printer", fullPage: true },
   // The printer bridge's states (docs/bridge.md): a print on the bed with the printer's own progress ...

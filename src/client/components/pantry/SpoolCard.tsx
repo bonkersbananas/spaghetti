@@ -60,7 +60,7 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
           <span className={cn("text-small text-ink-faint truncate", !name.detail && "sr-only")}>
             {name.detail || spool.material}
           </span>
-          <RemainingMeter remaining={spool.remaining} showLabel className="mt-1.5" />
+          <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel className="mt-1.5" />
         </div>
       </Link>
     </li>
