@@ -174,6 +174,8 @@ export interface CaptureResponse {
   id: string;
   url: string;
   photos: number;
+  /** One plain sentence: "Saved to Spaghetti: Drawer bins". */
+  message: string;
 }
 
 export interface PhotoResponse {
