@@ -568,6 +568,50 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The capture sheet on an idea's page: it opens on New idea, with This idea one tap away.
+    name: "capture-on-idea",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The capture sheet on a build that is printing: New idea first, This print second.
+    name: "capture-on-printing-build",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The same sheet with This idea picked: the title names the idea.
+    name: "capture-on-idea-here",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This idea" }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The same sheet with This print picked: the title and line name the print, and the outcome row shows.
+    name: "capture-on-printing-build-here",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This print" }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // A model link typed into the capture sheet: saving is the same one tap, Claude drafts after.
     name: "draft-capture",
     path: "/ideas",

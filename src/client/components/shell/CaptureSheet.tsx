@@ -21,8 +21,9 @@ type Target =
   | { kind: "attempt"; itemId: string; attemptId: string; name: string; number: number };
 
 /**
- * Where a capture goes, by context: the idea or build on screen, the print
- * running now (on its build's page, or anywhere), else a new idea.
+ * What a capture could be added to instead of a new idea, by context: the idea or build on
+ * screen, the print running now (on its build's page, or anywhere). It is only offered, as the
+ * second segment: the sheet always opens on "New idea".
  */
 function useCaptureTarget(): Target {
   const { pageItem } = useCapture();
@@ -62,9 +63,9 @@ function useCaptureTarget(): Target {
  * sheet at once; the idea lands at the top of the inbox while its photos
  * upload in the background. Closing keeps the draft.
  *
- * It follows its context: on an idea's or build's page the capture is added
- * there, and while something prints it goes to that print (and can finish
- * it). "New idea" is always one tap away.
+ * It always opens on "New idea", from the sidebar, the C hotkey, the + button, a drop or a paste.
+ * On an idea's or build's page, or while something prints, a second segment offers "This idea",
+ * "This build" or "This print" (which can finish the print), one tap away.
  */
 export function CaptureSheet() {
   const { open, setOpen, draft, setDraft, photos, addFiles, removePhoto, save, saveTo } = useCapture();
@@ -74,12 +75,12 @@ export function CaptureSheet() {
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
   const library = useFilePicker({ multiple: true, onFiles: addFiles });
   const auto = useCaptureTarget();
-  const [asIdea, setAsIdea] = useState(false);
+  const [asIdea, setAsIdea] = useState(true);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  // Each time it opens, it starts from its context again.
+  // Each time it opens, it starts on "New idea" again.
   useEffect(() => {
     if (!open) {
-      setAsIdea(false);
+      setAsIdea(true);
       setOutcome(null);
     }
   }, [open]);
@@ -177,11 +178,11 @@ export function CaptureSheet() {
             labelHidden
             size="sm"
             options={[
+              { value: "idea", label: "New idea" },
               {
                 value: "here",
                 label: auto.kind === "attempt" ? "This print" : auto.isBuild ? "This build" : "This idea",
               },
-              { value: "idea", label: "New idea" },
             ]}
             value={asIdea ? "idea" : "here"}
             onChange={(value) => setAsIdea(value === "idea")}
