@@ -85,7 +85,7 @@ function Shell() {
   });
 
   return (
-    <div className="bg-paper min-h-dvh">
+    <div className="bg-paper">
       <Sidebar />
       <main className="pt-safe md:pl-sidebar">
         <div className="max-w-wide pb-page mx-auto w-full px-5 md:px-12 md:pb-16">

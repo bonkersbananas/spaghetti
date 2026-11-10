@@ -35,7 +35,7 @@ export interface CardProps {
   onClick?: () => void;
   /** The card title's heading level: 2 in a grid right under the page title (the inbox), 3 under a section heading. */
   headingLevel?: 2 | 3;
-  /** Leaves room at the end of the text row for a button laid over the card (the idea card's menu). */
+  /** Leaves room at the end of the meta row for a button laid over the card (the idea card's menu). */
   reserveEnd?: boolean;
   className?: string;
 }
@@ -99,26 +99,32 @@ export function Card({
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
-      <div className={cn("flex items-start gap-2.5 px-2 pt-2.5 pb-2", reserveEnd && "pr-12")}>
-        <div className="min-w-0 flex-1">
-          {heading ? (
-            <Heading
-              className={cn(
-                "text-body text-ink font-semibold break-words",
-                // Notes standing in for a title read as text, not as a heading, and get a third line
-                // so they aren't cut off mid-thought. Real titles stay at two.
-                title ? "line-clamp-2" : "line-clamp-3 font-sans font-medium",
-              )}
-            >
-              {heading}
-            </Heading>
-          ) : (
-            !noteCard &&
-            !photo && <Heading className="text-body text-ink-faint font-sans font-medium italic">Untitled</Heading>
-          )}
-          {meta && <p className={cn("text-small text-ink-faint line-clamp-2", heading && "mt-0.5")}>{meta}</p>}
-        </div>
-        {person && <Avatar person={person} size="xs" via={via} className="mt-0.5" />}
+      <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
+        {heading ? (
+          <Heading
+            className={cn(
+              "text-body text-ink font-semibold break-words",
+              // Notes standing in for a title read as text, not as a heading, and get a third line
+              // so they aren't cut off mid-thought. Real titles stay at two.
+              title ? "line-clamp-2" : "line-clamp-3 font-sans font-medium",
+            )}
+          >
+            {heading}
+          </Heading>
+        ) : (
+          !noteCard &&
+          !photo && <Heading className="text-body text-ink-faint font-sans font-medium italic">Untitled</Heading>
+        )}
+        {/* The title has the whole width; the time, the avatar and (laid over the card) the menu share one row below it. */}
+        {(meta || person || reserveEnd) && (
+          <div
+            className={cn("mt-auto flex min-h-8 items-center gap-1.5", heading && "pt-0.5", reserveEnd && "h-10 pr-9")}
+          >
+            {meta && <p className="text-small text-ink-faint line-clamp-2 min-w-0 flex-1">{meta}</p>}
+            {!meta && <span className="flex-1" />}
+            {person && <Avatar person={person} size="xs" via={via} />}
+          </div>
+        )}
       </div>
     </>
   );

@@ -14,10 +14,12 @@ const colors: Record<PersonColor, string> = {
 };
 
 const sizes = {
-  xs: "size-5 text-caption",
-  sm: "size-7 text-caption",
-  md: "size-9 text-small",
-  lg: "size-12 text-lead",
+  // xs: two letters fit in 24 px at this size with normal tracking; one letter lost half of "Carl Oscar".
+  // The others are letterspaced a little.
+  xs: "size-6 text-micro",
+  sm: "size-7 text-caption tracking-wide",
+  md: "size-9 text-small tracking-wide",
+  lg: "size-12 text-lead tracking-wide",
 } as const;
 
 interface AvatarProps {
@@ -51,20 +53,14 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
       className={cn(
-        "text-on-accent inline-flex shrink-0 items-center justify-center rounded-full font-bold tracking-wide select-none",
+        "text-on-accent inline-flex shrink-0 items-center justify-center rounded-full font-bold select-none",
         colors[person.color],
         sizes[size],
         ringed && "ring-paper ring-2",
         !via && className,
       )}
     >
-      {glyphInstead ? (
-        <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden />
-      ) : size === "xs" ? (
-        initials(person.name).slice(0, 1)
-      ) : (
-        initials(person.name)
-      )}
+      {glyphInstead ? <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden /> : initials(person.name)}
     </span>
   );
   if (!via) return face;

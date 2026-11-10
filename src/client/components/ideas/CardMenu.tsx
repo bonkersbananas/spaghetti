@@ -31,13 +31,13 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
       )}
     </div>
   );
-  // Over the card's bottom-right corner, beside the avatar: the photo and a note's words stay clear.
+  // Over the card's bottom-right corner, at the end of the avatar's row: the photo and a note's words stay clear.
   const button = (
     <button
       type="button"
       aria-label={`Options for ${name}`}
       onClick={isDesktop ? undefined : () => setOpen(true)}
-      className="pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink absolute right-10 bottom-2.5 flex size-8 items-center justify-center rounded-full transition-colors"
+      className="pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
     >
       <MoreIcon size={20} weight="bold" aria-hidden />
     </button>
