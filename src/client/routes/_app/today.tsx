@@ -12,6 +12,7 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
+import { UpNext, upNextIdeas } from "@/components/today/UpNext";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
@@ -68,6 +69,7 @@ function Today() {
   const onBed = useMemo(() => printingAttempts(builds.items, now), [builds.items, now]);
   const onBedIds = useMemo(() => new Set(onBed.map(({ attempt }) => attempt.id)), [onBed]);
   const waiting = useMemo(() => pickUpAgain(builds.items), [builds.items]);
+  const queued = useMemo(() => upNextIdeas(ideas.items), [ideas.items]);
   const burner = useMemo(() => backBurnerIdea(ideas.items, now), [ideas.items, now]);
   // The newest entries, without the print already shown on the bed.
   const entries = useMemo(
@@ -102,6 +104,7 @@ function Today() {
     !brandNew &&
     onBed.length === 0 &&
     waiting.length === 0 &&
+    queued.length === 0 &&
     !burner &&
     !hasPrinter &&
     !lately;
@@ -160,7 +163,7 @@ function Today() {
           Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
         </EmptyState>
       ) : (
-        // On a phone the blocks run in one column in the order below (bed, pick up, printer, month, back burner).
+        // On a phone the blocks run in one column in the order below (bed, pick up, up next, printer, month, back burner).
         // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
           <div className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
@@ -177,17 +180,18 @@ function Today() {
               )}
             </div>
             <div className="order-2 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
-            <div className="order-5 empty:hidden">
+            <div className="order-3 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
+            <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>
           </div>
           <div className="contents lg:sticky lg:top-8 lg:flex lg:min-w-0 lg:flex-2 lg:flex-col lg:gap-10">
-            <div className="order-3 empty:hidden">
+            <div className="order-4 empty:hidden">
               {printer.data && spools.data && (
                 <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
               )}
             </div>
-            <div className="order-4 empty:hidden">
+            <div className="order-5 empty:hidden">
               <Lately
                 label={`${monthLabel(month.start)} so far`}
                 summary={summary.data ? summaryText : summary.isPending ? null : ""}

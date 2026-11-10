@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -119,4 +120,40 @@ test("who it is for shows under the title and is found by search", async ({ page
   await expect(page.getByRole("list", { name: "Ideas" }).getByText(/^for Mila/)).toBeVisible();
   await page.goto("/search?q=Mila");
   await expect(page.getByRole("link", { name: /Mug stand/ }).first()).toBeVisible();
+});
+
+test("Today shows the first three of the queue, in order, and nothing when it is empty", async ({ page }) => {
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Up next" })).toHaveCount(0);
+
+  for (const title of ["Alpha", "Bravo", "Charlie", "Delta"]) {
+    const id = await makeIdea(page, title);
+    await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
+  }
+  await page.goto("/today");
+  const section = page.getByRole("region", { name: "Up next" });
+  await expect(section.getByRole("link")).toHaveText([/Alpha/, /Bravo/, /Charlie/, /All 4 in Ideas/]);
+  await section.getByRole("link", { name: /Bravo/ }).click();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Bravo");
+});
+
+test("the inbox with an Up next section, its menu open, passes axe in both themes", async ({ page }) => {
+  for (const title of ["Axe one", "Axe two"]) {
+    const id = await makeIdea(page, title);
+    await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
+  }
+  await makeIdea(page, "Axe loose");
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto("/ideas");
+    await expect(upNext(page).getByRole("heading", { name: "Axe one" })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+    await page.getByRole("button", { name: "Options for Axe two" }).click();
+    await expect(page.getByRole("button", { name: "Move up" })).toBeVisible();
+    await page.waitForTimeout(300);
+    expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+    await page.keyboard.press("Escape");
+  }
 });
