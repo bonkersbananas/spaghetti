@@ -85,7 +85,8 @@ pnpm install
 pnpm run doctor     # checks Node, pnpm, the Playwright browser, wrangler, the local D1 and says how to fix each problem
 pnpm dev            # migrate local D1, then Vite + Worker on http://localhost:5173
 pnpm dev:seed       # the dev server on a throwaway database with the screenshot data (sign in as alex or sam, password spaghetti-al-dente), for exploring by hand
-pnpm user:add       # add or update one of the two people (local; --remote when deployed)
+pnpm user:add       # add or update one of the two people (local; --remote for https://spaghetti.day)
+pnpm ship           # build, apply remote migrations, deploy to spaghetti.day (docs/deploy.md; not `pnpm deploy`)
 pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api.md)
 pnpm lint           # Biome + design lint
 pnpm typecheck
@@ -139,7 +140,7 @@ If a wiring step can't find its place (a file moved), the command says what to a
 
 1. Change `src/worker/db/schema.ts`.
 2. `pnpm db:generate --name <what-changed>` writes `migrations/NNNN_<what-changed>.sql`. Read it; commit it with `migrations/meta/`.
-3. `pnpm db:migrate` applies it locally (`pnpm dev` does too). Tests apply all migrations automatically. Remote: `wrangler d1 migrations apply DB --remote` before deploying.
+3. `pnpm db:migrate` applies it locally (`pnpm dev` does too). Tests apply all migrations automatically. Remote: `pnpm ship` applies them before deploying (see docs/deploy.md).
 
 Never edit a migration that has been merged; add a new one.
 

@@ -17,7 +17,7 @@ Scopes are `read`, `capture`, `attempts` and `printer` (see [api.md](api.md)). G
 Claude Code:
 
 ```sh
-claude mcp add --transport http spaghetti https://YOUR-APP/mcp --header "Authorization: Bearer spg_…"
+claude mcp add --transport http spaghetti https://spaghetti.day/mcp --header "Authorization: Bearer spg_…"
 ```
 
 Locally the address is `http://localhost:5173/mcp` (`pnpm dev`) or `http://localhost:8787/mcp` (`pnpm build && pnpm start`).
@@ -29,7 +29,7 @@ Any client that takes a JSON config:
   "mcpServers": {
     "spaghetti": {
       "type": "http",
-      "url": "https://YOUR-APP/mcp",
+      "url": "https://spaghetti.day/mcp",
       "headers": { "Authorization": "Bearer spg_…" }
     }
   }
