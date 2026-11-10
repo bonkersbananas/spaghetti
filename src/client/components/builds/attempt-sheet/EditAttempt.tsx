@@ -26,12 +26,15 @@ export function EditAttempt({
   open,
   onOpenChange,
   incomingFile,
+  initialOutcome,
 }: {
   item: ItemView;
   attempt: AttemptView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   incomingFile?: { file: File; key: number } | null;
+  /** For a print still printing: the outcome picked already (from Today's "How did it go?"). */
+  initialOutcome?: Outcome | null;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -39,13 +42,21 @@ export function EditAttempt({
   const printing = attempt.outcome === null;
   // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
   const readOnly = offline ? (printing ? "finish" : "all") : undefined;
-  const [value, setValue] = useState({
-    outcome: attempt.outcome,
-    printedAt: attempt.printedAt,
-    note: attempt.note,
-    failureTags: attempt.failureTags,
-    successNotes: attempt.successNotes,
-    settings: attempt.settings,
+  const [value, setValue] = useState(() => {
+    // Finishing from Today with the outcome already picked: how long it took is worked out as the sheet's own picker would.
+    const picked = printing ? (initialOutcome ?? null) : null;
+    const actual =
+      picked && attempt.settings.actualMinutes === undefined
+        ? elapsedIfPlausible(attempt.printedAt, attempt.settings.estimatedMinutes)
+        : undefined;
+    return {
+      outcome: picked ?? attempt.outcome,
+      printedAt: attempt.printedAt,
+      note: attempt.note,
+      failureTags: attempt.failureTags,
+      successNotes: attempt.successNotes,
+      settings: actual !== undefined ? { ...attempt.settings, actualMinutes: actual } : attempt.settings,
+    };
   });
   // While finishing offline nothing autosaves: what was typed waits for the finish button (or for the
   // connection, when it comes back and the usual autosave takes over).

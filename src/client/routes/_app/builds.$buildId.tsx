@@ -1,4 +1,4 @@
-import { tagLabel } from "@shared/attempts";
+import { type Outcome, tagLabel } from "@shared/attempts";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -53,10 +53,14 @@ import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
-  validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string; finish?: string } => ({
     ...(search.new === true || search.new === "true" ? { new: true } : {}),
     // Opened from the journal or search: that attempt is picked and in view.
     ...(typeof search.attempt === "string" && search.attempt ? { attempt: search.attempt } : {}),
+    // From Today's Finish: open that attempt's sheet, with an outcome already picked ("success", "partial", "failed") or not ("1").
+    ...(typeof search.finish === "string" && /^(1|success|partial|failed)$/.test(search.finish)
+      ? { finish: search.finish }
+      : {}),
   }),
   component: BuildDetail,
 });
@@ -113,7 +117,7 @@ function Build({ item }: { item: ItemView }) {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
-  const { new: isNew, attempt: linkedAttempt } = Route.useSearch();
+  const { new: isNew, attempt: linkedAttempt, finish: finishParam } = Route.useSearch();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
@@ -141,8 +145,32 @@ function Build({ item }: { item: ItemView }) {
     open: boolean;
     attemptId: string | null;
     file?: { file: File; key: number } | null;
+    /** Picked already, when the sheet was opened from Today's "How did it go?". */
+    outcome?: Outcome | null;
   }>({ open: false, attemptId: null });
   const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId, file: null });
+  // Today's Finish: open the attempt's sheet (with its outcome picked, if it came with one), then drop the
+  // parameter so closing the sheet doesn't leave a link that reopens it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per arrival.
+  useEffect(() => {
+    if (!finishParam || !linkedAttempt) return;
+    const attempt = item.attempts.find((candidate) => candidate.id === linkedAttempt);
+    if (!attempt) return;
+    if (attempt.outcome === null) {
+      setSheet({
+        open: true,
+        attemptId: attempt.id,
+        file: null,
+        outcome: finishParam === "1" ? null : (finishParam as Outcome),
+      });
+    }
+    void navigate({
+      to: "/builds/$buildId",
+      params: { buildId: item.id },
+      search: { attempt: linkedAttempt },
+      replace: true,
+    });
+  }, [finishParam, linkedAttempt, item.attempts.length]);
   // A .3mf dropped on the build starts a new attempt from it; dropped on an attempt, it goes on that one.
   useSlicerDropTarget((file, attemptId) => {
     const onto = attemptId ? item.attempts.find((attempt) => attempt.id === attemptId) : undefined;
@@ -457,6 +485,7 @@ function Build({ item }: { item: ItemView }) {
         item={item}
         attemptId={sheet.attemptId}
         incomingFile={sheet.file}
+        initialOutcome={sheet.outcome}
         open={sheet.open}
         onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
       />

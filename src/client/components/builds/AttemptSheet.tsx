@@ -42,6 +42,7 @@ export function AttemptSheet({ item, attemptId, open, onOpenChange, initialOutco
         open={open}
         onOpenChange={onOpenChange}
         incomingFile={incomingFile}
+        initialOutcome={initialOutcome}
       />
     ) : null;
   }

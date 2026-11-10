@@ -17,6 +17,7 @@ import {
   type TagDefinition,
   type TagKind,
 } from "@shared/attempts";
+import { printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -343,6 +344,23 @@ export function findPrinting(items: ItemView[]): { item: ItemView; attempt: Atte
     }
   }
   return found;
+}
+
+/**
+ * Every print on the bed, the one that should be done by now first, then the newest. Today lists them all and
+ * the sidebar shows the first.
+ */
+export function printingAttempts(items: ItemView[], now = Date.now()): Array<{ item: ItemView; attempt: AttemptView }> {
+  const found: Array<{ item: ItemView; attempt: AttemptView }> = [];
+  for (const item of items) {
+    if (item.stage !== "building") continue;
+    for (const attempt of item.attempts) if (attempt.outcome === null) found.push({ item, attempt });
+  }
+  const due = (attempt: AttemptView) =>
+    printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now).state === "due";
+  return found.sort(
+    (a, b) => Number(due(b.attempt)) - Number(due(a.attempt)) || b.attempt.printedAt - a.attempt.printedAt,
+  );
 }
 
 /** Failure tags and success notes people added themselves. */
