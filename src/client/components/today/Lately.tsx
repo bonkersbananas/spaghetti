@@ -56,11 +56,18 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
           );
         })}
       </div>
-      <Link to="/journal" className="focus-ring self-start rounded-sm">
-        <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-3">
-          See the whole journal
-        </Button>
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-1">
+        <Link to="/journal" className="focus-ring rounded-sm">
+          <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-3">
+            See the whole journal
+          </Button>
+        </Link>
+        <Link to="/year" className="focus-ring rounded-sm">
+          <Button variant="quiet" size="sm" tabIndex={-1}>
+            See the year
+          </Button>
+        </Link>
+      </div>
     </section>
   );
 }

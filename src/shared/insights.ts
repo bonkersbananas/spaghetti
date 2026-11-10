@@ -50,11 +50,44 @@ export interface FailureInsight {
   fixes: FixCount[];
 }
 
+/** The picture of a build as the year shows it. */
+export interface MadePhoto {
+  id: string;
+  /** Its average color, shown while it loads. */
+  color: string;
+}
+
 export interface LongBuild {
   itemId: string;
   title: string | null;
   attempts: number;
+  photo: MadePhoto | null;
+  /** How each attempt this year went, oldest first (null: still printing). */
+  outcomes: (Outcome | null)[];
 }
+
+/** A build that got made this year: it had an attempt that worked. */
+export interface MadeBuild {
+  itemId: string;
+  title: string | null;
+  photo: MadePhoto;
+}
+
+/** What the year needs of a build besides its attempts. */
+export interface InsightItem {
+  title: string | null;
+  coverPhotoId: string | null;
+}
+
+export interface InsightPhoto extends MadePhoto {
+  itemId: string;
+  /** The attempt it shows, null for the build's own photos. */
+  attemptId: string | null;
+  createdAt: number;
+}
+
+/** How many finished builds the year hands over: the screen shows a dozen and counts the rest. */
+export const MADE_LIMIT = 36;
 
 export interface Insights {
   year: number;
@@ -66,6 +99,10 @@ export interface Insights {
   byPlate: RateRow[];
   failures: FailureInsight[];
   longestBuilds: LongBuild[];
+  /** Builds with a working attempt this year, newest first, up to MADE_LIMIT, each with its final photo. */
+  made: MadeBuild[];
+  /** How many there are in all (those with a photo). */
+  madeTotal: number;
 }
 
 const emptyCounts = (): OutcomeCounts => ({ success: 0, partial: 0, failed: 0 });
@@ -180,13 +217,38 @@ export function whatFixed(attempts: readonly InsightAttempt[], inRange: (attempt
 }
 
 /**
- * The year in a few facts. `titles` names builds for the longest-builds list.
+ * The photo that stands for a build: the cover picked for it, else the newest
+ * picture of its latest attempt that worked, else the newest of any attempt,
+ * else any picture of it (the same guess the app makes for a finished build).
+ */
+export function finalPhoto(
+  item: Pick<InsightItem, "coverPhotoId">,
+  photos: readonly InsightPhoto[],
+  attempts: readonly Pick<InsightAttempt, "id" | "outcome" | "printedAt" | "createdAt">[],
+): MadePhoto | null {
+  const newest = (list: readonly InsightPhoto[]) =>
+    list.reduce<InsightPhoto | undefined>((a, b) => (!a || b.createdAt > a.createdAt ? b : a), undefined);
+  const cover = item.coverPhotoId ? photos.find((photo) => photo.id === item.coverPhotoId) : undefined;
+  if (cover) return { id: cover.id, color: cover.color };
+  const worked = [...attempts]
+    .filter((a) => a.outcome === "success")
+    .sort((a, b) => b.printedAt - a.printedAt || b.createdAt - a.createdAt)[0];
+  const pick =
+    newest(worked ? photos.filter((photo) => photo.attemptId === worked.id) : []) ??
+    newest(photos.filter((photo) => photo.attemptId)) ??
+    newest(photos);
+  return pick ? { id: pick.id, color: pick.color } : null;
+}
+
+/**
+ * The year in a few facts. `items` and `photos` name and picture the builds.
  * `tzOffset` is the viewer's zone in minutes behind UTC, so a print at 23:30
  * on New Year's Eve lands in their year.
  */
 export function computeInsights(
   attempts: readonly InsightAttempt[],
-  titles: ReadonlyMap<string, string | null>,
+  items: ReadonlyMap<string, InsightItem>,
+  photos: readonly InsightPhoto[],
   year: number,
   tzOffset = 0,
   customTags: readonly { slug: string; label: string }[] = [],
@@ -222,13 +284,35 @@ export function computeInsights(
         .slice(0, 3),
     }));
 
-  const perBuild = new Map<string, number>();
-  for (const attempt of mine) perBuild.set(attempt.itemId, (perBuild.get(attempt.itemId) ?? 0) + 1);
-  const longestBuilds = [...perBuild]
-    .filter(([, n]) => n >= 3)
-    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+  const attemptsByBuild = new Map<string, InsightAttempt[]>();
+  for (const attempt of mine)
+    attemptsByBuild.set(attempt.itemId, [...(attemptsByBuild.get(attempt.itemId) ?? []), attempt]);
+  const photosByBuild = new Map<string, InsightPhoto[]>();
+  for (const photo of photos) photosByBuild.set(photo.itemId, [...(photosByBuild.get(photo.itemId) ?? []), photo]);
+  const pictureOf = (itemId: string, list: readonly InsightAttempt[]) =>
+    finalPhoto(items.get(itemId) ?? { coverPhotoId: null }, photosByBuild.get(itemId) ?? [], list);
+
+  const longestBuilds = [...attemptsByBuild]
+    .filter(([, list]) => list.length >= 3)
+    .sort((a, b) => b[1].length - a[1].length || (a[0] < b[0] ? -1 : 1))
     .slice(0, 3)
-    .map(([itemId, n]) => ({ itemId, title: titles.get(itemId) ?? null, attempts: n }));
+    .map(([itemId, list]) => ({
+      itemId,
+      title: items.get(itemId)?.title ?? null,
+      attempts: list.length,
+      photo: pictureOf(itemId, list),
+      outcomes: byPrintTime(list).map((attempt) => attempt.outcome),
+    }));
+
+  const allMade = [...attemptsByBuild]
+    .flatMap(([itemId, list]) => {
+      const worked = list.filter((attempt) => attempt.outcome === "success");
+      const photo = worked.length ? pictureOf(itemId, list) : null;
+      const at = Math.max(0, ...worked.map((attempt) => attempt.printedAt));
+      return photo ? [{ itemId, title: items.get(itemId)?.title ?? null, photo, at }] : [];
+    })
+    .sort((a, b) => b.at - a.at || (a.itemId < b.itemId ? -1 : 1));
+  const made = allMade.slice(0, MADE_LIMIT).map(({ at: _at, ...build }) => build);
 
   return {
     year,
@@ -239,6 +323,8 @@ export function computeInsights(
     byPlate: successRates(decided, (settings) => (settings.bedType ? plateName(settings.bedType) : null)),
     failures,
     longestBuilds,
+    made,
+    madeTotal: allMade.length,
   };
 }
 

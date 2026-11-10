@@ -57,7 +57,7 @@ export function MonthBars({ months, through = 11, className }: MonthBarsProps) {
               <span
                 aria-hidden
                 className={cn(
-                  "flex w-full max-w-9 flex-col-reverse overflow-hidden rounded-t-md",
+                  "flex w-full max-w-9 flex-col-reverse overflow-hidden rounded-t-md md:max-w-14",
                   sum === 0 && "bg-ink/6 h-1 rounded-md",
                   future && "opacity-50",
                 )}

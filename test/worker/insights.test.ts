@@ -38,7 +38,7 @@ describe("GET /api/insights", () => {
   it("is an empty year with nothing printed", async () => {
     const response = await request("/api/insights?year=2026", { cookie });
     const { insights } = await response.json<InsightsResponse>();
-    expect(insights).toMatchObject({ year: 2026, prints: 0, failures: [], longestBuilds: [] });
+    expect(insights).toMatchObject({ year: 2026, prints: 0, failures: [], longestBuilds: [], made: [], madeTotal: 0 });
     expect(insights.months).toHaveLength(12);
   });
 

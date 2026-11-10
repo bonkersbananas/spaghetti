@@ -25,7 +25,7 @@ export function RateRows({ rows, label, className }: RateRowsProps) {
               <span className="bg-basil block h-full rounded-full" style={{ width: `${Math.max(row.percent, 6)}%` }} />
             )}
           </span>
-          <span className="text-small text-ink-soft tabular justify-self-end text-right">
+          <span className="text-small text-ink-soft tabular justify-self-end text-right whitespace-nowrap">
             {row.percent}% worked{" "}
             <span className="text-ink-faint">
               · {row.total} {row.total === 1 ? "print" : "prints"}

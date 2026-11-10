@@ -77,8 +77,30 @@ describe("computeInsights", () => {
     at("b3", 7, "failed", {}, ["clog"], 3),
     at("b3", 8, null, {}, [], 3),
   ];
+  const photo = (id: string, itemId: string, attemptId: string | null, createdAt: number) => ({
+    id,
+    itemId,
+    attemptId,
+    color: "#aaaaaa",
+    createdAt,
+  });
+  const photos = [
+    photo("cover", "b1", null, 1),
+    photo("b1-final", "b1", all[1]?.id ?? null, 2),
+    photo("b3-fail", "b3", all[6]?.id ?? null, 9),
+    photo("b3-worked-old", "b3", all[5]?.id ?? null, 3),
+    photo("b3-worked-new", "b3", all[5]?.id ?? null, 4),
+  ];
   const old = { ...at("old", 1, "failed", {}, ["warping"]), printedAt: Date.UTC(2025, 11, 1) };
-  const result = computeInsights([...all, old], new Map([["b3", "Tugboat"]]), 2026);
+  const result = computeInsights(
+    [...all, old],
+    new Map([
+      ["b3", { title: "Tugboat", coverPhotoId: null }],
+      ["b1", { title: "Cube", coverPhotoId: "cover" }],
+    ]),
+    photos,
+    2026,
+  );
 
   it("counts a year's outcomes and months, leaving out prints still printing", () => {
     expect(result.prints).toBe(7);
@@ -96,7 +118,23 @@ describe("computeInsights", () => {
   });
 
   it("lists builds that took three or more attempts", () => {
-    expect(result.longestBuilds).toEqual([{ itemId: "b3", title: "Tugboat", attempts: 4 }]);
+    expect(result.longestBuilds).toEqual([
+      {
+        itemId: "b3",
+        title: "Tugboat",
+        attempts: 4,
+        photo: { id: "b3-worked-new", color: "#aaaaaa" },
+        outcomes: ["partial", "success", "failed", null],
+      },
+    ]);
+  });
+
+  it("makes a mosaic of builds that worked: the cover, else the picture of the attempt that worked", () => {
+    expect(result.made.map((build) => [build.itemId, build.photo.id])).toEqual([
+      ["b3", "b3-worked-new"],
+      ["b1", "cover"],
+    ]);
+    expect(result.madeTotal).toBe(2);
   });
 
   it("builds the sentence", () => {
