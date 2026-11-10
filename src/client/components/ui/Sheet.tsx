@@ -19,6 +19,8 @@ export interface SheetProps {
    * On phones it is always a bottom sheet.
    */
   desktop?: "dialog" | "panel";
+  /** A wider desktop dialog, for content that sits in columns (the shortcut list). */
+  wide?: boolean;
   children: ReactNode;
 }
 
@@ -60,7 +62,16 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, children }
   );
 }
 
-function DesktopSheet({ open, onOpenChange, title, description, footer, desktop = "dialog", children }: SheetProps) {
+function DesktopSheet({
+  open,
+  onOpenChange,
+  title,
+  description,
+  footer,
+  desktop = "dialog",
+  wide,
+  children,
+}: SheetProps) {
   const isPanel = desktop === "panel";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -71,7 +82,10 @@ function DesktopSheet({ open, onOpenChange, title, description, footer, desktop 
             "bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel
               ? "sg-panel inset-y-3 right-3 w-full max-w-md rounded-xl"
-              : "sg-dialog top-[14vh] left-1/2 max-h-[72vh] w-full max-w-xl -translate-x-1/2 rounded-xl",
+              : cn(
+                  "sg-dialog left-1/2 w-full -translate-x-1/2 rounded-xl",
+                  wide ? "top-[8vh] max-h-[84vh] max-w-4xl" : "top-[14vh] max-h-[72vh] max-w-xl",
+                ),
           )}
         >
           <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-1">

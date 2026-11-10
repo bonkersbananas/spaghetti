@@ -81,9 +81,10 @@ function Journal() {
     if (entry && item) void navigate(entryLink(entry, item));
   };
   useHotkeys({
-    j: () => move(1),
-    k: () => move(-1),
-    ...(selected ? { enter: open, escape: () => setSelected(null) } : {}),
+    journalNext: () => move(1),
+    journalPrevious: () => move(-1),
+    journalOpen: selected ? open : undefined,
+    journalClear: selected ? () => setSelected(null) : undefined,
   });
 
   // The next page loads before the end comes into view.

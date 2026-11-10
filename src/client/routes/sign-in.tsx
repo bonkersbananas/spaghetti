@@ -39,6 +39,8 @@ function SignIn() {
   const signIn = useMutation({
     mutationFn: () => api<SessionResponse>("/session", { method: "POST", json: { username, password } }),
     onSuccess: async ({ user }) => {
+      // Whatever an earlier session left in memory is not this person's to see.
+      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
       queryClient.setQueryData(sessionQuery.queryKey, user);
       rememberUser(user);
       await navigate({ href: safeRedirect(redirectTo), replace: true });

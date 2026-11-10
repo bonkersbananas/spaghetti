@@ -120,28 +120,32 @@ export function queueSlicerFile(
   });
 }
 
-/** Takes the file off an attempt at once, with Undo. */
+/**
+ * Takes the file off an attempt at once, with Undo: one still waiting leaves
+ * the outbox, and a saved one (or the saved one a waiting file was going to
+ * replace) is removed on the server too.
+ */
 export function removeSlicerFile(queryClient: QueryClient, itemId: string, attempt: AttemptView) {
   const file = attempt.file;
   if (!file) return;
   const waiting = outbox.removeFile(attempt.id);
+  const saved: AttemptFile | null = file.pending ? (file.replaces ?? null) : file;
   patchCachedItem(queryClient, itemId, (item) => ({
     ...item,
     attempts: item.attempts.map((a) => (a.id === attempt.id ? { ...a, file: null } : a)),
   }));
-  const onServer = !file.pending;
-  const deleted = onServer
+  const deleted = saved
     ? api(`/attempts/${attempt.id}/file`, { method: "DELETE" }).catch(() => undefined)
     : Promise.resolve(undefined);
   toast.undo("Slicer file removed", {
     description: file.name,
     onUndo: async () => {
       if (waiting) outbox.restoreFile(waiting.itemId, waiting.file);
-      if (!onServer) return;
+      if (!saved) return;
       await deleted;
       patchCachedItem(queryClient, itemId, (item) => ({
         ...item,
-        attempts: item.attempts.map((a) => (a.id === attempt.id ? { ...a, file: file as AttemptFile } : a)),
+        attempts: item.attempts.map((a) => (a.id === attempt.id ? { ...a, file: saved } : a)),
       }));
       await api(`/attempts/${attempt.id}/file/restore`, { method: "POST" }).catch(() =>
         toast.error("Couldn't bring the file back"),

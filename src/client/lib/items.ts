@@ -5,10 +5,11 @@ import type {
   ItemResponse,
   ItemStage,
   ItemsResponse,
+  Person,
   Photo,
   PhotoResponse,
 } from "@shared/api";
-import { byPrintTime, describeChanges } from "@shared/attempts";
+import { byPrintTime, describeChanges, mergeNote, unionTags } from "@shared/attempts";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -19,9 +20,13 @@ import {
   outbox,
   type PendingAttempt,
   type PendingFile,
+  type PendingFinish,
   type UploadProgress,
   useOutbox,
 } from "./outbox";
+import { peopleQuery } from "./queries";
+import { canEdit } from "./read-only";
+import { forgetItem } from "./recent";
 
 /** Ideas live in one list, builds (building, done, shelved) in the other. */
 export type ItemList = "ideas" | "builds";
@@ -70,6 +75,8 @@ export interface PhotoView extends Photo {
 export interface AttemptFileView extends AttemptFile {
   /** Still on its way to the server. */
   pending?: boolean;
+  /** For a file still on its way: the saved file it will replace, which removing it must remove too. */
+  replaces?: AttemptFile | null;
 }
 
 /** An attempt as the UI shows it, numbered from the first print. */
@@ -79,6 +86,8 @@ export interface AttemptView extends Omit<Attempt, "file"> {
   number: number;
   /** The server doesn't have it yet. */
   pending: boolean;
+  /** Finished on this device; the finish is waiting to be sent. */
+  finishQueued?: boolean;
 }
 
 export interface ItemView extends Omit<Item, "photos" | "attempts"> {
@@ -105,7 +114,7 @@ export function viewAttempts(
     return {
       ...attempt,
       changes: before ? describeChanges(before.settings, attempt.settings) : [],
-      file: waiting ? fromPendingFile(waiting) : attempt.file,
+      file: waiting ? { ...fromPendingFile(waiting), replaces: attempt.file } : attempt.file,
       number: index + 1,
       pending: pendingIds.has(attempt.id),
     };
@@ -197,6 +206,25 @@ export function connectOutbox(queryClient: QueryClient) {
         startedAt: item.startedAt ?? attempt.createdAt,
         attempts: [...item.attempts.filter((a) => a.id !== attempt.id), attempt],
       })),
+    attemptFinished: (attempt, { finished, pending, photos }) => {
+      patchCachedItem(queryClient, attempt.itemId, (item) => ({
+        ...item,
+        attempts: item.attempts.map((a) => (a.id === attempt.id ? attempt : a)),
+      }));
+      if (finished) return;
+      // Someone else gave it an outcome first: theirs stands, and what was added is said once.
+      const people = queryClient.getQueryData<Person[]>(peopleQuery.queryKey);
+      const who = people?.find((person) => person.id === attempt.finishedBy)?.name.split(" ")[0] ?? "Someone";
+      const saved = cachedItem(queryClient, attempt.itemId);
+      const number = saved ? viewAttempts(saved.attempts).find((a) => a.id === attempt.id)?.number : undefined;
+      const added = [photos > 0 && (photos === 1 ? "photo" : "photos"), pending.note.trim() && "note"].filter(Boolean);
+      toast.message(
+        `${who} had already finished attempt ${number ?? ""}`.trim(),
+        added.length
+          ? `Your ${added.join(" and ")} ${added.length > 1 || photos > 1 ? "were" : "was"} added.`
+          : undefined,
+      );
+    },
     photoSaved: (photo) =>
       patchCachedItem(queryClient, photo.itemId, (item) => ({
         ...item,
@@ -238,21 +266,48 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     ...attempt,
     itemId,
     finishedAt: attempt.outcome ? attempt.createdAt : null,
+    finishedBy: attempt.outcome ? attempt.createdBy : null,
     changes: [],
     file: null,
     updatedAt: attempt.createdAt,
   };
 }
 
-function withAttempts(itemId: string, attempts: Attempt[], entry: OutboxEntry | undefined): AttemptView[] {
+/** A print still printing on the server, shown as finished once its queued finish says so (the server decides when it lands). */
+function applyFinish(attempt: Attempt, finish: PendingFinish): Attempt {
+  return {
+    ...attempt,
+    outcome: finish.outcome,
+    finishedAt: finish.finishedAt,
+    note: mergeNote(attempt.note, finish.note),
+    failureTags:
+      finish.outcome === "success" ? attempt.failureTags : unionTags(attempt.failureTags, finish.failureTags),
+    successNotes:
+      finish.outcome === "failed" ? attempt.successNotes : unionTags(attempt.successNotes, finish.successNotes),
+  };
+}
+
+function withAttempts(itemId: string, saved: Attempt[], entry: OutboxEntry | undefined): AttemptView[] {
+  const finishes = entry?.finishes ?? [];
+  const attempts = finishes.length
+    ? saved.map((attempt) => {
+        const finish = attempt.outcome === null ? finishes.find((f) => f.attemptId === attempt.id) : undefined;
+        return finish ? applyFinish(attempt, finish) : attempt;
+      })
+    : saved;
   const files = entry?.files ?? [];
-  if (!entry?.attempts?.length) return viewAttempts(attempts, new Set(), files);
+  const queued = new Set(finishes.map((finish) => finish.attemptId));
+  const flag = (views: AttemptView[]) =>
+    queued.size ? views.map((view) => (queued.has(view.id) ? { ...view, finishQueued: true } : view)) : views;
+  if (!entry?.attempts?.length) return flag(viewAttempts(attempts, new Set(), files));
   const known = new Set(attempts.map((attempt) => attempt.id));
   const pending = entry.attempts.filter((attempt) => !known.has(attempt.id));
-  return viewAttempts(
-    [...attempts, ...pending.map((attempt) => fromPendingAttempt(itemId, attempt))],
-    new Set(pending.map((attempt) => attempt.id)),
-    files,
+  return flag(
+    viewAttempts(
+      [...attempts, ...pending.map((attempt) => fromPendingAttempt(itemId, attempt))],
+      new Set(pending.map((attempt) => attempt.id)),
+      files,
+    ),
   );
 }
 
@@ -327,11 +382,19 @@ export function useItem(id: string) {
   const query = useQuery({
     ...itemQuery(id),
     enabled: !pendingEntry,
-    // Opened from a list: show what the list already has, at once.
+    // Opened from a list: show what the list already has, at once, as old as the list is
+    // (so a list restored from the device is asked about again rather than trusted as fresh).
     initialData: () => {
       for (const list of LISTS) {
         const found = queryClient.getQueryData<Item[]>(itemKeys.list(list))?.find((item) => item.id === id);
         if (found) return found;
+      }
+      return undefined;
+    },
+    initialDataUpdatedAt: () => {
+      for (const list of LISTS) {
+        const state = queryClient.getQueryState<Item[]>(itemKeys.list(list));
+        if (state?.data?.some((item) => item.id === id)) return state.dataUpdatedAt;
       }
       return undefined;
     },
@@ -365,11 +428,14 @@ export async function saveItemChanges(
  * doesn't have yet, which simply leave the outbox.
  */
 export function deleteItem(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const noun = item.stage === "idea" ? "idea" : "build";
   const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
   const pendingEntry = outbox.remove(item.id);
   const onServer = !pendingEntry?.create;
   patchCachedItem(queryClient, item.id, () => null);
+  // Gone from the palette's Recent too (it comes back when the item is next opened).
+  forgetItem(item.id);
   const deleted = onServer
     ? api(`/items/${item.id}`, { method: "DELETE" }).catch((error) => {
         if (error instanceof ApiError && error.status === 404) return;
@@ -404,6 +470,7 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
 
 /** Removes one photo at once, with Undo. */
 export function removePhoto(queryClient: QueryClient, photo: PhotoView) {
+  if (!canEdit(!!photo.upload)) return;
   const pending = outbox.removePhoto(photo.id);
   let removed: Photo | undefined;
   patchCachedItem(queryClient, photo.itemId, (item) => {

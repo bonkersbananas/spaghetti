@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon, PrinterIcon } from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
-import { useHotkeys } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { loadSlot, spoolsQuery } from "@/lib/pantry";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -48,7 +48,7 @@ function Pantry() {
   const { add } = Route.useSearch();
   const [adding, setAdding] = useState<{ open: boolean; slot: string | null }>({ open: !!add, slot: null });
   const openAdd = (slot: string | null = null) => setAdding({ open: true, slot });
-  useHotkeys({ n: () => openAdd() });
+  useHotkeys({ pantryAdd: () => openAdd() });
 
   const loaded = spools?.filter((spool) => spool.slot).length ?? 0;
   const subtitle = spools?.length
@@ -67,7 +67,7 @@ function Pantry() {
                 Printer
               </Button>
             </Link>
-            <Button variant="secondary" icon={PlusIcon} shortcut={["N"]} onClick={() => openAdd()}>
+            <Button variant="secondary" icon={PlusIcon} shortcut={shortcutCaps("pantryAdd")} onClick={() => openAdd()}>
               Add spool
             </Button>
           </>
@@ -100,7 +100,7 @@ function Pantry() {
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
           <section aria-labelledby="loaded" className="flex flex-col gap-4 md:gap-5">
-            <div className="flex items-baseline justify-between gap-3 md:max-w-3xl">
+            <div className="flex items-baseline justify-between gap-3">
               <h2 id="loaded" className="text-headline text-ink">
                 In the printer
               </h2>
@@ -108,7 +108,7 @@ function Pantry() {
                 <p className="text-small text-ink-faint">Drag a spool onto a slot, or click a slot to change it.</p>
               )}
             </div>
-            <AmsLoadout className="md:max-w-3xl" onAddSpool={(slot) => openAdd(slot)} />
+            <AmsLoadout onAddSpool={(slot) => openAdd(slot)} />
           </section>
           {groups(spools).map((group) => (
             <section

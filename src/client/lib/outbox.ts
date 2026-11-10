@@ -1,4 +1,13 @@
-import type { Attempt, AttemptResponse, Item, ItemResponse, ItemStage, Photo, PhotoResponse } from "@shared/api";
+import type {
+  Attempt,
+  AttemptResponse,
+  FinishAttemptResponse,
+  Item,
+  ItemResponse,
+  ItemStage,
+  Photo,
+  PhotoResponse,
+} from "@shared/api";
 import type { AttemptSettings, Outcome } from "@shared/attempts";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
@@ -54,6 +63,20 @@ export type PendingAttemptChanges = Partial<
   Pick<PendingAttempt, "outcome" | "printedAt" | "note" | "failureTags" | "successNotes" | "settings">
 >;
 
+/**
+ * A print finished on this device while the server was out of reach: the
+ * outcome, when it came off the bed, and the note and tags that go with it.
+ * The server fills what is still empty and keeps someone else's outcome.
+ */
+export interface PendingFinish {
+  attemptId: string;
+  outcome: Outcome;
+  finishedAt: number;
+  note: string;
+  failureTags: string[];
+  successNotes: string[];
+}
+
 /** Everything still to send for one item. Kept in IndexedDB until the server has it. */
 export interface OutboxEntry {
   itemId: string;
@@ -63,6 +86,8 @@ export interface OutboxEntry {
   attempts?: PendingAttempt[];
   /** Slicer files for attempts, sent after the attempts. */
   files?: PendingFile[];
+  /** Prints to finish, sent after the attempts and before the photos. */
+  finishes?: PendingFinish[];
   photos: PendingPhoto[];
   queuedAt: number;
 }
@@ -85,6 +110,8 @@ export interface OutboxState {
 export interface OutboxHandlers {
   itemSaved: (item: Item) => void;
   attemptSaved: (attempt: Attempt) => void;
+  /** A queued finish landed. `finished` is false when someone else had finished that print first. */
+  attemptFinished: (attempt: Attempt, result: { finished: boolean; pending: PendingFinish; photos: number }) => void;
   photoSaved: (photo: Photo) => void;
   /** A slicer file is on the server: the attempt as it now is. */
   fileSaved: (attempt: Attempt) => void;
@@ -179,12 +206,18 @@ class Outbox {
     // A newer file for the same attempt replaces one still waiting.
     const incoming = new Set((entry.files ?? []).map((file) => file.attemptId));
     const files = [...(existing?.files ?? []).filter((file) => !incoming.has(file.attemptId)), ...(entry.files ?? [])];
+    // A print finished twice before it was sent keeps the later answer.
+    const finishes = [
+      ...(existing?.finishes ?? []).filter((f) => !entry.finishes?.some((g) => g.attemptId === f.attemptId)),
+      ...(entry.finishes ?? []),
+    ];
     const merged: OutboxEntry = existing
       ? {
           ...existing,
           create: existing.create ?? entry.create,
           ...(attempts.length ? { attempts } : {}),
           ...(files.length ? { files } : {}),
+          ...(finishes.length ? { finishes } : {}),
           photos: [...existing.photos, ...entry.photos],
         }
       : entry;
@@ -192,6 +225,20 @@ class Outbox {
     else this.setEntries([...this.state.entries, merged]);
     await this.store.put(merged).catch(() => undefined);
     void this.run();
+  }
+
+  /** Queues finishing a print that is saved on the server; sent when it can be. */
+  async addFinish(itemId: string, finish: PendingFinish) {
+    await this.add({ itemId, finishes: [finish], photos: [], queuedAt: Date.now() });
+  }
+
+  /** The finish still waiting for one attempt, if any. */
+  pendingFinish(attemptId: string): PendingFinish | undefined {
+    for (const entry of this.state.entries) {
+      const found = entry.finishes?.find((finish) => finish.attemptId === attemptId);
+      if (found) return found;
+    }
+    return undefined;
   }
 
   /** Takes an item out of the queue (it was deleted). Returns it, for undo. */
@@ -359,6 +406,7 @@ class Outbox {
         if (!entry) break;
         if (entry.create) await this.createItem(entry);
         else if (entry.attempts?.[0]) await this.createAttempt(entry, entry.attempts[0]);
+        else if (entry.finishes?.[0]) await this.sendFinish(entry, entry.finishes[0]);
         else if (entry.files?.[0]) await this.uploadFile(entry, entry.files[0]);
         else if (entry.photos[0]) await this.uploadPhoto(entry, entry.photos[0]);
         else this.finish(entry.itemId);
@@ -474,6 +522,38 @@ class Outbox {
     this.handlers.attemptSaved?.(attempt);
     const latest = this.entry(entry.itemId);
     if (latest) await this.save({ ...latest, attempts: latest.attempts?.filter((a) => a.id !== pending.id) });
+  }
+
+  private async sendFinish(entry: OutboxEntry, pending: PendingFinish) {
+    let result: FinishAttemptResponse;
+    try {
+      result = await api<FinishAttemptResponse>(`/attempts/${pending.attemptId}/finish`, {
+        method: "POST",
+        json: {
+          outcome: pending.outcome,
+          finishedAt: pending.finishedAt,
+          note: pending.note,
+          failureTags: pending.failureTags,
+          successNotes: pending.successNotes,
+        },
+      });
+    } catch (error) {
+      if (error instanceof ApiError && [400, 404].includes(error.status)) {
+        // Deleted meanwhile (its photos will find that out too), or unreadable: nothing to send.
+        this.dropFinish(entry.itemId, pending.attemptId);
+        return;
+      }
+      throw new RetryLater();
+    }
+    const photos =
+      this.entry(entry.itemId)?.photos.filter((photo) => photo.attemptId === pending.attemptId).length ?? 0;
+    this.handlers.attemptFinished?.(result.attempt, { finished: result.finished, pending, photos });
+    this.dropFinish(entry.itemId, pending.attemptId);
+  }
+
+  private dropFinish(itemId: string, attemptId: string) {
+    const latest = this.entry(itemId);
+    if (latest) void this.save({ ...latest, finishes: latest.finishes?.filter((f) => f.attemptId !== attemptId) });
   }
 
   /** Forgets an attempt and the photos queued behind it. */

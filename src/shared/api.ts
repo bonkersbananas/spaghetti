@@ -66,6 +66,8 @@ export interface Attempt {
   /** The slicer file it was printed from, if one was added. */
   file: AttemptFile | null;
   createdBy: string;
+  /** Who gave it its outcome; null while printing, and for attempts finished before this was kept. */
+  finishedBy: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -184,6 +186,29 @@ export interface UpdateAttemptRequest {
 
 export interface AttemptResponse {
   attempt: Attempt;
+}
+
+/**
+ * POST /api/attempts/:id/finish: how a print finished away from a connection
+ * reaches the server (queued on the device). Safe to repeat. If the attempt is
+ * still printing it is finished with this outcome, the note is added to its
+ * line and the tags set. If someone else finished it first, their outcome
+ * stands and only the note is added (`finished` is false); photos are
+ * uploaded separately either way.
+ */
+export interface FinishAttemptRequest {
+  outcome: Outcome;
+  /** When it came off the bed, epoch ms (never later than now). */
+  finishedAt?: number;
+  note?: string;
+  failureTags?: string[];
+  successNotes?: string[];
+}
+
+export interface FinishAttemptResponse {
+  attempt: Attempt;
+  /** False when someone else had already given it an outcome that differs from this one. */
+  finished: boolean;
 }
 
 /** A failure tag or success note someone added; the built-in ones live in shared/attempts.ts. */

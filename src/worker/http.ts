@@ -71,6 +71,7 @@ export function toApiAttempt(
     changes: previous ? describeChanges(previous.settings, attempt.settings) : [],
     file: file ? toApiFile(file) : null,
     createdBy: attempt.createdBy,
+    finishedBy: attempt.finishedBy,
     createdAt: attempt.createdAt.getTime(),
     updatedAt: attempt.updatedAt.getTime(),
   };

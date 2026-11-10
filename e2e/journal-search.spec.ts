@@ -142,6 +142,8 @@ test("starts an attempt from what worked last time", async ({ page, isMobile }) 
   ]);
 
   await page.goto(`/builds/${chain}`);
+  // The build has to be on screen before its shortcut does anything.
+  await expect(page.getByRole("heading", { level: 1, name: "Cable chain" })).toBeVisible();
   if (isMobile) await page.getByRole("button", { name: "Log attempt" }).click();
   else await page.keyboard.press("a");
   const sheet = page.getByRole("dialog", { name: "Attempt 2" });

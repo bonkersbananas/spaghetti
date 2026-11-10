@@ -153,6 +153,27 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
   const response = await page.request.get((await download.getAttribute("href")) ?? "");
   expect(response.ok()).toBe(true);
   expect((await response.body()).length).toBe(file.bytes.length);
+
+  // A second file that hasn't reached the server yet, removed again: the saved one goes too, not just the waiting one.
+  await page.route(`**/api/attempts/${attemptId}/file`, (route) =>
+    route.request().method() === "PUT" ? route.fulfill({ status: 503, body: "{}" }) : route.fallback(),
+  );
+  await expect(entry.getByRole("button", { name: "Attempt 1: success. Open" })).toBeVisible();
+  // Its top corner: the middle of the card is the file, with its own download link.
+  await entry.getByRole("button", { name: "Attempt 1: success. Open" }).click({ position: { x: 24, y: 24 } });
+  const again = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(again).toBeVisible();
+  await page.getByTestId("slicer-file-input").setInputFiles({
+    name: "desk-clips-v2.gcode.3mf",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from(file.bytes),
+  });
+  await again.getByRole("region", { name: "Which plate?" }).getByRole("button", { name: /Hook/ }).click();
+  await expect(again.getByText("desk-clips-v2.gcode.3mf")).toBeVisible();
+  await again.getByRole("button", { name: "Remove the slicer file" }).click();
+  await expect(again.getByRole("button", { name: "Add the slicer file" })).toBeVisible();
+  await page.unroute(`**/api/attempts/${attemptId}/file`);
+  await expect.poll(async () => (await getItem(page, id)).attempts[0]?.file).toBeNull();
 });
 
 test("picks a spool from the pantry for an attempt's filament", async ({ page, isMobile }) => {

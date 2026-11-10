@@ -2,16 +2,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
+import { CommandPalette } from "@/components/shell/CommandPalette";
 import { DropOverlay } from "@/components/shell/DropOverlay";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
+import { ShortcutOverlay } from "@/components/shell/ShortcutOverlay";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
+import { PaletteProvider, usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 /** The signed-in app: sidebar on desktop, tab bar on phones. */
 export const Route = createFileRoute("/_app")({
@@ -27,7 +31,9 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   return (
     <CaptureProvider>
-      <Shell />
+      <PaletteProvider>
+        <Shell />
+      </PaletteProvider>
     </CaptureProvider>
   );
 }
@@ -39,11 +45,16 @@ function Shell() {
   const dragging = useGlobalCapture();
   // Sends captures still waiting from this visit or an earlier one.
   useEffect(() => connectOutbox(queryClient), [queryClient]);
+  const { setPaletteOpen, setHelpOpen } = usePalette();
+  const isDesktop = useIsDesktop();
   useHotkeys({
-    c: () => setOpen(true),
+    capture: () => setOpen(true),
+    // There is no palette on phones.
+    palette: isDesktop ? () => setPaletteOpen(true) : undefined,
+    help: isDesktop ? () => setHelpOpen(true) : undefined,
     ...Object.fromEntries(
       [...sections, ...workshop].map((s) => [
-        s.hotkey,
+        s.shortcut,
         () => {
           void navigate({ to: s.to });
           // "/" focuses the search box from anywhere, also when search is already open.
@@ -64,6 +75,8 @@ function Shell() {
       </main>
       <TabBar />
       <CaptureSheet />
+      <CommandPalette />
+      <ShortcutOverlay />
       <DropOverlay visible={dragging} />
     </div>
   );

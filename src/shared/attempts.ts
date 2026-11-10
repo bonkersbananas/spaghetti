@@ -343,3 +343,18 @@ function supportChange(before: AttemptSettings, after: AttemptSettings): Setting
 export function byPrintTime<T extends { printedAt: number; createdAt: number; id: string }>(attempts: T[]): T[] {
   return [...attempts].sort((a, b) => a.printedAt - b.printedAt || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
 }
+
+/**
+ * Adds a line to an attempt's note without losing what is there: an empty
+ * note takes it as is, and the same line twice (a retried request) stays once.
+ */
+export function mergeNote(existing: string, added: string): string {
+  const line = added.trim();
+  const before = existing.trim();
+  if (!line) return existing;
+  if (!before) return line;
+  return before.includes(line) ? existing : `${before} · ${line}`;
+}
+
+/** Tag slugs of both lists, each once, in order. */
+export const unionTags = (a: readonly string[], b: readonly string[]): string[] => [...new Set([...a, ...b])];

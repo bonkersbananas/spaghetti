@@ -39,12 +39,15 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
-import { useHotkeys } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type AttemptView, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
 import { spring } from "@/lib/motion";
+import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
+import { canEdit, useReadOnly } from "@/lib/read-only";
+import { itemName, useRememberItem } from "@/lib/recent";
 import { useSlicerDropTarget } from "@/lib/slicer-files";
-import { useAutosave } from "@/lib/use-autosave";
+import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
@@ -107,6 +110,7 @@ function Build({ item }: { item: ItemView }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
+  const readOnly = useReadOnly(item.pending);
   const { new: isNew, attempt: linkedAttempt } = Route.useSearch();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
@@ -114,18 +118,12 @@ function Build({ item }: { item: ItemView }) {
 
   const [title, setTitle] = useState(item.title ?? "");
   const [note, setNote] = useState(item.note);
-  // Notes added from the capture sheet arrive from outside: show them.
-  const lastNote = useRef(item.note);
-  useEffect(() => {
-    if (item.note !== lastNote.current) {
-      lastNote.current = item.note;
-      setNote(item.note);
-    }
-  }, [item.note]);
-  const saveState = useAutosave({ title, note }, (value) => {
-    lastNote.current = value.note;
-    return saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note });
-  });
+  // Notes added from the capture sheet, or edits by the other person, arrive from outside: show them.
+  useFollowServer(item.title ?? "", title, setTitle);
+  useFollowServer(item.note, note, setNote);
+  const saveState = useAutosave({ title, note }, (value) =>
+    saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note }),
+  );
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
@@ -152,7 +150,10 @@ function Build({ item }: { item: ItemView }) {
   const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId, file: null });
   // A .3mf dropped on the build starts a new attempt from it; dropped on an attempt, it goes on that one.
   useSlicerDropTarget((file, attemptId) => {
-    const target = attemptId && item.attempts.some((attempt) => attempt.id === attemptId) ? attemptId : null;
+    const onto = attemptId ? item.attempts.find((attempt) => attempt.id === attemptId) : undefined;
+    // Offline, a saved attempt is only for reading; a new attempt can still start from the file.
+    if (onto && !canEdit(onto.pending)) return;
+    const target = onto?.id ?? null;
     setSheet({ open: true, attemptId: target, file: { file, key: Date.now() } });
   });
   const primary = () => openSheet(printing?.id ?? null);
@@ -174,6 +175,7 @@ function Build({ item }: { item: ItemView }) {
 
   const active = item.stage === "building";
   function remove() {
+    if (!canEdit(item.pending)) return;
     deleteItem(queryClient, item);
     void navigate({ to: "/builds" });
   }
@@ -181,28 +183,64 @@ function Build({ item }: { item: ItemView }) {
   const deleteSelectedOrBuild = () => {
     const attempt = story[selectedIndex];
     if (attempt) {
+      if (!canEdit(attempt.pending)) return;
       deleteAttempt(queryClient, item.id, attempt);
       setSelected(null);
     } else remove();
   };
+  useScreenActions("This build", [
+    {
+      id: "log",
+      label: printing ? "Finish attempt" : "Log attempt",
+      icon: printing ? CheckIcon : PlusIcon,
+      shortcut: "buildLog",
+      keywords: "log attempt finish print outcome add",
+      run: primary,
+    },
+    ...(active
+      ? [
+          {
+            id: "finish",
+            label: "Finish build",
+            icon: FinishIcon,
+            keywords: "done complete mark",
+            run: () => canEdit(item.pending) && finishBuild(queryClient, item),
+          },
+          {
+            id: "shelve",
+            label: "Shelve build",
+            icon: ShelveIcon,
+            keywords: "pause archive",
+            run: () => canEdit(item.pending) && shelveBuild(queryClient, item),
+          },
+        ]
+      : [
+          {
+            id: "reopen",
+            label: item.stage === "done" ? "Reopen build" : "Back on the bed",
+            icon: ReopenIcon,
+            keywords: "resume restart unshelve",
+            run: () => canEdit(item.pending) && reopenBuild(queryClient, item),
+          },
+        ]),
+  ]);
+  useRememberItem({
+    id: item.id,
+    kind: "build",
+    title: itemName(item, "build"),
+    photo: hero ? { id: hero.id, color: hero.color } : null,
+  });
+
   useHotkeys({
-    escape: () => (selected ? setSelected(null) : void navigate({ to: "/builds" })),
-    a: primary,
+    buildBack: () => (selected ? setSelected(null) : void navigate({ to: "/builds" })),
+    buildLog: primary,
     // Only bound when they do something, so Enter on a button and arrow-key scrolling keep working.
-    ...(story.length
-      ? {
-          arrowdown: () => moveSelection(1),
-          arrowup: () => moveSelection(-1),
-          j: () => moveSelection(1),
-          k: () => moveSelection(-1),
-        }
-      : {}),
-    ...(selected ? { enter: () => openSheet(selected) } : {}),
-    ...(gallery.length > 1
-      ? { arrowleft: () => selectPhoto(photoIndex - 1), arrowright: () => selectPhoto(photoIndex + 1) }
-      : {}),
-    backspace: deleteSelectedOrBuild,
-    delete: deleteSelectedOrBuild,
+    buildNext: story.length ? () => moveSelection(1) : undefined,
+    buildPrevious: story.length ? () => moveSelection(-1) : undefined,
+    buildOpen: selected ? () => openSheet(selected) : undefined,
+    buildPhotoPrevious: gallery.length > 1 ? () => selectPhoto(photoIndex - 1) : undefined,
+    buildPhotoNext: gallery.length > 1 ? () => selectPhoto(photoIndex + 1) : undefined,
+    buildDelete: deleteSelectedOrBuild,
   });
 
   // The moment a build that took some failing gets marked done.
@@ -224,15 +262,15 @@ function Build({ item }: { item: ItemView }) {
     <>
       {active ? (
         <>
-          <Button variant="quiet" icon={ShelveIcon} onClick={() => shelveBuild(queryClient, item)}>
+          <Button variant="quiet" icon={ShelveIcon} disabled={readOnly} onClick={() => shelveBuild(queryClient, item)}>
             Shelve
           </Button>
-          <Button icon={FinishIcon} onClick={() => finishBuild(queryClient, item)}>
+          <Button icon={FinishIcon} disabled={readOnly} onClick={() => finishBuild(queryClient, item)}>
             Finish build
           </Button>
         </>
       ) : (
-        <Button icon={ReopenIcon} onClick={() => reopenBuild(queryClient, item)}>
+        <Button icon={ReopenIcon} disabled={readOnly} onClick={() => reopenBuild(queryClient, item)}>
           {item.stage === "done" ? "Reopen" : "Back on the bed"}
         </Button>
       )}
@@ -247,9 +285,16 @@ function Build({ item }: { item: ItemView }) {
         {isDesktop ? (
           <span className="mr-2 flex items-center gap-2">{stageActions}</span>
         ) : (
-          active && <IconButton icon={ShelveIcon} label="Shelve build" onClick={() => shelveBuild(queryClient, item)} />
+          active && (
+            <IconButton
+              icon={ShelveIcon}
+              label="Shelve build"
+              disabled={readOnly}
+              onClick={() => shelveBuild(queryClient, item)}
+            />
+          )
         )}
-        <IconButton icon={TrashIcon} label="Delete build" onClick={remove} />
+        <IconButton icon={TrashIcon} label="Delete build" disabled={readOnly} onClick={remove} />
       </DetailBar>
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
@@ -285,6 +330,7 @@ function Build({ item }: { item: ItemView }) {
               maxLength={200}
               // A new build from scratch: name it first (or don't).
               autoFocus={isNew && isDesktop && !item.title}
+              readOnly={readOnly}
               value={title}
               onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
               onKeyDown={(event) => {
@@ -311,7 +357,13 @@ function Build({ item }: { item: ItemView }) {
                 )}
               </div>
               {!active && !isDesktop && (
-                <Button variant="quiet" size="sm" icon={ReopenIcon} onClick={() => reopenBuild(queryClient, item)}>
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  icon={ReopenIcon}
+                  disabled={readOnly}
+                  onClick={() => reopenBuild(queryClient, item)}
+                >
                   {item.stage === "done" ? "Reopen" : "Back on the bed"}
                 </Button>
               )}
@@ -319,6 +371,7 @@ function Build({ item }: { item: ItemView }) {
             <NoteField
               value={note}
               onChange={setNote}
+              readOnly={readOnly}
               placeholder="Notes for the whole build: the plan, a link, what to try next…"
               className="mt-1"
             />
@@ -339,7 +392,12 @@ function Build({ item }: { item: ItemView }) {
               )}
             </h2>
             {isDesktop && (
-              <Button variant="primary" icon={printing ? CheckIcon : PlusIcon} shortcut={["A"]} onClick={primary}>
+              <Button
+                variant="primary"
+                icon={printing ? CheckIcon : PlusIcon}
+                shortcut={shortcutCaps("buildLog")}
+                onClick={primary}
+              >
                 {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
               </Button>
             )}

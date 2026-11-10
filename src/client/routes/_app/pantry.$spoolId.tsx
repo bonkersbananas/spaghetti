@@ -124,7 +124,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
     deleteSpool(queryClient, spool);
     void navigate({ to: "/pantry" });
   };
-  useHotkeys({ escape: () => void navigate({ to: "/pantry" }), backspace: remove, delete: remove });
+  useHotkeys({ spoolBack: () => void navigate({ to: "/pantry" }), spoolDelete: remove });
 
   const materials: string[] = (SPOOL_MATERIALS as readonly string[]).includes(value.material)
     ? [...SPOOL_MATERIALS]

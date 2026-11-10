@@ -71,6 +71,7 @@ describe("signed out", () => {
       ["PATCH", `/api/attempts/${id}`],
       ["DELETE", `/api/attempts/${id}`],
       ["POST", `/api/attempts/${id}/restore`],
+      ["POST", `/api/attempts/${id}/finish`],
       ["GET", "/api/tags"],
       ["POST", "/api/tags"],
     ];
@@ -494,5 +495,92 @@ describe("purge", () => {
     const item = await getItem(build.id);
     expect(item.attempts.map((attempt) => attempt.id)).toEqual([kept.id]);
     expect(item.photos.map((photo) => photo.id)).toEqual([keptPhoto]);
+  });
+});
+
+describe("finishing a print that was queued on a device", () => {
+  const finish = (attemptId: string, json: Record<string, unknown>, who = cookie) =>
+    request(`/api/attempts/${attemptId}/finish`, { method: "POST", cookie: who, json });
+
+  it("finishes a print that is still printing, with its note, tags and the time it came off", async () => {
+    const item = await createItem({ stage: "building" });
+    const attempt = await logAttempt(item.id, { outcome: null, note: "0.2 mm", printedAt: minutesAgo(120) });
+    const cameOff = minutesAgo(30);
+    const response = await finish(attempt.id, {
+      outcome: "failed",
+      finishedAt: cameOff,
+      note: "Let go at 40%",
+      failureTags: ["bed-adhesion"],
+      successNotes: ["great-first-layer"],
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json<{ attempt: Attempt; finished: boolean }>();
+    expect(body.finished).toBe(true);
+    expect(body.attempt).toMatchObject({
+      outcome: "failed",
+      finishedAt: cameOff,
+      note: "0.2 mm · Let go at 40%",
+      failureTags: ["bed-adhesion"],
+      // A failure keeps no success notes.
+      successNotes: [],
+    });
+    expect(body.attempt.finishedBy).toBe(body.attempt.createdBy);
+  });
+
+  it("is safe to repeat: the note isn't added twice", async () => {
+    const item = await createItem({ stage: "building" });
+    const attempt = await logAttempt(item.id, { outcome: null });
+    const json = { outcome: "success", note: "Brim helped" };
+    await finish(attempt.id, json);
+    const again = await (await finish(attempt.id, json)).json<{ attempt: Attempt; finished: boolean }>();
+    expect(again.finished).toBe(true);
+    expect(again.attempt).toMatchObject({ outcome: "success", note: "Brim helped" });
+  });
+
+  it("keeps someone else's outcome, and only adds the note", async () => {
+    await addUser("sam", "another passphrase", "Sam Okafor", "sea");
+    const sam = await signIn("sam", "another passphrase");
+    const item = await createItem({ stage: "building" });
+    const attempt = await logAttempt(item.id, { outcome: null, note: "Printing" });
+    const first = await request(`/api/attempts/${attempt.id}`, {
+      method: "PATCH",
+      cookie: sam,
+      json: { outcome: "success" },
+    });
+    expect(first.status).toBe(200);
+
+    const response = await finish(attempt.id, { outcome: "failed", note: "Corner lifted", failureTags: ["warping"] });
+    const body = await response.json<{ attempt: Attempt; finished: boolean }>();
+    expect(body.finished).toBe(false);
+    expect(body.attempt).toMatchObject({ outcome: "success", note: "Printing · Corner lifted", failureTags: [] });
+    expect(body.attempt.finishedBy).not.toBe(body.attempt.createdBy);
+  });
+
+  it("answers 404 for an attempt that is gone", async () => {
+    const item = await createItem({ stage: "building" });
+    const attempt = await logAttempt(item.id, { outcome: null });
+    await request(`/api/attempts/${attempt.id}`, { method: "DELETE", cookie });
+    expect((await finish(attempt.id, { outcome: "success" })).status).toBe(404);
+    expect((await finish(attempt.id, { outcome: null })).status).toBe(400);
+  });
+});
+
+describe("finishing with tags already on the attempt", () => {
+  it("adds to the tags that are there, and the guard on them still matches an unchanged attempt", async () => {
+    const item = await createItem({ stage: "building" });
+    const attempt = await logAttempt(item.id, { outcome: null, failureTags: ["warping"] });
+    const response = await request(`/api/attempts/${attempt.id}/finish`, {
+      method: "POST",
+      cookie,
+      json: { outcome: "partial", failureTags: ["stringing"], successNotes: ["nice-surface"] },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json<{ attempt: Attempt; finished: boolean }>();
+    expect(body.finished).toBe(true);
+    expect(body.attempt).toMatchObject({
+      outcome: "partial",
+      failureTags: ["warping", "stringing"],
+      successNotes: ["nice-surface"],
+    });
   });
 });

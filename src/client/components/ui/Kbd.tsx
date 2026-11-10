@@ -6,12 +6,20 @@ interface KbdProps {
   /** "onAccent" for use on a tomato button. */
   tone?: "default" | "onAccent";
   className?: string;
+  /** Show on phones too (the styleguide's lists); elsewhere keys are for desktop only. */
+  always?: boolean;
 }
 
 /** A keyboard hint. Desktop only: hidden on phones, which have no keyboard. */
-export function Kbd({ keys, tone = "default", className }: KbdProps) {
+export function Kbd({ keys, tone = "default", className, always }: KbdProps) {
   return (
-    <span className={cn("hidden items-center gap-0.5 md:inline-flex", className)} aria-hidden>
+    <span
+      className={cn(
+        always ? "inline-flex items-center gap-0.5" : "hidden items-center gap-0.5 md:inline-flex",
+        className,
+      )}
+      aria-hidden
+    >
       {keys.map((key) => (
         <kbd
           key={key}
