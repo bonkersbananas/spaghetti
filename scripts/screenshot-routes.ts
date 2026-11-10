@@ -8,6 +8,53 @@ import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
 /** The spool that sat in A4 before the unknown-tray shot emptied it. */
 let unknownTraySlot: string | null = null;
 
+/** Opens the Notifications sheet from the account menu (phone: account sheet; desktop: the sidebar's popover). */
+async function openNotifications(page: Page, width: 390 | 1440) {
+  if (width === 390) {
+    await page.getByRole("button", { name: "Account" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Notifications/ })
+      .click();
+  } else {
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Notifications" }).click();
+  }
+  await page.getByRole("dialog", { name: "Notifications" }).waitFor();
+}
+
+/** What the browser says about notifications, set before the sheet reads it (a screenshot browser always says "denied"). */
+const withPermission = (page: Page, permission: NotificationPermission) =>
+  page.evaluate(
+    (value) => Object.defineProperty(Notification, "permission", { get: () => value, configurable: true }),
+    permission,
+  );
+
+/** A device that already has notifications on: the server knows it, and the browser has a subscription (there is no service worker in a shot). */
+async function subscribedDevice(page: Page) {
+  const endpoint = "https://push.example/screenshot-device";
+  const origin = new URL(page.url()).origin;
+  await page.request.put("/api/push/subscription", {
+    data: {
+      endpoint,
+      keys: {
+        p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+        auth: "tBHItJI5svbpez7KI4CCXg",
+      },
+      timeZone: "UTC",
+    },
+    headers: { Origin: origin },
+  });
+  await page.evaluate((url) => {
+    const subscription = { endpoint: url, unsubscribe: async () => true };
+    Object.defineProperty(navigator.serviceWorker, "getRegistration", { value: async () => ({}), configurable: true });
+    Object.defineProperty(navigator.serviceWorker, "ready", {
+      get: () => Promise.resolve({ pushManager: { getSubscription: async () => subscription } }),
+      configurable: true,
+    });
+  }, endpoint);
+}
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -736,6 +783,40 @@ export const shots: Shot[] = [
     fullPage: true,
   },
   { name: "styleguide", path: "/styleguide", fullPage: true },
+  {
+    // The moment before permission is asked for: the browser says nothing until the switch is turned on.
+    name: "notifications-off",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withPermission(page, "default");
+      await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+    },
+  },
+  {
+    name: "notifications-on",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withPermission(page, "granted");
+      await subscribedDevice(page);
+      await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await page
+        .getByRole("switch", { name: /Notify this device/ })
+        .and(page.locator("[aria-checked=true]"))
+        .waitFor();
+      await page.getByRole("switch", { name: /Also tell me/ }).click();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    // Blocked in the browser's settings: said plainly, the switch can't be turned on.
+    name: "notifications-blocked",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withPermission(page, "denied");
+      await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+    },
+  },
+  { name: "styleguide-notifications", path: "/styleguide", selector: "#notifications" },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
   { name: "styleguide-cards", path: "/styleguide", selector: "#cards" },

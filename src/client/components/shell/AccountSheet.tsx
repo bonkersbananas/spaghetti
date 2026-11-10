@@ -3,12 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, ArrowRightIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, ArrowRightIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { ChangePasswordSheet } from "./ChangePasswordSheet";
+import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -18,6 +19,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const people = useQuery({ ...peopleQuery, enabled: open });
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
+  const [notifying, setNotifying] = useState(false);
 
   return (
     <>
@@ -70,6 +72,19 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <span className="text-small text-ink-faint font-medium">Claude, the printer bridge</span>
           <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
         </Link>
+        <button
+          type="button"
+          onClick={() => {
+            onOpenChange(false);
+            setNotifying(true);
+          }}
+          className="pressable focus-ring bg-paper text-body text-ink mt-4 flex w-full items-center gap-3 rounded-md px-4 py-3.5 text-left font-semibold"
+        >
+          <BellIcon size={22} className="text-ink-soft" aria-hidden />
+          <span className="flex-1">Notifications</span>
+          <span className="text-small text-ink-faint font-medium">When a print is done</span>
+          <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
+        </button>
         <ThemeSwitch className="mt-5" />
         <Link
           to="/styleguide"
@@ -93,6 +108,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
         </button>
       </Sheet>
+      <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />
       <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
     </>
   );

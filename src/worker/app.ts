@@ -22,6 +22,7 @@ import { linkRoutes } from "./routes/links.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { printerRoutes } from "./routes/printer.ts";
+import { pushRoutes } from "./routes/push.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { spoolRoutes } from "./routes/spools.ts";
@@ -89,6 +90,7 @@ export const app = new Hono<AppEnv>()
   .use(requireAuth)
   .use(requireScope)
   .route("/account", accountRoutes)
+  .route("/push", pushRoutes)
   .route("/people", peopleRoutes)
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)

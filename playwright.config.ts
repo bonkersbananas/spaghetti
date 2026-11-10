@@ -21,12 +21,12 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
-      testIgnore: /(offline|performance|share)\.spec/,
+      testIgnore: /(offline|performance|push|share)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
       name: "phone",
-      testIgnore: /(offline|performance|share)\.spec/,
+      testIgnore: /(offline|performance|push|share)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
     },
     {
@@ -37,6 +37,31 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         baseURL: `http://127.0.0.1:${builtPort}`,
         viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      // Notifications need the service worker, so they run on the production build, at both widths.
+      name: "push-desktop",
+      testMatch: /push\.spec/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://127.0.0.1:${builtPort}`,
+        viewport: { width: 1440, height: 900 },
+        serviceWorkers: "allow",
+        permissions: ["notifications"],
+      },
+    },
+    {
+      name: "push-phone",
+      testMatch: /push\.spec/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://127.0.0.1:${builtPort}`,
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        serviceWorkers: "allow",
+        permissions: ["notifications"],
       },
     },
     {

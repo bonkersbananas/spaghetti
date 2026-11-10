@@ -25,7 +25,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 ## Next: features
 
 - [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
-- [ ] Push notifications: "Tugboat should be done, how did it go?" with outcome buttons on the notification
+- [x] Push notifications: "Tugboat is off the bed. How did it go?", with Worked / Partly / Spaghetti buttons where the platform has them ([0016](decisions/0016-web-push-nudges.md); setup in [deploy.md](deploy.md))
 - [ ] Insights and recipes: success rate by material and plate, which change fixed which failure, a year in review; promote a what-worked attempt to a named recipe on the spool's page
 - [ ] Richer ideas: an "Up next" queue, who it's for, comments between you two (link previews come with spec §4)
 - [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)

@@ -11,8 +11,10 @@ import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
+import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
+import { useServiceWorkerMessages } from "@/lib/push";
 import { sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -55,6 +57,11 @@ function Shell() {
   useEffect(() => connectOutbox(queryClient), [queryClient]);
   // Follows what the other person does, while the app is open.
   useLiveUpdates();
+  // A tapped notification says where to go; an answer given offline lands in the outbox behind this page's back.
+  useServiceWorkerMessages(
+    (path) => void navigate({ href: path }),
+    () => void outbox.pickUp(),
+  );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.
   useEffect(() => followUnresizedPhotos(queryClient), [queryClient]);
   const { setPaletteOpen, setHelpOpen } = usePalette();

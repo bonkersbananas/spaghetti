@@ -19,6 +19,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0013](0013-bambu-studio-and-orca-files-only.md) | Only Bambu Studio and Orca files are read | Accepted |
 | [0014](0014-mcp-hand-written-stateless.md) | The MCP server is hand-written, stateless and calls the API | Accepted |
 | [0015](0015-share-targets-by-device.md) | Sharing in: a share target, an iOS Shortcut and a bookmarklet | Accepted |
+| [0016](0016-web-push-nudges.md) | "How did it go?" arrives as a web push nudge, once, answerable in a tap | Accepted |
 
 ## Format
 
