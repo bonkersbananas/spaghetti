@@ -21,6 +21,8 @@ const origin = (page: Page) => new URL(page.url()).origin;
  */
 const BUDGET_KB = {
   "/sign-in": 245,
+  // Today pulls in the journal rows, the print card and the printer strip on top of what Ideas needs.
+  "/today": 340,
   "/ideas": 330,
   "/builds": 335,
   "/journal": 345,

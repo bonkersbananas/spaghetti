@@ -3,7 +3,7 @@
   "name": "Spaghetti",
   "short_name": "Spaghetti",
   "description": "Our 3D printing notebook: ideas, builds and every attempt, good or spaghetti.",
-  "start_url": "/ideas",
+  "start_url": "/today",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

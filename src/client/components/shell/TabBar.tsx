@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { PlusIcon } from "@/components/ui/icons";
 import { useCapture } from "@/lib/capture";
-import { type Section, sections } from "./sections";
+import { type Section, tabs } from "./sections";
 
 function Tab({ to, label, icon: Icon }: Section) {
   return (
@@ -22,20 +22,21 @@ function Tab({ to, label, icon: Icon }: Section) {
 }
 
 /**
- * Phone navigation, within thumb reach. The capture button sits in the
- * middle, a little larger, because capturing is the main thing people do.
+ * Phone navigation, within thumb reach: Today, Ideas, capture, Builds, Journal.
+ * The capture button sits in the middle, a little larger, because capturing is
+ * the main thing people do. Search is a tool, not a place: it is in the page header.
  */
 export function TabBar() {
   const { setOpen } = useCapture();
-  const [ideas, builds, journal, search] = sections as [Section, Section, Section, Section];
+  const [today, ideas, builds, journal] = tabs;
   return (
     <nav
       aria-label="Sections"
       className="bg-cream/92 pb-safe shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
     >
       <div className="h-tabbar mx-auto flex max-w-lg items-stretch px-2">
+        <Tab {...today} />
         <Tab {...ideas} />
-        <Tab {...builds} />
         <div className="flex flex-1 items-center justify-center">
           <button
             type="button"
@@ -46,8 +47,8 @@ export function TabBar() {
             <PlusIcon size={28} weight="bold" aria-hidden />
           </button>
         </div>
+        <Tab {...builds} />
         <Tab {...journal} />
-        <Tab {...search} />
       </div>
     </nav>
   );

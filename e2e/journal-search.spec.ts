@@ -8,6 +8,9 @@ async function signIn(page: Page) {
   await page.getByLabel("Name").fill(user.username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
+  // Signing in lands on Today; these tests start from the inbox.
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
 }
 
@@ -59,12 +62,8 @@ test("finds an attempt by a failure tag plus a material", async ({ page, isMobil
     { outcome: "failed", ago: 2 * HOUR, note: "Curled base", failureTags: ["warping"], settings: pla },
   ]);
 
-  if (isMobile)
-    await page
-      .getByRole("navigation", { name: "Sections" })
-      .filter({ visible: true })
-      .getByRole("link", { name: "Search" })
-      .click();
+  // On phones search is the button in the page header; on desktop it is the / key.
+  if (isMobile) await page.getByRole("link", { name: "Search" }).click();
   else await page.keyboard.press("/");
   const box_ = page.getByRole("searchbox", { name: "Search" });
   await expect(box_).toBeFocused();

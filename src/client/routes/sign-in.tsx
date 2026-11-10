@@ -18,14 +18,14 @@ export const Route = createFileRoute("/sign-in")({
   validateSearch: z.object({ redirect: z.string().optional() }),
   beforeLoad: async ({ context }) => {
     const user = await context.queryClient.ensureQueryData(sessionQuery);
-    if (user) throw redirect({ to: "/ideas" });
+    if (user) throw redirect({ to: "/today" });
   },
   component: SignIn,
 });
 
 /** Only same-origin paths, so a crafted link can't send people elsewhere. */
 function safeRedirect(target: string | undefined): string {
-  return target?.startsWith("/") && !target.startsWith("//") ? target : "/ideas";
+  return target?.startsWith("/") && !target.startsWith("//") ? target : "/today";
 }
 
 function SignIn() {

@@ -55,3 +55,18 @@ export function daysAgo(time: number, now = Date.now()): string {
   const days = Math.floor(Math.max(0, now - time) / DAY);
   return days === 0 ? "today" : `${days} d ago`;
 }
+
+/**
+ * How long ago, in words that stay readable for old things: "3 days ago", "5 weeks ago", "4 months ago".
+ * Under a week it is relativeTime; Today's "On the back burner" uses it for ideas weeks old.
+ */
+export function ageWords(time: number, now = Date.now()): string {
+  const days = Math.floor(Math.max(0, now - time) / DAY);
+  if (days < 7) return relativeTime(time, now);
+  if (days < 60) {
+    const weeks = Math.floor(days / 7);
+    return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`;
+  }
+  const months = Math.floor(days / 30);
+  return months < 12 ? `${months} months ago` : `${Math.floor(months / 12)} ${months < 24 ? "year" : "years"} ago`;
+}

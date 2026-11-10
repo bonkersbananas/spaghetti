@@ -10,6 +10,7 @@ import { actorOf } from "./changes.ts";
 import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
+import { accountRoutes } from "./routes/account.ts";
 import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
 import { captureRoutes } from "./routes/capture.ts";
@@ -87,6 +88,7 @@ export const app = new Hono<AppEnv>()
   .route("/session", sessionRoutes)
   .use(requireAuth)
   .use(requireScope)
+  .route("/account", accountRoutes)
   .route("/people", peopleRoutes)
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)

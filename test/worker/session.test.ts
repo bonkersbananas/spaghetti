@@ -143,3 +143,94 @@ describe("unknown endpoints", () => {
     expect(await response.json()).toMatchObject({ error: { code: "not_found" } });
   });
 });
+
+describe("changing your own password", () => {
+  const change = (cookie: string, currentPassword: string, newPassword: string) =>
+    request("/api/account/password", { method: "PUT", cookie, json: { currentPassword, newPassword } });
+
+  it("sets the new password, keeps this session and ends the others", async () => {
+    const here = await signIn("alex", "correct horse");
+    const phone = await signIn("alex", "correct horse");
+    const response = await change(here, "correct horse", "a brand new pot of pasta");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ signedOut: 1 });
+    expect((await request("/api/session", { cookie: here })).status).toBe(200);
+    expect((await request("/api/session", { cookie: phone })).status).toBe(401);
+    expect(
+      (await request("/api/session", { method: "POST", json: { username: "alex", password: "correct horse" } })).status,
+    ).toBe(401);
+    await signIn("alex", "a brand new pot of pasta");
+  });
+
+  it("refuses a wrong current password and leaves everything as it was", async () => {
+    const here = await signIn("alex", "correct horse");
+    const response = await change(here, "wrong horse", "a brand new pot of pasta");
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "wrong_password" } });
+    await signIn("alex", "correct horse");
+  });
+
+  it("wants at least 10 characters", async () => {
+    const here = await signIn("alex", "correct horse");
+    const response = await change(here, "correct horse", "123456789");
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "too_short" } });
+    expect((await change(here, "correct horse", "1234567890")).status).toBe(200);
+  });
+
+  it("refuses the same password", async () => {
+    const here = await signIn("alex", "correct horse");
+    const response = await change(here, "correct horse", "correct horse");
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "same_password" } });
+  });
+
+  it("needs a session", async () => {
+    expect((await change("", "correct horse", "a brand new pot of pasta")).status).toBe(401);
+  });
+
+  it("is refused to agent tokens", async () => {
+    const here = await signIn("alex", "correct horse");
+    const made = await request("/api/agents", {
+      method: "POST",
+      cookie: here,
+      json: { name: "Claude", scopes: ["read", "capture", "attempts", "printer"] },
+    });
+    const { token } = (await made.json()) as { token: string };
+    const response = await request("/api/account/password", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+      json: { currentPassword: "correct horse", newPassword: "a brand new pot of pasta" },
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "person_only" } });
+    await signIn("alex", "correct horse");
+  });
+
+  it("slows down guessing: five wrong passwords, then even the right one waits", async () => {
+    const here = await signIn("alex", "correct horse");
+    for (let i = 0; i < 5; i++) expect((await change(here, "nope", "a brand new pot of pasta")).status).toBe(403);
+    const response = await change(here, "correct horse", "a brand new pot of pasta");
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: { code: "rate_limited" } });
+    await signIn("alex", "correct horse");
+  });
+
+  it("holds parallel guesses to the same five", async () => {
+    const here = await signIn("alex", "correct horse");
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => change(here, "nope", "a brand new pot of pasta")),
+    );
+    const codes = results.map((r) => r.status);
+    expect(codes.filter((s) => s === 403)).toHaveLength(5);
+    expect(codes.filter((s) => s === 429)).toHaveLength(7);
+  });
+
+  it("counts failures per person", async () => {
+    await addUser("sam", "another horse", "Sam", "basil");
+    const alex = await signIn("alex", "correct horse");
+    const sam = await signIn("sam", "another horse");
+    for (let i = 0; i < 5; i++) await change(alex, "nope", "a brand new pot of pasta");
+    expect((await change(sam, "another horse", "a brand new pot of pasta")).status).toBe(200);
+  });
+});

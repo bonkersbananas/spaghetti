@@ -18,7 +18,7 @@ Authorization: Bearer spg_…
 - With an `Authorization` header only the token counts: an unknown, malformed or revoked one is `401 invalid_token`, never retried as a cookie. Revoking takes effect on the next request.
 - A token never needs CSRF headers (cookies do; a bearer header can't be sent cross-site by a browser).
 - Signed-out or no credentials: `401 signed_out`.
-- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
+- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), change a password (`PUT /api/account/password`), or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
 - `last_used` on a token moves at most every 5 minutes.
 
 ## Scopes
@@ -60,3 +60,7 @@ A spool can count itself down (decision [0009](decisions/0009-filament-tracked-i
 
 - `GET /api/builds/:id/story.md`: a build's (or idea's) whole story as one markdown document, with `read`. Works for any item id.
 - `/mcp`: the MCP server, with the same tokens; see [mcp.md](mcp.md). It calls this API as the agent, so everything above applies to it.
+
+## Changing your own password
+
+`PUT /api/account/password` with `{ currentPassword, newPassword }` (person-only). The new password needs at least 10 characters and no other rule, and must differ from the current one. It signs out the person's **other** sessions and keeps the one making the request; the answer is `{ signedOut }`, how many devices that was. Errors: `400 too_short`, `400 same_password`, `403 wrong_password`, and `429 rate_limited` after five wrong current passwords in 15 minutes (counted per person in `password_failures`, cleared on success).
