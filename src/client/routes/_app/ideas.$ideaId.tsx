@@ -1,3 +1,4 @@
+import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -239,7 +240,7 @@ function Idea({ item }: { item: ItemView }) {
           <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
             {person && <Avatar person={person} size="sm" via={via} />}
             <p>
-              {person ? `${person.name.split(" ")[0]} captured this` : "Captured"}{" "}
+              {person ? `${displayName(person)} captured this` : "Captured"}{" "}
               <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
                 {inlineTime(item.createdAt)}
               </time>

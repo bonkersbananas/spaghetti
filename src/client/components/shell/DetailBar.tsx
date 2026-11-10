@@ -16,7 +16,7 @@ interface DetailBarProps {
  */
 export function DetailBar({ back, children }: DetailBarProps) {
   return (
-    <div className="bg-paper/90 sticky top-0 z-20 -mx-5 mb-0 flex h-14 items-center justify-between gap-2 px-2 backdrop-blur-xl md:static md:mx-0 md:mb-6 md:h-auto md:bg-transparent md:px-0 md:pt-8 md:backdrop-blur-none">
+    <div className="bg-paper/90 sticky top-[var(--sg-safe-top)] z-20 -mx-5 mb-0 flex h-14 items-center justify-between gap-2 px-2 backdrop-blur-xl md:static md:mx-0 md:mb-6 md:h-auto md:bg-transparent md:px-0 md:pt-8 md:backdrop-blur-none">
       <Link
         to={back.to}
         className="pressable focus-ring text-body text-ink-soft hover:text-ink flex h-11 items-center gap-1 rounded-md pr-3 pl-1.5 font-semibold md:h-9 md:pl-1"

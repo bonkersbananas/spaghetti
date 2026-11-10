@@ -251,6 +251,24 @@ export const shots: Shot[] = [
     },
   },
   { name: "builds", path: "/builds", fullPage: true },
+  {
+    // The end of a build page on a phone: "Finish attempt" must sit above the tab bar (try it with --iphone).
+    name: "build-bottom",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    width: 390,
+    beforeShot: async (page) => {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    },
+  },
+  {
+    // The end of the Pantry on a phone: "Add spool" above the tab bar.
+    name: "pantry-bottom",
+    path: "/pantry",
+    width: 390,
+    beforeShot: async (page) => {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    },
+  },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
   {
     // A saved attempt open: the arrows in its header step to the attempt before and after.

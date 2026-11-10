@@ -92,7 +92,7 @@ test("one person's attempt and photo show up on the other's open build, without 
   const attempts = page.getByRole("list", { name: "Attempts, newest first" });
   await expect(attempts.getByText("Let go of the bed at 40%")).toBeVisible({ timeout: 25_000 });
   await expect(attempts.getByRole("img", { name: "Attempt 1" })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Sam logged an attempt")).toBeVisible();
+  await expect(page.getByText("Sam Okafor logged an attempt")).toBeVisible();
   // What Alex was typing is theirs: kept as typed, and saved.
   await expect(title).toHaveValue("Cable chain v2");
   await expect(title).toBeFocused();
@@ -104,19 +104,19 @@ test("one person's attempt and photo show up on the other's open build, without 
     .poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.title)
     .toBe("Cable chain v2");
 
-  // A photo on its own: "Sam added a photo".
+  // A photo on its own: "Sam Okafor added a photo".
   await samPage.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
     headers: { Origin: origin(samPage) },
     multipart: await photoParts(samPage),
   });
   await focus(page);
-  await expect(page.getByText("Sam added a photo")).toBeVisible();
+  await expect(page.getByText("Sam Okafor added a photo")).toBeVisible();
 
   // Deleted by the other person while it is open: the screen closes with a quiet word, no error.
   await samPage.request.delete(`/api/items/${id}`, { headers: { Origin: origin(samPage) } });
   await focus(page);
   await expect(page).toHaveURL(/\/builds$/);
-  await expect(page.getByText("Sam deleted this build")).toBeVisible();
+  await expect(page.getByText("Sam Okafor deleted this build")).toBeVisible();
   await expect(page.getByText("went wrong")).toHaveCount(0);
   await samContext.close();
 });

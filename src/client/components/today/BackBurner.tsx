@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { displayName } from "@shared/people";
 import { ageWords } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -40,7 +41,7 @@ export function BackBurner({ idea, person }: { idea: ItemView | undefined; perso
           {/* A note-only idea's words are already on its tile: say them once. */}
           {(photo || name.titled) && <p className="text-body text-ink line-clamp-2 font-semibold">{name.text}</p>}
           <p className="text-small text-ink-faint">
-            {person ? `${person.name.split(" ")[0]} · ` : ""}
+            {person ? `${displayName(person)} · ` : ""}
             {ageWords(idea.createdAt)}
           </p>
           <Button

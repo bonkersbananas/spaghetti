@@ -398,7 +398,7 @@ test("a finish queued offline keeps the other person's outcome, adds the photo a
   await sam.dispose();
 
   await context.setOffline(false);
-  await expect(page.getByText("Sam had already finished attempt 2")).toBeVisible();
+  await expect(page.getByText("Sam Okafor had already finished attempt 2")).toBeVisible();
   await expect(page.getByText("Your photo and note were added.")).toBeVisible();
   await expect.poll(async () => (await serverAttempt(page, buildId, printing)).note).toBe("Brim on · then it let go");
   const landed = await serverAttempt(page, buildId, printing);

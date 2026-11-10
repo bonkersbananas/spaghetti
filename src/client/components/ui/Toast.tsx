@@ -11,7 +11,7 @@ export function Toaster() {
       offset={isDesktop ? 24 : undefined}
       // --sg-actionbar-offset is set while a screen shows its ActionBar, so toasts never cover it.
       mobileOffset={{
-        bottom: "calc(var(--sg-tabbar-height) + var(--sg-safe-bottom) + var(--sg-actionbar-offset, 0rem) + 0.75rem)",
+        bottom: "calc(var(--sg-tabbar-height) + var(--sg-actionbar-offset, 0rem) + 0.75rem)",
       }}
       gap={8}
       icons={{
