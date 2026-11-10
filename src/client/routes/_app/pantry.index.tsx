@@ -100,7 +100,7 @@ function Pantry() {
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
           <section aria-labelledby="loaded" className="flex flex-col gap-4 md:gap-5">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-baseline justify-between gap-3 md:max-w-3xl">
               <h2 id="loaded" className="text-headline text-ink">
                 In the printer
               </h2>

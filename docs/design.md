@@ -70,6 +70,9 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | Placeholder in a field | 4.5:1 | 5.2 | 4.9 |
 | Error text | 4.5:1 | 5.7 | 8.3 |
 | Error text on cards | 4.5:1 | 6.3 | 7.5 |
+| Printer check | 4.5:1 | 5.5 | 11.4 |
+| Printer check on cards | 4.5:1 | 6.0 | 10.3 |
+| Printer check on sheets | 4.5:1 | 6.0 | 9.3 |
 | Active tab label | 4.5:1 | 6.3 | 7.5 |
 | Tomato chip | 4.5:1 | 5.2 | 6.9 |
 | Basil chip | 4.5:1 | 5.0 | 7.3 |
@@ -167,6 +170,9 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **SegmentedControl** — two to four choices side by side (main or auxiliary nozzle, no / normal / tree supports, where a capture goes). Arrow keys move between segments.
 - **NumberField / DurationField** — numbers with their unit inside the field (`suffix="°C"`), typed freely and kept as numbers; durations typed the way people say them ("2h 10", "2:10", "130") and shown as "2 h 10 min". TextField takes `size="sm"` for dense groups such as print settings.
 - **Swatch / SwatchPicker** — a filament's color as a round chip, and a 44 px well that opens the device's color picker with common filament colors first. The color is data, so it is the one inline style allowed.
+- **SpoolDisc** — a spool seen from the side, in its filament's color (data, set inline) with the faint rings of wound filament around a hub; `empty` draws a dashed ring for an empty AMS slot. Sizes `sm` (chips), `md` (rows), `lg` (AMS slots), `xl` (pantry cards), `hero` (a spool's page without a photo).
+- **RemainingMeter** — roughly how much is left on a spool: three short bars (full, half, low, empty), never grams.
+- **Caution / FromFileMark** — a gentle printer check as one semolina line with a warning icon ("The bed tops out at 120 °C."), beside the field it's about; fields take it as `caution`. Never a dialog, never blocking. `FromFileMark` is the small file glyph after a label (fields take it as `mark`) for a value that came from a slicer file and still matches it.
 - **Disclosure** — optional detail behind one tap, with a one-line summary while closed (an attempt's settings).
 - **ActionBar** — a screen's main action within thumb reach on phones, sitting on the tab bar ("Log attempt", "Start building"). Hidden on desktop, where the action lives in the page. Toasts move up above it while it shows.
 - **ChipRow / ChipDivider / FilterGroup** — rows of filter or suggestion chips: on phones a row scrolls sideways edge to edge (with a thin divider between kinds of chips), on desktop it wraps. `FilterGroup` is one kind of filter in a desktop filter column, a caption over its chips.
@@ -184,7 +190,8 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 
 - **Phone (< 768 px):** a page header with a large title and the account avatar; a bottom tab bar (Ideas, Builds, capture, Journal, Search) with the capture button in the middle.
 - **Desktop:** a fixed left sidebar on `paper-deep` with the mark, a "New idea" button, the four sections with keyboard hints, the styleguide and the signed-in person.
-- **Keyboard (desktop):** `C` capture, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search. Shortcuts are ignored while typing or while a sheet is open.
+- **Workshop:** the Pantry and the Printer sit under a quiet "Workshop" caption in the sidebar (`G P`, `G R`); on phones they are the first rows of the account sheet, so the tab bar keeps its four sections.
+- **Keyboard (desktop):** `C` capture, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search, `G P` Pantry, `G R` Printer. Shortcuts are ignored while typing or while a sheet is open.
 - **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
 - **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
 
@@ -204,6 +211,21 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **The attempt sheet** (bottom sheet on phones, right panel on desktop) asks only for the outcome, in three big buttons; the time is now. Photos, a one-line note, failure tags (when it didn't work), success notes (when it did) and settings are one tap away. A new attempt starts from the attempt before's settings, so people change only what they try differently. "Still printing" saves it now to finish later.
 - **Finishing** a build is one action, with undo; it picks the final photo (the newest photo of the last attempt that worked). A build that had spaghetti gets the one delight toast, "Al dente", with a sparkle on the Done chip.
 - **Capture follows its context**: on an idea's or a build's page it adds there (photos join it, the note goes into its notes); while something prints it adds to that print and can finish it. "New idea" is always one tap away in the sheet.
+
+## Pantry and printer
+
+- **The pantry** is the shelf of spools, named for the kitchen (and because "On the shelf" already means shelved builds). The AMS comes first, drawn as the unit itself: four bays with their spools in color, then the external spool holder as a wide row. Tap a slot to pick its spool in a sheet (the spool in it first, "Take it out" in the footer, "New spool" loads the new one straight into that slot); on desktop, drag a spool card onto a slot, or one slot onto another to swap. Below, spools are grouped by material in a grid of cards: the label photo when there is one, else the spool in its color, with what's left and where it's loaded.
+- **Adding a spool** takes seconds: snap the label (or not), a material chip, a color swatch (the color name fills itself in until you type one), done. Brand and finish are a tap more. `N` on desktop.
+- **A spool's page** edits it in place (autosave): what's left, loaded where, dried when ("Dried it today" is one tap), material, color, brand, finish, notes. Below, every attempt printed with it and how they went: "how does this silk PLA behave" is one tap.
+- **The printer page** is quiet: the X2D's facts (build volume, limits) and what people change: the nozzles fitted (size, hardened), the plates they own, the AMS units. Spaghetti never talks to the printer, and says so.
+- **Gentle checks** while logging an attempt (`printerHints` in `shared/spools.ts`, from docs/printer.md): a nozzle over 300 °C or a bed over 120 °C, TPU on the auxiliary nozzle or through the AMS, PVA through the AMS, PPS at all, abrasive filament on a nozzle that isn't hardened, a nozzle size that isn't the one fitted. Each is a Caution beside its field; with the settings closed, the first one shows under them.
+
+## Slicer files
+
+- **Drop a .3mf** (Bambu Studio or Orca, project or sliced) on a build (a new attempt), on an attempt in its story (that attempt), or on the open attempt sheet; phones pick one from the sheet's "Add the slicer file" well. The drop overlay says so while dragging over a build.
+- **One tap for the plate** of a multi-plate file: the plates' pictures as buttons. Then the file fills in the attempt: filaments (matched to pantry spools by material and a color people would call the same; unknown ones are one tap to add), plate, nozzle, layer height, infill, walls, supports, temperatures, the process preset, and the slicer's time and weight. The settings open to show it; each value from the file carries the file mark until changed. "What worked last time" steps aside: the file says what this attempt is.
+- **The file stays with the attempt** as a card: the plate's picture (what was meant to print), the name, plate and estimate, and a download button. Files over 25 MB keep only what they said, and the card says so. Parsing is all in the browser; the Worker only stores the bytes.
+- **Estimated vs actual:** finishing an attempt that was started as "still printing" fills in how long it took (when that's believable next to the estimate), and the attempt then says "Took 1 h 18 min, 6 min longer than the slicer's 1 h 12 min".
 
 ## Journal
 

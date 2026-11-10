@@ -34,7 +34,11 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
                 color={spool.photo.color || undefined}
                 className="size-full"
               />
-              <SpoolDisc color={spool.colorHex} size="sm" className="ring-cream absolute bottom-2.5 left-2.5 ring-2" />
+              <SpoolDisc
+                color={spool.colorHex}
+                size="sm"
+                className="ring-cream absolute bottom-2.5 left-2.5 z-10 ring-2"
+              />
             </>
           ) : (
             <div className="bg-ink/3 flex size-full items-center justify-center">

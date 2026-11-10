@@ -221,7 +221,13 @@ interface SlotSheetProps {
 export function SlotSheet({ slot, open, onOpenChange, spools, current, onPick, onAddSpool }: SlotSheetProps) {
   const sorted = [...spools]
     .filter((spool) => spool.remaining !== "empty" || spool.id === current?.id)
-    .sort((a, b) => Number(!!a.slot) - Number(!!b.slot) || a.material.localeCompare(b.material));
+    // What's in it now first, then spools that aren't loaded, then ones in other slots.
+    .sort(
+      (a, b) =>
+        Number(b.id === current?.id) - Number(a.id === current?.id) ||
+        Number(!!a.slot) - Number(!!b.slot) ||
+        a.material.localeCompare(b.material),
+    );
   return (
     <Sheet
       open={open}
