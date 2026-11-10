@@ -39,6 +39,8 @@ test("signs in, browses the four sections, opens capture and signs out", async (
     await expect(page.getByRole("heading", { name: emptyTitle })).toBeVisible();
   }
   await page.goto("/ideas");
+  // Hotkeys wait for the page: let the inbox show before pressing C.
+  await expect(page.getByRole("heading", { name: "Nothing simmering yet" })).toBeVisible();
 
   // Capture: the tab bar button on phones, the C key on desktop.
   if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
