@@ -2,10 +2,11 @@ import { useState } from "react";
 import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
 import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
+import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
-import { Panel, Section } from "./shared";
+import { Label, Panel, Section } from "./shared";
 
 export function SheetSection() {
   const [dialog, setDialog] = useState(false);
@@ -48,6 +49,24 @@ export function SheetSection() {
           First idea (delight)
         </Button>
       </Panel>
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <Panel>
+          <Label>Menu rows in a sheet (phones)</Label>
+          <MenuGroup>
+            <MenuItem icon={Icons.AgentIcon}>Agents</MenuItem>
+            <MenuItem icon={Icons.BellIcon}>Notifications</MenuItem>
+            <MenuItem icon={Icons.KeyIcon}>Change password</MenuItem>
+          </MenuGroup>
+        </Panel>
+        <Panel>
+          <Label>Menu rows in a popover (desktop)</Label>
+          <MenuGroup size="sm" className="max-w-64">
+            <MenuItem icon={Icons.AgentIcon}>Agents</MenuItem>
+            <MenuItem icon={Icons.BellIcon}>Notifications</MenuItem>
+            <MenuItem icon={Icons.SignOutIcon}>Sign out</MenuItem>
+          </MenuGroup>
+        </Panel>
+      </div>
       <ChangePasswordSheet open={password} onOpenChange={setPassword} />
       <Sheet
         open={dialog}

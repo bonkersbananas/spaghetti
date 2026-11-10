@@ -1,9 +1,9 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, ArrowRightIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -45,68 +45,42 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               ))
             : [0, 1].map((i) => <RowSkeleton key={i} />)}
         </ul>
-        <nav aria-label="Workshop" className="mt-4 flex flex-col gap-2">
-          {workshop.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              onClick={() => onOpenChange(false)}
-              className="pressable focus-ring bg-paper text-body text-ink flex items-center gap-3 rounded-md px-4 py-3.5 font-semibold"
-            >
-              <Icon size={22} className="text-ink-soft" aria-hidden />
-              <span className="flex-1">{label}</span>
-              <span className="text-small text-ink-faint font-medium">
-                {to === "/pantry" ? "Spools and the AMS" : "Nozzles and plates"}
-              </span>
-              <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
-            </Link>
+        <MenuGroup label="Workshop" className="mt-4">
+          {workshop.map(({ to, label, icon }) => (
+            <MenuItem key={to} to={to} icon={icon} onClick={() => onOpenChange(false)}>
+              {label}
+            </MenuItem>
           ))}
-        </nav>
-        <Link
-          to="/agents"
-          onClick={() => onOpenChange(false)}
-          className="pressable focus-ring bg-paper text-body text-ink mt-4 flex items-center gap-3 rounded-md px-4 py-3.5 font-semibold"
-        >
-          <AgentIcon size={22} className="text-ink-soft" aria-hidden />
-          <span className="flex-1">Agents</span>
-          <span className="text-small text-ink-faint font-medium">Claude, the printer bridge</span>
-          <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            onOpenChange(false);
-            setNotifying(true);
-          }}
-          className="pressable focus-ring bg-paper text-body text-ink mt-4 flex w-full items-center gap-3 rounded-md px-4 py-3.5 text-left font-semibold"
-        >
-          <BellIcon size={22} className="text-ink-soft" aria-hidden />
-          <span className="flex-1">Notifications</span>
-          <span className="text-small text-ink-faint font-medium">When a print is done</span>
-          <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
-        </button>
-        <ThemeSwitch className="mt-5" />
-        <Link
-          to="/styleguide"
-          onClick={() => onOpenChange(false)}
-          className="pressable focus-ring bg-paper text-body text-ink mt-4 flex items-center gap-3 rounded-md px-4 py-3.5 font-medium"
-        >
-          <PaletteIcon size={22} className="text-ink-faint" aria-hidden />
-          <span className="flex-1">Styleguide</span>
-          <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            onOpenChange(false);
-            setChangingPassword(true);
-          }}
-          className="pressable focus-ring bg-paper text-body text-ink mt-4 flex w-full items-center gap-3 rounded-md px-4 py-3.5 text-left font-medium"
-        >
-          <KeyIcon size={22} className="text-ink-faint" aria-hidden />
-          <span className="flex-1">Change password</span>
-          <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
-        </button>
+        </MenuGroup>
+        <MenuGroup className="mt-5">
+          <MenuItem to="/agents" icon={AgentIcon} onClick={() => onOpenChange(false)}>
+            Agents
+          </MenuItem>
+          <MenuItem
+            icon={BellIcon}
+            onClick={() => {
+              onOpenChange(false);
+              setNotifying(true);
+            }}
+          >
+            Notifications
+          </MenuItem>
+          <MenuItem
+            icon={KeyIcon}
+            onClick={() => {
+              onOpenChange(false);
+              setChangingPassword(true);
+            }}
+          >
+            Change password
+          </MenuItem>
+        </MenuGroup>
+        <ThemeSwitch className="mt-6" />
+        <MenuGroup className="mt-6">
+          <MenuItem to="/styleguide" icon={PaletteIcon} onClick={() => onOpenChange(false)}>
+            Styleguide
+          </MenuItem>
+        </MenuGroup>
       </Sheet>
       <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />
       <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
