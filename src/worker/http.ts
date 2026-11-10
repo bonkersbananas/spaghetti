@@ -28,6 +28,7 @@ export function toApiPhoto(photo: Photo): ApiPhoto {
     color: photo.color,
     takenAt: photo.takenAt?.getTime() ?? null,
     attemptId: photo.attemptId,
+    needsResize: photo.needsResize,
     createdBy: photo.createdBy,
     createdAt: photo.createdAt.getTime(),
   };

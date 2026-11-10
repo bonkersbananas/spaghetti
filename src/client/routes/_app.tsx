@@ -12,6 +12,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
 import { PaletteProvider, usePalette } from "@/lib/palette";
+import { followUnresizedPhotos } from "@/lib/photo-resize";
 import { sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -52,6 +53,8 @@ function Shell() {
   useEffect(() => connectOutbox(queryClient), [queryClient]);
   // Follows what the other person does, while the app is open.
   useLiveUpdates();
+  // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.
+  useEffect(() => followUnresizedPhotos(queryClient), [queryClient]);
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();
   useHotkeys({

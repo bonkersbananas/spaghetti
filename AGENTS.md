@@ -147,7 +147,7 @@ Never edit a migration that has been merged; add a new one.
 - An idea is a row in `items` with `stage = "idea"`; phase 3 moves the same row through `building`, `done`, `shelved`. Photos are their own table (`item_id`, `position`, size, average `color`, `taken_at`), stored in R2 as `photos/<id>/large` and `/thumb`.
 - The client picks ids (UUIDs) for items and photos, so every write is idempotent and safe to retry. New captures and added photos go through `outbox` (never straight to the API): it shows them at once, persists them in IndexedDB and sends them in the background. `useIdeas()` / `useItem()` merge the server's data with what the outbox still holds.
 - Deletes are soft (`deleted_at`); restore endpoints are the undo. `purgeDeleted` removes rows and R2 objects 30 days later, from the daily cron.
-- Photos are never processed in the Worker: resize in the browser with `processPhoto` (lib/images.ts).
+- Photos are never processed in the Worker: resize in the browser with `processPhoto` (lib/images.ts). A photo that arrives without a browser (an agent, the printer bridge) is uploaded with `needsResize=1`: it is stored as is, `photos.needs_resize` is set, its R2 objects are marked `provisional` (served `no-cache`, never kept by the service worker) and `lib/photo-resize.ts` has the next browser resize it in idle time and upload the real variants (the claim endpoint `POST /api/photos/:id/resize-claim` keeps two people from both doing it).
 
 ### Builds and attempts
 

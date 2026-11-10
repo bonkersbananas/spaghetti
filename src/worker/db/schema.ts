@@ -138,6 +138,14 @@ export const photos = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
     /** The print attempt it shows, or null for the item's own photos. */
     attemptId: text("attempt_id").references(() => attempts.id, { onDelete: "cascade" }),
+    /**
+     * It arrived without a browser to resize it (an agent, later the printer bridge): the bytes in R2 are
+     * the original, stored as both variants, and `color` is a placeholder. The next signed-in browser
+     * that sees it resizes it and uploads the real variants, which clears this.
+     */
+    needsResize: integer("needs_resize", { mode: "boolean" }).notNull().default(false),
+    /** When a browser took the job of resizing it, so two people's browsers don't both do it. */
+    resizeClaimedAt: integer("resize_claimed_at", { mode: "timestamp_ms" }),
   },
   (table) => [index("photos_item_idx").on(table.itemId, table.position)],
 );
