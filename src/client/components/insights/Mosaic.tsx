@@ -15,7 +15,7 @@ interface MosaicProps {
 /**
  * What got made this year: the final photo of each finished build, newest
  * first, as square thumbnails that open their build. A tight grid on phones,
- * larger on the desk; the rest are counted, not listed.
+ * larger on the desk; the rest are counted, not listed (no link: no screen lists exactly those).
  */
 export function Mosaic({ builds, total }: MosaicProps) {
   const shown = builds.slice(0, MOSAIC_SHOWN);
@@ -40,15 +40,7 @@ export function Mosaic({ builds, total }: MosaicProps) {
           </li>
         ))}
       </ul>
-      {more > 0 && (
-        <Link
-          to="/journal"
-          search={{ outcome: "success" }}
-          className="text-small text-ink-soft hover:text-ink focus-ring w-fit rounded-sm"
-        >
-          and {more} more
-        </Link>
-      )}
+      {more > 0 && <p className="text-small text-ink-soft m-0">and {more} more</p>}
     </div>
   );
 }

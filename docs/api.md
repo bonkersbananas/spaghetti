@@ -65,7 +65,7 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 
 ## Insights
 
-`GET /api/insights?year=2026&tz=-60` (read scope) is the year so far, computed from attempts and not stored: `{ insights: { year, prints, outcomes, months, byMaterial, byPlate, failures, longestBuilds } }`. `year` defaults to the current one and `tz` is the viewer's zone in minutes behind UTC (`Date.getTimezoneOffset()`), so a print late on New Year's Eve lands in their year. Each failure carries `fixes`: the changes (as phrases such as "a warmer bed") made right before an attempt of the same build that worked. The logic is `src/shared/insights.ts`.
+`GET /api/insights?year=2026&tz=-60` (read scope) is the year so far, computed from attempts and not stored: `{ insights: { year, prints, outcomes, months, byMaterial, byPlate, failures, longestBuilds, made, madeTotal } }`. `year` defaults to the current one and `tz` is the viewer's zone in minutes behind UTC (`Date.getTimezoneOffset()`), so a print late on New Year's Eve lands in their year. Each failure carries `fixes`: the changes (as phrases such as "a warmer bed") made right before an attempt of the same build that worked. `longestBuilds` (builds with three or more attempts this year) each carry a `photo` and the `outcomes` of their attempts, oldest first. `made` is the builds that had an attempt that worked this year, newest first, up to 36, each with its final photo (the cover if one was picked, else the newest picture of the attempt that worked); `madeTotal` counts them all. The logic is `src/shared/insights.ts`.
 
 ## Up next and "for"
 
