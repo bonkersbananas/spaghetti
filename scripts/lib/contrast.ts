@@ -114,6 +114,9 @@ export const pairs: Pair[] = [
   { label: "Print progress label", fg: "ink-soft", bg: "cream", min: 4.5 },
   { label: "Print progress label, due", fg: "semolina-ink", bg: "cream", min: 4.5 },
   { label: "Print progress label on paper, due", fg: "semolina-ink", bg: "paper", min: 4.5 },
+  { label: "A changed value in the compare sheet", fg: "ink", bg: "semolina-soft/0.7", under: "lifted", min: 4.5 },
+  { label: "Same-in-both settings, opened, on a sheet", fg: "ink-soft", bg: "ink/0.03", under: "lifted", min: 4.5 },
+  { label: "Column names and labels in the compare sheet", fg: "ink-faint", bg: "lifted", min: 4.5 },
   { label: "Attempt count on the outcome strip", fg: "ink-faint", bg: "cream", min: 4.5 },
 ];
 

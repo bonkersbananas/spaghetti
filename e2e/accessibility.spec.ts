@@ -132,6 +132,15 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto(`/builds/${data.buildId}`);
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
     await expectAccessible(page, "A build");
+    // The compare sheet (a changes line is the way in; the seeded build changed its bed temperature and brim).
+    await page
+      .getByRole("button", { name: /Compare$/ })
+      .first()
+      .click();
+    await expect(page.getByRole("dialog", { name: "Attempt 1 and attempt 2" })).toBeVisible();
+    await expectAccessible(page, "The compare sheet", "[role=dialog]");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
 
     await screen(page, "/journal", "Journal");
     await expect(page.getByText("Corners lifted").first()).toBeVisible();

@@ -66,7 +66,9 @@ export function OutcomeStrip({ attempts, onPick, className }: OutcomeStripProps)
               title={name}
               aria-label={name}
               onClick={() => onPick(attempt.id)}
-              className={cn(dot, "touch-target focus-ring")}
+              // A 44 px tall target a dot-and-gap wide: the dots sit 16 px apart, so wider targets would overlap and
+              // the last one would take every tap.
+              className={cn(dot, "focus-ring after:absolute after:-inset-x-0.75 after:-inset-y-4.5 after:content-['']")}
             />
           );
         })}

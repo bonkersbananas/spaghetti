@@ -78,6 +78,7 @@ export const SHORTCUTS = define([
   { id: "buildLog", group: "build", label: "Log or finish an attempt", keys: ["a"] },
   { id: "buildNext", group: "build", label: "Next attempt", keys: ["j", "arrowdown"] },
   { id: "buildPrevious", group: "build", label: "Previous attempt", keys: ["k", "arrowup"] },
+  { id: "buildCompare", group: "build", label: "Compare with the attempt before", keys: ["v"] },
   { id: "buildOpen", group: "build", label: "Open the picked attempt", keys: ["enter"] },
   { id: "buildPhotoPrevious", group: "build", label: "Previous photo", keys: ["arrowleft"] },
   { id: "buildPhotoNext", group: "build", label: "Next photo", keys: ["arrowright"] },
