@@ -62,6 +62,14 @@ describe("Up next", () => {
     expect(await queue()).toEqual(["a", "b", "c"]);
   });
 
+  it("a change that starts a build never leaves it queued, whatever upNext it carries", async () => {
+    const id = await idea("a");
+    await patch(id, { upNext: true });
+    const started = await (await patch(id, { stage: "building", upNext: 1 })).json<ItemResponse>();
+    expect(started.item).toMatchObject({ stage: "building", upNext: null });
+    expect(await queue()).toEqual([]);
+  });
+
   it("only ideas are queued", async () => {
     const build = crypto.randomUUID();
     await request("/api/items", { method: "POST", json: { id: build, stage: "building" }, cookie });

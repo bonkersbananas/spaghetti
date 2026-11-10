@@ -340,9 +340,7 @@ export const itemRoutes = new Hono<AppEnv>()
           ...(stage ? stageDates(current, stage, now) : {}),
           // Starting a build takes the idea off the queue (unless this same change puts it back: the undo).
           ...(stage && stage !== "idea" ? { upNext: null } : {}),
-          ...(upNext !== undefined && (current.stage === "idea" || stage === "idea")
-            ? { upNext: upNextValue(upNext) }
-            : {}),
+          ...(upNext !== undefined && (stage ?? current.stage) === "idea" ? { upNext: upNextValue(upNext) } : {}),
           ...(coverPhotoId !== undefined ? { coverPhotoId } : {}),
           updatedAt: now,
         })
