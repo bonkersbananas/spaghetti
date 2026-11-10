@@ -45,7 +45,8 @@ function ActivityLine({ item }: { item: ItemView }) {
   return (
     <MetaList>
       <span className="whitespace-nowrap">Attempt {last.number}</span>
-      <span className="whitespace-nowrap">{when}</span>
+      {/* "done around 10:38 AM" may wrap in a narrow card; a relative time never does. */}
+      <span className={cn(last.outcome !== null && "whitespace-nowrap")}>{when}</span>
     </MetaList>
   );
 }
