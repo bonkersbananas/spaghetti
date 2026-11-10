@@ -40,6 +40,38 @@ async function copyText(text: string) {
   }
 }
 
+/** The one command that points Claude Code at this app's MCP server, with the token filled in. */
+function ConnectClaude({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false);
+  const command = `claude mcp add --transport http spaghetti ${window.location.origin}/mcp --header "Authorization: Bearer ${token}"`;
+  return (
+    <section aria-labelledby="connect-claude" className="border-ink/6 flex flex-col gap-2.5 border-t pt-4">
+      <h3 id="connect-claude" className="text-small text-ink-soft font-sans font-semibold">
+        Connect Claude
+      </h3>
+      <p className="text-small text-ink-faint">To let Claude search, capture and log prints, run this once:</p>
+      <p
+        data-testid="connect-command"
+        className="text-caption text-ink-soft bg-ink/4 rounded-md p-3 font-mono leading-relaxed wrap-anywhere whitespace-pre-wrap select-all"
+      >
+        {command}
+      </p>
+      <Button
+        variant="quiet"
+        size="sm"
+        icon={copied ? CheckIcon : CopyIcon}
+        className="self-start"
+        onClick={async () => {
+          await copyText(command);
+          setCopied(true);
+        }}
+      >
+        {copied ? "Copied" : "Copy command"}
+      </Button>
+    </section>
+  );
+}
+
 /**
  * Making a token: a name (for a new agent) and what it may do, then the token itself,
  * once, with a Copy button. A bottom sheet on phones, a dialog on desktop.
@@ -143,6 +175,7 @@ export function AgentSheet({ open, onOpenChange, agent }: AgentSheetProps) {
             Use it as <span className="font-mono">Authorization: Bearer …</span>. Afterwards only its first letters are
             kept, so you can tell tokens apart. Lost it? Make another and revoke this one.
           </p>
+          <ConnectClaude token={shown.token} />
         </div>
       ) : (
         <form

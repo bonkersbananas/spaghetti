@@ -22,6 +22,7 @@ import { printerRoutes } from "./routes/printer.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { spoolRoutes } from "./routes/spools.ts";
+import { storyRoutes } from "./routes/story.ts";
 import { tagRoutes } from "./routes/tags.ts";
 
 /**
@@ -97,6 +98,7 @@ export const app = new Hono<AppEnv>()
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)
   .route("/journal", journalRoutes)
+  .route("/builds", storyRoutes)
   .route("/", searchRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))
   .onError((err, c) => {

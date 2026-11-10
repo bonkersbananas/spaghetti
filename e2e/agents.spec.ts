@@ -60,6 +60,20 @@ test("makes an agent, copies its token once, revokes it with an undo, and it sto
   await shown.getByRole("button", { name: "Copy token" }).click();
   await expect(shown.getByRole("button", { name: "Copied" })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(token);
+  // The quiet "Connect Claude" snippet, filled in with this app's address and the token, with its own Copy.
+  const command = `claude mcp add --transport http spaghetti ${origin(page)}/mcp --header "Authorization: Bearer ${token}"`;
+  await expect(shown.getByRole("heading", { name: "Connect Claude" })).toBeVisible();
+  await expect(shown.getByTestId("connect-command")).toHaveText(command);
+  await shown.getByRole("button", { name: "Copy command" }).click();
+  await expect(shown.getByRole("button", { name: "Copied" }).last()).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+  // ...and it works: the MCP endpoint answers to this token.
+  const hello = await page.request.post("/mcp", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+  });
+  expect(hello.status()).toBe(200);
+  expect((await hello.json()).result.tools.length).toBeGreaterThan(5);
   await shown.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
