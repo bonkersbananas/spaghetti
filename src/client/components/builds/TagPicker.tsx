@@ -1,7 +1,7 @@
 import { type TagKind, tagLabel } from "@shared/attempts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ToggleChip } from "@/components/ui/Chip";
+import { collapseChips, MoreChip, ToggleChip } from "@/components/ui/Chip";
 import { PlusIcon } from "@/components/ui/icons";
 import { addTag, useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -31,8 +31,11 @@ export function TagPicker({ kind, value, onChange, label, visible = 8, className
 
   // Picked tags someone else added, before the list of tags has them.
   const unknown = value.filter((slug) => !options.some((option) => option.slug === slug));
-  const shown = expanded ? options : options.filter((option, index) => index < visible || value.includes(option.slug));
-  const hidden = options.length - shown.length;
+  const { shown, hidden } = collapseChips(options, {
+    visible,
+    picked: (option) => value.includes(option.slug),
+    expanded,
+  });
 
   const toggle = (slug: string) => onChange(value.includes(slug) ? value.filter((s) => s !== slug) : [...value, slug]);
 
@@ -55,11 +58,7 @@ export function TagPicker({ kind, value, onChange, label, visible = 8, className
             </ToggleChip>
           );
         })}
-        {hidden > 0 && (
-          <ToggleChip selected={false} onClick={() => setExpanded(true)} className="text-ink-faint">
-            {hidden} more
-          </ToggleChip>
-        )}
+        {hidden > 0 && <MoreChip hidden={hidden} onClick={() => setExpanded(true)} />}
         {adding ? (
           <input
             // biome-ignore lint/a11y/noAutofocus: it appears because someone tapped "Add your own".

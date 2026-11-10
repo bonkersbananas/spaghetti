@@ -146,3 +146,34 @@ test("adds a capture to the print that's running and finishes it", async ({ page
     })
     .toEqual(["success", "Looks clean so far"]);
 });
+
+test("a print on the bed shows its progress only when there is an estimate", async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  const timed = crypto.randomUUID();
+  const untimed = crypto.randomUUID();
+  for (const [id, title, settings] of [
+    [timed, "Timed tugboat", { estimatedMinutes: 75 }],
+    [untimed, "Untimed hook", {}],
+  ] as const) {
+    await page.request.post("/api/items", { headers, data: { id, title, stage: "building" } });
+    await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome: null, settings },
+    });
+  }
+
+  await page.goto(`/builds/${timed}`);
+  const bar = page.getByRole("progressbar", { name: "Print progress" });
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveAttribute("aria-valuetext", /^About \d+ (h \d+ )?min left$|^Done around /);
+  await expect(page.getByText(/^About .* left$|^Done around /)).toBeVisible();
+
+  // The builds list says how long is left instead of when it started.
+  await page.goto("/builds");
+  await expect(page.getByRole("link", { name: /Timed tugboat/ })).toContainText(/about .* left|done around/);
+
+  // No estimate, nothing to measure: words only, no bar.
+  await page.goto(`/builds/${untimed}`);
+  await expect(page.getByText("On the bed now")).toBeVisible();
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+});

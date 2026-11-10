@@ -19,7 +19,7 @@ import { AmsLoadout } from "@/components/pantry/Ams";
 import { AttemptResult } from "@/components/search/Results";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { Button, IconButton } from "@/components/ui/Button";
-import { ToggleChip } from "@/components/ui/Chip";
+import { collapseChips, MoreChip, ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { CameraIcon, DriedIcon, ImageIcon, TrashIcon } from "@/components/ui/icons";
@@ -95,6 +95,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
+  const [allMaterials, setAllMaterials] = useState(false);
+  const [allFinishes, setAllFinishes] = useState(false);
   const [value, setValue] = useState<Editable>({
     material: spool.material,
     brand: spool.brand,
@@ -134,6 +136,18 @@ function SpoolPage({ spool }: { spool: Spool }) {
   const materials: string[] = (SPOOL_MATERIALS as readonly string[]).includes(value.material)
     ? [...SPOOL_MATERIALS]
     : [...SPOOL_MATERIALS, value.material];
+  // On desktop a row of ten chips wraps with one orphan, so only the first six show (and the picked one).
+  const visibleChips = isDesktop ? 6 : Number.POSITIVE_INFINITY;
+  const materialChips = collapseChips(materials, {
+    visible: visibleChips,
+    picked: (material) => material === value.material,
+    expanded: allMaterials,
+  });
+  const finishChips = collapseChips(FINISHES, {
+    visible: visibleChips,
+    picked: (finish) => finish === value.finish,
+    expanded: allFinishes,
+  });
 
   return (
     <article className="pb-6">
@@ -262,7 +276,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               <span className="text-small text-ink-soft px-0.5 font-semibold">Material</span>
               {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
               <div className="flex flex-wrap gap-2" role="group" aria-label="Material">
-                {materials.map((material) => (
+                {materialChips.shown.map((material) => (
                   <ToggleChip
                     key={material}
                     selected={value.material === material}
@@ -271,6 +285,9 @@ function SpoolPage({ spool }: { spool: Spool }) {
                     {material}
                   </ToggleChip>
                 ))}
+                {materialChips.hidden > 0 && (
+                  <MoreChip hidden={materialChips.hidden} onClick={() => setAllMaterials(true)} />
+                )}
               </div>
             </div>
 
@@ -298,7 +315,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               <span className="text-small text-ink-soft px-0.5 font-semibold">Finish</span>
               {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
               <div className="flex flex-wrap gap-2" role="group" aria-label="Finish">
-                {FINISHES.map((finish) => (
+                {finishChips.shown.map((finish) => (
                   <ToggleChip
                     key={finish}
                     selected={value.finish === finish}
@@ -307,6 +324,9 @@ function SpoolPage({ spool }: { spool: Spool }) {
                     {finishLabel(finish)}
                   </ToggleChip>
                 ))}
+                {finishChips.hidden > 0 && (
+                  <MoreChip hidden={finishChips.hidden} onClick={() => setAllFinishes(true)} />
+                )}
               </div>
             </div>
           </fieldset>
