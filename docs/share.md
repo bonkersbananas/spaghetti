@@ -30,7 +30,7 @@ Build them in the Shortcuts app. The iPhone's menus change between iOS versions,
 3. Add **Get Contents of URL**, with the URL `https://spaghetti.day/api/capture`.
 4. **Show More**: Method **POST**; add a header `Authorization` with the value `Bearer spg_…` (your token).
 5. **Request Body**: **Form**. Add a **Text** field named `text` and set its value to **Shortcut Input**.
-6. Optional: **Show Notification** "Saved to Spaghetti".
+6. Last, **Show Notification** with **Contents of URL** as its text. It says "Saved to Spaghetti: …" or what went wrong (for example that the key was refused), so a failure shows on the phone instead of being silent.
 
 **Share photo to Spaghetti** (photos)
 
@@ -38,7 +38,7 @@ Build them in the Shortcuts app. The iPhone's menus change between iOS versions,
 2. Add **Convert Image** to **JPEG** (the iPhone's photos are HEIC, which Spaghetti doesn't store), with **Shortcut Input** as the image.
 3. Add **Get Contents of URL** with the same URL, POST and `Authorization` header.
 4. **Request Body**: **File**, and choose the **Converted Image**.
-5. Optional: the same notification.
+5. Last, the same **Show Notification** with **Contents of URL**.
 
 To use them: in Safari, Photos or any app, tap Share and choose the shortcut (**Edit Actions** in the share sheet's list puts it first). The idea is saved on the server at once.
 
@@ -48,20 +48,26 @@ On the Agents page, drag **Save to Spaghetti** to the bookmarks bar (or copy it 
 
 ## `POST /api/capture`
 
-For the Shortcuts, and for anything else that has a token. Scope `capture` (people may use it with their session). Three body shapes:
+For the Shortcuts, and for anything else that has a token. Scope `capture` (people may use it with their session). It reads the body in any of these shapes (`readBody` in `src/worker/routes/capture.ts`, with the tests in `test/worker/capture.test.ts`):
 
 | Content-Type | Body |
 | --- | --- |
 | `application/json` | `{ "url"?, "text"?, "title"?, "id"?, "image"? }` (`image` is a base64 JPEG or WebP) |
-| `multipart/form-data` | the same text fields, and image files in any file field (up to 10) |
-| `image/jpeg`, `image/webp` | the photo itself; `url`, `text`, `title`, `id` in the query string |
+| `application/x-www-form-urlencoded` | the same text fields: what a Shortcuts **Form** body with only text fields sends |
+| `multipart/form-data` | the same text fields, and photos in any file part. A part that isn't an image is read as text (Shortcuts can send a URL or rich text as a file part): as `text`, `url` or `title` by its field name, otherwise as loose text |
+| `image/jpeg`, `image/webp` (or any body that starts like an image) | the photo itself |
+| `text/plain`, `text/uri-list` | the words, or the link when it is only a link |
+
+`id`, `title`, `text` and `url` may also be in the query string. A `text` that is only a link is the link.
 
 ```sh
 curl -X POST https://spaghetti.day/api/capture \
   -H "Authorization: Bearer spg_…" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://makerworld.com/en/models/123","title":"Drawer bins"}'
-# 201 {"id":"…","url":"https://spaghetti.day/ideas/…","photos":0}
+# 201 {"id":"…","url":"https://spaghetti.day/ideas/…","photos":0,"message":"Saved to Spaghetti: Drawer bins"}
 ```
 
-The note is the text, then the link (once); the title is the title if there is one. At least one of link, text, title or photo is needed (`400 invalid`). Photos are stored as they came, JPEG or WebP only (`415 unsupported` otherwise: HEIC must be converted first), and flagged `needsResize`: the next browser that opens the app resizes them ([decision 0004](decisions/0004-photos-resized-in-the-browser.md)). An `id` (a UUID) makes the call safe to repeat. The idea is the token owner's, marked "via" the token's agent.
+The answer depends on who asks: a JSON request (or `Accept: application/json`) gets the JSON above, and an error as `{ "error": { "code", "message" } }`; anything else, such as a Shortcut, gets one plain sentence, `Saved to Spaghetti: Drawer bins`, or on failure `Spaghetti couldn't save that: there was no link, text, title or photo in it.` with the same status (so a notification can show it).
+
+The note is the text, then the link (once); the title is the title if there is one. At least one of link, text, title or photo is needed (`400`). Photos are stored as they came, JPEG or WebP only (`415` otherwise: HEIC must be converted first), and flagged `needsResize`: the next browser that opens the app resizes them ([decision 0004](decisions/0004-photos-resized-in-the-browser.md)). An `id` (a UUID) makes the call safe to repeat. The idea is the token owner's, marked "via" the token's agent.

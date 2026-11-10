@@ -54,7 +54,9 @@ export function shortcutRecipes(origin: string, token: string): ShortcutRecipe[]
         { text: "Tap (i), turn on Show in Share Sheet, and under Share Sheet Types keep only URLs and Text." },
         ...post,
         { text: "Set Request Body to Form. Add a Text field named text, and set its value to Shortcut Input." },
-        { text: "Optional: add Show Notification saying Saved to Spaghetti." },
+        {
+          text: "Last, add Show Notification and set its text to Contents of URL. It says Saved to Spaghetti, or what went wrong, so a failure is never silent.",
+        },
       ],
     },
     {
@@ -67,7 +69,9 @@ export function shortcutRecipes(origin: string, token: string): ShortcutRecipe[]
         },
         ...post,
         { text: "Set Request Body to File, and choose the Converted Image." },
-        { text: "Optional: add Show Notification saying Saved to Spaghetti." },
+        {
+          text: "Last, add Show Notification and set its text to Contents of URL. It says Saved to Spaghetti, or what went wrong, so a failure is never silent.",
+        },
       ],
     },
   ];
