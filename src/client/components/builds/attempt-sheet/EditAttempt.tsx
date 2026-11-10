@@ -1,7 +1,8 @@
 import type { Outcome } from "@shared/attempts";
+import { offTheBedLabel } from "@shared/print-progress";
 import { fullTime, relativeTime } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
@@ -25,16 +26,16 @@ export function EditAttempt({
   attempt,
   open,
   onOpenChange,
-  incomingFile,
   initialOutcome,
+  incomingFile,
 }: {
   item: ItemView;
   attempt: AttemptView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  incomingFile?: { file: File; key: number } | null;
-  /** For a print still printing: the outcome picked already (from Today's "How did it go?"). */
+  /** Picked on the card of a print that is off the bed: the attempt is finished with it as the sheet opens. */
   initialOutcome?: Outcome | null;
+  incomingFile?: { file: File; key: number } | null;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -42,21 +43,13 @@ export function EditAttempt({
   const printing = attempt.outcome === null;
   // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
   const readOnly = offline ? (printing ? "finish" : "all") : undefined;
-  const [value, setValue] = useState(() => {
-    // Finishing from Today with the outcome already picked: how long it took is worked out as the sheet's own picker would.
-    const picked = printing ? (initialOutcome ?? null) : null;
-    const actual =
-      picked && attempt.settings.actualMinutes === undefined
-        ? elapsedIfPlausible(attempt.printedAt, attempt.settings.estimatedMinutes)
-        : undefined;
-    return {
-      outcome: picked ?? attempt.outcome,
-      printedAt: attempt.printedAt,
-      note: attempt.note,
-      failureTags: attempt.failureTags,
-      successNotes: attempt.successNotes,
-      settings: actual !== undefined ? { ...attempt.settings, actualMinutes: actual } : attempt.settings,
-    };
+  const [value, setValue] = useState({
+    outcome: attempt.outcome,
+    printedAt: attempt.printedAt,
+    note: attempt.note,
+    failureTags: attempt.failureTags,
+    successNotes: attempt.successNotes,
+    settings: attempt.settings,
   });
   // While finishing offline nothing autosaves: what was typed waits for the finish button (or for the
   // connection, when it comes back and the usual autosave takes over).
@@ -89,9 +82,27 @@ export function EditAttempt({
       printing && value.settings.actualMinutes === undefined
         ? elapsedIfPlausible(attempt.printedAt, value.settings.estimatedMinutes)
         : undefined;
-    change({ outcome, ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}) });
+    // A failure tag the printer suggested is offered (marked as a suggestion) once it didn't go well; it's the
+    // person's to take off.
+    const suggested =
+      outcome !== "success" && attempt.suggestedFailureTag && value.failureTags.length === 0
+        ? { failureTags: [attempt.suggestedFailureTag] }
+        : {};
+    change({
+      outcome,
+      ...suggested,
+      ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}),
+    });
   };
   const { estimatedMinutes, actualMinutes } = value.settings;
+  // The outcome was picked on the card: take it as the sheet opens, once.
+  const picked = useRef(false);
+  useEffect(() => {
+    if (open && initialOutcome && printing && !picked.current) {
+      picked.current = true;
+      finish(initialOutcome);
+    }
+  });
 
   return (
     <Sheet
@@ -103,6 +114,7 @@ export function EditAttempt({
         <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
           {printing ? "Started printing " : "Printed "}
           {relativeTime(attempt.printedAt).toLowerCase()}
+          {printing && attempt.endedAt !== null && <> · {offTheBedLabel(attempt.endedAt).toLowerCase()}</>}
         </time>
       }
       footer={
@@ -167,6 +179,7 @@ export function EditAttempt({
         note={value.note}
         onNote={(note) => change({ note })}
         failureTags={value.failureTags}
+        suggestedFailureTag={attempt.suggestedFailureTag ?? undefined}
         onFailureTags={(failureTags) => change({ failureTags })}
         successNotes={value.successNotes}
         onSuccessNotes={(successNotes) => change({ successNotes })}

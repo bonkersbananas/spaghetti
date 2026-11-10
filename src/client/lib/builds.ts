@@ -17,7 +17,7 @@ import {
   type TagDefinition,
   type TagKind,
 } from "@shared/attempts";
-import { printProgress } from "@shared/print-progress";
+import { isOffTheBed, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -347,8 +347,9 @@ export function findPrinting(items: ItemView[]): { item: ItemView; attempt: Atte
 }
 
 /**
- * Every print on the bed, the one that should be done by now first, then the newest. Today lists them all and
- * the sidebar shows the first.
+ * Every attempt on the bed that still has no outcome. Prints still printing come first (the one that should be
+ * done by now, then the newest), then the ones the printer says are off the bed and wait for "how did it go?".
+ * Today lists them all; the sidebar shows the first.
  */
 export function printingAttempts(items: ItemView[], now = Date.now()): Array<{ item: ItemView; attempt: AttemptView }> {
   const found: Array<{ item: ItemView; attempt: AttemptView }> = [];
@@ -356,11 +357,13 @@ export function printingAttempts(items: ItemView[], now = Date.now()): Array<{ i
     if (item.stage !== "building") continue;
     for (const attempt of item.attempts) if (attempt.outcome === null) found.push({ item, attempt });
   }
-  const due = (attempt: AttemptView) =>
-    printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now).state === "due";
-  return found.sort(
-    (a, b) => Number(due(b.attempt)) - Number(due(a.attempt)) || b.attempt.printedAt - a.attempt.printedAt,
-  );
+  const rank = (attempt: AttemptView) =>
+    isOffTheBed(attempt)
+      ? 2
+      : printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now).state === "due"
+        ? 0
+        : 1;
+  return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || b.attempt.printedAt - a.attempt.printedAt);
 }
 
 /** Failure tags and success notes people added themselves. */

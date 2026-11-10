@@ -132,7 +132,7 @@ export function TodaySection() {
             <PrintingCard item={due} attempt={due.attempts[0] as ItemView["attempts"][number]} person={sam} />
             <Label>The sidebar's now-printing card</Label>
             <div className="w-60">
-              <NowPrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} now={now} />
+              <NowPrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} />
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-8">

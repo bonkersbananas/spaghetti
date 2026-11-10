@@ -3,6 +3,7 @@ import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
+import { BridgeLine } from "@/components/pantry/BridgeLine";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
 import { SpoolRow } from "@/components/pantry/SpoolRow";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
@@ -144,6 +145,24 @@ export function PantrySection() {
       </div>
       <Label>The AMS as it is loaded here (live): bays are columns below lg, rows from lg</Label>
       <AmsLoadout readOnly className="md:max-w-3xl" />
+      <Label>The printer bridge, in one quiet line: connected, no printer, last heard, not set up</Label>
+      <div className="flex flex-col gap-2">
+        {[
+          { lastSeenAt: Date.now(), printerState: "idle" as const },
+          { lastSeenAt: Date.now(), printerState: "offline" as const },
+          { lastSeenAt: Date.now() - 3 * 60 * 60 * 1000, printerState: "idle" as const },
+        ].map((status) => (
+          <BridgeLine
+            key={`${status.printerState}-${status.lastSeenAt > Date.now() - 60_000}`}
+            status={{ ...status, progress: null, unknownTrays: [] }}
+          />
+        ))}
+        <BridgeLine status={null} />
+      </div>
+      <p className="text-small text-ink-faint md:max-w-3xl">
+        A tray the bridge can't match to a spool shows on its slot as "Which spool?" with what the printer sees; tapping
+        it opens the slot's spool picker, as for any slot.
+      </p>
     </Section>
   );
 }

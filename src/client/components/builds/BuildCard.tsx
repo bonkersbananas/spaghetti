@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import { printProgress } from "@shared/print-progress";
+import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
@@ -14,7 +14,7 @@ import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
-import { useNow } from "@/lib/use-now";
+import { usePrintProgress } from "@/lib/print-progress";
 import { OutcomeChip } from "./Outcome";
 
 /** When anything last happened on a build: its newest attempt, or when it started. */
@@ -28,8 +28,12 @@ export function lastActivity(item: ItemView): number {
  * "Started yesterday". The time never breaks across lines.
  */
 function ActivityLine({ item }: { item: ItemView }) {
-  const now = useNow();
   const last = item.attempts.at(-1);
+  const progress = usePrintProgress(
+    last && last.outcome === null && last.endedAt === null ? last.id : undefined,
+    last?.printedAt ?? 0,
+    last?.settings.estimatedMinutes,
+  );
   if (!last) {
     return (
       <>
@@ -38,15 +42,17 @@ function ActivityLine({ item }: { item: ItemView }) {
     );
   }
   // A print on the bed says how long is left (or that it should be done), not when it started.
-  const when =
-    last.outcome === null
-      ? lowerFirst(printProgress(last.printedAt, last.settings.estimatedMinutes, now).label)
+  const offBed = isOffTheBed(last) && last.endedAt !== null;
+  const when = offBed
+    ? lowerFirst(`${offTheBedLabel(last.endedAt as number)} · how did it go?`)
+    : last.outcome === null
+      ? lowerFirst(progress.label)
       : relativeTime(last.finishedAt ?? last.printedAt);
   return (
     <MetaList>
       <span className="whitespace-nowrap">Attempt {last.number}</span>
       {/* "done around 10:38 AM" may wrap in a narrow card; a relative time never does. */}
-      <span className={cn(last.outcome !== null && "whitespace-nowrap")}>{when}</span>
+      <span className={cn(last.outcome !== null && !offBed && "whitespace-nowrap")}>{when}</span>
     </MetaList>
   );
 }
@@ -86,7 +92,7 @@ export function BuildCard({
         note={item.note || undefined}
         chips={
           last ? (
-            <OutcomeChip outcome={last.outcome} className="shadow-soft" />
+            <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} className="shadow-soft" />
           ) : (
             <Chip className="bg-veil text-on-veil backdrop-blur-md">Not printed yet</Chip>
           )

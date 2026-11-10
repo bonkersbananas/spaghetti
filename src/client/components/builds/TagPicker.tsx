@@ -11,6 +11,8 @@ interface TagPickerProps {
   value: string[];
   onChange: (slugs: string[]) => void;
   label: string;
+  /** A tag the printer suggested: marked while it is picked, and always the person's to take off. */
+  suggested?: string;
   /** How many to show before "more". Picked ones always show. */
   visible?: number;
   className?: string;
@@ -21,7 +23,7 @@ interface TagPickerProps {
  * the rest one tap away. People add their own on the fly; it's offered next
  * time too.
  */
-export function TagPicker({ kind, value, onChange, label, visible = 8, className }: TagPickerProps) {
+export function TagPicker({ kind, value, onChange, label, suggested, visible = 8, className }: TagPickerProps) {
   const queryClient = useQueryClient();
   const options = useTagOptions(kind);
   const [expanded, setExpanded] = useState(false);
@@ -49,12 +51,18 @@ export function TagPicker({ kind, value, onChange, label, visible = 8, className
   return (
     <fieldset className={cn("flex flex-col gap-2.5", className)}>
       <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">{label}</legend>
+      {suggested && value.includes(suggested) && (
+        <p className="text-small text-ink-faint -mt-1 px-0.5">
+          The printer suggested the marked one. Tap it to take it off.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {[...shown.map((option) => option.slug), ...unknown].map((slug) => {
           const selected = value.includes(slug);
           return (
             <ToggleChip key={slug} selected={selected} tone={tone} onClick={() => toggle(slug)}>
               {tagLabel(kind, slug, options)}
+              {slug === suggested && selected && <span className="font-normal"> · suggested</span>}
             </ToggleChip>
           );
         })}

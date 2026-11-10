@@ -1,4 +1,5 @@
 import { type Outcome, tagLabel } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -148,10 +149,11 @@ function Build({ item }: { item: ItemView }) {
     open: boolean;
     attemptId: string | null;
     file?: { file: File; key: number } | null;
-    /** Picked already, when the sheet was opened from Today's "How did it go?". */
+    /** An outcome picked already: on the attempt's card (a print off the bed) or on Today's "How did it go?". */
     outcome?: Outcome | null;
   }>({ open: false, attemptId: null });
-  const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId, file: null });
+  const openSheet = (attemptId: string | null, outcome?: Outcome) =>
+    setSheet({ open: true, attemptId, file: null, outcome: outcome ?? null });
   // Today's Finish: open the attempt's sheet (with its outcome picked, if it came with one), then drop the
   // parameter so closing the sheet doesn't leave a link that reopens it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per arrival.
@@ -159,14 +161,7 @@ function Build({ item }: { item: ItemView }) {
     if (!finishParam || !linkedAttempt) return;
     const attempt = item.attempts.find((candidate) => candidate.id === linkedAttempt);
     if (!attempt) return;
-    if (attempt.outcome === null) {
-      setSheet({
-        open: true,
-        attemptId: attempt.id,
-        file: null,
-        outcome: finishParam === "1" ? null : (finishParam as Outcome),
-      });
-    }
+    if (attempt.outcome === null) openSheet(attempt.id, finishParam === "1" ? undefined : (finishParam as Outcome));
     void navigate({
       to: "/builds/$buildId",
       params: { buildId: item.id },
@@ -406,7 +401,12 @@ function Build({ item }: { item: ItemView }) {
               }}
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-              <StageChip item={item} printing={!!printing} celebrate={justFinished} />
+              <StageChip
+                item={item}
+                printing={!!printing}
+                offBed={!!printing && isOffTheBed(printing)}
+                celebrate={justFinished}
+              />
               <div className="text-small text-ink-faint">
                 {item.stage === "done" && item.finishedAt ? (
                   `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
@@ -455,7 +455,7 @@ function Build({ item }: { item: ItemView }) {
             </SectionHeading>
             {isDesktop && (
               <Button
-                variant="primary"
+                variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
                 icon={printing ? CheckIcon : PlusIcon}
                 shortcut={shortcutCaps("buildLog")}
                 onClick={primary}
@@ -493,7 +493,7 @@ function Build({ item }: { item: ItemView }) {
                       setSelected(attempt.id);
                       openSheet(attempt.id);
                     }}
-                    onFinish={() => openSheet(attempt.id)}
+                    onFinish={(outcome) => openSheet(attempt.id, outcome)}
                     reserveExtras={reserveExtras}
                     onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
                   />
@@ -518,7 +518,8 @@ function Build({ item }: { item: ItemView }) {
         </section>
       </div>
 
-      {!isDesktop && (active || printing) && (
+      {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
+      {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
         <ActionBar>
           <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
             {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
@@ -546,10 +547,20 @@ function Build({ item }: { item: ItemView }) {
 }
 
 /** Where a build stands, as a chip. Marking it done pops it, with a sparkle. */
-function StageChip({ item, printing, celebrate }: { item: ItemView; printing: boolean; celebrate: boolean }) {
+function StageChip({
+  item,
+  printing,
+  offBed,
+  celebrate,
+}: {
+  item: ItemView;
+  printing: boolean;
+  offBed: boolean;
+  celebrate: boolean;
+}) {
   if (item.stage === "building") {
     return printing ? (
-      <OutcomeChip outcome={null} />
+      <OutcomeChip outcome={null} offTheBed={offBed} />
     ) : (
       <Chip tone="semolina" icon={BuildsIcon}>
         On the bed

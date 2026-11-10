@@ -5,6 +5,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
 import { AmsLoadout } from "@/components/pantry/Ams";
+import { PrinterBridgeLine } from "@/components/pantry/BridgeLine";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -34,7 +35,7 @@ function Printer() {
     <>
       <PageHeader
         title="Printer"
-        subtitle="The X2D as it's set up here. Spaghetti never talks to it; this is what you've told it."
+        subtitle="The X2D as it's set up here. Spaghetti never controls it; this is what you've told it."
       />
       {isPending || !data ? (
         <div className="flex flex-col gap-6" aria-hidden>
@@ -156,6 +157,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           />
           <Fact icon={TemperatureIcon} label="Heated chamber" value={`up to ${X2D.maxChamberTemperature} °C`} />
         </div>
+        <PrinterBridgeLine />
       </div>
 
       <fieldset disabled={readOnly} className="contents">

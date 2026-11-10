@@ -77,6 +77,39 @@ test("asks how it went once the print should be done, and carries the answer int
   await expect(sheet.getByRole("radio", { name: "Worked" })).toBeChecked();
 });
 
+test("a print that is off the bed asks how it went, with the three answers, instead of a progress bar", async ({
+  page,
+  isMobile,
+}) => {
+  const { id, attempt } = await printing(page, "Drawer divider", 90 * MINUTE, 90);
+  await printing(page, "Still going", 10 * MINUTE, 120);
+  await page.request.patch(`/api/attempts/${attempt}`, {
+    headers: { Origin: origin(page) },
+    data: { endedAt: Date.now() - 10 * MINUTE },
+  });
+  await page.goto("/today");
+
+  const bed = page.getByRole("region", { name: "On the bed" });
+  const card = bed.getByRole("article").filter({ hasText: "Drawer divider" });
+  await expect(card.getByText(/Off the bed at .* · how did it go\?/)).toBeVisible();
+  await expect(card.getByRole("progressbar")).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Finish" })).toHaveCount(0);
+  // The one still printing keeps its bar.
+  await expect(bed.getByRole("article").filter({ hasText: "Still going" }).getByRole("progressbar")).toBeVisible();
+
+  await card.getByRole("radio", { name: "Spaghetti" }).click();
+  await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
+  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeChecked();
+
+  // The sidebar shows the print that is still printing before the one off the bed.
+  if (!isMobile) {
+    await page.keyboard.press("Escape");
+    await page.goto("/ideas");
+    await expect(page.getByRole("complementary").getByRole("link", { name: /Still going/ })).toBeVisible();
+  }
+});
+
 test("hides sections with nothing in them, and the sidebar card on Today itself", async ({ page, isMobile }) => {
   await printing(page, "Tugboat", 10 * MINUTE, 90);
   await page.goto("/today");

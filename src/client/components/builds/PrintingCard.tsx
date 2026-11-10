@@ -1,6 +1,6 @@
 import type { Person } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
-import { printProgress } from "@shared/print-progress";
+import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -12,8 +12,9 @@ import { heroPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import type { AttemptView, ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
-import { useNow } from "@/lib/use-now";
+import { usePrintProgress } from "@/lib/print-progress";
 import { itemName } from "../journal/JournalEntry";
+import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
 
@@ -34,8 +35,8 @@ interface PrintingCardProps {
  */
 export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) {
   const navigate = useNavigate();
-  const now = useNow();
-  const progress = printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now);
+  const offBed = isOffTheBed(attempt);
+  const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
   const hero = heroPhoto(item);
   const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
@@ -70,7 +71,7 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
         ) : (
           <NoteFace note={name.text} />
         )}
-        <OutcomeChip outcome={null} className="shadow-soft absolute bottom-2 left-2" />
+        <OutcomeChip outcome={null} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
       </div>
       <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col gap-2.5 px-2 pt-2.5 pb-2 md:px-4 md:py-3">
         <div className="flex items-start gap-3">
@@ -93,33 +94,50 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
             />
           )}
         </MetaList>
-        <div className="flex flex-col gap-1.5">
-          <PrintProgress
-            startedAt={attempt.printedAt}
-            estimatedMinutes={attempt.settings.estimatedMinutes}
-            showLabel={false}
+        {offBed && attempt.endedAt !== null ? (
+          // The printer says it stopped: no bar to draw, only the calm question and the three answers.
+          <OffTheBed
+            endedAt={attempt.endedAt}
+            onPick={(outcome) => finish(outcome)}
+            className="pointer-events-auto md:mt-auto"
           />
-          <div className="flex items-center justify-between gap-3">
-            <p
-              className={cn(
-                "text-small tabular min-w-0",
-                progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
-              )}
-            >
-              {progress.label}
-            </p>
-            {!due && (
-              <Button variant="secondary" size="sm" onClick={() => finish()} className="pointer-events-auto shrink-0">
-                Finish
-              </Button>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <PrintProgress
+                startedAt={attempt.printedAt}
+                estimatedMinutes={attempt.settings.estimatedMinutes}
+                attemptId={attempt.id}
+                showLabel={false}
+              />
+              <div className="flex items-center justify-between gap-3">
+                <p
+                  className={cn(
+                    "text-small tabular min-w-0",
+                    progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
+                  )}
+                >
+                  {progress.label}
+                </p>
+                {!due && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => finish()}
+                    className="pointer-events-auto shrink-0"
+                  >
+                    Finish
+                  </Button>
+                )}
+              </div>
+            </div>
+            {due && (
+              <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
+                <p className="text-body text-ink font-semibold">How did it go?</p>
+                <OutcomePicker value={null} onChange={(outcome) => finish(outcome)} size="md" />
+              </div>
             )}
-          </div>
-        </div>
-        {due && (
-          <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
-            <p className="text-body text-ink font-semibold">How did it go?</p>
-            <OutcomePicker value={null} onChange={(outcome) => finish(outcome)} size="md" />
-          </div>
+          </>
         )}
       </div>
     </article>

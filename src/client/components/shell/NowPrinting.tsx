@@ -1,4 +1,4 @@
-import { printProgress } from "@shared/print-progress";
+import { isOffTheBed } from "@shared/print-progress";
 import { Link, useLocation } from "@tanstack/react-router";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo } from "react";
@@ -9,25 +9,27 @@ import { heroPhoto, printingAttempts } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
+import { usePrintProgress } from "@/lib/print-progress";
 import { useNow } from "@/lib/use-now";
 import { itemName } from "../journal/JournalEntry";
 
 /** "45 min left", "Done by now", "On the bed": the progress sentence, short enough for a sidebar. */
-function shortLabel(startedAt: number, estimatedMinutes: number | undefined, now: number): string {
-  const { state, label } = printProgress(startedAt, estimatedMinutes, now);
-  if (state === "due") return "Done by now";
-  if (state === "unknown") return "On the bed";
-  return label.replace(/^About /, "");
+function shortLabel(progress: { state: string; label: string }): string {
+  if (progress.state === "due") return "Done by now";
+  if (progress.state === "unknown") return "On the bed";
+  // The printer's own words ("Layer 112 of 240 · about 38 min left") shrink to the part about time.
+  return (progress.label.split(" · ").at(-1) ?? progress.label).replace(/^[Aa]bout /, "");
 }
 
 interface NowPrintingCardProps {
   item: ItemView;
   attempt: AttemptView;
-  now: number;
 }
 
 /** The sidebar's small card: a thumbnail, the build's name, a ring and a few words on how far along it is. */
-export function NowPrintingCard({ item, attempt, now }: NowPrintingCardProps) {
+export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
+  const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
+  const offBed = isOffTheBed(attempt);
   const hero = heroPhoto(item);
   const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
   return (
@@ -54,12 +56,19 @@ export function NowPrintingCard({ item, attempt, now }: NowPrintingCardProps) {
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-small text-ink truncate font-semibold">{itemName(item).text}</span>
         <span className="text-caption text-ink-faint tabular flex items-center gap-1.5">
-          <PrintProgress
-            variant="ring"
-            startedAt={attempt.printedAt}
-            estimatedMinutes={attempt.settings.estimatedMinutes}
-          />
-          {shortLabel(attempt.printedAt, attempt.settings.estimatedMinutes, now)}
+          {offBed ? (
+            "Off the bed · how did it go?"
+          ) : (
+            <>
+              <PrintProgress
+                variant="ring"
+                startedAt={attempt.printedAt}
+                estimatedMinutes={attempt.settings.estimatedMinutes}
+                attemptId={attempt.id}
+              />
+              {shortLabel(progress)}
+            </>
+          )}
         </span>
       </span>
     </Link>
@@ -90,7 +99,7 @@ export function NowPrinting() {
           transition={{ duration: duration.base, ease: ease.out }}
           className="mb-3 flex flex-col gap-1.5"
         >
-          <NowPrintingCard item={first.item} attempt={first.attempt} now={now} />
+          <NowPrintingCard item={first.item} attempt={first.attempt} />
           {printing.length > 1 && (
             <Link
               to="/today"

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { type BridgeStatus, bridgeLine } from "../../src/shared/bridge.ts";
 import {
   colorDistance,
   colorTone,
@@ -224,5 +225,27 @@ describe("colorTone", () => {
     expect(colorTone("")).toBe("mid");
     expect(colorTone("white")).toBe("mid");
     expect(colorTone("#12")).toBe("mid");
+  });
+});
+
+describe("the Printer page's bridge line", () => {
+  const now = 1_000_000_000;
+  const status = (over: Partial<BridgeStatus>): BridgeStatus => ({
+    lastSeenAt: now - 30_000,
+    printerState: "idle",
+    progress: null,
+    unknownTrays: [],
+    ...over,
+  });
+  const since = (time: number) => (now - time > 600_000 ? "2 h ago" : "5 min ago");
+
+  it("says not set up, connected, no printer, or when it was last heard", () => {
+    expect(bridgeLine(null, now, since)).toEqual({ state: "none", text: "No printer bridge set up." });
+    expect(bridgeLine(status({}), now, since).state).toBe("connected");
+    expect(bridgeLine(status({ printerState: "offline" }), now, since).state).toBe("no-printer");
+    expect(bridgeLine(status({ lastSeenAt: now - 7_200_000 }), now, since)).toEqual({
+      state: "quiet",
+      text: "Printer bridge last heard 2 h ago.",
+    });
   });
 });
