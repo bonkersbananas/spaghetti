@@ -31,6 +31,8 @@ const attempt = (id: string, itemId: string, fields: Partial<Attempt>): Attempt 
   outcome: "success",
   printedAt: now - 3 * HOUR,
   finishedAt: now - 2 * HOUR,
+  endedAt: null,
+  suggestedFailureTag: null,
   note: "",
   failureTags: [],
   successNotes: [],

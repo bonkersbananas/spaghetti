@@ -180,7 +180,7 @@ describe("spools", () => {
 
 describe("printer and slots", () => {
   it("starts from the Combo's setup and saves changes", async () => {
-    expect(await getPrinter()).toEqual({ setup: DEFAULT_PRINTER, slots: {} });
+    expect(await getPrinter()).toEqual({ setup: DEFAULT_PRINTER, slots: {}, bridge: null });
     const setup = {
       nozzles: { main: { diameter: 0.6, hardened: true }, auxiliary: { diameter: 0.4, hardened: false } },
       plates: ["Textured PEI Plate", "Cool Plate", "Cool Plate"],

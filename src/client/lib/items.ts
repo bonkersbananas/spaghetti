@@ -268,6 +268,8 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     ...attempt,
     itemId,
     finishedAt: attempt.outcome ? attempt.createdAt : null,
+    endedAt: null,
+    suggestedFailureTag: null,
     finishedBy: attempt.outcome ? attempt.createdBy : null,
     createdVia: null,
     finishedVia: null,

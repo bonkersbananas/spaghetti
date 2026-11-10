@@ -85,3 +85,15 @@ jobs:
             -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
       - if: failure()
         run: docker logs spaghetti
+
+  bridge-image:
+    name: Bridge image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f bridge/Dockerfile -t spaghetti-bridge:ci .
+      - name: It starts, finds ffmpeg, and says what is missing
+        run: |
+          docker run --rm --entrypoint ffmpeg spaghetti-bridge:ci -version | head -1
+          ! docker run --rm spaghetti-bridge:ci 2>&1 | tee out.txt
+          grep -q "Missing settings" out.txt

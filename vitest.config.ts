@@ -31,7 +31,7 @@ export default defineConfig(async () => {
           },
           test: {
             name: "unit",
-            include: ["test/unit/**/*.test.ts"],
+            include: ["test/unit/**/*.test.ts", "test/bridge/**/*.test.ts"],
             environment: "node",
           },
         },

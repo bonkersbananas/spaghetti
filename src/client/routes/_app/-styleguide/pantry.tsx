@@ -30,6 +30,7 @@ const sampleSpool: Spool = {
   driedAt: null,
   photo: null,
   slot: "A2",
+  trayUuid: null,
   createdBy: "a",
   createdAt: Date.now(),
   updatedAt: Date.now(),

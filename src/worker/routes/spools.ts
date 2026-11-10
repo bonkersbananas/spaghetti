@@ -41,6 +41,7 @@ const fields = {
   remaining: z.enum(REMAINING).optional(),
   note: z.string().max(20_000).optional(),
   driedAt: z.number().int().positive().nullable().optional(),
+  trayUuid: words(80).optional(),
 };
 
 const createSpool = z.object({ id, ...fields, createdAt: z.number().int().positive().optional() });
@@ -73,6 +74,7 @@ export function toApiSpool(spool: Spool, slot: string | null): ApiSpool {
         ? { id: spool.photoId, width: spool.photoWidth, height: spool.photoHeight, color: spool.photoColor ?? "" }
         : null,
     slot,
+    trayUuid: spool.trayUuid,
     createdBy: spool.createdBy,
     createdAt: spool.createdAt.getTime(),
     updatedAt: spool.updatedAt.getTime(),
