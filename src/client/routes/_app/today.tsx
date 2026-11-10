@@ -16,7 +16,7 @@ import { UpNext, upNextIdeas } from "@/components/today/UpNext";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
-import { Overline } from "@/components/ui/Overline";
+import { Section } from "@/components/ui/Section";
 import { CardSkeleton, RowSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { printingAttempts } from "@/lib/builds";
@@ -118,10 +118,7 @@ function Today() {
 
   const bedSection =
     onBed.length > 0 ? (
-      <section aria-labelledby="today-bed" className="flex flex-col gap-3">
-        <Overline as="h2" id="today-bed" count={onBed.length > 1 ? onBed.length : undefined}>
-          On the bed
-        </Overline>
+      <Section id="today-bed" title="On the bed" size="overline" count={onBed.length > 1 ? onBed.length : undefined}>
         <div className="flex flex-col gap-4">
           {onBed.map(({ item, attempt }, index) => (
             <PrintingCard
@@ -134,7 +131,7 @@ function Today() {
             />
           ))}
         </div>
-      </section>
+      </Section>
     ) : null;
 
   return (

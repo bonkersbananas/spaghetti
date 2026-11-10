@@ -4,7 +4,11 @@ import { Panel, people, Section } from "./shared";
 
 export function AvatarSection() {
   return (
-    <Section id="avatars" title="Avatars" note="Initials on each person's color, beside what they wrote.">
+    <Section
+      id="avatars"
+      title="Avatars"
+      note="Initials on each person's color, beside what they wrote: first and last word's initial, at every size."
+    >
       <Panel className="flex flex-wrap items-center gap-6">
         {(["xs", "sm", "md", "lg"] as const).map((size) => (
           <Avatar key={size} person={people[0] as Person} size={size} />
@@ -21,10 +25,10 @@ export function AvatarSection() {
           {(["xs", "sm", "md", "lg"] as const).map((size) => (
             <div key={size} className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-3">
-                <Avatar person={people[0] as Person} size={size} />
+                <Avatar person={{ name: "Carl Oscar", color: "tomato" }} size={size} />
                 <Avatar person={people[0] as Person} size={size} via="Claude for Alex" />
               </div>
-              <span className="text-caption text-ink-faint">{size}: Alex · via Claude</span>
+              <span className="text-caption text-ink-faint">{size}: Carl Oscar, then Alex via Claude</span>
             </div>
           ))}
         </div>

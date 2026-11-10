@@ -19,6 +19,7 @@ import {
   ITEM_STAGES,
   type Item,
   type ItemStage,
+  itemDrafts,
   items,
   type Photo,
   photos,
@@ -117,7 +118,8 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   const rows = await db.select().from(items).where(where).orderBy(desc(items.createdAt), desc(items.id));
   if (!rows.length) return [];
   const slices = chunked(rows.map((row) => row.id));
-  const [photoSlices, attemptSlices] = await Promise.all([
+  const [draftSlices, photoSlices, attemptSlices] = await Promise.all([
+    Promise.all(slices.map((ids) => db.select().from(itemDrafts).where(inArray(itemDrafts.itemId, ids)))),
     Promise.all(
       slices.map((ids) =>
         db
@@ -148,6 +150,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       ),
     )
   ).flat();
+  const draftsByItem = new Map(draftSlices.flat().map((draft) => [draft.itemId, draft]));
   const files = new Map(fileRows.map((file) => [file.attemptId, file]));
   const photosByItem = groupBy<Photo>(
     photoSlices.flat().filter((photo) => photo.attemptId === null || liveAttempts.has(photo.attemptId)),
@@ -156,7 +159,13 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     const itemPhotos = photosByItem.get(row.id) ?? [];
     // A cover that was removed (or whose attempt was) reads as none, and returns with undo.
     const coverPhotoId = itemPhotos.some((photo) => photo.id === row.coverPhotoId) ? row.coverPhotoId : null;
-    return toApiItem({ ...row, coverPhotoId }, itemPhotos, attemptsByItem.get(row.id) ?? [], files);
+    return toApiItem(
+      { ...row, coverPhotoId },
+      itemPhotos,
+      attemptsByItem.get(row.id) ?? [],
+      files,
+      draftsByItem.get(row.id),
+    );
   });
 }
 

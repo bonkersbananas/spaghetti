@@ -15,7 +15,8 @@
   }
 
   body {
-    min-height: 100dvh;
+    /* No min-height in viewport units: iOS's standalone app can report a viewport taller than the screen
+       (by the bottom inset) after resuming, which made the document scroll and the fixed tab bar sit low. */
     font-size: var(--sg-text-body);
     line-height: var(--sg-text-body-lh);
     overscroll-behavior-y: none;
@@ -247,6 +248,16 @@
 /* Something that arrives on a screen already drawn (a link card's title) fades in. */
 .sg-fade-in {
   animation: sg-fade-in var(--sg-duration-fast) var(--sg-ease-out);
+}
+/* "Reading the page": the little sparkle breathes while Claude is on it. */
+@keyframes sg-pulse {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+}
+.sg-pulse {
+  animation: sg-pulse 1.8s ease-in-out infinite;
 }
 @keyframes sg-fade-out {
   to {

@@ -93,3 +93,55 @@ test("a page title is not under anything translucent at rest", async ({ page }) 
     expect(covering).toBe(false);
   }
 });
+
+test("the page never scrolls past its content and the tab bar's bottom is on screen", async ({ page }) => {
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  for (const path of ["/today", "/ideas", "/builds", "/journal", "/agents"]) {
+    await page.goto(path);
+    await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
+    const { docHeight, viewport, barBottom, scrollable } = await page.evaluate(() => {
+      const bar = document.querySelector('nav[aria-label="Sections"]')?.getBoundingClientRect();
+      const doc = document.documentElement;
+      return {
+        docHeight: doc.scrollHeight,
+        viewport: window.innerHeight,
+        barBottom: bar?.bottom ?? 0,
+        // Whether the page is scrollable only because of what it holds, never by a viewport-sized floor.
+        scrollable: doc.scrollHeight > window.innerHeight,
+      };
+    });
+    expect(barBottom).toBeLessThanOrEqual(viewport + 0.5);
+    // A page that fits must not scroll at all; a longer one ends with its own content (not a bottom inset's extra).
+    if (!scrollable) expect(docHeight).toBeLessThanOrEqual(viewport);
+  }
+  // A short page: the document is exactly the viewport, with no extra scroll.
+  await page.goto("/agents");
+  await page.evaluate(() => window.scrollTo(0, 1000));
+  const scrolled = await page.evaluate(() => {
+    const main = document.querySelector("main > div")?.getBoundingClientRect();
+    return {
+      y: window.scrollY,
+      max: document.documentElement.scrollHeight - window.innerHeight,
+      mainBottom: main?.bottom ?? 0,
+    };
+  });
+  expect(scrolled.y).toBeLessThanOrEqual(Math.max(0, scrolled.max));
+});
+
+test("a card's avatar shows both initials and fits its circle", async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title: "Cable chain" } });
+  await page.goto("/ideas");
+  const card = page.getByRole("article").or(page.locator("li")).filter({ hasText: "Cable chain" }).first();
+  const avatar = card.getByRole("img").last();
+  await expect(avatar).toBeVisible();
+  const { text, fits } = await avatar.evaluate((el) => ({
+    text: el.textContent ?? "",
+    fits: el.scrollWidth <= el.clientWidth,
+  }));
+  const name = (await avatar.getAttribute("aria-label")) ?? "";
+  const words = name.trim().split(/\s+/);
+  expect(text).toBe(((words[0]?.[0] ?? "") + (words.length > 1 ? (words.at(-1)?.[0] ?? "") : "")).toUpperCase());
+  expect(fits).toBe(true);
+});

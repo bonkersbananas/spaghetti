@@ -76,6 +76,9 @@
   --sg-ring-error: 0 0 0 1px rgb(168 56 28 / 0.6), 0 0 0 4px rgb(200 70 42 / 0.14);
 
   /* Type sizes: phone first, then desktop below. */
+  /* Two initials in the smallest avatar (24 px). */
+  --sg-text-micro: 0.6875rem;
+  --sg-text-micro-lh: 1rem;
   --sg-text-caption: 0.75rem;
   --sg-text-caption-lh: 1rem;
   --sg-text-small: 0.875rem;
@@ -235,6 +238,8 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --text-*: initial;
+  --text-micro: var(--sg-text-micro);
+  --text-micro--line-height: var(--sg-text-micro-lh);
   --text-caption: var(--sg-text-caption);
   --text-caption--line-height: var(--sg-text-caption-lh);
   --text-small: var(--sg-text-small);
