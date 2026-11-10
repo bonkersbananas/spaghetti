@@ -49,7 +49,7 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
       open={open}
       onOpenChange={onOpenChange}
       title="Notifications"
-      description="A nudge when a print is done, so it gets its outcome while you remember."
+      description="A nudge when a print is done, and now and then when the printer needs care."
     >
       <div className="flex flex-col gap-3">
         {status === "install" ? (
@@ -87,6 +87,12 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
               }
               checked={device.alsoOthers}
               onChange={(next) => device.setAlsoOthers.mutate(next)}
+            />
+            <Toggle
+              label="Tell me when upkeep is due"
+              hint="One gentle nudge a day at most: a dirty plate, a worn filter."
+              checked={device.upkeepNudges}
+              onChange={(next) => device.setUpkeepNudges.mutate(next)}
             />
             <Button
               variant="secondary"

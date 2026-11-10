@@ -486,6 +486,8 @@ export interface UpdatePrinterRequest {
   nozzles?: Partial<PrinterSetup["nozzles"]>;
   plates?: string[];
   amsUnits?: number;
+  /** Days each material stays dry; sent whole, and a material not listed goes back to its starting value. */
+  dryingDays?: Record<string, number>;
 }
 
 /** GET /api/printer: how the printer is set up, and what is loaded where (slot → spool id). */
@@ -542,4 +544,72 @@ export interface LinkPreviewResponse {
   url: string;
   title: string | null;
   site: string | null;
+}
+
+/** One "Done" on an upkeep task. */
+export interface UpkeepLog {
+  id: string;
+  taskId: string;
+  /** The person who did it (an agent's work is its owner's). */
+  doneBy: string;
+  /** The agent it was logged through, if any. */
+  via: string | null;
+  doneAt: number;
+  /** The printer's total print hours at that moment. */
+  printerHours: number;
+  note: string;
+  /** At /api/photos/<id>/large and /thumb. */
+  photo: { id: string; width: number; height: number; color: string } | null;
+}
+
+export interface UpkeepTask {
+  id: string;
+  name: string;
+  note: string;
+  /** Print hours between two "Done"s; null: only the days count. */
+  intervalHours: number | null;
+  /** Days between two "Done"s; null: only the print hours count. */
+  intervalDays: number | null;
+  createdAt: number;
+  /** Print hours and days since it was last done (or added, for one never done). */
+  sinceHours: number;
+  sinceDays: number;
+  /** How far through the interval (1 is due), and which limit is the nearer one. */
+  fraction: number;
+  due: boolean;
+  by: "hours" | "days" | null;
+  lastDone: UpkeepLog | null;
+  /** The latest few, newest first. */
+  history: UpkeepLog[];
+}
+
+/** GET /api/printer/upkeep: the tasks, most due first, and the printer's running total of print hours. */
+export interface UpkeepResponse {
+  printHours: number;
+  tasks: UpkeepTask[];
+}
+
+/** POST /api/printer/upkeep. The client picks the id; a retry gets the same task back. */
+export interface CreateUpkeepRequest {
+  id: string;
+  name: string;
+  note?: string;
+  intervalHours?: number | null;
+  intervalDays?: number | null;
+}
+
+/** PATCH /api/printer/upkeep/:id. */
+export interface UpdateUpkeepRequest {
+  name?: string;
+  note?: string;
+  intervalHours?: number | null;
+  intervalDays?: number | null;
+}
+
+/** POST /api/printer/upkeep/:id/done. The client picks the log's id, so a retry records one. */
+export interface LogUpkeepRequest {
+  id: string;
+  note?: string;
+  /** When it was done, epoch ms (not in the future); the printer's hours are those at that moment. Default: now. */
+  at?: number;
 }

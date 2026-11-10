@@ -1,7 +1,16 @@
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
-import { dueNudge, isQuietHour, nudgeMessage, type PushMessage } from "../../shared/push.ts";
+import {
+  dueNudge,
+  isQuietHour,
+  nudgeMessage,
+  type PushMessage,
+  UPKEEP_NUDGE_GAP_HOURS,
+  upkeepMessage,
+} from "../../shared/push.ts";
+import { sinceWords } from "../../shared/upkeep.ts";
 import { getDb } from "../db/index.ts";
-import { attempts, items, pushNudges, pushSubscriptions, users } from "../db/schema.ts";
+import { attempts, items, pushNudges, pushSubscriptions, upkeepTasks, users } from "../db/schema.ts";
+import { loadUpkeep } from "../routes/upkeep.ts";
 import { importVapidKey, type PushResult, sendPush } from "./webpush.ts";
 
 /** How far back an open attempt can still be due: well past the nudge window, so nothing is missed between cron runs. */
@@ -119,4 +128,50 @@ export async function sendNudges(env: Env, now = Date.now()) {
     }
   }
   return { sent };
+}
+
+/**
+ * One gentle nudge when an upkeep task is due (cron, with the others): the most due task that hasn't been
+ * nudged since it was last done, to the devices that switched "Tell me when upkeep is due" on, outside their
+ * quiet hours. At most one a day for the whole printer: once any task was nudged in the last 24 hours, the
+ * rest wait. A task is claimed before sending (nudged_at), and released if nothing got through.
+ */
+export async function sendUpkeepNudge(env: Env, now = Date.now()) {
+  const db = getDb(env.DB);
+  const devices = (await db.select().from(pushSubscriptions)).filter((s) => s.upkeepNudges);
+  if (!devices.length) return { sent: 0 };
+  const recent = await db
+    .select({ id: upkeepTasks.id })
+    .from(upkeepTasks)
+    .where(gt(upkeepTasks.nudgedAt, new Date(now - UPKEEP_NUDGE_GAP_HOURS * 3_600_000)))
+    .limit(1)
+    .get();
+  if (recent) return { sent: 0 };
+  const awake = devices.filter((s) => !isQuietHour(s.timeZone, now));
+  if (!awake.length) return { sent: 0 }; // Waits for the morning.
+  const nudged = new Set(
+    (await db.select({ id: upkeepTasks.id, at: upkeepTasks.nudgedAt }).from(upkeepTasks))
+      .filter((row) => row.at)
+      .map((row) => row.id),
+  );
+  const { tasks } = await loadUpkeep(db, now);
+  const task = tasks.find((candidate) => candidate.due && !nudged.has(candidate.id));
+  if (!task) return { sent: 0 };
+  const vapid = await loadVapid(env);
+  if (!vapid) return { sent: 0 };
+  // The claim is a conditional update, so two overlapping runs can't both send it.
+  const claim = await env.DB.prepare(
+    `UPDATE upkeep_tasks SET nudged_at = ?1 WHERE id = ?2 AND nudged_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM upkeep_tasks WHERE nudged_at > ?3)`,
+  )
+    .bind(now, task.id, now - UPKEEP_NUDGE_GAP_HOURS * 3_600_000)
+    .run();
+  if (!claim.meta.changes) return { sent: 0 };
+  const message = upkeepMessage(task, sinceWords(task, task.sinceHours, task.sinceDays));
+  let delivered = 0;
+  for (const device of awake) {
+    if ((await pushTo(env, vapid, device, message)) === "sent") delivered++;
+  }
+  if (!delivered) await db.update(upkeepTasks).set({ nudgedAt: null }).where(eq(upkeepTasks.id, task.id));
+  return { sent: delivered };
 }

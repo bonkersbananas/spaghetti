@@ -1,7 +1,7 @@
 import { app } from "./app.ts";
 import { mcpRoutes } from "./mcp/index.ts";
 import { purgeDeleted } from "./photos.ts";
-import { sendNudges } from "./push/nudges.ts";
+import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
 
 const DAILY = "0 4 * * *";
 
@@ -34,6 +34,9 @@ export default {
    */
   async scheduled(controller, env, ctx) {
     if (controller.cron === DAILY) ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
-    else ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
+    else {
+      ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
+      ctx.waitUntil(sendUpkeepNudge(env).then((result) => result.sent && console.log("upkeep nudged", result)));
+    }
   },
 } satisfies ExportedHandler<Env>;
