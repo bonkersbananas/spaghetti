@@ -250,6 +250,10 @@ export const spoolRoutes = new Hono<AppEnv>()
       recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
     ]);
     if (!row) return apiError(c, 404, "not_found", notFound);
+    // Clearing the net weight stops counting in grams altogether: the weighings go too, or they would keep the grams.
+    if (parsed.data.netGrams === null) {
+      await c.var.db.delete(spoolWeighings).where(eq(spoolWeighings.spoolId, spoolId));
+    }
     const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
