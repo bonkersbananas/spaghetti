@@ -23,6 +23,15 @@ const fields = z.object({
 /** A stand-in for the average color: a browser works out the real one when it resizes the photo. */
 const NEUTRAL = "#a9a095";
 
+/** A UUID made from the idea's id and the photo's place, the same every time. */
+async function photoIdFor(itemId: string, position: number): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${itemId}:${position}`)));
+  hash[6] = ((hash[6] ?? 0) & 0x0f) | 0x40;
+  hash[8] = ((hash[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(hash.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 const blank = (value: string | null | undefined) => value?.trim() || undefined;
 
 /**
@@ -103,21 +112,22 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
     .get();
   if (!item) return apiError(c, 409, "deleted", "That was deleted.");
 
-  // A retry with the same id finds its photos already there.
-  const have = images.length ? await db.select({ id: photos.id }).from(photos).where(eq(photos.itemId, itemId)) : [];
-  if (!have.length) {
-    for (const [position, image] of images.entries()) {
-      const photoId = crypto.randomUUID();
-      const httpMetadata = { contentType: image.contentType };
-      // The original is both sizes until a browser resizes it; "provisional" keeps it out of long-lived caches.
-      const customMetadata = { provisional: "1" };
-      await Promise.all(
-        (["large", "thumb"] as const).map((variant) =>
-          c.env.PHOTOS.put(photoKey(photoId, variant), image.bytes, { httpMetadata, customMetadata }),
-        ),
-      );
-      await db.batch([
-        db.insert(photos).values({
+  // Each photo's id follows from the idea's id and its place, so a retry after a half-finished upload
+  // stores the photos that are missing and finds the others where they were.
+  for (const [position, image] of images.entries()) {
+    const photoId = await photoIdFor(itemId, position);
+    const httpMetadata = { contentType: image.contentType };
+    // The original is both sizes until a browser resizes it; "provisional" keeps it out of long-lived caches.
+    const customMetadata = { provisional: "1" };
+    await Promise.all(
+      (["large", "thumb"] as const).map((variant) =>
+        c.env.PHOTOS.put(photoKey(photoId, variant), image.bytes, { httpMetadata, customMetadata }),
+      ),
+    );
+    await db.batch([
+      db
+        .insert(photos)
+        .values({
           id: photoId,
           itemId,
           position,
@@ -128,14 +138,14 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
           needsResize: true,
           createdBy: c.var.user.id,
           createdAt: now,
-        }),
-        recordChange(db, { entity: "photo", id: photoId, itemId, action: "created", actor: c.var.actor }),
-        db
-          .update(items)
-          .set({ updatedAt: now })
-          .where(and(eq(items.id, itemId), afterChange)),
-      ]);
-    }
+        })
+        .onConflictDoNothing(),
+      recordChange(db, { entity: "photo", id: photoId, itemId, action: "created", actor: c.var.actor }),
+      db
+        .update(items)
+        .set({ updatedAt: now })
+        .where(and(eq(items.id, itemId), afterChange)),
+    ]);
   }
   return c.json<CaptureResponse>(
     { id: itemId, url: `${new URL(c.req.url).origin}/ideas/${itemId}`, photos: images.length },

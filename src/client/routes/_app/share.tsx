@@ -42,7 +42,9 @@ function Share() {
       const input = kept ?? { title: params.title, text: params.text, url: params.url, files: [] };
       const id = shareIn({ ...input, id: params.id });
       if (params.id) void clearShare(params.id);
-      if (!id) toast.message("Nothing came through", "That share had no link, text or photo in it.");
+      // A reload of a share already taken has nothing left to say: the idea is saved.
+      if (!id && (kept || !params.id))
+        toast.message("Nothing came through", "That share had no link, text or photo in it.");
       void navigate({ to: "/ideas", replace: true });
     })();
   }, [params, shareIn, navigate]);

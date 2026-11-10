@@ -124,6 +124,25 @@ describe("POST /api/capture", () => {
     expect(feed?.n).toBe(1);
   });
 
+  it("a retry fills in the photos a half-finished call left out", async () => {
+    const bearer = await token(["capture"]);
+    const id = crypto.randomUUID();
+    const send = () => {
+      const form = new FormData();
+      form.set("id", id);
+      form.append("image", new File([jpeg()], "a.jpg", { type: "image/jpeg" }));
+      form.append("image", new File([jpeg()], "b.jpg", { type: "image/jpeg" }));
+      return asAgent(bearer, { body: form });
+    };
+    await send();
+    // The second photo never made it: drop its row, as a failure after the first would have.
+    await env.DB.prepare("DELETE FROM photos WHERE item_id = ? AND position = 1").bind(id).run();
+    expect((await send()).status).toBe(201);
+    expect((await getItem(id)).photos).toHaveLength(2);
+    await send();
+    expect((await getItem(id)).photos).toHaveLength(2);
+  });
+
   it("works for a signed-in person too", async () => {
     const response = await request("/api/capture", { method: "POST", json: { text: "from the browser" }, cookie });
     expect(response.status).toBe(201);
