@@ -1,10 +1,12 @@
 import type { Spool } from "@shared/api";
+import { DRY_IT, needsDrying } from "@shared/drying";
 import { amsUnitLetters, EXTERNAL_SLOT, type PrinterSetup, slotPlace, spoolName, unitSlots } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/Button";
 import { Overline } from "@/components/ui/Overline";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { useDryingDays } from "@/lib/upkeep";
 
 interface InThePrinterProps {
   setup: PrinterSetup;
@@ -26,12 +28,14 @@ export function loadedSlots(setup: PrinterSetup, slots: Record<string, string>, 
  * drawn when no spool is loaded at all.
  */
 export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
+  const dryDays = useDryingDays();
   const groups = loadedSlots(setup, slots, spools);
   const loaded = groups.flat().filter((entry) => entry.spool);
   if (loaded.length === 0) return null;
   const running = loaded
     .filter((entry) => entry.spool && (entry.spool.remaining === "low" || entry.spool.remaining === "empty"))
     .slice(0, 2);
+  const damp = loaded.find((entry) => entry.spool && needsDrying(entry.spool, Date.now(), dryDays));
 
   return (
     <section aria-labelledby="today-printer" className="flex flex-col gap-3">
@@ -76,6 +80,11 @@ export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
             ) : null,
           )}
         </ul>
+      )}
+      {damp?.spool && (
+        <p className="text-small text-ink-soft">
+          {spoolName(damp.spool).title} {slotPlace(damp.slot)}: {DRY_IT.toLowerCase()}.
+        </p>
       )}
     </section>
   );

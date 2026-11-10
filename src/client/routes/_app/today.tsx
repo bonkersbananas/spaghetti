@@ -12,6 +12,7 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
+import { UpkeepLine } from "@/components/today/UpkeepLine";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -134,6 +135,9 @@ function Today() {
   return (
     <>
       <PageHeader title="Today" subtitle={subtitle} />
+      <div className="-mt-4 mb-6 empty:hidden">
+        <UpkeepLine />
+      </div>
       {brandNew ? (
         <EmptyState
           className="py-10 md:py-20"

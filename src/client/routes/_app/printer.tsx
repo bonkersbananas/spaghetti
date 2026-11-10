@@ -1,4 +1,5 @@
 import { BED_TYPES, NOZZLE_DIAMETERS, type Nozzle, plateName } from "@shared/attempts";
+import { DRYING_DAYS } from "@shared/drying";
 import { type NozzleSetup, type PrinterSetup, X2D } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -6,6 +7,8 @@ import { type ReactNode, useMemo, useState } from "react";
 import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { PrinterBridgeLine } from "@/components/pantry/BridgeLine";
+import { DryingTable } from "@/components/printer/DryingTable";
+import { Upkeep } from "@/components/printer/Upkeep";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -89,6 +92,7 @@ interface SetupFields extends Record<string, unknown> {
   auxiliary: NozzleSetup;
   plates: string[];
   amsUnits: number;
+  dryingDays: Record<string, number>;
 }
 
 function Setup({ initial }: { initial: PrinterSetup }) {
@@ -101,6 +105,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
       auxiliary: initial.nozzles.auxiliary,
       plates: initial.plates,
       amsUnits: initial.amsUnits,
+      dryingDays: initial.dryingDays ?? {},
     }),
     [initial],
   );
@@ -114,6 +119,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
     nozzles: { main: value.main, auxiliary: value.auxiliary },
     plates: value.plates,
     amsUnits: value.amsUnits,
+    dryingDays: value.dryingDays,
   };
   const [adding, setAdding] = useState<string | null>(null);
   // Offline, the setup is only for reading (see lib/read-only.ts).
@@ -159,6 +165,8 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         </div>
         <PrinterBridgeLine />
       </div>
+
+      <Upkeep />
 
       <fieldset disabled={readOnly} className="contents">
         <Section title="Nozzles">
@@ -247,6 +255,17 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
             />
           </div>
+        </Section>
+
+        <Section title="Staying dry">
+          <p className="text-small text-ink-soft -mt-2">
+            How many days a spool stays dry after drying, by material. Past that, Spaghetti says to dry it before
+            printing. Starting values are a guide, not Bambu's word: change them to what you see.
+          </p>
+          <DryingTable
+            days={{ ...DRYING_DAYS, ...value.dryingDays }}
+            onChange={(dryingDays) => change({ dryingDays })}
+          />
         </Section>
       </fieldset>
       <p className="text-small text-ink-faint flex items-start gap-2">
