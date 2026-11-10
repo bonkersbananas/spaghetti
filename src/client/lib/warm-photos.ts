@@ -28,8 +28,11 @@ function newest(item: Item) {
   );
 }
 
+/** Photos that are still full-size originals waiting to be resized: warming them would download the whole thing. */
+const unresized = new Set<string>();
+
 function want(photoId: string | undefined, variant: PhotoVariant) {
-  if (!photoId) return;
+  if (!photoId || unresized.has(photoId)) return;
   const url = photoUrl(photoId, variant);
   if (requested.has(url) || requested.size >= MAX_PER_SESSION) return;
   requested.add(url);
@@ -77,6 +80,8 @@ const connection = (): { saveData?: boolean } | undefined =>
 /** Called with what a successful query returned; only item lists and item pages matter. */
 export function warmPhotosFor(queryKey: readonly unknown[], data: unknown) {
   if (queryKey[0] !== itemKeys.all[0] || !navigator.onLine || connection()?.saveData) return;
+  const items = Array.isArray(data) ? (data as Item[]) : data ? [data as Item] : [];
+  for (const item of items) for (const photo of item.photos ?? []) if (photo.needsResize) unresized.add(photo.id);
   if (queryKey[1] === "list" && Array.isArray(data)) {
     for (const item of data as Item[]) {
       want(hero(item)?.id, "thumb");

@@ -38,6 +38,11 @@ export interface Photo {
   takenAt: number | null;
   /** The print attempt it shows, or null for the item's own photos. */
   attemptId: string | null;
+  /**
+   * Arrived without a browser to resize it: stored at full size with a placeholder color until a signed-in
+   * browser resizes it and uploads the real variants (`lib/photo-resize.ts`).
+   */
+  needsResize: boolean;
   createdBy: string;
   createdAt: number;
 }
@@ -388,6 +393,11 @@ export interface ReorderPhotosRequest {
 export type PhotoVariant = "large" | "thumb";
 export const PHOTO_VARIANTS: readonly PhotoVariant[] = ["large", "thumb"];
 /** Most the Worker accepts for one variant. The browser's large WebP is far smaller. */
+/** POST /api/photos/:id/resize-claim: whether this browser now has the job of resizing the photo. */
+export interface ResizeClaimResponse {
+  claimed: boolean;
+}
+
 export const MAX_PHOTO_BYTES = 12 * 1024 * 1024;
 export const PHOTO_CONTENT_TYPES = ["image/webp", "image/jpeg"] as const;
 

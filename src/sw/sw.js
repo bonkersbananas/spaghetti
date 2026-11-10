@@ -6,7 +6,8 @@
  * What it does:
  *   - Precaches the app shell (index.html, scripts, styles, fonts, icons), so
  *     the app opens instantly and with no signal.
- *   - Serves photos already seen from a cache (they never change once saved).
+ *   - Serves photos already seen from a cache (they never change once saved, except originals still
+ *     waiting to be resized, which the server marks no-cache and are never kept).
  *   - Leaves everything else under /api alone: it goes to the network, every
  *     time, and is never cached, so nobody sees another person's stale edits.
  *   - Installs new versions in the background; the page offers a "Refresh"
@@ -83,7 +84,8 @@ async function photo(event, request) {
   const cached = await cache.match(request);
   if (cached) return cached;
   const response = await fetch(request);
-  if (response.ok) {
+  // An original waiting to be resized is served "no-cache": it will be replaced, so it is not kept here.
+  if (response.ok && !/no-cache/.test(response.headers.get("Cache-Control") ?? "")) {
     event.waitUntil(
       (async () => {
         await cache.put(request, response.clone());
