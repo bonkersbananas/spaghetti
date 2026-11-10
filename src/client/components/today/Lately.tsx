@@ -2,7 +2,7 @@ import type { JournalEntry as Entry, Item, Person } from "@shared/api";
 import { Link } from "@tanstack/react-router";
 import { JournalEntry } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
-import { Overline } from "@/components/ui/Overline";
+import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 interface LatelyProps {
@@ -27,17 +27,18 @@ export const LATELY_ENTRIES = 3;
 export function Lately({ label, summary, entries, items, people, via }: LatelyProps) {
   if (!entries.length && !summary) return null;
   return (
-    <section aria-labelledby="today-lately" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <Overline as="h2" id="today-lately">
-          {label}
-        </Overline>
-        {summary === null ? (
+    <Section
+      id="today-lately"
+      title={label}
+      size="overline"
+      description={
+        summary === null ? (
           <Skeleton className="h-6 w-64 max-w-full" />
         ) : (
           summary && <p className="font-display text-title text-ink">{summary}</p>
-        )}
-      </div>
+        )
+      }
+    >
       <div className="flex flex-col gap-1">
         {entries.slice(0, LATELY_ENTRIES).map((entry) => {
           const item = items.get(entry.itemId);
@@ -61,6 +62,6 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
           See the whole journal
         </Button>
       </Link>
-    </section>
+    </Section>
   );
 }

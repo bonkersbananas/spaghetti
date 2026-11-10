@@ -33,7 +33,7 @@ import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
@@ -393,7 +393,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
 function SpoolRecipes({ material, finish }: { material: string; finish: string | null }) {
   const recipes = recipesFor(useRecipes(), { material, finish });
   const kind = [finish ? finishLabel(finish).toLowerCase() : null, material.trim()].filter(Boolean).join(" ");
-  return <LazyRecipeShelf recipes={recipes} title={`Recipes for ${kind}`} className="mt-4 flex flex-col gap-3" />;
+  return <LazyRecipeShelf recipes={recipes} title={`Recipes for ${kind}`} className="mt-4" />;
 }
 
 /** "How does this silk PLA behave": every attempt printed with it, and how they went. */
@@ -404,12 +404,13 @@ function PrintedWith({ spool }: { spool: Spool }) {
     count: hits?.filter((hit) => hit.attempt.outcome === outcome).length ?? 0,
   })).filter((entry) => entry.count > 0);
   return (
-    <section aria-labelledby="printed-with" className="mt-4 flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <SectionHeading id="printed-with" count={hits?.length || undefined}>
-          Printed with it
-        </SectionHeading>
-        {counts.length > 0 && (
+    <Section
+      id="printed-with"
+      title="Printed with it"
+      count={hits?.length || undefined}
+      className="mt-4"
+      description={
+        counts.length > 0 && (
           <MetaList className="text-small text-ink-faint">
             {counts.map(({ outcome, count }) => (
               <span key={outcome}>
@@ -417,8 +418,9 @@ function PrintedWith({ spool }: { spool: Spool }) {
               </span>
             ))}
           </MetaList>
-        )}
-      </div>
+        )
+      }
+    >
       {isPending ? (
         <div aria-hidden>
           <RowSkeleton />
@@ -441,6 +443,6 @@ function PrintedWith({ spool }: { spool: Spool }) {
           ))}
         </ul>
       )}
-    </section>
+    </Section>
   );
 }

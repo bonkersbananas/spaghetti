@@ -49,7 +49,7 @@ import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
 import { SaveStatus } from "@/components/ui/SaveStatus";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
@@ -480,12 +480,13 @@ function Build({ item }: { item: ItemView }) {
         </div>
 
         {/* The story: every attempt, newest first. */}
-        <section aria-labelledby="story" className="flex min-w-0 flex-col md:flex-3">
-          <div className="mb-4 flex items-center justify-between gap-3 md:mb-5">
-            <SectionHeading id="story" count={item.attempts.length || undefined}>
-              Attempts
-            </SectionHeading>
-            {isDesktop && (
+        <Section
+          id="story"
+          title="Attempts"
+          count={item.attempts.length || undefined}
+          className="min-w-0 md:flex-3"
+          aside={
+            isDesktop && (
               <Button
                 variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
                 icon={printing ? CheckIcon : PlusIcon}
@@ -494,9 +495,9 @@ function Build({ item }: { item: ItemView }) {
               >
                 {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
               </Button>
-            )}
-          </div>
-
+            )
+          }
+        >
           {story.length === 0 ? (
             <EmptyState
               className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
@@ -552,7 +553,7 @@ function Build({ item }: { item: ItemView }) {
           </div>
 
           {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
-        </section>
+        </Section>
       </div>
 
       {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
