@@ -175,3 +175,32 @@ test("starts an attempt from what worked last time", async ({ page, isMobile }) 
     // The plate and temperatures that worked, on this print's own spool.
     .toEqual([70, 250, "Textured PEI Plate", "Black"]);
 });
+
+test("a row without a photo shows its icon once, and a print in progress shows how far along it is", async ({
+  page,
+}) => {
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title: "Plain idea" } });
+  const id = await build(page, "Printing now", []);
+  const response = await page.request.post(`/api/items/${id}/attempts`, {
+    headers,
+    data: {
+      id: crypto.randomUUID(),
+      outcome: null,
+      printedAt: Date.now() - 20 * 60_000,
+      settings: { ...pla, estimatedMinutes: 60 },
+    },
+  });
+  expect(response.ok()).toBe(true);
+
+  await page.goto("/journal");
+  const row = page.getByRole("link", { name: /Captured an idea.*Plain idea/ });
+  await expect(row).toBeVisible();
+  // The tile carries the icon: the label beside it has none.
+  await expect(row.locator("svg")).toHaveCount(1);
+
+  // The build's "Started a build" row has its name too: only the attempt card says which attempt it is.
+  const card = page.getByRole("link", { name: /Printing now.*attempt 1/ });
+  await expect(card.getByRole("progressbar", { name: "Print progress" })).toBeVisible();
+  await expect(card.getByText(/min left/)).toBeVisible();
+});

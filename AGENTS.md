@@ -90,7 +90,7 @@ pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build
+pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 4 shards (`pnpm test:e2e --shard=1/4`), so a test must not depend on another test's data
 pnpm exec playwright test --project=performance   # first-load JavaScript per screen, and a throttled 100-photo inbox
 pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark, --both, --scale 1, --out DIR; see Screenshots)
 pnpm screenshots:compare   # shots on main and on your branch, a diff image per changed screen, contact sheets (see Screenshots)
@@ -232,6 +232,7 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 `pnpm screenshots` seeds a throwaway local D1 (the same data as `pnpm dev:seed`: two people, a dozen ideas, the pantry, builds with histories), starts the dev server, signs in and saves each screen in `scripts/screenshot-routes.ts` at 390×844 and 1440×900 into `screenshots/`. Pass names to take only some (`pnpm screenshots ideas capture`). Shots can open a sheet first (`prepare`) or capture the full page (`fullPage`).
 
 - It takes every shot even when one fails, lists the failures at the end and exits 1. A failed shot is a bug in the shot or in the screen: fix it, don't skip it.
+- Each theme and width is taken on its own freshly seeded app (about half a minute of seeding each), so a shot that changes data, such as finishing a print, can't leak into the next one.
 - The seed's dates count back from a fixed date (`SEED_NOW` in `scripts/seed/index.ts`) and the browser's clock and time zone are fixed to it, so a screen looks the same on any day. Write shots that don't depend on how much data fits a page or on today's date (the journal's "September" shot scrolls until the month appears).
 - Options: `--dark` or `--both` (light and dark in one run, files named `ideas-dark-390.png`), `--built` (the production build with its service worker: what offline screens really show), `--out DIR`, `--scale 1` (device pixel ratio; the default is 3 on the phone and 2 on the desktop, so a full page can be 1170×9000).
 - `pnpm dev:seed` is the same data for exploring by hand; the seed is in `scripts/seed/`, and a new feature that needs data on screen adds to it.
