@@ -1,6 +1,7 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
+import type { BridgeStatusData } from "../../shared/bridge.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
@@ -90,6 +91,13 @@ export const attempts = sqliteTable(
     outcome: text("outcome").$type<Outcome>(),
     printedAt: integer("printed_at", { mode: "timestamp_ms" }).notNull(),
     finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+    /**
+     * When the print stopped on the printer (the printer bridge says so), before anyone said how it went.
+     * `finishedAt` stays "when an outcome was given".
+     */
+    endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+    /** A failure tag the printer suggests (a failed or cancelled print, spaghetti seen): a suggestion, never a verdict. */
+    suggestedFailureTag: text("suggested_failure_tag"),
     note: text("note").notNull().default(""),
     /** Slugs: built in (shared/attempts.ts) or from the tags table. */
     failureTags: text("failure_tags", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -198,6 +206,8 @@ export const spools = sqliteTable(
     photoWidth: integer("photo_width"),
     photoHeight: integer("photo_height"),
     photoColor: text("photo_color"),
+    /** The RFID tray UUID of a Bambu spool, as the AMS reports it, so the printer bridge finds it again. */
+    trayUuid: text("tray_uuid"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -230,6 +240,16 @@ export const printer = sqliteTable("printer", {
   id: text("id").primaryKey(),
   setup: text("setup", { mode: "json" }).$type<PrinterSetup>().notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/**
+ * What the printer bridge last told the app: one row (id "bridge"). `status` holds the printer's progress and the
+ * trays it couldn't match to a spool; `lastSeenAt` moves with every message, so "last heard" is honest.
+ */
+export const bridge = sqliteTable("bridge", {
+  id: text("id").primaryKey(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
+  status: text("status", { mode: "json" }).$type<BridgeStatusData>().notNull(),
 });
 
 /**
