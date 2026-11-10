@@ -87,7 +87,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
       </Link>
       <div
         className={cn(
-          "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full",
+          "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
           layout.picture,
         )}
       >
