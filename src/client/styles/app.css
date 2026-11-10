@@ -15,7 +15,8 @@
   }
 
   body {
-    min-height: 100dvh;
+    /* No min-height in viewport units: iOS's standalone app can report a viewport taller than the screen
+       (by the bottom inset) after resuming, which made the document scroll and the fixed tab bar sit low. */
     font-size: var(--sg-text-body);
     line-height: var(--sg-text-body-lh);
     overscroll-behavior-y: none;

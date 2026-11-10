@@ -14,7 +14,8 @@ const colors: Record<PersonColor, string> = {
 };
 
 const sizes = {
-  xs: "size-5 text-caption",
+  // Two letters fit in 24 px at this size and tracking; one letter (the old xs) lost half of "Carl Oscar".
+  xs: "size-6 text-caption tracking-normal",
   sm: "size-7 text-caption",
   md: "size-9 text-small",
   lg: "size-12 text-lead",
@@ -58,13 +59,7 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         !via && className,
       )}
     >
-      {glyphInstead ? (
-        <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden />
-      ) : size === "xs" ? (
-        initials(person.name).slice(0, 1)
-      ) : (
-        initials(person.name)
-      )}
+      {glyphInstead ? <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden /> : initials(person.name)}
     </span>
   );
   if (!via) return face;

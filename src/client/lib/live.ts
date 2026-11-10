@@ -110,7 +110,7 @@ function refreshAll(queryClient: QueryClient) {
 
 // --- the quiet word -------------------------------------------------------------------------------
 
-const firstName = (person?: Person) => displayName(person, "Someone");
+const nameOf = (person?: Person) => displayName(person, "Someone");
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 /** The item or spool whose screen is open, from the path. */
@@ -131,7 +131,7 @@ function sayAboutScreen(queryClient: QueryClient, screen: LiveScreen, changes: C
   const me = queryClient.getQueryData(sessionQuery.queryKey)?.id;
   const people = queryClient.getQueryData(peopleQuery.queryKey);
   const who = (change: Change) =>
-    change.actor.id === me ? "You" : firstName(people?.find((person) => person.id === change.actor.id));
+    change.actor.id === me ? "You" : nameOf(people?.find((person) => person.id === change.actor.id));
   const mine = (change: Change) => change.actor.kind === "person" && change.actor.id === me;
   const agents = queryClient.getQueryData(agentsQuery.queryKey);
   // "Sam logged an attempt", or for an agent, quietly: "Logged an attempt via Claude for Alex".
