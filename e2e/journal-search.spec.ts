@@ -72,7 +72,7 @@ test("finds an attempt by a failure tag plus a material", async ({ page, isMobil
 
   const attempts = page.getByRole("region", { name: "Attempts" });
   await expect(attempts.getByRole("link")).toHaveCount(1);
-  const result = attempts.getByRole("link", { name: "Swatch box, attempt 1" });
+  const result = attempts.getByRole("link", { name: /Swatch box · attempt 1/ });
   await expect(result).toContainText("Corners peeled up");
   await expect(result.locator("mark", { hasText: "PETG" })).toBeVisible();
   await expect(page.getByText("Curled base")).toHaveCount(0);
@@ -103,26 +103,26 @@ test("filters the journal to failures", async ({ page, isMobile }) => {
 
   await page.goto("/journal");
   await expect(page.getByRole("heading", { name: /so far$/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /attempt 3: worked/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Worked.*attempt 3/ })).toBeVisible();
   await expect(page.getByText("Started a build")).toBeVisible();
 
   await page.getByRole("button", { name: "Only failures" }).click();
   await expect(page).toHaveURL(/outcome=failures/);
-  await expect(page.getByRole("link", { name: /attempt 1: spaghetti/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /attempt 2: partly worked/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Spaghetti.*attempt 1/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Partly.*attempt 2/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /attempt 3/ })).toHaveCount(0);
   await expect(page.getByText("Started a build")).toHaveCount(0);
 
   // The filtered journal is a link: it opens filtered.
   await page.reload();
   await expect(page.getByRole("button", { name: "Only failures" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("link", { name: /attempt 1: spaghetti/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Spaghetti.*attempt 1/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /attempt 3/ })).toHaveCount(0);
 
   if (!isMobile) {
     // J walks to the newest entry, Enter opens it.
     await page.keyboard.press("j");
-    await expect(page.getByRole("link", { name: /attempt 2: partly worked/ })).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("link", { name: /^Partly.*attempt 2/ })).toHaveAttribute("aria-current", "true");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/builds\/.+\?attempt=/);
   }

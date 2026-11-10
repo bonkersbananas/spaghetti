@@ -88,15 +88,11 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   const filaments = attempt.settings.filaments ?? [];
   const settings = summarizeSettings(attempt.settings).slice(0, 3);
   const time = when === "time" ? clock(attempt.printedAt) : weekday(attempt.printedAt);
-  const outcomeWord = attempt.outcome
-    ? { success: "worked", partial: "partly worked", failed: "spaghetti" }[attempt.outcome]
-    : "printing";
 
   return (
     <Link
       ref={ref}
       {...entryLink(entry, item)}
-      aria-label={`${name.text}, attempt ${index + 1}: ${outcomeWord}`}
       aria-current={selected || undefined}
       className={cn(
         "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring flex flex-col rounded-lg p-1.5 md:flex-row",
@@ -107,7 +103,8 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         <div className="relative aspect-4/3 shrink-0 overflow-hidden rounded-md md:w-2/5">
           <Photo
             src={photoSrc(photo.id, "large")}
-            alt={`${name.text}, attempt ${index + 1}`}
+            // The card's own text names it; the picture would only repeat that.
+            alt=""
             color={photo.color || undefined}
             className="size-full"
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"

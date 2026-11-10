@@ -10,7 +10,7 @@ export interface PaletteRow {
   id: string;
   /** The name, with the words that matched marked (a Highlight). */
   title: ReactNode;
-  /** The name as plain text, for the row's accessible label. */
+  /** The name as plain text (React keys, filtering). The row is named by what it shows. */
   label: string;
   subtitle?: ReactNode;
   /** A photo thumbnail leads the row when there is one… */
@@ -203,7 +203,7 @@ function PaletteRowView({
       id={domId}
       role="option"
       aria-selected={active}
-      aria-label={row.label}
+      // Named by what it shows (title, meta, outcome), so what is read matches what is seen.
       onPointerMove={onActive}
       onClick={onRun}
       className={cn(

@@ -5,6 +5,7 @@ import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import type { PhotoView } from "@/lib/items";
+import { scrollBehavior } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 
 interface PhotoViewerProps {
@@ -35,7 +36,7 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
     const el = scroller.current;
     if (!el?.clientWidth) return;
     const target = index * el.clientWidth;
-    if (Math.abs(el.scrollLeft - target) > 2) el.scrollTo({ left: target, behavior: "smooth" });
+    if (Math.abs(el.scrollLeft - target) > 2) el.scrollTo({ left: target, behavior: scrollBehavior() });
   }, [index]);
 
   function onScroll() {

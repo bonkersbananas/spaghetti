@@ -1,7 +1,7 @@
 import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import { type AttemptSettings, carryOver, describeChanges, type Outcome } from "@shared/attempts";
 import { filamentFromSpool, printerHints, spoolFromFilament } from "@shared/spools";
-import { applyFileSettings } from "@shared/threemf/index.ts";
+import { applyFileSettings } from "@shared/threemf/prefill.ts";
 import { fullTime, relativeTime } from "@shared/time";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";

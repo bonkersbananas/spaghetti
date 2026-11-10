@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { forwardRef } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -53,7 +53,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const [lead, ...rest] = photos;
 
   return (
-    <motion.li
+    <m.li
       ref={ref}
       layout="position"
       initial={attempt.pending ? { opacity: 0, y: -10 } : false}
@@ -200,7 +200,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
           </div>
         </div>
       </div>
-    </motion.li>
+    </m.li>
   );
 });
 

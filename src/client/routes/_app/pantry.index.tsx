@@ -11,7 +11,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon, PrinterIcon } from "@/components/ui/icons";
-import { AddPhotoTile } from "@/components/ui/PhotoTiles";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { loadSlot, spoolsQuery } from "@/lib/pantry";
@@ -115,9 +115,7 @@ function Pantry() {
         <div className="flex flex-col gap-12 md:gap-16">
           <section aria-labelledby="loaded" className="flex flex-col gap-4 md:gap-5">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 id="loaded" className="text-headline text-ink">
-                In the printer
-              </h2>
+              <SectionHeading id="loaded">In the printer</SectionHeading>
               {isDesktop && (
                 <p className="text-small text-ink-faint">Drag a spool onto a slot, or click a slot to change it.</p>
               )}
@@ -130,12 +128,9 @@ function Pantry() {
               aria-labelledby={`material-${group.material}`}
               className="flex flex-col gap-4"
             >
-              <h2 id={`material-${group.material}`} className="text-title text-ink-soft">
-                {group.material}{" "}
-                <span className="text-ink-faint text-small tabular align-middle font-sans font-semibold">
-                  {group.spools.length}
-                </span>
-              </h2>
+              <SectionHeading id={`material-${group.material}`} size="title" count={group.spools.length}>
+                {group.material}
+              </SectionHeading>
               <ul className={grid} aria-label={`${group.material} spools`}>
                 {group.spools.map((spool) => (
                   <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
@@ -143,17 +138,6 @@ function Pantry() {
               </ul>
             </section>
           ))}
-          {isDesktop && (
-            <div className={grid}>
-              <AddPhotoTile
-                size="card"
-                icon={PlusIcon}
-                label="Add spool"
-                disabled={readOnly}
-                onClick={() => openAdd()}
-              />
-            </div>
-          )}
         </div>
       )}
       {!isDesktop && (spools?.length ?? 0) > 0 && (

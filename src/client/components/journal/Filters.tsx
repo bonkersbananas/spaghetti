@@ -88,9 +88,9 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
       selected={value.person === person.username}
       onClick={() => toggle("person", person.username)}
       className="pl-1.5"
-      aria-label={`By ${person.name}`}
     >
-      <Avatar person={person} size="xs" />
+      <Avatar person={person} size="xs" decorative />
+      <span className="sr-only">By </span>
       {person.name.split(" ")[0]}
     </ToggleChip>
   ));

@@ -15,6 +15,7 @@ import { TextField } from "@/components/ui/Field";
 import { ChipRow } from "@/components/ui/FilterChips";
 import { RecentIcon, SearchIcon, TagIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { Overline } from "@/components/ui/Overline";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -230,9 +231,9 @@ function Search() {
                     ([label, rows]) =>
                       rows.length > 0 && (
                         <section key={label} aria-label={label}>
-                          <h2 className="text-caption text-ink-faint mb-2 px-2 font-sans font-semibold tracking-wider uppercase">
-                            {label} <span className="tabular ml-1">{rows.length}</span>
-                          </h2>
+                          <Overline as="h2" count={rows.length} className="mb-2 block">
+                            {label}
+                          </Overline>
                           <ol className="-mx-2 flex flex-col gap-1">{rows.map(row)}</ol>
                         </section>
                       ),
@@ -330,7 +331,7 @@ function SuggestionGroup({ title, action, children }: { title: string; action?: 
   return (
     <section aria-label={title} className="flex flex-col gap-2.5">
       <div className="flex min-h-8 items-center justify-between gap-3">
-        <h2 className="text-caption text-ink-faint px-0.5 font-sans font-semibold tracking-wider uppercase">{title}</h2>
+        <Overline as="h2">{title}</Overline>
         {action}
       </div>
       <ChipRow label={title}>{children}</ChipRow>

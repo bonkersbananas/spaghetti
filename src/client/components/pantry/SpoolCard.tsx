@@ -21,7 +21,6 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
       <Link
         to="/pantry/$spoolId"
         params={{ spoolId: spool.id }}
-        aria-label={[name.title, name.detail].filter(Boolean).join(", ")}
         {...(draggable ? spoolDragProps(spool.id, spool.slot) : {})}
         className="group pressable focus-ring bg-cream shadow-soft hover:shadow-raised duration-fast flex h-full flex-col overflow-hidden rounded-lg transition-shadow"
       >

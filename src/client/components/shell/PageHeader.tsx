@@ -29,9 +29,9 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
             type="button"
             onClick={() => setAccountOpen(true)}
             className="pressable focus-ring rounded-full md:hidden"
-            aria-label="Account"
           >
-            <Avatar person={user} size="md" />
+            <Avatar person={user} size="md" decorative />
+            <span className="sr-only">Account</span>
           </button>
         )}
       </div>

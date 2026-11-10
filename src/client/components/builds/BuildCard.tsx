@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { inlineTime, relativeTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -47,7 +47,7 @@ export function BuildCard({ item, person }: { item: ItemView; person?: Person })
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
   return (
-    <motion.li layout="position" transition={spring.gentle} className="list-none">
+    <m.li layout="position" transition={spring.gentle} className="list-none">
       <Card
         link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
         aspect="portrait"
@@ -65,7 +65,7 @@ export function BuildCard({ item, person }: { item: ItemView; person?: Person })
         person={person}
         className="h-full"
       />
-    </motion.li>
+    </m.li>
   );
 }
 

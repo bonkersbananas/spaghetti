@@ -1,7 +1,7 @@
 import type { SessionResponse } from "@shared/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { type FormEvent, useState } from "react";
 import { z } from "zod";
 import { Mark } from "@/components/illustrations";
@@ -12,6 +12,7 @@ import { ApiError, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { ease, spring } from "@/lib/motion";
 import { rememberUser, sessionQuery } from "@/lib/queries";
+import { signOutSettled } from "@/lib/use-sign-out";
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: z.object({ redirect: z.string().optional() }),
@@ -37,7 +38,11 @@ function SignIn() {
   const [attempt, setAttempt] = useState(0);
 
   const signIn = useMutation({
-    mutationFn: () => api<SessionResponse>("/session", { method: "POST", json: { username, password } }),
+    mutationFn: async () => {
+      // A sign-out still on its way must not end the session this one starts.
+      await signOutSettled();
+      return api<SessionResponse>("/session", { method: "POST", json: { username, password } });
+    },
     onSuccess: async ({ user }) => {
       // Whatever an earlier session left in memory is not this person's to see.
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
@@ -62,26 +67,26 @@ function SignIn() {
         : undefined;
 
   return (
-    <div className="paper-grain bg-paper pt-safe pb-safe relative flex min-h-dvh flex-col items-center px-5">
+    <main className="paper-grain bg-paper pt-safe pb-safe relative flex min-h-dvh flex-col items-center px-5">
       <div className="flex w-full max-w-sm flex-1 flex-col justify-center py-10">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: ease.out }}
           className="mb-8 flex flex-col items-center text-center"
         >
-          <motion.div
+          <m.div
             initial={{ rotate: -90, scale: 0.6 }}
             animate={{ rotate: 0, scale: 1 }}
             transition={{ ...spring.gentle, delay: 0.05 }}
           >
             <Mark className="size-16 drop-shadow-sm md:size-18" />
-          </motion.div>
+          </m.div>
           <h1 className="text-display text-ink mt-5">Spaghetti</h1>
           <p className="text-body text-ink-soft mt-1.5">Our printing notebook. Failures included.</p>
-        </motion.div>
+        </m.div>
 
-        <motion.form
+        <m.form
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: ease.out, delay: 0.08 }}
@@ -128,11 +133,11 @@ function SignIn() {
           <Button type="submit" variant="primary" size="lg" fullWidth loading={signIn.isPending} className="mt-6">
             Sign in
           </Button>
-        </motion.form>
+        </m.form>
       </div>
       <p className="text-small text-ink-faint pb-6 text-center">
         Just the two of us here. No account? Ask the other cook.
       </p>
-    </div>
+    </main>
   );
 }

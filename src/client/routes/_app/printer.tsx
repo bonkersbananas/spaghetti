@@ -18,6 +18,7 @@ import {
   TemperatureIcon,
 } from "@/components/ui/icons";
 import { SaveStatus } from "@/components/ui/SaveStatus";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
 import { useReadOnly } from "@/lib/read-only";
@@ -148,19 +149,15 @@ function Setup({ initial }: { initial: PrinterSetup }) {
                     <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
                     <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
                   </div>
-                  {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-                  <div className="flex flex-wrap gap-2" role="group" aria-label={`${NOZZLE_NAMES[nozzle].title} size`}>
-                    {NOZZLE_DIAMETERS.map((diameter) => (
-                      <ToggleChip
-                        key={diameter}
-                        selected={fitted.diameter === diameter}
-                        onClick={() => setNozzle(nozzle, { diameter })}
-                        className="tabular"
-                      >
-                        {diameter} mm
-                      </ToggleChip>
-                    ))}
-                  </div>
+                  {/* Four sizes side by side: never a lone 0.8 mm wrapped onto its own line. */}
+                  <SegmentedControl
+                    label={`${NOZZLE_NAMES[nozzle].title} size`}
+                    labelHidden
+                    options={NOZZLE_DIAMETERS.map((diameter) => ({ value: String(diameter), label: `${diameter} mm` }))}
+                    value={String(fitted.diameter)}
+                    onChange={(diameter) => setNozzle(nozzle, { diameter: Number(diameter) })}
+                    className="w-full"
+                  />
                   <ToggleChip
                     tone="basil"
                     icon={HardenedIcon}

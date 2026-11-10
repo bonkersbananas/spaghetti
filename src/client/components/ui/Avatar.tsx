@@ -24,16 +24,16 @@ interface AvatarProps {
   size?: keyof typeof sizes;
   /** Adds a paper-colored ring, for overlapping stacks. */
   ringed?: boolean;
+  /** Next to the person's name already (a filter chip): hidden from screen readers, which would read the name twice. */
+  decorative?: boolean;
   className?: string;
 }
 
 /** A person's initials on their color. Shown beside what they wrote. */
-export function Avatar({ person, size = "md", ringed = false, className }: AvatarProps) {
+export function Avatar({ person, size = "md", ringed = false, decorative = false, className }: AvatarProps) {
   return (
     <span
-      role="img"
-      aria-label={person.name}
-      title={person.name}
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": person.name, title: person.name })}
       className={cn(
         "text-on-accent inline-flex shrink-0 items-center justify-center rounded-full font-bold tracking-wide select-none",
         colors[person.color],

@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { cn } from "@/lib/cn";
 import { duration } from "@/lib/motion";
 import { CheckIcon, WarningIcon } from "./icons";
@@ -20,7 +20,7 @@ export function SaveStatus({ state, className }: { state: SaveState; className?:
     <span className={cn("text-caption inline-flex h-5 items-center font-medium", className)} aria-live="polite">
       <AnimatePresence mode="wait" initial={false}>
         {state !== "idle" && (
-          <motion.span
+          <m.span
             key={state}
             initial={{ opacity: 0, y: 2 }}
             animate={{ opacity: 1, y: 0 }}
@@ -36,7 +36,7 @@ export function SaveStatus({ state, className }: { state: SaveState; className?:
             {state === "saved" && <CheckIcon size={12} weight="bold" aria-hidden />}
             {state === "error" && <WarningIcon size={12} weight="bold" aria-hidden />}
             {labels[state]}
-          </motion.span>
+          </m.span>
         )}
       </AnimatePresence>
     </span>

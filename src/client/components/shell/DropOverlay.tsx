@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useSyncExternalStore } from "react";
 import { DropIcon } from "@/components/ui/icons";
 import { duration, ease } from "@/lib/motion";
@@ -11,7 +11,7 @@ export function DropOverlay({ visible }: { visible: boolean }) {
   return (
     <AnimatePresence>
       {visible && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -19,7 +19,7 @@ export function DropOverlay({ visible }: { visible: boolean }) {
           className="bg-scrim pointer-events-none fixed inset-0 z-60 flex items-center justify-center p-6"
           aria-hidden
         >
-          <motion.div
+          <m.div
             initial={{ scale: 0.96, y: 6 }}
             animate={{ scale: 1, y: 0 }}
             transition={{ duration: duration.base, ease: ease.out }}
@@ -36,8 +36,8 @@ export function DropOverlay({ visible }: { visible: boolean }) {
                 ? "A .3mf from Bambu Studio or Orca fills in an attempt. Photos are captured as usual."
                 : "The photos start a new idea."}
             </p>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

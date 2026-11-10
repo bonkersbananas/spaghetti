@@ -1,5 +1,5 @@
 import type { Spool } from "@shared/api";
-import { amsUnitLetters, EXTERNAL_SLOT, slotLabel, spoolName, unitSlots } from "@shared/spools";
+import { amsUnitLetters, EXTERNAL_SLOT, spoolName, unitSlots } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -47,13 +47,9 @@ interface SlotProps {
 function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: SlotProps) {
   const [over, setOver] = useState(false);
   const name = spool ? spoolName(spool) : null;
-  const label = spool
-    ? `${slotLabel(slot)}: ${name?.title}${name?.detail ? `, ${name.detail}` : ""}`
-    : `${slotLabel(slot)}: empty`;
   return (
     <button
       type="button"
-      aria-label={readOnly ? label : `${label}. Change`}
       data-slot={slot}
       onClick={() => onOpen(slot)}
       disabled={readOnly}
@@ -88,7 +84,10 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
         </span>
         <span
           className={cn(
-            "text-small block w-full min-w-0 truncate font-semibold",
+            "block w-full min-w-0 font-semibold",
+            // A bay is narrow on a phone: the name steps down a size and may take two lines, breaking between
+            // words, rather than lose its end ("Sunflow…").
+            shape === "bay" ? "text-caption md:text-small line-clamp-2 break-words" : "text-small truncate",
             spool ? "text-ink" : "text-ink-faint",
           )}
         >

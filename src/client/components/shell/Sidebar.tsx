@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { CaretUpDownIcon, PaletteIcon, PlusIcon, SearchIcon, SignOutIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { Overline } from "@/components/ui/Overline";
 import { Popover } from "@/components/ui/Popover";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
@@ -54,7 +55,7 @@ export function Sidebar() {
 
       <nav aria-label="Sections" className="mt-5 flex flex-col gap-0.5">
         {sections.map(({ to, label, icon: Icon, shortcut }) => (
-          <Link key={to} to={to} className={itemClass}>
+          <Link key={to} to={to} preload="viewport" className={itemClass}>
             {({ isActive }) => (
               <>
                 <Icon
@@ -75,9 +76,9 @@ export function Sidebar() {
       </nav>
 
       <nav aria-label="Workshop" className="mt-6 flex flex-col gap-0.5">
-        <span className="text-caption text-ink-faint mb-1 px-3 font-semibold tracking-wider uppercase">Workshop</span>
+        <Overline className="mb-1 px-3">Workshop</Overline>
         {workshop.map(({ to, label, icon: Icon, shortcut }) => (
-          <Link key={to} to={to} className={itemClass}>
+          <Link key={to} to={to} preload="viewport" className={itemClass}>
             {({ isActive }) => (
               <>
                 <Icon
@@ -121,7 +122,7 @@ export function Sidebar() {
                 type="button"
                 className="pressable focus-ring hover:bg-ink/5 data-[state=open]:bg-ink/5 mt-2 flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left"
               >
-                <Avatar person={user} size="sm" />
+                <Avatar person={user} size="sm" decorative />
                 <span className="text-small text-ink min-w-0 flex-1 truncate font-semibold">{user.name}</span>
                 <CaretUpDownIcon size={16} className="text-ink-faint" aria-hidden />
                 <span className="sr-only">Account menu</span>

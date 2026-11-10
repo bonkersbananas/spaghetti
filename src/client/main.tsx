@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 import { registerServiceWorker } from "./lib/offline";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
 import { initTheme } from "./lib/theme";
+import { trackVisibleViewport } from "./lib/viewport";
 import { warmPhotosFor } from "./lib/warm-photos";
 import { routeTree } from "./routeTree.gen";
 
@@ -44,6 +45,7 @@ declare module "@tanstack/react-router" {
 }
 
 initTheme();
+trackVisibleViewport();
 registerServiceWorker();
 
 const root = document.getElementById("root");

@@ -11,7 +11,7 @@ import {
   plateName,
 } from "@shared/attempts";
 import { filamentFromSpool, type PrinterHint, printerHints, spoolName } from "@shared/spools";
-import { filamentFromFile, sameAsFile } from "@shared/threemf/index.ts";
+import { filamentFromFile, sameAsFile } from "@shared/threemf/prefill.ts";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useId, useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -19,6 +19,7 @@ import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { ToggleChip } from "@/components/ui/Chip";
 import { DurationField, NumberField, TextField } from "@/components/ui/Field";
 import { CloseIcon, DriedIcon, PlusIcon } from "@/components/ui/icons";
+import { Overline } from "@/components/ui/Overline";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { SwatchPicker } from "@/components/ui/Swatch";
@@ -66,10 +67,10 @@ function Group({
 }) {
   return (
     <section className={cn("flex flex-col gap-3", className)}>
-      <h3 className="text-caption text-ink-faint inline-flex items-center gap-1.5 font-sans font-semibold tracking-wider uppercase">
+      <Overline as="h3" className="inline-flex items-center gap-1.5">
         {title}
         {mark}
-      </h3>
+      </Overline>
       {children}
     </section>
   );

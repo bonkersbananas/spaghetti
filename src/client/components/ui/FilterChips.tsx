@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { Overline } from "./Overline";
 
 /**
  * A row of chips: on phones it scrolls sideways under the thumb, edge to
@@ -31,7 +32,7 @@ export function FilterGroup({ label, children }: { label: string; children: Reac
   return (
     // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset.
     <div role="group" aria-label={label} className="flex flex-col gap-2.5">
-      <span className="text-caption text-ink-faint px-0.5 font-semibold tracking-wider uppercase">{label}</span>
+      <Overline>{label}</Overline>
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );

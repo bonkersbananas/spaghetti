@@ -60,7 +60,7 @@ export function ToggleChip({
       aria-pressed={selected}
       className={cn(
         base,
-        "pressable focus-ring h-9 px-3.5 md:h-8",
+        "pressable focus-ring touch-target relative h-9 px-3.5 md:h-8",
         selected ? selectedTones[tone] : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}

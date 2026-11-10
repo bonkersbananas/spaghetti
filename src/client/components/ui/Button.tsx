@@ -21,6 +21,13 @@ const sizes: Record<ButtonSize, string> = {
 
 const iconSizes: Record<ButtonSize, number> = { sm: 16, md: 20, lg: 22 };
 
+/**
+ * Small buttons keep a 44 px hit area on touch screens (touch-target), which
+ * needs a positioned button: relative, unless the caller places it.
+ */
+const hitArea = (size: ButtonSize, className?: string) =>
+  size === "sm" && cn("touch-target", !/\b(absolute|fixed|sticky)\b/.test(className ?? "") && "relative");
+
 export interface ButtonProps extends ComponentPropsWithRef<"button"> {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -59,6 +66,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         "pressable focus-ring inline-flex shrink-0 items-center justify-center whitespace-nowrap select-none disabled:cursor-not-allowed aria-busy:pointer-events-none",
         variants[variant],
         sizes[size],
+        hitArea(size, className),
         fullWidth && "w-full",
         className,
       )}
@@ -103,6 +111,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         "pressable focus-ring inline-flex shrink-0 items-center justify-center",
         variants[variant],
         iconButtonSizes[size],
+        hitArea(size, className),
         className,
       )}
       {...props}
