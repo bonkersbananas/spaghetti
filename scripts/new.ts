@@ -80,6 +80,16 @@ function create(file: string, content: string) {
   writeFileSync(file, content);
 }
 
+/** Stops before anything is written if a file this command would create exists already. */
+function assertFree(...files: string[]) {
+  for (const file of files) {
+    if (existsSync(file)) {
+      console.error(`✗ ${shown(file)} exists already; nothing was created.`);
+      process.exit(1);
+    }
+  }
+}
+
 /** Edits an existing file: puts `text` before a marker line, or leaves a to-do if the marker has moved. */
 function wire(file: string, marker: string | RegExp, text: string, manual: string) {
   const source = readFileSync(file, "utf8");
@@ -99,11 +109,14 @@ function append(file: string, text: string) {
 }
 
 if (kind === "route") {
-  if (existsSync(path("src/client/routes/_app", `${kebab}.tsx`))) {
-    console.error(`✗ The route ${kebab} exists already.`);
+  // Check everything that could stop us before the first file is written.
+  assertFree(path("src/client/routes/_app", `${kebab}.tsx`), path("e2e", `${kebab}.spec.ts`));
+  const placement = args.includes("--section") ? "sections" : args.includes("--workshop") ? "workshop" : null;
+  const keys = flag("--shortcut") ?? `g ${kebab[0]}`;
+  if (placement && readFileSync(path("src/shared/shortcuts.ts"), "utf8").includes(`keys: ["${keys}"]`)) {
+    console.error(`✗ The keys "${keys}" are taken: pass another with --shortcut "g x". Nothing was created.`);
     process.exit(1);
   }
-  const placement = args.includes("--section") ? "sections" : args.includes("--workshop") ? "workshop" : null;
   create(path("src/client/routes/_app", `${kebab}.tsx`), routeTemplate(kebab));
   create(path("e2e", `${kebab}.spec.ts`), routeE2eTemplate(kebab));
   wire(
@@ -114,12 +127,6 @@ if (kind === "route") {
   );
   if (placement) {
     const id = `go${toPascal(kebab)}`;
-    const keys = flag("--shortcut") ?? `g ${kebab[0]}`;
-    const shortcuts = readFileSync(path("src/shared/shortcuts.ts"), "utf8");
-    if (shortcuts.includes(`keys: ["${keys}"]`)) {
-      console.error(`✗ The keys "${keys}" are taken: pass another with --shortcut "g x".`);
-      process.exit(1);
-    }
     wire(
       path("src/shared/shortcuts.ts"),
       /id: "paletteNext"/,
@@ -159,6 +166,11 @@ if (kind === "component") {
     console.error(`✗ No components/${dir} folder.`);
     process.exit(1);
   }
+  assertFree(
+    path("src/client/components", dir, `${component}.tsx`),
+    path("src/client/components/styleguide", `${component}Section.tsx`),
+    path("e2e", `styleguide-${kebab}.spec.ts`),
+  );
   create(path("src/client/components", dir, `${component}.tsx`), componentTemplate(component));
   create(
     path("src/client/components/styleguide", `${component}Section.tsx`),
@@ -207,6 +219,7 @@ if (kind === "endpoint") {
     );
     process.exit(1);
   }
+  assertFree(path("src/worker/routes", `${kebab}.ts`), path("test/worker", `${kebab}.test.ts`));
   create(path("src/worker/routes", `${kebab}.ts`), endpointTemplate(kebab));
   create(path("test/worker", `${kebab}.test.ts`), endpointTestTemplate(kebab));
   append(path("src/shared/api.ts"), endpointTypesTemplate(kebab));
