@@ -191,7 +191,10 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.keyboard.press("ControlOrMeta+k");
       await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("stand");
-      await page.getByRole("option", { name: /^Headphone stand\b/ }).waitFor();
+      await page
+        .getByRole("option", { name: /^Headphone stand\b/ })
+        .first()
+        .waitFor();
       await page.getByRole("group", { name: "Builds" }).waitFor();
     },
     cleanup: async (page) => {
