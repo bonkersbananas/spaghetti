@@ -361,6 +361,13 @@ export interface SpoolAttemptsResponse {
   attempts: AttemptHit[];
 }
 
+/** PUT /api/printer: any part of the setup; what is left out stays as it is. */
+export interface UpdatePrinterRequest {
+  nozzles?: Partial<PrinterSetup["nozzles"]>;
+  plates?: string[];
+  amsUnits?: number;
+}
+
 /** GET /api/printer: how the printer is set up, and what is loaded where (slot → spool id). */
 export interface PrinterResponse {
   setup: PrinterSetup;
