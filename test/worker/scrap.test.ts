@@ -84,18 +84,27 @@ describe("scrapping a build", () => {
 });
 
 describe("unscrap of something that is not a scrapped idea", () => {
-  it("is refused and restores nothing", async () => {
+  it("is refused, and a deleted attempt it names stays deleted", async () => {
     const started = await start(await idea("Flexi hummingbird"));
     await attempt(started.id);
     const before = (await (await request(`/api/items/${started.id}`, { cookie })).json<ItemResponse>()).item;
+    const deletedId = before.attempts[0]?.id as string;
+    await request(`/api/attempts/${deletedId}`, { method: "DELETE", cookie });
+
     const undone = await request(`/api/items/${started.id}/unscrap`, {
       method: "POST",
       cookie,
-      json: { stage: "building", startedAt: Date.now(), finishedAt: null, coverPhotoId: null, attemptIds: [] },
+      json: {
+        stage: "building",
+        startedAt: Date.now(),
+        finishedAt: null,
+        coverPhotoId: null,
+        attemptIds: [deletedId],
+      },
     });
     expect(undone.status).toBe(404);
     const after = (await (await request(`/api/items/${started.id}`, { cookie })).json<ItemResponse>()).item;
-    expect(after.attempts).toHaveLength(before.attempts.length);
+    expect(after.attempts).toHaveLength(0);
   });
 });
 
