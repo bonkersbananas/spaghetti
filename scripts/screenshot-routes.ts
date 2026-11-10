@@ -148,7 +148,22 @@ export const shots: Shot[] = [
     cleanup: unmockToday,
   },
   // With a print running, the sidebar's card (hidden on Today) and the phone's four tabs around capture.
-  { name: "sidebar-printing", path: "/ideas", width: 1440, selector: "aside" },
+  {
+    name: "sidebar-printing",
+    path: "/ideas",
+    width: 1440,
+    selector: "aside",
+    // The card arrives once the builds are fetched, and eases in.
+    prepare: async (page) => {
+      await page
+        .getByRole("complementary")
+        .getByRole("link", { name: /Towel hook/ })
+        .waitFor();
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+  },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
   { name: "builds", path: "/builds", fullPage: true },
