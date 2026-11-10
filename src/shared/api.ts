@@ -184,6 +184,41 @@ export interface ItemResponse {
   item: Item;
 }
 
+/** What GET /api/deleted lists: things deleted in the last 30 days that can still be restored. */
+export interface DeletedItem {
+  id: string;
+  stage: ItemStage;
+  title: string | null;
+  note: string;
+  deletedAt: number;
+  /** The first photo that is shown, for a small picture. */
+  photoId: string | null;
+}
+
+export interface DeletedAttempt {
+  id: string;
+  itemId: string;
+  /** The idea or build it belongs to (its title, or null when it has none). */
+  itemTitle: string | null;
+  outcome: Outcome | null;
+  printedAt: number;
+  deletedAt: number;
+}
+
+export interface DeletedResponse {
+  items: DeletedItem[];
+  attempts: DeletedAttempt[];
+}
+
+/** POST /api/items/:id/unscrap: what the build was like before it was scrapped back to an idea. */
+export interface UnscrapRequest {
+  stage: Exclude<ItemStage, "idea">;
+  startedAt: number;
+  finishedAt: number | null;
+  coverPhotoId: string | null;
+  attemptIds: string[];
+}
+
 /** POST /api/capture: the idea a share became, and its link. */
 export interface CaptureResponse {
   id: string;

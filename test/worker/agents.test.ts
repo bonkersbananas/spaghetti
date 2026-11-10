@@ -155,6 +155,8 @@ describe("authenticating with a token", () => {
       expect((await errorOf(result)).code).toBe("person_only");
     };
     await refused(asAgent(made.token, "/api/agents"));
+    await refused(asAgent(made.token, "/api/deleted"));
+    await refused(asAgent(made.token, `/api/items/${crypto.randomUUID()}/scrap`, { method: "POST" }));
     await refused(asAgent(made.token, "/api/agents", { method: "POST", json: { name: "Sneaky", scopes: ["read"] } }));
     await refused(
       asAgent(made.token, `/api/agents/${made.agent.id}/tokens`, { method: "POST", json: { scopes: ["read"] } }),

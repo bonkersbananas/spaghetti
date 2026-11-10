@@ -259,6 +259,45 @@ export const shots: Shot[] = [
   },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
+  { name: "ideas-started", path: "/ideas", fullPage: true },
+  {
+    // Scrapping a build that began as an idea: it is back in Ideas, with an Undo.
+    name: "build-scrapped",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Scrap build" }).click();
+      await page.getByText("Build scrapped").waitFor();
+      await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.getByRole("button", { name: "Undo" }).click();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    // Recently deleted: an idea, an idea with a photo, and a build, deleted a moment ago (restored after the shot).
+    name: "deleted",
+    path: "/deleted",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of [SEED_IDS.deskTidy, SEED_BUILD_IDS.headphoneStand]) {
+        await page.request.delete(`/api/items/${id}`, { headers });
+      }
+      await page.reload();
+      await page.getByRole("heading", { level: 1, name: "Recently deleted" }).waitFor();
+      await page
+        .getByRole("button", { name: /^Restore/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of [SEED_IDS.deskTidy, SEED_BUILD_IDS.headphoneStand]) {
+        await page.request.post(`/api/items/${id}/restore`, { headers });
+      }
+    },
+  },
   {
     // The card's menu in the Up next queue: a place up or down, or off the queue.
     name: "ideas-up-next-menu",
