@@ -4,14 +4,7 @@
  * a score: it counts, and it names what people changed right before a print
  * that worked.
  */
-import {
-  type AttemptSettings,
-  byPrintTime,
-  diffSettings,
-  type Outcome,
-  plateName,
-  tagLabel,
-} from "./attempts.ts";
+import { type AttemptSettings, byPrintTime, diffSettings, type Outcome, plateName, tagLabel } from "./attempts.ts";
 import { settingsMaterial } from "./recipes.ts";
 
 /** What the computation needs of an attempt (plus its build's title for the longest builds). */
@@ -257,4 +250,3 @@ export function fixSentence(fixes: readonly FixCount[]): string | null {
   const last = parts.pop();
   return `fixed ${parts.length ? `${parts.join(", ")} and ${last}` : last}`;
 }
-

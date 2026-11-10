@@ -10,7 +10,7 @@ import {
   weekLabel,
 } from "@shared/journal";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot, OpenNotebook } from "@/components/illustrations";
 import { Filters } from "@/components/journal/Filters";
@@ -203,7 +203,20 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
         {line === null ? (
           <Skeleton className="h-6 w-64 max-w-full" />
         ) : (
-          line && <p className="font-display text-title text-ink-soft">{line}</p>
+          line && (
+            <p className="font-display text-title text-ink-soft">
+              {line}
+              {first && (
+                <Link
+                  to="/year"
+                  search={{ year: new Date(month.start).getFullYear() }}
+                  className="text-small text-ink-faint hover:text-ink focus-ring decoration-ink/20 ml-3 rounded-sm font-sans underline underline-offset-4"
+                >
+                  See the year
+                </Link>
+              )}
+            </p>
+          )
         )}
       </header>
       {month.groups.map((group) => (
