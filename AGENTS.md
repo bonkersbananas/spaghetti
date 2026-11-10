@@ -31,6 +31,7 @@ src/
       pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, SpoolRow, AddSpoolSheet, SpoolGrams (the hero figure, what used it), WeightSheets (weigh it, set the weight), WeightPicker, RunningLow
       ideas/              IdeaCard, PhotoViewer, PhotoStrip, AddFirstPhotos
       builds/             BuildCard, AttemptEntry, AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
+      recipes/            RecipeCard, RecipeSheet (edit name and note, delete), SaveRecipe (the form and its sheet), SaveAsRecipe (inline in the attempt sheet), RecipePicker ("Start from a recipe"), RecipeShelf ("Recipes for silk PLA")
       today/              the blocks of /today: InThePrinter, PickUpAgain, Lately, BackBurner (the print on the bed is builds/PrintingCard)
       journal/            JournalEntry, Filters (the chips shared by the journal and search)
       search/             Results (attempt and item results)
@@ -168,6 +169,12 @@ Never edit a migration that has been merged; add a new one.
 - An attempt's filaments keep their plain values (type, brand, color) and add `spoolId` when picked from the pantry, so attempts read the same if the spool goes. `GET /api/spools/:id/attempts` finds them with `json_each` over the settings.
 - Slicer files (`attempt_files`, one live per attempt) are read in the browser (`shared/threemf`); the client sends what it read (`prefill`), the plate's PNG and, under `MAX_SLICER_FILE_BYTES`, the bytes, through the outbox behind the attempt (`files` in an outbox entry). R2 keys are `files/<id>/file` and `/thumb`, served at `/api/files/:id` and `/api/files/:id/thumb` only while the file, its attempt and its build are live. The purge removes them with their attempt.
 - The fields marked "from the file" are the ones still equal to `file.prefill` (`sameAsFile`, `filamentFromFile`).
+
+### Recipes
+
+- A recipe (`recipes` table, [0017](docs/decisions/0017-recipes-are-frozen-attempts.md)) is an attempt that worked, named: `POST /api/recipes { id, name, note?, sourceAttemptId }` reads the settings from the attempt (`recipeSettings` in `shared/recipes.ts`), so settings are never sent or edited; `PATCH` changes the name and note only. Pure rules (matching by material and finish, search terms, `startFromRecipe`) are in `shared/recipes.ts`; the client's cache and writes (optimistic save, rename, delete with undo) in `lib/recipes.ts`, query root `recipes` (persisted, refreshed by `recipe` changes in `lib/live.ts`).
+- Search returns `recipes` beside builds, attempts and ideas, found by a match in the Worker (`recipeMatchesTerms`), not by the FTS index; `what-worked` and the MCP tools `list_recipes` / `what_worked` include them.
+- Starting an attempt from a recipe only prefills the sheet (`RecipePicker` in `LogAttempt`); `AttemptFields` tells what changed against the recipe through its `baseline` prop instead of against the previous attempt.
 
 ### Journal and search
 
