@@ -36,4 +36,10 @@ describe("reading a model page", () => {
     expect(extractModelPage("makerworld", "<html><body>hello</body></html>")).toBeNull();
     expect(extractModelPage("makerworld", '<script id="__NEXT_DATA__">{broken</script>')).toBeNull();
   });
+
+  it("survives character references that aren't characters", () => {
+    const html =
+      '<meta property="og:title" content="Hook &#x110000; &#99999999; &#xZZ; &amp; &#65;"><meta property="og:description" content="x">';
+    expect(extractModelPage("printables", html)?.title).toBe("Hook &#x110000; &#99999999; &#xZZ; & A");
+  });
 });

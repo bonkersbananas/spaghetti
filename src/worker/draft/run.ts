@@ -207,7 +207,12 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
     const base = env.ANTHROPIC_BASE_URL?.trim();
     // With a stand-in Anthropic (e2e, screenshots) the page isn't fetched: the tests must not depend on the real sites.
     const page = base ? { status: null, html: null } : await fetchModelPage(row.url);
-    const facts = page.html ? extractModelPage(site.site.id, page.html) : null;
+    let facts: ReturnType<typeof extractModelPage> = null;
+    try {
+      facts = page.html ? extractModelPage(site.site.id, page.html) : null;
+    } catch {
+      // A page that breaks the reader is a page it can't read: web fetch is tried instead.
+    }
     answer = facts
       ? await askClaude(apiKey, row.url, site.site, base, facts)
       : await askClaude(apiKey, row.url, site.site, base);
