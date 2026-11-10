@@ -383,6 +383,14 @@ export const shots: Shot[] = [
       await page.getByRole("radio", { name: "Spaghetti" }).first().click();
       await page.getByRole("dialog").getByText("suggested").first().waitFor();
     },
+    // The sheet autosaves the outcome it opened with: put the attempt back off the bed for the shots after it.
+    cleanup: async (page) => {
+      await page.waitForTimeout(1500);
+      await page.request.patch(`/api/attempts/${SEED_BUILD_IDS.drawerDividerAttempt}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { outcome: null, failureTags: [] },
+      });
+    },
   },
   {
     name: "journal-off-bed",

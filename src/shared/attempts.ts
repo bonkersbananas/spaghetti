@@ -579,7 +579,8 @@ export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildS
       seen.add(identity);
       filaments.push(filament);
     }
-    if (attempt.outcome === null) continue;
+    // Still printing has spent nothing yet; one off the bed has spent what the printer says it took.
+    if (attempt.outcome === null && attempt.endedAt == null) continue;
     const { actualMinutes, estimatedMinutes, weightGrams, failedAtPercent } = attempt.settings;
     if (actualMinutes !== undefined) {
       minutes += actualMinutes;

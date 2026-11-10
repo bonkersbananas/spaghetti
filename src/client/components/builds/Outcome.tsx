@@ -22,11 +22,13 @@ const selectedStyles: Record<Outcome, string> = {
 };
 
 /** The dot on the timeline: the outcome's color, or semolina while printing. */
-export const outcomeDots: Record<Outcome | "printing", string> = {
+export const outcomeDots: Record<Outcome | "printing" | "offBed", string> = {
   success: "bg-basil",
   partial: "bg-semolina",
   failed: "bg-tomato",
   printing: "bg-semolina",
+  /** Stopped, no verdict yet: neutral, like its chip. */
+  offBed: "bg-ink/30",
 };
 
 interface OutcomePickerProps {

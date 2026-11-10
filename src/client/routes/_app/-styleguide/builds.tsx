@@ -28,7 +28,8 @@ const sampleStrip = [
   { id: "1", number: 1, outcome: "failed" },
   { id: "2", number: 2, outcome: "partial" },
   { id: "3", number: 3, outcome: "success" },
-  { id: "4", number: 4, outcome: null },
+  { id: "4", number: 4, outcome: null, offBed: true },
+  { id: "5", number: 5, outcome: null },
 ] as const;
 
 const longStrip = Array.from({ length: 17 }, (_, index) => ({

@@ -57,7 +57,7 @@ export function OutcomeStrip({ attempts, onPick, className }: OutcomeStripProps)
         {shown.map((attempt) => {
           const dot = cn(
             "relative size-2.5 shrink-0 rounded-full",
-            outcomeDots[attempt.outcome ?? "printing"],
+            outcomeDots[attempt.outcome ?? (attempt.offBed ? "offBed" : "printing")],
             attempt.outcome === null && !attempt.offBed && "animate-pulse",
           );
           if (!onPick) return <span key={attempt.id} aria-hidden className={dot} />;

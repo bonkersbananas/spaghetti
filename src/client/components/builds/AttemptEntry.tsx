@@ -77,7 +77,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
         <span
           className={cn(
             "ring-paper relative mt-5 size-3 rounded-full ring-4",
-            outcomeDots[attempt.outcome ?? "printing"],
+            outcomeDots[attempt.outcome ?? (offBed ? "offBed" : "printing")],
             printing && "animate-pulse",
           )}
         />
