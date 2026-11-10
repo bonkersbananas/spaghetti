@@ -29,7 +29,7 @@ export function upkeepRowText(task: UpkeepTask): string {
       ? task.sinceHours - task.intervalHours
       : task.sinceDays - (task.intervalDays ?? 0);
   const unit = task.by === "hours" ? "print hours" : "days";
-  return `Due: ${Math.max(1, Math.floor(over))} ${unit} over`;
+  return `Due ${Math.max(1, Math.floor(over))} ${unit} ago`;
 }
 
 /**
@@ -45,7 +45,7 @@ export function Upkeep() {
 
   return (
     <section aria-labelledby="printer-upkeep" className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 id="printer-upkeep" className="text-title text-ink">
           Upkeep
         </h2>
