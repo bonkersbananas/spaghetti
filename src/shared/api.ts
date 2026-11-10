@@ -1,5 +1,6 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
 import type { BridgeStatus } from "./bridge.ts";
+import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { PersonColor } from "./people.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
@@ -309,6 +310,10 @@ export interface JournalResponse {
 }
 
 /** GET /api/journal/summary?from=&to= (epoch ms, the month in local time). */
+export interface InsightsResponse {
+  insights: Insights;
+}
+
 export interface JournalSummaryResponse {
   summary: JournalSummary;
 }
