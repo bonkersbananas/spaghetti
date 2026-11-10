@@ -2,8 +2,8 @@ import type { Recipe } from "@shared/api";
 import { useState } from "react";
 import { Overline } from "@/components/ui/Overline";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { LazyRecipeSheet } from "./LazyRecipeSheet";
 import { RecipeCard } from "./RecipeCard";
-import { RecipeSheet } from "./RecipeSheet";
 
 /**
  * The recipes for a spool or a material: "Recipes for silk PLA". Nothing at all when there are none, so a spool
@@ -43,7 +43,7 @@ export function RecipeShelf({
           </li>
         ))}
       </ul>
-      <RecipeSheet recipeId={open} onOpenChange={(next) => !next && setOpen(null)} />
+      <LazyRecipeSheet recipeId={open} onOpenChange={(next) => !next && setOpen(null)} />
     </section>
   );
 }

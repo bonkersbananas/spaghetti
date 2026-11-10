@@ -6,7 +6,7 @@ import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-ro
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot, NoodleSearch } from "@/components/illustrations";
 import { Filters } from "@/components/journal/Filters";
-import { RecipeSheet } from "@/components/recipes/RecipeSheet";
+import { LazyRecipeSheet } from "@/components/recipes/LazyRecipeSheet";
 import { AttemptResult, attemptLink, ItemResult, itemLink, RecipeResult } from "@/components/search/Results";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -288,7 +288,7 @@ function Search() {
           <Filters layout="column" tags value={filters} onChange={setFilters} />
         </aside>
       </div>
-      <RecipeSheet recipeId={openRecipe} onOpenChange={(next) => !next && setOpenRecipe(null)} />
+      <LazyRecipeSheet recipeId={openRecipe} onOpenChange={(next) => !next && setOpenRecipe(null)} />
     </>
   );
 }

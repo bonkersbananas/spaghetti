@@ -19,7 +19,7 @@ import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { GramsHero, UsedBy } from "@/components/pantry/SpoolGrams";
 import { SetWeightSheet, WeighSheet } from "@/components/pantry/WeightSheets";
-import { RecipeShelf } from "@/components/recipes/RecipeShelf";
+import { LazyRecipeShelf } from "@/components/recipes/LazyRecipeSheet";
 import { AttemptResult } from "@/components/search/Results";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -391,7 +391,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
 function SpoolRecipes({ material, finish }: { material: string; finish: string | null }) {
   const recipes = recipesFor(useRecipes(), { material, finish });
   const kind = [finish ? finishLabel(finish).toLowerCase() : null, material.trim()].filter(Boolean).join(" ");
-  return <RecipeShelf recipes={recipes} title={`Recipes for ${kind}`} className="mt-4 flex flex-col gap-3" />;
+  return <LazyRecipeShelf recipes={recipes} title={`Recipes for ${kind}`} className="mt-4 flex flex-col gap-3" />;
 }
 
 /** "How does this silk PLA behave": every attempt printed with it, and how they went. */

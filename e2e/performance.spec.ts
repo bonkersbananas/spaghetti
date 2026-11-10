@@ -19,17 +19,18 @@ const origin = (page: Page) => new URL(page.url()).origin;
  * 10%. Most of it is React, the router, TanStack Query, sheets (vaul and
  * Radix), toasts and motion, which every screen needs at once.
  */
+// Recipes added about 1 kB of shared code to every screen (cache roots, change feed, an icon); its sheet and shelves load on demand, and search draws recipe results (about 4 kB).
 const BUDGET_KB = {
   "/sign-in": 245,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 345,
+  "/today": 350,
   // Sharing in (the share target's intake) added about 2 kB to every signed-in screen, and notifications a little more (two menu rows, the service worker messages); the settings sheet itself loads on first open.
   "/ideas": 340,
   "/builds": 340,
-  "/journal": 345,
-  "/search": 345,
-  "/pantry": 345,
-  "/printer": 345,
+  "/journal": 350,
+  "/search": 350,
+  "/pantry": 350,
+  "/printer": 350,
 } as const;
 
 /**
