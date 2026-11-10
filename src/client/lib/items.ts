@@ -12,6 +12,7 @@ import {
   type UploadProgress,
   useOutbox,
 } from "./outbox";
+import { forgetItem } from "./recent";
 
 /** Ideas live in one list, builds (building, done, shelved) in the other. */
 export type ItemList = "ideas" | "builds";
@@ -322,6 +323,8 @@ export function deleteItem(queryClient: QueryClient, item: ItemView) {
   const pendingEntry = outbox.remove(item.id);
   const onServer = !pendingEntry?.create;
   patchCachedItem(queryClient, item.id, () => null);
+  // Gone from the palette's Recent too (it comes back when the item is next opened).
+  forgetItem(item.id);
   const deleted = onServer
     ? api(`/items/${item.id}`, { method: "DELETE" }).catch((error) => {
         if (error instanceof ApiError && error.status === 404) return;

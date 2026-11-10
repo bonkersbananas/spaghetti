@@ -127,6 +127,8 @@ test("adds a capture to the print that's running and finishes it", async ({ page
 
   // Anywhere in the app, capture offers the print, with "New idea" a tap away.
   await page.goto("/ideas");
+  // The hotkeys exist once the shell has rendered.
+  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
   if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
   else await page.keyboard.press("c");
   const sheet = page.getByRole("dialog", { name: "Add to the print" });

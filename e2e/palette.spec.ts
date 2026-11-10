@@ -88,6 +88,18 @@ test.describe("on a laptop", () => {
     ).toBeVisible();
   });
 
+  test("a deleted idea leaves Recent", async ({ page }) => {
+    const id = await create(page, { title: "Doomed hook" });
+    await page.goto(`/ideas/${id}`);
+    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Doomed hook");
+    await page.getByRole("button", { name: "Delete idea" }).click();
+    await expect(page).toHaveURL(/\/ideas$/);
+    await expect(page.getByText("Idea deleted")).toBeVisible();
+    await page.keyboard.press(open);
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Doomed hook" })).toHaveCount(0);
+  });
+
   test("runs 'log attempt' from a build, and goes to a section", async ({ page }) => {
     const id = await create(page, { title: "Cable chain", stage: "building" });
     await page.goto(`/builds/${id}`);
