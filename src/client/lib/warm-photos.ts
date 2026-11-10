@@ -36,6 +36,26 @@ function want(photoId: string | undefined, variant: PhotoVariant) {
   queue.push(url);
 }
 
+/**
+ * Warming starts a moment after a list arrives, once the browser is idle, so
+ * it doesn't compete with the photos on screen for a phone's connection;
+ * then it goes two at a time.
+ */
+let scheduled = false;
+function schedulePump() {
+  if (scheduled) return;
+  scheduled = true;
+  const start = () => {
+    scheduled = false;
+    void pump();
+  };
+  // The screen's own photos start loading as it renders; give them a head start, then wait for a quiet moment.
+  setTimeout(() => {
+    if ("requestIdleCallback" in window) requestIdleCallback(start, { timeout: 3000 });
+    else start();
+  }, 1500);
+}
+
 async function pump() {
   while (running < 2 && queue.length) {
     const url = queue.shift();
@@ -68,5 +88,5 @@ export function warmPhotosFor(queryKey: readonly unknown[], data: unknown) {
     for (const photo of item.photos.slice(0, 12)) want(photo.id, "thumb");
     for (const attempt of item.attempts) want(item.photos.find((p) => p.attemptId === attempt.id)?.id, "large");
   } else return;
-  void pump();
+  schedulePump();
 }

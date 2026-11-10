@@ -7,6 +7,8 @@ function Tab({ to, label, icon: Icon }: Section) {
   return (
     <Link
       to={to}
+      // Phones have no hover: fetch each section's code once the tab bar shows, so the first tap is instant.
+      preload="viewport"
       className="pressable group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
     >
       {({ isActive }) => (

@@ -31,11 +31,13 @@ import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
+import { Overline } from "@/components/ui/Overline";
 import { type PaletteGroup, PaletteSurface } from "@/components/ui/Palette";
 import { Photo } from "@/components/ui/Photo";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { ShortcutList } from "@/components/ui/ShortcutList";
@@ -297,6 +299,19 @@ function TypeSection() {
         <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:gap-6">
           <span className="text-caption text-ink-faint w-24 shrink-0 font-semibold">tabular</span>
           <span className="tabular text-body text-ink">0.20 mm · 220 °C · 1,234 g · 03:41:07</span>
+        </div>
+        <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:gap-6">
+          <span className="text-caption text-ink-faint w-24 shrink-0 font-semibold">Overline</span>
+          <Overline count={3}>Attempts</Overline>
+        </div>
+        <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:gap-6">
+          <span className="text-caption text-ink-faint w-24 shrink-0 font-semibold">SectionHeading</span>
+          <div className="flex flex-col gap-2">
+            <SectionHeading count={3}>Attempts</SectionHeading>
+            <SectionHeading size="title" count={8}>
+              PLA
+            </SectionHeading>
+          </div>
         </div>
       </Panel>
     </Section>
@@ -922,7 +937,7 @@ function SearchSection() {
           </div>
           <Label>A month heading in the journal</Label>
           <div className="flex flex-col gap-1">
-            <span className="text-caption text-ink-faint font-semibold tracking-wider uppercase">October</span>
+            <Overline as="h3">October</Overline>
             <span className="font-display text-title text-ink-soft">5 prints, 1 spaghetti, phone stand finished</span>
           </div>
         </Panel>

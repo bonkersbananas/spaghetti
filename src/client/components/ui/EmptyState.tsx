@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { duration, ease } from "@/lib/motion";
@@ -19,7 +19,7 @@ interface EmptyStateProps {
  */
 export function EmptyState({ illustration, title, children, action, className }: EmptyStateProps) {
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: duration.slow, ease: ease.out }}
@@ -31,6 +31,6 @@ export function EmptyState({ illustration, title, children, action, className }:
       <h2 className="text-headline text-ink max-w-sm px-4">{title}</h2>
       {children && <div className="text-body text-ink-soft mt-2 max-w-sm px-4">{children}</div>}
       {action && <div className="mt-6">{action}</div>}
-    </motion.div>
+    </m.div>
   );
 }

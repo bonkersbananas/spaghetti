@@ -11,7 +11,6 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon, PrinterIcon } from "@/components/ui/icons";
-import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -139,17 +138,6 @@ function Pantry() {
               </ul>
             </section>
           ))}
-          {isDesktop && (
-            <div className={grid}>
-              <AddPhotoTile
-                size="card"
-                icon={PlusIcon}
-                label="Add spool"
-                disabled={readOnly}
-                onClick={() => openAdd()}
-              />
-            </div>
-          )}
         </div>
       )}
       {!isDesktop && (spools?.length ?? 0) > 0 && (

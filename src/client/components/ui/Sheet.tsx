@@ -87,7 +87,7 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, children }
               <Drawer.Description className="sr-only">{title}</Drawer.Description>
             )}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">{children}</div>
+          <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">{children}</div>
           {footer && (
             <div className="flex shrink-0 items-center gap-3 px-5 pt-2 pb-[max(1rem,var(--sg-safe-bottom))]">
               {footer}
@@ -141,7 +141,7 @@ function DesktopSheet({
               <IconButton icon={CloseIcon} label="Close" size="sm" className="-mt-0.5 -mr-2" />
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">{children}</div>
+          <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">{children}</div>
           {footer && (
             <div className="bg-paper/60 flex shrink-0 items-center gap-3 rounded-b-xl px-6 py-3.5">{footer}</div>
           )}

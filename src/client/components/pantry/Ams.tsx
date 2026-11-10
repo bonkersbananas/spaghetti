@@ -84,9 +84,10 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
         </span>
         <span
           className={cn(
-            "text-small block w-full min-w-0 font-semibold",
-            // A bay is narrow on a phone: a color name may take two lines, hyphenated, rather than lose its end.
-            shape === "bay" ? "line-clamp-2 break-words hyphens-auto" : "truncate",
+            "block w-full min-w-0 font-semibold",
+            // A bay is narrow on a phone: the name steps down a size and may take two lines, breaking between
+            // words, rather than lose its end ("Sunflow…").
+            shape === "bay" ? "text-caption md:text-small line-clamp-2 break-words" : "text-small truncate",
             spool ? "text-ink" : "text-ink-faint",
           )}
         >

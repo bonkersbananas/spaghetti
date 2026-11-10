@@ -213,46 +213,49 @@ function SpoolPage({ spool }: { spool: Spool }) {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {/* A label with its actions beside it, and what it says below at full width, so it never wraps under them. */}
+            <div className="flex flex-col gap-0.5">
+              <div className="flex min-h-8 items-center justify-between gap-3">
                 <span className="text-small text-ink-soft font-semibold">In the printer</span>
-                <span className="text-body text-ink">
-                  {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>
+                    {spool.slot ? "Move" : "Load it"}
+                  </Button>
+                  {spool.slot && (
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      onClick={() => spool.slot && void loadSlot(queryClient, spool.slot, null)}
+                    >
+                      Take out
+                    </Button>
+                  )}
+                </div>
               </div>
-              <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>
-                {spool.slot ? "Move" : "Load it"}
-              </Button>
-              {spool.slot && (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  onClick={() => spool.slot && void loadSlot(queryClient, spool.slot, null)}
-                >
-                  Take out
-                </Button>
-              )}
+              <span className="text-body text-ink">
+                {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
+              </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5">
+              <div className="flex min-h-8 items-center justify-between gap-3">
                 <span className="text-small text-ink-soft font-semibold">Dried</span>
-                <span className="text-body text-ink">
-                  {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
-                </span>
+                <ToggleChip
+                  tone="semolina"
+                  icon={DriedIcon}
+                  selected={!!value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000}
+                  onClick={() =>
+                    change({
+                      driedAt: value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000 ? null : Date.now(),
+                    })
+                  }
+                >
+                  Dried it today
+                </ToggleChip>
               </div>
-              <ToggleChip
-                tone="semolina"
-                icon={DriedIcon}
-                selected={!!value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000}
-                onClick={() =>
-                  change({
-                    driedAt: value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000 ? null : Date.now(),
-                  })
-                }
-              >
-                Dried it today
-              </ToggleChip>
+              <span className="text-body text-ink">
+                {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
+              </span>
             </div>
 
             <div className="flex flex-col gap-2.5">

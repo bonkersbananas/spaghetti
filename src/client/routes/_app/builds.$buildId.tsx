@@ -2,7 +2,7 @@ import { tagLabel } from "@shared/attempts";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
@@ -484,7 +484,7 @@ function StageChip({ item, printing, celebrate }: { item: ItemView; printing: bo
     return <Chip icon={ShelveIcon}>Shelved</Chip>;
   }
   return (
-    <motion.span
+    <m.span
       key={celebrate ? "celebrate" : "done"}
       initial={celebrate ? { scale: 0.5, rotate: -10, opacity: 0 } : false}
       animate={{ scale: 1, rotate: 0, opacity: 1 }}
@@ -495,7 +495,7 @@ function StageChip({ item, printing, celebrate }: { item: ItemView; printing: bo
         Done
       </Chip>
       {celebrate && (
-        <motion.span
+        <m.span
           initial={{ opacity: 0, scale: 0.4, x: -4, y: 4 }}
           animate={{ opacity: [0, 1, 0], scale: [0.4, 1.2, 0.9], x: 6, y: -8 }}
           transition={{ duration: 0.9, ease: "easeOut" }}
@@ -503,9 +503,9 @@ function StageChip({ item, printing, celebrate }: { item: ItemView; printing: bo
           aria-hidden
         >
           <SparkleIcon size={16} weight="fill" />
-        </motion.span>
+        </m.span>
       )}
-    </motion.span>
+    </m.span>
   );
 }
 

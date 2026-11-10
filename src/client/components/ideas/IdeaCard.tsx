@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
 import { relativeTime } from "@shared/time";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import type { ItemView } from "@/lib/items";
@@ -40,7 +40,7 @@ export function IdeaCard({ item, person, landing }: IdeaCardProps) {
   const cover = item.photos[0];
   const upload = useUploadState(item);
   return (
-    <motion.li
+    <m.li
       layout="position"
       initial={landing ? { opacity: 0, scale: 0.9, y: -12 } : false}
       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -61,7 +61,7 @@ export function IdeaCard({ item, person, landing }: IdeaCardProps) {
         person={person}
         className="h-full"
       />
-    </motion.li>
+    </m.li>
   );
 }
 

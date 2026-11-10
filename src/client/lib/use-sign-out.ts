@@ -5,11 +5,17 @@ import { api } from "./api";
 import { clearOfflineData } from "./offline";
 import { rememberUser, sessionQuery } from "./queries";
 
+/** The server-side sign-out still on its way; signing in again waits for it, so it can't end the new session. */
+let signingOut: Promise<unknown> = Promise.resolve();
+export const signOutSettled = () => signingOut;
+
+/** Signs out at once: the device forgets everything and shows sign-in while the server ends the session. */
 export function useSignOut() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   return useCallback(async () => {
-    await api("/session", { method: "DELETE" }).catch(() => undefined);
+    // keepalive: the request still reaches the server if the page goes away (a reload) first.
+    signingOut = api("/session", { method: "DELETE", keepalive: true }).catch(() => undefined);
     rememberUser(null);
     await clearOfflineData();
     queryClient.setQueryData(sessionQuery.queryKey, null);

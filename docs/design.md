@@ -120,6 +120,8 @@ Use `tabular` for numbers that line up (temperatures, durations, weights).
 - Spacing is Tailwind's 4 px scale. Prefer generous space to dividers.
 - Phone pages: `px-5`, content clears the tab bar with `pb-tabbar`; the shell handles safe-area insets (`pt-safe`, `pb-safe`).
 - Desktop: the sidebar is `w-sidebar` (16 rem); content sits in `max-w-wide` (72 rem) with `px-12`. A page with a single column of content (header text, fields, empty states) keeps it in one left-aligned `max-w-content` (45 rem) column, and empty states center within that column, not across the main area.
+- Touch targets: at least 44 px on phones. Controls drawn smaller (`Button`/`IconButton` `sm`, chips, a thumbnail's remove button, a toast's action) get `touch-target`, an invisible 44 px hit area on touch screens that doesn't change how they look.
+- Phone sheets sit on the on-screen keyboard: `lib/viewport.ts` keeps `--sg-keyboard-inset` and `--sg-visible-height` from `visualViewport` (iOS Safari doesn't shrink `100dvh` for the keyboard), so a sheet's footer button stays in view while typing. Fields are 16 px or more on phones (`text-body`), or iOS Safari zooms in.
 - Radii: `rounded-xs` (6) for keys and tiny bits, `sm` (10) for small buttons and nav items, `md` (14) for buttons and fields, `lg` (20) for cards and tiles, `xl` (28) for sheets and big panels, `rounded-pill` / `rounded-full` for chips and avatars. Bigger things get softer corners.
 
 ## Elevation
@@ -132,9 +134,9 @@ Surfaces are separated by soft, warm shadows, not borders.
 | `shadow-soft`   | Cards and secondary buttons at rest.         |
 | `shadow-raised` | Hover, the sign-in card, the capture button. |
 | `shadow-float`  | Sheets, dialogs, toasts.                     |
+| `shadow-bar`    | The phone tab bar (casts upward).            |
 
 In dark mode the same classes lift instead: a lighter surface and a faint lit top edge, not a darker shadow.
-| `shadow-bar`    | The phone tab bar (casts upward).            |
 
 A hairline (`bg-hairline`) is allowed only where a shadow can't work, such as between rows inside one surface.
 
@@ -143,6 +145,8 @@ A hairline (`bg-hairline`) is allowed only where a shadow can't work, such as be
 - Durations: `duration-instant` (90 ms, press), `duration-fast` (160 ms, hover and fades), `duration-base` (240 ms, sheets in), `duration-slow` (420 ms, entrances). Easing: `ease-out` for things arriving, `ease-in-out` for things leaving or looping.
 - In JS (`motion`), use `src/client/lib/motion.ts`: the same durations and easings, plus springs for things under a finger.
 - Everything tappable gets `pressable`: it shrinks to 97% while held.
+- `motion` is loaded lazily: components use `m.div` (not `motion.div`) inside the root's `<LazyMotion>`, so its animation code arrives just after the first screen.
+- JS scrolling (`scrollTo`, `scrollIntoView`) passes `behavior: scrollBehavior()` from `lib/motion.ts`, never `"smooth"`: an explicit smooth scroll ignores the reduced-motion CSS.
 - Focus: `focus-ring` / `shadow-ring`, a calm ink ring (never tomato, which means action or error). Fields keep their fill when focused; a field with an error uses `shadow-ring-error`.
 - `prefers-reduced-motion` is respected globally (CSS) and by `<MotionConfig reducedMotion="user">`. Never rely on motion to convey meaning.
 - Motion never delays content: no entrance animation longer than `slow`, nothing on scroll.
@@ -158,7 +162,7 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Button** — `primary` (tomato, one per screen), `secondary` (cream, soft shadow), `quiet` (toolbars, lists), `danger` (soft tomato). Sizes `sm`/`md`/`lg`; phone targets are at least 44 px. Optional `icon`, `shortcut` (keyboard hint, desktop only) and `loading`. **IconButton** needs a `label`.
 - **TextField / TextArea** — built for autosave: pass `saveState` to show "Saving… / Saved" beside the label instead of a save button. `appearance="plain"` for writing surfaces that read as text. TextArea grows with its content.
 - **SaveStatus** — the quiet autosave indicator on its own.
-- **Sheet** — the one overlay. A bottom sheet (vaul) on phones; on desktop a centered `dialog` (quick tasks like capture) or a right `panel` (detail views).
+- **Sheet** — the one overlay. A bottom sheet (vaul) on phones; on desktop a centered `dialog` (quick tasks like capture) or a right `panel` (detail views). Focus moves into it when it opens, stays there, and goes back to what opened it when it closes, also when it was opened from a shortcut or the palette.
 - **Toast** — `toast.undo(message, { onUndo })` after any delete. Also `toast.success`, `toast.error`, `toast.message`, `toast.action` (one button, such as "View") and `toast.delight` (a sparkle, for the rare moment worth celebrating). Phones show toasts above the tab bar.
 - **EmptyState** — illustration, a title with a small pasta joke, one plain sentence on what goes here, one next step. It fills the page's `max-w-content` column. On desktop its button is `secondary` when the sidebar's "New idea" is already the screen's primary action; phones keep it primary.
 - **Card** — photo first, optional title (the note stands in), chips over the photo, a `badge` top right (`PhotoCountBadge`), meta line, author avatar. Without a photo it is a **note card**: the note sits on paper where the photo would be, in the same grid. Pass `link` to make it a router link. Grids of prints use `aspect="portrait"` (4:5).
@@ -167,7 +171,7 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **PhotoThumb / AddPhotoTile** — square thumbnails with a remove button, and the wells to tap for more photos (`lg` when there are none yet, `md` and `sm` at the end of a row, `card` to fill a 4:5 grid cell, `row` for a full-width strip). `useFilePicker` gives the hidden input: `camera` opens the camera directly on phones.
 - **NoteField** — a note that reads as text with clickable links and becomes a growing textarea when tapped. TextArea also has `appearance="title"` for an editable heading.
 - **Chip / ToggleChip** — status and material labels in four tones; ToggleChip for filters, and with a `tone` for tags (a picked failure tag in tomato, a success note in basil).
-- **SegmentedControl** — two to four choices side by side (main or auxiliary nozzle, no / normal / tree supports, where a capture goes). Arrow keys move between segments.
+- **SegmentedControl** — two to four short choices side by side (main or auxiliary nozzle, a nozzle's size, no / normal / tree supports, where a capture goes, light / dark / system): a recessed channel with a lifted thumb, real radio inputs underneath. Arrow keys move between segments. Prefer it to a row of chips when there are four or fewer, so a lone choice never wraps onto its own line.
 - **NumberField / DurationField** — numbers with their unit inside the field (`suffix="°C"`), typed freely and kept as numbers; durations typed the way people say them ("2h 10", "2:10", "130") and shown as "2 h 10 min". TextField takes `size="sm"` for dense groups such as print settings.
 - **Swatch / SwatchPicker** — a filament's color as a round chip, and a 44 px well that opens the device's color picker with common filament colors first. The color is data, so it is the one inline style allowed.
 - **SpoolDisc** — a spool seen from the side, in its filament's color (data, set inline) with the faint rings of wound filament around a hub; `empty` draws a dashed ring for an empty AMS slot. Sizes `sm` (chips), `md` (rows), `lg` (AMS slots), `xl` (pantry cards), `hero` (a spool's page without a photo).
@@ -178,12 +182,13 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **ChipRow / ChipDivider / FilterGroup** — rows of filter or suggestion chips: on phones a row scrolls sideways edge to edge (with a thin divider between kinds of chips), on desktop it wraps. `FilterGroup` is one kind of filter in a desktop filter column, a caption over its chips.
 - **MetaList** — a line of short pieces with a dot between them ("Black PETG · 0.20 mm · Cool Plate"): settings lines, "attempt 3 · 2 h ago", what changed. It wraps cleanly: a dot never begins or ends a line (each piece carries its dot in a gutter the row clips). Use it for every dot-separated line; `SettingsLine` is built on it.
 - **Highlight** — text with the words a search matched on a semolina highlight, like a pen stroke. A tag chip that matched gets a ring instead.
-- **Avatar / AvatarStack** — initials on the person's color.
+- **Avatar / AvatarStack** — initials on the person's color. `decorative` when the person's name is already beside it (a filter chip, the account button), so screen readers don't read it twice.
+- **Overline** — the small uppercase caption over a group ("November so far", "Attempts 3", "Workshop"), with an optional `count`. No padding of its own: it lines up with what is under it.
+- **SectionHeading** — a section's Fraunces title with an optional count ("Attempts 3", "PLA 8"); `size="title"` for quieter groups.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
 - **Kbd** — keyboard hints, hidden on phones (`always` for the shortcut list).
 - **PaletteSurface / PaletteDialog** — the command palette: a search box over grouped rows (photo or icon, name, a line of meta, an outcome chip or the row's shortcut), the picked row on a quiet fill, key hints along the bottom. See Keyboard and the command palette.
 - **ShortcutList** — every shortcut from the registry, grouped by screen.
-- **SegmentedControl** — pick one of a few short options (appearance: light, dark, system): a recessed channel with a lifted thumb, real radio inputs underneath. `ThemeSwitch` (shell) is the appearance one.
 - **Popover** — a small floating panel for desktop menus, such as the sidebar's account menu. Tasks use Sheet.
 - **OfflineNotice** (shell) — a quiet strip at the top of the page while the server can't be reached, with how many captures are waiting and, over data kept from earlier, when it was last fetched. The only place the app complains about the connection.
 - **Illustrations** (`components/illustrations`) — 160×120 spot illustrations: ink outlines at 2.5 px, round caps, one tinted circle behind, one or two accent fills. The `Mark` is the app icon: a twirl of spaghetti on a tomato tile.
@@ -258,6 +263,17 @@ Desktop only. Phones have no palette and no shortcut list; their layouts are unt
 ## What worked last time
 
 The attempt sheet offers the best match from history above the settings: the latest attempt that worked with the same material (the build's own first), with its photo, key settings and what would change, and **Use these settings** to start from them in one tap (with Undo). The spool stays the one already chosen; only the plate, temperatures and the rest change. It stays out of the way when nothing matches, or when the attempt already starts from those settings.
+
+## Accessibility
+
+- `e2e/accessibility.spec.ts` runs axe (WCAG 2.1 A and AA, best practices) on the main screens, the sheets, the palette and the empty states, at both widths and in both themes. A new screen gets a line there.
+- Links and buttons are named by what they show. Don't put an `aria-label` on a card or row that has visible text: it hides the rest from screen readers, and voice control can't find it by what people see. Decorative pictures inside a named link get `alt=""`.
+- Outcomes never rely on color alone: each has its icon and word (`OutcomeChip`), and the attempt thread's colored dot sits beside that chip.
+- The toasts (sonner) and the `OfflineNotice` are live regions; reduced motion is respected in CSS, `MotionConfig` and JS scrolling.
+
+## Performance
+
+`e2e/performance.spec.ts` (Playwright project `performance`, on the production build) measures each screen's first-load JavaScript against a budget and scrolls an inbox of 100 photo ideas at 4× CPU throttling. What's rarely used loads on demand: the styleguide (its own route), the `.3mf` reader (imported when a file is dropped), and the command palette and shortcut list (fetched once the app is idle, on desktop only). Photos in lists are lazy thumbnails (600 px), and warming photos for offline waits until the screen's own have had a head start. Tab bar and sidebar links preload their section's code once visible, so the first tap doesn't wait for it.
 
 ## Voice
 

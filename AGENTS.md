@@ -76,7 +76,8 @@ pnpm user:add       # add or update one of the two people (local; --remote when 
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop; offline tests run against the production build
+pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build
+pnpm exec playwright test --project=performance   # first-load JavaScript per screen, and a throttled 100-photo inbox
 pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark for dark mode)
 pnpm build && pnpm start   # the built app on workerd, as the container runs it
 ```
@@ -162,6 +163,7 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 - Every screen works one-handed on a phone (tab bar, sheets, 44 px targets) and with a keyboard on desktop (sidebar, shortcuts, columns).
 - No full-page spinners (skeletons), no save buttons (autosave with `SaveStatus`), no confirm dialogs for deletes (`toast.undo`).
 - The pasta jokes stay small: empty-state titles, a toast, the mark.
+- Accessible by default: name controls by their visible text (no `aria-label` on cards or rows with text), 44 px touch targets (`touch-target` for smaller controls), fields at 16 px on phones, `m.*` not `motion.*`, and `scrollBehavior()` for JS scrolling. Add new screens to `e2e/accessibility.spec.ts`.
 
 ## Screenshots
 

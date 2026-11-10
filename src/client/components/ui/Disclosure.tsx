@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { type ReactNode, useId } from "react";
 import { cn } from "@/lib/cn";
 import { duration, ease } from "@/lib/motion";
@@ -52,7 +52,7 @@ export function Disclosure({
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div
+          <m.div
             id={id}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -61,7 +61,7 @@ export function Disclosure({
             className="overflow-hidden"
           >
             <div className="px-4 pt-1 pb-4">{children}</div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

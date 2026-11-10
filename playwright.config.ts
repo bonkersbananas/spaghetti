@@ -18,13 +18,23 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
-      testIgnore: /offline\.spec/,
+      testIgnore: /(offline|performance)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
       name: "phone",
-      testIgnore: /offline\.spec/,
+      testIgnore: /(offline|performance)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
+    {
+      // Performance is measured on the production build, like the offline tests.
+      name: "performance",
+      testMatch: /performance\.spec/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://127.0.0.1:${builtPort}`,
+        viewport: { width: 1440, height: 900 },
+      },
     },
     {
       name: "offline",

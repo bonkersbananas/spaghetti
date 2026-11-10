@@ -1,7 +1,7 @@
 import { type AttemptSettings, carryOver, describeChanges } from "@shared/attempts";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon, CheckIcon, UndoIcon, WorkedIcon } from "@/components/ui/icons";
@@ -51,7 +51,7 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
   const parts = summarizeSettings(show.attempt.settings).slice(0, 4);
   return (
     <AnimatePresence initial={false}>
-      <motion.section
+      <m.section
         key={show.attempt.id}
         aria-label="What worked last time"
         initial={{ opacity: 0, y: 6 }}
@@ -134,7 +134,7 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
             </Button>
           </div>
         )}
-      </motion.section>
+      </m.section>
     </AnimatePresence>
   );
 }
