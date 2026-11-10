@@ -1,4 +1,4 @@
-import type { PeopleResponse, Person, SessionResponse } from "@shared/api";
+import type { LinkPreviewResponse, PeopleResponse, Person, SessionResponse } from "@shared/api";
 import { queryOptions } from "@tanstack/react-query";
 import { ApiError, api } from "./api";
 
@@ -31,6 +31,21 @@ export const peopleQuery = queryOptions({
   queryFn: async () => (await api<PeopleResponse>("/people")).people,
   staleTime: 60 * 60 * 1000,
 });
+
+/**
+ * What a link in a note calls itself (its page title and site), for link
+ * cards. A page's title hardly changes, so a day is fresh; a link that can't
+ * be read (offline, a private address, no title) just keeps showing its address.
+ */
+export function linkPreviewQuery(url: string) {
+  return queryOptions({
+    queryKey: ["link-preview", url],
+    queryFn: async () => api<LinkPreviewResponse>(`/links/preview?url=${encodeURIComponent(url)}`),
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 7 * 24 * 60 * 60 * 1000,
+    retry: false,
+  });
+}
 
 const USER_KEY = "sg-user";
 

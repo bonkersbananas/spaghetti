@@ -13,6 +13,7 @@ import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } f
 import { Photo } from "@/components/ui/Photo";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
+import { heroClick } from "@/lib/hero";
 import { photoSrc } from "@/lib/previews";
 
 /** Where a result leads. */
@@ -48,7 +49,11 @@ const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
       // Named by what it shows (outcome, title, the words that matched), as people see it.
       aria-current={selected || undefined}
       onPointerEnter={onPointerEnter}
-      onClick={onOpen}
+      viewTransition
+      onClick={(event) => {
+        heroClick(event, photo?.id);
+        onOpen?.();
+      }}
       className={cn(
         "pressable focus-ring flex items-start gap-3.5 rounded-lg p-2 md:gap-4",
         selected ? "bg-cream shadow-ring" : "hover:bg-ink/4",

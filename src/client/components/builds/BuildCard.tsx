@@ -87,7 +87,11 @@ export function BuildCard({
       <Card
         link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
         aspect="portrait"
-        photo={photo ? { src: photoSrc(photo.id, "thumb"), alt: photoAlt(item), color: photo.color } : undefined}
+        photo={
+          photo
+            ? { id: photo.id, src: photoSrc(photo.id, "thumb"), alt: photoAlt(item), color: photo.color }
+            : undefined
+        }
         title={item.title}
         note={item.note || undefined}
         chips={

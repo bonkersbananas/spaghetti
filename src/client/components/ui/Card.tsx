@@ -2,6 +2,7 @@ import type { Person } from "@shared/api";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { heroClick } from "@/lib/hero";
 import { Avatar } from "./Avatar";
 import { ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
@@ -9,7 +10,12 @@ import { Photo } from "./Photo";
 
 export interface CardProps {
   /** The photo leads. Without one, the note fills its place as a note card. */
-  photo?: { src: string; alt: string; color?: string };
+  photo?: {
+    src: string;
+    alt: string;
+    color?: string /** The photo's id, so it can travel to the page this opens. */;
+    id?: string;
+  };
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
   note?: string;
@@ -116,7 +122,7 @@ export function Card({
 
   if (link) {
     return (
-      <Link {...link} className={rootClass}>
+      <Link {...link} viewTransition onClick={(event) => heroClick(event, photo?.id)} className={rootClass}>
         {content}
       </Link>
     );
