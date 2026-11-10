@@ -53,8 +53,6 @@ export const SEED_IDEAS: SeedIdea[] = [
     ago: 3 * DAY + 2 * HOUR,
     title: "Bath tugboat for Mila",
     note: "Chunky enough for small hands. Print the hull in two halves so it floats upright?",
-    upNext: 2,
-    forWhom: "Mila",
     photos: [{ file: "tugboat.svg", color: "#867362" }],
   },
   {
@@ -62,6 +60,8 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "alex",
     ago: 5 * HOUR,
     note: "Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely.",
+    upNext: 2,
+    forWhom: "the kitchen",
     photos: [],
   },
   {
@@ -70,7 +70,6 @@ export const SEED_IDEAS: SeedIdea[] = [
     ago: 6 * DAY + 3 * HOUR,
     title: "Headphone stand",
     note: "Charcoal matte PLA. Needs a heavier base, or rubber feet.",
-    upNext: 1,
     photos: [{ file: "headphone-stand.svg", color: "#98846c" }],
   },
   {
@@ -86,6 +85,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "sam",
     ago: 2 * DAY + 2 * HOUR,
     title: "Desk tidy-up",
+    upNext: 1,
     note: "Clips for the desk edge, a bin for the drawer of screws, and a phone stand in that blue PETG.\n\nThe bin's grid is from https://makerworld.com/en/models/drawer-bins, scaled to 42 mm.",
     photos: [
       { file: "cable-clips.svg", color: "#a5967e" },

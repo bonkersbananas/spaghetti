@@ -125,7 +125,9 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           className="h-full"
         />
       </div>
-      {menu && !item.pending && <CardMenu menu={menu} name={item.title || "this idea"} />}
+      {menu && !item.pending && (
+        <CardMenu menu={menu} name={item.title || item.note.split("\n")[0]?.slice(0, 40) || "this idea"} />
+      )}
     </m.li>
   );
 }

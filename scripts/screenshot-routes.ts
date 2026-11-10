@@ -195,7 +195,7 @@ export const shots: Shot[] = [
     name: "ideas-up-next-menu",
     path: "/ideas",
     prepare: async (page) => {
-      await page.getByRole("button", { name: /^Options for Bath tugboat/ }).click();
+      await page.getByRole("button", { name: /^Options for Replacement knob/ }).click();
       await page.getByRole("button", { name: "Move up" }).waitFor();
       await page.waitForTimeout(400);
     },
