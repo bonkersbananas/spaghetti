@@ -32,12 +32,21 @@ interface AvatarProps {
   className?: string;
 }
 
-const markSizes = { xs: "size-3", sm: "size-3.5", md: "size-5", lg: "size-6" } as const;
-const markIcons = { xs: 8, sm: 9, md: 12, lg: 14 } as const;
+const glyphSizes = { xs: 12, sm: 16, md: 20, lg: 28 } as const;
+const badgeSizes = { md: "size-4.5", lg: "size-5.5" } as const;
+const badgeGlyphs = { md: 11, lg: 14 } as const;
 
-/** A person's initials on their color. Shown beside what they wrote. With `via`, it was done through their agent. */
+/**
+ * A person's initials on their color. Shown beside what they wrote.
+ *
+ * With `via`, it was done through that person's agent ("Claude for Alex"):
+ * small (xs, sm) the circle keeps their color and shows an agent glyph in place
+ * of the letter, so it reads as "Alex's agent" at a glance; larger (md, lg) the
+ * initials stay and a badge sits outside the circle, cut out of the surface behind.
+ */
 export function Avatar({ person, size = "md", ringed = false, decorative = false, via, className }: AvatarProps) {
   const label = via ? `${person.name}, via ${via}` : person.name;
+  const glyphInstead = !!via && (size === "xs" || size === "sm");
   const face = (
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
@@ -49,22 +58,62 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         !via && className,
       )}
     >
-      {size === "xs" ? initials(person.name).slice(0, 1) : initials(person.name)}
+      {glyphInstead ? (
+        <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden />
+      ) : size === "xs" ? (
+        initials(person.name).slice(0, 1)
+      ) : (
+        initials(person.name)
+      )}
     </span>
   );
   if (!via) return face;
+  if (glyphInstead) return className ? <span className={cn("inline-flex shrink-0", className)}>{face}</span> : face;
+  const badge = badgeSizes[size as "md" | "lg"];
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
       <span
         aria-hidden
         className={cn(
-          "bg-paper text-ink-soft shadow-soft absolute -right-1 -bottom-1 inline-flex items-center justify-center rounded-full",
-          markSizes[size],
+          "bg-select text-on-select ring-cream absolute -right-1.5 -bottom-1.5 inline-flex items-center justify-center rounded-full ring-2",
+          badge,
         )}
       >
-        <AgentIcon size={markIcons[size]} weight="fill" />
+        <AgentIcon size={badgeGlyphs[size as "md" | "lg"]} weight="fill" />
       </span>
+    </span>
+  );
+}
+
+/**
+ * An agent itself ("Claude for Alex"), as the subject of its own card: a rounded
+ * square, not a circle, so it never passes for a person, in its owner's color,
+ * with its own first letter so one agent can be told from another.
+ */
+export function AgentAvatar({
+  name,
+  owner,
+  size = "lg",
+  className,
+}: {
+  name: string;
+  owner: Pick<Person, "color">;
+  size?: keyof typeof sizes;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "text-on-accent font-display inline-flex shrink-0 items-center justify-center font-semibold select-none",
+        colors[owner.color],
+        sizes[size],
+        size === "lg" ? "text-title rounded-md" : "rounded-sm",
+        className,
+      )}
+    >
+      {name.trim().charAt(0).toUpperCase() || "?"}
     </span>
   );
 }

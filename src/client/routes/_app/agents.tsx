@@ -1,5 +1,6 @@
 import type { AgentInfo, AgentTokenInfo } from "@shared/agents";
 import { SCOPE_INFO } from "@shared/agents";
+import type { PersonColor } from "@shared/people";
 import { relativeTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -8,7 +9,7 @@ import { AgentSheet } from "@/components/agents/AgentSheet";
 import { EmptyPot } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { Avatar } from "@/components/ui/Avatar";
+import { AgentAvatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -49,12 +50,12 @@ function Agents() {
         actions={newAgent}
       />
       {isPending ? (
-        <div className="max-w-content flex flex-col gap-3" aria-hidden>
+        <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
           <RowSkeleton />
           <RowSkeleton />
         </div>
       ) : mine.length ? (
-        <ul className="max-w-content flex flex-col gap-4" aria-label="Your agents">
+        <ul className="flex max-w-2xl flex-col gap-4" aria-label="Your agents">
           {mine.map((agent) => (
             <AgentCard key={agent.id} agent={agent} owner={owner} readOnly={readOnly} onAddToken={() => open(agent)} />
           ))}
@@ -63,11 +64,12 @@ function Agents() {
         <EmptyState
           className="py-10 md:py-20"
           illustration={<EmptyPot />}
-          title="No sous-chefs yet"
+          title="No sous-chefs in the kitchen yet"
           action={isDesktop ? newAgent : undefined}
         >
-          An agent is a helper with its own keys, like Claude searching your notes or a bridge that watches the printer.
-          Each gets only what you allow.
+          An agent is a helper that works for you with a key of its own: Claude searching your notes and logging a
+          print, or a bridge at home that watches the printer. Each gets only what you allow, and everything it does is
+          marked “via”.
         </EmptyState>
       )}
       {!isDesktop && (
@@ -93,7 +95,7 @@ function AgentCard({
   onAddToken,
 }: {
   agent: AgentInfo;
-  owner?: { name: string; color: Parameters<typeof Avatar>[0]["person"]["color"] };
+  owner?: { name: string; color: PersonColor };
   readOnly: boolean;
   onAddToken: () => void;
 }) {
@@ -101,7 +103,7 @@ function AgentCard({
   return (
     <li className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-5">
       <div className="flex items-center gap-3.5">
-        {owner && <Avatar person={owner} size="md" via={agent.name} />}
+        {owner && <AgentAvatar name={agent.name} owner={owner} size="lg" />}
         <div className="min-w-0 flex-1">
           <h2 className="text-lead text-ink font-semibold break-words">{agent.name}</h2>
           <p className="text-small text-ink-faint">Acts for {owner?.name.split(" ")[0] ?? "you"}</p>
@@ -127,33 +129,35 @@ function TokenRow({ agent, token, readOnly }: { agent: AgentInfo; token: AgentTo
   const queryClient = useQueryClient();
   const revoking = usePendingRevokes().has(token.id);
   return (
-    <li className="border-ink/6 flex flex-col gap-2 border-t py-3 first:border-t-0 first:pt-0">
-      <div className="flex items-center gap-3">
-        <span className="text-small text-ink-soft font-mono">{token.prefix}…</span>
-        <span className="text-small text-ink-faint flex-1">
-          {revoking
-            ? "Revoked"
-            : token.lastUsedAt
-              ? `Used ${relativeTime(token.lastUsedAt).toLowerCase()}`
-              : "Never used"}
-        </span>
-        <Button
-          variant="quiet"
-          size="sm"
-          disabled={readOnly || revoking}
-          onClick={() => revokeToken(queryClient, agent, token)}
-          aria-label={`Revoke ${token.prefix}`}
-        >
-          Revoke
-        </Button>
-      </div>
-      <ul className="flex flex-wrap gap-1.5" aria-label="Scopes">
+    <li className="border-ink/6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <span className="text-small text-ink-soft font-mono">{token.prefix}…</span>
+      {/* One quiet row from tablet width up; on a phone the scopes take the line below. */}
+      <ul
+        className="order-last flex basis-full flex-wrap gap-1.5 md:order-none md:flex-1 md:basis-auto"
+        aria-label="Scopes"
+      >
         {token.scopes.map((scope) => (
           <li key={scope}>
             <Chip>{SCOPE_INFO[scope].label}</Chip>
           </li>
         ))}
       </ul>
+      <span className="text-small text-ink-faint max-md:flex-1">
+        {revoking
+          ? "Revoked"
+          : token.lastUsedAt
+            ? `Used ${relativeTime(token.lastUsedAt).toLowerCase()}`
+            : "Never used"}
+      </span>
+      <Button
+        variant="quiet"
+        size="sm"
+        disabled={readOnly || revoking}
+        onClick={() => revokeToken(queryClient, agent, token)}
+        aria-label={`Revoke ${token.prefix}`}
+      >
+        Revoke
+      </Button>
     </li>
   );
 }

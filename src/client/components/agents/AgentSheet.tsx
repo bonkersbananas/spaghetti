@@ -160,7 +160,7 @@ export function AgentSheet({ open, onOpenChange, agent }: AgentSheetProps) {
               maxLength={60}
               autoComplete="off"
               onChange={(event) => setName(event.target.value)}
-              hint="Shown beside what it does: “via Claude for Alex”."
+              hint={`Shown beside what it does: “via ${name.trim() || "Claude for Alex"}”.`}
             />
           )}
           <fieldset className="flex flex-col gap-3">
