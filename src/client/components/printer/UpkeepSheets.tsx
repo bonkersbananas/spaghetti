@@ -179,7 +179,7 @@ export function TaskSheet({ task, onOpenChange }: { task: UpkeepTask | null; onO
         />
         <div className="grid grid-cols-2 gap-3">
           <NumberField
-            label="Every"
+            label="Every (print hours)"
             suffix="print h"
             value={hours}
             min={1}
@@ -188,7 +188,7 @@ export function TaskSheet({ task, onOpenChange }: { task: UpkeepTask | null; onO
             onBlur={() => hours !== (task?.intervalHours ?? undefined) && commit({ intervalHours: hours ?? null })}
           />
           <NumberField
-            label="or"
+            label="Or every (days)"
             suffix="days"
             value={days}
             min={1}

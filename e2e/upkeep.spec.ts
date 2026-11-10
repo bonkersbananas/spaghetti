@@ -26,7 +26,7 @@ test("marks a task done, with a note, and it shows in the history", async ({ pag
     .getByRole("button", { name: new RegExp(task) })
     .first()
     .click();
-  await expect(page.getByRole("dialog", { name: task }).getByText("Emptied, a lot of teal")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: task }).getByText("Emptied, a lot of teal").first()).toBeVisible();
 });
 
 test("edits an interval and keeps it", async ({ page }) => {
@@ -36,7 +36,7 @@ test("edits an interval and keeps it", async ({ page }) => {
     .first()
     .click();
   const sheet = page.getByRole("dialog", { name: "Check the belts" });
-  const days = sheet.getByLabel("or");
+  const days = sheet.getByRole("textbox", { name: "Or every (days)" });
   await days.fill("45");
   await days.blur();
   await expect
