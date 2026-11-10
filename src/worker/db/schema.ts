@@ -93,6 +93,8 @@ export const attempts = sqliteTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
+    /** Who gave it its outcome (for "Sam had already finished attempt 3"). */
+    finishedBy: text("finished_by").references(() => users.id),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),

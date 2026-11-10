@@ -213,8 +213,11 @@ function AppearanceSection() {
           <Label>Offline notice</Label>
           <OfflineBanner waiting={0} />
           <OfflineBanner waiting={2} />
+          <OfflineBanner waiting={0} seenAt={Date.now() - 2 * 60 * 60 * 1000} />
           <p className="text-small text-ink-faint">
-            The one quiet place that says there is no connection. Captures wait in the outbox on this device.
+            The one quiet place that says there is no connection. Captures wait in the outbox on this device. Over data
+            kept from an earlier visit it also says how old that is (the last row); saved things are read-only until the
+            connection is back.
           </p>
         </Panel>
       </div>
@@ -843,6 +846,7 @@ const sampleAttempt: AttemptView = {
     { key: "bedTemperature", text: "bed 55 → 60 °C" },
   ],
   createdBy: "a",
+  finishedBy: "a",
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };

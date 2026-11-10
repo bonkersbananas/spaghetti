@@ -35,7 +35,7 @@ export const peopleQuery = queryOptions({
 const USER_KEY = "sg-user";
 
 /** Who signed in on this device, kept so the app can open without a connection. */
-function rememberedUser(): Person | null {
+export function rememberedUser(): Person | null {
   try {
     const raw = localStorage.getItem(USER_KEY);
     return raw ? (JSON.parse(raw) as Person | null) : null;

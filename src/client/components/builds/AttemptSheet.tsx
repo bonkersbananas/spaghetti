@@ -1,7 +1,7 @@
 import { type AttemptSettings, carryOver, describeChanges, type Outcome } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea, TextField } from "@/components/ui/Field";
@@ -11,11 +11,12 @@ import { MetaList } from "@/components/ui/MetaList";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Sheet } from "@/components/ui/Sheet";
-import { type AttemptDraft, deleteAttempt, logAttempt, saveAttemptChanges } from "@/lib/builds";
+import { type AttemptDraft, deleteAttempt, logAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
 import { useDraftPhotos } from "@/lib/capture";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
+import { useReadOnly } from "@/lib/read-only";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { OutcomePicker } from "./Outcome";
@@ -47,7 +48,14 @@ export function AttemptSheet({ item, attemptId, open, onOpenChange, initialOutco
   }, [open, attemptId, attempt, onOpenChange]);
   if (attemptId) {
     return attempt ? (
-      <EditAttempt key={attempt.id} item={item} attempt={attempt} open={open} onOpenChange={onOpenChange} />
+      // A finish queued on this device remounts it, so it starts again from the finished attempt rather than autosaving its draft.
+      <EditAttempt
+        key={`${attempt.id}${attempt.finishQueued ? ":queued" : ""}`}
+        item={item}
+        attempt={attempt}
+        open={open}
+        onOpenChange={onOpenChange}
+      />
     ) : null;
   }
   return <LogAttempt item={item} open={open} onOpenChange={onOpenChange} initialOutcome={initialOutcome} />;
@@ -110,6 +118,11 @@ interface FieldsProps {
   outcomeLabel: string;
   /** Enter in the note, on desktop: log the attempt. */
   onEnter?: () => void;
+  /**
+   * A saved attempt, seen without a connection: "all" shows what was written and changes nothing;
+   * "finish" (a print still printing) lets the outcome, note and tags be filled in, to be sent later.
+   */
+  readOnly?: "all" | "finish";
   /** Shown above the settings: "what worked last time", for a new attempt. */
   suggestion?: ReactNode;
 }
@@ -146,51 +159,59 @@ function AttemptFields(props: FieldsProps) {
 
   return (
     <div className="flex flex-col gap-5" data-capture>
-      <div className="flex flex-col gap-3">
-        <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
-        <OutcomePicker value={outcome} onChange={props.onOutcome} />
-      </div>
-      {props.when}
+      <fieldset disabled={props.readOnly === "all"} className="contents">
+        <div className="flex flex-col gap-3">
+          <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
+          <OutcomePicker value={outcome} onChange={props.onOutcome} />
+        </div>
+      </fieldset>
+      <fieldset disabled={!!props.readOnly} className="contents">
+        {props.when}
+      </fieldset>
       {props.photos}
-      {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
-      <TextArea
-        aria-label="Note"
-        minRows={1}
-        placeholder={
-          outcome === "failed"
-            ? "What went wrong? One line is plenty."
-            : outcome === "success"
-              ? "What made it work? One line is plenty."
-              : "A line about this attempt"
-        }
-        maxLength={500}
-        enterKeyHint="done"
-        value={props.note}
-        onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-          // Enter logs the attempt on desktop (when it can be logged); on a phone it puts the keyboard away.
-          event.preventDefault();
-          if (isDesktop && props.onEnter) props.onEnter();
-          else event.currentTarget.blur();
-        }}
-      />
-      {(outcome === "failed" || outcome === "partial") && (
-        <TagPicker kind="failure" label="What went wrong?" value={props.failureTags} onChange={props.onFailureTags} />
-      )}
-      {(outcome === "success" || outcome === "partial") && (
-        <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
-      )}
+      <fieldset disabled={props.readOnly === "all"} className="contents">
+        {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
+        <TextArea
+          aria-label="Note"
+          minRows={1}
+          placeholder={
+            outcome === "failed"
+              ? "What went wrong? One line is plenty."
+              : outcome === "success"
+                ? "What made it work? One line is plenty."
+                : "A line about this attempt"
+          }
+          maxLength={500}
+          enterKeyHint="done"
+          value={props.note}
+          onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+            // Enter logs the attempt on desktop (when it can be logged); on a phone it puts the keyboard away.
+            event.preventDefault();
+            if (isDesktop && props.onEnter) props.onEnter();
+            else event.currentTarget.blur();
+          }}
+        />
+        {(outcome === "failed" || outcome === "partial") && (
+          <TagPicker kind="failure" label="What went wrong?" value={props.failureTags} onChange={props.onFailureTags} />
+        )}
+        {(outcome === "success" || outcome === "partial") && (
+          <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
+        )}
+      </fieldset>
       {props.suggestion}
-      <Disclosure
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        title="Settings"
-        icon={SettingsIcon}
-        summary={settingsSummary}
-      >
-        <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} />
-      </Disclosure>
+      <fieldset disabled={!!props.readOnly} className="contents">
+        <Disclosure
+          open={settingsOpen || !!props.readOnly}
+          onOpenChange={setSettingsOpen}
+          title="Settings"
+          icon={SettingsIcon}
+          summary={settingsSummary}
+        >
+          <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} />
+        </Disclosure>
+      </fieldset>
     </div>
   );
 }
@@ -370,6 +391,10 @@ function EditAttempt({
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
+  const offline = useReadOnly(attempt.pending);
+  const printing = attempt.outcome === null;
+  // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
+  const readOnly = offline ? (printing ? "finish" : "all") : undefined;
   const [value, setValue] = useState({
     outcome: attempt.outcome,
     printedAt: attempt.printedAt,
@@ -378,9 +403,15 @@ function EditAttempt({
     successNotes: attempt.successNotes,
     settings: attempt.settings,
   });
-  const saveState = useAutosave(value, (changes) => saveAttemptChanges(queryClient, item.id, attempt.id, changes), {
-    delay: 500,
-  });
+  // While finishing offline nothing autosaves: what was typed waits for the finish button (or for the
+  // connection, when it comes back and the usual autosave takes over).
+  const held = useRef(value);
+  if (readOnly !== "finish") held.current = value;
+  const saveState = useAutosave(
+    readOnly === "finish" ? held.current : value,
+    (changes) => saveAttemptChanges(queryClient, item.id, attempt.id, changes),
+    { delay: 500 },
+  );
   const change = (next: Partial<typeof value>) => setValue((current) => ({ ...current, ...next }));
   const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(item.id, files, attempt.id) });
   const library = useFilePicker({
@@ -389,7 +420,6 @@ function EditAttempt({
   });
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const previous = item.attempts[attempt.number - 2];
-  const printing = attempt.outcome === null;
 
   return (
     <Sheet
@@ -409,6 +439,7 @@ function EditAttempt({
             variant="quiet"
             icon={TrashIcon}
             size={isDesktop ? "md" : "lg"}
+            disabled={!!readOnly}
             onClick={() => {
               deleteAttempt(queryClient, item.id, attempt);
               onOpenChange(false);
@@ -421,9 +452,13 @@ function EditAttempt({
           <Button
             variant={printing && !value.outcome ? "secondary" : "primary"}
             size={isDesktop ? "md" : "lg"}
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              if (readOnly === "finish" && value.outcome)
+                queueFinish(item.id, attempt, { ...value, outcome: value.outcome });
+              onOpenChange(false);
+            }}
           >
-            Done
+            {readOnly === "finish" && value.outcome ? "Finish attempt" : "Done"}
           </Button>
         </>
       }
@@ -432,6 +467,7 @@ function EditAttempt({
       {library.input}
       <AttemptFields
         outcomeLabel={printing ? "Finished? How did it go?" : "How did it go?"}
+        readOnly={readOnly}
         outcome={value.outcome}
         onOutcome={(outcome) => change({ outcome })}
         note={value.note}
@@ -453,7 +489,7 @@ function EditAttempt({
                 alt={`Attempt photo ${index + 1}`}
                 color={photo.color || undefined}
                 busy={!!photo.upload}
-                onRemove={() => removePhoto(queryClient, photo)}
+                onRemove={offline && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
             ))}
             {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}

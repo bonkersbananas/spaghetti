@@ -1,14 +1,16 @@
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AttemptResponse } from "../../shared/api.ts";
+import type { AttemptResponse, FinishAttemptResponse } from "../../shared/api.ts";
 import {
   type AttemptSettings,
   byPrintTime,
   carryOver,
+  mergeNote,
   NOZZLES,
   OUTCOMES,
   SUPPORT_TYPES,
+  unionTags,
 } from "../../shared/attempts.ts";
 import type { Db } from "../db/index.ts";
 import { type Attempt, attempts, items } from "../db/schema.ts";
@@ -91,6 +93,14 @@ const updateAttempt = z.object({
   settings: settings.optional(),
 });
 
+const finishAttempt = z.object({
+  outcome: z.enum(OUTCOMES),
+  finishedAt: z.number().int().positive().optional(),
+  note: note.optional(),
+  failureTags: slugs.optional(),
+  successNotes: slugs.optional(),
+});
+
 const notFound = "That attempt isn't here any more.";
 
 /** An item's attempts that aren't deleted. */
@@ -171,6 +181,7 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
       outcome: outcomeValue,
       printedAt: printed,
       finishedAt: outcomeValue ? now : null,
+      finishedBy: outcomeValue ? c.var.user.id : null,
       note: body.note ?? "",
       failureTags: body.failureTags ?? [],
       successNotes: body.successNotes ?? [],
@@ -207,9 +218,14 @@ export const attemptRoutes = new Hono<AppEnv>()
     const { printedAt: printedTime, outcome: nextOutcome, ...changes } = parsed.data;
     const now = new Date();
     let finishedAt = current.finishedAt;
-    if (nextOutcome === null) finishedAt = null;
-    else if (nextOutcome && !current.outcome) finishedAt = now;
-    else if (nextOutcome) finishedAt ??= now;
+    let finishedBy = current.finishedBy;
+    if (nextOutcome === null) {
+      finishedAt = null;
+      finishedBy = null;
+    } else if (nextOutcome && !current.outcome) {
+      finishedAt = now;
+      finishedBy = c.var.user.id;
+    } else if (nextOutcome) finishedAt ??= now;
 
     const [attempt] = await db
       .update(attempts)
@@ -218,6 +234,7 @@ export const attemptRoutes = new Hono<AppEnv>()
         ...(nextOutcome !== undefined ? { outcome: nextOutcome } : {}),
         ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
         finishedAt,
+        finishedBy,
         updatedAt: now,
       })
       .where(eq(attempts.id, current.id))
@@ -225,6 +242,80 @@ export const attemptRoutes = new Hono<AppEnv>()
     await db.update(items).set({ updatedAt: now }).where(eq(items.id, current.itemId));
     if (!attempt) return apiError(c, 404, "not_found", notFound);
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
+  })
+
+  /**
+   * A print finished on a device without signal, sent when it is back. It only
+   * fills what was empty: a print still printing is finished; one someone else
+   * finished keeps their outcome and gets this note added. Repeating it changes nothing.
+   */
+  .post("/:id/finish", async (c) => {
+    const parsed = finishAttempt.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That finish couldn't be read.");
+    const body = parsed.data;
+    const db = c.var.db;
+    const found = await findLive(db, c.req.param("id"));
+    if (!found) return apiError(c, 404, "not_found", notFound);
+    const now = new Date();
+    let current = found.attempt;
+    // The write only goes through if the attempt is still as it was read (its outcome, note and tags): if another
+    // device's finish or edit landed in between, read again and decide again, so no one's outcome is replaced.
+    for (let tries = 0; tries < 4; tries++) {
+      const note = mergeNote(current.note, body.note ?? "");
+      const finishing = current.outcome === null;
+      // The same outcome again (a retry, or the same answer) counts as finished: nothing new to say.
+      const finished = finishing || current.outcome === body.outcome;
+      const tags =
+        finished && body.outcome
+          ? {
+              failureTags:
+                body.outcome === "success"
+                  ? current.failureTags
+                  : unionTags(current.failureTags, body.failureTags ?? []),
+              successNotes:
+                body.outcome === "failed"
+                  ? current.successNotes
+                  : unionTags(current.successNotes, body.successNotes ?? []),
+            }
+          : {};
+      const [attempt] = await db
+        .update(attempts)
+        .set({
+          note,
+          ...tags,
+          ...(finishing
+            ? {
+                outcome: body.outcome,
+                finishedAt: new Date(
+                  Math.min(Math.max(body.finishedAt ?? now.getTime(), current.printedAt.getTime()), now.getTime()),
+                ),
+                finishedBy: c.var.user.id,
+              }
+            : {}),
+          updatedAt: note !== current.note || finishing ? now : current.updatedAt,
+        })
+        .where(
+          and(
+            eq(attempts.id, current.id),
+            isNull(attempts.deletedAt),
+            eq(attempts.note, current.note),
+            eq(attempts.failureTags, current.failureTags),
+            eq(attempts.successNotes, current.successNotes),
+            current.outcome === null ? isNull(attempts.outcome) : eq(attempts.outcome, current.outcome),
+          ),
+        )
+        .returning();
+      if (attempt) {
+        if (finishing || note !== current.note) {
+          await db.update(items).set({ updatedAt: now }).where(eq(items.id, current.itemId));
+        }
+        return c.json<FinishAttemptResponse>({ attempt: await loadAttempt(db, attempt), finished });
+      }
+      const again = await findLive(db, current.id);
+      if (!again) return apiError(c, 404, "not_found", notFound);
+      current = again.attempt;
+    }
+    return apiError(c, 409, "conflict", "That attempt keeps changing. Try again in a moment.");
   })
 
   /** Hides the attempt and its photos at once; restore is the undo. */

@@ -148,6 +148,7 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
           successNotes: attempt.successNotes,
           settings: attempt.settings,
           createdBy: attempt.createdBy,
+          finishedBy: attempt.finishedBy,
           createdAt: attempt.createdAt.getTime(),
           updatedAt: attempt.updatedAt.getTime(),
         },

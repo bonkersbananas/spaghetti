@@ -1,6 +1,7 @@
 /**
  * A tiny promise wrapper around one IndexedDB object store. Used for the
- * outbox: captures stay on the device until the server has them.
+ * outbox (captures stay on the device until the server has them) and for the
+ * persisted query cache.
  */
 export function openStore<T>(dbName: string, storeName: string, keyPath: string) {
   let dbPromise: Promise<IDBDatabase> | null = null;
@@ -36,6 +37,8 @@ export function openStore<T>(dbName: string, storeName: string, keyPath: string)
   return {
     all: () => run("readonly", (store) => store.getAll() as IDBRequest<T[]>),
     put: (value: T) => run("readwrite", (store) => store.put(value)).then(() => undefined),
+    get: (key: string) => run("readonly", (store) => store.get(key) as IDBRequest<T | undefined>),
     delete: (key: string) => run("readwrite", (store) => store.delete(key)).then(() => undefined),
+    clear: () => run("readwrite", (store) => store.clear()).then(() => undefined),
   };
 }

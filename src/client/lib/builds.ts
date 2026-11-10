@@ -24,6 +24,7 @@ import { ApiError, api } from "./api";
 import type { DraftPhoto } from "./capture";
 import { type AttemptView, cachedItem, type ItemView, type PhotoView, patchCachedItem, useBuilds } from "./items";
 import { outbox, type PendingAttemptChanges } from "./outbox";
+import { canEdit } from "./read-only";
 
 /** The fields of a stage change, as the server sets them. */
 function stageFields(item: Pick<Item, "startedAt">, stage: ItemStage, now = Date.now()) {
@@ -76,6 +77,7 @@ async function changeStage(
 
 /** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
 export function startBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   void changeStage(queryClient, item.id, "building");
   toast.undo("Moved to Builds", {
     description: "Same idea, same photos. Log the first attempt when it prints.",
@@ -125,6 +127,7 @@ export function newestPhoto(item: Pick<ItemView, "photos">): PhotoView | undefin
  * some spaghetti to get there earns a small moment of delight.
  */
 export function finishBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const previousCover = item.coverPhotoId;
   const final = finalPhotoGuess(item);
   void changeStage(queryClient, item.id, "done", final && !final.upload ? { coverPhotoId: final.id } : {});
@@ -143,6 +146,7 @@ export function finishBuild(queryClient: QueryClient, item: ItemView) {
 }
 
 export function shelveBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const before = item.stage;
   void changeStage(queryClient, item.id, "shelved");
   toast.undo("Shelved", {
@@ -153,6 +157,7 @@ export function shelveBuild(queryClient: QueryClient, item: ItemView) {
 
 /** Back on the bed: a done or shelved build becomes active again. */
 export function reopenBuild(queryClient: QueryClient, item: ItemView) {
+  if (!canEdit(item.pending)) return;
   const before = item.stage;
   void changeStage(queryClient, item.id, "building");
   toast.undo("Back on the bed", { onUndo: () => void changeStage(queryClient, item.id, before) });
@@ -201,6 +206,35 @@ export function logAttempt(item: Pick<ItemView, "id">, draft: AttemptDraft, crea
   return id;
 }
 
+/** What someone added to a note in a form that started from `base`: the rest after it, or all of it if it was rewritten. */
+function addedNote(base: string, next: string): string {
+  const before = base.trim();
+  const after = next.trim();
+  if (after === before) return "";
+  return before && after.startsWith(before) ? after.slice(before.length).trim() : after;
+}
+
+/**
+ * Finishes a print that is saved on the server while it can't be reached: the
+ * finish waits in the outbox (outcome, when, note and tags) and goes up with
+ * its photos when the connection is back. The server only fills what is empty,
+ * so it can't overwrite what someone else did meanwhile.
+ */
+export function queueFinish(
+  itemId: string,
+  attempt: Pick<AttemptView, "id" | "note">,
+  draft: { outcome: Outcome; note: string; failureTags: string[]; successNotes: string[] },
+) {
+  void outbox.addFinish(itemId, {
+    attemptId: attempt.id,
+    outcome: draft.outcome,
+    finishedAt: Date.now(),
+    note: addedNote(attempt.note, draft.note),
+    failureTags: draft.failureTags,
+    successNotes: draft.successNotes,
+  });
+}
+
 /** Saves edits to an attempt (autosave): the cache first, then the server or the outbox. */
 export async function saveAttemptChanges(
   queryClient: QueryClient,
@@ -239,6 +273,7 @@ export async function saveAttemptChanges(
 
 /** Deletes an attempt and its photos at once, with Undo. */
 export function deleteAttempt(queryClient: QueryClient, itemId: string, attempt: AttemptView) {
+  if (!canEdit(attempt.pending)) return;
   const pending = outbox.removeAttempt(attempt.id);
   const queuedPhotos = pending ? [] : outbox.dropAttemptPhotos(attempt.id);
   let removed: { attempt: Attempt; photos: Photo[] } | undefined;

@@ -3,12 +3,14 @@ import type { Outcome } from "@shared/attempts";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
-import { saveAttemptChanges } from "./builds";
+import { queueFinish, saveAttemptChanges } from "./builds";
+import { isOnline } from "./connection";
 import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
 import { cachedItem, type ItemView, ideasQuery, saveItemChanges } from "./items";
 import { outbox } from "./outbox";
 import { setPreview } from "./previews";
 import { sessionQuery } from "./queries";
+import { canEdit } from "./read-only";
 
 /** A photo in the capture sheet, resized in the background while you type. */
 export interface DraftPhoto {
@@ -197,6 +199,22 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       const note = draft.trim();
       const current = photosRef.current;
       if (!note && !current.length && !(target.kind === "attempt" && target.outcome)) return false;
+      const item = cachedItem(queryClient, target.itemId);
+      const pendingAttempt =
+        target.kind === "attempt" &&
+        outbox
+          .getSnapshot()
+          .entries.flatMap((entry) => entry.attempts ?? [])
+          .some((a) => a.id === target.attemptId);
+      // Without a connection, a saved print can still be finished (the outbox sends it); other changes to saved things wait.
+      const finishQueued = target.kind === "attempt" && !!target.outcome && !isOnline() && !pendingAttempt;
+      const needsServer =
+        !!note &&
+        !isOnline() &&
+        !finishQueued &&
+        (target.kind === "attempt" ? !pendingAttempt : !outbox.isPending(target.itemId));
+      // Refuse before anything is queued, so the draft stays in the sheet.
+      if (needsServer && !canEdit()) return false;
       if (current.length) {
         void outbox.add({
           itemId: target.itemId,
@@ -208,7 +226,6 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
           queuedAt: Date.now(),
         });
       }
-      const item = cachedItem(queryClient, target.itemId);
       if (target.kind === "item" && note) {
         const before = item?.note.trimEnd() ?? "";
         void saveItemChanges(queryClient, target.itemId, { note: before ? `${before}\n\n${note}` : note }).catch(() =>
@@ -223,6 +240,18 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
             .entries.flatMap((entry) => entry.attempts ?? [])
             .find((a) => a.id === target.attemptId);
         const before = attempt?.note.trim() ?? "";
+        if (finishQueued && target.outcome && attempt) {
+          queueFinish(target.itemId, attempt, {
+            outcome: target.outcome,
+            note: note ? (before ? `${before} ${note}` : note) : before,
+            failureTags: attempt.failureTags,
+            successNotes: attempt.successNotes,
+          });
+          setDraft("");
+          clearPhotos();
+          setOpen(false);
+          return true;
+        }
         const changes = {
           ...(note ? { note: before ? `${before} ${note}` : note } : {}),
           ...(target.outcome ? { outcome: target.outcome } : {}),
