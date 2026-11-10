@@ -166,6 +166,8 @@ describe("authenticating with a token", () => {
     await refused(asAgent(made.token, `/api/items/${item.id}/restore`, { method: "POST" }));
     await refused(asAgent(made.token, `/api/photos/${uuid()}`, { method: "DELETE" }));
     await refused(asAgent(made.token, `/api/spools/${uuid()}`, { method: "DELETE" }));
+    await refused(asAgent(made.token, "/api/printer/upkeep/plate", { method: "DELETE" }));
+    await refused(asAgent(made.token, `/api/printer/upkeep/logs/${uuid()}`, { method: "DELETE" }));
     // The session is a cookie's business: a token reads none, and can't sign in as anyone.
     expect(await status(asAgent(made.token, "/api/session"))).toBe(401);
     expect(await status(asAgent(made.token, "/api/session", { method: "DELETE" }))).toBe(204);
@@ -265,6 +267,28 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     json: { printerState: "idle" },
   },
   { name: "load a slot", scope: "printer", method: "PUT", path: "/api/printer/slots/A1", json: { spoolId: null } },
+  { name: "read the upkeep", scope: "read", method: "GET", path: "/api/printer/upkeep" },
+  {
+    name: "add an upkeep task",
+    scope: "printer",
+    method: "POST",
+    path: "/api/printer/upkeep",
+    json: { id: "mine", name: "Wipe the lid", intervalDays: 30 },
+  },
+  {
+    name: "change an upkeep task",
+    scope: "printer",
+    method: "PATCH",
+    path: "/api/printer/upkeep/plate",
+    json: { intervalDays: 10 },
+  },
+  {
+    name: "log upkeep",
+    scope: "printer",
+    method: "POST",
+    path: "/api/printer/upkeep/plate/done",
+    json: { id: uuid() },
+  },
 ];
 
 describe("scopes", () => {

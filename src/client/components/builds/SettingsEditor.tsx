@@ -14,6 +14,7 @@ import { filamentFromSpool, type PrinterHint, printerHints, spoolName } from "@s
 import { filamentFromFile, sameAsFile } from "@shared/threemf/prefill.ts";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useId, useState } from "react";
+import { DryIt } from "@/components/pantry/DryIt";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -254,6 +255,7 @@ export function SettingsEditor({ value, onChange, outcome, fromFile, className }
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position in the AMS mapping.
             <div key={index} className="flex flex-col gap-2">
+              {spool && !choosing.has(index) && <DryIt spool={spool} className="px-0.5" />}
               {spool && !choosing.has(index) ? (
                 <div className="flex items-center gap-2">
                   <LinkedSpool

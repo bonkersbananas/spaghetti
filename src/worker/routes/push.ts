@@ -35,8 +35,14 @@ const subscribe = z.object({
   }),
   timeZone,
   alsoOthers: z.boolean().optional(),
+  upkeepNudges: z.boolean().optional(),
 });
-const change = z.object({ endpoint, alsoOthers: z.boolean().optional(), timeZone: timeZone.optional() });
+const change = z.object({
+  endpoint,
+  alsoOthers: z.boolean().optional(),
+  upkeepNudges: z.boolean().optional(),
+  timeZone: timeZone.optional(),
+});
 const target = z.object({ endpoint });
 
 /**
@@ -52,6 +58,7 @@ export const pushRoutes = new Hono<AppEnv>()
       subscriptions: rows.map((row) => ({
         endpoint: row.endpoint,
         alsoOthers: row.alsoOthers,
+        upkeepNudges: row.upkeepNudges,
         timeZone: row.timeZone,
       })),
     });
@@ -84,6 +91,7 @@ export const pushRoutes = new Hono<AppEnv>()
         auth: keys.auth,
         timeZone: body.timeZone,
         alsoOthers: body.alsoOthers ?? false,
+        upkeepNudges: body.upkeepNudges ?? false,
         createdAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -95,6 +103,7 @@ export const pushRoutes = new Hono<AppEnv>()
           auth: keys.auth,
           timeZone: body.timeZone,
           ...(body.alsoOthers === undefined ? {} : { alsoOthers: body.alsoOthers }),
+          ...(body.upkeepNudges === undefined ? {} : { upkeepNudges: body.upkeepNudges }),
         },
       });
     return c.body(null, 204);
