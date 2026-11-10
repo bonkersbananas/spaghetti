@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm db:migrate && vite",
+    "dev:seed": "node scripts/dev-seed.ts",
     "build": "vite build",
     "preview": "pnpm db:migrate && vite build && vite preview",
     "start": "node scripts/start.ts",
@@ -19,7 +20,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "doctor": "node scripts/doctor.ts",
     "screenshots": "node scripts/screenshots.ts",
+    "screenshots:compare": "node scripts/screenshots-compare.ts",
+    "new": "node scripts/new.ts",
     "icons": "node scripts/icons.ts",
     "types": "wrangler types",
     "db:generate": "drizzle-kit generate",

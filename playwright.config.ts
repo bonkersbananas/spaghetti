@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { launchOptions } from "./scripts/lib/browser.ts";
 
 const port = 5174;
 // The production build, served by workerd: the only one with a service worker.
@@ -14,6 +15,8 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
+    // SPAGHETTI_BROWSER: use an existing Chromium (see scripts/lib/browser.ts).
+    launchOptions: launchOptions(),
   },
   projects: [
     {

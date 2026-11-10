@@ -46,14 +46,20 @@ pnpm format       # fix formatting and import order
 
 The first Playwright run needs a browser: `pnpm exec playwright install chromium-headless-shell`. CI runs all of the above on every pull request, and builds and smoke-tests the container image.
 
-## Screenshots
+## Screenshots and exploring with data
 
 ```sh
 pnpm screenshots                 # every screen at 390×844 and 1440×900
-pnpm screenshots ideas capture   # only some
+pnpm screenshots ideas capture   # only some (--dark, --both, --scale 1, --out DIR)
+pnpm screenshots:compare         # the same on main and on your branch: diff images and contact sheets
+pnpm dev:seed                    # the dev server on a throwaway database with the screenshot data
 ```
 
-It starts the app on a seeded throwaway database, signs in and writes PNGs to `screenshots/` (gitignored). The list of screens is in `scripts/screenshot-routes.ts`.
+They start the app on a seeded throwaway database, sign in and write PNGs to `screenshots/` (gitignored). The list of screens is in `scripts/screenshot-routes.ts`; the seed is in `scripts/seed/`. A shot that fails doesn't stop the rest: failures are listed at the end and the exit code is 1.
+
+`pnpm run doctor` checks Node, pnpm, the browser, wrangler and the local database, and says how to fix what's wrong. To use an existing Chromium instead of Playwright's download, set `SPAGHETTI_BROWSER=/path/to/chromium`.
+
+Decisions and plans: [docs/decisions/](docs/decisions/README.md) and [docs/roadmap.md](docs/roadmap.md). For agents working in the repository, start with [AGENTS.md](AGENTS.md).
 
 ## Photos and deleting
 

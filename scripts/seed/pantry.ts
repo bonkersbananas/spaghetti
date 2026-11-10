@@ -191,8 +191,13 @@ const SETUP: PrinterSetup = {
   amsUnits: 1,
 };
 
-export async function seedPantry(browser: Browser, request: APIRequestContext, origin: string, stateDir: string) {
-  const now = Date.now();
+export async function seedPantry(
+  browser: Browser,
+  request: APIRequestContext,
+  origin: string,
+  stateDir: string,
+  now: number,
+) {
   const headers = { Origin: origin };
   const sql: string[] = [];
   const svg = readFileSync(join(root, "scripts/seed/photos/spool-label.svg"), "utf8");

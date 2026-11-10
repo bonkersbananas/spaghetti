@@ -710,8 +710,8 @@ export async function seedBuilds(
   requests: Record<By, APIRequestContext>,
   origin: string,
   stateDir: string,
+  now: number,
 ) {
-  const now = Date.now();
   const headers = { Origin: origin };
   const sql: string[] = [];
   for (const build of [...SEED_BUILDS, ...OLDER_BUILDS]) {
