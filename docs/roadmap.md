@@ -1,6 +1,6 @@
 # Roadmap
 
-The plan for Spaghetti, kept in the repository so agents can see what the phases and pull request numbers in commit messages refer to. The autopilot (the agent that runs the project) updates it as work lands; tick items off in the pull request that does them. Settled decisions, including the "no"s, are in [decisions/](decisions/README.md).
+**The autopilot's plan on fctl is the live version of this plan; this file is a copy, kept in the repository so agents can see what the phases and pull request numbers in commit messages refer to, and it can be behind.** When your pull request finishes an item here, tick it in the same pull request. Settled decisions, including the "no"s, are in [decisions/](decisions/README.md).
 
 **Where it stands:** v1 is built and merged (PRs #1–#12): capture, ideas, builds and attempts, journal and search with "what worked last time", Pantry, Printer page, .3mf files, dark mode, offline, command palette, and an accessibility and performance pass. Deploying waits for the Cloudflare token, which Carl Oscar will give when it's ready.
 
@@ -10,9 +10,9 @@ The plan for Spaghetti, kept in the repository so agents can see what the phases
 
 ## Now: UI improvements spec
 
-The spec is `docs/specs/ui-improvements.md` once #1 lands. Its sections, in the suggested order:
+The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested order:
 
-- [ ] §1 Shared building blocks (PrintProgress, SpoolDisc rim, OutcomeStrip) and §9 small polish, with the styleguide split per section first
+- [x] §1 Shared building blocks (PrintProgress, SpoolDisc rim, OutcomeStrip) and §9 small polish, with the styleguide split per section first (#14)
 - [ ] §5 Pantry (rims, AMS remaining, fill discs, desktop list view) and §6 Journal (one icon per row, plate pictures, printing progress, compact rows), side by side
 - [ ] §3 Build page: summary under the notes, aligned attempt photos, compare two attempts
 - [ ] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar)
@@ -24,7 +24,7 @@ The spec is `docs/specs/ui-improvements.md` once #1 lands. Its sections, in the 
 
 ## Next: features
 
-- [ ] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later)
+- [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
 - [ ] Push notifications: "Tugboat should be done, how did it go?" with outcome buttons on the notification
 - [ ] Insights and recipes: success rate by material and plate, which change fixed which failure, a year in review; promote a what-worked attempt to a named recipe on the spool's page
 - [ ] Richer ideas: an "Up next" queue, who it's for, comments between you two, a share target for the phone's share sheet (link previews come with spec §4)

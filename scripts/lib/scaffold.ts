@@ -136,26 +136,23 @@ export function ${component}({ children, className }: ${component}Props) {
 `;
 }
 
-/** The styleguide section for a component: a live specimen, in the matching dark mode too. */
+/**
+ * The styleguide section for a component (routes/_app/-styleguide/<id>.tsx): a live specimen,
+ * in the shared Section and Panel markup the other sections use.
+ */
 export function styleguideSectionTemplate(name: string, importPath: string): string {
   const component = toPascal(name);
   return `import { ${component} } from "${importPath}";
+import { Panel, Section } from "./shared";
 
-/**
- * The styleguide's entry for ${component}. Show every variant and state, in the same
- * Section and Panel markup as the other sections.
- */
+/** Show every variant and state of ${component}; look at it in dark mode too (the switch at the top of the page). */
 export function ${component}Section() {
   return (
-    <section id="${toKebab(name)}" className="scroll-mt-8">
-      <h2 className="text-headline text-ink">${toLabel(name)}</h2>
-      <p className="max-w-content text-body text-ink-soft mt-1">One line on when to use it.</p>
-      <div className="mt-6">
-        <div className="bg-cream shadow-soft flex flex-wrap items-center gap-6 rounded-lg p-5 md:p-6">
-          <${component}>Default</${component}>
-        </div>
-      </div>
-    </section>
+    <Section id="${toKebab(name)}" title="${toLabel(name)}" note="One line on when to use it.">
+      <Panel className="flex flex-wrap items-center gap-6">
+        <${component}>Default</${component}>
+      </Panel>
+    </Section>
   );
 }
 `;

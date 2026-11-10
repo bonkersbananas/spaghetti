@@ -9,7 +9,7 @@
  *       palette) and its shortcut in shared/shortcuts.ts.
  *   pnpm new component <Name> [--in ui|builds|ideas|journal|pantry|search|shell]
  *       components/<in>/<Name>.tsx (default ui), its styleguide section in
- *       components/styleguide/<Name>Section.tsx wired into the styleguide, and an e2e test of the
+ *       routes/_app/-styleguide/<name>.tsx wired into the styleguide, and an e2e test of the
  *       specimen (axe, both themes).
  *   pnpm new endpoint <plural-name>
  *       worker/routes/<name>.ts (zod schema, list and create), mounted in app.ts, types in
@@ -168,26 +168,26 @@ if (kind === "component") {
   }
   assertFree(
     path("src/client/components", dir, `${component}.tsx`),
-    path("src/client/components/styleguide", `${component}Section.tsx`),
+    path("src/client/routes/_app/-styleguide", `${kebab}.tsx`),
     path("e2e", `styleguide-${kebab}.spec.ts`),
   );
   create(path("src/client/components", dir, `${component}.tsx`), componentTemplate(component));
   create(
-    path("src/client/components/styleguide", `${component}Section.tsx`),
+    path("src/client/routes/_app/-styleguide", `${kebab}.tsx`),
     styleguideSectionTemplate(component, `@/components/${dir}/${component}`),
   );
   create(path("e2e", `styleguide-${kebab}.spec.ts`), componentE2eTemplate(component));
   const styleguide = path("src/client/routes/_app/styleguide.tsx");
   if (existsSync(styleguide)) {
     const source = readFileSync(styleguide, "utf8");
-    // Today the styleguide is one file with a table of contents and a list of sections.
+    // The styleguide page lists the sections: a table of contents, an import and the element.
     let next: string | null = insertBefore(source, /^\] as const;/, `  ["${kebab}", "${toLabel(kebab)}"],`);
     next =
       next &&
       insertBefore(
         next,
-        /^import .* from "@\/components\//,
-        `import { ${component}Section } from "@/components/styleguide/${component}Section";`,
+        /^import .* from "\.\/-styleguide\//,
+        `import { ${component}Section } from "./-styleguide/${kebab}";`,
       );
     next = next && insertAfter(next, "<SkeletonSection />", `          <${component}Section />`);
     if (next) {

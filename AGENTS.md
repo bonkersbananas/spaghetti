@@ -2,7 +2,7 @@
 
 Spaghetti is a private 3D printing notebook for two people. Design quality is the main requirement: read [docs/design.md](docs/design.md) before writing any UI, and look at `/styleguide`.
 
-Before proposing or building something, check what is already decided: [docs/decisions/](docs/decisions/README.md) has one short record per settled decision, including the things we decided **not** to do (one printer, no public sign-up, nothing depends on a Bambu service, offline is read-only…), and [docs/roadmap.md](docs/roadmap.md) says what the phases, specs and pull request numbers in commit messages refer to and what comes next. When a decision is made in a conversation, a review or an issue, add a record (the format is in the decisions README) and tick or add the roadmap item in the pull request that does the work.
+Before proposing or building something, check what is already decided: [docs/decisions/](docs/decisions/README.md) has one short record per settled decision, including the things we decided **not** to do (one printer, no public sign-up, nothing depends on a Bambu service, offline is read-only…), and [docs/roadmap.md](docs/roadmap.md) says what the phases, specs and pull request numbers in commit messages refer to and what comes next. When a decision is made in a conversation, a review or an issue, add a record (the format is in the decisions README). **When a pull request finishes something on the roadmap, tick it there in the same pull request** (and add what it turns up); the roadmap is a copy that drifts otherwise.
 
 ## Stack
 
@@ -111,7 +111,7 @@ SPAGHETTI_BROWSER=/usr/bin/chromium pnpm screenshots
 `pnpm new route <name>`, `pnpm new component <Name>` and `pnpm new endpoint <plural-name>` create the files below with their wiring (add `--dry-run` to preview; run `pnpm new` without arguments for the options). Then fill them in, `pnpm format`, and run the checks.
 
 - `route`: the route file, `e2e/<name>.spec.ts` (opens, axe), a screen in `scripts/screenshot-routes.ts` and the regenerated `routeTree.gen.ts`; with `--section` or `--workshop` also the entry in `sections.ts` and its shortcut in `shared/shortcuts.ts`.
-- `component`: `components/<--in ui>/<Name>.tsx`, its styleguide section (`components/styleguide/<Name>Section.tsx`, listed in the styleguide's table of contents) and `e2e/styleguide-<name>.spec.ts` (the specimen passes axe in both themes). The templates are in `scripts/lib/scaffold.ts`.
+- `component`: `components/<--in ui>/<Name>.tsx`, its styleguide section (`routes/_app/-styleguide/<name>.tsx`, the one place for sections, listed in `styleguide.tsx`'s table of contents and page) and `e2e/styleguide-<name>.spec.ts` (the specimen passes axe in both themes). The templates are in `scripts/lib/scaffold.ts`.
 - `endpoint`: `worker/routes/<name>.ts` with a zod schema, mounted in `app.ts`, the types in `shared/api.ts`, a `queryOptions` in `lib/queries.ts` and `test/worker/<name>.test.ts`. Storage (a table and migration) is yours to add.
 
 If a wiring step can't find its place (a file moved), the command says what to add by hand.
@@ -190,7 +190,7 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 ### Add a component or token
 
 1. Shared UI goes in `src/client/components/ui/`, built only from tokens. If you need a new color, size, shadow or duration, add it to `styles/tokens.css` (light **and dark**) and to the `@theme` block. New text/surface pairs go into `scripts/lib/contrast.ts`, which `pnpm test` checks for WCAG AA in both themes. Look at your component in dark mode (the switch on `/styleguide`).
-2. Show it in `routes/_app/styleguide.tsx`, in the matching section or a new one (add it to `toc`).
+2. Show it in the styleguide: in the matching section file under `routes/_app/-styleguide/` or a new one built from `./shared`'s `Section` and `Panel` (`pnpm new component` makes it), and list a new one in `styleguide.tsx`'s `toc` and page.
 3. Document it in `docs/design.md`.
 4. Icons: add the Phosphor icon to `components/ui/icons.tsx` and import it from there.
 
