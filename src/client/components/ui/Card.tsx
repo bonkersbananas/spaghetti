@@ -99,7 +99,7 @@ export function Card({
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
-      <div className="flex flex-col px-2 pt-2.5 pb-1.5">
+      <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
         {heading ? (
           <Heading
             className={cn(
@@ -117,7 +117,9 @@ export function Card({
         )}
         {/* The title has the whole width; the time, the avatar and (laid over the card) the menu share one row below it. */}
         {(meta || person || reserveEnd) && (
-          <div className={cn("flex min-h-8 items-center gap-1.5", heading && "mt-0.5", reserveEnd && "h-10 pr-9")}>
+          <div
+            className={cn("mt-auto flex min-h-8 items-center gap-1.5", heading && "pt-0.5", reserveEnd && "h-10 pr-9")}
+          >
             {meta && <p className="text-small text-ink-faint line-clamp-2 min-w-0 flex-1">{meta}</p>}
             {!meta && <span className="flex-1" />}
             {person && <Avatar person={person} size="xs" via={via} />}

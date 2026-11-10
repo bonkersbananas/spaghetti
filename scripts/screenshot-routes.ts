@@ -250,6 +250,26 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
     },
   },
+  {
+    // A card in the middle of the queue: its menu has Move up and Move down. A third idea joins the queue for the shot.
+    name: "ideas-up-next-menu-middle",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Options for Hook for the bike helmet/ }).click();
+      await page.getByRole("button", { name: "Up next", exact: true }).click();
+      // Let the "Up next" toast go, so it doesn't cover the menu's rows.
+      await page.locator("[data-sonner-toast]").first().waitFor({ state: "detached", timeout: 10_000 });
+      await page.getByRole("button", { name: /^Options for Replacement knob/ }).click();
+      await page.getByRole("button", { name: "Move down" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+      await page.getByRole("button", { name: /^Options for Hook for the bike helmet/ }).click();
+      await page.getByRole("button", { name: "Take off Up next" }).click();
+    },
+  },
   { name: "builds", path: "/builds", fullPage: true },
   {
     // The end of a build page on a phone: "Finish attempt" must sit above the tab bar (try it with --iphone).
