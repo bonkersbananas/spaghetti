@@ -1,3 +1,4 @@
+import { gramsText } from "@shared/ledger";
 import { REMAINING_LABELS, type Remaining } from "@shared/spools";
 import { cn } from "@/lib/cn";
 
@@ -9,21 +10,29 @@ const tones: Record<Remaining, string> = {
   empty: "bg-ink-ghost",
 };
 
-/** Roughly how much is left on a spool: three short bars, never grams. */
+/**
+ * How much is left on a spool: three short bars. With grams known ("about 420 g") the figure
+ * stands beside them in place of the level's word, which screen readers still hear.
+ */
 export function RemainingMeter({
   remaining,
+  gramsLeft,
   showLabel,
   className,
 }: {
   remaining: Remaining;
+  /** Grams left, once the spool has gram data. */
+  gramsLeft?: number | null;
   /** The word beside the bars. "lg" shows it from the lg breakpoint (screen readers always hear it). */
   showLabel?: boolean | "lg";
   className?: string;
 }) {
+  const word = REMAINING_LABELS[remaining];
+  const grams = gramsLeft === null || gramsLeft === undefined ? null : `about ${gramsText(gramsLeft)}`;
   return (
     <span
-      className={cn("text-small text-ink-faint inline-flex items-center gap-1.5", className)}
-      title={`${REMAINING_LABELS[remaining]}`}
+      className={cn("text-small text-ink-faint tabular inline-flex items-center gap-1.5", className)}
+      title={grams ? `${word}, ${grams}` : word}
     >
       <span className="inline-flex items-end gap-0.5" aria-hidden>
         {[0, 1, 2].map((bar) => (
@@ -38,9 +47,12 @@ export function RemainingMeter({
         ))}
       </span>
       {showLabel === true ? (
-        REMAINING_LABELS[remaining]
+        <>
+          {grams ?? word}
+          {grams && <span className="sr-only">, {word}</span>}
+        </>
       ) : (
-        <span className={cn("sr-only", showLabel === "lg" && "lg:not-sr-only")}>{REMAINING_LABELS[remaining]}</span>
+        <span className={cn("sr-only", showLabel === "lg" && "lg:not-sr-only")}>{grams ?? word}</span>
       )}
     </span>
   );

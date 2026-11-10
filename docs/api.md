@@ -30,7 +30,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
 | `capture` | `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
 | `attempts` | `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`. |
-| `printer` | `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`. |
+| `printer` | `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
 The rules are one table, `src/worker/auth/scopes.ts`: any route not listed there is person-only, so a new endpoint is closed to tokens until it is given a scope. Routes that need to look at the body (a photo's `attemptId`, the fields of a `PATCH`) narrow it with `canUse` / `missingScope`. `test/worker/agents.test.ts` has a case per row.
 
@@ -43,6 +43,16 @@ The change feed (`GET /api/changes?after=<cursor>`, see `src/shared/changes.ts`)
 ## Idempotent writes
 
 The client picks ids (UUIDs) for items, attempts, photos and files, so any write can be retried safely: a repeat returns the same thing and records no second change. Photos are uploaded already resized (WebP or JPEG, large and thumb); see "Items and photos" in `AGENTS.md`.
+
+## Filament in grams
+
+A spool can count itself down (decision [0009](decisions/0009-filament-tracked-in-grams.md)). Every spool response (`GET /spools`, `GET /spools/:id`, the writes below) carries `netGrams`, `tareGrams`, `gramsLeft` (null until the spool has gram data), `gramsApproximate` (a failed print was counted by a guess) and `weighedAt`. With gram data `remaining` is derived from the grams: a `remaining` sent in a `PATCH` (the printer bridge sends the AMS's on every sync) is ignored for such a spool and changes nothing. Without gram data `remaining` is the hand-set (or AMS) level, as before.
+
+- `POST /spools` accepts `netGrams` (and `tareGrams`): a Bambu spool is 1000 g.
+- `PUT /spools/:id/weight` with `{ "netGrams": 1000, "tareGrams": 250 }` sets what it held when new and the empty spool's weight; `null` clears them and drops the spool's weighings (back to a hand-set level). `printer` scope.
+- `POST /spools/:id/weighings` with `{ "id": "<uuid>", "onScale": 812 }` (the empty spool's weight is taken off) or `{ "id", "gramsLeft": 562 }`, optionally `tareGrams` and `at`: a fresh baseline. Idempotent on `id`. `printer` scope. `DELETE /spools/:id/weighings/:weighingId` takes one back; it is person-only.
+- `GET /spools/:id/usage` lists what used the spool (attempt, build, grams, whether the amount is a guess, whether it still counts) and its weighings.
+- Usage is read off finished attempts, never stored: `settings.filaments[].grams` (from the slicer file) of each filament whose `spoolId` is the spool. Editing an attempt, or deleting and restoring it, changes the answer.
 
 ## Also here
 

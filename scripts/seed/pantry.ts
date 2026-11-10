@@ -26,6 +26,8 @@ interface SeedSpool {
   driedAgo?: number;
   addedAgo: number;
   note?: string;
+  /** Counted in grams: what it held when new, and the weighing that set what was left (days ago). */
+  grams?: { net: number; left: number; weighedAgo: number };
   /** Light and dark shades of the filament for the label photo. */
   photo?: { light: string; dark: string };
 }
@@ -52,6 +54,7 @@ export const SEED_SPOOLS: SeedSpool[] = [
     remaining: "half",
     slot: "A1",
     addedAgo: 120 * DAY,
+    grams: { net: 1000, left: 520, weighedAgo: 10 * DAY },
     photo: { light: "#ffffff", dark: "#cfc9bc" },
   },
   {
@@ -64,6 +67,7 @@ export const SEED_SPOOLS: SeedSpool[] = [
     remaining: "low",
     slot: "A2",
     addedAgo: 60 * DAY,
+    grams: { net: 1000, left: 140, weighedAgo: 4 * DAY },
   },
   {
     id: SEED_SPOOL_IDS.black,
@@ -75,6 +79,7 @@ export const SEED_SPOOLS: SeedSpool[] = [
     remaining: "full",
     slot: "A3",
     addedAgo: 110 * DAY,
+    grams: { net: 1000, left: 880, weighedAgo: 12 * DAY },
   },
   {
     id: SEED_SPOOL_IDS.bluePetg,
@@ -86,6 +91,7 @@ export const SEED_SPOOLS: SeedSpool[] = [
     slot: "A4",
     driedAgo: 3 * DAY,
     addedAgo: 50 * DAY,
+    grams: { net: 1000, left: 430, weighedAgo: 6 * DAY },
     note: "Dry it first: it strings when it has sat out a week. 245 °C, 70 °C bed on textured PEI.",
   },
   {
@@ -120,6 +126,7 @@ export const SEED_SPOOLS: SeedSpool[] = [
     finish: "matte",
     remaining: "low",
     addedAgo: 40 * DAY,
+    grams: { net: 1000, left: 85, weighedAgo: DAY / 48 },
   },
   {
     id: id(8),
@@ -212,6 +219,7 @@ export async function seedPantry(
         colorHex: spool.colorHex,
         finish: spool.finish ?? null,
         remaining: spool.remaining,
+        netGrams: spool.grams?.net ?? null,
         note: spool.note ?? "",
         createdAt: now - spool.addedAgo,
         driedAt: spool.driedAgo ? now - spool.driedAgo : null,
@@ -236,6 +244,18 @@ export async function seedPantry(
         },
       });
       if (!uploaded.ok()) throw new Error(`Uploading the label of ${spool.colorName} failed: ${uploaded.status()}`);
+    }
+    if (spool.grams) {
+      const weighed = await request.post(`/api/spools/${spool.id}/weighings`, {
+        headers,
+        data: {
+          id: crypto.randomUUID(),
+          gramsLeft: spool.grams.left,
+          tareGrams: 250,
+          at: now - spool.grams.weighedAgo,
+        },
+      });
+      if (!weighed.ok()) throw new Error(`Weighing ${spool.colorName} failed: ${weighed.status()}`);
     }
     if (spool.slot) {
       const loaded = await request.put(`/api/printer/slots/${spool.slot}`, { headers, data: { spoolId: spool.id } });

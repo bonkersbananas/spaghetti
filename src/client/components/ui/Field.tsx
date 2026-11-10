@@ -81,8 +81,8 @@ export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "si
   suffix?: string;
   /** "plain" drops the surface, for titles that read as text until edited. */
   appearance?: "surface" | "plain";
-  /** "sm" for dense groups of fields, such as print settings. */
-  size?: "sm" | "md";
+  /** "sm" for dense groups of fields, such as print settings. "lg" is one big figure to type, such as a weighing. */
+  size?: "sm" | "md" | "lg";
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
@@ -131,10 +131,15 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           aria-describedby={error || caution || hint ? `${fieldId}-message` : undefined}
           className={cn(
             appearance === "surface"
-              ? cn(inputSurface, "text-body", size === "md" ? "h-12 px-4 md:h-11" : "h-11 px-3 md:h-9")
+              ? cn(
+                  inputSurface,
+                  size === "lg" ? "text-headline tabular h-16 px-5 font-semibold" : "text-body",
+                  size === "md" && "h-12 px-4 md:h-11",
+                  size === "sm" && "h-11 px-3 md:h-9",
+                )
               : "text-ink placeholder:text-ink-faint w-full bg-transparent",
             IconComponent && "pl-11",
-            suffix && (size === "md" ? "pr-12" : "pr-10"),
+            suffix && (size === "lg" ? "pr-14" : size === "md" ? "pr-12" : "pr-10"),
             error && "shadow-ring-error focus:shadow-ring-error",
           )}
           {...props}
@@ -144,7 +149,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
             aria-hidden
             className={cn(
               "text-small text-ink-faint pointer-events-none absolute top-1/2 -translate-y-1/2 font-medium",
-              size === "md" ? "right-4" : "right-3",
+              size === "lg" ? "right-5" : size === "md" ? "right-4" : "right-3",
             )}
           >
             {suffix}

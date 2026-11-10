@@ -21,8 +21,8 @@ describe("settings from a slicer file", () => {
   it("reads plate 1 as attempt settings", () => {
     expect(settingsFromFile(sliced, 1)).toEqual({
       filaments: [
-        { type: "PLA", colorHex: "#00ae42", profile: "Bambu PLA Basic" },
-        { type: "PLA", colorHex: "#ffffff", profile: "Generic PLA" },
+        { type: "PLA", colorHex: "#00ae42", profile: "Bambu PLA Basic", grams: 19 },
+        { type: "PLA", colorHex: "#ffffff", profile: "Generic PLA", grams: 4.5 },
       ],
       bedType: "Textured PEI Plate",
       nozzleDiameter: 0.4,

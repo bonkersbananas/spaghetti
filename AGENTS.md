@@ -28,7 +28,7 @@ src/
       ui/                 the design system: Button, Field, Sheet, Toast, Card, Chip, Avatar, Skeleton, EmptyState, Kbd, icons
       illustrations/      empty-state spot illustrations and the app mark
       shell/              Sidebar, TabBar, PageHeader, CaptureSheet, DropOverlay, AccountSheet, CommandPalette, ShortcutOverlay, sections.ts (sections and the workshop)
-      pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, AddSpoolSheet
+      pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, SpoolRow, AddSpoolSheet, SpoolGrams (the hero figure, what used it), WeightSheets (weigh it, set the weight), WeightPicker, RunningLow
       ideas/              IdeaCard, PhotoViewer, PhotoStrip, AddFirstPhotos
       builds/             BuildCard, AttemptEntry, AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
       journal/            JournalEntry, Filters (the chips shared by the journal and search)
@@ -162,6 +162,7 @@ Never edit a migration that has been merged; add a new one.
 ### Pantry, printer and slicer files
 
 - Spools (`spools`) are the filament library; `ams_slots` says which spool is in which slot ("A1" to "D4", "Ext"), one slot per spool; `printer` is one row (`x2d`) with the setup as JSON (`PrinterSetup` in `shared/spools.ts`). A spool's label photo is stored like other photos (`photos/<id>/…`, served by `/api/photos`), but its fields live on the spool row.
+- Filament in grams ([0009](docs/decisions/0009-filament-tracked-in-grams.md)): grams left are never stored, they are worked out from the net weight, the latest weighing (`spool_weighings`) and the finished attempts' `filaments[].grams` (`shared/ledger.ts` pure rules, `worker/ledger.ts` loading). Spools without gram data keep their hand-set level; with it, `remaining` is derived and a PATCHed one is ignored. Anything that changes an attempt's outcome, filaments or existence must refresh the `spools` queries (outbox handlers, `saveAttemptChanges`, `deleteAttempt`).
 - An attempt's filaments keep their plain values (type, brand, color) and add `spoolId` when picked from the pantry, so attempts read the same if the spool goes. `GET /api/spools/:id/attempts` finds them with `json_each` over the settings.
 - Slicer files (`attempt_files`, one live per attempt) are read in the browser (`shared/threemf`); the client sends what it read (`prefill`), the plate's PNG and, under `MAX_SLICER_FILE_BYTES`, the bytes, through the outbox behind the attempt (`files` in an outbox entry). R2 keys are `files/<id>/file` and `/thumb`, served at `/api/files/:id` and `/api/files/:id/thumb` only while the file, its attempt and its build are live. The purge removes them with their attempt.
 - The fields marked "from the file" are the ones still equal to `file.prefill` (`sameAsFile`, `filamentFromFile`).
