@@ -89,6 +89,10 @@ export const items = sqliteTable(
     finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
     /** The photo picked as the build's final one (checked by the API, not a foreign key). */
     coverPhotoId: text("cover_photo_id"),
+    /** Its place in the Up next queue (1 is first), or null when it isn't queued. Only ideas are queued. */
+    upNext: integer("up_next"),
+    /** Who it is for ("Mila"): optional, shown quietly under the title and searchable. */
+    forWhom: text("for_whom"),
   },
   (table) => [index("items_stage_created_idx").on(table.stage, table.createdAt)],
 );

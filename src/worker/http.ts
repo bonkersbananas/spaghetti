@@ -114,6 +114,8 @@ export function toApiItem(
     startedAt: item.startedAt?.getTime() ?? null,
     finishedAt: item.finishedAt?.getTime() ?? null,
     coverPhotoId: item.coverPhotoId,
+    upNext: item.upNext,
+    forWhom: item.forWhom,
     photos: itemPhotos.map(toApiPhoto),
     attempts: toApiAttempts(itemAttempts, files),
   };

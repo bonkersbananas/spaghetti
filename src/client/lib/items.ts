@@ -350,6 +350,8 @@ function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
     startedAt: stage === "idea" ? null : entry.create.createdAt,
     finishedAt: null,
     coverPhotoId: null,
+    upNext: null,
+    forWhom: null,
     photos: sortPhotos(pendingPhotos(entry, state, [])),
     attempts: withAttempts(entry.itemId, [], entry),
     pending: true,
@@ -422,10 +424,12 @@ export function useItem(id: string) {
 export async function saveItemChanges(
   queryClient: QueryClient,
   id: string,
-  changes: { title?: string | null; note?: string },
+  changes: { title?: string | null; note?: string; forWhom?: string | null },
 ) {
   patchCachedItem(queryClient, id, (item) => ({ ...item, ...changes }));
-  if (outbox.updatePending(id, changes)) return;
+  const { forWhom: _forWhom, ...words } = changes;
+  // An idea still in the outbox takes its words there; who it is for waits until the server has it.
+  if (outbox.updatePending(id, words)) return;
   const { item } = await api<ItemResponse>(`/items/${id}`, {
     method: "PATCH",
     json: changes,
@@ -442,27 +446,32 @@ export async function saveItemChanges(
  * the one beside it may have been edited by the other person meanwhile, and
  * sending its old text back would undo that.
  */
-export function useItemFields(item: Pick<ItemView, "id" | "title" | "note">) {
+export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "forWhom">) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(item.title ?? "");
   const [note, setNote] = useState(item.note);
+  const [forWhom, setForWhom] = useState(item.forWhom ?? "");
   // What the server is known to have (as far as this screen has seen or sent).
-  const known = useRef({ title: item.title ?? "", note: item.note });
+  const known = useRef({ title: item.title ?? "", note: item.note, forWhom: item.forWhom ?? "" });
+  useFollowServer(item.forWhom ?? "", forWhom, setForWhom, (value) => {
+    known.current.forWhom = value;
+  });
   useFollowServer(item.title ?? "", title, setTitle, (value) => {
     known.current.title = value;
   });
   useFollowServer(item.note, note, setNote, (value) => {
     known.current.note = value;
   });
-  const saveState = useAutosave({ title, note }, async (value) => {
-    const changes: { title?: string | null; note?: string } = {};
+  const saveState = useAutosave({ title, note, forWhom }, async (value) => {
+    const changes: { title?: string | null; note?: string; forWhom?: string | null } = {};
     if (value.title !== known.current.title) changes.title = value.title.trim() || null;
     if (value.note !== known.current.note) changes.note = value.note;
+    if (value.forWhom !== known.current.forWhom) changes.forWhom = value.forWhom.trim() || null;
     if (!Object.keys(changes).length) return;
     await saveItemChanges(queryClient, item.id, changes);
-    known.current = { title: value.title, note: value.note };
+    known.current = { title: value.title, note: value.note, forWhom: value.forWhom };
   });
-  return { title, setTitle, note, setNote, saveState };
+  return { title, setTitle, note, setNote, forWhom, setForWhom, saveState };
 }
 
 /**

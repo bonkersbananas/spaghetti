@@ -65,6 +65,8 @@ export const item = (id: string, fields: Partial<Item>): Item => ({
   startedAt: now - 9 * HOUR,
   finishedAt: null,
   coverPhotoId: null,
+  upNext: null,
+  forWhom: null,
   photos: [],
   attempts: [],
   ...fields,

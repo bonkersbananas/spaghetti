@@ -196,6 +196,11 @@ Never edit a migration that has been merged; add a new one.
 - Four ways in ([docs/share.md](docs/share.md), [0015](docs/decisions/0015-share-targets-by-device.md)): the manifest's `share_target` (`POST /api/share`, taken by the service worker's `receiveShare`, which keeps the form in the `sg-share` cache and redirects to `/share?id=…`; `lib/share.ts` reads it, `routes/_app/share.tsx` saves it with `useCapture().shareIn` and `ShareSheet` shows "Captured"), the bookmarklet (`/share?title&url&text`, `shared/shortcut.ts`), and `POST /api/capture` (`worker/routes/capture.ts`) for the iOS Shortcuts built from the Agents page's card. Notes are composed by `shared/capture.ts` so the browser and the Worker agree.
 - The share target and its service worker only exist in the production build: test them in `e2e/share.spec.ts` (the `offline` and `share-desktop` projects, port 5175).
 
+### Up next and "for"
+
+- `items.up_next` is an idea's place in the queue (null when not queued), `items.for_whom` who it is for (`forWhom` in the API; also in the search index, in the item row's `tags` column). The client's queue logic is `lib/up-next.ts` (`splitQueue`, `setUpNext` with its undo toast, `reorderUpNext`, `moveUpNext`, `dropUpNext`), all optimistic. The inbox shows the queue as a section on top (drag on desktop with native drag and drop, "Move up" / "Move down" in the card's menu for everyone), Today shows the first three (`components/today/UpNext.tsx`). Starting a build clears `upNext` (server and `changeStage`); its undo sends the old place back.
+- `ForField` is the quiet "for …" line under a title; `useItemFields` autosaves it with the title and note.
+
 ### Agents and tokens
 
 - Agents (`agents`, `agent_tokens`) act through `Authorization: Bearer spg_…` with scopes `read`, `capture`, `attempts`, `printer`; full reference in [docs/api.md](docs/api.md). `requireAuth` in `src/worker/app.ts` sets `c.var.user` (the owner), `c.var.actor` (what the feed records), `c.var.via` (the agent id or null) and `c.var.scopes` (null for a person).

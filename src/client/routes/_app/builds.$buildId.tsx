@@ -29,6 +29,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
+import { ForField } from "@/components/ui/ForField";
 import {
   ArrowRightIcon,
   BuildsIcon,
@@ -134,7 +135,7 @@ function Build({ item }: { item: ItemView }) {
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
 
-  const { title, setTitle, note, setNote, saveState } = useItemFields(item);
+  const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
@@ -414,6 +415,12 @@ function Build({ item }: { item: ItemView }) {
                   event.currentTarget.blur();
                 }
               }}
+            />
+            <ForField
+              aria-label="For"
+              value={forWhom}
+              onChange={(event) => setForWhom(event.target.value)}
+              readOnly={readOnly || item.pending}
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
               <StageChip

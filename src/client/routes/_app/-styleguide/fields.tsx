@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TextArea, TextField } from "@/components/ui/Field";
+import { ForField } from "@/components/ui/ForField";
 import * as Icons from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";
@@ -46,6 +47,8 @@ export function FieldSection() {
           <Label>Plain, for writing surfaces</Label>
           <TextArea appearance="title" defaultValue="Articulated dragon" aria-label="Title" minRows={1} />
           <TextArea appearance="plain" aria-label="Note" placeholder="Jot it down…" minRows={3} />
+          <Label>For field: who it is for, quiet under a title</Label>
+          <ForField defaultValue="Mila" aria-label="For" />
           <Label>Note field: links stay clickable, tap the text to edit</Label>
           <NoteField value={linkedNote} onChange={setLinkedNote} />
           <Label>Save states</Label>

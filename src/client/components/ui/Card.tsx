@@ -35,6 +35,8 @@ export interface CardProps {
   onClick?: () => void;
   /** The card title's heading level: 2 in a grid right under the page title (the inbox), 3 under a section heading. */
   headingLevel?: 2 | 3;
+  /** Leaves room at the end of the text row for a button laid over the card (the idea card's menu). */
+  reserveEnd?: boolean;
   className?: string;
 }
 
@@ -63,6 +65,7 @@ export function Card({
   link,
   onClick,
   headingLevel = 3,
+  reserveEnd,
   className,
 }: CardProps) {
   const Heading = headingLevel === 2 ? "h2" : "h3";
@@ -96,7 +99,7 @@ export function Card({
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
-      <div className="flex items-start gap-2.5 px-2 pt-2.5 pb-2">
+      <div className={cn("flex items-start gap-2.5 px-2 pt-2.5 pb-2", reserveEnd && "pr-12")}>
         <div className="min-w-0 flex-1">
           {heading ? (
             <Heading

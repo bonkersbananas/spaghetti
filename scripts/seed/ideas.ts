@@ -17,6 +17,10 @@ interface SeedIdea {
   title?: string;
   note?: string;
   photos: Array<{ file: string; color: string }>;
+  /** Its place in the Up next queue (1 is first). */
+  upNext?: number;
+  /** Who it is for. */
+  forWhom?: string;
 }
 
 const MIN = 60_000;
@@ -56,6 +60,8 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "alex",
     ago: 5 * HOUR,
     note: "Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely.",
+    upNext: 2,
+    forWhom: "the kitchen",
     photos: [],
   },
   {
@@ -79,6 +85,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "sam",
     ago: 2 * DAY + 2 * HOUR,
     title: "Desk tidy-up",
+    upNext: 1,
     note: "Clips for the desk edge, a bin for the drawer of screws, and a phone stand in that blue PETG.\n\nThe bin's grid is from https://makerworld.com/en/models/drawer-bins, scaled to 42 mm.",
     photos: [
       { file: "cable-clips.svg", color: "#a5967e" },
@@ -202,6 +209,9 @@ export async function seedIdeas(
       data: { id: idea.id, title: idea.title ?? null, note: idea.note ?? "", createdAt: now - idea.ago },
     });
     if (!created.ok()) throw new Error(`Seeding ${idea.id} failed: ${created.status()}`);
+    if (idea.forWhom) {
+      await request.patch(`/api/items/${idea.id}`, { headers: { Origin: origin }, data: { forWhom: idea.forWhom } });
+    }
     for (const [position, photo] of idea.photos.entries()) {
       let images = rendered.get(photo.file);
       if (!images) {
@@ -226,5 +236,9 @@ export async function seedIdeas(
       if (!uploaded.ok())
         throw new Error(`Uploading ${photo.file} failed: ${uploaded.status()} ${await uploaded.text()}`);
     }
+  }
+  // The Up next queue, marked in its order.
+  for (const idea of SEED_IDEAS.filter((i) => i.upNext).sort((a, b) => (a.upNext ?? 0) - (b.upNext ?? 0))) {
+    await requests[idea.by].patch(`/api/items/${idea.id}`, { headers: { Origin: origin }, data: { upNext: true } });
   }
 }
