@@ -61,14 +61,44 @@ interface PhotoThumbProps {
   /** Still being resized or uploaded. */
   busy?: boolean;
   onRemove?: () => void;
+  /** Makes the tile a button that picks it (the compare sheet's row of an attempt's photos). */
+  onSelect?: () => void;
+  /** With `onSelect`: the one showing now. */
+  selected?: boolean;
   className?: string;
 }
 
-/** A square photo in a row of them, with a remove button. */
-export function PhotoThumb({ src, alt, color, size = "md", busy, onRemove, className }: PhotoThumbProps) {
+/** A square photo in a row of them, with a remove button, or as a button that picks it. */
+export function PhotoThumb({
+  src,
+  alt,
+  color,
+  size = "md",
+  busy,
+  onRemove,
+  onSelect,
+  selected,
+  className,
+}: PhotoThumbProps) {
+  const photo = <Photo src={src} alt={alt} color={color} eager className="shadow-soft size-full rounded-md" />;
   return (
     <div className={cn("relative shrink-0", size === "md" ? "size-24" : "size-16", className)}>
-      <Photo src={src} alt={alt} color={color} eager className="shadow-soft size-full rounded-md" />
+      {onSelect ? (
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-pressed={selected}
+          aria-label={alt}
+          className={cn(
+            "pressable focus-ring touch-target relative block size-full rounded-md",
+            selected && "ring-ink ring-offset-lifted ring-2 ring-offset-2",
+          )}
+        >
+          {photo}
+        </button>
+      ) : (
+        photo
+      )}
       {busy && (
         <span className="bg-veil text-on-veil absolute bottom-1.5 left-1.5 flex size-6 items-center justify-center rounded-full backdrop-blur-md">
           <ProgressRing value={null} className="size-3.5" />

@@ -6,6 +6,8 @@ import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
+import { BuildSummary } from "@/components/builds/BuildSummary";
+import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
@@ -24,6 +26,7 @@ import { TextArea } from "@/components/ui/Field";
 import {
   BuildsIcon,
   CheckIcon,
+  CompareIcon,
   FinishIcon,
   IdeasIcon,
   PlusIcon,
@@ -196,6 +199,31 @@ function Build({ item }: { item: ItemView }) {
     entryRefs.current.get(next.id)?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
   };
 
+  // Comparing an attempt with the one before it (the sheet; desktop can swap either side from its header).
+  const [compare, setCompare] = useState<{ open: boolean; pair: ComparePair | null }>({ open: false, pair: null });
+  const comparePredecessor = (attemptId: string) => {
+    const index = item.attempts.findIndex((attempt) => attempt.id === attemptId);
+    const before = item.attempts[index - 1];
+    return index > 0 && before ? { before, attempt: item.attempts[index] } : null;
+  };
+  const openCompare = (attemptId: string) => {
+    const found = comparePredecessor(attemptId);
+    if (found) setCompare({ open: true, pair: { older: found.before.id, newer: attemptId } });
+  };
+  // V compares the picked attempt (else the newest) with the one before it.
+  const compareTarget = selected ?? story[0]?.id;
+  const compareFound = compareTarget ? comparePredecessor(compareTarget) : null;
+  // The strip in the summary picks an attempt the way J and K do.
+  const pickAttempt = (attemptId: string) => {
+    setSelected(attemptId);
+    entryRefs.current.get(attemptId)?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
+  };
+
+  // When any attempt has more than one photo, every entry keeps room for their column so the lead photos match.
+  const reserveExtras = story.some(
+    (attempt) => item.photos.filter((photo) => photo.attemptId === attempt.id).length > 1,
+  );
+
   const active = item.stage === "building";
   function remove() {
     if (!canEdit(item.pending)) return;
@@ -212,6 +240,18 @@ function Build({ item }: { item: ItemView }) {
     } else remove();
   };
   useScreenActions("This build", [
+    ...(compareFound?.attempt
+      ? [
+          {
+            id: "compare",
+            label: `Compare attempt ${compareFound.attempt.number} with attempt ${compareFound.before.number}`,
+            icon: CompareIcon,
+            shortcut: "buildCompare" as const,
+            keywords: "compare diff difference versus side by side attempts",
+            run: () => compareTarget && openCompare(compareTarget),
+          },
+        ]
+      : []),
     {
       id: "log",
       label: printing ? "Finish attempt" : "Log attempt",
@@ -261,6 +301,7 @@ function Build({ item }: { item: ItemView }) {
     buildNext: story.length ? () => moveSelection(1) : undefined,
     buildPrevious: story.length ? () => moveSelection(-1) : undefined,
     buildOpen: selected ? () => openSheet(selected) : undefined,
+    buildCompare: compareFound && compareTarget ? () => openCompare(compareTarget) : undefined,
     buildPhotoPrevious: gallery.length > 1 ? () => selectPhoto(photoIndex - 1) : undefined,
     buildPhotoNext: gallery.length > 1 ? () => selectPhoto(photoIndex + 1) : undefined,
     buildDelete: deleteSelectedOrBuild,
@@ -401,6 +442,8 @@ function Build({ item }: { item: ItemView }) {
             />
           </div>
 
+          <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} />
+
           {worked && <WhatWorked attempt={worked} onOpen={() => openSheet(worked.id)} />}
         </div>
 
@@ -451,6 +494,8 @@ function Build({ item }: { item: ItemView }) {
                       openSheet(attempt.id);
                     }}
                     onFinish={() => openSheet(attempt.id)}
+                    reserveExtras={reserveExtras}
+                    onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
                   />
                 ))}
               </AnimatePresence>
@@ -481,6 +526,13 @@ function Build({ item }: { item: ItemView }) {
         </ActionBar>
       )}
 
+      <CompareSheet
+        item={item}
+        open={compare.open}
+        onOpenChange={(open) => setCompare((current) => ({ ...current, open }))}
+        pair={compare.pair}
+        onPairChange={(pair) => setCompare({ open: true, pair })}
+      />
       <AttemptSheet
         item={item}
         attemptId={sheet.attemptId}

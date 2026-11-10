@@ -1,6 +1,8 @@
 import type { Outcome } from "@shared/attempts";
 import { useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { BuildSummary } from "@/components/builds/BuildSummary";
+import { CompareTable } from "@/components/builds/CompareTable";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
 import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { TagPicker } from "@/components/builds/TagPicker";
@@ -71,6 +73,46 @@ const sampleAttempt: AttemptView = {
   updatedAt: Date.now(),
 };
 
+/** The attempt before sampleAttempt, and the one after: three in all, with times and weights. */
+const sampleBefore: AttemptView = {
+  ...sampleAttempt,
+  id: "sample-before",
+  number: 1,
+  outcome: "failed",
+  failureTags: ["spaghetti"],
+  successNotes: [],
+  changes: [],
+  settings: {
+    ...sampleAttempt.settings,
+    bedType: "Smooth PEI Plate",
+    brim: false,
+    bedTemperature: 55,
+    actualMinutes: 85,
+    failedAtPercent: 46,
+    weightGrams: 64,
+  },
+};
+const sampleAfter: AttemptView = {
+  ...sampleAttempt,
+  id: "sample-after",
+  number: 3,
+  outcome: "success",
+  failureTags: [],
+  successNotes: ["great-first-layer"],
+  settings: {
+    ...sampleAttempt.settings,
+    chamberTemperature: 35,
+    filamentDried: true,
+    actualMinutes: 182,
+    weightGrams: 66,
+    filaments: [
+      ...(sampleAttempt.settings.filaments ?? []),
+      { type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white" }, // design-lint-ignore: a filament color is data
+    ],
+  },
+};
+const sampleAttempts = [sampleBefore, sampleAttempt, sampleAfter];
+
 export function BuildsSection() {
   const [outcome, setOutcome] = useState<Outcome | null>("failed");
   const [failureTags, setFailureTags] = useState(["spaghetti"]);
@@ -81,7 +123,7 @@ export function BuildsSection() {
       note="Logging an attempt next to the printer: the outcome is one big tap, tags and settings one more. A failed print is spaghetti, recorded with the same care as a success: soft tomato, never an error."
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel className="flex flex-col gap-5">
+        <Panel className="flex min-w-0 flex-col gap-5">
           <Label>Outcome picker</Label>
           <OutcomePicker value={outcome} onChange={setOutcome} />
           <Label>Outcome chips</Label>
@@ -122,7 +164,11 @@ export function BuildsSection() {
             visible={6}
           />
         </Panel>
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Label>Build summary: from the second attempt on, under the notes</Label>
+          <BuildSummary attempts={sampleAttempts} open onPick={(id) => toast.message(`Picked ${id}`)} />
+          <Label>Compare two attempts: what changed, what stayed, how it went</Label>
+          <CompareTable older={sampleAttempt} newer={sampleAfter} />
           <Label>Attempt in a build's timeline</Label>
           <ol className="flex flex-col">
             <AttemptEntry
@@ -132,6 +178,7 @@ export function BuildsSection() {
               first
               last
               onOpen={() => toast.message("Opens the attempt")}
+              onCompare={() => toast.message("Opens the comparison")}
             />
           </ol>
           <Label>New build tiles</Label>

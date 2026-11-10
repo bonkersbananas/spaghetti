@@ -29,6 +29,7 @@ export {
   Clock as ClockIcon,
   ClockCounterClockwise as RecentIcon,
   CloudArrowUp as DropIcon,
+  Columns as CompareIcon,
   Command as CommandIcon,
   CookingPot as TodayIcon,
   Copy as CopyIcon,

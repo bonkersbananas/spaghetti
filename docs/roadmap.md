@@ -13,9 +13,9 @@
 The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested order:
 
 - [x] §1 Shared building blocks (PrintProgress, SpoolDisc rim, OutcomeStrip) and §9 small polish, with the styleguide split per section first (#14)
-- [ ] §5 Pantry (rims, AMS remaining, fill discs, desktop list view) and §6 Journal (one icon per row, plate pictures, printing progress, compact rows), side by side (§6 Journal is done in #19; §5 Pantry is still open)
-- [ ] §3 Build page: summary under the notes, aligned attempt photos, compare two attempts
-- [x] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar) (#22)
+- [x] §5 Pantry (rims, AMS remaining, fill discs, desktop list view; #17) and §6 Journal (one icon per row, plate pictures, printing progress, compact rows; #19), side by side
+- [x] §3 Build page: summary under the notes, aligned attempt photos, compare two attempts (#23)
+- [x] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar) (#TODAY)
 - [ ] §4 Idea page (proportions, link cards and a preview endpoint) and §8 Motion (photo transitions, outcome tap, reflow, stepping between attempts)
 
 ## Now: agents in the repo

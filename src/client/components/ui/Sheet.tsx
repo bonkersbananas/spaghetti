@@ -21,6 +21,8 @@ export interface SheetProps {
   desktop?: "dialog" | "panel";
   /** A wider desktop dialog, for content that sits in columns (the shortcut list). */
   wide?: boolean;
+  /** On phones, as tall as a sheet gets instead of as tall as its content (the compare sheet's two attempts). */
+  tall?: boolean;
   children: ReactNode;
 }
 
@@ -58,7 +60,7 @@ export function Sheet(props: SheetProps) {
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
 }
 
-function PhoneSheet({ open, onOpenChange, title, description, footer, children }: SheetProps) {
+function PhoneSheet({ open, onOpenChange, title, description, footer, tall, children }: SheetProps) {
   const returnFocus = useReturnFocus(open);
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
@@ -76,7 +78,12 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, children }
           }}
           onCloseAutoFocus={returnFocus}
           // Sits on the keyboard when it is up (lib/viewport.ts), so the footer's button stays in view.
-          className="bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex max-h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))] flex-col rounded-t-xl focus:outline-none"
+          className={cn(
+            "bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex flex-col rounded-t-xl focus:outline-none",
+            tall
+              ? "h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))]"
+              : "max-h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))]",
+          )}
         >
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
           <div className="px-5 pt-2 pb-1">
