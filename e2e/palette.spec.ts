@@ -46,7 +46,7 @@ test.describe("on a laptop", () => {
 
     // What fits this build comes first; the rest follow.
     const options = palette.getByRole("option");
-    await expect(options.first()).toHaveAccessibleName("Log attempt");
+    await expect(options.first()).toHaveAccessibleName(/^Log attempt\b/);
     for (const name of ["Finish build", "Shelve build", "New idea", "Sign out"]) {
       await expect(palette.getByRole("option", { name })).toBeVisible();
     }
@@ -74,7 +74,7 @@ test.describe("on a laptop", () => {
     await expect(palette.getByRole("option", { name: "Cable chain" })).toHaveCount(0);
 
     // Builds come before ideas, and Enter opens the first.
-    await expect(palette.getByRole("option").first()).toHaveAccessibleName("Tugboat deck");
+    await expect(palette.getByRole("option").first()).toHaveAccessibleName(/^Tugboat deck\b/);
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Tugboat deck");
@@ -82,6 +82,7 @@ test.describe("on a laptop", () => {
 
     // It is the most recent thing opened.
     await page.goto("/ideas");
+    await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
     await page.keyboard.press(open);
     await expect(
       page.getByRole("group", { name: "Recent" }).getByRole("option", { name: "Tugboat deck" }),
@@ -107,7 +108,7 @@ test.describe("on a laptop", () => {
 
     await page.keyboard.press(open);
     await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("log att");
-    await expect(page.getByRole("option").first()).toHaveAccessibleName("Log attempt");
+    await expect(page.getByRole("option").first()).toHaveAccessibleName(/^Log attempt\b/);
     await page.keyboard.press("Enter");
     await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeHidden();
@@ -127,7 +128,7 @@ test.describe("on a laptop", () => {
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Desk hook");
 
     await page.keyboard.press(open);
-    await expect(page.getByRole("option").first()).toHaveAccessibleName("Start building");
+    await expect(page.getByRole("option").first()).toHaveAccessibleName(/^Start building\b/);
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
 

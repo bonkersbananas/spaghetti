@@ -172,6 +172,17 @@
   padding: 0 0.75rem;
   transition: background-color var(--sg-duration-fast) var(--sg-ease-out);
 }
+/* Undo is the one thing people tap on a toast: a 44 px hit area on touch screens, as touch-target gives other small controls. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
+  position: relative;
+}
+@media (pointer: coarse) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]::after {
+    content: "";
+    position: absolute;
+    inset: -0.375rem -0.25rem;
+  }
+}
 [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:hover {
   background: rgb(255 250 243 / 0.2);
 }

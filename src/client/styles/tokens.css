@@ -98,6 +98,9 @@
   --sg-wide-width: 72rem;
   --sg-safe-top: env(safe-area-inset-top, 0px);
   --sg-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* What the on-screen keyboard covers, and what is left above it (lib/viewport.ts keeps them current). */
+  --sg-keyboard-inset: 0px;
+  --sg-visible-height: 100dvh;
 
   /* Motion */
   --sg-duration-instant: 90ms;
@@ -144,7 +147,7 @@
   --sg-well: #120f0d;
   --sg-ink: #ece4d9;
   --sg-ink-soft: #c6bab0;
-  --sg-ink-faint: #a09488;
+  --sg-ink-faint: #ab9f93;
   --sg-ink-ghost: #6b6158;
   --sg-hairline: rgb(236 228 217 / 0.08);
   --sg-scrim: rgb(12 8 5 / 0.6);
@@ -330,4 +333,22 @@
 @utility render-lazy {
   content-visibility: auto;
   contain-intrinsic-size: auto 40rem;
+}
+/*
+ * A 44 px hit area on touch screens for controls drawn smaller (small
+ * buttons, chips, the remove button on a thumbnail), without changing how
+ * they look. The element must be positioned (relative or absolute).
+ */
+@utility touch-target {
+  @media (pointer: coarse) {
+    &::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 2.75rem);
+      height: max(100%, 2.75rem);
+      transform: translate(-50%, -50%);
+    }
+  }
 }

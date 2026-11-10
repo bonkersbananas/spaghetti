@@ -1,6 +1,6 @@
 import { fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptFilament } from "@shared/attempts";
-import type { Plate } from "@shared/threemf/index.ts";
+import type { Plate } from "@shared/threemf/types.ts";
 import { useMemo } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";

@@ -28,6 +28,7 @@ import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
@@ -344,14 +345,9 @@ function PrintedWith({ spool }: { spool: Spool }) {
   return (
     <section aria-labelledby="printed-with" className="mt-4 flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 id="printed-with" className="text-headline text-ink">
+        <SectionHeading id="printed-with" count={hits?.length || undefined}>
           Printed with it
-          {hits && hits.length > 0 && (
-            <span className="text-small text-ink-faint tabular ml-2 align-middle font-sans font-semibold">
-              {hits.length}
-            </span>
-          )}
-        </h2>
+        </SectionHeading>
         {counts.length > 0 && (
           <MetaList className="text-small text-ink-faint">
             {counts.map(({ outcome, count }) => (

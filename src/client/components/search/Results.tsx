@@ -34,19 +34,18 @@ interface RowProps {
   onPointerEnter?: () => void;
   onOpen?: () => void;
   children: ReactNode;
-  label: string;
 }
 
 /** A result: its photo first, the words that matched beside it. */
 const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, children, label },
+  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, children },
   ref,
 ) {
   return (
     <Link
       ref={ref}
       {...link}
-      aria-label={label}
+      // Named by what it shows (outcome, title, the words that matched), as people see it.
       aria-current={selected || undefined}
       onPointerEnter={onPointerEnter}
       onClick={onOpen}
@@ -100,7 +99,6 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       selected={selected}
       onPointerEnter={onHover}
       onOpen={onOpen}
-      label={`${title}, attempt ${hit.number}`}
     >
       <span className="flex items-center gap-2">
         <OutcomeChip outcome={attempt.outcome} />
@@ -194,7 +192,6 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
       selected={selected}
       onPointerEnter={onHover}
       onOpen={onOpen}
-      label={title || item.note.slice(0, 80) || look.label}
     >
       <span className="flex items-center gap-2">
         <Chip tone={look.tone} icon={look.icon}>

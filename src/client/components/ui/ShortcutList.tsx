@@ -2,6 +2,7 @@ import { GROUP_LABELS, keycaps, SHORTCUT_COLUMNS, type ShortcutGroup, shortcutsI
 import { cn } from "@/lib/cn";
 import { isMac } from "@/lib/hotkeys";
 import { Kbd } from "./Kbd";
+import { Overline } from "./Overline";
 
 /**
  * Every shortcut, grouped by where it works, read straight from the registry
@@ -25,12 +26,9 @@ export function ShortcutList({ className }: { className?: string }) {
 function Group({ group }: { group: ShortcutGroup }) {
   return (
     <section aria-labelledby={`shortcuts-${group}`}>
-      <h3
-        id={`shortcuts-${group}`}
-        className="text-caption text-ink-faint mb-2 font-sans font-semibold tracking-wider uppercase"
-      >
+      <Overline as="h3" id={`shortcuts-${group}`} className="mb-2 block">
         {GROUP_LABELS[group]}
-      </h3>
+      </Overline>
       <dl className="flex flex-col">
         {shortcutsIn(group).map((shortcut) => (
           <div key={shortcut.id} className="flex items-center justify-between gap-4 py-1">

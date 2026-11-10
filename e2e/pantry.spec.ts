@@ -43,7 +43,7 @@ test("adds a spool to the pantry and loads it into the AMS", async ({ page, isMo
   await sheet.getByRole("button", { name: "Add to pantry" }).click();
   await expect(sheet).toBeHidden();
 
-  await expect(page.getByRole("link", { name: "Blue, Polymaker PETG Matte" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Blue Polymaker PETG Matte/ })).toBeVisible();
   await expect
     .poll(async () =>
       (await (await page.request.get("/api/spools")).json()).spools.map((s: { colorName: string }) => s.colorName),
@@ -51,11 +51,11 @@ test("adds a spool to the pantry and loads it into the AMS", async ({ page, isMo
     .toEqual(["Blue"]);
 
   // An empty slot: tap it and pick the spool.
-  await page.getByRole("button", { name: "A3: empty. Change" }).click();
+  await page.getByRole("button", { name: /^A3 Empty/ }).click();
   const slot = page.getByRole("dialog", { name: "Slot A3" });
   await slot.getByRole("button", { name: /Blue/ }).click();
   await expect(slot).toBeHidden();
-  await expect(page.getByRole("button", { name: /^A3: Blue/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^A3 Blue/ })).toBeVisible();
   await expect
     .poll(async () => Object.keys((await (await page.request.get("/api/printer")).json()).slots))
     .toEqual(["A3"]);
@@ -63,16 +63,16 @@ test("adds a spool to the pantry and loads it into the AMS", async ({ page, isMo
   // On desktop, drag it from the pantry to another slot.
   if (!isMobile) {
     await page
-      .getByRole("link", { name: "Blue, Polymaker PETG Matte" })
-      .dragTo(page.getByRole("button", { name: "A1: empty. Change" }));
-    await expect(page.getByRole("button", { name: /^A1: Blue/ })).toBeVisible();
+      .getByRole("link", { name: /Blue Polymaker PETG Matte/ })
+      .dragTo(page.getByRole("button", { name: /^A1 Empty/ }));
+    await expect(page.getByRole("button", { name: /^A1 Blue/ })).toBeVisible();
     await expect
       .poll(async () => Object.keys((await (await page.request.get("/api/printer")).json()).slots))
       .toEqual(["A1"]);
   }
 
   // The spool's page says where it is.
-  await page.getByRole("link", { name: "Blue, Polymaker PETG Matte" }).click();
+  await page.getByRole("link", { name: /Blue Polymaker PETG Matte/ }).click();
   await expect(page.getByText(isMobile ? "Loaded in A3" : "Loaded in A1")).toBeVisible();
 });
 
@@ -212,6 +212,6 @@ test("picks a spool from the pantry for an attempt's filament", async ({ page, i
   // The spool's page lists the print.
   await page.goto(`/pantry/${silk}`);
   const printed = page.getByRole("region", { name: /Printed with it/ });
-  await expect(printed.getByRole("link", { name: "Lampshade, attempt 1" })).toBeVisible();
+  await expect(printed.getByRole("link", { name: /Lampshade · attempt 1/ })).toBeVisible();
   await expect(printed).toContainText("1 worked");
 });

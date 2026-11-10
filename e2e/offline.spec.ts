@@ -446,16 +446,16 @@ test("shows the pantry as last seen with no connection, read-only", async ({ pag
     await page.goto(`/pantry/${spoolId}`);
     await expect(page.getByRole("button", { name: "Take out of the pantry" })).toBeEnabled();
     await page.goto("/pantry");
-    await expect(page.getByRole("link", { name: "Jade white, PLA" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Jade white PLA/ })).toBeVisible();
     await expect.poll(() => cacheHolds(page, "Jade white")).toBe(true);
 
     // Reloaded with no signal: the pantry is there to read, not to change.
     await context.setOffline(true);
     await page.reload();
-    await expect(page.getByRole("link", { name: "Jade white, PLA" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Jade white PLA/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Add spool" }).filter({ visible: true }).first()).toBeDisabled();
-    await expect(page.getByRole("button", { name: "A1: empty" })).toBeDisabled();
-    await page.getByRole("link", { name: "Jade white, PLA" }).click();
+    await expect(page.getByRole("button", { name: /^A1 Empty/ })).toBeDisabled();
+    await page.getByRole("link", { name: /Jade white PLA/ }).click();
     await expect(page.getByRole("button", { name: "Take out of the pantry" })).toBeDisabled();
     await expect(page.getByRole("radio", { name: "Half" })).toBeDisabled();
 

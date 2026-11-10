@@ -1,14 +1,8 @@
 import { type AttemptFile, MAX_SLICER_FILE_BYTES, type Spool } from "@shared/api";
 import type { AttemptFilament, AttemptSettings } from "@shared/attempts";
 import { filamentFromSpool, matchFilaments } from "@shared/spools";
-import {
-  type Plate,
-  printablePlates,
-  readThreeMfFile,
-  settingsFromFile,
-  slicerName,
-  type ThreeMfResult,
-} from "@shared/threemf/index.ts";
+import { printablePlates, settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
+import type { Plate, ThreeMfResult } from "@shared/threemf/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { type RefObject, useEffect, useRef } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -35,6 +29,8 @@ export interface SlicerFileDraft {
  * it isn't a Bambu Studio or Orca Slicer file.
  */
 export async function readSlicerFile(file: File): Promise<SlicerFileDraft | null> {
+  // The reader (and its unzip) loads the first time someone drops a file, not with the app.
+  const { readThreeMfFile } = await import("@shared/threemf/read.ts");
   const result = await readThreeMfFile(file);
   const plates = printablePlates(result);
   if (result.kind === "unknown" || (!plates.length && !Object.keys(result.settings).length)) {

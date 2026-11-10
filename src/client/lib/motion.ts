@@ -13,3 +13,12 @@ export const spring = {
   snappy: { type: "spring", stiffness: 520, damping: 34, mass: 0.8 },
   gentle: { type: "spring", stiffness: 260, damping: 28 },
 } as const;
+
+/**
+ * "smooth" unless the person prefers reduced motion. Scrolling from JS with
+ * behavior "smooth" ignores the CSS that turns smooth scrolling off, so every
+ * scrollTo / scrollIntoView passes this instead.
+ */
+export function scrollBehavior(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}

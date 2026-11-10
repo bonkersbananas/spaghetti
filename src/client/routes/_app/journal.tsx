@@ -19,6 +19,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Kbd } from "@/components/ui/Kbd";
+import { Overline } from "@/components/ui/Overline";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -30,6 +31,7 @@ import {
   readFilters,
   summaryQuery,
 } from "@/lib/journal";
+import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/_app/journal")({
@@ -73,7 +75,7 @@ function Journal() {
       entries[index === -1 ? (by > 0 ? 0 : entries.length - 1) : Math.max(0, Math.min(entries.length - 1, index + by))];
     if (!next) return;
     setSelected(next.key);
-    refs.current.get(next.key)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    refs.current.get(next.key)?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
   };
   const open = () => {
     const entry = entries.find((e) => e.key === selected);
@@ -193,10 +195,10 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
   return (
     <section aria-label={monthLabel(month.start)} className="render-lazy flex flex-col gap-7 md:gap-8">
       <header className={cn("flex flex-col gap-1", !first && "pt-4 md:pt-6")}>
-        <h2 className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">
+        <Overline as="h2">
           {monthLabel(month.start)}
           {current && " so far"}
-        </h2>
+        </Overline>
         {line === null ? (
           <Skeleton className="h-6 w-64 max-w-full" />
         ) : (

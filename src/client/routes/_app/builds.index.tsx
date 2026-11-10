@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { createBuild } from "@/lib/builds";
 import { type ItemView, useBuilds } from "@/lib/items";
@@ -106,9 +107,9 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-4 md:gap-5">
-      <h2 className={quiet ? "text-title text-ink-soft" : "text-headline text-ink"}>
-        {title} <span className="text-ink-faint text-small tabular align-middle font-sans font-semibold">{count}</span>
-      </h2>
+      <SectionHeading size={quiet ? "title" : "headline"} count={count}>
+        {title}
+      </SectionHeading>
       {children}
     </section>
   );

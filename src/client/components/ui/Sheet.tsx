@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { Drawer } from "vaul";
 import { cn } from "@/lib/cn";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -29,17 +29,55 @@ export interface SheetProps {
  * actions), dialog or side panel on desktop. Never an "are you sure?" box:
  * deletes use an undo toast instead.
  */
+/**
+ * Puts focus back where it was when the sheet opened. Radix only returns it
+ * to a Dialog.Trigger, and our sheets open from state (a shortcut, a button
+ * elsewhere, the palette), so without this it would fall to the page.
+ */
+function useReturnFocus(open: boolean) {
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current && typeof document !== "undefined") {
+    const active = document.activeElement;
+    opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+  }
+  wasOpen.current = open;
+  return (event: Event) => {
+    const target = opener.current;
+    opener.current = null;
+    if (!target?.isConnected) return;
+    // Another sheet opened as this one closed (an action that opens the next step): leave focus there.
+    if (document.activeElement?.closest("[role=dialog]")) return;
+    event.preventDefault();
+    target.focus({ preventScroll: true });
+  };
+}
+
 export function Sheet(props: SheetProps) {
   const isDesktop = useIsDesktop();
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
 }
 
 function PhoneSheet({ open, onOpenChange, title, description, footer, children }: SheetProps) {
+  const returnFocus = useReturnFocus(open);
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
       <Drawer.Portal>
         <Drawer.Overlay className="bg-scrim fixed inset-0 z-40" />
-        <Drawer.Content className="bg-lifted shadow-float fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-xl focus:outline-none">
+        <Drawer.Content
+          // vaul leaves focus on what opened the sheet (so no field grabs it and pops the keyboard up):
+          // move it to the sheet itself, so Tab starts inside and stays there. A field that asked for focus keeps it.
+          onOpenAutoFocus={(event) => {
+            const sheet = event.currentTarget;
+            if (!(sheet instanceof HTMLElement)) return;
+            requestAnimationFrame(() => {
+              if (!sheet.contains(document.activeElement)) sheet.focus({ preventScroll: true });
+            });
+          }}
+          onCloseAutoFocus={returnFocus}
+          // Sits on the keyboard when it is up (lib/viewport.ts), so the footer's button stays in view.
+          className="bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex max-h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))] flex-col rounded-t-xl focus:outline-none"
+        >
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
           <div className="px-5 pt-2 pb-1">
             <Drawer.Title className="font-display text-title text-ink font-semibold">{title}</Drawer.Title>
@@ -49,7 +87,7 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, children }
               <Drawer.Description className="sr-only">{title}</Drawer.Description>
             )}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">{children}</div>
           {footer && (
             <div className="flex shrink-0 items-center gap-3 px-5 pt-2 pb-[max(1rem,var(--sg-safe-bottom))]">
               {footer}
@@ -73,11 +111,13 @@ function DesktopSheet({
   children,
 }: SheetProps) {
   const isPanel = desktop === "panel";
+  const returnFocus = useReturnFocus(open);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
         <Dialog.Content
+          onCloseAutoFocus={returnFocus}
           className={cn(
             "bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel
@@ -101,7 +141,7 @@ function DesktopSheet({
               <IconButton icon={CloseIcon} label="Close" size="sm" className="-mt-0.5 -mr-2" />
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-3 pb-5">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">{children}</div>
           {footer && (
             <div className="bg-paper/60 flex shrink-0 items-center gap-3 rounded-b-xl px-6 py-3.5">{footer}</div>
           )}

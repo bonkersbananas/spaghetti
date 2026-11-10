@@ -62,7 +62,7 @@ function SignIn() {
         : undefined;
 
   return (
-    <div className="paper-grain bg-paper pt-safe pb-safe relative flex min-h-dvh flex-col items-center px-5">
+    <main className="paper-grain bg-paper pt-safe pb-safe relative flex min-h-dvh flex-col items-center px-5">
       <div className="flex w-full max-w-sm flex-1 flex-col justify-center py-10">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -133,6 +133,6 @@ function SignIn() {
       <p className="text-small text-ink-faint pb-6 text-center">
         Just the two of us here. No account? Ask the other cook.
       </p>
-    </div>
+    </main>
   );
 }

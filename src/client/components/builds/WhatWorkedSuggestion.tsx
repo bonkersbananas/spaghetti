@@ -6,6 +6,7 @@ import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon, CheckIcon, UndoIcon, WorkedIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
 import { duration, ease } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
@@ -72,10 +73,10 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
             </span>
           )}
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-caption text-basil-ink flex items-center gap-1 font-semibold tracking-wider uppercase">
+            <Overline tone="basil" className="flex items-center gap-1">
               <WorkedIcon size={14} weight="fill" aria-hidden />
               Worked last time
-            </span>
+            </Overline>
             <MetaList className="text-small">
               <span className="text-ink font-semibold">{where}</span>
               <span className="text-ink-faint font-medium whitespace-nowrap">{inlineTime(show.attempt.printedAt)}</span>

@@ -24,6 +24,8 @@ export interface CardProps {
   /** Where the card leads (a TanStack Router link). */
   link?: LinkProps;
   onClick?: () => void;
+  /** The card title's heading level: 2 in a grid right under the page title (the inbox), 3 under a section heading. */
+  headingLevel?: 2 | 3;
   className?: string;
 }
 
@@ -50,8 +52,10 @@ export function Card({
   aspect = "landscape",
   link,
   onClick,
+  headingLevel = 3,
   className,
 }: CardProps) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   const noteCard = !photo && !!note;
   // A note card already shows its note; below a photo the note stands in for a title.
   const heading = title || (noteCard ? null : note);
@@ -88,7 +92,7 @@ export function Card({
       <div className="flex items-start gap-2.5 px-2 pt-2.5 pb-2">
         <div className="min-w-0 flex-1">
           {heading ? (
-            <h3
+            <Heading
               className={cn(
                 "text-body text-ink line-clamp-2 font-semibold break-words",
                 // Notes standing in for a title read as text, not as a heading.
@@ -96,9 +100,10 @@ export function Card({
               )}
             >
               {heading}
-            </h3>
+            </Heading>
           ) : (
-            !noteCard && !photo && <h3 className="text-body text-ink-faint font-sans font-medium italic">Untitled</h3>
+            !noteCard &&
+            !photo && <Heading className="text-body text-ink-faint font-sans font-medium italic">Untitled</Heading>
           )}
           {meta && <p className={cn("text-small text-ink-faint line-clamp-2", heading && "mt-0.5")}>{meta}</p>}
         </div>

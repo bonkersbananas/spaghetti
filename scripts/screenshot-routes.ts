@@ -170,7 +170,7 @@ export const shots: Shot[] = [
       await page.goto("/ideas");
       await page.locator("h1").first().waitFor();
       await page.keyboard.press("ControlOrMeta+k");
-      await page.getByRole("option", { name: "Headphone stand", exact: true }).waitFor();
+      await page.getByRole("option", { name: /^Headphone stand\b/ }).waitFor();
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
@@ -183,7 +183,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.keyboard.press("ControlOrMeta+k");
       await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("stand");
-      await page.getByRole("option", { name: "Headphone stand", exact: true }).waitFor();
+      await page.getByRole("option", { name: /^Headphone stand\b/ }).waitFor();
       await page.getByRole("group", { name: "Builds" }).waitFor();
     },
     cleanup: async (page) => {
@@ -220,7 +220,7 @@ export const shots: Shot[] = [
     name: "ams",
     path: "/pantry",
     prepare: async (page) => {
-      await page.getByRole("button", { name: /^A4: Blue/ }).click();
+      await page.getByRole("button", { name: /^A4 Blue/ }).click();
       await page.getByRole("dialog", { name: "Slot A4" }).waitFor();
       await page.waitForTimeout(400);
     },

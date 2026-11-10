@@ -34,14 +34,16 @@ import {
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
+import { Overline } from "@/components/ui/Overline";
 import { SaveStatus } from "@/components/ui/SaveStatus";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type AttemptView, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
-import { spring } from "@/lib/motion";
+import { scrollBehavior, spring } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -170,7 +172,7 @@ function Build({ item }: { item: ItemView }) {
     const next = story[Math.max(0, Math.min(story.length - 1, selectedIndex + by))];
     if (!next) return;
     setSelected(next.id);
-    entryRefs.current.get(next.id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    entryRefs.current.get(next.id)?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
   };
 
   const active = item.stage === "building";
@@ -383,14 +385,9 @@ function Build({ item }: { item: ItemView }) {
         {/* The story: every attempt, newest first. */}
         <section aria-labelledby="story" className="flex min-w-0 flex-col md:flex-3">
           <div className="mb-4 flex items-center justify-between gap-3 md:mb-5">
-            <h2 id="story" className="text-headline text-ink">
+            <SectionHeading id="story" count={item.attempts.length || undefined}>
               Attempts
-              {item.attempts.length > 0 && (
-                <span className="text-small text-ink-faint tabular ml-2 align-middle font-sans font-semibold">
-                  {item.attempts.length}
-                </span>
-              )}
-            </h2>
+            </SectionHeading>
             {isDesktop && (
               <Button
                 variant="primary"
@@ -525,9 +522,7 @@ function WhatWorked({ attempt, onOpen }: { attempt: AttemptView; onOpen: () => v
         "pressable focus-ring bg-basil-soft/60 hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left",
       )}
     >
-      <span className="text-caption text-basil-ink font-semibold tracking-wider uppercase">
-        What worked · attempt {attempt.number}
-      </span>
+      <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
       <SettingsLine
         filaments={filaments}
         parts={settings}

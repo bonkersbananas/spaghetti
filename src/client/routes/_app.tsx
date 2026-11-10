@@ -1,11 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
-import { CommandPalette } from "@/components/shell/CommandPalette";
 import { DropOverlay } from "@/components/shell/DropOverlay";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
-import { ShortcutOverlay } from "@/components/shell/ShortcutOverlay";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
@@ -16,6 +14,12 @@ import { PaletteProvider, usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
+
+// Desktop-only overlays, loaded once the app is idle rather than with the first screen.
+const loadPalette = () => import("@/components/shell/CommandPalette");
+const loadShortcuts = () => import("@/components/shell/ShortcutOverlay");
+const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })));
+const ShortcutOverlay = lazy(() => loadShortcuts().then((m) => ({ default: m.ShortcutOverlay })));
 
 /** The signed-in app: sidebar on desktop, tab bar on phones. */
 export const Route = createFileRoute("/_app")({
@@ -75,9 +79,39 @@ function Shell() {
       </main>
       <TabBar />
       <CaptureSheet />
-      <CommandPalette />
-      <ShortcutOverlay />
+      {isDesktop && <DesktopOverlays />}
       <DropOverlay visible={dragging} />
     </div>
+  );
+}
+
+/**
+ * The command palette and the shortcut list. Their code arrives while the
+ * browser is idle after the first screen, so ⌘K still opens at once; each
+ * mounts the first time it is asked for and stays (for its exit animation).
+ */
+function DesktopOverlays() {
+  const { paletteOpen, helpOpen } = usePalette();
+  const [palette, setPalette] = useState(false);
+  const [shortcuts, setShortcuts] = useState(false);
+  if (paletteOpen && !palette) setPalette(true);
+  if (helpOpen && !shortcuts) setShortcuts(true);
+  useEffect(() => {
+    const warm = () => {
+      void loadPalette();
+      void loadShortcuts();
+    };
+    if (!("requestIdleCallback" in window)) {
+      const timer = setTimeout(warm, 1500);
+      return () => clearTimeout(timer);
+    }
+    const id = requestIdleCallback(warm, { timeout: 4000 });
+    return () => cancelIdleCallback(id);
+  }, []);
+  return (
+    <Suspense fallback={null}>
+      {palette && <CommandPalette />}
+      {shortcuts && <ShortcutOverlay />}
+    </Suspense>
   );
 }
