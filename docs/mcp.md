@@ -41,7 +41,8 @@ Any client that takes a JSON config:
 | Tool | For | Scope |
 | --- | --- | --- |
 | `search` | Ideas, builds and attempts by words, with `outcome`, `material` and `tag` filters; gives the `build_id`s the other tools need | `read` |
-| `what_worked` | The latest attempts that worked, for a `build_id`, a `material` or free text | `read` |
+| `what_worked` | The latest attempts that worked, for a `build_id`, a `material` or free text, with the saved recipes for the material | `read` |
+| `list_recipes` | The saved recipes (named settings of attempts that worked), optionally for a `material` and `finish` | `read` |
 | `get_build` | One build as a markdown story: the idea, notes, every attempt with settings, changes and notes, what worked (the same as `GET /api/builds/:id/story.md`) | `read` |
 | `capture_idea` | A title and/or note, optionally a photo by https URL or base64 (JPEG or WebP) | `capture` |
 | `start_attempt` | A print has started: an attempt with no outcome yet | `attempts` |

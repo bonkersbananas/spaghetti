@@ -24,6 +24,7 @@ import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { printerRoutes } from "./routes/printer.ts";
 import { pushRoutes } from "./routes/push.ts";
+import { recipeRoutes } from "./routes/recipes.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { spoolRoutes } from "./routes/spools.ts";
@@ -103,6 +104,7 @@ export const app = new Hono<AppEnv>()
   .route("/attempts", attemptFileRoutes)
   .route("/files", fileRoutes)
   .route("/spools", spoolRoutes)
+  .route("/recipes", recipeRoutes)
   .route("/printer", printerRoutes)
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)

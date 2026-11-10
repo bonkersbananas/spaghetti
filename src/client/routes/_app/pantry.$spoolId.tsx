@@ -1,5 +1,6 @@
 import type { Spool } from "@shared/api";
 import { OUTCOME_LABELS, OUTCOMES } from "@shared/attempts";
+import { recipesFor } from "@shared/recipes";
 import {
   FINISHES,
   finishLabel,
@@ -19,6 +20,7 @@ import { AmsLoadout } from "@/components/pantry/Ams";
 import { DryIt } from "@/components/pantry/DryIt";
 import { GramsHero, UsedBy } from "@/components/pantry/SpoolGrams";
 import { SetWeightSheet, WeighSheet } from "@/components/pantry/WeightSheets";
+import { LazyRecipeShelf } from "@/components/recipes/LazyRecipeSheet";
 import { AttemptResult } from "@/components/search/Results";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -41,6 +43,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto, spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry";
 import { photoSrc } from "@/lib/previews";
 import { canEdit, useReadOnly } from "@/lib/read-only";
+import { useRecipes } from "@/lib/recipes";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -362,6 +365,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
           />
 
           <UsedBy spool={spool} />
+          <SpoolRecipes material={value.material} finish={value.finish} />
           <PrintedWith spool={spool} />
         </div>
       </div>
@@ -383,6 +387,13 @@ function SpoolPage({ spool }: { spool: Spool }) {
       </Sheet>
     </article>
   );
+}
+
+/** The recipes saved for this kind of filament: "Recipes for silk PLA", matched by material and finish. */
+function SpoolRecipes({ material, finish }: { material: string; finish: string | null }) {
+  const recipes = recipesFor(useRecipes(), { material, finish });
+  const kind = [finish ? finishLabel(finish).toLowerCase() : null, material.trim()].filter(Boolean).join(" ");
+  return <LazyRecipeShelf recipes={recipes} title={`Recipes for ${kind}`} className="mt-4 flex flex-col gap-3" />;
 }
 
 /** "How does this silk PLA behave": every attempt printed with it, and how they went. */

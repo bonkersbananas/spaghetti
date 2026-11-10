@@ -17,6 +17,7 @@ export {
   ArrowUpRight as ExternalIcon,
   ArrowUUpLeft as ReopenIcon,
   Bell as BellIcon,
+  BookBookmark as RecipeIcon,
   BookOpenText as JournalIcon,
   CalendarBlank as CalendarIcon,
   Camera as CameraIcon,

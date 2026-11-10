@@ -185,6 +185,28 @@ export const photos = sqliteTable(
   (table) => [index("photos_item_idx").on(table.itemId, table.position)],
 );
 
+/** Named settings of an attempt that worked (docs/decisions/0017). */
+export const recipes = sqliteTable("recipes", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  note: text("note").notNull().default(""),
+  /** Uppercase filament type of the attempt it came from. */
+  material: text("material").notNull(),
+  /** The finish of the spool it was printed on, if it had one. */
+  finish: text("finish"),
+  /** The attempt's chosen settings (shared/recipes.ts recipeSettings); never edited, a newer recipe replaces it. */
+  settings: text("settings", { mode: "json" }).$type<AttemptSettings>().notNull().default({}),
+  /** The attempt and build it came from. Not foreign keys: the recipe outlives them (the link just goes quiet). */
+  sourceAttemptId: text("source_attempt_id"),
+  sourceItemId: text("source_item_id"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+});
+
 /**
  * Failure tags and success notes people added to the built-in ones. The slug
  * is made from the label and is what attempts store.
@@ -250,6 +272,7 @@ export const draftRuns = sqliteTable("draft_runs", {
 export type ItemDraftRow = typeof itemDrafts.$inferSelect;
 
 export type Item = typeof items.$inferSelect;
+export type RecipeRow = typeof recipes.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
 export type Attempt = typeof attempts.$inferSelect;
 export type Tag = typeof tags.$inferSelect;

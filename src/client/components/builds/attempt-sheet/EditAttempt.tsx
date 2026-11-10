@@ -4,6 +4,7 @@ import { offTheBedLabel } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
+import { SaveAsRecipe } from "@/components/recipes/SaveAsRecipe";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
@@ -12,6 +13,7 @@ import { deleteAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
+import { canBeRecipe } from "@/lib/recipes";
 import { queueSlicerFile, removeSlicerFile } from "@/lib/slicer-files";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -183,6 +185,22 @@ export function EditAttempt({
         settings={value.settings}
         onSettings={(settings) => change({ settings })}
         previous={previous}
+        suggestion={
+          value.outcome === "success" &&
+          !attempt.pending &&
+          canBeRecipe({ outcome: value.outcome, settings: value.settings }) ? (
+            <SaveAsRecipe
+              source={{
+                id: attempt.id,
+                itemId: item.id,
+                number: attempt.number,
+                title: item.title,
+                settings: value.settings,
+              }}
+              disabled={!!readOnly}
+            />
+          ) : undefined
+        }
         when={<WhenField value={value.printedAt} onChange={(time) => change({ printedAt: time ?? Date.now() })} />}
         photos={
           <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 py-1 md:-mx-6 md:px-6">
