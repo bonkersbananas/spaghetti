@@ -41,8 +41,8 @@ interface SeedAttempt {
   successNotes?: string[];
   settings: AttemptSettings;
   photos?: SeedPhoto[];
-  /** Printed from the fixture slicer file (e2e/fixtures/slicer-file.ts), plate 1. */
-  slicerFile?: boolean;
+  /** Printed from the fixture slicer file (e2e/fixtures/slicer-file.ts): true is plate 1, 2 is the hook plate. */
+  slicerFile?: boolean | 2;
 }
 
 interface SeedBuild {
@@ -674,6 +674,50 @@ const OLDER_BUILDS: SeedBuild[] = [
     ],
   },
   {
+    // Printing from a slicer file with no photo yet: the plate's picture and how far along it is.
+    id: "5eed0000-0000-4000-8000-000000000107",
+    by: "sam",
+    create: { title: "Towel hook", note: "For the bathroom door.", createdAgo: 6 * HOUR },
+    stage: "building",
+    startedAgo: 5 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0801",
+        by: "sam",
+        ago: 4 * HOUR,
+        outcome: "failed",
+        finishedAfter: 20 * MIN,
+        note: "Came off the plate in the first few layers.",
+        failureTags: ["bed-adhesion"],
+        settings: {
+          filaments: [{ type: "PETG", brand: "Bambu", colorHex: "#f2f2f2", colorName: "White" }],
+          bedType: "Cool Plate",
+          layerHeight: 0.2,
+          infillDensity: 25,
+          nozzleTemperature: 240,
+          bedTemperature: 65,
+          failedAtPercent: 8,
+        },
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0802",
+        by: "sam",
+        ago: 15 * MIN,
+        outcome: null,
+        settings: {
+          filaments: [{ type: "PETG", brand: "Bambu", colorHex: "#f2f2f2", colorName: "White" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 25,
+          nozzleTemperature: 240,
+          bedTemperature: 70,
+          estimatedMinutes: 45,
+        },
+        slicerFile: 2,
+      },
+    ],
+  },
+  {
     id: SEED_IDS.cableChain,
     by: "sam",
     stage: "building",
@@ -741,17 +785,18 @@ export async function seedBuilds(
       if (attempt.slicerFile) {
         const bytes = slicerFile();
         const read = readThreeMf(bytes);
-        const thumb = read.plates[0]?.thumbnail?.bytes;
+        const plate = attempt.slicerFile === 2 ? 2 : 1;
+        const thumb = read.plates[plate - 1]?.thumbnail?.bytes;
         const uploaded = await request.put(`/api/attempts/${attempt.id}/file`, {
           headers,
           multipart: {
             id: crypto.randomUUID(),
             name: SLICER_FILE_NAME,
             size: String(bytes.length),
-            plate: "1",
+            plate: String(plate),
             plateCount: String(read.plates.length),
             slicer: "BambuStudio 02.01.00.00",
-            prefill: JSON.stringify(settingsFromFile(read, 1)),
+            prefill: JSON.stringify(settingsFromFile(read, plate)),
             file: { name: SLICER_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
             ...(thumb ? { thumb: { name: "plate_1.png", mimeType: "image/png", buffer: Buffer.from(thumb) } } : {}),
           },

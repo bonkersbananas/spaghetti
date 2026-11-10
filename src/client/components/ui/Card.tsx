@@ -3,7 +3,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "./Avatar";
-import { ImageIcon } from "./icons";
+import { ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
@@ -133,6 +133,16 @@ export function PhotoCountBadge({ count }: { count: number }) {
       <ImageIcon size={13} weight="bold" aria-hidden />
       {count}
       <span className="sr-only">photos</span>
+    </span>
+  );
+}
+
+/** "Slicer preview" with the file glyph: a plate's picture where a photo would be, so nobody takes it for the result. */
+export function SlicerPreviewBadge() {
+  return (
+    <span className="rounded-pill bg-veil text-caption text-on-veil inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
+      <SlicerFileIcon size={13} weight="fill" aria-hidden />
+      Slicer preview
     </span>
   );
 }
