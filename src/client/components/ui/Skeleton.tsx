@@ -8,7 +8,7 @@ export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden className={cn("sg-skeleton", !className?.includes("rounded-") && "rounded-sm", className)} />;
 }
 
-const aspects = { landscape: "aspect-4/3", portrait: "aspect-4/5" };
+const aspects = { landscape: "aspect-4/3", portrait: "aspect-4/5", square: "aspect-square" };
 
 /** Skeleton of a photo Card, for grids that are loading. Match the Card's aspect. */
 export function CardSkeleton({ aspect = "landscape" }: { aspect?: keyof typeof aspects }) {

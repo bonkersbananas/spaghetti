@@ -45,6 +45,25 @@ export const FINISH_LABELS: Record<string, string> = {
 export const finishLabel = (finish: string) =>
   FINISH_LABELS[finish] ?? finish.charAt(0).toUpperCase() + finish.slice(1);
 
+/** Colors offered first when adding a spool: Bambu's common ones. Data, not design tokens. */
+export const QUICK_COLORS: ReadonlyArray<{ name: string; hex: string }> = [
+  { name: "Jade white", hex: "#f4f1ea" },
+  { name: "Black", hex: "#1d1d1f" },
+  { name: "Gray", hex: "#8e9089" },
+  { name: "Red", hex: "#c12e1f" },
+  { name: "Orange", hex: "#f2711c" },
+  { name: "Sunflower yellow", hex: "#f0b323" },
+  { name: "Bambu green", hex: "#00ae42" },
+  { name: "Blue", hex: "#0a2989" },
+  { name: "Purple", hex: "#6c3a9c" },
+  { name: "Pink", hex: "#f19bbd" },
+  { name: "Terracotta", hex: "#9d4f2d" },
+  { name: "Beige", hex: "#d8c3a0" },
+];
+
+/** Materials offered as chips when adding a spool, most common first. */
+export const SPOOL_MATERIALS = ["PLA", "PETG", "ABS", "ASA", "TPU", "PLA-CF", "PETG-CF", "PA", "PC", "PVA"] as const;
+
 /** Brands people are likely to type, offered as suggestions. */
 export const BRANDS = ["Bambu", "Polymaker", "eSun", "Elegoo", "Sunlu", "Prusament", "Overture", "Jayo"] as const;
 

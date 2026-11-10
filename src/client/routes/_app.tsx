@@ -5,7 +5,7 @@ import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
 import { Sidebar } from "@/components/shell/Sidebar";
-import { sections } from "@/components/shell/sections";
+import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -42,7 +42,7 @@ function Shell() {
   useHotkeys({
     c: () => setOpen(true),
     ...Object.fromEntries(
-      sections.map((s) => [
+      [...sections, ...workshop].map((s) => [
         s.hotkey,
         () => {
           void navigate({ to: s.to });

@@ -1,0 +1,235 @@
+import type {
+  PrinterResponse,
+  Spool,
+  SpoolAttemptsResponse,
+  SpoolResponse,
+  SpoolsResponse,
+  UpdateSpoolRequest,
+} from "@shared/api";
+import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
+import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
+import { toast } from "@/components/ui/Toast";
+import { ApiError, api } from "./api";
+import { processPhoto } from "./images";
+import { setPreview } from "./previews";
+
+/** Every spool in the pantry. */
+export const spoolsQuery = queryOptions({
+  queryKey: ["spools"] as const,
+  queryFn: async () => (await api<SpoolsResponse>("/spools")).spools,
+  staleTime: 60_000,
+});
+
+/** How the printer is set up, and what is loaded where. */
+export const printerQuery = queryOptions({
+  queryKey: ["printer"] as const,
+  queryFn: async () => api<PrinterResponse>("/printer"),
+  staleTime: 60_000,
+});
+
+export function spoolAttemptsQuery(spoolId: string) {
+  return queryOptions({
+    queryKey: ["spools", spoolId, "attempts"] as const,
+    queryFn: async () => (await api<SpoolAttemptsResponse>(`/spools/${spoolId}/attempts`)).attempts,
+  });
+}
+
+/** The printer's setup, or the Combo's until it has loaded: hints never wait for it. */
+export function usePrinterSetup(): PrinterSetup {
+  return useQuery(printerQuery).data?.setup ?? DEFAULT_PRINTER;
+}
+
+/** Spools as matching and hints need them. */
+export const asSpoolLike = (spool: Spool): SpoolLike => spool;
+
+function patchSpools(queryClient: QueryClient, change: (spools: Spool[]) => Spool[]) {
+  queryClient.setQueryData<Spool[]>(spoolsQuery.queryKey, (spools) => (spools ? change(spools) : spools));
+}
+
+function patchSpool(queryClient: QueryClient, id: string, change: (spool: Spool) => Spool) {
+  patchSpools(queryClient, (spools) => spools.map((spool) => (spool.id === id ? change(spool) : spool)));
+}
+
+export interface SpoolDraft {
+  material: string;
+  brand?: string | null;
+  colorName?: string | null;
+  colorHex?: string | null;
+  finish?: string | null;
+  note?: string;
+}
+
+/**
+ * Puts a spool in the pantry at once (with its photo, if one was taken) and
+ * saves it in the background. Returns the spool, for whoever wants to link
+ * it, and a promise that settles once the server has it.
+ */
+export function addSpool(
+  queryClient: QueryClient,
+  draft: SpoolDraft,
+  createdBy: string,
+  photo?: File,
+): { spool: Spool; saved: Promise<boolean> } {
+  const now = Date.now();
+  const spool: Spool = {
+    id: crypto.randomUUID(),
+    material: draft.material.trim() || "PLA",
+    brand: draft.brand?.trim() || null,
+    colorName: draft.colorName?.trim() || null,
+    colorHex: draft.colorHex ?? null,
+    finish: draft.finish ?? null,
+    remaining: "full",
+    note: draft.note ?? "",
+    driedAt: null,
+    photo: null,
+    slot: null,
+    createdBy,
+    createdAt: now,
+    updatedAt: now,
+  };
+  patchSpools(queryClient, (spools) => [spool, ...spools]);
+  if (!queryClient.getQueryData(spoolsQuery.queryKey)) queryClient.setQueryData(spoolsQuery.queryKey, [spool]);
+  const saved = (async () => {
+    try {
+      const { spool: stored } = await api<SpoolResponse>("/spools", {
+        method: "POST",
+        json: {
+          id: spool.id,
+          material: spool.material,
+          brand: spool.brand,
+          colorName: spool.colorName,
+          colorHex: spool.colorHex,
+          finish: spool.finish,
+          note: spool.note,
+          createdAt: now,
+        },
+      });
+      patchSpool(queryClient, spool.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
+      if (photo) void setSpoolPhoto(queryClient, spool.id, photo);
+      return true;
+    } catch {
+      patchSpools(queryClient, (spools) => spools.filter((s) => s.id !== spool.id));
+      toast.error("Couldn't add that spool", "Check the connection and add it again.");
+      return false;
+    }
+  })();
+  return { spool, saved };
+}
+
+/** Saves edits to a spool (autosave): the cache first, then the server. */
+export async function saveSpool(queryClient: QueryClient, id: string, changes: UpdateSpoolRequest) {
+  patchSpool(queryClient, id, (spool) => ({ ...spool, ...changes, updatedAt: Date.now() }) as Spool);
+  const { spool } = await api<SpoolResponse>(`/spools/${id}`, { method: "PATCH", json: changes, keepalive: true });
+  patchSpool(queryClient, id, (current) => ({ ...current, updatedAt: spool.updatedAt }));
+}
+
+/** A new photo of the label: shown from the device at once, then uploaded. */
+export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, file: File) {
+  try {
+    const processed = await processPhoto(file);
+    const photoId = crypto.randomUUID();
+    setPreview(photoId, processed.thumb, processed.large);
+    patchSpool(queryClient, spoolId, (spool) => ({
+      ...spool,
+      photo: { id: photoId, width: processed.width, height: processed.height, color: processed.color },
+    }));
+    const form = new FormData();
+    form.set("width", String(processed.width));
+    form.set("height", String(processed.height));
+    form.set("color", processed.color);
+    form.set("large", processed.large, "large");
+    form.set("thumb", processed.thumb, "thumb");
+    await api<SpoolResponse>(`/spools/${spoolId}/photo/${photoId}`, { method: "PUT", body: form });
+  } catch (error) {
+    toast.error("Couldn't save the photo", error instanceof Error ? error.message : undefined);
+  }
+}
+
+/** Takes a spool out of the pantry at once, with Undo. Its slot empties, and fills again with Undo. */
+export function deleteSpool(queryClient: QueryClient, spool: Spool) {
+  const before = queryClient.getQueryData<Spool[]>(spoolsQuery.queryKey);
+  const printer = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey);
+  patchSpools(queryClient, (spools) => spools.filter((s) => s.id !== spool.id));
+  if (spool.slot) patchSlots(queryClient, (slots) => withoutSpool(slots, spool.id));
+  const deleted = api(`/spools/${spool.id}`, { method: "DELETE" }).catch((error) => {
+    if (error instanceof ApiError && error.status === 404) return;
+    if (before) queryClient.setQueryData(spoolsQuery.queryKey, before);
+    if (printer) queryClient.setQueryData(printerQuery.queryKey, printer);
+    toast.error("Couldn't take that spool out", "It's back in the pantry.");
+  });
+  toast.undo("Spool taken out", {
+    description: [spool.colorName, spool.material].filter(Boolean).join(" "),
+    onUndo: async () => {
+      await deleted;
+      patchSpools(queryClient, (spools) => [spool, ...spools.filter((s) => s.id !== spool.id)]);
+      if (spool.slot) {
+        const slot = spool.slot;
+        patchSlots(queryClient, (slots) => ({ ...slots, [slot]: spool.id }));
+      }
+      try {
+        await api<SpoolResponse>(`/spools/${spool.id}/restore`, { method: "POST" });
+      } catch {
+        toast.error("Couldn't bring the spool back", "Try again in a moment.");
+      }
+      void queryClient.invalidateQueries({ queryKey: printerQuery.queryKey });
+    },
+  });
+}
+
+function withoutSpool(slots: Record<string, string>, spoolId: string) {
+  return Object.fromEntries(Object.entries(slots).filter(([, id]) => id !== spoolId));
+}
+
+function patchSlots(queryClient: QueryClient, change: (slots: Record<string, string>) => Record<string, string>) {
+  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) =>
+    printer ? { ...printer, slots: change(printer.slots) } : printer,
+  );
+  const slots = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey)?.slots;
+  if (!slots) return;
+  const bySpool = new Map(Object.entries(slots).map(([slot, id]) => [id, slot]));
+  patchSpools(queryClient, (spools) => spools.map((spool) => ({ ...spool, slot: bySpool.get(spool.id) ?? null })));
+}
+
+/**
+ * Loads a spool into a slot (out of wherever it was), or empties the slot,
+ * at once; the server follows, and a failure puts it back.
+ */
+export async function loadSlot(
+  queryClient: QueryClient,
+  slot: string,
+  spoolId: string | null,
+  /** Settles once a spool just added is on the server. */
+  after?: Promise<boolean>,
+) {
+  const before = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey);
+  patchSlots(queryClient, (slots) => {
+    const next = spoolId ? withoutSpool(slots, spoolId) : { ...slots };
+    if (spoolId) next[slot] = spoolId;
+    else delete next[slot];
+    return next;
+  });
+  try {
+    if (after && !(await after)) throw new Error("The spool wasn't saved.");
+    const saved = await api<PrinterResponse>(`/printer/slots/${slot}`, { method: "PUT", json: { spoolId } });
+    queryClient.setQueryData(printerQuery.queryKey, saved);
+    patchSlots(queryClient, (slots) => slots);
+  } catch {
+    if (before) {
+      queryClient.setQueryData(printerQuery.queryKey, before);
+      patchSlots(queryClient, (slots) => slots);
+    }
+    toast.error("Couldn't change the AMS", "It's back the way it was.");
+  }
+}
+
+/** Saves the printer's setup (autosave): nozzles, plates, AMS units. */
+export async function savePrinterSetup(queryClient: QueryClient, setup: PrinterSetup) {
+  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) =>
+    printer ? { ...printer, setup } : { setup, slots: {} },
+  );
+  const saved = await api<PrinterResponse>("/printer", { method: "PUT", json: setup, keepalive: true });
+  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) => ({
+    setup: printer?.setup ?? saved.setup,
+    slots: saved.slots,
+  }));
+}
