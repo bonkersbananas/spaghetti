@@ -23,6 +23,13 @@ async function openNotifications(page: Page, width: 390 | 1440) {
   await page.getByRole("dialog", { name: "Notifications" }).waitFor();
 }
 
+/** Opens the account sheet (phone) or the sidebar's account menu (desktop). */
+async function openAccount(page: Page, width: 390 | 1440) {
+  if (width === 390) await page.getByRole("button", { name: "Account" }).click();
+  else await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("dialog").waitFor();
+}
+
 /** What the browser says about notifications, set before the sheet reads it (a screenshot browser always says "denied"). */
 const withPermission = (page: Page, permission: NotificationPermission) =>
   page.evaluate(
@@ -1036,6 +1043,29 @@ export const shots: Shot[] = [
       await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
     },
   },
+  {
+    // The account menu with Alex's picture: the row says "Change photo".
+    name: "account-photo",
+    path: "/ideas",
+    prepare: async (page) => {
+      await openAccount(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await page.locator("[role=dialog] img[src*='/api/people/']").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // Placing a photo in the circle.
+    name: "profile-crop",
+    path: "/ideas",
+    prepare: async (page) => {
+      await openAccount(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
+      await page.getByTestId("crop-frame").locator("img").waitFor();
+      await page.getByRole("slider", { name: "Zoom" }).fill("1.6");
+      await page.waitForTimeout(400);
+    },
+  },
+  { name: "styleguide-avatars", path: "/styleguide", selector: "#avatars" },
   { name: "styleguide-notifications", path: "/styleguide", selector: "#notifications" },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
