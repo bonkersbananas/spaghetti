@@ -13,7 +13,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0007](0007-inbox-is-a-uniform-grid.md) | The inbox is a uniform 4:5 grid, not masonry | Accepted |
 | [0008](0008-spools-are-the-pantry.md) | Spools are called the Pantry | Accepted |
 | [0009](0009-filament-tracked-in-grams.md) | Filament is tracked in grams, automatically (not built yet) | Accepted |
-| [0010](0010-no-printer-connection-for-now.md) | No connection to the printer, for now | Open |
+| [0010](0010-optional-read-only-printer-bridge.md) | An optional, read-only printer bridge (not built yet) | Accepted |
 | [0011](0011-no-ci-deploys.md) | No CI deploys | Accepted |
 | [0012](0012-one-printer-the-x2d.md) | One printer, the X2D | Accepted |
 | [0013](0013-bambu-studio-and-orca-files-only.md) | Only Bambu Studio and Orca files are read | Accepted |

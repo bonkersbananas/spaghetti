@@ -22,6 +22,7 @@
     "test:e2e": "playwright test",
     "doctor": "node scripts/doctor.ts",
     "screenshots": "node scripts/screenshots.ts",
+    "screenshots:compare": "node scripts/screenshots-compare.ts",
     "icons": "node scripts/icons.ts",
     "types": "wrangler types",
     "db:generate": "drizzle-kit generate",

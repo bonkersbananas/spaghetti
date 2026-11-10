@@ -15,7 +15,7 @@
  *
  * The browser's clock is fixed to the seed's date (SEED_NOW) and its time
  * zone to UTC, so the pictures don't depend on the day they are taken.
- * SPAGHETTI_BROWSER=/path/to/chromium uses an existing Chromium.
+ * SPAGHETTI_BROWSER=/path/to/chromium uses an existing Chromium; SCREENSHOT_PORT picks the server port.
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -60,7 +60,7 @@ if (built) {
   if (build.status !== 0) process.exit(build.status ?? 1);
 }
 const app = await startSeededApp({
-  port: 5180 + Math.floor(Math.random() * 100),
+  port: Number(process.env.SCREENSHOT_PORT) || 5180 + Math.floor(Math.random() * 100),
   built,
   now: SEED_NOW,
   log: (message) => console.log(`  ${message}`),

@@ -32,7 +32,7 @@ The spec is `docs/specs/ui-improvements.md` once #1 lands. Its sections, in the 
 - [ ] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
 - [ ] Passkeys, and adding people in the app instead of the command line
 - [ ] Filament accounting: grams from slicer files update what's left, "not enough for this print", a shopping list (decided: [grams, automatically](decisions/0009-filament-tracked-in-grams.md); a spool starts at 1 kg, each attempt's slicer grams come off it, failed prints in proportion to how far they got, levels follow and stay correctable)
-- [ ] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (open decision: [printer connection](decisions/0010-no-printer-connection-for-now.md))
+- [ ] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (decided: [optional and read-only](decisions/0010-optional-read-only-printer-bridge.md); a small program on a home computer using LAN mode, local MQTT, FTP and the camera, never Bambu's cloud and never a command to the printer)
 
 ## Next: agents using the service
 

@@ -6,4 +6,4 @@ Status: Accepted
 
 **Why:** a notebook that stops working when a vendor changes an API or an account is locked is not a notebook. Bambu's cloud and protocols are undocumented and change.
 
-**Consequences:** everything the app learns about the printer comes from files people hand it ([0013](0013-bambu-studio-and-orca-files-only.md)) or from what they type. A future printer bridge ([0010](0010-no-printer-connection-for-now.md)) must be optional and the app must work without it. See [docs/printer.md](../printer.md).
+**Consequences:** what the app learns about the printer comes from files people hand it ([0013](0013-bambu-studio-and-orca-files-only.md)), from what they type, or from the optional local bridge. That bridge ([0010](0010-optional-read-only-printer-bridge.md)) talks to the printer over the local network only and the app works without it. See [docs/printer.md](../printer.md).
