@@ -5,6 +5,8 @@ import type { DraftResponse, FeaturesResponse, ItemResponse } from "../../src/sh
 import { DRAFTS_PER_DAY } from "../../src/shared/draft.ts";
 import { app } from "../../src/worker/app.ts";
 import { resumeDrafts, STALE_MS } from "../../src/worker/draft/run.ts";
+import makerworldPage from "../fixtures/pages/makerworld.html?raw";
+import printablesChallenge from "../fixtures/pages/printables-challenge.html?raw";
 import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 
 const PAGE = "https://makerworld.com/en/models/12345-cable-comb";
@@ -29,14 +31,28 @@ const goodDraft = {
 };
 
 type Answer = { json?: unknown; stopReason?: string; status?: number };
+type Page = { status?: number; body?: string; location?: string };
 
 /** Stubs the Anthropic API and the image host; Responses are made inside the stub (a Response can't cross requests). */
-function stubWeb(answer: Answer | (() => Answer) = { json: goodDraft }) {
+function stubWeb(answer: Answer | (() => Answer) = { json: goodDraft }, pages: Record<string, Page> = {}) {
   const asked: string[] = [];
   const bodies: Array<Record<string, unknown>> = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     asked.push(url.href);
+    if (url.hostname === "cloudflare-dns.com") {
+      const type = url.searchParams.get("type");
+      return Response.json({ Status: 0, Answer: type === "A" ? [{ type: 1, data: "93.184.216.34" }] : [] });
+    }
+    const page = pages[url.href];
+    if (page) {
+      return new Response(page.body ?? "", {
+        status: page.status ?? 200,
+        headers: { "Content-Type": "text/html", ...(page.location ? { Location: page.location } : {}) },
+      });
+    }
+    if (url.hostname === "makerworld.bblmw.com")
+      return new Response(jpeg(), { headers: { "Content-Type": "image/jpeg" } });
     if (url.hostname === "api.anthropic.com") {
       bodies.push(JSON.parse(String(init?.body)));
       const next = typeof answer === "function" ? answer() : answer;
@@ -60,11 +76,10 @@ function stubWeb(answer: Answer | (() => Answer) = { json: goodDraft }) {
 }
 
 let cookie: string;
-let alex: string;
 
 beforeEach(async () => {
   await resetDb();
-  alex = await addUser("alex", "correct horse", "Alex Rivera", "tomato");
+  await addUser("alex", "correct horse", "Alex Rivera", "tomato");
   cookie = await signIn("alex", "correct horse");
 });
 afterEach(() => vi.restoreAllMocks());
@@ -130,7 +145,11 @@ describe("drafting an idea from a model page", () => {
       detail: string;
     }>();
     expect(run?.outcome).toBe("drafted");
-    expect(JSON.parse(run?.detail ?? "{}")).toEqual({ stopReason: "end_turn" });
+    expect(JSON.parse(run?.detail ?? "{}")).toMatchObject({
+      stopReason: "end_turn",
+      source: "web_fetch",
+      pageStatus: 404,
+    });
 
     // Opus, the web fetch tool limited to the three sites, and a JSON schema for the answer.
     const sent = web.bodies[0] as {
@@ -310,5 +329,75 @@ describe("drafting an idea from a model page", () => {
     await resumeDrafts(env);
     expect((await getItem(lost)).draft).toMatchObject({ status: "failed", failure: "timeout" });
     expect(web.bodies).toHaveLength(1);
+  });
+
+  it("reads the page in the Worker and has Claude write only the note: the page's facts stay the page's", async () => {
+    const web = stubWeb(
+      {
+        json: {
+          readable: true,
+          note: "A flexi red panda that wiggles. Fun to print and give away.",
+          material: "PLA",
+          plate: "Textured PEI plate",
+          settings: "0.2 mm layers",
+        },
+      },
+      { [PAGE]: { body: makerworldPage } },
+    );
+    const id = await addIdea({ note: PAGE });
+    const { draft } = await (await draftIt(id)).json<DraftResponse>();
+    expect(draft).toMatchObject({
+      status: "drafted",
+      applied: ["title", "note", "photos"],
+      findings: { designer: "Fluffy Tails", license: "Standard Digital File License", material: "PLA" },
+    });
+    const item = await getItem(id);
+    expect(item.title).toBe("Fluffy Tail Cute Flexi Red Panda - Toy / Keychain");
+    expect(item.note).toContain("A flexi red panda that wiggles.");
+    expect(item.photos.length).toBeGreaterThan(0);
+    // No web fetch tool: Claude gets the page's text and print profiles as data.
+    const sent = web.bodies[0] as { tools?: unknown[]; messages: Array<{ content: string }> };
+    expect(sent.tools ?? []).toEqual([]);
+    expect(sent.messages[0]?.content).toContain("needs an AMS");
+    expect(sent.messages[0]?.content).not.toContain("<boostme>");
+    // Only the allowed picture host was downloaded, and the run says where the page came from.
+    expect(web.asked.filter((url) => !/cloudflare-dns|anthropic|makerworld\.com|bblmw/.test(url))).toEqual([]);
+    const run = await env.DB.prepare("SELECT outcome, detail FROM draft_runs").first<{
+      outcome: string;
+      detail: string;
+    }>();
+    expect(JSON.parse(run?.detail ?? "{}")).toMatchObject({ source: "worker_fetch", pageStatus: 200 });
+  });
+
+  it("falls back to Claude's web fetch when the page turns the Worker away, and says so", async () => {
+    const web = stubWeb(undefined, { [PAGE]: { status: 403, body: printablesChallenge } });
+    const id = await addIdea({ note: PAGE });
+    const { draft } = await (await draftIt(id)).json<DraftResponse>();
+    expect(draft?.status).toBe("drafted");
+    expect((web.bodies[0] as { tools: unknown[] }).tools).toHaveLength(1);
+    const run = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
+    expect(JSON.parse(run?.detail ?? "{}")).toMatchObject({ source: "web_fetch", pageStatus: 403 });
+  });
+
+  it("falls back too when the page has nothing to draft from, and never follows a redirect off the three sites", async () => {
+    const empty = stubWeb(undefined, { [PAGE]: { body: "<html><body>Just a moment</body></html>" } });
+    const id = await addIdea({ note: PAGE });
+    await draftIt(id);
+    const detail = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
+    expect(JSON.parse(detail?.detail ?? "{}")).toMatchObject({
+      source: "web_fetch",
+      pageStatus: 200,
+      pageUnreadable: true,
+    });
+    expect(empty.bodies).toHaveLength(1);
+
+    vi.restoreAllMocks();
+    await resetDb();
+    await addUser("alex", "correct horse", "Alex Rivera", "tomato");
+    cookie = await signIn("alex", "correct horse");
+    const away = stubWeb(undefined, { [PAGE]: { status: 302, location: "https://evil.example/model" } });
+    const other = await addIdea({ note: PAGE });
+    await draftIt(other);
+    expect(away.asked.some((url) => url.includes("evil.example"))).toBe(false);
   });
 });

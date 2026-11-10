@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { SparkleIcon, UndoIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { requestDraft, siteName, undoDraft, useDraftsEnabled } from "@/lib/drafts";
 import type { ItemView } from "@/lib/items";
 
