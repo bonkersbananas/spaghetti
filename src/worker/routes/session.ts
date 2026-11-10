@@ -1,10 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { SessionResponse } from "../../shared/api.ts";
 import { verifyPassword } from "../../shared/password.ts";
 import { endSession, readSession, startSession } from "../auth/session.ts";
-import { users } from "../db/schema.ts";
+import { pushSubscriptions, users } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toPerson } from "../http.ts";
 
@@ -38,6 +38,16 @@ export const sessionRoutes = new Hono<AppEnv>()
     return c.json<SessionResponse>({ user: toPerson(user) });
   })
   .delete("/", async (c) => {
+    // A device that signs out stops getting this person's notifications: the app says which one it is.
+    const forget = z.object({ pushEndpoint: z.string().max(2048) }).safeParse(await c.req.json().catch(() => null));
+    if (forget.success) {
+      const user = await readSession(c, c.var.db);
+      if (user) {
+        await c.var.db
+          .delete(pushSubscriptions)
+          .where(and(eq(pushSubscriptions.endpoint, forget.data.pushEndpoint), eq(pushSubscriptions.userId, user.id)));
+      }
+    }
     await endSession(c, c.var.db);
     return c.body(null, 204);
   });

@@ -16,6 +16,7 @@ export {
   ArrowUp as MoveUpIcon,
   ArrowUpRight as ExternalIcon,
   ArrowUUpLeft as ReopenIcon,
+  Bell as BellIcon,
   BookOpenText as JournalIcon,
   CalendarBlank as CalendarIcon,
   Camera as CameraIcon,

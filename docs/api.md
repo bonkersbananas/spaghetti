@@ -68,3 +68,13 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 ## Changing your own password
 
 `PUT /api/account/password` with `{ currentPassword, newPassword }` (person-only). The new password needs at least 10 characters and no other rule, and must differ from the current one. It signs out the person's **other** sessions and keeps the one making the request; the answer is `{ signedOut }`, how many devices that was. Errors: `400 too_short`, `400 same_password`, `403 wrong_password`, and `429 rate_limited` after five wrong current passwords in 15 minutes (counted per person in `password_failures`, cleared on success).
+
+## Notifications (people only)
+
+The devices that get "how did it go?" push notifications. A token is refused these (`403 person_only`), reads included.
+
+- `GET /api/push` → `{ publicKey, canSend, subscriptions: [{ endpoint, alsoOthers, timeZone }] }`: the VAPID public key (null when the server has none) and this person's devices.
+- `PUT /api/push/subscription` `{ endpoint, keys: { p256dh, auth }, timeZone, alsoOthers? }` turns notifications on for a device (https endpoints only, ten devices per person); `PATCH` changes `alsoOthers` or `timeZone`; `DELETE { endpoint }` turns them off. `DELETE /api/session` also accepts `{ pushEndpoint }` and forgets that device with the session.
+- `POST /api/push/test { endpoint }` sends a test notification to that device (`404` unknown, `410` the push service dropped it, `502` it didn't take it, `503` no private key).
+
+A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with the person's session cookie.

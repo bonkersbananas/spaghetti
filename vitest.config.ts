@@ -12,7 +12,15 @@ export default defineConfig(async () => {
           plugins: [
             cloudflareTest({
               wrangler: { configPath: "./wrangler.jsonc" },
-              miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+              miniflare: {
+                bindings: {
+                  TEST_MIGRATIONS: migrations,
+                  // A throwaway pair made only for the tests; the real one is never in the repository.
+                  VAPID_PUBLIC_KEY:
+                    "BBxnnFAUPlUsGEZ8Pa-IDPsQuQ8VmvkEfM-gNO8wCBupZWGUkdkkQGzwC1tHzQs7cQG8YM4S5epLdcSOutLISbo",
+                  VAPID_PRIVATE_KEY: "JRWTuy9_i4-619ppiGZN_VeMcThGOk0QoCwJK-F1NAo",
+                },
+              },
             }),
           ],
           test: {

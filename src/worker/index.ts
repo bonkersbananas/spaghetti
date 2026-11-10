@@ -1,6 +1,9 @@
 import { app } from "./app.ts";
 import { mcpRoutes } from "./mcp/index.ts";
 import { purgeDeleted } from "./photos.ts";
+import { sendNudges } from "./push/nudges.ts";
+
+const DAILY = "0 4 * * *";
 
 /**
  * The share target's POST (public/manifest.webmanifest) is answered by the service worker. When it isn't there
@@ -25,8 +28,12 @@ export default {
     if (pathname === "/api/share" && request.method === "POST") return shareFallback(request);
     return app.fetch(request, env, ctx);
   },
-  /** Daily (see triggers in wrangler.jsonc): empties the bin of things deleted a month ago. */
-  async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
+  /**
+   * Two schedules (triggers in wrangler.jsonc): every 5 minutes the "how did it go?" nudges, and daily
+   * the bin of things deleted a month ago.
+   */
+  async scheduled(controller, env, ctx) {
+    if (controller.cron === DAILY) ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
+    else ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
   },
 } satisfies ExportedHandler<Env>;

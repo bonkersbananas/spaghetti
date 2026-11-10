@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import {
   AgentIcon,
+  BellIcon,
   CaretUpDownIcon,
   KeyIcon,
   PaletteIcon,
@@ -22,6 +23,7 @@ import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { ChangePasswordSheet } from "./ChangePasswordSheet";
+import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
 import { NowPrinting } from "./NowPrinting";
 import { sections, workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -36,6 +38,7 @@ export function Sidebar() {
   const signOut = useSignOut();
   const { setPaletteOpen } = usePalette();
   const [changingPassword, setChangingPassword] = useState(false);
+  const [notifying, setNotifying] = useState(false);
 
   return (
     <aside className="paper-grain w-sidebar bg-paper-deep fixed inset-y-0 left-0 hidden flex-col px-3 pt-5 pb-3 md:flex">
@@ -148,6 +151,17 @@ export function Sidebar() {
               <PopoverClose asChild>
                 <Button
                   variant="quiet"
+                  icon={BellIcon}
+                  fullWidth
+                  onClick={() => setNotifying(true)}
+                  className="justify-start"
+                >
+                  Notifications
+                </Button>
+              </PopoverClose>
+              <PopoverClose asChild>
+                <Button
+                  variant="quiet"
                   icon={KeyIcon}
                   fullWidth
                   onClick={() => setChangingPassword(true)}
@@ -162,6 +176,7 @@ export function Sidebar() {
             </div>
           </Popover>
         )}
+        {user && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
         {user && <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />}
       </div>
     </aside>
