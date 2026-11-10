@@ -28,7 +28,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | Scope | Allows |
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
-| `capture` | `POST /items`, `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
+| `capture` | `POST /items` (an idea; one that starts as a build, `stage: "building"`, also needs `attempts`), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
 | `attempts` | `POST /items/:id/attempts`, `PATCH /attempts/:id`, `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`. |
 | `printer` | `PUT /printer/slots/:slot`, `PUT /printer`, `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`. |
 

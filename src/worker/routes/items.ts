@@ -182,6 +182,8 @@ export const itemRoutes = new Hono<AppEnv>()
   .post("/", async (c) => {
     const parsed = createItem.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    // Capture adds ideas; an item that starts as a build is work on attempts.
+    if (parsed.data.stage === "building" && !canUse(c, "attempts")) return missingScope(c, ["attempts"]);
     const now = Date.now();
     const { id: itemId, title: itemTitle, note: itemNote, createdAt, stage = "idea" } = parsed.data;
     // A capture made offline keeps the time it was made, but never one in the future.

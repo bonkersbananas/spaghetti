@@ -300,6 +300,21 @@ describe("scopes", () => {
     expect((await errorOf(refused)).message).toContain('"attempts"');
   });
 
+  it("splits creating an item: an idea is capture, one that starts as a build needs attempts", async () => {
+    const capture = (await makeAgent(["capture"], "c")).token;
+    const create = (json: unknown, token = capture) => asAgent(token, "/api/items", { method: "POST", json });
+    expect((await create({ id: uuid(), note: "idea" })).status).toBe(201);
+    const refused = await create({ id: uuid(), stage: "building" });
+    expect(refused.status).toBe(403);
+    expect((await errorOf(refused)).message).toContain('"attempts"');
+    expect((await create({ id: uuid(), stage: "building" }, (await makeAgent(["attempts"], "a")).token)).status).toBe(
+      403,
+    );
+    expect(
+      (await create({ id: uuid(), stage: "building" }, (await makeAgent(["capture", "attempts"], "b")).token)).status,
+    ).toBe(201);
+  });
+
   it("splits patching an item: words are capture, stage and cover are attempts", async () => {
     const capture = (await makeAgent(["capture"], "c")).token;
     const patch = (json: unknown, token = capture) => asAgent(token, `/api/items/${itemId}`, { method: "PATCH", json });
