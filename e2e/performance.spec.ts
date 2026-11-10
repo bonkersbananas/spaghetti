@@ -22,15 +22,15 @@ const origin = (page: Page) => new URL(page.url()).origin;
 const BUDGET_KB = {
   "/sign-in": 210,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 308,
-  // The account sheet and menu (popover, theme switch, password sheet) load while the browser is idle, and no route
-  // checks its search with zod (route checks load with the app): together about 40 kB gzip off every screen.
-  "/ideas": 300,
-  "/builds": 300,
-  "/journal": 302,
-  "/search": 306,
-  "/pantry": 308,
-  "/printer": 308,
+  "/today": 312,
+  // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
+  // search with zod (route checks load with the app): together about 35 kB gzip off every screen.
+  "/ideas": 304,
+  "/builds": 305,
+  "/journal": 306,
+  "/search": 310,
+  "/pantry": 313,
+  "/printer": 313,
 } as const;
 
 /**

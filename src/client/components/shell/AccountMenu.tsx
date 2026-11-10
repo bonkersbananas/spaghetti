@@ -1,12 +1,12 @@
 import type { Person } from "@shared/api";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useSignOut } from "@/lib/use-sign-out";
 import { AccountButton } from "./AccountButton";
-import { ChangePasswordSheet } from "./ChangePasswordSheet";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
+import { ChangePasswordSheet } from "./lazy-account";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** The sidebar's account menu (desktop), loaded on demand by the Sidebar. */
@@ -58,9 +58,13 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
           </MenuGroup>
         </div>
       </Popover>
-      {/* Mounted once asked for. In the production build, a closed sheet that mounts while another sheet is open (the share sheet) looped (React #185). */}
+      {/* Mounted once asked for. In the production build, a closed sheet that mounts while another sheet is open (the share sheet) looped (React error 185). */}
       {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
-      {asked.password && <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />}
+      {asked.password && (
+        <Suspense fallback={null}>
+          <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
+        </Suspense>
+      )}
     </>
   );
 }
