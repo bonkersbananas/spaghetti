@@ -162,6 +162,7 @@ function Search() {
         ) : result.kind === "recipe" ? (
           <Suspense fallback={<RowSkeleton />}>
             <RecipeResult
+              ref={common.ref}
               recipe={result.hit}
               terms={common.terms}
               selected={common.selected}
