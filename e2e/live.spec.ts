@@ -223,3 +223,100 @@ test("the spool page and the printer setup follow the other person's edits, and 
     await samContext.close();
   }
 });
+
+test("the attempt sheet follows the other person's edits and the printer's report, and a save sends only what was changed here", async ({
+  page,
+  browser,
+}) => {
+  // Two waits on the feed (it is asked every ten seconds) and a lot to check: more than the default 30 s on a slow runner.
+  test.setTimeout(90_000);
+  const samContext = await browser.newContext({ viewport: page.viewportSize(), baseURL: origin() });
+  const samPage = await samContext.newPage();
+  await signInAs(page, alex);
+  await signInAs(samPage, sam);
+  const headers = { Origin: origin() };
+  const buildId = crypto.randomUUID();
+  const finished = crypto.randomUUID();
+  const printing = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Cable chain", stage: "building" } });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: {
+      id: finished,
+      outcome: "partial",
+      note: "Original",
+      settings: { bedTemperature: 60, layerHeight: 0.2, infillDensity: 15 },
+    },
+  });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: { id: printing, outcome: null, settings: { estimatedMinutes: 90 } },
+  });
+  const attemptOnServer = async (id: string) =>
+    (await (await page.request.get(`/api/items/${buildId}`)).json()).item.attempts.find(
+      (attempt: { id: string }) => attempt.id === id,
+    );
+
+  // Alex has the finished attempt open, with its settings showing.
+  await page.goto(`/builds/${buildId}`);
+  await page
+    .locator(`[data-attempt-id="${finished}"]`)
+    .getByRole("button", { name: /Open$/ })
+    .click({ position: { x: 6, y: 6 } });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(sheet.getByRole("textbox", { name: "Note" })).toHaveValue("Original");
+  await sheet.getByRole("button", { name: /^Settings \d/ }).click();
+  await expect(sheet.getByLabel("Infill", { exact: true })).toHaveValue("15");
+
+  // Sam, meanwhile: a success note, a nozzle temperature and a finer layer height.
+  const sent = await samPage.request.patch(`/api/attempts/${finished}`, {
+    headers,
+    data: {
+      successNotes: ["great-first-layer"],
+      settingsMerge: { set: { nozzleTemperature: 230, layerHeight: 0.16 } },
+    },
+  });
+  expect(sent.ok()).toBe(true);
+
+  // Before Alex's screen has heard, Alex changes the infill and adds to the note. Those saves carry those two
+  // fields and nothing else: Sam's tag and settings are still there afterwards.
+  const infill = sheet.getByLabel("Infill", { exact: true });
+  await infill.fill("20");
+  const note = sheet.getByRole("textbox", { name: "Note" });
+  await note.focus();
+  await note.press("End");
+  await note.pressSequentially(" plus");
+  await expect.poll(async () => (await attemptOnServer(finished)).note).toBe("Original plus");
+  await expect.poll(async () => (await attemptOnServer(finished)).settings.infillDensity).toBe(20);
+  const after = await attemptOnServer(finished);
+  expect(after.successNotes).toEqual(["great-first-layer"]);
+  expect(after.settings).toMatchObject({ bedTemperature: 60, layerHeight: 0.16, nozzleTemperature: 230 });
+
+  // Alex's sheet takes what Sam did on its own, and keeps what Alex typed.
+  await expect(sheet.getByRole("button", { name: "Great first layer" })).toHaveAttribute("aria-pressed", "true", {
+    timeout: 25_000,
+  });
+  await expect(sheet.getByRole("button", { name: "0.16 mm" })).toHaveAttribute("aria-pressed", "true");
+  await expect(infill).toHaveValue("20");
+  await expect(note).toHaveValue("Original plus");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // The printer reports on the print still on the bed (the bridge's endedAt and a suggested tag) while its sheet is open.
+  await page
+    .locator(`[data-attempt-id="${printing}"]`)
+    .getByRole("button", { name: /Open$/ })
+    .click({ position: { x: 6, y: 6 } });
+  const finishing = page.getByRole("dialog", { name: "Finish attempt 2" });
+  await expect(finishing).toBeVisible();
+  const reported = await samPage.request.patch(`/api/attempts/${printing}`, {
+    headers,
+    data: { endedAt: Date.now() - 1000, suggestedFailureTag: "warping" },
+  });
+  expect(reported.ok()).toBe(true);
+  await expect(finishing.getByText(/off the bed at/i)).toBeVisible({ timeout: 25_000 });
+  // Picking "Spaghetti" now offers the tag the printer suggested.
+  await finishing.getByRole("radio", { name: "Spaghetti" }).click();
+  await expect(finishing.getByRole("button", { name: "Warping" })).toHaveAttribute("aria-pressed", "true");
+  await samContext.close();
+});

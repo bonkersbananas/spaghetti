@@ -105,6 +105,15 @@ const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.s
 export function useLiveFields<T extends Record<string, unknown>>(
   server: T,
   save: (changes: Partial<T>) => Promise<void>,
+  {
+    delay,
+    hold = false,
+  }: {
+    /** How long after the last change a save goes (`useAutosave`'s default otherwise). */
+    delay?: number;
+    /** Keep what is typed here without saving it (a print being finished with no connection waits for its button). */
+    hold?: boolean;
+  } = {},
 ) {
   const [value, setValue] = useState<T>(server);
   const latest = useRef(value);
@@ -132,14 +141,21 @@ export function useLiveFields<T extends Record<string, unknown>>(
 
   const saveRef = useRef(save);
   saveRef.current = save;
-  const saveState = useAutosave(value, async (sending) => {
-    const changes: Partial<T> = {};
-    for (const key of Object.keys(sending) as Array<keyof T>) {
-      if (!same(sending[key], known.current[key])) changes[key] = sending[key];
-    }
-    if (!Object.keys(changes).length) return;
-    await saveRef.current(changes);
-    known.current = { ...known.current, ...changes };
-  });
+  // While held, autosave keeps seeing what it saw last, so nothing is sent until the hold ends.
+  const held = useRef(value);
+  if (!hold) held.current = value;
+  const saveState = useAutosave(
+    hold ? held.current : value,
+    async (sending) => {
+      const changes: Partial<T> = {};
+      for (const key of Object.keys(sending) as Array<keyof T>) {
+        if (!same(sending[key], known.current[key])) changes[key] = sending[key];
+      }
+      if (!Object.keys(changes).length) return;
+      await saveRef.current(changes);
+      known.current = { ...known.current, ...changes };
+    },
+    delay === undefined ? undefined : { delay },
+  );
   return { value, change, saveState };
 }

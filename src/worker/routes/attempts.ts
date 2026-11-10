@@ -10,6 +10,7 @@ import {
   mergeNote,
   NOZZLES,
   OUTCOMES,
+  SETTING_KEYS,
   SUPPORT_TYPES,
   unionTags,
 } from "../../shared/attempts.ts";
@@ -97,6 +98,10 @@ const updateAttempt = z.object({
   failureTags: slugs.optional(),
   successNotes: slugs.optional(),
   settings: settings.optional(),
+  /** Change some settings and leave the rest as the server has them (the sheet, which follows the other person's edits). */
+  settingsMerge: z
+    .object({ set: settings.optional(), unset: z.array(z.enum(SETTING_KEYS)).max(40).optional() })
+    .optional(),
 });
 
 const finishAttempt = z.object({
@@ -235,7 +240,15 @@ export const attemptRoutes = new Hono<AppEnv>()
     const found = await findLive(db, c.req.param("id"));
     if (!found) return apiError(c, 404, "not_found", notFound);
     const current = found.attempt;
-    const { printedAt: printedTime, endedAt: endedTime, outcome: nextOutcome, ...changes } = parsed.data;
+    const { printedAt: printedTime, endedAt: endedTime, outcome: nextOutcome, settingsMerge, ...changes } = parsed.data;
+    // A merge applies to the settings as they are now (or to the whole replacement sent with it).
+    const mergedSettings = settingsMerge
+      ? Object.fromEntries(
+          Object.entries({ ...(changes.settings ?? current.settings), ...settingsMerge.set }).filter(
+            ([key]) => !(settingsMerge.unset as string[] | undefined)?.includes(key),
+          ),
+        )
+      : undefined;
     const now = new Date();
     let finishedAt = current.finishedAt;
     let finishedBy = current.finishedBy;
@@ -255,6 +268,7 @@ export const attemptRoutes = new Hono<AppEnv>()
         .update(attempts)
         .set({
           ...changes,
+          ...(mergedSettings ? { settings: mergedSettings } : {}),
           ...(nextOutcome !== undefined ? { outcome: nextOutcome } : {}),
           ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
           ...(endedTime !== undefined ? { endedAt: endedTime === null ? null : notFuture(endedTime, now) } : {}),

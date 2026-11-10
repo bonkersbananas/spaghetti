@@ -9,6 +9,7 @@ import type {
   TagResponse,
   TagsResponse,
 } from "@shared/api";
+import type { SettingsMerge } from "@shared/attempt-fields";
 import {
   type AttemptSettings,
   BUILT_IN_TAGS,
@@ -242,6 +243,8 @@ export async function saveAttemptChanges(
   itemId: string,
   attemptId: string,
   changes: PendingAttemptChanges,
+  /** Which settings `changes.settings` changes, when only some did: the server applies just those to its own copy. */
+  settingsMerge?: SettingsMerge,
 ) {
   const now = Date.now();
   patchCachedItem(queryClient, itemId, (item) => ({
@@ -258,9 +261,11 @@ export async function saveAttemptChanges(
     ),
   }));
   if (outbox.updatePendingAttempt(attemptId, changes)) return;
+  const { settings: _whole, ...rest } = changes;
   const { attempt: saved } = await api<AttemptResponse>(`/attempts/${attemptId}`, {
     method: "PATCH",
-    json: changes,
+    // Settings go as the settings that changed (merged on the server), unless the whole object is the change.
+    json: settingsMerge ? { ...rest, settingsMerge } : changes,
     keepalive: true,
   });
   // The outcome, filaments or spools may have changed what a spool has left.
