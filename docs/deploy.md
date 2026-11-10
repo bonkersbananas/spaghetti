@@ -72,6 +72,10 @@ The script never prints the private key and refuses to overwrite a file. The dep
 
 The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
 
+## Claude drafting ideas
+
+Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)) uses the `ANTHROPIC_API_KEY` secret, already set on the live Worker (`pnpm exec wrangler secret put ANTHROPIC_API_KEY`; it is kept across `pnpm ship`). Without it the feature is hidden. Locally, put `ANTHROPIC_API_KEY=sk-ant-…` in `.dev.vars` (never committed). The e2e tests and screenshots don't need a key: they point `ANTHROPIC_BASE_URL` at a stand-in server (`scripts/lib/fake-claude.ts`). The 5-minute cron also finishes drafts whose request was lost.
+
 ## Where agents and the bridge point
 
 - MCP server: `https://spaghetti.day/mcp` ([mcp.md](mcp.md)).

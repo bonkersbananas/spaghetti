@@ -72,7 +72,11 @@ test("a page that can't be read leaves the idea as captured, with one line and a
 });
 
 test("words a person wrote are never replaced; the page's link can be drafted by hand", async ({ page, isMobile }) => {
-  await capture(page, isMobile, `For Mila, the one with the little teeth. Print it in the green PETG if there is enough left, and check the size first. ${GOOD}`);
+  await capture(
+    page,
+    isMobile,
+    `For Mila, the one with the little teeth. Print it in the green PETG if there is enough left, and check the size first. ${GOOD}`,
+  );
   await page.getByRole("list", { name: "Ideas" }).getByRole("link").first().click();
   // Not a bare link, so nothing started by itself.
   await expect(page.getByRole("button", { name: "Draft from this page" })).toBeVisible();

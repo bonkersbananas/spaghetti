@@ -21,6 +21,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0015](0015-share-targets-by-device.md) | Sharing in: a share target, an iOS Shortcut and a bookmarklet | Accepted |
 | [0016](0016-web-push-nudges.md) | "How did it go?" arrives as a web push nudge, once, answerable in a tap | Accepted |
 | [0018](0018-upkeep-and-drying.md) | Upkeep is a list with intervals, due-ness is a fact, and it nudges at most once a day | Accepted |
+| [0019](0019-claude-drafts-ideas-from-model-pages.md) | Claude drafts an idea from a model page, in the background, only into empty fields | Accepted |
 
 ## Format
 
