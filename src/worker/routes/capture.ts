@@ -42,6 +42,22 @@ interface Body {
   files: Uint8Array[];
 }
 
+/** A file that is neither a photo we store nor readable text (a PNG, a PDF): refused with the photo message. */
+class UnsupportedFile extends Error {
+  constructor() {
+    super("Photos must be JPEG or WebP images.");
+  }
+}
+
+/** Text from bytes, or UnsupportedFile when they aren't UTF-8 text. */
+function decodeText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
+  } catch {
+    throw new UnsupportedFile();
+  }
+}
+
 const SINGLE_URL = /^https?:\/\/\S+$/i;
 const isImage = (bytes: Uint8Array) =>
   (bytes[0] === 0xff && bytes[1] === 0xd8) || // JPEG
@@ -79,7 +95,7 @@ async function readBody(c: Context<AppEnv>): Promise<Body> {
   if (type === "application/json") {
     const parsed = fields.parse(await c.req.json());
     if (parsed.image) files.push(fromBase64(parsed.image));
-    return { fields: { ...loose, ...parsed }, files };
+    return { fields: fields.parse({ ...loose, ...parsed }), files };
   }
   if (type === "application/x-www-form-urlencoded" || type === "multipart/form-data") {
     const form = await c.req.formData();
@@ -91,18 +107,24 @@ async function readBody(c: Context<AppEnv>): Promise<Body> {
       if (entry.size === 0) continue;
       const bytes = new Uint8Array(await entry.arrayBuffer());
       if (entry.type.startsWith("image/") || isImage(bytes)) files.push(bytes);
-      else addText(loose, new TextDecoder().decode(bytes), name);
+      else addText(loose, decodeText(bytes), name);
     }
     return { fields: fields.parse(loose), files };
   }
   const bytes = new Uint8Array(await c.req.arrayBuffer());
   if (type.startsWith("image/") || isImage(bytes)) files.push(bytes);
   else if (bytes.length) {
-    const body = new TextDecoder().decode(bytes);
+    const body = decodeText(bytes);
     // A JSON body sent without its Content-Type.
     if (/^\s*\{/.test(body) && type !== "text/plain") {
-      const parsed = fields.safeParse(JSON.parse(body));
-      if (parsed.success) return { fields: { ...loose, ...parsed.data }, files };
+      let json: unknown;
+      try {
+        json = JSON.parse(body);
+      } catch {
+        // Words that happen to start with a brace: shared text, not JSON.
+      }
+      const parsed = json === undefined ? undefined : fields.safeParse(json);
+      if (parsed?.success) return { fields: fields.parse({ ...loose, ...parsed.data }), files };
     }
     // text/uri-list may start with comment lines.
     addText(
@@ -143,6 +165,7 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
   try {
     ({ fields: input, files } = await readBody(c));
   } catch (error) {
+    if (error instanceof UnsupportedFile) return refuse(415, "unsupported", error.message);
     if (error instanceof Error && /base64|JPEG|WebP|photo/i.test(error.message)) {
       return refuse(400, "invalid", error.message);
     }

@@ -243,6 +243,30 @@ describe("POST /api/capture", () => {
       expect(await heic.text()).toContain("JPEG or WebP");
     });
 
+    it("keeps words that start with a brace, and refuses a file that is no photo or text", async () => {
+      const bearer = await token(["capture"]);
+      const braces = await saved(
+        await asAgent(bearer, { body: "{curly} note", headers: { "Content-Type": "application/octet-stream" } }),
+      );
+      expect(braces).toBe("Saved to Spaghetti: {curly} note");
+      const png = await asAgent(bearer, {
+        body: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0xfd, 0x00]),
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      expect(png.status).toBe(415);
+      expect(await png.text()).toContain("JPEG or WebP");
+    });
+
+    it("validates the query string too, whatever the body", async () => {
+      const bearer = await token(["capture"]);
+      const response = await request("/api/capture?id=not-a-uuid", {
+        method: "POST",
+        json: { text: "x" },
+        headers: { Authorization: `Bearer ${bearer}` },
+      });
+      expect(response.status).toBe(400);
+    });
+
     it("JSON callers still get JSON, with the sentence in it", async () => {
       const bearer = await token(["capture"]);
       const reply = await (await asAgent(bearer, { json: { text: "plain json" } })).json<CaptureResponse>();
