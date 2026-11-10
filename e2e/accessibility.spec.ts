@@ -213,7 +213,28 @@ for (const scheme of ["light", "dark"] as const) {
       await page.keyboard.press("?");
       await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
       await expectAccessible(page, "The shortcut list", "[role=dialog]");
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await expect(page.getByRole("dialog", { name: "Account" })).toBeVisible();
+      await expectAccessible(page, "The account menu", "[role=dialog]");
     }
+
+    // The profile picture: the crop sheet, then the account menu showing it.
+    await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
+    const crop = page.getByRole("dialog", { name: "Your picture" });
+    await expect(crop.getByTestId("crop-frame").locator("img")).toBeVisible();
+    await expectAccessible(page, "The crop sheet", "[role=dialog]");
+    await crop.getByRole("button", { name: "Save" }).click();
+    await expect(crop).toBeHidden();
+    await expect
+      .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
+      .toMatch(/\/photo\?v=/);
+    await page.reload();
+    await page.getByRole("button", { name: isMobile ? "Account" : "Account menu" }).click();
+    await expect(page.getByRole("button", { name: "Change photo" })).toBeVisible();
+    await expect(page.getByRole("dialog").locator("img[src*='/api/people/']").first()).toBeVisible();
+    await expectAccessible(page, "The account menu with a picture", "[role=dialog]");
+    await page.request.delete("/api/people/me/photo", { headers: { Origin: origin(page) } });
   });
 }
 

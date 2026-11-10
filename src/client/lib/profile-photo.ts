@@ -74,6 +74,7 @@ export function changeMyPhoto(queryClient: QueryClient, next: Blob | null) {
   const saved = (async () => {
     await previous;
     await send(next);
+    return true;
   })().catch(() => {
     showMine(queryClient, before);
     toast.error(next ? "Couldn't save your picture" : "Couldn't remove your picture", "It's back as it was.");

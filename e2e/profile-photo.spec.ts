@@ -18,6 +18,8 @@ async function signInAs(page: Page, user: { username: string }) {
 const origin = (_page?: Page) => new URL(test.info().project.use.baseURL ?? "").origin;
 
 async function openAccount(page: Page, isMobile: boolean) {
+  const open = page.getByRole("dialog", { name: isMobile ? "The kitchen" : "Account" });
+  if (await open.isVisible()) return open;
   if (isMobile) {
     await page.getByRole("button", { name: "Account" }).click();
     return page.getByRole("dialog", { name: "The kitchen" });
@@ -98,7 +100,9 @@ test("sets a picture from the account menu, the other person sees it, and it can
   await expect
     .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
     .toBeNull();
-  await page.getByRole("button", { name: "Undo" }).click();
+  // On a phone the sheet covers the toast: close it to reach Undo.
+  if (isMobile) await page.keyboard.press("Escape");
+  await page.getByRole("listitem").filter({ hasText: "Picture removed" }).getByRole("button", { name: "Undo" }).click();
   await expect
     .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
     .not.toBeNull();
