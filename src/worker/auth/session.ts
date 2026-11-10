@@ -78,6 +78,12 @@ export async function readSession(c: Context, db: Db): Promise<User | null> {
   return row.user;
 }
 
+/** The id of this request's own session (what the cookie hashes to), or null without a cookie. */
+export async function currentSessionId(c: Context): Promise<string | null> {
+  const token = getCookie(c, SESSION_COOKIE);
+  return token ? hashToken(token) : null;
+}
+
 export async function endSession(c: Context, db: Db) {
   const token = getCookie(c, SESSION_COOKIE);
   if (token) await db.delete(sessions).where(eq(sessions.id, await hashToken(token)));

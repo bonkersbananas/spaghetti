@@ -16,6 +16,19 @@ export interface SessionResponse {
   user: Person;
 }
 
+/** Changing your own password: the new one must be at least this long (no other rules). */
+export const MIN_PASSWORD_LENGTH = 10;
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  /** How many other devices were signed out. */
+  signedOut: number;
+}
+
 export interface PeopleResponse {
   people: Person[];
 }

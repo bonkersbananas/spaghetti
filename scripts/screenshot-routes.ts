@@ -424,6 +424,38 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Change password, with a wrong current password said under its field and what was typed kept.
+    name: "change-password",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Account" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Change password" }).click();
+      const sheet = page.getByRole("dialog", { name: "Change password" });
+      await sheet.waitFor();
+      await sheet.getByLabel("Current password").fill("pasta-al-dente");
+      await sheet.getByLabel("New password").fill("a-fresh-pot-of-pasta");
+      await sheet.getByRole("button", { name: "Save new password" }).click();
+      await sheet.getByText("That isn't your current password.").waitFor();
+    },
+  },
+  {
+    // Change password, with a wrong current password said under its field and what was typed kept.
+    name: "change-password-desktop",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Change password" }).click();
+      const sheet = page.getByRole("dialog", { name: "Change password" });
+      await sheet.waitFor();
+      await sheet.getByLabel("Current password").fill("pasta-al-dente");
+      await sheet.getByLabel("New password").fill("a-fresh-pot-of-pasta");
+      await sheet.getByRole("button", { name: "Save new password" }).click();
+      await sheet.getByText("That isn't your current password.").waitFor();
+    },
+  },
+  {
     // The one quiet place that says there is no connection (needs the signed-in app open).
     name: "offline",
     path: "/ideas",
