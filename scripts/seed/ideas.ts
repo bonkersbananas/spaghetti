@@ -17,6 +17,10 @@ interface SeedIdea {
   title?: string;
   note?: string;
   photos: Array<{ file: string; color: string }>;
+  /** Its place in the Up next queue (1 is first). */
+  upNext?: number;
+  /** Who it is for. */
+  forWhom?: string;
 }
 
 const MIN = 60_000;
@@ -49,6 +53,8 @@ export const SEED_IDEAS: SeedIdea[] = [
     ago: 3 * DAY + 2 * HOUR,
     title: "Bath tugboat for Mila",
     note: "Chunky enough for small hands. Print the hull in two halves so it floats upright?",
+    upNext: 2,
+    forWhom: "Mila",
     photos: [{ file: "tugboat.svg", color: "#867362" }],
   },
   {
@@ -64,6 +70,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     ago: 6 * DAY + 3 * HOUR,
     title: "Headphone stand",
     note: "Charcoal matte PLA. Needs a heavier base, or rubber feet.",
+    upNext: 1,
     photos: [{ file: "headphone-stand.svg", color: "#98846c" }],
   },
   {
@@ -202,6 +209,9 @@ export async function seedIdeas(
       data: { id: idea.id, title: idea.title ?? null, note: idea.note ?? "", createdAt: now - idea.ago },
     });
     if (!created.ok()) throw new Error(`Seeding ${idea.id} failed: ${created.status()}`);
+    if (idea.forWhom) {
+      await request.patch(`/api/items/${idea.id}`, { headers: { Origin: origin }, data: { forWhom: idea.forWhom } });
+    }
     for (const [position, photo] of idea.photos.entries()) {
       let images = rendered.get(photo.file);
       if (!images) {
@@ -226,5 +236,9 @@ export async function seedIdeas(
       if (!uploaded.ok())
         throw new Error(`Uploading ${photo.file} failed: ${uploaded.status()} ${await uploaded.text()}`);
     }
+  }
+  // The Up next queue, marked in its order.
+  for (const idea of SEED_IDEAS.filter((i) => i.upNext).sort((a, b) => (a.upNext ?? 0) - (b.upNext ?? 0))) {
+    await requests[idea.by].patch(`/api/items/${idea.id}`, { headers: { Origin: origin }, data: { upNext: true } });
   }
 }

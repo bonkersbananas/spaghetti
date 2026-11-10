@@ -1,11 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { IdeaCard } from "@/components/ideas/IdeaCard";
+import { useState } from "react";
+import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { EmptyPot } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
@@ -13,6 +15,7 @@ import { shortcutCaps } from "@/lib/hotkeys";
 import { useIdeas } from "@/lib/items";
 import { useArrived } from "@/lib/live";
 import { peopleQuery } from "@/lib/queries";
+import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/ideas/")({
@@ -29,6 +32,47 @@ function Ideas() {
   const arrived = useArrived();
   const via = useVia();
   const byId = new Map(people?.map((person) => [person.id, person]));
+  const queryClient = useQueryClient();
+  const isDesktop = useIsDesktop();
+  const { queue, rest } = splitQueue(items);
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const menuFor = (item: (typeof items)[number], index: number): UpNextMenu => ({
+    queued: index >= 0,
+    onToggle: () => setUpNext(queryClient, item, index < 0),
+    onMoveUp: index > 0 ? () => moveUpNext(queryClient, queue, item.id, -1) : undefined,
+    onMoveDown: index >= 0 && index < queue.length - 1 ? () => moveUpNext(queryClient, queue, item.id, 1) : undefined,
+  });
+  const card = (item: (typeof items)[number], index: number) => (
+    <IdeaCard
+      key={item.id}
+      item={item}
+      person={byId.get(item.createdBy)}
+      via={via(item.createdVia)}
+      landing={item.id === landed || arrived.has(item.id)}
+      headingLevel={queue.length > 0 ? 3 : 2}
+      menu={menuFor(item, index)}
+      drag={
+        isDesktop && index >= 0 && queue.length > 1
+          ? {
+              dragging: dragged === item.id,
+              over: over === item.id && dragged !== item.id,
+              onDragStart: () => setDragged(item.id),
+              onDragEnd: () => {
+                setDragged(null);
+                setOver(null);
+              },
+              onDragOver: () => setOver(item.id),
+              onDrop: () => {
+                if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
+                setDragged(null);
+                setOver(null);
+              },
+            }
+          : undefined
+      }
+    />
+  );
 
   return (
     <>
@@ -41,17 +85,28 @@ function Ideas() {
           ))}
         </div>
       ) : items.length ? (
-        <ul className={grid} aria-label="Ideas">
-          {items.map((item) => (
-            <IdeaCard
-              key={item.id}
-              item={item}
-              person={byId.get(item.createdBy)}
-              via={via(item.createdVia)}
-              landing={item.id === landed || arrived.has(item.id)}
-            />
-          ))}
-        </ul>
+        <>
+          {queue.length > 0 && (
+            <section aria-labelledby="up-next-heading" className="mb-10">
+              <SectionHeading id="up-next-heading" count={queue.length} className="mb-4">
+                Up next
+              </SectionHeading>
+              <ul className={grid} aria-label="Up next">
+                {queue.map((item, index) => card(item, index))}
+              </ul>
+            </section>
+          )}
+          {queue.length > 0 && rest.length > 0 && (
+            <SectionHeading id="inbox-heading" className="mb-4">
+              The rest
+            </SectionHeading>
+          )}
+          {rest.length > 0 && (
+            <ul className={grid} aria-label="Ideas">
+              {rest.map((item) => card(item, -1))}
+            </ul>
+          )}
+        </>
       ) : error ? (
         <IdeasUnreachable onRetry={() => void refetch()} />
       ) : (
