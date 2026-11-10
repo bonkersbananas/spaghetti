@@ -214,7 +214,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
             </div>
 
             {/* A label with its actions beside it, and what it says below at full width, so it never wraps under them. */}
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 md:max-w-md">
               <div className="flex min-h-8 items-center justify-between gap-3">
                 <span className="text-small text-ink-soft font-semibold">In the printer</span>
                 <div className="flex items-center gap-1.5">
@@ -237,7 +237,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               </span>
             </div>
 
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 md:max-w-md">
               <div className="flex min-h-8 items-center justify-between gap-3">
                 <span className="text-small text-ink-soft font-semibold">Dried</span>
                 <ToggleChip
