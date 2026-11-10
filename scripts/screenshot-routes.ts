@@ -63,8 +63,22 @@ async function mockToday(page: Page, show: { builds: Slice; journal: Slice; spoo
     await route.fulfill({ response, json: show.spools === "none" ? { ...json, slots: {} } : json });
   });
   await page.reload({ waitUntil: "networkidle" });
-  // An empty state eases in; the shot is taken once it has.
-  await page.waitForTimeout(1500);
+}
+
+/**
+ * Waits for a heading and for the empty state around it to finish easing in. It starts late (motion's code
+ * loads first, a couple of seconds on a busy machine), so a shot taken once the heading exists shows nothing.
+ */
+async function waitUntilEased(page: Page, title: string) {
+  await page.getByRole("heading", { name: title }).waitFor();
+  await page.waitForFunction(
+    (text) => {
+      const heading = Array.from(document.querySelectorAll("main h2")).find((h) => h.textContent === text);
+      return !!heading?.parentElement && getComputedStyle(heading.parentElement).opacity === "1";
+    },
+    title,
+    { timeout: 15_000 },
+  );
 }
 
 async function unmockToday(page: Page) {
@@ -110,7 +124,7 @@ export const shots: Shot[] = [
     path: "/today",
     prepare: async (page) => {
       await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "young" });
-      await page.getByRole("heading", { name: "All quiet in the kitchen" }).waitFor();
+      await waitUntilEased(page, "All quiet in the kitchen");
     },
     cleanup: unmockToday,
   },
@@ -120,7 +134,7 @@ export const shots: Shot[] = [
     path: "/today",
     prepare: async (page) => {
       await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "none" });
-      await page.getByRole("heading", { name: "Nothing on the stove yet" }).waitFor();
+      await waitUntilEased(page, "Nothing on the stove yet");
     },
     cleanup: unmockToday,
   },
