@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm db:migrate && vite",
+    "dev:seed": "node scripts/dev-seed.ts",
     "build": "vite build",
     "preview": "pnpm db:migrate && vite build && vite preview",
     "start": "node scripts/start.ts",
@@ -19,13 +20,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "doctor": "node scripts/doctor.ts",
     "screenshots": "node scripts/screenshots.ts",
+    "screenshots:compare": "node scripts/screenshots-compare.ts",
+    "new": "node scripts/new.ts",
     "icons": "node scripts/icons.ts",
     "types": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:export": "node scripts/db-export.ts",
-    "user:add": "node scripts/user-add.ts"
+    "user:add": "node scripts/user-add.ts",
+    "agent:add": "node scripts/agent-add.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",

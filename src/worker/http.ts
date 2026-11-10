@@ -71,7 +71,9 @@ export function toApiAttempt(
     changes: previous ? describeChanges(previous.settings, attempt.settings) : [],
     file: file ? toApiFile(file) : null,
     createdBy: attempt.createdBy,
+    createdVia: attempt.createdVia,
     finishedBy: attempt.finishedBy,
+    finishedVia: attempt.finishedVia,
     createdAt: attempt.createdAt.getTime(),
     updatedAt: attempt.updatedAt.getTime(),
   };
@@ -103,6 +105,7 @@ export function toApiItem(
     title: item.title,
     note: item.note,
     createdBy: item.createdBy,
+    createdVia: item.createdVia,
     createdAt: item.createdAt.getTime(),
     updatedAt: item.updatedAt.getTime(),
     startedAt: item.startedAt?.getTime() ?? null,

@@ -11,7 +11,7 @@ export interface Target {
   persistTo?: string;
 }
 
-function targetArgs({ remote, persistTo }: Target): string[] {
+export function targetArgs({ remote, persistTo }: Target): string[] {
   if (remote) return ["--remote"];
   return ["--local", ...(persistTo ? ["--persist-to", persistTo] : [])];
 }

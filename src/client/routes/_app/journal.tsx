@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useVia } from "@/lib/agents";
 import { cn } from "@/lib/cn";
 import { useHotkeys } from "@/lib/hotkeys";
 import {
@@ -219,6 +220,7 @@ function Group({
   selected,
   refs,
 }: Omit<MonthProps, "month" | "first"> & { group: JournalGroup<Entry> }) {
+  const via = useVia();
   return (
     <section aria-label={group.kind === "day" ? dayLabel(group.start) : weekLabel(group.start, group.end)}>
       {group.kind === "day" ? (
@@ -245,6 +247,7 @@ function Group({
                 entry={entry}
                 item={item}
                 person={person}
+                via={via(entry.via)}
                 selected={selected === entry.key}
                 when={group.kind === "day" ? "time" : "date"}
               />

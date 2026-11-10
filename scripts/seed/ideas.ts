@@ -187,9 +187,13 @@ export async function render(
 }
 
 /** Creates the seed ideas through the API, as whoever captured each one. */
-export async function seedIdeas(browser: Browser, requests: Record<"alex" | "sam", APIRequestContext>, origin: string) {
+export async function seedIdeas(
+  browser: Browser,
+  requests: Record<"alex" | "sam", APIRequestContext>,
+  origin: string,
+  now: number,
+) {
   const rendered = new Map<string, { large: Buffer; thumb: Buffer; width: number; height: number }>();
-  const now = Date.now();
   // Oldest first, as they would have been captured.
   for (const idea of [...SEED_IDEAS].reverse()) {
     const request = requests[idea.by];

@@ -32,11 +32,13 @@ function useUploadState(item: ItemView) {
 interface IdeaCardProps {
   item: ItemView;
   person?: Person;
+  /** The agent it was captured through. */
+  via?: string;
   /** Just captured: it lands with a little bounce. */
   landing?: boolean;
 }
 
-export function IdeaCard({ item, person, landing }: IdeaCardProps) {
+export function IdeaCard({ item, person, via, landing }: IdeaCardProps) {
   const cover = item.photos[0];
   const upload = useUploadState(item);
   return (
@@ -59,6 +61,7 @@ export function IdeaCard({ item, person, landing }: IdeaCardProps) {
         chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
         meta={relativeTime(item.createdAt)}
         person={person}
+        via={via}
         className="h-full"
       />
     </m.li>

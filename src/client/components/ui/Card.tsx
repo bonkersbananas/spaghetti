@@ -20,6 +20,8 @@ export interface CardProps {
   /** Small line under the title: "2 attempts · 3 days ago". */
   meta?: ReactNode;
   person?: Pick<Person, "name" | "color">;
+  /** The agent it was made through: the avatar gets its mark and says "via …". */
+  via?: string;
   /** "portrait" (4:5) suits grids of prints; "tall" is 3:4. */
   aspect?: "landscape" | "square" | "portrait" | "tall";
   /** Where the card leads (a TanStack Router link). */
@@ -50,6 +52,7 @@ export function Card({
   badge,
   meta,
   person,
+  via,
   aspect = "landscape",
   link,
   onClick,
@@ -106,7 +109,7 @@ export function Card({
           )}
           {meta && <p className={cn("text-small text-ink-faint line-clamp-2", heading && "mt-0.5")}>{meta}</p>}
         </div>
-        {person && <Avatar person={person} size="xs" className="mt-0.5" />}
+        {person && <Avatar person={person} size="xs" via={via} className="mt-0.5" />}
       </div>
     </>
   );

@@ -9,7 +9,8 @@ import {
   PHOTO_CONTENT_TYPES,
   type PhotoResponse,
 } from "../../shared/api.ts";
-import { actorOf, afterChange, recordChange } from "../changes.ts";
+import { canUse, missingScope } from "../auth/scopes.ts";
+import { afterChange, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import {
   type Attempt,
@@ -181,6 +182,8 @@ export const itemRoutes = new Hono<AppEnv>()
   .post("/", async (c) => {
     const parsed = createItem.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    // Capture adds ideas; an item that starts as a build is work on attempts.
+    if (parsed.data.stage === "building" && !canUse(c, "attempts")) return missingScope(c, ["attempts"]);
     const now = Date.now();
     const { id: itemId, title: itemTitle, note: itemNote, createdAt, stage = "idea" } = parsed.data;
     // A capture made offline keeps the time it was made, but never one in the future.
@@ -197,6 +200,7 @@ export const itemRoutes = new Hono<AppEnv>()
           // A build started from scratch starts when it was made.
           startedAt: stage === "building" ? created : null,
           createdBy: c.var.user.id,
+          createdVia: c.var.via,
           createdAt: created,
           updatedAt: created,
         })
@@ -206,7 +210,7 @@ export const itemRoutes = new Hono<AppEnv>()
         id: itemId,
         itemId,
         action: "created",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
     ]);
     const item = await loadItem(c.var.db, itemId);
@@ -224,6 +228,13 @@ export const itemRoutes = new Hono<AppEnv>()
     const parsed = updateItem.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That change couldn't be read.");
     const { stage, coverPhotoId, ...changes } = parsed.data;
+    // Title and note are "capture"; moving a build along or picking its final photo is work on its attempts.
+    if ((stage !== undefined || coverPhotoId !== undefined) && !canUse(c, "attempts")) {
+      return missingScope(c, ["attempts"]);
+    }
+    if ((changes.title !== undefined || changes.note !== undefined) && !canUse(c, "capture")) {
+      return missingScope(c, ["capture"]);
+    }
     const itemId = c.req.param("id");
     const db = c.var.db;
     const current = await db
@@ -260,7 +271,7 @@ export const itemRoutes = new Hono<AppEnv>()
           updatedAt: now,
         })
         .where(and(eq(items.id, itemId), isNull(items.deletedAt))),
-      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: actorOf(c.var.user) }),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
     ]);
     const item = await loadItem(db, itemId);
     if (!item) return apiError(c, 404, "not_found", notFound);
@@ -275,7 +286,7 @@ export const itemRoutes = new Hono<AppEnv>()
         .set({ deletedAt: new Date() })
         .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
         .returning({ id: items.id }),
-      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "deleted", actor: actorOf(c.var.user) }),
+      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "deleted", actor: c.var.actor }),
     ]);
     if (!result.length) return apiError(c, 404, "not_found", notFound);
     return c.body(null, 204);
@@ -290,7 +301,7 @@ export const itemRoutes = new Hono<AppEnv>()
         .set({ deletedAt: null })
         .where(and(eq(items.id, itemId), isNotNull(items.deletedAt)))
         .returning({ id: items.id }),
-      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "restored", actor: actorOf(c.var.user) }),
+      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "restored", actor: c.var.actor }),
     ]);
     // Restoring something that isn't deleted is harmless and records nothing.
     const item = await loadItem(c.var.db, itemId);
@@ -322,7 +333,7 @@ export const itemRoutes = new Hono<AppEnv>()
     await db.batch([
       ...statements,
       db.update(items).set({ updatedAt: new Date() }).where(eq(items.id, itemId)),
-      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: actorOf(c.var.user) }),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
     ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
     return c.json<ItemResponse>({ item: (await loadItem(db, itemId)) ?? item });
   })
@@ -361,6 +372,8 @@ export const itemRoutes = new Hono<AppEnv>()
     }
 
     const attemptId = fields.data.attemptId ?? null;
+    // A photo of an attempt comes with the attempts scope; any other needs capture.
+    if (!canUse(c, attemptId ? "attempts" : "capture")) return missingScope(c, [attemptId ? "attempts" : "capture"]);
     if (attemptId) {
       const attempt = await c.var.db
         .select({ id: attempts.id })
@@ -376,7 +389,7 @@ export const itemRoutes = new Hono<AppEnv>()
       return apiError(c, 409, "conflict", "That photo belongs to something else.");
     }
 
-    const actor = actorOf(c.var.user);
+    const actor = c.var.actor;
     const httpMetadata = { contentType };
     await Promise.all([
       c.env.PHOTOS.put(photoKey(photoId, "large"), large.stream(), { httpMetadata }),
