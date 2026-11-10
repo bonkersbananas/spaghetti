@@ -24,15 +24,10 @@ export default function ProfilePhoto() {
   return (
     <>
       <div className="flex items-center gap-3 py-1">
-        <Avatar person={user} size="lg" decorative />
-        <div className="min-w-0 flex-1">
-          <Button variant="quiet" size="sm" className="-ml-3" disabled={readOnly} onClick={choose}>
-            {user.photoUrl ? "Change photo" : "Add a photo"}
-          </Button>
-          <p className="text-small text-ink-faint px-0 leading-snug">
-            {user.photoUrl ? "Shown beside what you write." : "Instead of your initials."}
-          </p>
-        </div>
+        <Avatar person={user} size="md" decorative />
+        <Button variant="quiet" size="sm" className="-ml-3 flex-1 justify-start" disabled={readOnly} onClick={choose}>
+          {user.photoUrl ? "Change photo" : "Add a photo"}
+        </Button>
         {user.photoUrl && (
           <Button variant="quiet" size="sm" disabled={readOnly} onClick={() => changeMyPhoto(queryClient, null)}>
             Remove

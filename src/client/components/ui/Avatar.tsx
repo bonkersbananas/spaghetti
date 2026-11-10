@@ -102,7 +102,7 @@ function Picture({ url }: { url: string }) {
       onLoad={() => setState("loaded")}
       onError={() => setState("failed")}
       className={cn(
-        "ring-ink/10 absolute inset-0 size-full rounded-full object-cover ring-1 transition-opacity duration-300 ring-inset dark:ring-white/15",
+        "ring-ink/10 absolute inset-0 size-full rounded-full object-cover ring-1 transition-opacity duration-300 ring-inset dark:ring-white/15 dark:brightness-90",
         state === "loaded" ? "opacity-100" : "opacity-0",
       )}
     />

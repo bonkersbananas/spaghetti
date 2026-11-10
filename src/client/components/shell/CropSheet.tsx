@@ -36,7 +36,7 @@ export function CropSheet({ file, onClose, onChooseAnother, onSave }: CropSheetP
       title="Your picture"
       description="Drag to place it, pinch or scroll to zoom."
       footer={
-        <div className="flex gap-3">
+        <div className="flex w-full gap-3">
           <Button variant="secondary" className="flex-1" onClick={onChooseAnother}>
             Choose another
           </Button>
@@ -209,7 +209,7 @@ function Cropper({ file, bitmap, view, problem, update }: { file: File } & Crop)
         {/* The mask: everything outside the circle is dimmed, with a hairline on its edge. */}
         <div
           aria-hidden
-          className="bg-scrim pointer-events-none absolute inset-0 [mask-image:radial-gradient(circle_closest-side,transparent_calc(100%-1px),black_100%)]"
+          className="bg-veil-strong pointer-events-none absolute inset-0 [mask-image:radial-gradient(circle_closest-side,transparent_calc(100%-1px),black_100%)]"
         />
         <div
           aria-hidden
@@ -230,7 +230,7 @@ function Cropper({ file, bitmap, view, problem, update }: { file: File } & Crop)
             view &&
             update(zoomView(bitmap.width, bitmap.height, view, Number(event.target.value) / view.zoom, SIZE))
           }
-          className="accent-tomato min-w-0 flex-1"
+          className="accent-ink min-w-0 flex-1"
         />
       </label>
     </div>
