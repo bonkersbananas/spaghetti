@@ -423,27 +423,35 @@ export const itemRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const { stage, startedAt, finishedAt, coverPhotoId, attemptIds } = parsed.data;
     const now = new Date();
-    // The item first: only when it is a live idea do its attempts come back and a change get recorded.
-    const updated = await db
-      .update(items)
-      .set({
-        stage,
-        startedAt: new Date(startedAt),
-        finishedAt: finishedAt === null ? null : new Date(finishedAt),
-        coverPhotoId,
-        upNext: null,
-        updatedAt: now,
-      })
-      .where(and(eq(items.id, itemId), isNull(items.deletedAt), eq(items.stage, "idea")))
-      .returning({ id: items.id });
-    if (!updated.length) return apiError(c, 404, "not_found", goneForGood);
-    if (attemptIds.length) {
-      await db
+    // One batch, so it is all or nothing: the attempts come back only while the item is a live idea (checked in
+    // the statement itself), then the item moves on, then the change is recorded only if that moved it.
+    const [, moved] = await db.batch([
+      db
         .update(attempts)
         .set({ deletedAt: null })
-        .where(and(eq(attempts.itemId, itemId), inArray(attempts.id, attemptIds)));
-    }
-    await db.batch([recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor })]);
+        .where(
+          and(
+            eq(attempts.itemId, itemId),
+            inArray(attempts.id, attemptIds),
+            sql`exists (select 1 from items where id = ${itemId} and deleted_at is null and stage = 'idea')`,
+          ),
+        ),
+      db
+        .update(items)
+        .set({
+          stage,
+          startedAt: new Date(startedAt),
+          finishedAt: finishedAt === null ? null : new Date(finishedAt),
+          coverPhotoId,
+          upNext: null,
+          updatedAt: now,
+        })
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt), eq(items.stage, "idea")))
+        .returning({ id: items.id }),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
+    ]);
+    // Nothing was changed if the item wasn't a live idea: it is still deleted or already a build.
+    if (!moved.length) return apiError(c, 404, "not_found", goneForGood);
     const item = await loadItem(db, itemId);
     if (!item) return apiError(c, 404, "not_found", goneForGood);
     return c.json<ItemResponse>({ item });

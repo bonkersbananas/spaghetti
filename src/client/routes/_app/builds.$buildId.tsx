@@ -253,10 +253,11 @@ function Build({ item }: { item: ItemView }) {
     },
     [buildId, queryClient],
   );
+  // A build that began as an idea goes back to Ideas when it is removed; any other is deleted.
+  const scrapsToIdea = !item.pending && beganAsIdea(item);
   function remove() {
     if (!canEdit(item.pending)) return;
-    // A build that began as an idea goes back to Ideas; any other is deleted.
-    if (!item.pending && beganAsIdea(item)) {
+    if (scrapsToIdea) {
       scrapBuild(queryClient, item);
       void navigate({ to: "/ideas" });
       return;
@@ -400,7 +401,12 @@ function Build({ item }: { item: ItemView }) {
             />
           )
         )}
-        <IconButton icon={TrashIcon} label="Delete build" disabled={readOnly} onClick={remove} />
+        <IconButton
+          icon={TrashIcon}
+          label={scrapsToIdea ? "Scrap build" : "Delete build"}
+          disabled={readOnly}
+          onClick={remove}
+        />
       </DetailBar>
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">

@@ -74,7 +74,7 @@ test("scrapping a build that began as an idea sends it back to Ideas, and Undo b
 
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Flexi hummingbird");
-  await page.getByRole("button", { name: "Delete build" }).click();
+  await page.getByRole("button", { name: "Scrap build" }).click();
   await expect(page.getByText("Build scrapped")).toBeVisible();
   await expect(page.getByText("Flexi hummingbird is back in Ideas")).toBeVisible();
   await expect.poll(async () => (await getItem(page, id)).stage).toBe("idea");

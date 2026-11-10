@@ -243,7 +243,7 @@ export const shots: Shot[] = [
     name: "build-scrapped",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: "Delete build" }).click();
+      await page.getByRole("button", { name: "Scrap build" }).click();
       await page.getByText("Build scrapped").waitFor();
       await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
       await page.waitForTimeout(500);

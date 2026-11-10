@@ -157,7 +157,7 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   // Saved fields don't pretend to save.
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveJSProperty("readOnly", true);
   await expect(page.getByRole("button", { name: "Finish build" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Delete build" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(Delete|Scrap) build$/ })).toBeDisabled();
   // Logging an attempt still works.
   await expect(page.getByRole("button", { name: "Log attempt" })).toBeEnabled();
 
