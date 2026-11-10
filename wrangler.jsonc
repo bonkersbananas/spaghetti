@@ -13,10 +13,12 @@
     {
       "binding": "DB",
       "database_name": "spaghetti",
-      // Local development and the container use this placeholder. Before the
-      // first `wrangler deploy`, replace it with the id that
-      // `wrangler d1 create spaghetti` prints (see README, "Deploying").
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      // The deployed database (spaghetti.day, see docs/deploy.md).
+      "database_id": "d99aafba-1ebb-4a7c-bd39-345958ee888d",
+      // Local development, the e2e servers and the container key their local
+      // database by this id, so keeping the old placeholder here means state
+      // created before the deploy stays where it was. Never used remotely.
+      "preview_database_id": "00000000-0000-4000-8000-000000000000",
       "migrations_dir": "migrations"
     }
   ],
@@ -27,6 +29,11 @@
       "bucket_name": "spaghetti-photos"
     }
   ],
+  // The domain is the only way in: no workers.dev URL, no preview URLs.
+  // Wrangler creates the DNS record for the custom domain on deploy.
+  "routes": [{ "pattern": "spaghetti.day", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
   // Daily at 04:00 UTC: removes ideas and photos deleted more than 30 days
   // ago, with their R2 objects (src/worker/photos.ts, purgeDeleted).
   "triggers": { "crons": ["0 4 * * *"] },

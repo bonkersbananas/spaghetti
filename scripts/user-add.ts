@@ -5,6 +5,7 @@
  *   pnpm user:add --username sam --name Sam --color sea
  *   pnpm user:add ... --remote            # the deployed D1 database
  *   pnpm user:add ... --persist-to /data  # local state elsewhere (the container)
+ *   pnpm user:add --check --remote        # writes nothing: only proves the database can be reached
  *
  * The password is asked for without echo, or read from SPAGHETTI_PASSWORD.
  * Local by default; it applies local migrations first.
@@ -13,7 +14,7 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { PERSON_COLORS, type PersonColor } from "../src/shared/people.ts";
 import { upsertUser } from "./lib/users.ts";
-import { applyMigrations, type Target } from "./lib/wrangler.ts";
+import { applyMigrations, executeSql, type Target } from "./lib/wrangler.ts";
 
 const { values } = parseArgs({
   options: {
@@ -21,6 +22,7 @@ const { values } = parseArgs({
     name: { type: "string" },
     color: { type: "string" },
     remote: { type: "boolean", default: false },
+    check: { type: "boolean", default: false },
     "persist-to": { type: "string", default: process.env.SPAGHETTI_STATE_DIR },
   },
 });
@@ -49,6 +51,13 @@ async function askHidden(question: string): Promise<string> {
 }
 
 async function main() {
+  if (values.check) {
+    const target: Target = { remote: values.remote, persistTo: values["persist-to"] };
+    executeSql("SELECT count(*) FROM users;", target);
+    console.log(`✓ The ${target.remote ? "deployed" : "local"} database can be reached. Nothing was written.`);
+    rl.close();
+    return;
+  }
   const username = (await ask("Username (to sign in)", values.username)).toLowerCase();
   const name = await ask("Name (shown in the app)", values.name);
   const color = (await ask(`Color (${PERSON_COLORS.join(", ")})`, values.color)) as PersonColor;

@@ -2,7 +2,7 @@
 
 **The autopilot's plan on fctl is the live version of this plan; this file is a copy, kept in the repository so agents can see what the phases and pull request numbers in commit messages refer to, and it can be behind.** When your pull request finishes an item here, tick it in the same pull request. Settled decisions, including the "no"s, are in [decisions/](decisions/README.md).
 
-**Where it stands:** v1 is built and merged (PRs #1–#12): capture, ideas, builds and attempts, journal and search with "what worked last time", Pantry, Printer page, .3mf files, dark mode, offline, command palette, and an accessibility and performance pass. Deploying waits for the Cloudflare token, which Carl Oscar will give when it's ready.
+**Where it stands:** v1 is built and merged (PRs #1–#12): capture, ideas, builds and attempts, journal and search with "what worked last time", Pantry, Printer page, .3mf files, dark mode, offline, command palette, and an accessibility and performance pass. It is deployed at https://spaghetti.day (docs/deploy.md).
 
 **Direction (Carl Oscar, 10 Nov):** implement the UI improvements spec in its suggested order, make the repo better for agents, then the features and the agent-facing service below. The ideas come from another agent's review; add more as building goes on.
 
@@ -46,7 +46,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 
 ## Deploy
 
-- [ ] When the Cloudflare token arrives: create D1 and R2, migrate, deploy to workers.dev, add the two people, one-step `pnpm deploy` (see [no CI deploys](decisions/0011-no-ci-deploys.md))
+- [x] Deployed to https://spaghetti.day with D1 and R2; one-step `pnpm ship`. Adding the two people is the last step (see [no CI deploys](decisions/0011-no-ci-deploys.md))
 
 ## Done (v1)
 
