@@ -34,6 +34,7 @@ export function ftpFiles(options: FtpOptions): PrinterFiles {
       const refused = options.pin?.check("ftps", fingerprintOf(client.ftp.socket as TLSSocket));
       if (refused) throw new Error("The printer's certificate changed.");
       await client.login("bblp", options.accessCode);
+      // biome-ignore lint/correctness/useHookAtTopLevel: basic-ftp's method, not a React hook
       await client.useDefaultSettings();
     } catch (error) {
       client.close();
