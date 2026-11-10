@@ -7,8 +7,8 @@ import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
 import { NoteFace } from "@/components/ui/NoteFace";
-import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
+import { Section } from "@/components/ui/Section";
 import { startBuild } from "@/lib/builds";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
@@ -22,10 +22,7 @@ export function BackBurner({ idea, person }: { idea: ItemView | undefined; perso
   const photo = idea.photos[0];
   const name = itemName(idea);
   return (
-    <section aria-labelledby="today-burner" className="flex flex-col gap-3">
-      <Overline as="h2" id="today-burner">
-        On the back burner
-      </Overline>
+    <Section id="today-burner" title="On the back burner" size="overline">
       <div className="hover:bg-ink/4 pressable relative -mx-1.5 flex gap-4 rounded-lg p-1.5">
         <Link to="/ideas/$ideaId" params={{ ideaId: idea.id }} className="focus-ring absolute inset-0 z-0 rounded-lg">
           <span className="sr-only">{name.text}</span>
@@ -56,6 +53,6 @@ export function BackBurner({ idea, person }: { idea: ItemView | undefined; perso
           </Button>
         </div>
       </div>
-    </section>
+    </Section>
   );
 }

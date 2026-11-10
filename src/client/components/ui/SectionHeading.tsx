@@ -6,6 +6,8 @@ interface SectionHeadingProps {
   count?: number;
   /** "headline" for a page's main sections, "title" for quieter groups (done builds, a material in the pantry). */
   size?: "headline" | "title";
+  /** The heading level: h2, or h3 for a group inside a section. */
+  as?: "h2" | "h3";
   id?: string;
   className?: string;
   children: ReactNode;
@@ -16,9 +18,16 @@ interface SectionHeadingProps {
  * is separated by a real space, so a screen reader says "Attempts 3", not
  * "Attempts3".
  */
-export function SectionHeading({ count, size = "headline", id, className, children }: SectionHeadingProps) {
+export function SectionHeading({
+  count,
+  size = "headline",
+  as: Tag = "h2",
+  id,
+  className,
+  children,
+}: SectionHeadingProps) {
   return (
-    <h2 id={id} className={cn(size === "headline" ? "text-headline text-ink" : "text-title text-ink-soft", className)}>
+    <Tag id={id} className={cn(size === "headline" ? "text-headline text-ink" : "text-title text-ink-soft", className)}>
       {children}
       {count !== undefined && (
         <>
@@ -26,6 +35,6 @@ export function SectionHeading({ count, size = "headline", id, className, childr
           <span className="text-small text-ink-faint tabular ml-0.5 align-middle font-sans font-semibold">{count}</span>
         </>
       )}
-    </h2>
+    </Tag>
   );
 }

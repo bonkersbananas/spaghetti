@@ -3,8 +3,8 @@ import { amsUnitLetters, EXTERNAL_SLOT, type PrinterSetup, slotPlace, spoolName,
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { Button } from "@/components/ui/Button";
-import { Overline } from "@/components/ui/Overline";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
+import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { useIdle } from "@/lib/use-idle";
 
@@ -48,17 +48,18 @@ export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
     .slice(0, 2);
 
   return (
-    <section aria-labelledby="today-printer" className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <Overline as="h2" id="today-printer">
-          In the printer
-        </Overline>
+    <Section
+      id="today-printer"
+      title="In the printer"
+      size="overline"
+      aside={
         <Link to="/pantry" className="focus-ring rounded-sm">
           <Button variant="quiet" size="sm" tabIndex={-1} className="-my-2 -mr-3">
             Pantry
           </Button>
         </Link>
-      </div>
+      }
+    >
       <Link
         to="/pantry"
         className="pressable focus-ring hover:bg-ink/4 no-scrollbar -mx-1.5 flex items-start gap-3 overflow-x-auto rounded-lg p-1.5"
@@ -92,6 +93,6 @@ export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
         </ul>
       )}
       <DryMention loaded={loaded} />
-    </section>
+    </Section>
   );
 }

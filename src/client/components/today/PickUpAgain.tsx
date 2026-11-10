@@ -7,8 +7,8 @@ import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
+import { Section } from "@/components/ui/Section";
 import { heroPhoto, useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
@@ -84,10 +84,7 @@ export function PickUpAgain({ builds }: { builds: ItemView[] }) {
   const waiting = pickUpAgain(builds);
   if (waiting.length === 0) return null;
   return (
-    <section aria-labelledby="today-pickup" className="flex flex-col gap-3">
-      <Overline as="h2" id="today-pickup">
-        Pick up again
-      </Overline>
+    <Section id="today-pickup" title="Pick up again" size="overline">
       <div className="flex flex-col gap-1">
         {waiting.slice(0, MOST).map((item) => (
           <Row key={item.id} item={item} />
@@ -100,6 +97,6 @@ export function PickUpAgain({ builds }: { builds: ItemView[] }) {
           </Button>
         </Link>
       )}
-    </section>
+    </Section>
   );
 }

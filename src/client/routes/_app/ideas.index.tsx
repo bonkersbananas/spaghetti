@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
@@ -87,25 +87,24 @@ function Ideas() {
       ) : items.length ? (
         <>
           {queue.length > 0 && (
-            <section aria-labelledby="up-next-heading" className="mb-10">
-              <SectionHeading id="up-next-heading" count={queue.length} className="mb-4">
-                Up next
-              </SectionHeading>
+            <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">
               <ul className={grid} aria-label="Up next">
                 {queue.map((item, index) => card(item, index))}
               </ul>
-            </section>
+            </Section>
           )}
-          {queue.length > 0 && rest.length > 0 && (
-            <SectionHeading id="inbox-heading" className="mb-4">
-              The rest
-            </SectionHeading>
-          )}
-          {rest.length > 0 && (
-            <ul className={grid} aria-label="Ideas">
-              {rest.map((item) => card(item, -1))}
-            </ul>
-          )}
+          {rest.length > 0 &&
+            (queue.length > 0 ? (
+              <Section id="inbox-heading" title="The rest">
+                <ul className={grid} aria-label="Ideas">
+                  {rest.map((item) => card(item, -1))}
+                </ul>
+              </Section>
+            ) : (
+              <ul className={grid} aria-label="Ideas">
+                {rest.map((item) => card(item, -1))}
+              </ul>
+            ))}
         </>
       ) : error ? (
         <IdeasUnreachable onRetry={() => void refetch()} />
