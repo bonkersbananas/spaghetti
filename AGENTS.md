@@ -89,7 +89,7 @@ pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build
+pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 4 shards (`pnpm test:e2e --shard=1/4`), so a test must not depend on another test's data
 pnpm exec playwright test --project=performance   # first-load JavaScript per screen, and a throttled 100-photo inbox
 pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark, --both, --scale 1, --out DIR; see Screenshots)
 pnpm screenshots:compare   # shots on main and on your branch, a diff image per changed screen, contact sheets (see Screenshots)
