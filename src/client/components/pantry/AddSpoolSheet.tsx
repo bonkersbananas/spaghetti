@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useObjectUrl } from "@/lib/use-object-url";
 
 interface AddSpoolSheetProps {
   open: boolean;
@@ -46,7 +47,8 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
   const [draft, setDraft] = useState<SpoolDraft>(() => blank(initial));
   // A color name typed by hand is kept; one we guessed follows the color.
   const [namedByHand, setNamedByHand] = useState(false);
-  const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const photoUrl = useObjectUrl(photo);
   const [otherMaterial, setOtherMaterial] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when it opens.
@@ -56,11 +58,10 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
     setNamedByHand(!!initial?.colorName);
     setOtherMaterial(!!initial?.material && !(SPOOL_MATERIALS as readonly string[]).includes(initial.material));
   }, [open]);
-  useEffect(() => () => (photo ? URL.revokeObjectURL(photo.url) : undefined), [photo]);
 
   const pickPhoto = (files: File[]) => {
     const file = files[0];
-    if (file) setPhoto({ file, url: URL.createObjectURL(file) });
+    if (file) setPhoto(file);
   };
   const camera = useFilePicker({ camera: true, onFiles: pickPhoto, testId: "spool-camera-input" });
   const library = useFilePicker({ onFiles: pickPhoto, testId: "spool-photo-input" });
@@ -71,7 +72,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
 
   function save() {
     if (!user || !draft.material.trim()) return;
-    const { spool, saved } = addSpool(queryClient, draft, user.id, photo?.file);
+    const { spool, saved } = addSpool(queryClient, draft, user.id, photo ?? undefined);
     setPhoto(null);
     onOpenChange(false);
     onAdded?.(spool, saved);
@@ -107,7 +108,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
         {library.input}
         <div className="flex gap-2.5">
           {photo ? (
-            <PhotoThumb src={photo.url} alt="Spool label" onRemove={() => setPhoto(null)} />
+            photoUrl && <PhotoThumb src={photoUrl} alt="Spool label" onRemove={() => setPhoto(null)} />
           ) : (
             <>
               {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Snap the label" onClick={camera.open} />}

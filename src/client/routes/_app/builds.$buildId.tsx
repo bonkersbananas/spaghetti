@@ -43,6 +43,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { type AttemptView, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { peopleQuery } from "@/lib/queries";
+import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -143,8 +144,17 @@ function Build({ item }: { item: ItemView }) {
   // The story, newest first.
   const story = [...item.attempts].reverse();
   const printing = story.find((attempt) => attempt.outcome === null);
-  const [sheet, setSheet] = useState<{ open: boolean; attemptId: string | null }>({ open: false, attemptId: null });
-  const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId });
+  const [sheet, setSheet] = useState<{
+    open: boolean;
+    attemptId: string | null;
+    file?: { file: File; key: number } | null;
+  }>({ open: false, attemptId: null });
+  const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId, file: null });
+  // A .3mf dropped on the build starts a new attempt from it; dropped on an attempt, it goes on that one.
+  useSlicerDropTarget((file, attemptId) => {
+    const target = attemptId && item.attempts.some((attempt) => attempt.id === attemptId) ? attemptId : null;
+    setSheet({ open: true, attemptId: target, file: { file, key: Date.now() } });
+  });
   const primary = () => openSheet(printing?.id ?? null);
   const [selected, setSelected] = useState<string | null>(linkedAttempt ?? null);
   // Came here for one attempt: bring it into view.
@@ -396,6 +406,7 @@ function Build({ item }: { item: ItemView }) {
       <AttemptSheet
         item={item}
         attemptId={sheet.attemptId}
+        incomingFile={sheet.file}
         open={sheet.open}
         onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
       />

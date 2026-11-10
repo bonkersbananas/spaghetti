@@ -78,7 +78,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
         over && "shadow-ring bg-semolina-soft/60",
         shape === "bay"
           ? "flex-col items-center gap-2 px-1.5 pt-3 pb-2.5 md:px-2 md:pt-4"
-          : "items-center gap-3 px-3 py-2.5 text-left",
+          : "w-full items-center gap-3 px-3 py-2.5 text-left",
       )}
     >
       <SpoolDisc color={spool?.colorHex} empty={!spool} size={shape === "bay" ? "lg" : "md"} />
@@ -86,11 +86,16 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
         <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
           {slot === EXTERNAL_SLOT ? "External" : slot}
         </span>
-        <span className={cn("text-small min-w-0 truncate font-semibold", spool ? "text-ink" : "text-ink-faint")}>
+        <span
+          className={cn(
+            "text-small block w-full min-w-0 truncate font-semibold",
+            spool ? "text-ink" : "text-ink-faint",
+          )}
+        >
           {spool ? (name?.title ?? spool.material) : "Empty"}
         </span>
         {spool && (
-          <span className="text-caption text-ink-faint w-full min-w-0 truncate">
+          <span className="text-caption text-ink-faint block w-full min-w-0 truncate">
             {spool.colorName ? spool.material : (spool.brand ?? "")}
           </span>
         )}
@@ -263,7 +268,7 @@ export function SlotSheet({ slot, open, onOpenChange, spools, current, onPick, o
                   </span>
                   {spool.slot && (
                     <span className="text-small text-ink-faint tabular shrink-0">
-                      {here ? "Here now" : `In ${slotLabel(spool.slot)}`}
+                      {here ? "Here now" : spool.slot === "Ext" ? "External" : `In ${spool.slot}`}
                     </span>
                   )}
                   <RemainingMeter remaining={spool.remaining} />

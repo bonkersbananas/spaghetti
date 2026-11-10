@@ -9,9 +9,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { APIRequestContext, Browser } from "@playwright/test";
+import { SLICER_FILE_NAME, slicerFile } from "../../e2e/fixtures/slicer-file.ts";
 import type { AttemptSettings, Outcome } from "../../src/shared/attempts.ts";
+import { readThreeMf, settingsFromFile } from "../../src/shared/threemf/index.ts";
 import { executeSql, root } from "../lib/wrangler.ts";
 import { type PhotoVariant, render, SEED_IDS } from "./ideas.ts";
+import { linkSeedSpools } from "./pantry.ts";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -38,6 +41,8 @@ interface SeedAttempt {
   successNotes?: string[];
   settings: AttemptSettings;
   photos?: SeedPhoto[];
+  /** Printed from the fixture slicer file (e2e/fixtures/slicer-file.ts), plate 1. */
+  slicerFile?: boolean;
 }
 
 interface SeedBuild {
@@ -333,7 +338,7 @@ export const SEED_BUILDS: SeedBuild[] = [
   },
 ];
 
-const black = { type: "PLA", brand: "Bambu", colorHex: "#1d1d1f", colorName: "Black", amsSlot: "A3" };
+const green = { type: "PLA", brand: "Bambu", colorHex: "#00ae42", colorName: "Bambu green", amsSlot: "A2" };
 const tealPetg = { type: "PETG", brand: "Polymaker", colorHex: "#2c8a87", colorName: "Teal", amsSlot: "B2" };
 const bluePetg = { type: "PETG", brand: "Bambu", colorHex: "#2f6f9f", colorName: "Blue", amsSlot: "A4" };
 
@@ -364,7 +369,7 @@ const OLDER_BUILDS: SeedBuild[] = [
         note: "Clips popped off the cool plate one by one. Spaghetti salad.",
         failureTags: ["spaghetti", "bed-adhesion"],
         settings: {
-          filaments: [black],
+          filaments: [green],
           bedType: "Cool Plate",
           layerHeight: 0.2,
           infillDensity: 20,
@@ -385,16 +390,22 @@ const OLDER_BUILDS: SeedBuild[] = [
         note: "Textured sheet and 55 °C: every clip stayed put.",
         successNotes: ["great-first-layer", "would-print-again"],
         settings: {
-          filaments: [black],
+          filaments: [{ ...green, profile: "Bambu PLA Basic" }],
           bedType: "Textured PEI Plate",
+          nozzleDiameter: 0.4,
           layerHeight: 0.2,
-          infillDensity: 20,
+          infillDensity: 15,
+          wallLoops: 3,
+          supportEnabled: false,
+          processPreset: "0.20mm Standard @BBL X2D",
           nozzleTemperature: 220,
           bedTemperature: 55,
-          actualMinutes: 52,
-          weightGrams: 18,
+          estimatedMinutes: 72,
+          actualMinutes: 78,
+          weightGrams: 18.4,
         },
         photos: [{ file: "cable-clips.svg", color: "#a5967e" }],
+        slicerFile: true,
       },
     ],
   },
@@ -723,10 +734,30 @@ export async function seedBuilds(
           note: attempt.note ?? "",
           failureTags: attempt.failureTags ?? [],
           successNotes: attempt.successNotes ?? [],
-          settings: attempt.settings,
+          settings: linkSeedSpools(attempt.settings),
         },
       });
       if (!created.ok()) throw new Error(`Seeding attempt ${attempt.id} failed: ${created.status()}`);
+      if (attempt.slicerFile) {
+        const bytes = slicerFile();
+        const read = readThreeMf(bytes);
+        const thumb = read.plates[0]?.thumbnail?.bytes;
+        const uploaded = await request.put(`/api/attempts/${attempt.id}/file`, {
+          headers,
+          multipart: {
+            id: crypto.randomUUID(),
+            name: SLICER_FILE_NAME,
+            size: String(bytes.length),
+            plate: "1",
+            plateCount: String(read.plates.length),
+            slicer: "BambuStudio 02.01.00.00",
+            prefill: JSON.stringify(settingsFromFile(read, 1)),
+            file: { name: SLICER_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
+            ...(thumb ? { thumb: { name: "plate_1.png", mimeType: "image/png", buffer: Buffer.from(thumb) } } : {}),
+          },
+        });
+        if (!uploaded.ok()) throw new Error(`Adding the slicer file to ${attempt.id} failed: ${uploaded.status()}`);
+      }
       for (const photo of attempt.photos ?? []) {
         const svg = readFileSync(join(root, "scripts/seed/photos", photo.file), "utf8");
         const large = await render(browser, svg, 1600, photo);

@@ -9,6 +9,7 @@ import { cachedItem, type ItemView, ideasQuery, saveItemChanges } from "./items"
 import { outbox } from "./outbox";
 import { setPreview } from "./previews";
 import { sessionQuery } from "./queries";
+import { isSlicerFile, takeSlicerDrop } from "./slicer-files";
 
 /** A photo in the capture sheet, resized in the background while you type. */
 export interface DraftPhoto {
@@ -355,7 +356,16 @@ export function useGlobalCapture(): boolean {
       event.preventDefault();
       depth = 0;
       setDragging(false);
-      const files = imageFiles(event.dataTransfer?.files ?? []);
+      const dropped = Array.from(event.dataTransfer?.files ?? []);
+      // A slicer file goes to the build or attempt on screen (dropped on an attempt: that one).
+      const slicer = dropped.find(isSlicerFile);
+      if (slicer) {
+        const onAttempt = event.target instanceof Element ? event.target.closest("[data-attempt-id]") : null;
+        if (takeSlicerDrop(slicer, onAttempt?.getAttribute("data-attempt-id") ?? null)) return;
+        toast.message("Open a build to add a slicer file", "Drop the .3mf on a build or an attempt.");
+        return;
+      }
+      const files = imageFiles(dropped);
       if (files.length) openWith({ files });
       else toast.message("Only photos can be dropped here", "Drop JPEG, PNG or WebP images to capture them.");
     }

@@ -124,6 +124,8 @@ export function slotIds(units: number): string[] {
 
 export const isAmsSlot = (slot: string | undefined) => !!slot && /^[A-D][1-4]$/.test(slot);
 export const slotLabel = (slot: string) => (slot === EXTERNAL_SLOT ? "External spool" : slot);
+/** "in A2", "on the external holder": where a loaded spool is, mid-sentence. */
+export const slotPlace = (slot: string) => (slot === EXTERNAL_SLOT ? "on the external holder" : `in ${slot}`);
 
 /** What matching and hints need of a spool. */
 export interface SpoolLike {

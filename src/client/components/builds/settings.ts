@@ -43,8 +43,12 @@ export function summarizeResults(settings: AttemptSettings): string[] {
   const parts: string[] = [];
   if (settings.failedAtPercent !== undefined) parts.push(`failed at ${settings.failedAtPercent}%`);
   if (settings.failedAtLayer !== undefined) parts.push(`failed at layer ${settings.failedAtLayer}`);
-  if (settings.actualMinutes !== undefined) parts.push(`took ${formatMinutes(settings.actualMinutes)}`);
-  else if (settings.estimatedMinutes !== undefined) parts.push(`est. ${formatMinutes(settings.estimatedMinutes)}`);
+  // With both, the estimate-vs-actual line says it.
+  if (settings.actualMinutes !== undefined && settings.estimatedMinutes === undefined) {
+    parts.push(`took ${formatMinutes(settings.actualMinutes)}`);
+  } else if (settings.estimatedMinutes !== undefined && settings.actualMinutes === undefined) {
+    parts.push(`est. ${formatMinutes(settings.estimatedMinutes)}`);
+  }
   if (settings.weightGrams !== undefined) parts.push(`${settings.weightGrams} g`);
   return parts;
 }
@@ -52,6 +56,9 @@ export function summarizeResults(settings: AttemptSettings): string[] {
 /** Whether there is anything to show at all. */
 export function hasSettings(settings: AttemptSettings): boolean {
   return (
-    !!settings.filaments?.length || summarizeSettings(settings).length > 0 || summarizeResults(settings).length > 0
+    !!settings.filaments?.length ||
+    summarizeSettings(settings).length > 0 ||
+    summarizeResults(settings).length > 0 ||
+    settings.actualMinutes !== undefined
   );
 }

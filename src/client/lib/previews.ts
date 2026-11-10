@@ -1,5 +1,5 @@
 import type { PhotoVariant } from "@shared/api";
-import { photoUrl } from "@shared/api";
+import { fileUrl, photoUrl } from "@shared/api";
 
 /**
  * Object URLs of photos made on this device. A photo shows from here while
@@ -28,4 +28,9 @@ export function photoSrc(photoId: string, variant: PhotoVariant): string {
 
 export function hasPreview(photoId: string): boolean {
   return previews.has(photoId);
+}
+
+/** A slicer file's plate picture: the local copy while it uploads, else the server's. */
+export function fileThumbSrc(fileId: string): string {
+  return previews.get(fileId)?.thumb ?? fileUrl(fileId, "thumb");
 }

@@ -1,4 +1,5 @@
 import type { AttemptFilament, AttemptSettings } from "../attempts.ts";
+import { colorDistance, materialKey, SAME_COLOR } from "../spools.ts";
 import type { Plate, ThreeMfResult } from "./types.ts";
 
 /**
@@ -98,12 +99,15 @@ export function sameAsFile(
   return JSON.stringify(settings[key]) === JSON.stringify(fromFile[key]);
 }
 
-/** Whether a filament is still the file's: the same material and color (a spool picked for it doesn't count as a change). */
+/**
+ * Whether a filament is still the file's: the same material in a color people
+ * would call the same (a spool picked for it doesn't count as a change).
+ */
 export function filamentFromFile(index: number, settings: AttemptSettings, fromFile: AttemptSettings | undefined) {
   const file = fromFile?.filaments?.[index];
   const now = settings.filaments?.[index];
   if (!file || !now) return false;
-  return (
-    (file.type ?? "").toUpperCase() === (now.type ?? "").toUpperCase() && (file.colorHex ?? "") === (now.colorHex ?? "")
-  );
+  if (materialKey(file.type) !== materialKey(now.type)) return false;
+  if (!file.colorHex || !now.colorHex) return (file.colorHex ?? "") === (now.colorHex ?? "");
+  return colorDistance(file.colorHex, now.colorHex) <= SAME_COLOR;
 }

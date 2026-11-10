@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
+import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
+import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
 
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
@@ -145,6 +147,75 @@ export const shots: Shot[] = [
       await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByRole("radio", { name: "System" }).waitFor();
     },
+  },
+  { name: "pantry", path: "/pantry", fullPage: true },
+  {
+    // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
+    name: "ams",
+    path: "/pantry",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^A4: Blue/ }).click();
+      await page.getByRole("dialog", { name: "Slot A4" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
+  { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
+  { name: "printer", path: "/printer", fullPage: true },
+  {
+    // A sliced file dropped on a build: which plate, then the attempt filled in from it.
+    name: "attempt-file-plates",
+    path: `/builds/${SEED_IDS.desiccantHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await page.getByTestId("slicer-file-input").setInputFiles({
+        name: SLICER_FILE_NAME,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(slicerFile()),
+      });
+      await sheet.getByRole("region", { name: "Which plate?" }).waitFor();
+      await sheet
+        .getByRole("region", { name: "Which plate?" })
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.reload();
+    },
+  },
+  {
+    name: "attempt-file",
+    path: `/builds/${SEED_IDS.desiccantHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await page.getByTestId("slicer-file-input").setInputFiles({
+        name: SLICER_FILE_NAME,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(slicerFile()),
+      });
+      await sheet.getByRole("button", { name: /Cable clips/ }).click();
+      await sheet.getByLabel("Layer height").waitFor();
+      await sheet.getByText(SLICER_FILE_NAME).evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.reload();
+    },
+  },
+  {
+    // An attempt printed from a slicer file, in the build's story: the plate, the file, estimate vs actual.
+    name: "build-file",
+    path: "/builds/5eed0000-0000-4000-8000-000000000101",
+    fullPage: true,
   },
   { name: "styleguide", path: "/styleguide", fullPage: true },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },

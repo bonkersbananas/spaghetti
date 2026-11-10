@@ -7,7 +7,7 @@ import {
   REMAINING_LABELS,
   type Remaining,
   SPOOL_MATERIALS,
-  slotLabel,
+  slotPlace,
   spoolName,
 } from "@shared/spools";
 import { inlineTime } from "@shared/time";
@@ -157,9 +157,6 @@ function SpoolPage({ spool }: { spool: Spool }) {
                 <SpoolDisc color={value.colorHex} size="hero" />
               </div>
             )}
-            {spool.photo && (
-              <SpoolDisc color={value.colorHex} size="lg" className="ring-cream absolute bottom-4 left-4 ring-4" />
-            )}
           </div>
           <div className="flex gap-2">
             {!isDesktop && (
@@ -191,7 +188,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               }}
             />
             <MetaList className="text-body text-ink-soft">
-              {[name.detail || value.material, ...(spool.slot ? [`in ${slotLabel(spool.slot)}`] : [])].map((piece) => (
+              {[name.detail || value.material, ...(spool.slot ? [slotPlace(spool.slot)] : [])].map((piece) => (
                 <span key={piece}>{piece}</span>
               ))}
             </MetaList>
@@ -213,7 +210,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-small text-ink-soft font-semibold">In the printer</span>
               <span className="text-body text-ink">
-                {spool.slot ? `Loaded in ${slotLabel(spool.slot)}` : "Not loaded"}
+                {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
               </span>
             </div>
             <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>

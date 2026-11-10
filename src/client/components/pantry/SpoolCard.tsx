@@ -25,7 +25,7 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
         {...(draggable ? spoolDragProps(spool.id, spool.slot) : {})}
         className="group pressable focus-ring bg-cream shadow-soft hover:shadow-raised duration-fast flex h-full flex-col overflow-hidden rounded-lg transition-shadow"
       >
-        <div className="relative aspect-square">
+        <div className="relative aspect-square overflow-hidden">
           {spool.photo ? (
             <>
               <Photo
