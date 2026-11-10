@@ -45,7 +45,7 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
       <SectionHeading id="started-heading" size="title" count={started.length} className="mb-3">
         Started
       </SectionHeading>
-      <ul className="flex flex-col md:grid md:grid-cols-2 md:gap-x-8 xl:grid-cols-3" aria-label="Started ideas">
+      <ul className="flex flex-col md:grid md:grid-cols-2 md:gap-x-8 xl:grid-cols-3" aria-label="Started">
         {started.slice(0, MOST).map((item) => (
           <li key={item.id}>
             <Row item={item} />
