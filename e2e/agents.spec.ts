@@ -184,6 +184,8 @@ test("sets up sharing from iPhone: a capture-only key, in the steps ready to cop
     403,
   );
 
+  await page.waitForTimeout(500);
+  expect((await new AxeBuilder({ page }).include("[role=dialog]").analyze()).violations.map((v) => v.id)).toEqual([]);
   await steps.getByRole("button", { name: "Copy address" }).first().click();
   await expect(steps.getByRole("button", { name: "Copied" })).toBeVisible();
   await sheet.getByRole("button", { name: "Done" }).click();

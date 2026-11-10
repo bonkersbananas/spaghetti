@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -77,6 +78,8 @@ test("the share target saves a shared link and photo as an idea, and the Capture
   expect(idea.title).toBe("Cable clip remix");
   await expect.poll(async () => (await serverIdeas(page))[0].photos.length).toBe(1);
 
+  await page.waitForTimeout(500);
+  expect((await new AxeBuilder({ page }).include("[role=dialog]").analyze()).violations.map((v) => v.id)).toEqual([]);
   await note.fill("Check this out\nhttps://makerworld.com/en/models/1\nfor Mila's desk");
   await expect.poll(async () => (await serverIdeas(page))[0].note).toContain("for Mila's desk");
   await sheet.getByRole("button", { name: "Done" }).click();
