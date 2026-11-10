@@ -36,7 +36,7 @@ type Slice = "all" | "none" | "young";
  */
 async function mockToday(
   page: Page,
-  show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice; late?: boolean },
+  show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice; late?: boolean; offBed?: boolean },
 ) {
   const DAY = 24 * 60 * 60 * 1000;
   await page.route(/\/api\/items\?stage=/, async (route) => {
@@ -45,9 +45,16 @@ async function mockToday(
       items: Array<{
         stage: string;
         createdAt: number;
-        attempts?: Array<{ outcome: string | null; printedAt: number }>;
+        attempts?: Array<{ outcome: string | null; printedAt: number; endedAt?: number | null }>;
       }>;
     };
+    // The printer says the towel hook's print stopped ten minutes ago: nobody has said how it went.
+    if (show.offBed) {
+      for (const item of json.items)
+        for (const attempt of item.attempts ?? [])
+          if (attempt.outcome === null && attempt.printedAt > SEED_NOW - 30 * 60 * 1000)
+            attempt.endedAt = SEED_NOW - 10 * 60 * 1000;
+    }
     // Prints on the bed started earlier, so they are due.
     if (show.late) {
       for (const item of json.items)
@@ -116,6 +123,20 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", late: true });
       await page.getByText("How did it go?").first().waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // The bridge saw the towel hook's print stop: a calm question with three answers instead of a bar.
+    name: "today-off-the-bed",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", offBed: true });
+      await page
+        .getByText(/Off the bed at/)
+        .first()
+        .waitFor();
     },
     cleanup: unmockToday,
   },
