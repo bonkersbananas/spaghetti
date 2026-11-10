@@ -52,7 +52,7 @@ function ConnectClaude({ token }: { token: string }) {
       <p className="text-small text-ink-faint">To let Claude search, capture and log prints, run this once:</p>
       <p
         data-testid="connect-command"
-        className="text-caption text-ink-soft bg-ink/4 rounded-md p-3 font-mono leading-relaxed break-all select-all"
+        className="text-caption text-ink-soft bg-ink/4 rounded-md p-3 font-mono leading-relaxed wrap-anywhere whitespace-pre-wrap select-all"
       >
         {command}
       </p>
