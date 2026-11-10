@@ -52,4 +52,14 @@ describe("trimCache", () => {
     });
     expect(hashes(trimmed)).toEqual(["ideas", "builds", "s2", "s3", "facets"]);
   });
+
+  it("caps the journal's lists and its month summaries apart, so summaries never push the list out", () => {
+    const list = query(["journal", "list", ""], "j-list", 1);
+    const summaries = Array.from({ length: 5 }, (_, n) => query(["journal", "summary", n, n + 1], `j-sum${n}`, 10 + n));
+    const trimmed = trimCache(client([list, ...summaries]), new Map(), {
+      limits: { "journal-list": 2, "journal-summary": 3 },
+      maxBytes: 100_000,
+    });
+    expect(hashes(trimmed)).toEqual(["j-list", "j-sum2", "j-sum3", "j-sum4"]);
+  });
 });

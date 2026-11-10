@@ -10,13 +10,16 @@ export interface CachedClient<Q extends CachedQuery> {
 }
 
 /**
- * The group a query is capped with: item pages ("items-detail"), or the
- * first key of anything else ("search", "journal"…). The two item lists have
- * no group: they always stay.
+ * The group a query is capped with: item pages ("items-detail"), the
+ * journal's lists and its month summaries separately ("journal-list",
+ * "journal-summary": a screen loads many summaries per list), or the first
+ * key of anything else ("search"…). The two item lists have no group: they
+ * always stay.
  */
 export function cacheGroup(query: Pick<CachedQuery, "queryKey">): string | null {
   const [root, second] = query.queryKey;
   if (root === "items") return second === "detail" ? "items-detail" : null;
+  if (root === "journal") return `journal-${String(second)}`;
   return String(root);
 }
 

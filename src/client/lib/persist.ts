@@ -27,7 +27,7 @@ const CACHE_VERSION = "1";
 /** Forget what was seen this long ago. */
 export const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 /** How many of each kept besides the item lists (which hold every item already): the most recently fetched. */
-const LIMITS = { "items-detail": 40, journal: 12, search: 10, "what-worked": 20 };
+const LIMITS = { "items-detail": 40, "journal-list": 12, "journal-summary": 48, search: 10, "what-worked": 20 };
 /** A rough ceiling on what is written (JSON characters). Past it, the oldest item pages go first. */
 const MAX_BYTES = 3_000_000;
 
