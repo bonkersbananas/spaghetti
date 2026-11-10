@@ -15,6 +15,7 @@ import {
   SignOutIcon,
 } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useCapture } from "@/lib/capture";
@@ -132,47 +133,36 @@ export function Sidebar() {
               </button>
             }
           >
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               <ThemeSwitch />
-              <PopoverClose asChild>
-                <Link to="/styleguide" className="focus-ring rounded-md">
-                  <Button variant="quiet" icon={PaletteIcon} fullWidth tabIndex={-1} className="justify-start">
-                    Styleguide
-                  </Button>
-                </Link>
-              </PopoverClose>
-              <PopoverClose asChild>
-                <Link to="/agents" className="focus-ring rounded-md">
-                  <Button variant="quiet" icon={AgentIcon} fullWidth tabIndex={-1} className="justify-start">
+              <MenuGroup size="sm">
+                <PopoverClose asChild>
+                  <MenuItem to="/agents" icon={AgentIcon}>
                     Agents
-                  </Button>
-                </Link>
-              </PopoverClose>
-              <PopoverClose asChild>
-                <Button
-                  variant="quiet"
-                  icon={BellIcon}
-                  fullWidth
-                  onClick={() => setNotifying(true)}
-                  className="justify-start"
-                >
-                  Notifications
-                </Button>
-              </PopoverClose>
-              <PopoverClose asChild>
-                <Button
-                  variant="quiet"
-                  icon={KeyIcon}
-                  fullWidth
-                  onClick={() => setChangingPassword(true)}
-                  className="justify-start"
-                >
-                  Change password
-                </Button>
-              </PopoverClose>
-              <Button variant="quiet" icon={SignOutIcon} fullWidth onClick={signOut} className="justify-start">
-                Sign out
-              </Button>
+                  </MenuItem>
+                </PopoverClose>
+                <PopoverClose asChild>
+                  <MenuItem icon={BellIcon} onClick={() => setNotifying(true)}>
+                    Notifications
+                  </MenuItem>
+                </PopoverClose>
+                <PopoverClose asChild>
+                  <MenuItem icon={KeyIcon} onClick={() => setChangingPassword(true)}>
+                    Change password
+                  </MenuItem>
+                </PopoverClose>
+              </MenuGroup>
+              <div className="bg-hairline h-px" />
+              <MenuGroup size="sm">
+                <PopoverClose asChild>
+                  <MenuItem to="/styleguide" icon={PaletteIcon}>
+                    Styleguide
+                  </MenuItem>
+                </PopoverClose>
+                <MenuItem icon={SignOutIcon} onClick={signOut}>
+                  Sign out
+                </MenuItem>
+              </MenuGroup>
             </div>
           </Popover>
         )}
