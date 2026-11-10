@@ -1,7 +1,11 @@
 import { OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
+import { m } from "motion/react";
+import { useState } from "react";
 import { Chip, type ChipTone } from "@/components/ui/Chip";
 import { FinishIcon, type Icon, PartlyIcon, PrintingIcon, SpaghettiIcon, WorkedIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { tap } from "@/lib/haptics";
+import { spring } from "@/lib/motion";
 
 export const outcomeIcons: Record<Outcome, Icon> = {
   success: WorkedIcon,
@@ -45,6 +49,8 @@ interface OutcomePickerProps {
  * success, so spaghetti is never styled as an error.
  */
 export function OutcomePicker({ value, onChange, size = "lg", className }: OutcomePickerProps) {
+  // The picked icon springs in, but only for a pick made here: opening an attempt that already has an outcome doesn't.
+  const [picked, setPicked] = useState(false);
   return (
     <div role="radiogroup" aria-label="How did it go?" className={cn("grid grid-cols-3 gap-2.5", className)}>
       {OUTCOMES.map((outcome) => {
@@ -57,7 +63,11 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
             type="button"
             role="radio"
             aria-checked={selected}
-            onClick={() => onChange(outcome)}
+            onClick={() => {
+              setPicked(true);
+              tap();
+              onChange(outcome);
+            }}
             className={cn(
               "pressable focus-ring flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
               size === "lg" ? "text-body h-22 md:h-20" : "text-small h-16 gap-1",
@@ -66,7 +76,17 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
                 : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
             )}
           >
-            <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "duotone" : "regular"} aria-hidden />
+            {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
+                Keyed on being picked, so the icon is new when it is, and answers the tap with a small spring. */}
+            <m.span
+              key={selected ? "picked" : "idle"}
+              initial={selected && picked ? { scale: 0.8 } : false}
+              animate={{ scale: 1 }}
+              transition={spring.snappy}
+              className="flex"
+            >
+              <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
+            </m.span>
             {OUTCOME_LABELS[outcome]}
           </button>
         );

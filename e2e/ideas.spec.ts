@@ -47,9 +47,13 @@ test("captures a note, which lands at the top of the inbox and stays", async ({ 
   await page.reload();
   await expect(ideas(page).getByRole("link").first()).toContainText("A hook for the AMS");
 
-  // The note's link is clickable in the detail.
+  // The note's link is clickable in the detail, and shows as a card under the note too.
   await ideas(page).getByRole("link").first().click();
-  await expect(page.getByRole("link", { name: "example.com/hook" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "example.com/hook", exact: true })).toHaveAttribute(
+    "href",
+    "https://example.com/hook",
+  );
+  await expect(page.getByRole("list", { name: "Links in the note" }).getByRole("link")).toHaveAttribute(
     "href",
     "https://example.com/hook",
   );

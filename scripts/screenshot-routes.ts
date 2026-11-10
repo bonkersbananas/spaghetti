@@ -37,6 +37,19 @@ export const shots: Shot[] = [
   { name: "builds", path: "/builds", fullPage: true },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
   {
+    // A saved attempt open: the arrows in its header step to the attempt before and after.
+    name: "attempt-step",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Attempt 2: .*Open$/ }).click({ position: { x: 6, y: 6 } });
+      await page.getByRole("dialog", { name: "Attempt 2" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     name: "attempt",
     path: `/builds/${SEED_IDS.desiccantHook}`,
     prepare: async (page) => {
@@ -221,6 +234,16 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  // The same idea in full: its note's link as a card under it.
+  {
+    name: "idea-links",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const links = page.getByRole("list", { name: "Links in the note" });
+      await links.getByText("Drawer bins, 42 mm grid").waitFor();
+      await links.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
   {
     name: "undo",
     path: "/ideas",

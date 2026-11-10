@@ -244,6 +244,10 @@
     opacity: 0;
   }
 }
+/* Something that arrives on a screen already drawn (a link card's title) fades in. */
+.sg-fade-in {
+  animation: sg-fade-in var(--sg-duration-fast) var(--sg-ease-out);
+}
 @keyframes sg-fade-out {
   to {
     opacity: 0;
@@ -301,6 +305,26 @@
   animation: sg-panel-out var(--sg-duration-fast) var(--sg-ease-in-out);
 }
 
+/*
+ * A photo travelling from a card to its page (lib/hero.ts): the one named
+ * group moves over --sg-duration-base, the rest of the page crossfades quickly.
+ * The old and new pictures fill the moving frame instead of stretching.
+ */
+::view-transition-group(hero-photo) {
+  animation-duration: var(--sg-duration-base);
+  animation-timing-function: var(--sg-ease-out);
+}
+::view-transition-old(hero-photo),
+::view-transition-new(hero-photo) {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--sg-duration-fast);
+}
+
 /* biome-ignore-start lint/complexity/noImportantStyles: reduced motion must win over every component's own timing. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -310,6 +334,12 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* No page transition at all with reduced motion: the new page is just there. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
 /* biome-ignore-end lint/complexity/noImportantStyles: see above */

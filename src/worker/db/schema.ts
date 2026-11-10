@@ -176,6 +176,19 @@ export const tags = sqliteTable(
   (table) => [primaryKey({ columns: [table.kind, table.slug] })],
 );
 
+/**
+ * What a link in a note points at: its page's title and site name, kept so a
+ * note's link cards cost one fetch per address, not one per look. A page that
+ * couldn't be read is remembered too (`failed`), for a day.
+ */
+export const linkPreviews = sqliteTable("link_previews", {
+  url: text("url").primaryKey(),
+  title: text("title"),
+  site: text("site"),
+  failed: integer("failed", { mode: "boolean" }).notNull().default(false),
+  fetchedAt: integer("fetched_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type Item = typeof items.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
 export type Attempt = typeof attempts.$inferSelect;

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5bb58aad-e36a-4ed3-91a3-b8972b1b16dd",
+  "id": "2328b04b-1c72-4f73-8dfe-71fee8f7ef8b",
   "prevId": "fb050a61-9236-4141-b337-fd2215646516",
   "tables": {
     "agent_tokens": {
@@ -781,6 +781,52 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "link_previews": {
+      "name": "link_previews",
+      "columns": {
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "site": {
+          "name": "site",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failed": {
+          "name": "failed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "photos": {
       "name": "photos",
       "columns": {
@@ -1044,94 +1090,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "spool_weighings": {
-      "name": "spool_weighings",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "spool_id": {
-          "name": "spool_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "grams_left": {
-          "name": "grams_left",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "on_scale": {
-          "name": "on_scale",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "weighed_at": {
-          "name": "weighed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "spool_weighings_spool_idx": {
-          "name": "spool_weighings_spool_idx",
-          "columns": [
-            "spool_id",
-            "weighed_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "spool_weighings_spool_id_spools_id_fk": {
-          "name": "spool_weighings_spool_id_spools_id_fk",
-          "tableFrom": "spool_weighings",
-          "tableTo": "spools",
-          "columnsFrom": [
-            "spool_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "spool_weighings_created_by_users_id_fk": {
-          "name": "spool_weighings_created_by_users_id_fk",
-          "tableFrom": "spool_weighings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "spools": {
       "name": "spools",
       "columns": {
@@ -1184,20 +1142,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'full'"
-        },
-        "net_grams": {
-          "name": "net_grams",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "tare_grams": {
-          "name": "tare_grams",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "note": {
           "name": "note",

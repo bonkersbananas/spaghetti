@@ -35,8 +35,11 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["PUT", new RegExp(`^/printer/slots/${id}$`), ["printer"]],
 ];
 
-/** Reading is `read`, except the session and agent management, which tokens never see. */
-const PERSON_ONLY_READS = /^\/(session|agents)(\/|$)/;
+/**
+ * Reading is `read`, except the session and agent management, which tokens never see, and link
+ * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
+ */
+const PERSON_ONLY_READS = /^\/(session|agents|links)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {

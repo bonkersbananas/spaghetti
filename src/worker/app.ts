@@ -16,6 +16,7 @@ import { changeRoutes } from "./routes/changes.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { journalRoutes } from "./routes/journal.ts";
+import { linkRoutes } from "./routes/links.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { printerRoutes } from "./routes/printer.ts";
@@ -98,6 +99,7 @@ export const app = new Hono<AppEnv>()
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)
   .route("/journal", journalRoutes)
+  .route("/links", linkRoutes)
   .route("/builds", storyRoutes)
   .route("/", searchRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))

@@ -24,6 +24,7 @@ import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
+import { heroClick } from "@/lib/hero";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
@@ -112,6 +113,8 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
     <Link
       ref={ref}
       {...entryLink(entry, item)}
+      viewTransition
+      onClick={(event) => heroClick(event, photo?.id)}
       aria-current={selected || undefined}
       className={cn(
         "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring flex flex-col rounded-lg p-1.5 md:flex-row",
@@ -256,6 +259,8 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
     <Link
       ref={ref}
       {...entryLink(entry, item)}
+      viewTransition
+      onClick={(event) => heroClick(event, photo?.id)}
       aria-current={selected || undefined}
       className={cn(
         "pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5",
@@ -345,6 +350,8 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
     <Link
       ref={ref}
       {...entryLink(entry, item)}
+      viewTransition
+      onClick={(event) => heroClick(event, photo?.id)}
       aria-current={selected || undefined}
       className={cn(
         "pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5",

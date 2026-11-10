@@ -13,6 +13,8 @@ export interface SheetProps {
   description?: ReactNode;
   /** Sticky actions at the bottom (phone) or footer (desktop). */
   footer?: ReactNode;
+  /** Small buttons at the right of the header, beside the title (stepping between things): next to the close button on desktop. */
+  headerActions?: ReactNode;
   /**
    * How it appears on desktop: a centered "dialog" for quick, focused tasks
    * (capture), or a "panel" sliding in from the right for detail views.
@@ -60,7 +62,7 @@ export function Sheet(props: SheetProps) {
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
 }
 
-function PhoneSheet({ open, onOpenChange, title, description, footer, tall, children }: SheetProps) {
+function PhoneSheet({ open, onOpenChange, title, description, footer, headerActions, tall, children }: SheetProps) {
   const returnFocus = useReturnFocus(open);
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
@@ -86,13 +88,16 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, tall, chil
           )}
         >
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
-          <div className="px-5 pt-2 pb-1">
-            <Drawer.Title className="font-display text-title text-ink font-semibold">{title}</Drawer.Title>
-            {description ? (
-              <Drawer.Description className="text-small text-ink-faint mt-0.5">{description}</Drawer.Description>
-            ) : (
-              <Drawer.Description className="sr-only">{title}</Drawer.Description>
-            )}
+          <div className="flex items-start justify-between gap-3 px-5 pt-2 pb-1">
+            <div className="min-w-0">
+              <Drawer.Title className="font-display text-title text-ink font-semibold">{title}</Drawer.Title>
+              {description ? (
+                <Drawer.Description className="text-small text-ink-faint mt-0.5">{description}</Drawer.Description>
+              ) : (
+                <Drawer.Description className="sr-only">{title}</Drawer.Description>
+              )}
+            </div>
+            {headerActions && <div className="-mr-2 flex shrink-0 items-center gap-1">{headerActions}</div>}
           </div>
           <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">{children}</div>
           {footer && (
@@ -113,6 +118,7 @@ function DesktopSheet({
   title,
   description,
   footer,
+  headerActions,
   desktop = "dialog",
   wide,
   children,
@@ -144,9 +150,12 @@ function DesktopSheet({
                 <Dialog.Description className="sr-only">{title}</Dialog.Description>
               )}
             </div>
-            <Dialog.Close asChild>
-              <IconButton icon={CloseIcon} label="Close" size="sm" className="-mt-0.5 -mr-2" />
-            </Dialog.Close>
+            <div className="-mt-0.5 -mr-2 flex shrink-0 items-center gap-0.5">
+              {headerActions}
+              <Dialog.Close asChild>
+                <IconButton icon={CloseIcon} label="Close" size="sm" />
+              </Dialog.Close>
+            </div>
           </div>
           <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">{children}</div>
           {footer && (
