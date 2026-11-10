@@ -49,6 +49,19 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
     },
   },
+  // The print on the bed: its entry in the story, with the progress bar and how long is left.
+  {
+    name: "build-progress",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    selector: "li[data-attempt-id]:first-child",
+    // High in the window, clear of the tab bar and the action bar.
+    beforeShot: async (page) => {
+      await page
+        .locator("li[data-attempt-id]:first-child")
+        .evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -90));
+    },
+  },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
   {
