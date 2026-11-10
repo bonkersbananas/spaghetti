@@ -78,13 +78,11 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           >
             Change password
           </MenuItem>
-        </MenuGroup>
-        <ThemeSwitch className="mt-6" />
-        <MenuGroup className="mt-6">
           <MenuItem to="/styleguide" icon={PaletteIcon} onClick={() => onOpenChange(false)}>
             Styleguide
           </MenuItem>
         </MenuGroup>
+        <ThemeSwitch className="mt-6" />
       </Sheet>
       <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />
       <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
