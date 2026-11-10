@@ -117,6 +117,7 @@ describe("the MCP endpoint", () => {
       "start_attempt",
       "log_attempt",
       "finish_attempt",
+      "list_recipes",
       "list_spools",
       "weigh_spool",
       "load_slot",
@@ -333,6 +334,7 @@ describe("tools, scopes and attribution", () => {
       ["search", { query: "hose" }],
       ["what_worked", { build_id: idea }],
       ["get_build", { build_id: idea }],
+      ["list_recipes", {}],
       ["list_spools", {}],
     ] as const) {
       const refused = await callTool(blind, name, args);

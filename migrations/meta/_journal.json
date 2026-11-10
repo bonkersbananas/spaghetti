@@ -99,6 +99,13 @@
       "when": 1794319402139,
       "tag": "0013_web-push",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1794323033594,
+      "tag": "0014_recipes",
+      "breakpoints": true
     }
   ]
 }

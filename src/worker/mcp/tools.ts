@@ -5,6 +5,8 @@ import type {
   FinishAttemptResponse,
   ItemHit,
   PrinterResponse,
+  Recipe,
+  RecipesResponse,
   SearchResponse,
   SpoolResponse,
   SpoolsResponse,
@@ -93,6 +95,17 @@ function itemLine(hit: ItemHit): string {
   return `- ${name} (${hit.item.stage}${attempts}) build_id: ${hit.item.id}`;
 }
 
+function recipeLine(recipe: Recipe): string {
+  const settings = describeSettings(recipe.settings);
+  return [
+    `- Recipe "${recipe.name}" for ${[recipe.finish, recipe.material].filter(Boolean).join(" ")} (recipe_id: ${recipe.id}${recipe.source ? `, from build_id: ${recipe.source.itemId}, attempt_id: ${recipe.source.attemptId}` : ""})`,
+    recipe.note.trim() && `  note: ${recipe.note.trim()}`,
+    settings.length && `  settings: ${settings.join(", ")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function attemptLine(hit: AttemptHit & { sameBuild?: boolean }): string {
   const a = hit.attempt;
   const settings = describeSettings(a.settings);
@@ -155,7 +168,7 @@ export const tools: Tool[] = [
     name: "what_worked",
     title: "What worked last time",
     description:
-      'Find the latest print attempts that worked, with their settings, to start from. Give a build_id (its own successes come first), a material, or free text (searched among successful attempts); combine them to narrow it. Needs the "read" scope.',
+      'Find the latest print attempts that worked, with their settings, to start from, and the saved recipes for the material (named settings people keep for how they print it). Give a build_id (its own successes come first), a material, or free text (searched among successful attempts); combine them to narrow it. Needs the "read" scope.',
     scopes: ["read"],
     readOnly: true,
     input: z.object({
@@ -172,12 +185,14 @@ export const tools: Tool[] = [
         return { text: "Give a build_id, a material or some words to look for.", isError: true };
       }
       let hits: Array<AttemptHit & { sameBuild?: boolean }>;
+      let recipes: Recipe[] = [];
       if (args.build_id && !args.query) {
         const query = new URLSearchParams({ item: args.build_id });
         if (args.material) query.set("material", args.material);
         const result = await ctx.call(`/api/what-worked?${query}`);
         if (!result.ok) return failure(result);
         hits = (result.json as WhatWorkedResponse).matches;
+        recipes = (result.json as WhatWorkedResponse).recipes;
       } else {
         const query = new URLSearchParams({ outcome: "success" });
         if (args.query) query.set("q", args.query);
@@ -185,10 +200,12 @@ export const tools: Tool[] = [
         const result = await ctx.call(`/api/search?${query}`);
         if (!result.ok) return failure(result);
         hits = (result.json as SearchResponse).attempts;
+        recipes = (result.json as SearchResponse).recipes;
         if (args.build_id)
           hits = hits.sort((a, b) => Number(b.item.id === args.build_id) - Number(a.item.id === args.build_id));
       }
-      return { text: hits.length ? hits.map(attemptLine).join("\n") : "No successful attempt matches yet." };
+      const lines = [...recipes.map(recipeLine), ...hits.map(attemptLine)];
+      return { text: lines.length ? lines.join("\n") : "No successful attempt matches yet." };
     },
   }),
 
@@ -346,6 +363,28 @@ export const tools: Tool[] = [
           ? `Finished: ${outcomeWord(done.attempt.outcome)}.`
           : `It was already finished as ${outcomeWord(done.attempt.outcome)}; that stands, and your note and tags were added.`,
       };
+    },
+  }),
+
+  tool({
+    name: "list_recipes",
+    title: "List the recipes",
+    description:
+      'List the saved recipes: named settings of attempts that worked ("Silk PLA, slow outer wall"), with the material, finish, note and a link back to the attempt they came from. Give a material (and finish) to see the ones for a spool. Needs the "read" scope.',
+    scopes: ["read"],
+    readOnly: true,
+    input: z.object({
+      material: materialArg,
+      finish: z.string().max(40).optional().describe('A finish such as "silk" or "matte".'),
+    }),
+    async run(args, ctx) {
+      const query = new URLSearchParams();
+      if (args.material) query.set("material", args.material);
+      if (args.finish && args.material) query.set("finish", args.finish);
+      const result = await ctx.call(`/api/recipes${query.size ? `?${query}` : ""}`);
+      if (!result.ok) return failure(result);
+      const list = (result.json as RecipesResponse).recipes;
+      return { text: list.length ? list.map(recipeLine).join("\n") : "No recipes saved yet." };
     },
   }),
 

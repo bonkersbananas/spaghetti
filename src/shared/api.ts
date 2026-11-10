@@ -343,6 +343,49 @@ export interface SearchResponse {
   builds: ItemHit[];
   ideas: ItemHit[];
   attempts: AttemptHit[];
+  /** Recipes whose name, note or material match; none while an outcome or tag filter is on. */
+  recipes: Recipe[];
+}
+
+/** Where a recipe came from: the attempt that worked, while it and its build still exist. */
+export interface RecipeSource {
+  attemptId: string;
+  itemId: string;
+  /** The build's title. */
+  title: string | null;
+  /** The attempt's number in its build. */
+  number: number;
+  /** The attempt's photo (else its build's): recipes lead with the picture. */
+  photo: Photo | null;
+}
+
+/**
+ * "This is how we print silk PLA now": the settings of an attempt that worked, named. The settings are fixed (a
+ * newer attempt makes a newer recipe); only the name and note change.
+ */
+export interface Recipe {
+  id: string;
+  name: string;
+  note: string;
+  /** Uppercase filament type, "PLA". */
+  material: string;
+  /** The finish of the spool it was printed on ("silk", "matte"), if known. */
+  finish: string | null;
+  settings: AttemptSettings;
+  /** Null once the attempt or its build is deleted: the recipe stays. */
+  source: RecipeSource | null;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** GET /api/recipes?material=&finish= (matched like the pantry does) */
+export interface RecipesResponse {
+  recipes: Recipe[];
+}
+
+export interface RecipeResponse {
+  recipe: Recipe;
 }
 
 /**
@@ -351,6 +394,8 @@ export interface SearchResponse {
  */
 export interface WhatWorkedResponse {
   matches: Array<AttemptHit & { sameBuild: boolean }>;
+  /** The recipes for this material, when one was asked for. */
+  recipes: Recipe[];
 }
 
 /** A spool on the shelf. */
