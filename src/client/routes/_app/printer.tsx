@@ -20,6 +20,7 @@ import {
   TemperatureIcon,
 } from "@/components/ui/icons";
 import { SaveStatus } from "@/components/ui/SaveStatus";
+import { Section as PageSection } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
@@ -61,15 +62,9 @@ function Printer() {
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   const id = `printer-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id={id} className="text-title text-ink">
-          {title}
-        </h2>
-        {aside}
-      </div>
+    <PageSection id={id} title={title} aside={aside}>
       {children}
-    </section>
+    </PageSection>
   );
 }
 
@@ -145,7 +140,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
   const units = setup.amsUnits;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-12">
+    <div className="flex max-w-3xl flex-col gap-12 md:gap-16">
       <div className="bg-cream shadow-soft flex flex-col gap-5 rounded-xl p-5 md:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col">
