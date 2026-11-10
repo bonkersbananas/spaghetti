@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -253,7 +253,17 @@ export const spoolRoutes = new Hono<AppEnv>()
       parsed.data.netGrams === null
         ? await c.var.db.batch([
             update,
-            c.var.db.delete(spoolWeighings).where(eq(spoolWeighings.spoolId, spoolId)),
+            c.var.db
+              .delete(spoolWeighings)
+              .where(
+                and(
+                  eq(spoolWeighings.spoolId, spoolId),
+                  inArray(
+                    spoolWeighings.spoolId,
+                    c.var.db.select({ id: spools.id }).from(spools).where(isNull(spools.deletedAt)),
+                  ),
+                ),
+              ),
             change,
           ])
         : await c.var.db.batch([update, change]);

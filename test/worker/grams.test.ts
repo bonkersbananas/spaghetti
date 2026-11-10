@@ -119,6 +119,24 @@ describe("grams on a spool", () => {
     expect((await patched.json<SpoolResponse>()).spool.remaining).toBe("empty");
   });
 
+  it("keeps a shelved spool's weighings when a clear is refused, so restoring brings them back", async () => {
+    const spool = await addSpool({ netGrams: 1000 });
+    await request(`/api/spools/${spool.id}/weighings`, {
+      method: "POST",
+      cookie,
+      json: { id: crypto.randomUUID(), gramsLeft: 300 },
+    });
+    await request(`/api/spools/${spool.id}`, { method: "DELETE", cookie });
+    const refused = await request(`/api/spools/${spool.id}/weight`, {
+      method: "PUT",
+      cookie,
+      json: { netGrams: null },
+    });
+    expect(refused.status).toBe(404);
+    await request(`/api/spools/${spool.id}/restore`, { method: "POST", cookie });
+    expect(await getSpool(spool.id)).toMatchObject({ gramsLeft: 300, netGrams: 1000 });
+  });
+
   it("counts a finished attempt's grams off the spool, and follows edits, deletes and undo", async () => {
     const spool = await addSpool({ netGrams: 1000 });
     const item = await build();
