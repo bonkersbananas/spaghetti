@@ -7,6 +7,7 @@ import { Api } from "./api.ts";
 import { Bridge } from "./bridge.ts";
 import { ffmpegCamera } from "./camera.ts";
 import { loadConfig } from "./config.ts";
+import { CertPin } from "./pin.ts";
 import { ftpFiles } from "./printer-files.ts";
 import { connectToPrinter } from "./printer-link.ts";
 import { Queue } from "./queue.ts";
@@ -16,13 +17,18 @@ const log = (message: string) => console.log(`${new Date().toISOString()} ${mess
 
 try {
   const config = loadConfig();
+  const store = new Store(join(config.dataDir, "state.json"));
+  const pin = new CertPin(
+    { certs: store.certs, save: () => store.save() },
+    { trustNew: config.trustNewCertificate, log },
+  );
   const bridge = new Bridge({
     api: new Api(config.appUrl, config.token),
-    store: new Store(join(config.dataDir, "state.json")),
+    store,
     queue: new Queue(join(config.dataDir, "queue")),
-    files: ftpFiles({ host: config.printerHost, accessCode: config.accessCode }),
+    files: ftpFiles({ host: config.printerHost, accessCode: config.accessCode, pin }),
     camera: config.camera
-      ? ffmpegCamera({ host: config.printerHost, accessCode: config.accessCode, ffmpeg: config.ffmpeg, log })
+      ? ffmpegCamera({ host: config.printerHost, accessCode: config.accessCode, ffmpeg: config.ffmpeg, log, pin })
       : null,
     printerId: config.serial,
     log,
@@ -35,6 +41,7 @@ try {
     onReport: (payload) => bridge.onReport(payload),
     onConnection: (connected) => bridge.onConnection(connected),
     log,
+    pin,
   });
   bridge.start();
   const shutdown = async () => {

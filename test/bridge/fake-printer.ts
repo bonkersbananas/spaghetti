@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:net";
+import tls from "node:tls";
 import { Aedes, type PublishPacket } from "aedes";
 import type { Report } from "./fixtures.ts";
 
@@ -18,10 +19,13 @@ export class FakePrinter {
   private server!: Server;
   url = "";
   connections = 0;
+  /** Every login attempt, with the password it carried: an impostor must never see the real one. */
+  logins: string[] = [];
 
-  async start(): Promise<this> {
+  async start(certificate?: { key: string; cert: string }): Promise<this> {
     this.broker = await Aedes.createBroker();
     this.broker.authenticate = (_client, username, password, done) => {
+      this.logins.push(password?.toString() ?? "");
       const ok = username === "bblp" && password?.toString() === this.accessCode;
       done(null, ok);
     };
@@ -38,10 +42,10 @@ export class FakePrinter {
       if (packet.topic === `device/${this.serial}/request` && payload.includes("pushall"))
         this.onFullStatusRequested?.();
     });
-    this.server = createServer(this.broker.handle);
+    this.server = certificate ? tls.createServer(certificate, this.broker.handle) : createServer(this.broker.handle);
     await new Promise<void>((resolve) => this.server.listen(0, "127.0.0.1", resolve));
     const address = this.server.address();
-    this.url = `mqtt://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+    this.url = `${certificate ? "mqtts" : "mqtt"}://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     return this;
   }
 

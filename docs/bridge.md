@@ -76,6 +76,14 @@ To build the image for a Pi on a bigger machine: `docker buildx build --platform
 
 The log says what it hears and does ("A print started", "Attaching … to the attempt already started by hand", "Unknown spool in A3"). It never prints the access code or the token.
 
+## The printer's certificate
+
+The printer's TLS certificate is self-signed, so nothing can verify it against a certificate authority, and the access code is a password. The bridge therefore **pins** it: the first time it reaches the printer's MQTT service and its FTPS service it stores the certificate's SHA-256 fingerprint in `state.json` (under `certs`), and after that it refuses a different certificate **before any credential is sent**, with a log line that says what changed. If the certificate changed because you updated the printer's firmware or reset it, accept the new one by running once with `--trust-new-certificate` (or `BRIDGE_TRUST_NEW_CERTIFICATE=1`), or delete that service's line under `certs` in `state.json`. If you changed nothing, something else on your network may be answering as the printer: don't accept it.
+
+- **Camera:** ffmpeg can't pin a fingerprint, so the bridge reads the stream's certificate first (a separate handshake that sends nothing) and pins that too, then starts ffmpeg. A service that presented the right certificate once and a different one to ffmpeg would not be caught.
+- **Bambu's printer CA [uncertain]:** the community tools may verify the certificate against a Bambu printer CA with the serial number as the name. We couldn't confirm that for the X2D, so the bridge doesn't rely on it; if you can, that would be better than trust on first use.
+- The first connection is the weak moment: pin it on a network you trust.
+
 ## What it does
 
 **A print starts** (the printer reports a new job while it is preparing or printing):

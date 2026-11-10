@@ -4,7 +4,9 @@
  * here, and nothing else in the bridge talks FTP.
  */
 import { Writable } from "node:stream";
+import type { TLSSocket } from "node:tls";
 import { Client } from "basic-ftp";
+import { type CertPin, fingerprintOf } from "./pin.ts";
 
 export interface PrinterFiles {
   /** The first file with one of these names, looking in the places Bambu keeps prints. */
@@ -19,20 +21,24 @@ export interface FtpOptions {
   host: string;
   accessCode: string;
   port?: number;
+  pin?: CertPin;
 }
 
 export function ftpFiles(options: FtpOptions): PrinterFiles {
   async function connect(): Promise<Client> {
     const client = new Client(30_000);
-    await client.access({
-      host: options.host,
-      port: options.port ?? 990,
-      user: "bblp",
-      password: options.accessCode,
-      secure: "implicit",
-      // The printer's certificate is self-signed.
-      secureOptions: { rejectUnauthorized: false },
-    });
+    // Implicit TLS: connect, check the certificate, and only then log in with the access code.
+    const port = options.port ?? 990;
+    try {
+      await client.connectImplicitTLS(options.host, port, { rejectUnauthorized: false });
+      const refused = options.pin?.check("ftps", fingerprintOf(client.ftp.socket as TLSSocket));
+      if (refused) throw new Error("The printer's certificate changed.");
+      await client.login("bblp", options.accessCode);
+      await client.useDefaultSettings();
+    } catch (error) {
+      client.close();
+      throw error;
+    }
     return client;
   }
   return {

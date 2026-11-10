@@ -19,6 +19,8 @@ export interface StoredState {
   attempts: Record<string, AttemptRef>;
   /** The AMS as last synced, to send it again only when it changes. */
   amsHash: string | null;
+  /** The printer's certificates by service (SHA-256 fingerprints), pinned on first use; see pin.ts. */
+  certs: Partial<Record<"mqtt" | "ftps" | "camera", string>>;
 }
 
 const KEEP_ATTEMPTS = 30;
@@ -29,7 +31,7 @@ export class Store {
 
   constructor(path: string) {
     this.path = path;
-    this.data = { version: 1, current: null, attempts: {}, amsHash: null };
+    this.data = { version: 1, current: null, attempts: {}, amsHash: null, certs: {} };
     try {
       const saved = JSON.parse(readFileSync(path, "utf8")) as Partial<StoredState>;
       if (saved.version === 1) this.data = { ...this.data, ...saved };
@@ -37,6 +39,11 @@ export class Store {
       // No file yet, or one we can't read: start empty. A restart then costs at most a repeated start,
       // which the deterministic ids turn into the same attempt.
     }
+  }
+
+  /** The pinned certificates, for `CertPin`. */
+  get certs() {
+    return this.data.certs;
   }
 
   save() {

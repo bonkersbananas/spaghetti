@@ -20,6 +20,8 @@ export interface Config {
   /** Turn the camera frame off. */
   camera: boolean;
   ffmpeg: string;
+  /** Accept (and pin) a changed printer certificate this run. */
+  trustNewCertificate: boolean;
 }
 
 const KEYS = {
@@ -66,5 +68,6 @@ export function loadConfig(
     mqttUrl: pick("mqttUrl", "BRIDGE_MQTT_URL") ?? `mqtts://${printerHost}:8883`,
     camera: (pick("camera", "BRIDGE_CAMERA") ?? "on") !== "off",
     ffmpeg: pick("ffmpeg", "BRIDGE_FFMPEG") ?? "ffmpeg",
+    trustNewCertificate: argv.includes("--trust-new-certificate") || env.BRIDGE_TRUST_NEW_CERTIFICATE === "1",
   };
 }

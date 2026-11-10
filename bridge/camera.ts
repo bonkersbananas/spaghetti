@@ -4,6 +4,7 @@
  * no photo.
  */
 import { spawn } from "node:child_process";
+import { type CertPin, probeFingerprint } from "./pin.ts";
 
 export interface Camera {
   /** A JPEG, or null when there is no frame to be had. */
@@ -19,12 +20,20 @@ export interface CameraOptions {
   url?: string;
   timeoutMs?: number;
   log?: (message: string) => void;
+  /** Checks the stream's certificate before ffmpeg is given the access code. */
+  pin?: CertPin;
 }
 
 export function ffmpegCamera(options: CameraOptions): Camera {
   let warned = false;
   return {
-    grab() {
+    async grab() {
+      // ffmpeg can't pin a fingerprint, so the certificate is read and checked first (a separate handshake that
+      // sends nothing); a service that answers differently the second time isn't caught. Documented in docs/bridge.md.
+      if (options.pin && !options.url) {
+        const seen = await probeFingerprint(options.host, 322).catch(() => null);
+        if (!seen || options.pin.check("camera", seen)) return null;
+      }
       const url =
         options.url ?? `rtsps://bblp:${encodeURIComponent(options.accessCode)}@${options.host}:322/streaming/live/1`;
       return new Promise((resolve) => {
