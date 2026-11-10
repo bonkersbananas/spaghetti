@@ -24,7 +24,7 @@ const BUDGET_KB = {
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
   "/today": 345,
   // Sharing in (the share target's intake) added about 2 kB to every signed-in screen, and notifications a little more (two menu rows, the service worker messages); the settings sheet itself loads on first open.
-  "/ideas": 335,
+  "/ideas": 340,
   "/builds": 340,
   "/journal": 345,
   "/search": 345,
