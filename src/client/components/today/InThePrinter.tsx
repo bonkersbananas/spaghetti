@@ -40,7 +40,7 @@ export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
           In the printer
         </Overline>
         <Link to="/pantry" className="focus-ring rounded-sm">
-          <Button variant="quiet" size="sm" tabIndex={-1} className="-mr-2">
+          <Button variant="quiet" size="sm" tabIndex={-1} className="-my-2 -mr-3">
             Pantry
           </Button>
         </Link>

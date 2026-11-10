@@ -29,7 +29,7 @@ export function BackBurner({ idea, person }: { idea: ItemView | undefined; perso
         <Link to="/ideas/$ideaId" params={{ ideaId: idea.id }} className="focus-ring absolute inset-0 z-0 rounded-lg">
           <span className="sr-only">{name.text}</span>
         </Link>
-        <div className="pointer-events-none relative aspect-4/5 w-28 shrink-0 overflow-hidden rounded-md">
+        <div className="shadow-soft pointer-events-none relative aspect-4/5 w-28 shrink-0 overflow-hidden rounded-md">
           {photo ? (
             <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
           ) : (
@@ -37,7 +37,8 @@ export function BackBurner({ idea, person }: { idea: ItemView | undefined; perso
           )}
         </div>
         <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col items-start gap-1 py-1">
-          <p className="text-body text-ink line-clamp-2 font-semibold">{name.text}</p>
+          {/* A note-only idea's words are already on its tile: say them once. */}
+          {(photo || name.titled) && <p className="text-body text-ink line-clamp-2 font-semibold">{name.text}</p>}
           <p className="text-small text-ink-faint">
             {person ? `${person.name.split(" ")[0]} · ` : ""}
             {ageWords(idea.createdAt)}

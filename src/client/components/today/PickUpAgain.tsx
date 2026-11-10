@@ -95,7 +95,7 @@ export function PickUpAgain({ builds }: { builds: ItemView[] }) {
       </div>
       {waiting.length > MOST && (
         <Link to="/builds" className="focus-ring self-start rounded-sm">
-          <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-2">
+          <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-3">
             All builds
           </Button>
         </Link>

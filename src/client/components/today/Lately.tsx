@@ -57,7 +57,7 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
         })}
       </div>
       <Link to="/journal" className="focus-ring self-start rounded-sm">
-        <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-2">
+        <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-3">
           See the whole journal
         </Button>
       </Link>

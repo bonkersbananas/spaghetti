@@ -5,7 +5,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
-import { EmptyPot } from "@/components/illustrations";
+import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { itemName } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BackBurner } from "@/components/today/BackBurner";
@@ -137,7 +137,7 @@ function Today() {
       ) : quiet ? (
         <EmptyState
           className="py-10 md:py-20"
-          illustration={<EmptyPot />}
+          illustration={<SpoolStrand />}
           title="All quiet in the kitchen"
           action={
             <Link to="/ideas" className="focus-ring rounded-md">

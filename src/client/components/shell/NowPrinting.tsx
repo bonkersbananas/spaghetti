@@ -8,7 +8,7 @@ import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto, printingAttempts } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
-import { photoSrc } from "@/lib/previews";
+import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { useNow } from "@/lib/use-now";
 import { itemName } from "../journal/JournalEntry";
 
@@ -29,6 +29,7 @@ interface NowPrintingCardProps {
 /** The sidebar's small card: a thumbnail, the build's name, a ring and a few words on how far along it is. */
 export function NowPrintingCard({ item, attempt, now }: NowPrintingCardProps) {
   const hero = heroPhoto(item);
+  const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
   return (
     <Link
       to="/builds/$buildId"
@@ -43,6 +44,8 @@ export function NowPrintingCard({ item, attempt, now }: NowPrintingCardProps) {
           color={hero.color || undefined}
           className="size-9 shrink-0 rounded-sm"
         />
+      ) : plate ? (
+        <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-9 shrink-0 rounded-sm p-0.5" />
       ) : (
         <span className="bg-ink/5 text-ink-faint flex size-9 shrink-0 items-center justify-center rounded-sm">
           <BuildsIcon size={18} aria-hidden />

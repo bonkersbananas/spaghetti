@@ -9,6 +9,7 @@ import { NoteFace } from "@/components/ui/NoteFace";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto } from "@/lib/builds";
+import { cn } from "@/lib/cn";
 import type { AttemptView, ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { useNow } from "@/lib/use-now";
@@ -34,7 +35,8 @@ interface PrintingCardProps {
 export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) {
   const navigate = useNavigate();
   const now = useNow();
-  const due = printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now).state === "due";
+  const progress = printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now);
+  const due = progress.state === "due";
   const hero = heroPhoto(item);
   const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
   const name = itemName(item);
@@ -91,17 +93,32 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
             />
           )}
         </MetaList>
-        <PrintProgress startedAt={attempt.printedAt} estimatedMinutes={attempt.settings.estimatedMinutes} />
-        {due ? (
-          <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
-            <p className="text-small text-ink-soft font-semibold">How did it go?</p>
-            <OutcomePicker value={null} onChange={(outcome) => finish(outcome)} size="md" />
+        <div className="flex flex-col gap-1.5">
+          <PrintProgress
+            startedAt={attempt.printedAt}
+            estimatedMinutes={attempt.settings.estimatedMinutes}
+            showLabel={false}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p
+              className={cn(
+                "text-small tabular min-w-0",
+                progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
+              )}
+            >
+              {progress.label}
+            </p>
+            {!due && (
+              <Button variant="secondary" size="sm" onClick={() => finish()} className="pointer-events-auto shrink-0">
+                Finish
+              </Button>
+            )}
           </div>
-        ) : (
-          <div className="pointer-events-auto flex justify-end md:mt-auto">
-            <Button variant="secondary" size="sm" onClick={() => finish()}>
-              Finish
-            </Button>
+        </div>
+        {due && (
+          <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
+            <p className="text-body text-ink font-semibold">How did it go?</p>
+            <OutcomePicker value={null} onChange={(outcome) => finish(outcome)} size="md" />
           </div>
         )}
       </div>
