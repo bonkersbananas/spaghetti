@@ -1,6 +1,6 @@
 import { OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
 import { Chip, type ChipTone } from "@/components/ui/Chip";
-import { type Icon, PartlyIcon, PrintingIcon, SpaghettiIcon, WorkedIcon } from "@/components/ui/icons";
+import { FinishIcon, type Icon, PartlyIcon, PrintingIcon, SpaghettiIcon, WorkedIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
 export const outcomeIcons: Record<Outcome, Icon> = {
@@ -76,11 +76,20 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
 interface OutcomeChipProps {
   /** null: still printing. */
   outcome: Outcome | null;
+  /** The print stopped on the printer and nobody has said how it went yet (see `isOffTheBed`). */
+  offTheBed?: boolean;
   className?: string;
 }
 
-/** How an attempt went, as a chip; "Printing" with a gentle pulse while it runs. */
-export function OutcomeChip({ outcome, className }: OutcomeChipProps) {
+/** How an attempt went, as a chip; "Printing" with a gentle pulse while it runs, "Off the bed" once it stopped. */
+export function OutcomeChip({ outcome, offTheBed, className }: OutcomeChipProps) {
+  if (!outcome && offTheBed) {
+    return (
+      <Chip tone="neutral" icon={FinishIcon} className={className}>
+        Off the bed
+      </Chip>
+    );
+  }
   if (!outcome) {
     return (
       <Chip tone="semolina" className={className}>

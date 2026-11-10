@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { doneBy, printProgress } from "../../src/shared/print-progress.ts";
+import {
+  doneBy,
+  isOffTheBed,
+  LIVE_FRESH_MS,
+  livePrintProgress,
+  offTheBedLabel,
+  printProgress,
+} from "../../src/shared/print-progress.ts";
 
 const MINUTE = 60_000;
 const start = Date.UTC(2026, 10, 10, 9, 0);
@@ -69,5 +76,35 @@ describe("printProgress", () => {
 describe("doneBy", () => {
   it("has nothing to say once the print is due", () => {
     expect(doneBy(start, 60, start + 60 * MINUTE)).toBeUndefined();
+  });
+});
+
+describe("the printer's own progress", () => {
+  const live = { percent: 47, remainingMinutes: 38, layer: 112, totalLayers: 240, at: 1_000_000 };
+
+  it("says the layer and the minutes left", () => {
+    expect(livePrintProgress(live, 1_000_000 + 30_000)).toEqual({
+      fraction: 0.47,
+      state: "running",
+      label: "Layer 112 of 240 · about 38 min left",
+    });
+  });
+
+  it("falls back to the percent, or says nearly done, with less to go on", () => {
+    expect(livePrintProgress({ ...live, layer: null, remainingMinutes: null }, live.at)?.label).toBe("47% done");
+    expect(livePrintProgress({ ...live, remainingMinutes: 0 }, live.at)?.label).toBe("Layer 112 of 240 · nearly done");
+    expect(livePrintProgress({ ...live, layer: null }, live.at)?.label).toBe("About 38 min left");
+  });
+
+  it("is gone when the bridge goes quiet", () => {
+    expect(livePrintProgress(live, live.at + LIVE_FRESH_MS + 1)).toBeNull();
+    expect(livePrintProgress(null, live.at)).toBeNull();
+  });
+
+  it("knows a print that is off the bed but not yet judged", () => {
+    expect(isOffTheBed({ outcome: null, endedAt: 5 })).toBe(true);
+    expect(isOffTheBed({ outcome: null, endedAt: null })).toBe(false);
+    expect(isOffTheBed({ outcome: "success", endedAt: 5 })).toBe(false);
+    expect(offTheBedLabel(Date.UTC(2026, 9, 21, 10, 42))).toMatch(/^Off the bed at /);
   });
 });

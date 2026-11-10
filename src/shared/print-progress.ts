@@ -47,3 +47,47 @@ export function printProgress(
   const fraction = Math.min(1, Math.max(0, (now - startedAt) / (estimatedMinutes * MINUTE)));
   return { fraction, state: "running", label };
 }
+
+/** What the printer reported (the bridge, via the app): see `BridgeProgress` in bridge.ts. */
+export interface LiveProgress {
+  percent: number;
+  remainingMinutes: number | null;
+  layer: number | null;
+  totalLayers: number | null;
+  /** When the app heard it, epoch ms. */
+  at: number;
+}
+
+/** A report counts as live for this long after it arrived: the bridge sends one at least every minute. */
+export const LIVE_FRESH_MS = 3 * MINUTE;
+
+/**
+ * The printer's own progress, as the same shape `printProgress` gives: "Layer 112 of 240 · about 38 min left".
+ * Null once the report is old (the bridge went quiet), so the slicer's estimate takes over again without a fuss.
+ */
+export function livePrintProgress(live: LiveProgress | null | undefined, now: number): PrintProgressResult | null {
+  if (!live || now - live.at > LIVE_FRESH_MS) return null;
+  const parts: string[] = [];
+  if (live.layer !== null && live.totalLayers !== null && live.totalLayers > 0) {
+    parts.push(`Layer ${live.layer} of ${live.totalLayers}`);
+  }
+  if (live.remainingMinutes !== null) {
+    parts.push(
+      live.remainingMinutes > 0 ? `about ${formatDuration(Math.max(1, live.remainingMinutes))} left` : "nearly done",
+    );
+  }
+  const text = parts.join(" · ");
+  const label = text ? text.charAt(0).toUpperCase() + text.slice(1) : `${Math.round(live.percent)}% done`;
+  return { fraction: Math.min(1, Math.max(0, live.percent / 100)), state: "running", label };
+}
+
+/**
+ * A print that stopped on the printer and waits for someone to say how it went: no outcome, but the bridge saw
+ * it end. Calm, not an alarm: "Off the bed at 10:42 · how did it go?".
+ */
+export const isOffTheBed = (attempt: { outcome: unknown; endedAt: number | null }) =>
+  attempt.outcome === null && attempt.endedAt !== null;
+
+export function offTheBedLabel(endedAt: number): string {
+  return `Off the bed at ${clockTime(endedAt)}`;
+}

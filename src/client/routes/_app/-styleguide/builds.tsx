@@ -1,12 +1,14 @@
 import type { Outcome } from "@shared/attempts";
+import { livePrintProgress } from "@shared/print-progress";
 import { useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { OffTheBed } from "@/components/builds/OffTheBed";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
 import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { TagPicker } from "@/components/builds/TagPicker";
 import * as Icons from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
-import { PrintProgress } from "@/components/ui/PrintProgress";
+import { PrintProgress, PrintProgressView } from "@/components/ui/PrintProgress";
 import { toast } from "@/components/ui/Toast";
 import type { AttemptView } from "@/lib/items";
 import { Label, Panel, people, SAMPLE_COLOR, Section } from "./shared";
@@ -87,6 +89,7 @@ export function BuildsSection() {
           <Label>Outcome chips</Label>
           <div className="flex flex-wrap gap-2">
             <OutcomeChip outcome={null} />
+            <OutcomeChip outcome={null} offTheBed />
             <OutcomeChip outcome="success" />
             <OutcomeChip outcome="partial" />
             <OutcomeChip outcome="failed" />
@@ -108,6 +111,25 @@ export function BuildsSection() {
           <p className="text-small text-ink-faint">
             Without an estimate there is no bar and no ring: the app never draws progress it can't know.
           </p>
+          <Label>Printer's own progress, while the bridge is reporting</Label>
+          <PrintProgressView
+            progress={
+              livePrintProgress(
+                { percent: 47, remainingMinutes: 38, layer: 112, totalLayers: 240, at: Date.now() },
+                Date.now(),
+              ) ?? {
+                fraction: 0.47,
+                state: "running",
+                label: "",
+              }
+            }
+          />
+          <p className="text-small text-ink-faint">
+            "Layer 112 of 240 · about 38 min left" replaces the slicer's estimate while the bridge's last report is
+            under three minutes old, and quietly gives way to it again when the bridge goes silent.
+          </p>
+          <Label>Off the bed: stopped, no verdict yet</Label>
+          <OffTheBed endedAt={Date.now() - 20 * MINUTE} onPick={(picked) => toast.message(`Opens with ${picked}`)} />
           <Label>Outcome strip: dots, oldest first</Label>
           <div className="flex flex-col items-start gap-3">
             <OutcomeStrip attempts={[...sampleStrip]} />
@@ -120,6 +142,7 @@ export function BuildsSection() {
             value={failureTags}
             onChange={setFailureTags}
             visible={6}
+            suggested="spaghetti"
           />
         </Panel>
         <div className="flex flex-col gap-4">

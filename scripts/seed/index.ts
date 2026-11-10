@@ -5,7 +5,7 @@
  */
 import { type Browser, request } from "@playwright/test";
 import { SEED_USERS } from "../lib/local-app.ts";
-import { seedBuilds } from "./builds.ts";
+import { seedBridge, seedBuilds } from "./builds.ts";
 import { seedIdeas } from "./ideas.ts";
 import { seedPantry } from "./pantry.ts";
 
@@ -51,6 +51,7 @@ export async function seedAll({
     await seedIdeas(browser, { alex, sam }, origin, now);
     await seedPantry(browser, alex, origin, stateDir, now);
     await seedBuilds(browser, { alex, sam }, origin, stateDir, now);
+    await seedBridge(alex, origin);
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);
   }
