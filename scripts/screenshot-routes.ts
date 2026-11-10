@@ -62,6 +62,46 @@ export const shots: Shot[] = [
       await page.evaluate(() => window.scrollBy(0, -90));
     },
   },
+  {
+    // Two attempts side by side: a column each on desktop, one photo under a switch on phones.
+    name: "compare",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Desktop: the attempt's name opens a list of every attempt; picking one swaps that column.
+    name: "compare-pickers",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    width: 1440,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
+        .first()
+        .click();
+      const sheet = page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ });
+      await sheet.waitFor();
+      await sheet
+        .getByRole("button", { name: /^Attempt \d+$/ })
+        .last()
+        .click();
+      await page.getByRole("dialog", { name: "Pick the attempt to compare" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
   {

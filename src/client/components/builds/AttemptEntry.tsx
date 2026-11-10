@@ -1,21 +1,19 @@
 import type { Person } from "@shared/api";
-import { tagLabel } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
-import { CheckIcon, SameAgainIcon } from "@/components/ui/icons";
+import { CompareIcon, SameAgainIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { UploadBadge } from "@/components/ui/UploadBadge";
-import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import type { AttemptView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
+import { AttemptTags } from "./AttemptTags";
 import { EstimateLine } from "./Estimate";
 import { OutcomeChip, outcomeDots } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
@@ -36,6 +34,10 @@ interface AttemptEntryProps {
   onOpen: () => void;
   /** For a printing attempt: open it to finish it. */
   onFinish?: () => void;
+  /** With an attempt before it: compare the two. */
+  onCompare?: () => void;
+  /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
+  reserveExtras?: boolean;
 }
 
 /**
@@ -44,11 +46,9 @@ interface AttemptEntryProps {
  * and the settings in a line. Tapping it opens the attempt.
  */
 export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(function AttemptEntry(
-  { attempt, photos, person, via, selected, first, last, onOpen, onFinish },
+  { attempt, photos, person, via, selected, first, last, onOpen, onFinish, onCompare, reserveExtras },
   ref,
 ) {
-  const failureOptions = useTagOptions("failure");
-  const successOptions = useTagOptions("success");
   const printing = attempt.outcome === null;
   const settings = summarizeSettings(attempt.settings);
   const results = summarizeResults(attempt.settings);
@@ -104,35 +104,58 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               </span>
             </div>
 
-            {attempt.changes.length > 0 && (
-              <p className="text-small text-ink-soft flex items-start gap-1.5">
-                <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
-                <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
-                <MetaList className="flex-1">
-                  {attempt.changes.map((change) => (
-                    <span
-                      key={change.key}
-                      className="bg-semolina-soft/70 text-ink max-w-full rounded-xs px-1 font-medium whitespace-nowrap"
-                    >
-                      {change.text}
-                    </span>
-                  ))}
-                </MetaList>
-              </p>
+            {attempt.changes.length > 0 &&
+              (onCompare ? (
+                // The line is a button: the same chips, then a quiet "Compare". Above the open button, like the file card.
+                <button
+                  type="button"
+                  onClick={onCompare}
+                  className="text-small text-ink-soft focus-ring pressable hover:bg-ink/4 pointer-events-auto relative z-10 -mx-1.5 flex items-start gap-1.5 rounded-md px-1.5 py-0.5 text-left"
+                >
+                  <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
+                  <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
+                  <ChangeChips attempt={attempt} className="flex-1" />
+                  <span className="text-ink-faint mt-0.5 inline-flex shrink-0 items-center gap-1 font-semibold">
+                    <CompareIcon size={16} aria-hidden />
+                    Compare
+                  </span>
+                </button>
+              ) : (
+                <p className="text-small text-ink-soft flex items-start gap-1.5">
+                  <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
+                  <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
+                  <ChangeChips attempt={attempt} className="flex-1" />
+                </p>
+              ))}
+            {attempt.changes.length === 0 && onCompare && (
+              <Button
+                variant="quiet"
+                size="sm"
+                icon={CompareIcon}
+                onClick={onCompare}
+                className="pointer-events-auto relative z-10 -ml-2 self-start"
+              >
+                Compare with attempt {attempt.number - 1}
+              </Button>
             )}
 
             {attempt.note && <p className="text-body text-ink break-words">{attempt.note}</p>}
 
             {lead && (
-              <div className={cn("flex gap-2", rest.length > 0 ? "md:max-w-xl" : "md:max-w-md")}>
+              // On desktop the lead is the same size in every entry (4:3, at most md); any more photos
+              // are a narrow column beside it, as tall as the lead, so the pictures line up down the story.
+              <div className="flex gap-2">
                 <EntryPhoto
                   photo={lead}
                   alt={`Attempt ${attempt.number}`}
                   variant="large"
-                  className="aspect-4/3 min-w-0 flex-3"
+                  className="aspect-4/3 min-w-0 flex-3 md:max-w-md md:flex-1"
                 />
+                {rest.length === 0 && reserveExtras && (
+                  <div className="hidden md:block md:w-32 md:flex-none" aria-hidden />
+                )}
                 {rest.length > 0 && (
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2 md:w-32 md:flex-none">
                     {rest.slice(0, 2).map((photo, index) => (
                       <EntryPhoto
                         key={photo.id}
@@ -147,22 +170,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               </div>
             )}
 
-            {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
-              <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
-                {attempt.failureTags.map((slug) => (
-                  <li key={`f-${slug}`}>
-                    <Chip tone="tomato">{tagLabel("failure", slug, failureOptions)}</Chip>
-                  </li>
-                ))}
-                {attempt.successNotes.map((slug) => (
-                  <li key={`s-${slug}`}>
-                    <Chip tone="basil" icon={CheckIcon}>
-                      {tagLabel("success", slug, successOptions)}
-                    </Chip>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AttemptTags attempt={attempt} />
 
             {attempt.file && (
               // Above the open button, so its download link works.
@@ -237,5 +245,20 @@ function EntryPhoto({
         </span>
       )}
     </div>
+  );
+}
+
+function ChangeChips({ attempt, className }: { attempt: AttemptView; className?: string }) {
+  return (
+    <MetaList className={className}>
+      {attempt.changes.map((change) => (
+        <span
+          key={change.key}
+          className="bg-semolina-soft/70 text-ink max-w-full rounded-xs px-1 font-medium whitespace-nowrap"
+        >
+          {change.text}
+        </span>
+      ))}
+    </MetaList>
   );
 }
