@@ -198,8 +198,12 @@ export const spools = sqliteTable(
     colorHex: text("color_hex"),
     /** "matte", "silk"… (shared/spools.ts), or people's own word. */
     finish: text("finish"),
-    /** Roughly how much is left: never grams. */
+    /** The level set by hand (or reported by the AMS). Once the spool has gram data, the level follows the grams instead. */
     remaining: text("remaining").$type<Remaining>().notNull().default("full"),
+    /** What the spool held when new, in grams. Null: no gram data, the level stays hand-set (decision 0009). */
+    netGrams: integer("net_grams"),
+    /** What the empty spool weighs, so a weighing on a scale can leave it out. */
+    tareGrams: integer("tare_grams"),
     note: text("note").notNull().default(""),
     driedAt: integer("dried_at", { mode: "timestamp_ms" }),
     photoId: text("photo_id"),
@@ -216,6 +220,29 @@ export const spools = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
   (table) => [index("spools_material_idx").on(table.material)],
+);
+
+/**
+ * A weighing: filament left on a spool at a moment, the baseline the usage after it counts down from.
+ * The client picks the id, so a retry is the same weighing. Removing one (the undo) is a delete.
+ */
+export const spoolWeighings = sqliteTable(
+  "spool_weighings",
+  {
+    id: text("id").primaryKey(),
+    spoolId: text("spool_id")
+      .notNull()
+      .references(() => spools.id, { onDelete: "cascade" }),
+    /** Grams of filament left: the scale's figure minus the empty spool. */
+    gramsLeft: integer("grams_left").notNull(),
+    /** What the scale said, when it was entered that way. */
+    onScale: integer("on_scale"),
+    weighedAt: integer("weighed_at", { mode: "timestamp_ms" }).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+  },
+  (table) => [index("spool_weighings_spool_idx").on(table.spoolId, table.weighedAt)],
 );
 
 /**

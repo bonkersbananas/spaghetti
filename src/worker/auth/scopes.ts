@@ -28,6 +28,8 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["POST", /^\/spools$/, ["printer"]],
   ["PATCH", new RegExp(`^/spools/${id}$`), ["printer"]],
   ["PUT", new RegExp(`^/spools/${id}/photo/${id}$`), ["printer"]],
+  ["PUT", new RegExp(`^/spools/${id}/weight$`), ["printer"]],
+  ["POST", new RegExp(`^/spools/${id}/weighings$`), ["printer"]],
   ["PUT", /^\/printer$/, ["printer"]],
   ["PUT", /^\/printer\/bridge$/, ["printer"]],
   ["PUT", new RegExp(`^/printer/slots/${id}$`), ["printer"]],

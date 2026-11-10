@@ -8,13 +8,16 @@ import {
   type SpoolAttemptsResponse,
   type SpoolResponse,
   type SpoolsResponse,
+  type SpoolUsageResponse,
 } from "../../shared/api.ts";
+import { gramsFromScale, levelOf, MAX_SPOOL_GRAMS, type SpoolGrams } from "../../shared/ledger.ts";
 import { REMAINING } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { amsSlots, type Spool, spools } from "../db/schema.ts";
+import { amsSlots, type Spool, spools, spoolWeighings } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { gramsFor, loadUsage, loadWeighings } from "../ledger.ts";
 import { photoKey } from "../photos.ts";
 import { attemptHits } from "./search.ts";
 
@@ -44,7 +47,25 @@ const fields = {
   trayUuid: words(80).optional(),
 };
 
-const createSpool = z.object({ id, ...fields, createdAt: z.number().int().positive().optional() });
+const grams = z.number().int().min(1).max(MAX_SPOOL_GRAMS);
+const tare = z.number().int().min(0).max(MAX_SPOOL_GRAMS);
+const createSpool = z.object({
+  id,
+  ...fields,
+  netGrams: grams.nullable().optional(),
+  tareGrams: tare.nullable().optional(),
+  createdAt: z.number().int().positive().optional(),
+});
+const weightBody = z.object({ netGrams: grams.nullable().optional(), tareGrams: tare.nullable().optional() });
+const weighBody = z
+  .object({
+    id,
+    onScale: z.number().min(0).max(MAX_SPOOL_GRAMS * 2).optional(),
+    gramsLeft: z.number().min(0).max(MAX_SPOOL_GRAMS).optional(),
+    tareGrams: tare.nullable().optional(),
+    at: z.number().int().positive().optional(),
+  })
+  .refine((body) => body.onScale !== undefined || body.gramsLeft !== undefined);
 const updateSpool = z.object({ ...fields, material: fields.material.optional() });
 
 const photoFields = z.object({
@@ -58,7 +79,8 @@ const photoFields = z.object({
 
 const notFound = "That spool isn't on the shelf any more.";
 
-export function toApiSpool(spool: Spool, slot: string | null): ApiSpool {
+export function toApiSpool(spool: Spool, slot: string | null, ledger?: SpoolGrams): ApiSpool {
+  const gramsLeft = ledger?.gramsLeft ?? null;
   return {
     id: spool.id,
     material: spool.material,
@@ -66,7 +88,12 @@ export function toApiSpool(spool: Spool, slot: string | null): ApiSpool {
     colorName: spool.colorName,
     colorHex: spool.colorHex,
     finish: spool.finish,
-    remaining: spool.remaining,
+    remaining: levelOf({ remaining: spool.remaining, gramsLeft, netGrams: spool.netGrams }),
+    netGrams: spool.netGrams,
+    tareGrams: spool.tareGrams,
+    gramsLeft,
+    gramsApproximate: ledger?.approximate ?? false,
+    weighedAt: ledger?.weighedAt ?? null,
     note: spool.note,
     driedAt: spool.driedAt?.getTime() ?? null,
     photo:
@@ -81,14 +108,16 @@ export function toApiSpool(spool: Spool, slot: string | null): ApiSpool {
   };
 }
 
-async function loadSpool(db: Db, spoolId: string) {
+async function loadSpool(db: Db, d1: D1Database, spoolId: string) {
   const row = await db
     .select({ spool: spools, slot: amsSlots.slot })
     .from(spools)
     .leftJoin(amsSlots, eq(amsSlots.spoolId, spools.id))
     .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
     .get();
-  return row ? toApiSpool(row.spool, row.slot) : null;
+  if (!row) return null;
+  const ledger = (await gramsFor(db, d1, [row.spool])).get(row.spool.id);
+  return toApiSpool(row.spool, row.slot, ledger);
 }
 
 /** /api/spools: the filament library. */
@@ -99,8 +128,13 @@ export const spoolRoutes = new Hono<AppEnv>()
       .from(spools)
       .leftJoin(amsSlots, eq(amsSlots.spoolId, spools.id))
       .where(isNull(spools.deletedAt));
+    const ledger = await gramsFor(
+      c.var.db,
+      c.env.DB,
+      rows.map((row) => row.spool),
+    );
     const list = rows
-      .map((row) => toApiSpool(row.spool, row.slot))
+      .map((row) => toApiSpool(row.spool, row.slot, ledger.get(row.spool.id)))
       .sort((a, b) => a.material.localeCompare(b.material) || b.createdAt - a.createdAt);
     return c.json<SpoolsResponse>({ spools: list });
   })
@@ -125,13 +159,13 @@ export const spoolRoutes = new Hono<AppEnv>()
         .onConflictDoNothing(),
       recordChange(c.var.db, { entity: "spool", id: spoolId, action: "created", actor: c.var.actor }),
     ]);
-    const spool = await loadSpool(c.var.db, spoolId);
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
     if (!spool) return apiError(c, 409, "deleted", "That spool was deleted.");
     return c.json<SpoolResponse>({ spool }, 201);
   })
 
   .get("/:id", async (c) => {
-    const spool = await loadSpool(c.var.db, c.req.param("id"));
+    const spool = await loadSpool(c.var.db, c.env.DB, c.req.param("id"));
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
   })
@@ -142,6 +176,15 @@ export const spoolRoutes = new Hono<AppEnv>()
     const { driedAt, ...values } = parsed.data;
     const now = new Date();
     const spoolId = c.req.param("id");
+    // Grams win: once a spool has gram data its level follows them, so a level set by hand or reported by the
+    // AMS (the printer bridge sends one on every sync) is left out, and a request with nothing else changes nothing.
+    if (values.remaining !== undefined) {
+      const known = await loadSpool(c.var.db, c.env.DB, spoolId);
+      if (known && known.gramsLeft !== null) {
+        delete values.remaining;
+        if (!Object.keys(values).length && driedAt === undefined) return c.json<SpoolResponse>({ spool: known });
+      }
+    }
     const [[row]] = await c.var.db.batch([
       c.var.db
         .update(spools)
@@ -155,7 +198,7 @@ export const spoolRoutes = new Hono<AppEnv>()
       recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
     ]);
     if (!row) return apiError(c, 404, "not_found", notFound);
-    const spool = await loadSpool(c.var.db, row.id);
+    const spool = await loadSpool(c.var.db, c.env.DB, row.id);
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
   })
@@ -184,9 +227,117 @@ export const spoolRoutes = new Hono<AppEnv>()
         .where(and(eq(spools.id, spoolId), isNotNull(spools.deletedAt))),
       recordChange(c.var.db, { entity: "spool", id: spoolId, action: "restored", actor: c.var.actor }),
     ]);
-    const spool = await loadSpool(c.var.db, spoolId);
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
     if (!spool) return apiError(c, 404, "not_found", "That spool is gone for good.");
     return c.json<SpoolResponse>({ spool });
+  })
+
+  /** What it held when new and what the empty spool weighs. Null clears it: back to a hand-set level. */
+  .put("/:id/weight", async (c) => {
+    const parsed = weightBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That weight couldn't be read.");
+    const spoolId = c.req.param("id");
+    const [[row]] = await c.var.db.batch([
+      c.var.db
+        .update(spools)
+        .set({ ...parsed.data, updatedAt: new Date() })
+        .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+        .returning({ id: spools.id }),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
+    ]);
+    if (!row) return apiError(c, 404, "not_found", notFound);
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    return c.json<SpoolResponse>({ spool });
+  })
+
+  /** A weighing: a fresh baseline. A retry with the same id changes nothing. */
+  .post("/:id/weighings", async (c) => {
+    const parsed = weighBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That weighing couldn't be read.");
+    const spoolId = c.req.param("id");
+    const db = c.var.db;
+    const current = await db
+      .select()
+      .from(spools)
+      .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+      .get();
+    if (!current) return apiError(c, 404, "not_found", notFound);
+    const { id: weighingId, onScale, tareGrams, at } = parsed.data;
+    const emptySpool = tareGrams !== undefined ? tareGrams : current.tareGrams;
+    const left = parsed.data.gramsLeft ?? gramsFromScale(onScale ?? 0, emptySpool);
+    const now = Date.now();
+    await db.batch([
+      db
+        .insert(spoolWeighings)
+        .values({
+          id: weighingId,
+          spoolId,
+          gramsLeft: Math.round(left),
+          onScale: onScale === undefined ? null : Math.round(onScale),
+          weighedAt: new Date(Math.min(at ?? now, now)),
+          createdBy: c.var.user.id,
+        })
+        .onConflictDoNothing(),
+      db
+        .update(spools)
+        .set({ ...(tareGrams !== undefined ? { tareGrams } : {}), updatedAt: new Date(now) })
+        .where(eq(spools.id, spoolId)),
+      recordChange(db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
+    ]);
+    const spool = await loadSpool(db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    return c.json<SpoolResponse>({ spool }, 201);
+  })
+
+  /** Takes a weighing back (the undo of a mistyped one): person only. */
+  .delete("/:id/weighings/:weighingId", async (c) => {
+    const spoolId = c.req.param("id");
+    await c.var.db.batch([
+      c.var.db
+        .delete(spoolWeighings)
+        .where(and(eq(spoolWeighings.id, c.req.param("weighingId")), eq(spoolWeighings.spoolId, spoolId))),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
+    ]);
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    return c.json<SpoolResponse>({ spool });
+  })
+
+  /** What used it, newest first, and its weighings: the history on the spool page. */
+  .get("/:id/usage", async (c) => {
+    const spoolId = c.req.param("id");
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    const [entries, weighed] = await Promise.all([loadUsage(c.env.DB, spoolId), loadWeighings(c.var.db, [spoolId])]);
+    const weighings = [...(weighed.get(spoolId) ?? [])].sort((a, b) => b.at - a.at);
+    const latest = weighings[0]?.at ?? Number.NEGATIVE_INFINITY;
+    const hits = await attemptHits(
+      c.var.db,
+      entries.map((entry) => entry.attemptId),
+    );
+    return c.json<SpoolUsageResponse>({
+      usage: entries
+        .sort((a, b) => b.at - a.at)
+        .flatMap((entry) => {
+          const hit = hits.find((h) => h.attempt.id === entry.attemptId);
+          if (!hit?.attempt.outcome) return [];
+          return [
+            {
+              attemptId: entry.attemptId,
+              itemId: entry.itemId,
+              title: hit.item.title,
+              number: hit.number,
+              outcome: hit.attempt.outcome,
+              grams: entry.grams,
+              approximate: entry.approximate,
+              at: entry.at,
+              counted: entry.at > latest,
+            },
+          ];
+        }),
+      weighings,
+    });
   })
 
   /**
@@ -241,7 +392,7 @@ export const spoolRoutes = new Hono<AppEnv>()
     if (current.photoId && current.photoId !== photoId) {
       await c.env.PHOTOS.delete([photoKey(current.photoId, "large"), photoKey(current.photoId, "thumb")]);
     }
-    const spool = await loadSpool(db, spoolId);
+    const spool = await loadSpool(db, c.env.DB, spoolId);
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
   })

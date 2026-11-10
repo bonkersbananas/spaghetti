@@ -27,6 +27,11 @@ const sampleSpool: Spool = {
   colorHex: SILK,
   finish: "silk",
   remaining: "half",
+  netGrams: 1000,
+  tareGrams: 250,
+  gramsLeft: 420,
+  gramsApproximate: true,
+  weighedAt: null,
   note: "",
   driedAt: null,
   photo: null,
@@ -80,6 +85,12 @@ export function PantrySection() {
             <RemainingMeter remaining="half" showLabel />
             <RemainingMeter remaining="low" showLabel />
             <RemainingMeter remaining="empty" showLabel />
+          </div>
+          <Label>With grams (the level follows them)</Label>
+          <div className="flex flex-wrap gap-4">
+            <RemainingMeter remaining="full" gramsLeft={870} showLabel />
+            <RemainingMeter remaining="half" gramsLeft={420} showLabel />
+            <RemainingMeter remaining="low" gramsLeft={40} showLabel />
           </div>
           <Label>A printer check, and a value from a slicer file</Label>
           <NumberField

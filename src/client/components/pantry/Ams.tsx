@@ -140,8 +140,9 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
             {shape === "bay" && (
               <RemainingMeter
                 remaining={spool.remaining}
-                // A spool that is still loaded but empty says so in words at every width.
-                showLabel={spool.remaining === "empty" ? true : "lg"}
+                gramsLeft={spool.gramsLeft}
+                // A spool that is still loaded but empty says so in words at every width, and grams always show.
+                showLabel={spool.remaining === "empty" || spool.gramsLeft !== null ? true : "lg"}
                 // Pinned to the bottom of the tile, so the four meters sit on one line when a name wraps.
                 className="mt-auto self-center pt-1 lg:mt-0.5 lg:self-start lg:pt-0"
               />
@@ -149,7 +150,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
           </>
         )}
       </span>
-      {spool && shape === "row" && <RemainingMeter remaining={spool.remaining} showLabel="lg" />}
+      {spool && shape === "row" && <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel="lg" />}
     </button>
   );
 }
@@ -329,7 +330,7 @@ export function SlotSheet({ slot, open, onOpenChange, spools, current, onPick, o
                       {here ? "Here now" : spool.slot === "Ext" ? "External" : `In ${spool.slot}`}
                     </span>
                   )}
-                  <RemainingMeter remaining={spool.remaining} />
+                  <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} />
                 </button>
               </li>
             );

@@ -4,9 +4,11 @@ import type {
   SpoolAttemptsResponse,
   SpoolResponse,
   SpoolsResponse,
+  SpoolUsageResponse,
   UpdatePrinterRequest,
   UpdateSpoolRequest,
 } from "@shared/api";
+import { gramsFromScale, levelOf } from "@shared/ledger";
 import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
@@ -35,6 +37,14 @@ export function spoolAttemptsQuery(spoolId: string) {
   });
 }
 
+/** What used a spool and its weighings: the history on its page. */
+export function spoolUsageQuery(spoolId: string) {
+  return queryOptions({
+    queryKey: ["spools", spoolId, "usage"] as const,
+    queryFn: async () => api<SpoolUsageResponse>(`/spools/${spoolId}/usage`),
+  });
+}
+
 /** The printer's setup, or the Combo's until it has loaded: hints never wait for it. */
 export function usePrinterSetup(): PrinterSetup {
   return useQuery(printerQuery).data?.setup ?? DEFAULT_PRINTER;
@@ -58,6 +68,8 @@ export interface SpoolDraft {
   colorHex?: string | null;
   finish?: string | null;
   note?: string;
+  /** Grams when new; leave out for a spool whose level stays hand-set. */
+  netGrams?: number | null;
 }
 
 /**
@@ -80,6 +92,11 @@ export function addSpool(
     colorHex: draft.colorHex ?? null,
     finish: draft.finish ?? null,
     remaining: "full",
+    netGrams: draft.netGrams ?? null,
+    tareGrams: null,
+    gramsLeft: draft.netGrams ?? null,
+    gramsApproximate: false,
+    weighedAt: null,
     note: draft.note ?? "",
     driedAt: null,
     photo: null,
@@ -102,6 +119,7 @@ export function addSpool(
           colorName: spool.colorName,
           colorHex: spool.colorHex,
           finish: spool.finish,
+          netGrams: spool.netGrams,
           note: spool.note,
           createdAt: now,
         },
@@ -123,6 +141,87 @@ export async function saveSpool(queryClient: QueryClient, id: string, changes: U
   patchSpool(queryClient, id, (spool) => ({ ...spool, ...changes, updatedAt: Date.now() }) as Spool);
   const { spool } = await api<SpoolResponse>(`/spools/${id}`, { method: "PATCH", json: changes, keepalive: true });
   patchSpool(queryClient, id, (current) => ({ ...current, updatedAt: spool.updatedAt }));
+}
+
+const replaceSpool = (queryClient: QueryClient, stored: Spool) =>
+  patchSpool(queryClient, stored.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
+
+/**
+ * Sets what the spool held when new (and optionally the empty spool's weight). Grams left follow at
+ * once: the spool had none, so they start at the net weight; otherwise the server's answer settles them.
+ */
+export async function setSpoolWeight(
+  queryClient: QueryClient,
+  spool: Spool,
+  weight: { netGrams?: number | null; tareGrams?: number | null },
+) {
+  patchSpool(queryClient, spool.id, (current) => {
+    const next = { ...current, ...weight };
+    if (weight.netGrams === null) next.gramsLeft = null;
+    else if (weight.netGrams !== undefined && current.gramsLeft === null) next.gramsLeft = weight.netGrams;
+    return { ...next, remaining: levelOf(next) };
+  });
+  try {
+    const { spool: stored } = await api<SpoolResponse>(`/spools/${spool.id}/weight`, {
+      method: "PUT",
+      json: weight,
+      keepalive: true,
+    });
+    replaceSpool(queryClient, stored);
+    void queryClient.invalidateQueries({ queryKey: ["spools", spool.id, "usage"] });
+  } catch {
+    patchSpool(queryClient, spool.id, () => spool);
+    toast.error("Couldn't save the weight", "It's back the way it was.");
+  }
+}
+
+/**
+ * A weighing: "On the scale: 812 g" (minus the empty spool) or the filament left, as the new baseline.
+ * It shows at once; the toast undoes it.
+ */
+export async function weighSpool(
+  queryClient: QueryClient,
+  spool: Spool,
+  weighing: { onScale?: number; gramsLeft?: number; tareGrams?: number | null },
+) {
+  const id = crypto.randomUUID();
+  const tare = weighing.tareGrams !== undefined ? weighing.tareGrams : spool.tareGrams;
+  const left = weighing.gramsLeft ?? gramsFromScale(weighing.onScale ?? 0, tare);
+  const change = (current: Spool, gramsLeft: number | null): Spool => {
+    const next = { ...current, gramsLeft, weighedAt: gramsLeft === null ? null : Date.now() };
+    return { ...next, remaining: levelOf(next) };
+  };
+  patchSpool(queryClient, spool.id, (current) => ({
+    ...change(current, left),
+    ...(weighing.tareGrams !== undefined ? { tareGrams: weighing.tareGrams } : {}),
+    gramsApproximate: false,
+  }));
+  try {
+    const { spool: stored } = await api<SpoolResponse>(`/spools/${spool.id}/weighings`, {
+      method: "POST",
+      json: { id, ...weighing },
+      keepalive: true,
+    });
+    replaceSpool(queryClient, stored);
+    void queryClient.invalidateQueries({ queryKey: ["spools", spool.id, "usage"] });
+  } catch {
+    patchSpool(queryClient, spool.id, () => spool);
+    toast.error("Couldn't save the weighing", "It's back the way it was.");
+    return;
+  }
+  toast.undo(`Weighed: about ${left} g`, {
+    description: [spool.colorName, spool.material].filter(Boolean).join(" "),
+    onUndo: async () => {
+      patchSpool(queryClient, spool.id, () => spool);
+      try {
+        const { spool: stored } = await api<SpoolResponse>(`/spools/${spool.id}/weighings/${id}`, { method: "DELETE" });
+        replaceSpool(queryClient, stored);
+        void queryClient.invalidateQueries({ queryKey: ["spools", spool.id, "usage"] });
+      } catch {
+        toast.error("Couldn't undo the weighing", "Try again in a moment.");
+      }
+    },
+  });
 }
 
 /** A new photo of the label: shown from the device at once, then uploaded. */

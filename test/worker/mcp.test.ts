@@ -118,6 +118,7 @@ describe("the MCP endpoint", () => {
       "log_attempt",
       "finish_attempt",
       "list_spools",
+      "weigh_spool",
       "load_slot",
     ]);
     for (const tool of listed) {
@@ -359,6 +360,14 @@ describe("tools, scopes and attribution", () => {
     expect(feed[0]).toMatchObject({ entity: "slot", id: "A2", actor: { kind: "agent", id: bridge.agent.id } });
     expect((await callTool(bridge.token, "load_slot", { slot: "A2", spool_id: null })).text).toBe("A2 is now empty.");
     expect((await callTool(bridge.token, "load_slot", { slot: "Z9", spool_id: spoolId })).isError).toBe(true);
+
+    const gramsSpool = uuid();
+    await request("/api/spools", { method: "POST", json: { id: gramsSpool, material: "PETG", netGrams: 1000 }, cookie });
+    expect((await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool, on_scale: 812, tare_grams: 250 })).text).toBe(
+      "Weighed: about 562 g left.",
+    );
+    expect((await callTool(bridge.token, "list_spools")).text).toContain("about 562 g left");
+    expect((await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool })).isError).toBe(true);
 
     const reader = (await makeAgent(["read", "capture", "attempts"], "reader")).token;
     const refused = await callTool(reader, "load_slot", { slot: "A1", spool_id: spoolId });

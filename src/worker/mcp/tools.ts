@@ -6,6 +6,7 @@ import type {
   ItemHit,
   PrinterResponse,
   SearchResponse,
+  SpoolResponse,
   SpoolsResponse,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
@@ -352,7 +353,7 @@ export const tools: Tool[] = [
     name: "list_spools",
     title: "List the filament spools",
     description:
-      'List the spools in the pantry (the filament on hand) and which AMS slot each is loaded in, with a spool_id for load_slot. "remaining" is rough: full, most, half, low or empty. Needs the "read" scope.',
+      'List the spools in the pantry (the filament on hand) and which AMS slot each is loaded in, with a spool_id for load_slot. "level" is rough: full, half, low or empty. A spool with gram data also says how many grams are left (about), counted down from its weighing or net weight by the prints that used it; its level follows those grams. Needs the "read" scope.',
     scopes: ["read"],
     readOnly: true,
     input: z.object({}),
@@ -363,10 +364,42 @@ export const tools: Tool[] = [
       const slots = printer.ok ? (printer.json as PrinterResponse).slots : {};
       const lines = list.map((spool) => {
         const name = [spool.brand, spool.material, spool.colorName ?? spool.colorHex].filter(Boolean).join(" ");
-        return `- ${name}${spool.finish ? ` (${spool.finish})` : ""}: ${spool.remaining}${spool.slot ? `, loaded in ${spool.slot}` : ""} (spool_id: ${spool.id})`;
+        return `- ${name}${spool.finish ? ` (${spool.finish})` : ""}: ${spool.remaining}${spool.gramsLeft === null ? "" : `, about ${spool.gramsLeft} g left`}${spool.slot ? `, loaded in ${spool.slot}` : ""} (spool_id: ${spool.id})`;
       });
       const loaded = Object.entries(slots).length;
       return { text: lines.length ? `${lines.join("\n")}\n\n${loaded} of the slots are loaded.` : "No spools yet." };
+    },
+  }),
+
+  tool({
+    name: "weigh_spool",
+    title: "Weigh a spool",
+    description:
+      'Record a weighing: a fresh baseline for how many grams are left on a spool. Give on_scale (what the scale says, with the spool; the spool\'s empty weight is taken off) or grams_left. Optionally tare_grams remembers what the empty spool weighs. Needs the "printer" scope.',
+    scopes: ["printer"],
+    readOnly: false,
+    input: z.object({
+      spool_id: id.describe("A spool_id from list_spools."),
+      on_scale: z.number().min(0).max(40_000).optional().describe("Grams on the scale, spool included."),
+      grams_left: z.number().min(0).max(20_000).optional().describe("Grams of filament left, if already worked out."),
+      tare_grams: z.number().int().min(0).max(20_000).optional().describe("What the empty spool weighs."),
+    }),
+    async run(args, ctx) {
+      if (args.on_scale === undefined && args.grams_left === undefined) {
+        return { text: "Give on_scale or grams_left.", isError: true };
+      }
+      const result = await ctx.call(`/api/spools/${args.spool_id}/weighings`, {
+        method: "POST",
+        json: {
+          id: crypto.randomUUID(),
+          onScale: args.on_scale,
+          gramsLeft: args.grams_left,
+          tareGrams: args.tare_grams,
+        },
+      });
+      if (!result.ok) return failure(result);
+      const left = (result.json as SpoolResponse).spool.gramsLeft;
+      return { text: `Weighed: about ${left} g left.` };
     },
   }),
 

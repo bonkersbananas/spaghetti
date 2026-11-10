@@ -46,6 +46,7 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'changes'"),
     env.DB.prepare("DELETE FROM attempt_files"),
     env.DB.prepare("DELETE FROM ams_slots"),
+    env.DB.prepare("DELETE FROM spool_weighings"),
     env.DB.prepare("DELETE FROM spools"),
     env.DB.prepare("DELETE FROM printer"),
     env.DB.prepare("DELETE FROM bridge"),
