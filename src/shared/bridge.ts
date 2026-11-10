@@ -25,7 +25,8 @@ export interface UnknownTray {
   brand: string | null;
 }
 
-export type BridgePrinterState = "idle" | "printing" | "paused" | "finished" | "failed";
+/** "offline": the bridge is up but can't reach the printer. */
+export type BridgePrinterState = "idle" | "printing" | "paused" | "finished" | "failed" | "offline";
 
 /** What is stored: everything but the last-heard time. */
 export interface BridgeStatusData {

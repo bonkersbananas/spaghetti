@@ -33,7 +33,7 @@ const BRIDGE_ID = "bridge";
 const count = z.number().int().min(0).max(100_000).nullable().optional();
 /** What the printer bridge sends. Anything left out stays as it was. */
 const bridgeSchema = z.object({
-  printerState: z.enum(["idle", "printing", "paused", "finished", "failed"]).nullable().optional(),
+  printerState: z.enum(["idle", "printing", "paused", "finished", "failed", "offline"]).nullable().optional(),
   progress: z
     .object({
       attemptId: z.uuid(),

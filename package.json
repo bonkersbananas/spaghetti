@@ -30,7 +30,8 @@
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:export": "node scripts/db-export.ts",
     "user:add": "node scripts/user-add.ts",
-    "agent:add": "node scripts/agent-add.ts"
+    "agent:add": "node scripts/agent-add.ts",
+    "bridge": "node bridge/index.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",

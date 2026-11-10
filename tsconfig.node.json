@@ -10,7 +10,9 @@
     "drizzle.config.ts",
     "playwright.config.ts",
     "scripts",
+    "bridge",
     "e2e",
-    "test/unit"
+    "test/unit",
+    "test/bridge"
   ]
 }
