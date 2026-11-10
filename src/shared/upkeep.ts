@@ -104,6 +104,22 @@ export function sinceWords(status: UpkeepStatus, sinceHours: number, sinceDays: 
   return `${hours} print ${hours === 1 ? "hour" : "hours"} since`;
 }
 
+/** How far through the nearer limit, for the row under the name: "12 of 20 print hours", "30 of 60 days". */
+export function progressWords(
+  task: UpkeepInterval,
+  status: UpkeepStatus,
+  sinceHours: number,
+  sinceDays: number,
+): string {
+  if (status.by === "hours" && task.intervalHours) {
+    return `${Math.floor(sinceHours)} of ${task.intervalHours} print ${task.intervalHours === 1 ? "hour" : "hours"}`;
+  }
+  if (status.by === "days" && task.intervalDays) {
+    return `${Math.floor(sinceDays)} of ${task.intervalDays} ${task.intervalDays === 1 ? "day" : "days"}`;
+  }
+  return "";
+}
+
 /** "42 print hours", "1 h", "3 days": the meter's label for a task. */
 export function formatHours(hours: number): string {
   if (hours < 10) return `${Math.round(hours * 10) / 10} h`;
