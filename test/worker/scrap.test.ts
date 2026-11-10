@@ -83,6 +83,22 @@ describe("scrapping a build", () => {
   });
 });
 
+describe("unscrap of something that is not a scrapped idea", () => {
+  it("is refused and restores nothing", async () => {
+    const started = await start(await idea("Flexi hummingbird"));
+    await attempt(started.id);
+    const before = (await (await request(`/api/items/${started.id}`, { cookie })).json<ItemResponse>()).item;
+    const undone = await request(`/api/items/${started.id}/unscrap`, {
+      method: "POST",
+      cookie,
+      json: { stage: "building", startedAt: Date.now(), finishedAt: null, coverPhotoId: null, attemptIds: [] },
+    });
+    expect(undone.status).toBe(404);
+    const after = (await (await request(`/api/items/${started.id}`, { cookie })).json<ItemResponse>()).item;
+    expect(after.attempts).toHaveLength(before.attempts.length);
+  });
+});
+
 describe("recently deleted", () => {
   it("lists deleted ideas, builds and attempts, but not empty ones or what is not deleted", async () => {
     const gone = await idea("Gone idea");

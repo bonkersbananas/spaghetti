@@ -154,3 +154,18 @@ test("a new build with a title is kept", async ({ page }) => {
   await page.waitForTimeout(500);
   expect((await page.request.get(`/api/items/${id}`)).status()).toBe(200);
 });
+
+test("a title typed just before leaving a new build is not lost", async ({ page }) => {
+  await page.goto("/builds");
+  await page
+    .getByRole("button", { name: /^(New build|Start a build)$/ })
+    .first()
+    .click();
+  const title = page.getByRole("textbox", { name: "Title" });
+  await title.fill("Quick title");
+  // Leave at once, before autosave's pause has passed.
+  const id = new URL(page.url()).pathname.split("/").pop() as string;
+  await page.getByRole("link", { name: "Builds" }).first().click();
+  await expect(page).toHaveURL(/\/builds$/);
+  await expect.poll(async () => (await getItem(page, id)).title).toBe("Quick title");
+});

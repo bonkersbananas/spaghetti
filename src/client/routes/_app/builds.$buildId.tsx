@@ -240,8 +240,9 @@ function Build({ item }: { item: ItemView }) {
   const active = item.stage === "building";
   // A new build left empty removes itself when you leave it. Deferred a tick: React's dev double mount runs this cleanup too,
   // and the page is still the build's own then.
+  // What is typed counts too, not only what is saved: autosave lags a keystroke by 600 ms.
   const latest = useRef(item);
-  latest.current = item;
+  latest.current = { ...item, title: title || null, note: note || "" };
   const buildId = item.id;
   useEffect(
     () => () => {

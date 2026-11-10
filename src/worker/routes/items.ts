@@ -423,31 +423,29 @@ export const itemRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const { stage, startedAt, finishedAt, coverPhotoId, attemptIds } = parsed.data;
     const now = new Date();
-    const [updated] = await db.batch([
-      db
-        .update(items)
-        .set({
-          stage,
-          startedAt: new Date(startedAt),
-          finishedAt: finishedAt === null ? null : new Date(finishedAt),
-          coverPhotoId,
-          upNext: null,
-          updatedAt: now,
-        })
-        .where(and(eq(items.id, itemId), isNull(items.deletedAt), eq(items.stage, "idea")))
-        .returning({ id: items.id }),
-      ...(attemptIds.length
-        ? [
-            db
-              .update(attempts)
-              .set({ deletedAt: null })
-              .where(and(eq(attempts.itemId, itemId), inArray(attempts.id, attemptIds))),
-          ]
-        : []),
-      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
-    ] as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    // The item first: only when it is a live idea do its attempts come back and a change get recorded.
+    const updated = await db
+      .update(items)
+      .set({
+        stage,
+        startedAt: new Date(startedAt),
+        finishedAt: finishedAt === null ? null : new Date(finishedAt),
+        coverPhotoId,
+        upNext: null,
+        updatedAt: now,
+      })
+      .where(and(eq(items.id, itemId), isNull(items.deletedAt), eq(items.stage, "idea")))
+      .returning({ id: items.id });
+    if (!updated.length) return apiError(c, 404, "not_found", goneForGood);
+    if (attemptIds.length) {
+      await db
+        .update(attempts)
+        .set({ deletedAt: null })
+        .where(and(eq(attempts.itemId, itemId), inArray(attempts.id, attemptIds)));
+    }
+    await db.batch([recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor })]);
     const item = await loadItem(db, itemId);
-    if (!item || !(updated as unknown[]).length) return apiError(c, 404, "not_found", goneForGood);
+    if (!item) return apiError(c, 404, "not_found", goneForGood);
     return c.json<ItemResponse>({ item });
   })
 
