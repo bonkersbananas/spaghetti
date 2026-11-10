@@ -10,6 +10,7 @@ import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
+import { useLiveUpdates } from "@/lib/live";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
@@ -49,6 +50,8 @@ function Shell() {
   const dragging = useGlobalCapture();
   // Sends captures still waiting from this visit or an earlier one.
   useEffect(() => connectOutbox(queryClient), [queryClient]);
+  // Follows what the other person does, while the app is open.
+  useLiveUpdates();
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();
   useHotkeys({

@@ -20,12 +20,11 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
+import { deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
-import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/ideas/$ideaId")({
@@ -88,13 +87,7 @@ function Idea({ item }: { item: ItemView }) {
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
 
-  const [title, setTitle] = useState(item.title ?? "");
-  const [note, setNote] = useState(item.note);
-  useFollowServer(item.title ?? "", title, setTitle);
-  useFollowServer(item.note, note, setNote);
-  const saveState = useAutosave({ title, note }, (value) =>
-    saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note }),
-  );
+  const { title, setTitle, note, setNote, saveState } = useItemFields(item);
 
   const photos = item.photos.filter((photo) => !photo.attemptId);
   const [selectedId, setSelectedId] = useState(photos[0]?.id);
