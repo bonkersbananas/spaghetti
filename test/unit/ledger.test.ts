@@ -147,19 +147,21 @@ describe("grams left", () => {
 });
 
 describe("levels", () => {
-  it("follow the thresholds: full from 70 %, half from 30 %, low from 8 %, empty below", () => {
+  it("follow the thresholds: full from 70 %, half from 30 %, low above 10 g, empty at 10 g or less", () => {
     const at = (left: number) => levelFromGrams(left, 1000);
-    expect([1000, 700, 699, 300, 299, 80, 79, 0].map(at)).toEqual([
+    expect([1000, 700, 699, 300, 299, 62, 11, 10, 0].map(at)).toEqual([
       "full",
       "full",
       "half",
       "half",
+      "low",
       "low",
       "low",
       "empty",
       "empty",
     ]);
     expect(levelFromGrams(100, 250)).toBe("half");
+    expect(levelFromGrams(40, 250)).toBe("low");
   });
 
   it("the Running low list holds low and empty spools and anything at 100 g or less", () => {

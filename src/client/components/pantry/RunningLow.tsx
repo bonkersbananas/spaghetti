@@ -38,7 +38,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
   const isDesktop = useIsDesktop();
   if (!low.length) return null;
   return (
-    <section aria-labelledby="running-low" className="flex flex-col gap-4 md:gap-5">
+    <section aria-labelledby="running-low" className="flex flex-col gap-4 md:max-w-2xl md:gap-5">
       <div className="flex items-center justify-between gap-3">
         <SectionHeading id="running-low" count={low.length}>
           Running low
@@ -52,7 +52,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
           {isDesktop ? "Copy list" : "Share list"}
         </Button>
       </div>
-      <ul className="bg-cream shadow-soft overflow-hidden rounded-lg md:max-w-2xl" aria-label="Spools running low">
+      <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label="Spools running low">
         {low.map(({ spool, needs }) => {
           const name = spoolName(spool);
           return (

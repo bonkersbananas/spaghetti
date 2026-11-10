@@ -16,24 +16,24 @@ export const DEFAULT_NET_GRAMS = 1000;
 export const MAX_SPOOL_GRAMS = 20_000;
 
 /**
- * Where the four levels start, as a share of the net weight: full from 70 %,
- * half from 30 %, low from 8 %, empty below. They are the printer bridge's
- * thresholds for the AMS's own percentage (bridge/ams.ts), so grams and the
- * AMS agree on what "low" means.
+ * Where the levels start: full from 70 % of the net weight, half from 30 %, low above 10 g, and
+ * empty at 10 g or less (a tangle-free remainder that prints practically nothing). The first two are
+ * the printer bridge's thresholds for the AMS's own percentage (bridge/ams.ts); "low" is an amount,
+ * not a share, because 62 g is still a small print on a 1 kg or a 250 g spool.
  */
-export const LEVEL_FROM = { full: 0.7, half: 0.3, low: 0.08 } as const;
+export const LEVEL_FROM = { full: 0.7, half: 0.3 } as const;
+export const EMPTY_GRAMS = 10;
 
 /** Spools at or below this many grams are on the Running low list, whatever their size. */
 export const LOW_GRAMS = 100;
 
 /** The level that grams over the net weight give. */
 export function levelFromGrams(left: number, net: number): Remaining {
-  if (net <= 0) return left > 0 ? "full" : "empty";
+  if (left <= EMPTY_GRAMS) return "empty";
+  if (net <= 0) return "full";
   const share = left / net;
   if (share >= LEVEL_FROM.full) return "full";
-  if (share >= LEVEL_FROM.half) return "half";
-  if (share >= LEVEL_FROM.low) return "low";
-  return "empty";
+  return share >= LEVEL_FROM.half ? "half" : "low";
 }
 
 /** The parts of an attempt that decide what it used. */
