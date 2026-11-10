@@ -94,7 +94,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         {hero ? (
           <Photo src={photoSrc(hero.id, "thumb")} alt="" color={hero.color || undefined} className="size-full" />
         ) : plate ? (
-          <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-full p-3" />
+          <Photo
+            src={fileThumbSrc(plate.id)}
+            alt=""
+            fit="contain"
+            className={cn("size-full", compact ? "p-1 md:p-3" : "p-3")}
+          />
         ) : (
           <NoteFace note={name.text} />
         )}
@@ -113,7 +118,14 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         )}
       >
         <div className="flex items-start gap-3">
-          <h3 className="font-display text-title text-ink line-clamp-2 min-w-0 flex-1 break-words">{name.text}</h3>
+          <h3
+            className={cn(
+              "font-display text-ink line-clamp-2 min-w-0 flex-1 break-words",
+              compact ? "text-lead md:text-title" : "text-title",
+            )}
+          >
+            {name.text}
+          </h3>
           {person && (
             <span className="mt-1.5 flex shrink-0 items-center gap-2">
               <ViaText name={via} className="hidden md:inline" />
