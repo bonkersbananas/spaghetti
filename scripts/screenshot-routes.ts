@@ -278,7 +278,12 @@ export const shots: Shot[] = [
       });
       await sheet.getByRole("button", { name: /Cable clips/ }).click();
       await sheet.getByLabel("Layer height").waitFor();
-      await sheet.getByText(SLICER_FILE_NAME).evaluate((element) => element.scrollIntoView({ block: "start" }));
+      // The settings open with an animation that changes the sheet's height: scroll once it has finished, or
+      // where the sheet ends up depends on how far along it was (the shot came out differently from run to run).
+      await page.waitForTimeout(900);
+      await sheet
+        .getByText(SLICER_FILE_NAME)
+        .evaluate((element) => element.scrollIntoView({ block: "start", behavior: "instant" }));
       await page.waitForTimeout(500);
     },
     cleanup: async (page) => {
