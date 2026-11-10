@@ -22,6 +22,8 @@ export function summarizeSettings(settings: AttemptSettings): string[] {
   const layer = settings.layerHeight === undefined ? undefined : decimals(settings.layerHeight, 2);
   if (layer && !settings.processPreset?.startsWith(`${layer}mm`)) parts.push(`${layer} mm`);
   if (settings.infillDensity !== undefined) parts.push(`${settings.infillDensity}% infill`);
+  if (settings.wallLoops !== undefined)
+    parts.push(`${settings.wallLoops} ${settings.wallLoops === 1 ? "wall" : "walls"}`);
   if (settings.bedType) parts.push(plateName(settings.bedType));
   if (settings.nozzle === "auxiliary") parts.push("aux nozzle");
   if (settings.nozzleDiameter !== undefined && settings.nozzleDiameter !== 0.4) {
@@ -41,8 +43,12 @@ export function summarizeResults(settings: AttemptSettings): string[] {
   const parts: string[] = [];
   if (settings.failedAtPercent !== undefined) parts.push(`failed at ${settings.failedAtPercent}%`);
   if (settings.failedAtLayer !== undefined) parts.push(`failed at layer ${settings.failedAtLayer}`);
-  if (settings.actualMinutes !== undefined) parts.push(`took ${formatMinutes(settings.actualMinutes)}`);
-  else if (settings.estimatedMinutes !== undefined) parts.push(`est. ${formatMinutes(settings.estimatedMinutes)}`);
+  // With both, the estimate-vs-actual line says it.
+  if (settings.actualMinutes !== undefined && settings.estimatedMinutes === undefined) {
+    parts.push(`took ${formatMinutes(settings.actualMinutes)}`);
+  } else if (settings.estimatedMinutes !== undefined && settings.actualMinutes === undefined) {
+    parts.push(`est. ${formatMinutes(settings.estimatedMinutes)}`);
+  }
   if (settings.weightGrams !== undefined) parts.push(`${settings.weightGrams} g`);
   return parts;
 }
@@ -50,6 +56,9 @@ export function summarizeResults(settings: AttemptSettings): string[] {
 /** Whether there is anything to show at all. */
 export function hasSettings(settings: AttemptSettings): boolean {
   return (
-    !!settings.filaments?.length || summarizeSettings(settings).length > 0 || summarizeResults(settings).length > 0
+    !!settings.filaments?.length ||
+    summarizeSettings(settings).length > 0 ||
+    summarizeResults(settings).length > 0 ||
+    settings.actualMinutes !== undefined
   );
 }

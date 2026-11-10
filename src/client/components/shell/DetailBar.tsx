@@ -5,7 +5,7 @@ import { Kbd } from "@/components/ui/Kbd";
 
 interface DetailBarProps {
   /** Where "back" goes: the section the detail belongs to. */
-  back: { to: "/ideas" | "/builds"; label: string };
+  back: { to: "/ideas" | "/builds" | "/pantry"; label: string };
   /** The screen's actions, on the right. */
   children?: ReactNode;
 }

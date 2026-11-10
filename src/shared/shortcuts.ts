@@ -11,7 +11,16 @@
  */
 
 /** Where a shortcut works. The overlay groups by it. */
-export const SHORTCUT_GROUPS = ["anywhere", "palette", "idea", "build", "journal", "search"] as const;
+export const SHORTCUT_GROUPS = [
+  "anywhere",
+  "palette",
+  "idea",
+  "build",
+  "journal",
+  "search",
+  "pantry",
+  "spool",
+] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 export const GROUP_LABELS: Record<ShortcutGroup, string> = {
@@ -21,13 +30,15 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
   build: "On a build",
   journal: "In the journal",
   search: "In search",
+  pantry: "In the pantry",
+  spool: "On a spool",
 };
 
 /** How the overlay lays the groups out in three columns of about the same height. */
 export const SHORTCUT_COLUMNS: readonly (readonly ShortcutGroup[])[] = [
   ["anywhere", "search"],
-  ["build", "journal"],
-  ["idea", "palette"],
+  ["build", "journal", "pantry"],
+  ["idea", "spool", "palette"],
 ];
 
 interface ShortcutDefinition {
@@ -49,6 +60,8 @@ export const SHORTCUTS = define([
   { id: "goBuilds", group: "anywhere", label: "Go to Builds", keys: ["g b"] },
   { id: "goJournal", group: "anywhere", label: "Go to Journal", keys: ["g j"] },
   { id: "search", group: "anywhere", label: "Search", keys: ["/"] },
+  { id: "goPantry", group: "anywhere", label: "Go to the Pantry", keys: ["g p"] },
+  { id: "goPrinter", group: "anywhere", label: "Go to the Printer", keys: ["g r"] },
 
   { id: "paletteNext", group: "palette", label: "Next result", keys: ["arrowdown"] },
   { id: "palettePrevious", group: "palette", label: "Previous result", keys: ["arrowup"] },
@@ -83,6 +96,11 @@ export const SHORTCUTS = define([
   { id: "searchNext", group: "search", label: "Next result", keys: ["arrowdown"] },
   { id: "searchPrevious", group: "search", label: "Previous result", keys: ["arrowup"] },
   { id: "searchOpen", group: "search", label: "Open the picked result", keys: ["enter"] },
+
+  { id: "pantryAdd", group: "pantry", label: "Add a spool", keys: ["n"] },
+
+  { id: "spoolBack", group: "spool", label: "Back to the Pantry", keys: ["escape"] },
+  { id: "spoolDelete", group: "spool", label: "Take it out of the pantry, with undo", keys: ["backspace", "delete"] },
 ]);
 
 export type ShortcutId = (typeof SHORTCUTS)[number]["id"];

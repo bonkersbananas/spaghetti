@@ -18,7 +18,17 @@ import { rememberedUser } from "./queries";
  * Only the roots listed here are kept. A new screen that should open offline
  * adds its query's first key to `PERSISTED_ROOTS`.
  */
-export const PERSISTED_ROOTS = ["items", "tags", "people", "journal", "facets", "search", "what-worked"] as const;
+export const PERSISTED_ROOTS = [
+  "items",
+  "tags",
+  "people",
+  "journal",
+  "facets",
+  "search",
+  "what-worked",
+  "spools",
+  "printer",
+] as const;
 /** The roots that are "what you saw" (the offline strip dates them); tags and people are support data. */
 const SEEN_ROOTS = ["items", "journal", "search"];
 

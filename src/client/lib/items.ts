@@ -1,4 +1,14 @@
-import type { Attempt, Item, ItemResponse, ItemStage, ItemsResponse, Person, Photo, PhotoResponse } from "@shared/api";
+import type {
+  Attempt,
+  AttemptFile,
+  Item,
+  ItemResponse,
+  ItemStage,
+  ItemsResponse,
+  Person,
+  Photo,
+  PhotoResponse,
+} from "@shared/api";
 import { byPrintTime, describeChanges, mergeNote, unionTags } from "@shared/attempts";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -9,6 +19,7 @@ import {
   type OutboxState,
   outbox,
   type PendingAttempt,
+  type PendingFile,
   type PendingFinish,
   type UploadProgress,
   useOutbox,
@@ -60,8 +71,17 @@ export interface PhotoView extends Photo {
   upload?: UploadProgress | { status: "queued"; progress: 0 };
 }
 
+/** A slicer file as the UI shows it: on the server, or still on this device. */
+export interface AttemptFileView extends AttemptFile {
+  /** Still on its way to the server. */
+  pending?: boolean;
+  /** For a file still on its way: the saved file it will replace, which removing it must remove too. */
+  replaces?: AttemptFile | null;
+}
+
 /** An attempt as the UI shows it, numbered from the first print. */
-export interface AttemptView extends Attempt {
+export interface AttemptView extends Omit<Attempt, "file"> {
+  file: AttemptFileView | null;
   /** 1 for the first attempt. */
   number: number;
   /** The server doesn't have it yet. */
@@ -82,17 +102,40 @@ const sortPhotos = <T extends Photo>(photos: T[]) =>
   [...photos].sort((a, b) => a.position - b.position || a.createdAt - b.createdAt);
 
 /** Numbers attempts and works out what changed between them, as the server does. */
-export function viewAttempts(attempts: Attempt[], pendingIds: ReadonlySet<string> = new Set()): AttemptView[] {
+export function viewAttempts(
+  attempts: Attempt[],
+  pendingIds: ReadonlySet<string> = new Set(),
+  pendingFiles: readonly PendingFile[] = [],
+): AttemptView[] {
   const ordered = byPrintTime(attempts);
   return ordered.map((attempt, index) => {
     const before = ordered[index - 1];
+    const waiting = pendingFiles.find((file) => file.attemptId === attempt.id);
     return {
       ...attempt,
       changes: before ? describeChanges(before.settings, attempt.settings) : [],
+      file: waiting ? { ...fromPendingFile(waiting), replaces: attempt.file } : attempt.file,
       number: index + 1,
       pending: pendingIds.has(attempt.id),
     };
   });
+}
+
+/** A slicer file still on this device, as the attempt shows it. */
+function fromPendingFile(file: PendingFile): AttemptFileView {
+  return {
+    id: file.id,
+    name: file.name,
+    size: file.size,
+    stored: !!file.file,
+    hasThumb: !!file.thumb,
+    plate: file.plate,
+    plateCount: file.plateCount,
+    slicer: file.slicer ?? null,
+    prefill: file.prefill,
+    createdAt: file.queuedAt,
+    pending: true,
+  };
 }
 
 const sortByNewest = (items: Item[]) => items.sort((a, b) => b.createdAt - a.createdAt || (b.id > a.id ? 1 : -1));
@@ -187,6 +230,11 @@ export function connectOutbox(queryClient: QueryClient) {
         ...item,
         photos: sortPhotos([...item.photos.filter((p) => p.id !== photo.id), photo]),
       })),
+    fileSaved: (attempt) =>
+      patchCachedItem(queryClient, attempt.itemId, (item) => ({
+        ...item,
+        attempts: item.attempts.map((a) => (a.id === attempt.id ? { ...a, file: attempt.file } : a)),
+      })),
     photoDropped: (message) => toast.error("Photo not saved", message),
   };
   void outbox.resume();
@@ -220,6 +268,7 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     finishedAt: attempt.outcome ? attempt.createdAt : null,
     finishedBy: attempt.outcome ? attempt.createdBy : null,
     changes: [],
+    file: null,
     updatedAt: attempt.createdAt,
   };
 }
@@ -246,16 +295,18 @@ function withAttempts(itemId: string, saved: Attempt[], entry: OutboxEntry | und
         return finish ? applyFinish(attempt, finish) : attempt;
       })
     : saved;
+  const files = entry?.files ?? [];
   const queued = new Set(finishes.map((finish) => finish.attemptId));
   const flag = (views: AttemptView[]) =>
     queued.size ? views.map((view) => (queued.has(view.id) ? { ...view, finishQueued: true } : view)) : views;
-  if (!entry?.attempts?.length) return flag(viewAttempts(attempts));
+  if (!entry?.attempts?.length) return flag(viewAttempts(attempts, new Set(), files));
   const known = new Set(attempts.map((attempt) => attempt.id));
   const pending = entry.attempts.filter((attempt) => !known.has(attempt.id));
   return flag(
     viewAttempts(
       [...attempts, ...pending.map((attempt) => fromPendingAttempt(itemId, attempt))],
       new Set(pending.map((attempt) => attempt.id)),
+      files,
     ),
   );
 }

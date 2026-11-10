@@ -17,6 +17,7 @@ import { root } from "./lib/wrangler.ts";
 import { shots } from "./screenshot-routes.ts";
 import { seedBuilds } from "./seed/builds.ts";
 import { seedIdeas } from "./seed/ideas.ts";
+import { seedPantry } from "./seed/pantry.ts";
 
 const viewports = [
   { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
@@ -129,7 +130,8 @@ async function seed(browser: Browser) {
   );
   if (!alex || !sam) throw new Error("Seeding needs both people");
   await seedIdeas(browser, { alex, sam }, server.url);
+  await seedPantry(browser, alex, server.url, state.dir);
   await seedBuilds(browser, { alex, sam }, server.url, state.dir);
   await Promise.all([alex.dispose(), sam.dispose()]);
-  console.log("  seeded ideas and builds");
+  console.log("  seeded ideas, the pantry and builds");
 }

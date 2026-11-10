@@ -30,6 +30,8 @@ export interface AttemptFilament {
   profile?: string;
   /** The physical AMS slot, such as "A2", or "Ext" for the external spool. */
   amsSlot?: string;
+  /** The spool on the shelf it came from, if picked from there. The values above stay, so the attempt reads the same without it. */
+  spoolId?: string;
 }
 
 export const NOZZLES = ["main", "auxiliary"] as const;
@@ -53,6 +55,8 @@ export interface AttemptSettings {
   layerHeight?: number;
   /** Percent, 0-100. */
   infillDensity?: number;
+  /** Wall loops (perimeters). */
+  wallLoops?: number;
   supportEnabled?: boolean;
   supportType?: SupportType;
   brim?: boolean;
@@ -284,6 +288,7 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
     numberChange("nozzleDiameter", "nozzle", before.nozzleDiameter, after.nozzleDiameter, num, " mm", "no nozzle size"),
     numberChange("layerHeight", "layers", before.layerHeight, after.layerHeight, mm2, " mm"),
     numberChange("infillDensity", "infill", before.infillDensity, after.infillDensity, num, "%"),
+    numberChange("wallLoops", "walls", before.wallLoops, after.wallLoops, num, "", "no wall count"),
     supportChange(before, after),
     before.brim === after.brim || (!before.brim && !after.brim)
       ? null

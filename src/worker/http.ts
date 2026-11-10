@@ -1,8 +1,14 @@
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { Attempt as ApiAttempt, Item as ApiItem, Photo as ApiPhoto, Person } from "../shared/api.ts";
+import type {
+  Attempt as ApiAttempt,
+  AttemptFile as ApiAttemptFile,
+  Item as ApiItem,
+  Photo as ApiPhoto,
+  Person,
+} from "../shared/api.ts";
 import { byPrintTime, describeChanges } from "../shared/attempts.ts";
-import type { Attempt, Item, Photo, User } from "./db/schema.ts";
+import type { Attempt, AttemptFileRow, Item, Photo, User } from "./db/schema.ts";
 
 export function apiError(c: Context, status: ContentfulStatusCode, code: string, message: string) {
   return c.json({ error: { code, message } }, status);
@@ -27,8 +33,31 @@ export function toApiPhoto(photo: Photo): ApiPhoto {
   };
 }
 
+export function toApiFile(file: AttemptFileRow): ApiAttemptFile {
+  return {
+    id: file.id,
+    name: file.name,
+    size: file.size,
+    stored: file.stored,
+    hasThumb: file.hasThumb,
+    plate: file.plate,
+    plateCount: file.plateCount,
+    slicer: file.slicer,
+    prefill: file.prefill,
+    createdAt: file.createdAt.getTime(),
+  };
+}
+
+/** Live (not deleted) files by attempt id. */
+export type FilesByAttempt = ReadonlyMap<string, AttemptFileRow>;
+
 /** An attempt, with what changed since `previous` (the non-deleted attempt printed before it, if any). */
-export function toApiAttempt(attempt: Attempt, previous: Attempt | null | undefined): ApiAttempt {
+export function toApiAttempt(
+  attempt: Attempt,
+  previous: Attempt | null | undefined,
+  files: FilesByAttempt = new Map(),
+): ApiAttempt {
+  const file = files.get(attempt.id);
   return {
     id: attempt.id,
     itemId: attempt.itemId,
@@ -40,6 +69,7 @@ export function toApiAttempt(attempt: Attempt, previous: Attempt | null | undefi
     successNotes: attempt.successNotes,
     settings: attempt.settings,
     changes: previous ? describeChanges(previous.settings, attempt.settings) : [],
+    file: file ? toApiFile(file) : null,
     createdBy: attempt.createdBy,
     finishedBy: attempt.finishedBy,
     createdAt: attempt.createdAt.getTime(),
@@ -48,7 +78,7 @@ export function toApiAttempt(attempt: Attempt, previous: Attempt | null | undefi
 }
 
 /** One item's non-deleted attempts, oldest first, each compared with the one before. */
-export function toApiAttempts(itemAttempts: Attempt[]): ApiAttempt[] {
+export function toApiAttempts(itemAttempts: Attempt[], files: FilesByAttempt = new Map()): ApiAttempt[] {
   const ordered = byPrintTime(
     itemAttempts.map((row) => ({
       row,
@@ -57,11 +87,16 @@ export function toApiAttempts(itemAttempts: Attempt[]): ApiAttempt[] {
       createdAt: row.createdAt.getTime(),
     })),
   ).map(({ row }) => row);
-  return ordered.map((attempt, index) => toApiAttempt(attempt, ordered[index - 1]));
+  return ordered.map((attempt, index) => toApiAttempt(attempt, ordered[index - 1], files));
 }
 
 /** `itemAttempts` are the item's non-deleted attempts, in any order. */
-export function toApiItem(item: Item, itemPhotos: Photo[], itemAttempts: Attempt[] = []): ApiItem {
+export function toApiItem(
+  item: Item,
+  itemPhotos: Photo[],
+  itemAttempts: Attempt[] = [],
+  files: FilesByAttempt = new Map(),
+): ApiItem {
   return {
     id: item.id,
     stage: item.stage,
@@ -74,6 +109,6 @@ export function toApiItem(item: Item, itemPhotos: Photo[], itemAttempts: Attempt
     finishedAt: item.finishedAt?.getTime() ?? null,
     coverPhotoId: item.coverPhotoId,
     photos: itemPhotos.map(toApiPhoto),
-    attempts: toApiAttempts(itemAttempts),
+    attempts: toApiAttempts(itemAttempts, files),
   };
 }

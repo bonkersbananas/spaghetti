@@ -1,6 +1,7 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { PersonColor } from "./people.ts";
+import type { PrinterSetup, Remaining } from "./spools.ts";
 
 /** A person as the client sees them: never includes credentials. */
 export interface Person {
@@ -62,11 +63,44 @@ export interface Attempt {
   settings: AttemptSettings;
   /** What changed since the attempt before it; empty for the first. */
   changes: SettingChange[];
+  /** The slicer file it was printed from, if one was added. */
+  file: AttemptFile | null;
   createdBy: string;
   /** Who gave it its outcome; null while printing, and for attempts finished before this was kept. */
   finishedBy: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * A slicer file (.3mf or .gcode.3mf) on an attempt. Read in the browser; the
+ * Worker only keeps the bytes (at /api/files/<id>, when `stored`) and the
+ * plate's thumbnail (/api/files/<id>/thumb, when `hasThumb`).
+ */
+export interface AttemptFile {
+  id: string;
+  name: string;
+  /** Bytes. */
+  size: number;
+  /** False when it was over MAX_SLICER_FILE_BYTES: only what it said is kept. */
+  stored: boolean;
+  hasThumb: boolean;
+  /** The plate printed, from 1, of `plateCount`. */
+  plate: number;
+  plateCount: number;
+  slicer: string | null;
+  /** The settings read from the file: values still equal to these show as "from the file". */
+  prefill: AttemptSettings;
+  createdAt: number;
+}
+
+/** The largest slicer file kept with an attempt. Above it, only what the file said is saved. */
+export const MAX_SLICER_FILE_BYTES = 25 * 1024 * 1024;
+/** Plate thumbnails are small PNGs; this is generous. */
+export const MAX_FILE_THUMB_BYTES = 4 * 1024 * 1024;
+
+export function fileUrl(id: string, part: "file" | "thumb" = "file"): string {
+  return part === "file" ? `/api/files/${id}` : `/api/files/${id}/thumb`;
 }
 
 /** An idea, and the build it grows into: one record that moves through stages. Titles are optional. */
@@ -236,8 +270,8 @@ export interface FacetsResponse {
   tags: Array<{ kind: TagKind; slug: string; count: number }>;
 }
 
-/** An attempt without "what changed" (search results and suggestions show it on its own). */
-export type AttemptSummary = Omit<Attempt, "changes">;
+/** An attempt without "what changed" or its file (search results and suggestions show it on its own). */
+export type AttemptSummary = Omit<Attempt, "changes" | "file">;
 
 /** An attempt found by search or offered as "what worked last time". */
 export interface AttemptHit {
@@ -273,6 +307,69 @@ export interface SearchResponse {
  */
 export interface WhatWorkedResponse {
   matches: Array<AttemptHit & { sameBuild: boolean }>;
+}
+
+/** A spool on the shelf. */
+export interface Spool {
+  id: string;
+  material: string;
+  brand: string | null;
+  colorName: string | null;
+  /** #rrggbb */
+  colorHex: string | null;
+  finish: string | null;
+  remaining: Remaining;
+  note: string;
+  /** When it was last dried, epoch ms. */
+  driedAt: number | null;
+  /** Its photo (usually the label), at /api/photos/<id>/large and /thumb. */
+  photo: { id: string; width: number; height: number; color: string } | null;
+  /** Where it is loaded: "A1" to "D4", "Ext", or null. */
+  slot: string | null;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SpoolsResponse {
+  spools: Spool[];
+}
+
+export interface SpoolResponse {
+  spool: Spool;
+}
+
+/** POST /api/spools. The client picks the id; a retry gets the same spool back. */
+export interface CreateSpoolRequest {
+  id: string;
+  material: string;
+  brand?: string | null;
+  colorName?: string | null;
+  colorHex?: string | null;
+  finish?: string | null;
+  remaining?: Remaining;
+  note?: string;
+  driedAt?: number | null;
+  createdAt?: number;
+}
+
+/** PATCH /api/spools/:id */
+export type UpdateSpoolRequest = Partial<Omit<CreateSpoolRequest, "id" | "createdAt">>;
+
+/** GET /api/spools/:id/attempts: what was printed with it, newest first. */
+export interface SpoolAttemptsResponse {
+  attempts: AttemptHit[];
+}
+
+/** GET /api/printer: how the printer is set up, and what is loaded where (slot → spool id). */
+export interface PrinterResponse {
+  setup: PrinterSetup;
+  slots: Record<string, string>;
+}
+
+/** PUT /api/printer/slots/:slot. Loading a spool takes it out of the slot it was in. */
+export interface SetSlotRequest {
+  spoolId: string | null;
 }
 
 /** PUT /api/items/:id/photos/order */

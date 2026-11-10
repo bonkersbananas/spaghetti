@@ -115,6 +115,12 @@ What it can't know:
 - **Project files have no slice.** Their plate filaments are a guess from each object's assigned extruder, with no grams or meters, and there is no time or weight.
 - **Unrecognised files.** Other slicers' 3mf files (PrusaSlicer, Cura, CAD tools) give `kind: "unknown"`; the PrusaSlicer layout is different and not read.
 
+### How the app uses it
+
+- `settingsFromFile(result, plate)` (`src/shared/threemf/prefill.ts`) turns one plate into `AttemptSettings`: its filaments (type, color, preset without the `@BBL X2D` suffix), bed type, nozzle size, layer height, infill, wall loops, supports (tree when `support_type` says so), process preset, the temperatures of the first filament the plate uses, and the plate's estimate (minutes) and weight. `printablePlates` lists the sliced plates of a `.gcode.3mf` (else every plate) for the "which plate?" question.
+- `matchFilaments` (`src/shared/spools.ts`) links the file's filaments to spools: the same material (`materialKey`: "PETG HF" is PETG, "PLA Matte" is PLA) in a color within `SAME_COLOR` of the file's (a "redmean" distance), preferring a spool with filament left, then one loaded in the AMS, then the closest color. A file without colors only matches a lone spool of that material.
+- `printerHints` gives the gentle checks of section 1 and 2 against the printer's setup as people describe it (nozzles fitted, hardened or not).
+
 ## 4. Local-only printer state (background only)
 
 Not proposed for now. For awareness:

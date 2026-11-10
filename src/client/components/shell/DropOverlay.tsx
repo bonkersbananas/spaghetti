@@ -1,9 +1,13 @@
 import { AnimatePresence, motion } from "motion/react";
+import { useSyncExternalStore } from "react";
 import { DropIcon } from "@/components/ui/icons";
 import { duration, ease } from "@/lib/motion";
+import { hasSlicerDropTarget, subscribeSlicerDropTargets } from "@/lib/slicer-files";
 
 /** Shown while photos are dragged over the window: let go anywhere to capture them. */
 export function DropOverlay({ visible }: { visible: boolean }) {
+  // On a build (or with an attempt open), a slicer file can be dropped too.
+  const slicer = useSyncExternalStore(subscribeSlicerDropTargets, hasSlicerDropTarget);
   return (
     <AnimatePresence>
       {visible && (
@@ -24,8 +28,14 @@ export function DropOverlay({ visible }: { visible: boolean }) {
             <span className="bg-semolina-soft text-semolina-ink flex size-14 items-center justify-center rounded-full">
               <DropIcon size={28} aria-hidden />
             </span>
-            <p className="font-display text-title text-ink font-semibold">Drop to capture</p>
-            <p className="text-small text-ink-faint">The photos start a new idea.</p>
+            <p className="font-display text-title text-ink font-semibold">
+              {slicer ? "Drop it here" : "Drop to capture"}
+            </p>
+            <p className="text-small text-ink-faint max-w-64">
+              {slicer
+                ? "A .3mf from Bambu Studio or Orca fills in an attempt. Photos are captured as usual."
+                : "The photos start a new idea."}
+            </p>
           </motion.div>
         </motion.div>
       )}

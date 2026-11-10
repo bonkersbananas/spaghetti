@@ -40,6 +40,25 @@ export interface PendingAttempt {
   createdAt: number;
 }
 
+/**
+ * A slicer file waiting to reach the server, behind its attempt: what the
+ * browser read from it, its plate's picture, and its bytes (left out when
+ * over MAX_SLICER_FILE_BYTES).
+ */
+export interface PendingFile {
+  id: string;
+  attemptId: string;
+  name: string;
+  size: number;
+  file?: Blob;
+  thumb?: Blob;
+  plate: number;
+  plateCount: number;
+  slicer?: string;
+  prefill: AttemptSettings;
+  queuedAt: number;
+}
+
 export type PendingAttemptChanges = Partial<
   Pick<PendingAttempt, "outcome" | "printedAt" | "note" | "failureTags" | "successNotes" | "settings">
 >;
@@ -65,6 +84,8 @@ export interface OutboxEntry {
   create?: { title: string | null; note: string; createdAt: number; createdBy: string; stage?: ItemStage };
   /** Attempts to log, sent after the item and before the photos. */
   attempts?: PendingAttempt[];
+  /** Slicer files for attempts, sent after the attempts. */
+  files?: PendingFile[];
   /** Prints to finish, sent after the attempts and before the photos. */
   finishes?: PendingFinish[];
   photos: PendingPhoto[];
@@ -92,6 +113,8 @@ export interface OutboxHandlers {
   /** A queued finish landed. `finished` is false when someone else had finished that print first. */
   attemptFinished: (attempt: Attempt, result: { finished: boolean; pending: PendingFinish; photos: number }) => void;
   photoSaved: (photo: Photo) => void;
+  /** A slicer file is on the server: the attempt as it now is. */
+  fileSaved: (attempt: Attempt) => void;
   /** A photo that can never be uploaded (unreadable, refused). */
   photoDropped: (message: string) => void;
 }
@@ -118,6 +141,7 @@ class Outbox {
   private cancelledItems = new Set<string>();
   private cancelledPhotos = new Set<string>();
   private cancelledAttempts = new Set<string>();
+  private cancelledFiles = new Set<string>();
   handlers: Partial<OutboxHandlers> = {};
 
   subscribe = (listener: () => void) => {
@@ -166,6 +190,7 @@ class Outbox {
     const known = new Set(this.state.entries.map((entry) => entry.itemId));
     const fresh = stored.filter((entry) => !known.has(entry.itemId));
     for (const entry of fresh) for (const photo of entry.photos) registerPreview(photo);
+    for (const entry of fresh) for (const file of entry.files ?? []) registerFilePreview(file);
     if (fresh.length) {
       this.setEntries([...fresh, ...this.state.entries].sort((a, b) => a.queuedAt - b.queuedAt));
     }
@@ -175,8 +200,12 @@ class Outbox {
   /** Queues a new item or more photos for one; resolves once it is on the device. */
   async add(entry: OutboxEntry) {
     for (const photo of entry.photos) registerPreview(photo);
+    for (const file of entry.files ?? []) registerFilePreview(file);
     const existing = this.entry(entry.itemId);
     const attempts = [...(existing?.attempts ?? []), ...(entry.attempts ?? [])];
+    // A newer file for the same attempt replaces one still waiting.
+    const incoming = new Set((entry.files ?? []).map((file) => file.attemptId));
+    const files = [...(existing?.files ?? []).filter((file) => !incoming.has(file.attemptId)), ...(entry.files ?? [])];
     // A print finished twice before it was sent keeps the later answer.
     const finishes = [
       ...(existing?.finishes ?? []).filter((f) => !entry.finishes?.some((g) => g.attemptId === f.attemptId)),
@@ -187,6 +216,7 @@ class Outbox {
           ...existing,
           create: existing.create ?? entry.create,
           ...(attempts.length ? { attempts } : {}),
+          ...(files.length ? { files } : {}),
           ...(finishes.length ? { finishes } : {}),
           photos: [...existing.photos, ...entry.photos],
         }
@@ -218,6 +248,7 @@ class Outbox {
     this.cancelledItems.add(itemId);
     for (const photo of entry.photos) this.cancelledPhotos.add(photo.id);
     for (const attempt of entry.attempts ?? []) this.cancelledAttempts.add(attempt.id);
+    for (const file of entry.files ?? []) this.cancelledFiles.add(file.id);
     this.setEntries(this.state.entries.filter((e) => e.itemId !== itemId));
     void this.store.delete(itemId).catch(() => undefined);
     return entry;
@@ -228,6 +259,7 @@ class Outbox {
     this.cancelledItems.delete(entry.itemId);
     for (const photo of entry.photos) this.cancelledPhotos.delete(photo.id);
     for (const attempt of entry.attempts ?? []) this.cancelledAttempts.delete(attempt.id);
+    for (const file of entry.files ?? []) this.cancelledFiles.delete(file.id);
     void this.add(entry);
   }
 
@@ -274,31 +306,64 @@ class Outbox {
     return true;
   }
 
-  /** Takes a pending attempt and its photos out (deleted). Returns them, for undo. */
-  removeAttempt(attemptId: string): { itemId: string; attempt: PendingAttempt; photos: PendingPhoto[] } | undefined {
+  /** Takes a pending attempt, its file and its photos out (deleted). Returns them, for undo. */
+  removeAttempt(
+    attemptId: string,
+  ): { itemId: string; attempt: PendingAttempt; photos: PendingPhoto[]; files: PendingFile[] } | undefined {
     const entry = this.entryWithAttempt(attemptId);
     const attempt = entry?.attempts?.find((a) => a.id === attemptId);
     if (!entry || !attempt) return undefined;
     this.cancelledAttempts.add(attemptId);
     const photos = entry.photos.filter((photo) => photo.attemptId === attemptId);
     for (const photo of photos) this.cancelledPhotos.add(photo.id);
+    const files = (entry.files ?? []).filter((file) => file.attemptId === attemptId);
+    for (const file of files) this.cancelledFiles.add(file.id);
     void this.save({
       ...entry,
       attempts: entry.attempts?.filter((a) => a.id !== attemptId),
+      files: entry.files?.filter((file) => file.attemptId !== attemptId),
       photos: entry.photos.filter((photo) => photo.attemptId !== attemptId),
     });
-    return { itemId: entry.itemId, attempt, photos };
+    return { itemId: entry.itemId, attempt, photos, files };
   }
 
-  restoreAttempt(removed: { itemId: string; attempt: PendingAttempt; photos: PendingPhoto[] }) {
+  restoreAttempt(removed: { itemId: string; attempt: PendingAttempt; photos: PendingPhoto[]; files: PendingFile[] }) {
     this.cancelledAttempts.delete(removed.attempt.id);
     for (const photo of removed.photos) this.cancelledPhotos.delete(photo.id);
+    for (const file of removed.files) this.cancelledFiles.delete(file.id);
     void this.add({
       itemId: removed.itemId,
       attempts: [removed.attempt],
+      files: removed.files,
       photos: removed.photos,
       queuedAt: Date.now(),
     });
+  }
+
+  /** A slicer file still on this device, for an attempt (shown until the server has it). */
+  pendingFile(attemptId: string): PendingFile | undefined {
+    for (const entry of this.state.entries) {
+      const file = entry.files?.find((f) => f.attemptId === attemptId);
+      if (file) return file;
+    }
+    return undefined;
+  }
+
+  /** Takes a waiting slicer file out (removed before it was sent). Returns it, for undo. */
+  removeFile(attemptId: string): { itemId: string; file: PendingFile } | undefined {
+    for (const entry of this.state.entries) {
+      const file = entry.files?.find((f) => f.attemptId === attemptId);
+      if (!file) continue;
+      this.cancelledFiles.add(file.id);
+      void this.save({ ...entry, files: entry.files?.filter((f) => f.id !== file.id) });
+      return { itemId: entry.itemId, file };
+    }
+    return undefined;
+  }
+
+  restoreFile(itemId: string, file: PendingFile) {
+    this.cancelledFiles.delete(file.id);
+    void this.add({ itemId, files: [file], photos: [], queuedAt: Date.now() });
   }
 
   /** Photos of an attempt still on this device, which a delete on the server can't reach. */
@@ -342,6 +407,7 @@ class Outbox {
         if (entry.create) await this.createItem(entry);
         else if (entry.attempts?.[0]) await this.createAttempt(entry, entry.attempts[0]);
         else if (entry.finishes?.[0]) await this.sendFinish(entry, entry.finishes[0]);
+        else if (entry.files?.[0]) await this.uploadFile(entry, entry.files[0]);
         else if (entry.photos[0]) await this.uploadPhoto(entry, entry.photos[0]);
         else this.finish(entry.itemId);
         this.attempt = 0;
@@ -498,8 +564,41 @@ class Outbox {
     void this.save({
       ...latest,
       attempts: latest.attempts?.filter((a) => a.id !== attemptId),
+      files: latest.files?.filter((file) => file.attemptId !== attemptId),
       photos: latest.photos.filter((photo) => photo.attemptId !== attemptId),
     });
+  }
+
+  private async uploadFile(entry: OutboxEntry, pending: PendingFile) {
+    const form = new FormData();
+    form.set("id", pending.id);
+    form.set("name", pending.name);
+    form.set("size", String(pending.size));
+    form.set("plate", String(pending.plate));
+    form.set("plateCount", String(pending.plateCount));
+    if (pending.slicer) form.set("slicer", pending.slicer);
+    form.set("prefill", JSON.stringify(pending.prefill));
+    if (pending.thumb) form.set("thumb", pending.thumb, "thumb.png");
+    if (pending.file) form.set("file", pending.file, pending.name);
+    const response = await send(`/api/attempts/${pending.attemptId}/file`, form, () => undefined);
+    const dropFile = () => {
+      const latest = this.entry(entry.itemId);
+      if (latest) void this.save({ ...latest, files: latest.files?.filter((file) => file.id !== pending.id) });
+    };
+    if (response.status === 404 || response.status === 409) return dropFile();
+    if ([400, 413, 415].includes(response.status)) {
+      dropFile();
+      this.handlers.photoDropped?.("The slicer file was refused by the server and couldn't be kept.");
+      return;
+    }
+    if (response.status < 200 || response.status >= 300) throw new RetryLater();
+    const { attempt } = JSON.parse(response.body) as AttemptResponse;
+    if (this.cancelledFiles.has(pending.id)) {
+      await api(`/attempts/${pending.attemptId}/file`, { method: "DELETE" }).catch(() => undefined);
+    } else {
+      this.handlers.fileSaved?.(attempt);
+    }
+    dropFile();
   }
 
   private async uploadPhoto(entry: OutboxEntry, pending: PendingPhoto) {
@@ -567,6 +666,11 @@ class Outbox {
     const latest = this.entry(itemId);
     if (latest) void this.save({ ...latest, photos: latest.photos.filter((p) => p.id !== photoId) });
   }
+}
+
+/** Shows a waiting slicer file's plate picture from the device. */
+function registerFilePreview(file: PendingFile) {
+  if (file.thumb) setPreview(file.id, file.thumb, file.thumb);
 }
 
 /** Shows a pending photo from the device until (and after) the server has it. */

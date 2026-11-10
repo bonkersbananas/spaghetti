@@ -46,6 +46,7 @@ import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
+import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -141,8 +142,20 @@ function Build({ item }: { item: ItemView }) {
   // The story, newest first.
   const story = [...item.attempts].reverse();
   const printing = story.find((attempt) => attempt.outcome === null);
-  const [sheet, setSheet] = useState<{ open: boolean; attemptId: string | null }>({ open: false, attemptId: null });
-  const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId });
+  const [sheet, setSheet] = useState<{
+    open: boolean;
+    attemptId: string | null;
+    file?: { file: File; key: number } | null;
+  }>({ open: false, attemptId: null });
+  const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId, file: null });
+  // A .3mf dropped on the build starts a new attempt from it; dropped on an attempt, it goes on that one.
+  useSlicerDropTarget((file, attemptId) => {
+    const onto = attemptId ? item.attempts.find((attempt) => attempt.id === attemptId) : undefined;
+    // Offline, a saved attempt is only for reading; a new attempt can still start from the file.
+    if (onto && !canEdit(onto.pending)) return;
+    const target = onto?.id ?? null;
+    setSheet({ open: true, attemptId: target, file: { file, key: Date.now() } });
+  });
   const primary = () => openSheet(printing?.id ?? null);
   const [selected, setSelected] = useState<string | null>(linkedAttempt ?? null);
   // Came here for one attempt: bring it into view.
@@ -451,6 +464,7 @@ function Build({ item }: { item: ItemView }) {
       <AttemptSheet
         item={item}
         attemptId={sheet.attemptId}
+        incomingFile={sheet.file}
         open={sheet.open}
         onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
       />

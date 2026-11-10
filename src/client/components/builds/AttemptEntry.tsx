@@ -15,8 +15,10 @@ import { cn } from "@/lib/cn";
 import type { AttemptView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
+import { EstimateLine } from "./Estimate";
 import { OutcomeChip, outcomeDots } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
+import { SavedFileCard } from "./SlicerFile";
 import { filamentLabel, formatMinutes, summarizeResults, summarizeSettings } from "./settings";
 
 interface AttemptEntryProps {
@@ -59,6 +61,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
       transition={spring.gentle}
       className="relative flex list-none gap-3.5 md:gap-4"
       aria-current={selected || undefined}
+      data-attempt-id={attempt.id}
     >
       {/* The thread of the story: a dot in the outcome's color on a quiet line. */}
       <div className="relative flex w-3 shrink-0 justify-center" aria-hidden>
@@ -156,6 +159,19 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 ))}
               </ul>
             )}
+
+            {attempt.file && (
+              // Above the open button, so its download link works.
+              <div className="pointer-events-auto relative z-10 md:max-w-md">
+                <SavedFileCard file={attempt.file} />
+              </div>
+            )}
+
+            {!printing &&
+              attempt.settings.estimatedMinutes !== undefined &&
+              attempt.settings.actualMinutes !== undefined && (
+                <EstimateLine estimated={attempt.settings.estimatedMinutes} actual={attempt.settings.actualMinutes} />
+              )}
 
             {(filaments.length > 0 || settings.length > 0 || results.length > 0) && (
               <SettingsLine

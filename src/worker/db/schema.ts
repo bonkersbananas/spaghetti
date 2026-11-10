@@ -1,6 +1,7 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
 import type { PersonColor } from "../../shared/people.ts";
+import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 
 /** The two people who share the workspace. Made with `pnpm user:add`. */
 export const users = sqliteTable("users", {
@@ -156,3 +157,100 @@ export type Item = typeof items.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
 export type Attempt = typeof attempts.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
+
+/**
+ * The spools on the shelf: the filament library. The client picks the id.
+ * A spool's photo (usually its label) is stored like other photos, in R2 as
+ * `photos/<photoId>/large` and `/thumb`. Deleting is soft, with undo.
+ */
+export const spools = sqliteTable(
+  "spools",
+  {
+    id: text("id").primaryKey(),
+    /** "PLA", "PETG"… as people (or a slicer file) say it. */
+    material: text("material").notNull(),
+    brand: text("brand"),
+    colorName: text("color_name"),
+    /** Lowercase #rrggbb. */
+    colorHex: text("color_hex"),
+    /** "matte", "silk"… (shared/spools.ts), or people's own word. */
+    finish: text("finish"),
+    /** Roughly how much is left: never grams. */
+    remaining: text("remaining").$type<Remaining>().notNull().default("full"),
+    note: text("note").notNull().default(""),
+    driedAt: integer("dried_at", { mode: "timestamp_ms" }),
+    photoId: text("photo_id"),
+    photoWidth: integer("photo_width"),
+    photoHeight: integer("photo_height"),
+    photoColor: text("photo_color"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("spools_material_idx").on(table.material)],
+);
+
+/**
+ * What is loaded where: AMS slots ("A1" to "D4") and the external spool
+ * holder ("Ext"). A spool sits in one slot at most. A deleted spool keeps
+ * its row, so undo puts it back where it was; it reads as an empty slot.
+ */
+export const amsSlots = sqliteTable("ams_slots", {
+  slot: text("slot").primaryKey(),
+  spoolId: text("spool_id")
+    .notNull()
+    .unique()
+    .references(() => spools.id, { onDelete: "cascade" }),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => users.id),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/** The printer as it's set up here: one row (id "x2d"), its setup as JSON. */
+export const printer = sqliteTable("printer", {
+  id: text("id").primaryKey(),
+  setup: text("setup", { mode: "json" }).$type<PrinterSetup>().notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/**
+ * The slicer file an attempt was printed from (.3mf or .gcode.3mf): what the
+ * browser read from it (`prefill`), its plate's thumbnail, and the file itself
+ * in R2 (`files/<id>/file`, `/thumb`) when it was under the size cap. One per
+ * attempt; deleting is soft (undo), and the purge removes the bytes.
+ */
+export const attemptFiles = sqliteTable(
+  "attempt_files",
+  {
+    id: text("id").primaryKey(),
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    size: integer("size").notNull(),
+    /** The bytes are in R2; false when the file was over the cap and only what it said is kept. */
+    stored: integer("stored", { mode: "boolean" }).notNull(),
+    hasThumb: integer("has_thumb", { mode: "boolean" }).notNull(),
+    /** Which plate was printed (from 1), of how many. */
+    plate: integer("plate").notNull(),
+    plateCount: integer("plate_count").notNull(),
+    /** "BambuStudio 02.01.00.00" */
+    slicer: text("slicer"),
+    /** The settings read from the file, so the app can mark the values that came from it. */
+    prefill: text("prefill", { mode: "json" }).$type<AttemptSettings>().notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("attempt_files_attempt_idx").on(table.attemptId)],
+);
+
+export type Spool = typeof spools.$inferSelect;
+export type AmsSlot = typeof amsSlots.$inferSelect;
+export type AttemptFileRow = typeof attemptFiles.$inferSelect;

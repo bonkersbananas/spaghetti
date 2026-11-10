@@ -110,6 +110,17 @@
   animation: sg-shake var(--sg-duration-slow) var(--sg-ease-out);
 }
 
+/*
+ * A spool seen from the side (SpoolDisc): the filament's color with the
+ * faint rings of wound filament and a soft highlight. The color is data, set
+ * inline; the texture is the same on every color.
+ */
+.spool-wound {
+  background-image:
+    radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.32), transparent 46%),
+    repeating-radial-gradient(circle, rgb(0 0 0 / 0.07) 0 1px, transparent 1px 3px);
+}
+
 /* Steam wisps in empty-state illustrations. */
 @keyframes sg-steam {
   0% {

@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { cn } from "@/lib/cn";
+import { Caution } from "./Caution";
 import type { Icon } from "./icons";
 import { type SaveState, SaveStatus } from "./SaveStatus";
 
@@ -18,20 +19,27 @@ interface FieldFrameProps {
   label?: string;
   hint?: ReactNode;
   error?: string;
+  /** A gentle note (a Caution), such as a printer limit: shown instead of the hint, never blocking. */
+  caution?: ReactNode;
+  /** A small mark after the label, such as FromFileMark. */
+  mark?: ReactNode;
   saveState?: SaveState;
   className?: string;
   children: ReactNode;
 }
 
-function FieldFrame({ id, label, hint, error, saveState, className, children }: FieldFrameProps) {
+function FieldFrame({ id, label, hint, error, caution, mark, saveState, className, children }: FieldFrameProps) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {(label || saveState) && (
         <div className="flex items-baseline justify-between gap-3 px-0.5">
           {label && (
-            <label htmlFor={id} className="text-small text-ink-soft font-semibold">
-              {label}
-            </label>
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <label htmlFor={id} className="text-small text-ink-soft truncate font-semibold">
+                {label}
+              </label>
+              {mark}
+            </span>
           )}
           {saveState && <SaveStatus state={saveState} />}
         </div>
@@ -41,6 +49,10 @@ function FieldFrame({ id, label, hint, error, saveState, className, children }: 
         <p id={`${id}-message`} className="text-small text-tomato-ink px-0.5 font-medium">
           {error}
         </p>
+      ) : caution ? (
+        <div id={`${id}-message`}>
+          <Caution>{caution}</Caution>
+        </div>
       ) : hint ? (
         <p id={`${id}-message`} className="text-small text-ink-faint px-0.5">
           {hint}
@@ -57,6 +69,10 @@ export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "si
   label?: string;
   hint?: ReactNode;
   error?: string;
+  /** A gentle note beside the field (a printer limit); see Caution. */
+  caution?: ReactNode;
+  /** A small mark after the label (FromFileMark). */
+  mark?: ReactNode;
   /** Shown beside the label for fields that autosave. */
   saveState?: SaveState;
   icon?: Icon;
@@ -73,6 +89,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     label,
     hint,
     error,
+    caution,
+    mark,
     saveState,
     icon: IconComponent,
     suffix,
@@ -87,7 +105,16 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const autoId = useId();
   const fieldId = id ?? autoId;
   return (
-    <FieldFrame id={fieldId} label={label} hint={hint} error={error} saveState={saveState} className={className}>
+    <FieldFrame
+      id={fieldId}
+      label={label}
+      hint={hint}
+      error={error}
+      caution={caution}
+      mark={mark}
+      saveState={saveState}
+      className={className}
+    >
       <div className="relative">
         {IconComponent && (
           <IconComponent
@@ -100,7 +127,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           ref={ref}
           id={fieldId}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error || hint ? `${fieldId}-message` : undefined}
+          aria-describedby={error || caution || hint ? `${fieldId}-message` : undefined}
           className={cn(
             appearance === "surface"
               ? cn(inputSurface, "text-body", size === "md" ? "h-12 px-4 md:h-11" : "h-11 px-3 md:h-9")

@@ -1,0 +1,88 @@
+import { and, eq, isNull, ne } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
+import type { PrinterResponse } from "../../shared/api.ts";
+import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
+import type { Db } from "../db/index.ts";
+import { amsSlots, printer, spools } from "../db/schema.ts";
+import type { AppEnv } from "../env.ts";
+import { apiError } from "../http.ts";
+
+const PRINTER_ID = "x2d";
+
+const nozzle = z.object({ diameter: z.number().min(0.1).max(2), hardened: z.boolean() });
+const setupSchema = z.object({
+  nozzles: z.object({ main: nozzle, auxiliary: nozzle }),
+  plates: z
+    .array(z.string().trim().min(1).max(60))
+    .max(20)
+    .transform((list) => [...new Set(list)]),
+  amsUnits: z.number().int().min(0).max(X2D.maxAmsUnits),
+}) satisfies z.ZodType<PrinterSetup>;
+
+const setSlot = z.object({ spoolId: z.uuid().nullable() });
+
+async function loadPrinter(db: Db): Promise<PrinterResponse> {
+  const [row, slots] = await Promise.all([
+    db.select().from(printer).where(eq(printer.id, PRINTER_ID)).get(),
+    // A deleted spool's slot reads as empty (and fills again with undo).
+    db
+      .select({ slot: amsSlots.slot, spoolId: amsSlots.spoolId })
+      .from(amsSlots)
+      .innerJoin(spools, eq(spools.id, amsSlots.spoolId))
+      .where(isNull(spools.deletedAt)),
+  ]);
+  return {
+    setup: row?.setup ?? DEFAULT_PRINTER,
+    slots: Object.fromEntries(slots.map((slot) => [slot.slot, slot.spoolId])),
+  };
+}
+
+/** /api/printer: the X2D as it's set up here, and what is loaded where. Never a live connection. */
+export const printerRoutes = new Hono<AppEnv>()
+  .get("/", async (c) => c.json<PrinterResponse>(await loadPrinter(c.var.db)))
+
+  /** Replaces the setup: nozzles fitted, plates owned, AMS units. */
+  .put("/", async (c) => {
+    const parsed = setupSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That setup couldn't be read.");
+    const now = new Date();
+    await c.var.db
+      .insert(printer)
+      .values({ id: PRINTER_ID, setup: parsed.data, updatedAt: now })
+      .onConflictDoUpdate({ target: printer.id, set: { setup: parsed.data, updatedAt: now } });
+    return c.json<PrinterResponse>(await loadPrinter(c.var.db));
+  })
+
+  /**
+   * Loads a spool into a slot ("A1" to "D4", or "Ext"), taking it out of the
+   * slot it was in; `spoolId: null` empties the slot.
+   */
+  .put("/slots/:slot", async (c) => {
+    const slot = c.req.param("slot");
+    if (!SLOT_PATTERN.test(slot)) return apiError(c, 404, "not_found", "There's no such slot.");
+    const parsed = setSlot.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    const db = c.var.db;
+    const { spoolId } = parsed.data;
+    if (!spoolId) {
+      await db.delete(amsSlots).where(eq(amsSlots.slot, slot));
+      return c.json<PrinterResponse>(await loadPrinter(db));
+    }
+    const spool = await db
+      .select({ id: spools.id })
+      .from(spools)
+      .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+      .get();
+    if (!spool) return apiError(c, 404, "not_found", "That spool isn't on the shelf any more.");
+    const now = new Date();
+    await db.batch([
+      // Out of wherever it was, and whatever was in this slot comes out.
+      db.delete(amsSlots).where(and(eq(amsSlots.spoolId, spoolId), ne(amsSlots.slot, slot))),
+      db
+        .insert(amsSlots)
+        .values({ slot, spoolId, updatedBy: c.var.user.id, updatedAt: now })
+        .onConflictDoUpdate({ target: amsSlots.slot, set: { spoolId, updatedBy: c.var.user.id, updatedAt: now } }),
+    ]);
+    return c.json<PrinterResponse>(await loadPrinter(db));
+  });

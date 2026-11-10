@@ -1,8 +1,12 @@
+import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import { type AttemptSettings, carryOver, describeChanges, type Outcome } from "@shared/attempts";
+import { filamentFromSpool, printerHints, spoolFromFilament } from "@shared/spools";
+import { applyFileSettings } from "@shared/threemf/index.ts";
 import { fullTime, relativeTime } from "@shared/time";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { CalendarIcon, CameraIcon, ImageIcon, PlusIcon, SettingsIcon, TrashIcon } from "@/components/ui/icons";
@@ -11,17 +15,33 @@ import { MetaList } from "@/components/ui/MetaList";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Sheet } from "@/components/ui/Sheet";
+import { toast } from "@/components/ui/Toast";
 import { type AttemptDraft, deleteAttempt, logAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
 import { useDraftPhotos } from "@/lib/capture";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
+import { addSpool, spoolsQuery, usePrinterSetup } from "@/lib/pantry";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { useReadOnly } from "@/lib/read-only";
+import {
+  fileSettings,
+  formatBytes,
+  linkSpools,
+  plateOf,
+  queueSlicerFile,
+  readSlicerFile,
+  removeSlicerFile,
+  SLICER_ACCEPT,
+  type SlicerFileDraft,
+  useSlicerDropTarget,
+} from "@/lib/slicer-files";
 import { useAutosave } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { EstimateLine, elapsedIfPlausible } from "./Estimate";
 import { OutcomePicker } from "./Outcome";
 import { SettingsEditor } from "./SettingsEditor";
-import { summarizeSettings } from "./settings";
+import { AddSlicerFile, FileCard, PlateChooser, SavedFileCard, UnknownFilaments, usePlateThumbUrl } from "./SlicerFile";
+import { formatMinutes, summarizeSettings } from "./settings";
 import { TagPicker } from "./TagPicker";
 import { WhatWorkedSuggestion } from "./WhatWorkedSuggestion";
 
@@ -33,6 +53,8 @@ interface AttemptSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Open with the failure tags or the settings already showing. */
   initialOutcome?: Outcome | null;
+  /** A slicer file dropped on the build or the attempt: read it into the sheet. */
+  incomingFile?: { file: File; key: number } | null;
 }
 
 /**
@@ -40,7 +62,7 @@ interface AttemptSheetProps {
  * the time is now, and everything else (photos, a line, tags, settings) is
  * one more tap away. A bottom sheet on phones, a side panel on desktop.
  */
-export function AttemptSheet({ item, attemptId, open, onOpenChange, initialOutcome }: AttemptSheetProps) {
+export function AttemptSheet({ item, attemptId, open, onOpenChange, initialOutcome, incomingFile }: AttemptSheetProps) {
   const attempt = attemptId ? item.attempts.find((a) => a.id === attemptId) : undefined;
   // The attempt was deleted (here or elsewhere) while open.
   useEffect(() => {
@@ -55,10 +77,136 @@ export function AttemptSheet({ item, attemptId, open, onOpenChange, initialOutco
         attempt={attempt}
         open={open}
         onOpenChange={onOpenChange}
+        incomingFile={incomingFile}
       />
     ) : null;
   }
-  return <LogAttempt item={item} open={open} onOpenChange={onOpenChange} initialOutcome={initialOutcome} />;
+  return (
+    <LogAttempt
+      item={item}
+      open={open}
+      onOpenChange={onOpenChange}
+      initialOutcome={initialOutcome}
+      incomingFile={incomingFile}
+    />
+  );
+}
+
+/** A slicer file being read into the sheet: which plate, what it said, which filaments aren't in the pantry. */
+interface SlicerState {
+  draft: SlicerFileDraft;
+  /** Null until a plate is picked, for a file with several. */
+  plate: number | null;
+  prefill: AttemptSettings | null;
+  /** Filaments (by position) that matched no spool. */
+  unknown: number[];
+}
+
+/**
+ * Reading a dropped or picked .3mf into an attempt: ask for the plate when
+ * there are several, lay what the file says over the settings, link its
+ * filaments to spools in the pantry, and offer to add the ones that aren't.
+ */
+function useSlicerFile({
+  open,
+  settings,
+  onSettings,
+  onReady,
+  incomingFile,
+}: {
+  open: boolean;
+  settings: AttemptSettings;
+  onSettings: (settings: AttemptSettings) => void;
+  onReady?: (draft: SlicerFileDraft, plate: number | null, prefill: AttemptSettings) => void;
+  incomingFile?: { file: File; key: number } | null;
+}) {
+  const queryClient = useQueryClient();
+  const { data: user } = useSuspenseQuery(sessionQuery);
+  const { data: spools = [] } = useQuery(spoolsQuery);
+  const [state, setState] = useState<SlicerState | null>(null);
+  const [settingsKey, setSettingsKey] = useState(0);
+  const latest = useRef(settings);
+  latest.current = settings;
+
+  const apply = (draft: SlicerFileDraft, plate: number | null) => {
+    const prefill = fileSettings(draft, plate);
+    const linked = linkSpools(prefill, spools);
+    onSettings(applyFileSettings(latest.current, linked.settings));
+    setState({ draft, plate, prefill, unknown: linked.unknown });
+    setSettingsKey((key) => key + 1);
+    onReady?.(draft, plate, prefill);
+  };
+  const receive = async (file: File) => {
+    const draft = await readSlicerFile(file);
+    if (!draft) return;
+    if (draft.plates.length > 1) setState({ draft, plate: null, prefill: null, unknown: [] });
+    else apply(draft, draft.plates[0]?.index ?? null);
+  };
+  const picker = useFilePicker({
+    accept: SLICER_ACCEPT,
+    onFiles: ([file]) => file && void receive(file),
+    testId: "slicer-file-input",
+  });
+  useSlicerDropTarget((file) => void receive(file), open);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new drop is a new key.
+  useEffect(() => {
+    if (incomingFile) void receive(incomingFile.file);
+  }, [incomingFile?.key]);
+
+  /** One tap: a filament from the file that isn't in the pantry becomes a spool there, and this attempt's. */
+  const addUnknown = (index: number) => {
+    const filament = latest.current.filaments?.[index];
+    if (!filament || !user) return;
+    const { spool } = addSpool(queryClient, spoolFromFilament(filament), user.id);
+    onSettings({
+      ...latest.current,
+      filaments: latest.current.filaments?.map((f, i) =>
+        i === index ? filamentFromSpool(spool, { profile: f.profile }) : f,
+      ),
+    });
+    setState((current) => current && { ...current, unknown: current.unknown.filter((i) => i !== index) });
+    toast.success("Added to the pantry", [spool.colorName, spool.brand, spool.material].filter(Boolean).join(" "));
+  };
+
+  const unknownFilaments = (state?.unknown ?? []).flatMap((index) => {
+    const filament = settings.filaments?.[index];
+    return filament && !filament.spoolId ? [{ index, filament }] : [];
+  });
+
+  return {
+    state,
+    picker,
+    choosePlate: (plate: number) => state && apply(state.draft, plate),
+    clear: () => setState(null),
+    addUnknown,
+    unknownFilaments,
+    settingsKey,
+  };
+}
+
+/** A file read into a new attempt, before it is logged. */
+function DraftFile({ state, onRemove }: { state: SlicerState; onRemove: () => void }) {
+  const plate = plateOf(state.draft, state.plate);
+  const src = usePlateThumbUrl(plate);
+  const plateCount = state.draft.result.plates.length;
+  const estimate = state.prefill?.estimatedMinutes;
+  return (
+    <FileCard
+      name={state.draft.file.name}
+      thumbSrc={src}
+      meta={[
+        plateCount > 1 && plate ? `plate ${plate.index} of ${plateCount}` : "",
+        estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "",
+        formatBytes(state.draft.file.size),
+      ].filter(Boolean)}
+      note={
+        state.draft.file.size > MAX_SLICER_FILE_BYTES
+          ? `Over ${formatBytes(MAX_SLICER_FILE_BYTES)}, so only what it said will be kept.`
+          : undefined
+      }
+      onRemove={onRemove}
+    />
+  );
 }
 
 const toLocalInput = (time: number) => {
@@ -125,12 +273,26 @@ interface FieldsProps {
   readOnly?: "all" | "finish";
   /** Shown above the settings: "what worked last time", for a new attempt. */
   suggestion?: ReactNode;
+  /** The slicer file: its card, a plate to pick, or the well to add one. */
+  file?: ReactNode;
+  /** What the slicer file said, to mark the values that came from it. */
+  fromFile?: AttemptSettings;
+  /** Changes when a file was read: the settings open to show what it filled in. */
+  settingsKey?: number;
+  /** Shown under the outcome: how long it took next to the estimate. */
+  estimate?: ReactNode;
 }
 
 function AttemptFields(props: FieldsProps) {
   const { outcome, previous, settings } = props;
   const isDesktop = useIsDesktop();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // A file was read: show what it filled in.
+  useEffect(() => {
+    if (props.settingsKey) setSettingsOpen(true);
+  }, [props.settingsKey]);
+  const setup = usePrinterSetup();
+  const hints = printerHints(settings, setup);
   const changes = previous ? describeChanges(previous.settings, settings) : [];
   const summary = summarizeSettings(settings);
   const filamentNames = (settings.filaments ?? [])
@@ -156,6 +318,14 @@ function AttemptFields(props: FieldsProps) {
   ) : (
     "Filament, plate, temperatures, times. All optional."
   );
+  const summaryWithFile = props.fromFile ? (
+    <span className="inline-flex min-w-0 items-start gap-1.5">
+      <FromFileMark className="mt-0.5" />
+      <span className="min-w-0">{settingsSummary}</span>
+    </span>
+  ) : (
+    settingsSummary
+  );
 
   return (
     <div className="flex flex-col gap-5" data-capture>
@@ -163,6 +333,7 @@ function AttemptFields(props: FieldsProps) {
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
           <OutcomePicker value={outcome} onChange={props.onOutcome} />
+          {props.estimate}
         </div>
       </fieldset>
       <fieldset disabled={!!props.readOnly} className="contents">
@@ -200,18 +371,30 @@ function AttemptFields(props: FieldsProps) {
           <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
         )}
       </fieldset>
-      {props.suggestion}
       <fieldset disabled={!!props.readOnly} className="contents">
-        <Disclosure
-          open={settingsOpen || !!props.readOnly}
-          onOpenChange={setSettingsOpen}
-          title="Settings"
-          icon={SettingsIcon}
-          summary={settingsSummary}
-        >
-          <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} />
-        </Disclosure>
+        {props.file}
       </fieldset>
+      {props.suggestion}
+      <div className="flex flex-col gap-2">
+        <fieldset disabled={!!props.readOnly} className="contents">
+          <Disclosure
+            open={settingsOpen || !!props.readOnly}
+            onOpenChange={setSettingsOpen}
+            title="Settings"
+            icon={SettingsIcon}
+            summary={summaryWithFile}
+          >
+            <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} fromFile={props.fromFile} />
+          </Disclosure>
+        </fieldset>
+        {/* Closed, the settings still say if something needs a look. */}
+        {!settingsOpen && !props.readOnly && hints[0] && (
+          <Caution className="px-1">
+            {hints[0].text}
+            {hints.length > 1 ? ` And ${hints.length - 1} more in the settings.` : ""}
+          </Caution>
+        )}
+      </div>
     </div>
   );
 }
@@ -221,11 +404,13 @@ function LogAttempt({
   open,
   onOpenChange,
   initialOutcome,
+  incomingFile,
 }: {
   item: ItemView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialOutcome?: Outcome | null;
+  incomingFile?: { file: File; key: number } | null;
 }) {
   const isDesktop = useIsDesktop();
   const { data: user } = useSuspenseQuery(sessionQuery);
@@ -244,12 +429,18 @@ function LogAttempt({
   const { photos, addFiles, removePhoto: removeDraftPhoto, clear } = useDraftPhotos();
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
   const library = useFilePicker({ multiple: true, onFiles: addFiles });
+  const slicer = useSlicerFile({
+    open,
+    settings: draft.settings,
+    onSettings: (settings) => change({ settings }),
+    incomingFile,
+  });
 
   // A fresh sheet starts from the latest attempt (one may have been logged since), but a
   // half-filled one is kept when it closes: nothing typed is lost.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only on opening.
   useEffect(() => {
-    if (open && !dirty && !photos.length) setDraft(blank());
+    if (open && !dirty && !photos.length && !slicer.state) setDraft(blank());
   }, [open]);
 
   const change = (next: Partial<Omit<AttemptDraft, "photos">>) => {
@@ -259,7 +450,10 @@ function LogAttempt({
 
   function save(outcome: Outcome | null) {
     if (!user) return;
-    logAttempt(item, { ...draft, outcome, printedAt: when ?? Date.now(), photos }, user.id);
+    const attemptId = logAttempt(item, { ...draft, outcome, printedAt: when ?? Date.now(), photos }, user.id);
+    const file = slicer.state;
+    if (file?.prefill) queueSlicerFile(item.id, attemptId, file.draft, file.plate, file.prefill);
+    slicer.clear();
     clear();
     setDirty(false);
     setWhen(null);
@@ -319,8 +513,21 @@ function LogAttempt({
       >
         {camera.input}
         {library.input}
+        {slicer.picker.input}
         <AttemptFields
           outcomeLabel="How did it go?"
+          fromFile={slicer.state?.prefill ?? undefined}
+          settingsKey={slicer.settingsKey}
+          file={
+            <SlicerFileSection
+              state={slicer.state}
+              onPick={slicer.picker.open}
+              onPlate={slicer.choosePlate}
+              onAddUnknown={slicer.addUnknown}
+              unknown={slicer.unknownFilaments}
+              card={slicer.state?.prefill ? <DraftFile state={slicer.state} onRemove={slicer.clear} /> : null}
+            />
+          }
           onEnter={() => {
             if (draft.outcome) save(draft.outcome);
           }}
@@ -336,11 +543,14 @@ function LogAttempt({
           onSettings={(settings) => change({ settings })}
           previous={previous}
           suggestion={
-            <WhatWorkedSuggestion
-              itemId={item.id}
-              settings={draft.settings}
-              onUse={(settings) => change({ settings })}
-            />
+            // A slicer file says what this attempt is: no other settings to offer.
+            slicer.state ? null : (
+              <WhatWorkedSuggestion
+                itemId={item.id}
+                settings={draft.settings}
+                onUse={(settings) => change({ settings })}
+              />
+            )
           }
           when={
             <WhenField
@@ -383,11 +593,13 @@ function EditAttempt({
   attempt,
   open,
   onOpenChange,
+  incomingFile,
 }: {
   item: ItemView;
   attempt: AttemptView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  incomingFile?: { file: File; key: number } | null;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -420,6 +632,23 @@ function EditAttempt({
   });
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const previous = item.attempts[attempt.number - 2];
+  const slicer = useSlicerFile({
+    // Offline, a saved attempt's settings are only for reading: no file can go on it.
+    open: open && !readOnly,
+    settings: value.settings,
+    onSettings: (settings) => change({ settings }),
+    onReady: (draft, plate, prefill) => queueSlicerFile(item.id, attempt.id, draft, plate, prefill),
+    incomingFile,
+  });
+  const finish = (outcome: Outcome) => {
+    // Finishing a print that was logged as it started: how long it took, if that's believable.
+    const actual =
+      printing && value.settings.actualMinutes === undefined
+        ? elapsedIfPlausible(attempt.printedAt, value.settings.estimatedMinutes)
+        : undefined;
+    change({ outcome, ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}) });
+  };
+  const { estimatedMinutes, actualMinutes } = value.settings;
 
   return (
     <Sheet
@@ -465,11 +694,33 @@ function EditAttempt({
     >
       {camera.input}
       {library.input}
+      {slicer.picker.input}
       <AttemptFields
         outcomeLabel={printing ? "Finished? How did it go?" : "How did it go?"}
         readOnly={readOnly}
         outcome={value.outcome}
-        onOutcome={(outcome) => change({ outcome })}
+        onOutcome={finish}
+        fromFile={attempt.file?.prefill}
+        settingsKey={slicer.settingsKey}
+        estimate={
+          value.outcome && estimatedMinutes !== undefined && actualMinutes !== undefined ? (
+            <EstimateLine estimated={estimatedMinutes} actual={actualMinutes} className="px-0.5" />
+          ) : null
+        }
+        file={
+          <SlicerFileSection
+            state={slicer.state?.plate === null ? slicer.state : null}
+            onPick={slicer.picker.open}
+            onPlate={slicer.choosePlate}
+            onAddUnknown={slicer.addUnknown}
+            unknown={slicer.unknownFilaments}
+            card={
+              attempt.file ? (
+                <SavedFileCard file={attempt.file} onRemove={() => removeSlicerFile(queryClient, item.id, attempt)} />
+              ) : null
+            }
+          />
+        }
         note={value.note}
         onNote={(note) => change({ note })}
         failureTags={value.failureTags}
@@ -504,4 +755,33 @@ function EditAttempt({
       />
     </Sheet>
   );
+}
+
+/** The sheet's slicer file: a plate to pick, the file's card (and filaments to add to the pantry), or the well to add one. */
+function SlicerFileSection({
+  state,
+  card,
+  onPick,
+  onPlate,
+  onAddUnknown,
+  unknown,
+}: {
+  state: SlicerState | null;
+  card: ReactNode;
+  onPick: () => void;
+  onPlate: (plate: number) => void;
+  onAddUnknown: (index: number) => void;
+  unknown: Array<{ index: number; filament: NonNullable<AttemptSettings["filaments"]>[number] }>;
+}) {
+  const isDesktop = useIsDesktop();
+  if (state && state.plate === null) return <PlateChooser draft={state.draft} onPick={onPlate} />;
+  if (card) {
+    return (
+      <div className="flex flex-col gap-3">
+        {card}
+        <UnknownFilaments filaments={unknown} onAdd={onAddUnknown} />
+      </div>
+    );
+  }
+  return <AddSlicerFile onClick={onPick} desktop={isDesktop} />;
 }

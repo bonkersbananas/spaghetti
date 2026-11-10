@@ -11,7 +11,7 @@ import { shortcutCaps } from "@/lib/hotkeys";
 import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
-import { sections } from "./sections";
+import { sections, workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 const itemClass =
@@ -54,6 +54,29 @@ export function Sidebar() {
 
       <nav aria-label="Sections" className="mt-5 flex flex-col gap-0.5">
         {sections.map(({ to, label, icon: Icon, shortcut }) => (
+          <Link key={to} to={to} className={itemClass}>
+            {({ isActive }) => (
+              <>
+                <Icon
+                  size={20}
+                  weight={isActive ? "fill" : "regular"}
+                  className={isActive ? "text-tomato" : "text-ink-faint group-hover:text-ink-soft"}
+                  aria-hidden
+                />
+                <span className="flex-1">{label}</span>
+                <Kbd
+                  keys={shortcutCaps(shortcut)}
+                  className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"
+                />
+              </>
+            )}
+          </Link>
+        ))}
+      </nav>
+
+      <nav aria-label="Workshop" className="mt-6 flex flex-col gap-0.5">
+        <span className="text-caption text-ink-faint mb-1 px-3 font-semibold tracking-wider uppercase">Workshop</span>
+        {workshop.map(({ to, label, icon: Icon, shortcut }) => (
           <Link key={to} to={to} className={itemClass}>
             {({ isActive }) => (
               <>

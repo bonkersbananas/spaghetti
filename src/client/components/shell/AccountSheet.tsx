@@ -7,6 +7,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
+import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** Phone-only: who is signed in, the two people, the styleguide, sign out. */
@@ -38,7 +39,24 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             ))
           : [0, 1].map((i) => <RowSkeleton key={i} />)}
       </ul>
-      <ThemeSwitch className="mt-4" />
+      <nav aria-label="Workshop" className="mt-4 flex flex-col gap-2">
+        {workshop.map(({ to, label, icon: Icon }) => (
+          <Link
+            key={to}
+            to={to}
+            onClick={() => onOpenChange(false)}
+            className="pressable focus-ring bg-paper text-body text-ink flex items-center gap-3 rounded-md px-4 py-3.5 font-semibold"
+          >
+            <Icon size={22} className="text-ink-soft" aria-hidden />
+            <span className="flex-1">{label}</span>
+            <span className="text-small text-ink-faint font-medium">
+              {to === "/pantry" ? "Spools and the AMS" : "Nozzles and plates"}
+            </span>
+            <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
+          </Link>
+        ))}
+      </nav>
+      <ThemeSwitch className="mt-5" />
       <Link
         to="/styleguide"
         onClick={() => onOpenChange(false)}

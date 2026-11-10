@@ -29,7 +29,7 @@ import { focusSearch, searchQuery } from "@/lib/search";
 import { useTheme } from "@/lib/theme";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useSignOut } from "@/lib/use-sign-out";
-import { sections } from "./sections";
+import { sections, workshop } from "./sections";
 
 /** How long typing pauses before the search runs. */
 const DEBOUNCE_MS = 90;
@@ -128,7 +128,7 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
     const here = context.flatMap(({ group, actions }) =>
       actions.map((a: ScreenAction) => action(`here-${a.id}`, group, a.label, a.icon, a.run, a.shortcut, a.keywords)),
     );
-    const goTo = sections.map((section) =>
+    const goTo = [...sections, ...workshop].map((section) =>
       action(
         `go-${section.to}`,
         "Go to",

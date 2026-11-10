@@ -13,7 +13,7 @@ import {
   unionTags,
 } from "../../shared/attempts.ts";
 import type { Db } from "../db/index.ts";
-import { type Attempt, attempts, items } from "../db/schema.ts";
+import { type Attempt, attemptFiles, attempts, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { stageDates } from "./items.ts";
@@ -34,16 +34,18 @@ const filament = z.object({
   colorName: words.optional(),
   profile: words.optional(),
   amsSlot: z.string().trim().max(16).optional(),
+  spoolId: z.uuid().optional(),
 });
 
 /** Every field optional; unknown keys are dropped. */
-const settings = z.object({
+export const settings = z.object({
   filaments: z.array(filament).max(32).optional(),
   bedType: words.optional(),
   nozzle: z.enum(NOZZLES).optional(),
   nozzleDiameter: between(0.1, 2).optional(),
   layerHeight: between(0.01, 2).optional(),
   infillDensity: between(0, 100).optional(),
+  wallLoops: z.number().int().min(0).max(100).optional(),
   supportEnabled: z.boolean().optional(),
   supportType: z.enum(SUPPORT_TYPES).optional(),
   brim: z.boolean().optional(),
@@ -111,10 +113,18 @@ function liveAttempts(db: Db, itemId: string) {
     .where(and(eq(attempts.itemId, itemId), isNull(attempts.deletedAt)));
 }
 
-/** The attempt as the API shows it, compared with the one printed before it. */
-async function loadAttempt(db: Db, attempt: Attempt) {
-  const siblings = (await liveAttempts(db, attempt.itemId)).filter((row) => row.id !== attempt.id);
-  const all = toApiAttempts([...siblings, attempt]);
+/** The attempt as the API shows it, compared with the one printed before it, with its file. */
+export async function loadAttempt(db: Db, attempt: Attempt) {
+  const [siblingRows, file] = await Promise.all([
+    liveAttempts(db, attempt.itemId),
+    db
+      .select()
+      .from(attemptFiles)
+      .where(and(eq(attemptFiles.attemptId, attempt.id), isNull(attemptFiles.deletedAt)))
+      .get(),
+  ]);
+  const siblings = siblingRows.filter((row) => row.id !== attempt.id);
+  const all = toApiAttempts([...siblings, attempt], new Map(file ? [[attempt.id, file]] : []));
   const found = all.find((row) => row.id === attempt.id);
   if (!found) throw new Error("The attempt went missing.");
   return found;

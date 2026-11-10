@@ -93,20 +93,24 @@ interface FilePickerOptions {
   camera?: boolean;
   multiple?: boolean;
   onFiles: (files: File[]) => void;
+  /** What it offers: photos by default; ".3mf" for slicer files. */
+  accept?: string;
+  /** For tests: the input's test id. */
+  testId?: string;
 }
 
 /** A hidden file input and a function to open it. */
-export function useFilePicker({ camera, multiple, onFiles }: FilePickerOptions) {
+export function useFilePicker({ camera, multiple, onFiles, accept = "image/*", testId }: FilePickerOptions) {
   const inputRef = useRef<HTMLInputElement>(null);
   const input = (
     <input
       ref={inputRef}
       type="file"
-      accept="image/*"
+      accept={accept}
       capture={camera ? "environment" : undefined}
       multiple={multiple}
       hidden
-      data-testid={camera ? "camera-input" : "photo-input"}
+      data-testid={testId ?? (camera ? "camera-input" : "photo-input")}
       onChange={(event) => {
         const files = Array.from(event.target.files ?? []);
         event.target.value = "";

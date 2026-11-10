@@ -7,7 +7,7 @@ import { DropOverlay } from "@/components/shell/DropOverlay";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
 import { ShortcutOverlay } from "@/components/shell/ShortcutOverlay";
 import { Sidebar } from "@/components/shell/Sidebar";
-import { sections } from "@/components/shell/sections";
+import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -53,7 +53,7 @@ function Shell() {
     palette: isDesktop ? () => setPaletteOpen(true) : undefined,
     help: isDesktop ? () => setHelpOpen(true) : undefined,
     ...Object.fromEntries(
-      sections.map((s) => [
+      [...sections, ...workshop].map((s) => [
         s.shortcut,
         () => {
           void navigate({ to: s.to });

@@ -482,9 +482,9 @@ describe("purge", () => {
     await uploadPhoto(deletedBuild.id, deletedPhoto, cookie, { attemptId: deletedAttempt.id });
     await request(`/api/items/${deletedBuild.id}`, { method: "DELETE", cookie });
 
-    expect(await purgeDeleted(env)).toEqual({ photos: 0, attempts: 0, items: 0 });
+    expect(await purgeDeleted(env)).toEqual({ photos: 0, files: 0, spools: 0, attempts: 0, items: 0 });
     const result = await purgeDeleted(env, Date.now() + PURGE_AFTER_MS + 1000);
-    expect(result).toEqual({ photos: 2, attempts: 2, items: 1 });
+    expect(result).toEqual({ photos: 2, files: 0, spools: 0, attempts: 2, items: 1 });
 
     expect(await env.PHOTOS.get(`photos/${keptPhoto}/large`)).not.toBeNull();
     for (const id of [gonePhoto, deletedPhoto]) {

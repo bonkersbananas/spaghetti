@@ -13,12 +13,15 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppJournalRouteImport } from './routes/_app/journal'
+import { Route as AppPrinterRouteImport } from './routes/_app/printer'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
 import { Route as AppBuildsIndexRouteImport } from './routes/_app/builds.index'
 import { Route as AppBuildsBuildIdRouteImport } from './routes/_app/builds.$buildId'
 import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
 import { Route as AppIdeasIdeaIdRouteImport } from './routes/_app/ideas.$ideaId'
+import { Route as AppPantryIndexRouteImport } from './routes/_app/pantry.index'
+import { Route as AppPantrySpoolIdRouteImport } from './routes/_app/pantry.$spoolId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -37,6 +40,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppJournalRoute = AppJournalRouteImport.update({
   id: '/journal',
   path: '/journal',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPrinterRoute = AppPrinterRouteImport.update({
+  id: '/printer',
+  path: '/printer',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSearchRoute = AppSearchRouteImport.update({
@@ -69,41 +77,60 @@ const AppIdeasIdeaIdRoute = AppIdeasIdeaIdRouteImport.update({
   path: '/ideas/$ideaId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPantryIndexRoute = AppPantryIndexRouteImport.update({
+  id: '/pantry/',
+  path: '/pantry/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPantrySpoolIdRoute = AppPantrySpoolIdRouteImport.update({
+  id: '/pantry/$spoolId',
+  path: '/pantry/$spoolId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
   '/journal': typeof AppJournalRoute
+  '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/styleguide': typeof AppStyleguideRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
   '/builds/': typeof AppBuildsIndexRoute
   '/ideas/': typeof AppIdeasIndexRoute
+  '/pantry/': typeof AppPantryIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/journal': typeof AppJournalRoute
+  '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/styleguide': typeof AppStyleguideRoute
   '/': typeof AppIndexRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
   '/builds': typeof AppBuildsIndexRoute
   '/ideas': typeof AppIdeasIndexRoute
+  '/pantry': typeof AppPantryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/journal': typeof AppJournalRoute
+  '/_app/printer': typeof AppPrinterRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/': typeof AppIndexRoute
   '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
+  '/_app/pantry/$spoolId': typeof AppPantrySpoolIdRoute
   '/_app/builds/': typeof AppBuildsIndexRoute
   '/_app/ideas/': typeof AppIdeasIndexRoute
+  '/_app/pantry/': typeof AppPantryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,35 +138,44 @@ export interface FileRouteTypes {
     | '/'
     | '/sign-in'
     | '/journal'
+    | '/printer'
     | '/search'
     | '/styleguide'
     | '/builds/$buildId'
     | '/ideas/$ideaId'
+    | '/pantry/$spoolId'
     | '/builds/'
     | '/ideas/'
+    | '/pantry/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/sign-in'
     | '/journal'
+    | '/printer'
     | '/search'
     | '/styleguide'
     | '/'
     | '/builds/$buildId'
     | '/ideas/$ideaId'
+    | '/pantry/$spoolId'
     | '/builds'
     | '/ideas'
+    | '/pantry'
   id:
     | '__root__'
     | '/_app'
     | '/sign-in'
     | '/_app/journal'
+    | '/_app/printer'
     | '/_app/search'
     | '/_app/styleguide'
     | '/_app/'
     | '/_app/builds/$buildId'
     | '/_app/ideas/$ideaId'
+    | '/_app/pantry/$spoolId'
     | '/_app/builds/'
     | '/_app/ideas/'
+    | '/_app/pantry/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -175,6 +211,13 @@ declare module '@tanstack/react-router' {
       path: '/journal'
       fullPath: '/journal'
       preLoaderRoute: typeof AppJournalRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/printer': {
+      id: '/_app/printer'
+      path: '/printer'
+      fullPath: '/printer'
+      preLoaderRoute: typeof AppPrinterRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/search': {
@@ -219,29 +262,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIdeasIdeaIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/pantry/': {
+      id: '/_app/pantry/'
+      path: '/pantry'
+      fullPath: '/pantry/'
+      preLoaderRoute: typeof AppPantryIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pantry/$spoolId': {
+      id: '/_app/pantry/$spoolId'
+      path: '/pantry/$spoolId'
+      fullPath: '/pantry/$spoolId'
+      preLoaderRoute: typeof AppPantrySpoolIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppJournalRoute: typeof AppJournalRoute
+  AppPrinterRoute: typeof AppPrinterRoute
   AppSearchRoute: typeof AppSearchRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
   AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
+  AppPantrySpoolIdRoute: typeof AppPantrySpoolIdRoute
   AppBuildsIndexRoute: typeof AppBuildsIndexRoute
   AppIdeasIndexRoute: typeof AppIdeasIndexRoute
+  AppPantryIndexRoute: typeof AppPantryIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppJournalRoute: AppJournalRoute,
+  AppPrinterRoute: AppPrinterRoute,
   AppSearchRoute: AppSearchRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppIndexRoute: AppIndexRoute,
   AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,
   AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,
+  AppPantrySpoolIdRoute: AppPantrySpoolIdRoute,
   AppBuildsIndexRoute: AppBuildsIndexRoute,
   AppIdeasIndexRoute: AppIdeasIndexRoute,
+  AppPantryIndexRoute: AppPantryIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
