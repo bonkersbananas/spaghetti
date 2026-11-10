@@ -3,6 +3,7 @@
  * ideas, the pantry and builds with histories. Everything goes through the
  * real API, as a phone would.
  */
+import { readFileSync } from "node:fs";
 import { type APIRequestContext, type Browser, request } from "@playwright/test";
 import { SEED_USERS } from "../lib/local-app.ts";
 import { executeSql } from "../lib/wrangler.ts";
@@ -50,6 +51,7 @@ export async function seedAll({
   );
   if (!alex || !sam) throw new Error("Seeding needs both people");
   try {
+    await seedProfilePicture(alex, origin);
     await seedIdeas(browser, { alex, sam }, origin, now);
     await seedPantry(browser, alex, origin, stateDir, now);
     await seedBuilds(browser, { alex, sam }, origin, stateDir, now);
@@ -65,6 +67,21 @@ export async function seedAll({
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);
   }
+}
+
+/** Alex has a picture, Sam keeps initials, so the shots show both. */
+async function seedProfilePicture(alex: APIRequestContext, origin: string) {
+  const response = await alex.put("/api/people/me/photo", {
+    headers: { Origin: origin },
+    multipart: {
+      photo: {
+        name: "portrait.jpg",
+        mimeType: "image/jpeg",
+        buffer: readFileSync(new URL("../../e2e/fixtures/portrait.jpg", import.meta.url)),
+      },
+    },
+  });
+  if (!response.ok()) throw new Error(`Seeding the profile picture failed: ${response.status()}`);
 }
 
 const DAY = 24 * 3_600_000;
