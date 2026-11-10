@@ -96,6 +96,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "agent":
         roots.add("agents");
         break;
+      case "person":
+        roots.add("people").add("session");
+        break;
     }
     if (change.itemId && change.entity !== "spool") details.add(change.itemId);
   }

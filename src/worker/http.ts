@@ -16,7 +16,13 @@ export function apiError(c: Context, status: ContentfulStatusCode, code: string,
 }
 
 export function toPerson(user: User): Person {
-  return { id: user.id, username: user.username, name: user.name, color: user.color };
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    color: user.color,
+    photoUrl: user.photoKey ? `/api/people/${user.id}/photo?v=${user.photoKey.split("/").pop()}` : null,
+  };
 }
 
 export function toApiPhoto(photo: Photo): ApiPhoto {
