@@ -118,8 +118,9 @@ function Today() {
           On the bed
         </Overline>
         <div className="flex flex-col gap-4">
-          {onBed.map(({ item, attempt }) => (
+          {onBed.map(({ item, attempt }, index) => (
             <PrintingCard
+              compact={index > 0}
               key={attempt.id}
               item={item}
               attempt={attempt}

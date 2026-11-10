@@ -127,9 +127,11 @@ export function TodaySection() {
       {ready && (
         <div className="grid gap-8 lg:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
-            <Label>PrintingCard: on the bed, and once it should be done</Label>
+            <Label>
+              PrintingCard: on the bed, and once it should be done (compact on phones: every print after the first)
+            </Label>
             <PrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} person={alex} />
-            <PrintingCard item={due} attempt={due.attempts[0] as ItemView["attempts"][number]} person={sam} />
+            <PrintingCard item={due} attempt={due.attempts[0] as ItemView["attempts"][number]} person={sam} compact />
             <Label>The sidebar's now-printing card</Label>
             <div className="w-60">
               <NowPrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} />

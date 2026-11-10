@@ -25,7 +25,23 @@ interface PrintingCardProps {
   /** Who started it. */
   person?: Person;
   via?: string;
+  /**
+   * Phones only: a small square picture beside the name instead of the big one on top, for the prints after
+   * the first, so three prints on the bed don't push the rest of Today two screens down. Desktop is unchanged.
+   */
+  compact?: boolean;
 }
+
+/** The card's grid on phones, big or compact; from md both are the same row: picture on two fifths, text beside. */
+const layouts = {
+  big: { card: "grid-cols-1", picture: "aspect-4/3", head: "px-2 pt-2.5", body: "px-2 pt-2.5 pb-2" },
+  compact: {
+    card: "grid-cols-[auto_minmax(0,1fr)]",
+    picture: "size-24 self-start",
+    head: "pt-1 pr-2 pl-3",
+    body: "col-span-2 px-2 pt-3 pb-2",
+  },
+} as const;
 
 /**
  * A print on the bed, big and warm: the build's picture, its name in Fraunces (the one card title that is,
@@ -33,7 +49,8 @@ interface PrintingCardProps {
  * the build; Finish goes to the build with the attempt's sheet open. When the print should be done, the button
  * gives way to the question people came to answer: how did it go?
  */
-export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) {
+export function PrintingCard({ item, attempt, person, via, compact = false }: PrintingCardProps) {
+  const layout = layouts[compact ? "compact" : "big"];
   const navigate = useNavigate();
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
@@ -51,7 +68,12 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
     });
 
   return (
-    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative flex flex-col rounded-lg p-1.5 transition-shadow md:flex-row">
+    <article
+      className={cn(
+        "bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative grid rounded-lg p-1.5 transition-shadow md:grid-cols-5 md:grid-rows-[auto_1fr]",
+        layout.card,
+      )}
+    >
       {/* The whole card leads to the build; what is inside that can be pressed sits above it. */}
       <Link
         to="/builds/$buildId"
@@ -63,7 +85,12 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
           {name.text}, attempt {attempt.number}
         </span>
       </Link>
-      <div className="pointer-events-none relative aspect-4/3 shrink-0 overflow-hidden rounded-md md:w-2/5">
+      <div
+        className={cn(
+          "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full",
+          layout.picture,
+        )}
+      >
         {hero ? (
           <Photo src={photoSrc(hero.id, "thumb")} alt="" color={hero.color || undefined} className="size-full" />
         ) : plate ? (
@@ -71,9 +98,20 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
         ) : (
           <NoteFace note={name.text} />
         )}
-        <OutcomeChip outcome={null} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
+        {/* On a compact card the words under it say the same, and a chip would cover the small picture. */}
+        <OutcomeChip
+          outcome={null}
+          offTheBed={offBed}
+          className={cn("shadow-soft absolute bottom-2 left-2", compact && "max-md:hidden")}
+        />
       </div>
-      <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col gap-2.5 px-2 pt-2.5 pb-2 md:px-4 md:py-3">
+      <div
+        className={cn(
+          "pointer-events-none relative flex min-w-0 flex-col md:col-span-3 md:px-4 md:pt-3",
+          compact ? "gap-1.5 md:gap-2.5" : "gap-2.5",
+          layout.head,
+        )}
+      >
         <div className="flex items-start gap-3">
           <h3 className="font-display text-title text-ink line-clamp-2 min-w-0 flex-1 break-words">{name.text}</h3>
           {person && (
@@ -94,6 +132,13 @@ export function PrintingCard({ item, attempt, person, via }: PrintingCardProps) 
             />
           )}
         </MetaList>
+      </div>
+      <div
+        className={cn(
+          "pointer-events-none relative flex min-w-0 flex-col gap-2.5 md:col-span-3 md:px-4 md:pt-2.5 md:pb-3",
+          layout.body,
+        )}
+      >
         {offBed && attempt.endedAt !== null ? (
           // The printer says it stopped: no bar to draw, only the calm question and the three answers.
           <OffTheBed
