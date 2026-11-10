@@ -180,20 +180,20 @@ export function JournalSection() {
       note="An attempt is a card that leads with its photo, or with the slicer's picture of the plate (labeled as a preview) while there is no photo yet. A print in progress shows how far along it is. Events are quiet rows with one icon: in the tile, or beside the label when a photo fills the tile. The compact variant makes every entry a row, for Today's “Lately”."
     >
       {ready && (
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="flex flex-col gap-8">
           <div className="flex min-w-0 flex-col gap-4">
             <Label>Attempt cards: plate preview and progress, photo, neither</Label>
             {rows(false)}
           </div>
-          <div className="flex min-w-0 flex-col gap-8">
-            <div className="flex flex-col gap-3">
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-3">
               <Label>Event rows: idea and finished without a photo, started with one</Label>
               <JournalEntry entry={entry("idea", bare)} item={bare} person={first} when="time" />
               <JournalEntry entry={entry("started", tugboat)} item={tugboat} person={second} when="time" />
               <JournalEntry entry={entry("finished", finished)} item={finished} person={first} when="time" />
               <JournalEntry entry={entry("shelved", bare)} item={bare} person={second} when="time" />
             </div>
-            <div className="flex flex-col gap-3">
+            <div className="flex min-w-0 flex-col gap-3">
               <Label>Compact: the same attempts as rows</Label>
               {rows(true)}
             </div>

@@ -343,7 +343,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           className="size-12 shrink-0 rounded-md"
         />
       ) : plate ? (
-        <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-12 shrink-0 rounded-md p-1" />
+        <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-12 shrink-0 rounded-md" />
       ) : (
         <span className="bg-ink/5 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md">
           <BuildsIcon size={22} aria-hidden />
