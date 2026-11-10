@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { fromBase64Url } from "../../shared/base64url.ts";
 import { isTimeZone, type PushConfig, testMessage } from "../../shared/push.ts";
 import { pushSubscriptions } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -11,9 +12,27 @@ const MAX_DEVICES = 10;
 
 const endpoint = z.string().url().max(2048).startsWith("https://");
 const timeZone = z.string().max(64).refine(isTimeZone, "Unknown time zone");
+/** What a browser really gives: an uncompressed P-256 point and a 16-byte secret, base64url. */
+const decodes = (text: string, length: number, first?: number) => {
+  try {
+    const bytes = fromBase64Url(text);
+    return bytes.length === length && (first === undefined || bytes[0] === first);
+  } catch {
+    return false;
+  }
+};
 const subscribe = z.object({
   endpoint,
-  keys: z.object({ p256dh: z.string().min(1).max(256), auth: z.string().min(1).max(64) }),
+  keys: z.object({
+    p256dh: z
+      .string()
+      .max(256)
+      .refine((k) => decodes(k, 65, 4), "Not a P-256 key"),
+    auth: z
+      .string()
+      .max(64)
+      .refine((k) => decodes(k, 16), "Not a 16-byte secret"),
+  }),
   timeZone,
   alsoOthers: z.boolean().optional(),
 });

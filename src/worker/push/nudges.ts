@@ -105,8 +105,16 @@ export async function sendNudges(env: Env, now = Date.now()) {
         .run();
       if (!claim.meta.changes) continue;
       const message = nudgeMessage(kind, attempt, title, userId === own ? undefined : names.get(own));
+      let delivered = 0;
       for (const device of awake) {
-        if ((await pushTo(env, vapid, device, message)) === "sent") sent++;
+        if ((await pushTo(env, vapid, device, message)) === "sent") delivered++;
+      }
+      sent += delivered;
+      // Nothing got through (a hiccup at the push service): release the claim so the next run tries again.
+      if (!delivered) {
+        await env.DB.prepare("DELETE FROM push_nudges WHERE attempt_id = ? AND user_id = ?")
+          .bind(attempt.id, userId)
+          .run();
       }
     }
   }

@@ -198,6 +198,41 @@ describe("when a nudge is sent", () => {
   });
 });
 
+describe("a push that doesn't get through", () => {
+  it("is tried again on the next run, until a device takes it", async () => {
+    await subscribe(alex, "alex-phone");
+    await attempt(alex, "r1", { printedAt: noon - 3 * HOUR, endedAt: noon - 5 * MIN });
+    respondWith = () => 503;
+    expect(await sendNudges(env, noon)).toEqual({ sent: 0 });
+    respondWith = () => 201;
+    expect(await sendNudges(env, noon + 5 * MIN)).toEqual({ sent: 1 });
+    expect(await sendNudges(env, noon + 10 * MIN)).toEqual({ sent: 0 });
+  });
+
+  it("with a stored key that can't be used drops that device and still reaches the others", async () => {
+    await subscribe(alex, "good");
+    await env.DB.prepare(
+      "INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, time_zone, also_others, created_at) SELECT 'bad', id, 'https://push.example/bad', 'AAAA', 'AAAA', 'UTC', 0, 0 FROM users WHERE username = 'alex'",
+    ).run();
+    await attempt(alex, "r2", { printedAt: noon - 3 * HOUR, endedAt: noon - 5 * MIN });
+    expect(await sendNudges(env, noon)).toEqual({ sent: 1 });
+    expect(
+      (await env.DB.prepare("SELECT endpoint FROM push_subscriptions").all()).results.map((r) => r.endpoint),
+    ).toEqual(["https://push.example/good"]);
+  });
+
+  it("is refused at signup when the keys aren't a browser's", async () => {
+    const put = (keys: unknown) =>
+      request("/api/push/subscription", {
+        method: "PUT",
+        cookie: alex,
+        json: { endpoint: "https://push.example/x", keys, timeZone: "UTC" },
+      });
+    expect((await put({ p256dh: "AAAA", auth: "AAAA" })).status).toBe(400);
+    expect((await put({ ...(await browserKeys()), auth: "AAAA" })).status).toBe(400);
+  });
+});
+
 describe("expired subscriptions", () => {
   const devices = async () =>
     (await env.DB.prepare("SELECT endpoint FROM push_subscriptions").all()).results.map((r) => r.endpoint);

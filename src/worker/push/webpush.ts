@@ -123,7 +123,13 @@ export async function sendPush(
   vapid: { subject: string; publicKey: string; signingKey: CryptoKey },
   options: { ttl?: number; urgency?: "normal" | "high" } = {},
 ): Promise<PushResult> {
-  const body = await encryptPayload(subscription, enc(JSON.stringify(message)));
+  let body: Bytes;
+  try {
+    body = await encryptPayload(subscription, enc(JSON.stringify(message)));
+  } catch {
+    // Keys that don't decode or aren't a P-256 point never will: treat the subscription as gone.
+    return "gone";
+  }
   let response: Response;
   try {
     response = await fetch(subscription.endpoint, {
