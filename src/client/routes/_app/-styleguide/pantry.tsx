@@ -1,0 +1,103 @@
+import type { Spool } from "@shared/api";
+import { useState } from "react";
+import { EstimateLine } from "@/components/builds/Estimate";
+import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
+import { AmsLoadout } from "@/components/pantry/Ams";
+import { SpoolCard } from "@/components/pantry/SpoolCard";
+import { Caution, FromFileMark } from "@/components/ui/Caution";
+import { NumberField } from "@/components/ui/Field";
+import { RemainingMeter } from "@/components/ui/RemainingMeter";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
+
+const SILK = "#c9a46b"; // design-lint-ignore: a filament color is data
+
+const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
+
+const sampleSpool: Spool = {
+  id: "sample-spool",
+  material: "PLA",
+  brand: "Eryone",
+  colorName: "Silk gold",
+  colorHex: SILK,
+  finish: "silk",
+  remaining: "half",
+  note: "",
+  driedAt: null,
+  photo: null,
+  slot: "A2",
+  createdBy: "a",
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
+export function PantrySection() {
+  const [nozzle, setNozzle] = useState<number | undefined>(310);
+  return (
+    <Section
+      id="pantry"
+      title="Pantry & printer"
+      note="Spools are drawn as spools, in their own color (data, set inline), with a rough meter of what's left. Printer checks are a gentle semolina line, never a dialog; values from a slicer file carry a small file mark until someone changes them."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel className="flex flex-col gap-5">
+          <Label>Spool discs: sm, md, lg, xl, and an empty slot</Label>
+          <div className="flex flex-wrap items-end gap-4">
+            <SpoolDisc color={SILK} size="sm" />
+            <SpoolDisc color={TEAL} size="md" />
+            <SpoolDisc color={SAMPLE_COLOR} size="lg" />
+            <SpoolDisc color={SILK} size="xl" />
+            <SpoolDisc empty size="lg" />
+          </div>
+          <Label>What's left</Label>
+          <div className="flex flex-wrap gap-4">
+            <RemainingMeter remaining="full" showLabel />
+            <RemainingMeter remaining="half" showLabel />
+            <RemainingMeter remaining="low" showLabel />
+            <RemainingMeter remaining="empty" showLabel />
+          </div>
+          <Label>A printer check, and a value from a slicer file</Label>
+          <NumberField
+            size="sm"
+            label="Nozzle"
+            mark={<FromFileMark />}
+            suffix="°C"
+            value={nozzle}
+            onChange={setNozzle}
+            caution={nozzle !== undefined && nozzle > 300 ? "The X2D's nozzles top out at 300 °C." : undefined}
+            className="max-w-48"
+          />
+          <Caution>TPU doesn't feed well through the AMS: the external spool is safer.</Caution>
+        </Panel>
+        <div className="flex flex-col gap-4">
+          <Label>A spool in the pantry</Label>
+          <ul className="grid grid-cols-2 gap-3">
+            <SpoolCard spool={sampleSpool} draggable={false} />
+            <SpoolCard
+              spool={{
+                ...sampleSpool,
+                id: "sample-2",
+                colorName: "Teal",
+                colorHex: TEAL,
+                material: "PETG",
+                brand: "Polymaker",
+                finish: null,
+                remaining: "low",
+                slot: null,
+              }}
+              draggable={false}
+            />
+          </ul>
+          <Label>A slicer file on an attempt, and how long it took</Label>
+          <FileCard name="desk-clips.gcode.3mf" meta={["plate 1 of 2", "est. 1 h 12 min", "14 KB"]} download="#" />
+          <EstimateLine estimated={72} actual={78} />
+          <div className="flex gap-2">
+            <PlateThumb alt="" className="size-16" />
+          </div>
+        </div>
+      </div>
+      <Label>The AMS as it is loaded here (live; the pantry changes it)</Label>
+      <AmsLoadout readOnly className="md:max-w-3xl" />
+    </Section>
+  );
+}
