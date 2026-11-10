@@ -14,6 +14,7 @@ import { FieldSection } from "./-styleguide/fields";
 import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
 import { MotionSection } from "./-styleguide/motion";
+import { NotificationSection } from "./-styleguide/notifications";
 import { PaletteSection } from "./-styleguide/palette";
 import { PantrySection } from "./-styleguide/pantry";
 import { PhotoSection } from "./-styleguide/photos";
@@ -51,6 +52,7 @@ const toc = [
   ["search", "Journal & search"],
   ["journal", "Journal entries"],
   ["sheets", "Sheets & toasts"],
+  ["notifications", "Notifications"],
   ["palette", "Palette & shortcuts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
@@ -93,6 +95,7 @@ function Styleguide() {
           <JournalSection />
           <PaletteSection />
           <SheetSection />
+          <NotificationSection />
           <EmptySection />
           <SkeletonSection />
         </div>

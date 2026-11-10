@@ -30,7 +30,11 @@ export const pushRoutes = new Hono<AppEnv>()
     return c.json<PushConfig>({
       publicKey: c.env.VAPID_PUBLIC_KEY || null,
       canSend: Boolean(c.env.VAPID_PUBLIC_KEY && c.env.VAPID_PRIVATE_KEY),
-      subscriptions: rows.map((row) => ({ endpoint: row.endpoint, alsoOthers: row.alsoOthers })),
+      subscriptions: rows.map((row) => ({
+        endpoint: row.endpoint,
+        alsoOthers: row.alsoOthers,
+        timeZone: row.timeZone,
+      })),
     });
   })
   /** Turns notifications on for a device (or refreshes it: the browser may renew its subscription). */

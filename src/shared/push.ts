@@ -124,5 +124,5 @@ export interface PushConfig {
   /** False when the private half is missing (a local server): subscribing works, sending doesn't. */
   canSend: boolean;
   /** This person's devices. */
-  subscriptions: Array<{ endpoint: string; alsoOthers: boolean }>;
+  subscriptions: Array<{ endpoint: string; alsoOthers: boolean; timeZone: string }>;
 }

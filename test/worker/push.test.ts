@@ -229,7 +229,7 @@ describe("the devices routes", () => {
     expect(mine).toEqual({
       publicKey: env.VAPID_PUBLIC_KEY,
       canSend: true,
-      subscriptions: [{ endpoint, alsoOthers: true }],
+      subscriptions: [{ endpoint, alsoOthers: true, timeZone: "UTC" }],
     });
     expect(
       ((await (await request("/api/push", { cookie: sam })).json()) as { subscriptions: unknown[] }).subscriptions,
@@ -317,5 +317,21 @@ describe("the devices routes", () => {
       expect(response.status).toBe(403);
       expect(await response.json()).toMatchObject({ error: { code: "person_only" } });
     }
+  });
+});
+
+describe("signing out", () => {
+  it("forgets the device that says so, and only that one", async () => {
+    const phone = await subscribe(alex, "alex-phone");
+    await subscribe(alex, "alex-laptop");
+    await request("/api/session", { method: "DELETE", cookie: alex, json: { pushEndpoint: phone } });
+    const left = (await env.DB.prepare("SELECT endpoint FROM push_subscriptions").all()).results.map((r) => r.endpoint);
+    expect(left).toEqual(["https://push.example/alex-laptop"]);
+  });
+
+  it("can't be used to forget someone else's device", async () => {
+    const phone = await subscribe(alex, "alex-phone");
+    await request("/api/session", { method: "DELETE", cookie: sam, json: { pushEndpoint: phone } });
+    expect((await env.DB.prepare("SELECT endpoint FROM push_subscriptions").all()).results).toHaveLength(1);
   });
 });

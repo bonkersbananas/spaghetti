@@ -10,6 +10,9 @@
  *     waiting to be resized, which the server marks no-cache and are never kept).
  *   - Leaves everything else under /api alone: it goes to the network, every
  *     time, and is never cached, so nobody sees another person's stale edits.
+ *   - Shows the "how did it go?" notifications (web push) and answers them: a button records the outcome
+ *     without opening the app, through the same /finish route the app uses; with no connection the answer
+ *     is queued in the app's outbox (IndexedDB), which sends it on the next visit.
  *   - Installs new versions in the background; the page offers a "Refresh"
  *     toast (SKIP_WAITING), otherwise the new version takes over once every
  *     tab has been closed.
@@ -49,7 +52,143 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
+  // The same thing a notification button does; the e2e test uses it, since a test can't tap one.
+  else if (event.data?.type === "answer-nudge") event.waitUntil(answerNudge(event.data.nudge, event.data.outcome));
 });
+
+// ---- "How did it go?" notifications (web push) ----
+
+const OUTCOME_LABEL = { success: "Worked", partial: "Partly", failed: "Spaghetti" };
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(showNudge(event));
+});
+
+async function showNudge(event) {
+  let message = null;
+  try {
+    message = event.data?.json() ?? null;
+  } catch {
+    // Not ours to read: still show something, a push must always be visible.
+  }
+  const maxActions = self.Notification?.maxActions ?? 0;
+  await self.registration.showNotification(message?.title ?? "Spaghetti", {
+    body: message?.body ?? "",
+    tag: message?.tag ?? "spaghetti",
+    icon: "/icon-192.png",
+    data: { url: message?.url ?? "/ideas", attemptId: message?.attemptId, itemId: message?.itemId },
+    // Android and desktop Chrome have buttons; iPhone has none, and tapping the notification opens the sheet.
+    actions: (message?.actions ?? []).slice(0, maxActions),
+  });
+}
+
+self.addEventListener("notificationclick", (event) => {
+  const { data } = event.notification;
+  event.notification.close();
+  if (event.action && OUTCOME_LABEL[event.action] && data?.attemptId) {
+    event.waitUntil(answerNudge(data, event.action));
+  } else {
+    event.waitUntil(openApp(data?.url ?? "/ideas"));
+  }
+});
+
+async function openApp(path) {
+  const url = new URL(path, self.location.origin).href;
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const open = windows[0];
+  if (open) {
+    await open.focus().catch(() => undefined);
+    // The app navigates itself (no reload); a page that doesn't know the message gets a plain navigation.
+    open.postMessage({ type: "navigate", url: path });
+    return;
+  }
+  await self.clients.openWindow(url);
+}
+
+/** Records the outcome a notification button picked. Offline or a server hiccup queues it in the outbox. */
+async function answerNudge(nudge, outcome) {
+  if (!nudge?.attemptId || !OUTCOME_LABEL[outcome]) return;
+  const finishedAt = Date.now();
+  let status = 0;
+  try {
+    const response = await fetch(`/api/attempts/${encodeURIComponent(nudge.attemptId)}/finish`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outcome, finishedAt }),
+    });
+    status = response.status;
+  } catch {
+    // No connection.
+  }
+  if (status >= 200 && status < 300) {
+    await confirmAnswer(nudge, `Marked as ${OUTCOME_LABEL[outcome]}`, "Add a photo or a word whenever you like.");
+  } else if (status === 401) {
+    // Signed out on this device: sign in, then the sheet.
+    await openApp(nudge.url);
+  } else if (status === 400 || status === 404) {
+    await confirmAnswer(nudge, "That print isn't there any more", "");
+  } else if (nudge.itemId) {
+    await queueFinish(nudge.itemId, {
+      attemptId: nudge.attemptId,
+      outcome,
+      finishedAt,
+      note: "",
+      failureTags: [],
+      successNotes: [],
+    });
+    await confirmAnswer(
+      nudge,
+      `Marked as ${OUTCOME_LABEL[outcome]}`,
+      "Saved on this phone. It reaches Spaghetti when you're back online.",
+    );
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of windows) client.postMessage({ type: "outbox-changed" });
+  }
+}
+
+/** A short-lived replacement for the notification, so a tap on a button has an answer; it clears itself. */
+async function confirmAnswer(nudge, title, body) {
+  const tag = `attempt-${nudge.attemptId}`;
+  await self.registration.showNotification(title, {
+    body,
+    tag,
+    icon: "/icon-192.png",
+    silent: true,
+    data: { url: nudge.url },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 6000));
+  for (const shown of await self.registration.getNotifications({ tag })) shown.close();
+}
+
+/** Adds a finish to the app's outbox (IndexedDB "spaghetti" / "outbox", the same shape lib/outbox.ts keeps). */
+function queueFinish(itemId, finish) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open("spaghetti", 1);
+    open.onupgradeneeded = () => {
+      if (!open.result.objectStoreNames.contains("outbox"))
+        open.result.createObjectStore("outbox", { keyPath: "itemId" });
+    };
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction("outbox", "readwrite");
+      const store = tx.objectStore("outbox");
+      const read = store.get(itemId);
+      read.onsuccess = () => {
+        const entry = read.result ?? { itemId, photos: [], queuedAt: Date.now() };
+        // Answered twice before it was sent keeps the later answer.
+        const finishes = (entry.finishes ?? []).filter((f) => f.attemptId !== finish.attemptId);
+        store.put({ ...entry, finishes: [...finishes, finish] });
+      };
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

@@ -58,10 +58,14 @@ import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
-  validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string; finish?: boolean } => ({
     ...(search.new === true || search.new === "true" ? { new: true } : {}),
     // Opened from the journal or search: that attempt is picked and in view.
     ...(typeof search.attempt === "string" && search.attempt ? { attempt: search.attempt } : {}),
+    // From a "how did it go?" notification: the attempt's sheet opens, for the outcome, a photo and a word.
+    ...(search.finish === true || search.finish === "true" || search.finish === 1 || search.finish === "1"
+      ? { finish: true }
+      : {}),
   }),
   component: BuildDetail,
 });
@@ -118,7 +122,7 @@ function Build({ item }: { item: ItemView }) {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
-  const { new: isNew, attempt: linkedAttempt } = Route.useSearch();
+  const { new: isNew, attempt: linkedAttempt, finish: linkedFinish } = Route.useSearch();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
@@ -160,6 +164,13 @@ function Build({ item }: { item: ItemView }) {
     setSheet({ open: true, attemptId: target, file: { file, key: Date.now() } });
   });
   const primary = () => openSheet(printing?.id ?? null);
+  // A tapped notification ("how did it go?") lands here: open that attempt's sheet once, then drop the flag from the address.
+  const attemptThere = linkedAttempt ? item.attempts.find((attempt) => attempt.id === linkedAttempt) : undefined;
+  useEffect(() => {
+    if (!linkedFinish || !attemptThere) return;
+    setSheet({ open: true, attemptId: attemptThere.id, file: null, outcome: null });
+    void navigate({ to: ".", search: (current) => ({ ...current, finish: undefined }), replace: true });
+  }, [linkedFinish, attemptThere, navigate]);
   const [selected, setSelected] = useState<string | null>(linkedAttempt ?? null);
   // Came here for one attempt: bring it into view.
   useEffect(() => {

@@ -3,12 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, ArrowRightIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, ArrowRightIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { ChangePasswordSheet } from "./ChangePasswordSheet";
+import { NotificationsSheet } from "./NotificationsSheet";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -18,6 +19,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const people = useQuery({ ...peopleQuery, enabled: open });
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
+  const [notifying, setNotifying] = useState(false);
 
   return (
     <>
@@ -93,6 +95,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <ArrowRightIcon size={18} className="text-ink-ghost" aria-hidden />
         </button>
       </Sheet>
+      <NotificationsSheet open={notifying} onOpenChange={setNotifying} />
       <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
     </>
   );

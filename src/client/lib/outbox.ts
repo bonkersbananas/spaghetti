@@ -186,8 +186,25 @@ class Outbox {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") this.retryNow();
     });
+    await this.pickUp();
+  }
+
+  /**
+   * Loads entries the store has that this page doesn't know of and sends them: what an earlier visit left
+   * behind, or what the service worker queued (a notification's answer given with no signal).
+   */
+  async pickUp() {
     const stored = await this.store.all().catch(() => [] as OutboxEntry[]);
     const known = new Set(this.state.entries.map((entry) => entry.itemId));
+    // An entry this page already holds may have gained a finish from the service worker.
+    for (const entry of stored) {
+      const current = this.entry(entry.itemId);
+      const missing = (entry.finishes ?? []).filter(
+        (f) => !current?.finishes?.some((g) => g.attemptId === f.attemptId),
+      );
+      if (current && missing.length)
+        await this.save({ ...current, finishes: [...(current.finishes ?? []), ...missing] });
+    }
     const fresh = stored.filter((entry) => !known.has(entry.itemId));
     for (const entry of fresh) for (const photo of entry.photos) registerPreview(photo);
     for (const entry of fresh) for (const file of entry.files ?? []) registerFilePreview(file);
