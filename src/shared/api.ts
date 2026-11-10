@@ -1,4 +1,5 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
+import type { BridgeStatus } from "./bridge.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { PersonColor } from "./people.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
@@ -59,6 +60,13 @@ export interface Attempt {
   printedAt: number;
   /** When an outcome was given. */
   finishedAt: number | null;
+  /**
+   * When the print stopped on the printer, told by the printer bridge. With no `outcome` yet it is a print that
+   * is off the bed and waiting for someone to say how it went.
+   */
+  endedAt: number | null;
+  /** A failure tag the printer suggests (a failed or cancelled print, spaghetti seen). A suggestion, not a verdict. */
+  suggestedFailureTag: string | null;
   /** The one-line note. */
   note: string;
   /** Slugs of failure tags (built in or people's own). */
@@ -189,6 +197,9 @@ export interface CreateAttemptRequest {
 export interface UpdateAttemptRequest {
   outcome?: Outcome | null;
   printedAt?: number;
+  /** The printer bridge's: when the print stopped, and the failure tag it suggests (null clears them). */
+  endedAt?: number | null;
+  suggestedFailureTag?: string | null;
   note?: string;
   failureTags?: string[];
   successNotes?: string[];
@@ -339,6 +350,8 @@ export interface Spool {
   photo: { id: string; width: number; height: number; color: string } | null;
   /** Where it is loaded: "A1" to "D4", "Ext", or null. */
   slot: string | null;
+  /** The RFID tray UUID of a Bambu spool, as the AMS reports it; the printer bridge finds the spool by it. */
+  trayUuid: string | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -363,6 +376,7 @@ export interface CreateSpoolRequest {
   remaining?: Remaining;
   note?: string;
   driedAt?: number | null;
+  trayUuid?: string | null;
   createdAt?: number;
 }
 
@@ -385,6 +399,24 @@ export interface UpdatePrinterRequest {
 export interface PrinterResponse {
   setup: PrinterSetup;
   slots: Record<string, string>;
+  /** What the printer bridge last said; null while none has ever been set up. */
+  bridge: BridgeStatus | null;
+}
+
+/**
+ * PUT /api/printer/bridge: what the printer bridge sends (heartbeat, progress, trays it couldn't match). Whatever is
+ * left out stays as it was; `progress: null` says there is no print going.
+ */
+export interface UpdateBridgeRequest {
+  printerState?: BridgeStatus["printerState"];
+  progress?: {
+    attemptId: string;
+    percent: number;
+    remainingMinutes?: number | null;
+    layer?: number | null;
+    totalLayers?: number | null;
+  } | null;
+  unknownTrays?: BridgeStatus["unknownTrays"];
 }
 
 /** PUT /api/printer/slots/:slot. Loading a spool takes it out of the slot it was in. */

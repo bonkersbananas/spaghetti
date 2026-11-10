@@ -84,6 +84,7 @@ export function addSpool(
     driedAt: null,
     photo: null,
     slot: null,
+    trayUuid: null,
     createdBy,
     createdAt: now,
     updatedAt: now,

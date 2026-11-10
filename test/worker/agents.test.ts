@@ -241,6 +241,13 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     path: `/api/spools/${spoolId}`,
     json: { remaining: "half" },
   },
+  {
+    name: "tell the app about the printer",
+    scope: "printer",
+    method: "PUT",
+    path: "/api/printer/bridge",
+    json: { printerState: "idle" },
+  },
   { name: "load a slot", scope: "printer", method: "PUT", path: "/api/printer/slots/A1", json: { spoolId: null } },
 ];
 
@@ -307,12 +314,11 @@ describe("scopes", () => {
     const refused = await create({ id: uuid(), stage: "building" });
     expect(refused.status).toBe(403);
     expect((await errorOf(refused)).message).toContain('"attempts"');
+    // A build from scratch is attempts work only: the printer bridge needs no "capture" for it.
     expect((await create({ id: uuid(), stage: "building" }, (await makeAgent(["attempts"], "a")).token)).status).toBe(
-      403,
+      201,
     );
-    expect(
-      (await create({ id: uuid(), stage: "building" }, (await makeAgent(["capture", "attempts"], "b")).token)).status,
-    ).toBe(201);
+    expect((await create({ id: uuid(), note: "idea" }, (await makeAgent(["attempts"], "b")).token)).status).toBe(403);
   });
 
   it("splits patching an item: words are capture, stage and cover are attempts", async () => {

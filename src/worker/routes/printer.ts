@@ -2,10 +2,11 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { PrinterResponse } from "../../shared/api.ts";
+import type { BridgeStatusData } from "../../shared/bridge.ts";
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { amsSlots, printer, spools } from "../db/schema.ts";
+import { amsSlots, attempts, bridge, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 
@@ -28,8 +29,40 @@ const setupSchema = z.object({
 
 const setSlot = z.object({ spoolId: z.uuid().nullable() });
 
+const BRIDGE_ID = "bridge";
+const count = z.number().int().min(0).max(100_000).nullable().optional();
+/** What the printer bridge sends. Anything left out stays as it was. */
+const bridgeSchema = z.object({
+  printerState: z.enum(["idle", "printing", "paused", "finished", "failed"]).nullable().optional(),
+  progress: z
+    .object({
+      attemptId: z.uuid(),
+      percent: z.number().min(0).max(100),
+      remainingMinutes: count,
+      layer: count,
+      totalLayers: count,
+    })
+    .nullable()
+    .optional(),
+  unknownTrays: z
+    .array(
+      z.object({
+        slot: z.string().regex(SLOT_PATTERN),
+        material: z.string().trim().max(40).nullable(),
+        colorHex: z
+          .string()
+          .regex(/^#[0-9a-f]{6}$/i)
+          .transform((value) => value.toLowerCase())
+          .nullable(),
+        brand: z.string().trim().max(60).nullable(),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
 async function loadPrinter(db: Db): Promise<PrinterResponse> {
-  const [row, slots] = await Promise.all([
+  const [row, slots, bridgeRow] = await Promise.all([
     db.select().from(printer).where(eq(printer.id, PRINTER_ID)).get(),
     // A deleted spool's slot reads as empty (and fills again with undo).
     db
@@ -37,10 +70,12 @@ async function loadPrinter(db: Db): Promise<PrinterResponse> {
       .from(amsSlots)
       .innerJoin(spools, eq(spools.id, amsSlots.spoolId))
       .where(isNull(spools.deletedAt)),
+    db.select().from(bridge).where(eq(bridge.id, BRIDGE_ID)).get(),
   ]);
   return {
     setup: row?.setup ?? DEFAULT_PRINTER,
     slots: Object.fromEntries(slots.map((slot) => [slot.slot, slot.spoolId])),
+    bridge: bridgeRow ? { ...bridgeRow.status, lastSeenAt: bridgeRow.lastSeenAt.getTime() } : null,
   };
 }
 
@@ -67,6 +102,63 @@ export const printerRoutes = new Hono<AppEnv>()
       recordChange(c.var.db, { entity: "printer", id: PRINTER_ID, action: "updated", actor: c.var.actor }),
     ]);
     return c.json<PrinterResponse>(await loadPrinter(c.var.db));
+  })
+
+  /**
+   * The printer bridge's message: it is alive (always), and optionally the printer's progress and the trays it
+   * couldn't match. Only a change in what it says is a change in the feed; a heartbeat just moves "last heard".
+   */
+  .put("/bridge", async (c) => {
+    const parsed = bridgeSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    const db = c.var.db;
+    const body = parsed.data;
+    const now = new Date();
+    const row = await db.select().from(bridge).where(eq(bridge.id, BRIDGE_ID)).get();
+    const before: BridgeStatusData = row?.status ?? { printerState: null, progress: null, unknownTrays: [] };
+
+    let progress = before.progress;
+    if (body.progress === null) progress = null;
+    else if (body.progress) {
+      // Only for a print that is there: an attempt that was deleted meanwhile has nothing to show.
+      const attempt = await db
+        .select({ id: attempts.id })
+        .from(attempts)
+        .where(and(eq(attempts.id, body.progress.attemptId), isNull(attempts.deletedAt)))
+        .get();
+      progress = attempt
+        ? {
+            attemptId: body.progress.attemptId,
+            percent: Math.round(body.progress.percent),
+            remainingMinutes: body.progress.remainingMinutes ?? null,
+            layer: body.progress.layer ?? null,
+            totalLayers: body.progress.totalLayers ?? null,
+            at: now.getTime(),
+          }
+        : null;
+    }
+    const status: BridgeStatusData = {
+      printerState: body.printerState === undefined ? before.printerState : body.printerState,
+      progress,
+      unknownTrays: body.unknownTrays ?? before.unknownTrays,
+    };
+    // Progress is stamped at each message; what counts as a change is the printer's own numbers.
+    const same = (a: BridgeStatusData, b: BridgeStatusData) =>
+      JSON.stringify({ ...a, progress: a.progress && { ...a.progress, at: 0 } }) ===
+      JSON.stringify({ ...b, progress: b.progress && { ...b.progress, at: 0 } });
+    const statements = [
+      db
+        .insert(bridge)
+        .values({ id: BRIDGE_ID, lastSeenAt: now, status })
+        .onConflictDoUpdate({ target: bridge.id, set: { lastSeenAt: now, status } }),
+    ] as const;
+    if (!row || !same(before, status)) {
+      await db.batch([
+        ...statements,
+        recordChange(db, { entity: "printer", id: BRIDGE_ID, action: "updated", actor: c.var.actor }),
+      ]);
+    } else await db.batch([...statements]);
+    return c.json<PrinterResponse>(await loadPrinter(db));
   })
 
   /**

@@ -143,6 +143,8 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
           outcome: attempt.outcome,
           printedAt: attempt.printedAt.getTime(),
           finishedAt: attempt.finishedAt?.getTime() ?? null,
+          endedAt: attempt.endedAt?.getTime() ?? null,
+          suggestedFailureTag: attempt.suggestedFailureTag,
           note: attempt.note,
           failureTags: attempt.failureTags,
           successNotes: attempt.successNotes,
