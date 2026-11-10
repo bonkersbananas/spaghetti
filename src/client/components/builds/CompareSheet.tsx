@@ -74,6 +74,7 @@ function AttemptPhotos({
   picked,
   onPick,
   fade = false,
+  reserveThumbs = false,
 }: {
   attempt: AttemptView;
   photos: PhotoView[];
@@ -81,6 +82,8 @@ function AttemptPhotos({
   onPick: (photoId: string) => void;
   /** Crossfade when the attempt changes (the phone's switch). */
   fade?: boolean;
+  /** The other attempt has a row of thumbnails: keep its height here, so the notes below start level. */
+  reserveThumbs?: boolean;
 }) {
   const reduce = useReducedMotion();
   const shown = photos.find((photo) => photo.id === picked) ?? photos[0];
@@ -125,6 +128,7 @@ function AttemptPhotos({
           frame
         )}
       </div>
+      {photos.length <= 1 && reserveThumbs && <div className="size-16" aria-hidden />}
       {photos.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {photos.map((photo, index) => (
@@ -205,6 +209,7 @@ function DesktopCompare({
               photos={photosOf(item, attempt)}
               picked={picked[attempt.id]}
               onPick={(photoId) => pick(attempt.id, photoId)}
+              reserveThumbs={photosOf(item, other).length > 1}
             />
             <AttemptWords attempt={attempt} />
           </div>
@@ -258,12 +263,15 @@ function AttemptPicker({
                   className={cn(
                     "focus-ring flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-left",
                     current ? "bg-semolina-soft/60" : "hover:bg-ink/4",
-                    taken && "opacity-60",
                   )}
                 >
                   <span
                     aria-hidden
-                    className={cn("size-2.5 shrink-0 rounded-full", outcomeDots[candidate.outcome ?? "printing"])}
+                    className={cn(
+                      "size-2.5 shrink-0 rounded-full",
+                      outcomeDots[candidate.outcome ?? "printing"],
+                      taken && "opacity-40",
+                    )}
                   />
                   <span className="text-small text-ink font-semibold">Attempt {candidate.number}</span>
                   <span className="text-small text-ink-faint ml-auto">

@@ -95,7 +95,8 @@ test("compares two attempts from the changes line and from the keyboard", async 
   await expect(went.getByRole("row", { name: /Time 2 h est\. 1 h 30 min/ })).toBeVisible();
   await expect(went.getByRole("row", { name: /Filament 60 g/ })).toBeVisible();
   // What stayed the same is one tap away.
-  await expect(sheet.getByRole("button", { name: /^Same in both/ })).toBeVisible();
+  await sheet.getByRole("button", { name: /^Same in both/ }).click();
+  await expect(sheet.getByText("Layers 0.20 mm")).toBeVisible();
 
   if (isMobile) {
     // Phones: a switch over one photo; the chosen attempt's words follow.

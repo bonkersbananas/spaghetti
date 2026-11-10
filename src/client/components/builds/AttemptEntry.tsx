@@ -110,12 +110,13 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 <button
                   type="button"
                   onClick={onCompare}
-                  className="text-small text-ink-soft focus-ring pressable hover:bg-ink/4 pointer-events-auto relative z-10 -mx-1.5 flex items-start gap-1.5 rounded-md px-1.5 py-0.5 text-left"
+                  className="text-small text-ink-soft focus-ring pressable hover:bg-ink/4 pointer-events-auto relative z-10 -mx-1.5 flex flex-wrap items-start gap-x-1.5 gap-y-1 rounded-md px-1.5 py-0.5 text-left md:flex-nowrap"
                 >
                   <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
                   <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
-                  <ChangeChips attempt={attempt} className="flex-1" />
-                  <span className="text-ink-faint mt-0.5 inline-flex shrink-0 items-center gap-1 font-semibold">
+                  <ChangeChips attempt={attempt} className="min-w-0 flex-1" />
+                  {/* On phones "Compare" takes its own line under the chips, so they keep their width; on desktop it ends the line. */}
+                  <span className="text-ink-faint inline-flex basis-full items-center gap-1 pl-5.5 font-semibold md:mt-0.5 md:shrink-0 md:basis-auto md:pl-0">
                     <CompareIcon size={16} aria-hidden />
                     Compare
                   </span>

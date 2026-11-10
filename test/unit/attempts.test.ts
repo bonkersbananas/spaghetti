@@ -275,6 +275,19 @@ describe("summarizeBuild", () => {
     });
   });
 
+  it("counts a failed print's estimate only up to where it failed", () => {
+    const summary = summarizeBuild([
+      done("failed", { estimatedMinutes: 200, failedAtPercent: 50 }),
+      done("success", { actualMinutes: 180 }),
+    ]);
+    expect(summary.minutes).toEqual({ value: 280, approximate: true });
+    // Without a point of failure the whole estimate is all there is.
+    expect(summarizeBuild([done("failed", { estimatedMinutes: 200 })]).minutes).toEqual({
+      value: 200,
+      approximate: true,
+    });
+  });
+
   it("leaves out a figure nobody has", () => {
     const summary = summarizeBuild([done("failed"), done("success")]);
     expect(summary.minutes).toBeNull();

@@ -121,7 +121,7 @@ export function BuildsSection() {
       note="Logging an attempt next to the printer: the outcome is one big tap, tags and settings one more. A failed print is spaghetti, recorded with the same care as a success: soft tomato, never an error."
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel className="flex flex-col gap-5">
+        <Panel className="flex min-w-0 flex-col gap-5">
           <Label>Outcome picker</Label>
           <OutcomePicker value={outcome} onChange={setOutcome} />
           <Label>Outcome chips</Label>
@@ -162,7 +162,7 @@ export function BuildsSection() {
             visible={6}
           />
         </Panel>
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Label>Build summary: from the second attempt on, under the notes</Label>
           <BuildSummary attempts={sampleAttempts} open onPick={(id) => toast.message(`Picked ${id}`)} />
           <Label>Compare two attempts: what changed, what stayed, how it went</Label>

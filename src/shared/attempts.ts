@@ -521,7 +521,7 @@ export interface BuildSummary {
   words: string;
   /**
    * Time on the bed from the finished attempts: what each took, else its
-   * estimate. `approximate` when any of them had to be guessed or had nothing,
+   * estimate (cut short to the point where it failed, when that is known). `approximate` when any of them had to be guessed or had nothing,
    * so it reads "about 6 h 22 min". Null when no figure is known at all.
    */
   minutes: { value: number; approximate: boolean } | null;
@@ -576,12 +576,14 @@ export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildS
       filaments.push(filament);
     }
     if (attempt.outcome === null) continue;
-    const { actualMinutes, estimatedMinutes, weightGrams } = attempt.settings;
+    const { actualMinutes, estimatedMinutes, weightGrams, failedAtPercent } = attempt.settings;
     if (actualMinutes !== undefined) {
       minutes += actualMinutes;
       minutesKnown = true;
     } else if (estimatedMinutes !== undefined) {
-      minutes += estimatedMinutes;
+      // A print that failed part-way only ran that far, so the slicer's full estimate would overstate it.
+      const ran = failedAtPercent === undefined ? 1 : Math.min(1, Math.max(0, failedAtPercent / 100));
+      minutes += estimatedMinutes * ran;
       minutesKnown = true;
       minutesApproximate = true;
     } else {

@@ -79,6 +79,42 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The lower half of the comparison: what stayed the same (opened) and how each attempt went.
+    name: "compare-details",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
+        .first()
+        .click();
+      const sheet = page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ });
+      await sheet.waitFor();
+      await sheet.getByRole("button", { name: /^Same in both/ }).click();
+      await sheet.getByText("Layers 0.20 mm").waitFor();
+      await sheet.getByRole("region", { name: "How it went" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(2000);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A print still on the bed can be compared: its Printing chip, and no results of its own yet.
+    name: "compare-printing",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // Desktop: the attempt's name opens a list of every attempt; picking one swaps that column.
     name: "compare-pickers",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,

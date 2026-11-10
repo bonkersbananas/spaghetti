@@ -41,6 +41,12 @@ function results(
   ].filter((row) => row.before !== none || row.after !== none);
 }
 
+/**
+ * Rows of a label, the older attempt's value and the newer one's, laid on the
+ * same two columns as the attempts above (the label shares the left one), so
+ * each value sits under its own attempt. Still a table to assistive tech: the
+ * label opens each row, then one cell per attempt.
+ */
 function Rows({
   rows,
   older,
@@ -51,29 +57,29 @@ function Rows({
   newer: Compared;
 }) {
   return (
-    <table className="w-full table-fixed border-separate border-spacing-y-2 text-left">
+    <table className="block">
       {/* Phones show one photo at a time, so the columns are named; on desktop the headers above them do it. */}
-      <thead className="md:sr-only">
-        <tr className="text-caption text-ink-faint text-left font-semibold">
-          <th scope="col" className="sr-only md:w-36">
-            Setting
-          </th>
-          <th scope="col" className="pr-3 font-semibold">
+      <thead className="block md:sr-only">
+        <tr className="text-caption text-ink-faint mb-2 grid grid-cols-2 gap-x-4 text-left font-semibold md:gap-x-6">
+          <th scope="col" className="flex gap-3 text-left font-semibold">
+            <span className="w-24 shrink-0 md:w-36">
+              <span className="sr-only">Setting</span>
+            </span>
             Attempt {older.number}
           </th>
-          <th scope="col" className="font-semibold">
+          <th scope="col" className="text-left font-semibold">
             Attempt {newer.number}
           </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody className="flex flex-col gap-2">
         {rows.map((row) => (
-          <tr key={row.key} className="text-small align-baseline">
-            <th scope="row" className="text-ink-faint w-24 pr-3 text-left font-normal md:w-36">
-              {row.label}
-            </th>
-            <td className="text-ink tabular pr-3">{row.before}</td>
-            <td className="text-ink tabular">
+          <tr key={row.key} className="text-small grid grid-cols-2 items-baseline gap-x-4 md:gap-x-6">
+            <td className="flex min-w-0 gap-3">
+              <span className="text-ink-faint w-24 shrink-0 md:w-36">{row.label}</span>
+              <span className="text-ink tabular min-w-0">{row.before}</span>
+            </td>
+            <td className="text-ink tabular min-w-0">
               {row.highlight ? (
                 <span className="bg-semolina-soft/70 rounded-xs px-1 font-medium">{row.after}</span>
               ) : (
@@ -123,7 +129,8 @@ export function CompareTable({ older, newer }: { older: Compared; newer: Compare
             <MetaList className="text-small text-ink-soft tabular">
               {same.map((row) => (
                 <span key={row.key} className="whitespace-nowrap">
-                  {row.label} {row.after}
+                  {/* "Layers 0.20 mm", but just "brim" rather than "Brim brim". */}
+                  {row.after.toLowerCase().includes(row.label.toLowerCase()) ? row.after : `${row.label} ${row.after}`}
                 </span>
               ))}
             </MetaList>
