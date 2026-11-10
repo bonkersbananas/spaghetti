@@ -261,11 +261,14 @@ function SpoolPage({ spool }: { spool: Spool }) {
           </div>
 
           <div className="flex items-end gap-3">
-            <SwatchPicker
-              value={value.colorHex ?? undefined}
-              onChange={(colorHex) => change({ colorHex })}
-              label="Color"
-            />
+            <div className="flex flex-col gap-1.5">
+              <span className="text-small text-ink-soft px-0.5 font-semibold">Color</span>
+              <SwatchPicker
+                value={value.colorHex ?? undefined}
+                onChange={(colorHex) => change({ colorHex })}
+                label="Color"
+              />
+            </div>
             <TextField
               size="sm"
               label="Brand"
