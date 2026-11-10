@@ -89,6 +89,34 @@ export const RESULT_KEYS = [
   "failedAtLayer",
 ] as const satisfies ReadonlyArray<keyof AttemptSettings>;
 
+/** Every setting an attempt can carry, one by one (for following the server a setting at a time). */
+export const SETTING_KEYS = [
+  "filaments",
+  "bedType",
+  "nozzle",
+  "nozzleDiameter",
+  "layerHeight",
+  "infillDensity",
+  "wallLoops",
+  "supportEnabled",
+  "supportType",
+  "brim",
+  "processPreset",
+  "nozzleTemperature",
+  "bedTemperature",
+  "chamberTemperature",
+  "estimatedMinutes",
+  "actualMinutes",
+  "weightGrams",
+  "failedAtPercent",
+  "failedAtLayer",
+  "filamentDried",
+] as const satisfies ReadonlyArray<keyof AttemptSettings>;
+export type SettingKey = (typeof SETTING_KEYS)[number];
+/** Fails to compile when a setting is added to AttemptSettings but not to SETTING_KEYS. */
+const _everySettingListed: Exclude<keyof AttemptSettings, SettingKey> extends never ? true : never = true;
+void _everySettingListed;
+
 /** "Same as last time": the settings a new attempt starts from. */
 export function carryOver(settings: AttemptSettings | undefined): AttemptSettings {
   const next: AttemptSettings = { ...settings };
