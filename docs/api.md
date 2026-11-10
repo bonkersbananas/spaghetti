@@ -63,6 +63,10 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 - `DELETE /recipes/:id` and `POST /recipes/:id/restore`: soft delete and its undo, people only.
 - A recipe carries `source` (`attemptId`, `itemId`, `title`, `number`, `photo`) while that attempt and its build exist, else `null`.
 
+## Insights
+
+`GET /api/insights?year=2026&tz=-60` (read scope) is the year so far, computed from attempts and not stored: `{ insights: { year, prints, outcomes, months, byMaterial, byPlate, failures, longestBuilds } }`. `year` defaults to the current one and `tz` is the viewer's zone in minutes behind UTC (`Date.getTimezoneOffset()`), so a print late on New Year's Eve lands in their year. Each failure carries `fixes`: the changes (as phrases such as "a warmer bed") made right before an attempt of the same build that worked. The logic is `src/shared/insights.ts`.
+
 ## Up next and "for"
 
 An idea can be queued as **Up next**: `upNext` on an item is its place in the queue (1 is first) or `null`. `PATCH /items/:id { "upNext": true }` puts it at the end, `false` or `null` takes it off, a number puts it at that place (the undo of taking it off). Only ideas are queued, and a stage change to a build takes the idea off the queue. `PUT /items/up-next/order { "ids": [...] }` sets the order (those first, in that order; queued ideas not listed follow) and answers with the queue. `forWhom` ("Mila", up to 80 characters, empty clears it) is optional and searchable. All of these are `capture` scope.

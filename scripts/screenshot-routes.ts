@@ -409,6 +409,8 @@ export const shots: Shot[] = [
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
+  // The year so far: figures, months, success by material and plate, what fixed each failure.
+  { name: "year", path: "/year?year=2026", fullPage: true },
   {
     // Further back: a month that sums itself up, grouped by week.
     name: "journal-months",
@@ -731,6 +733,7 @@ export const shots: Shot[] = [
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
+  { name: "styleguide-year", path: "/styleguide", selector: "#year" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",

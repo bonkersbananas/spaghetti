@@ -58,10 +58,10 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
   const through = current ? new Date().getMonth() : 11;
   return (
     <div className="flex flex-col gap-12 pb-10 md:gap-16 md:pb-16">
-      <section aria-label="In numbers" className="flex flex-col gap-6 md:flex-row md:items-end md:gap-16">
+      <section aria-label="In numbers" className="flex flex-row flex-wrap items-end gap-x-8 gap-y-5 md:gap-16">
         <Figure value={String(insights.prints)} words={insights.prints === 1 ? "print" : "prints"} />
         <Figure value={`${percent(insights)}%`} words="worked" tone="basil" />
-        <p className="text-lead text-ink-soft max-w-sm md:pb-2">
+        <p className="text-lead text-ink-soft w-full max-w-sm md:w-auto md:pb-2">
           {outcomes.partial} came out {OUTCOME_LABELS.partial.toLowerCase()}, and{" "}
           <Link
             to="/journal"
@@ -111,7 +111,9 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
                     </span>
                   </Link>
                   <p className="text-body text-ink-soft">
-                    {fixed ? `It ${fixed}.` : "Nothing has fixed it yet: that is still to find."}
+                    {fixed
+                      ? `${fixed.charAt(0).toUpperCase()}${fixed.slice(1)}.`
+                      : "Nothing has fixed it yet: that is still to find."}
                   </p>
                 </li>
               );
@@ -148,9 +150,7 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
 function Figure({ value, words, tone }: { value: string; words: string; tone?: "basil" }) {
   return (
     <p className="flex items-baseline gap-3">
-      <span
-        className={`font-display tabular text-[4.5rem] leading-none md:text-[6rem] ${tone === "basil" ? "text-basil-ink" : "text-ink"}`}
-      >
+      <span className={`font-display tabular text-figure ${tone === "basil" ? "text-basil-ink" : "text-ink"}`}>
         {value}
       </span>
       <span className="text-lead text-ink-soft">{words}</span>
