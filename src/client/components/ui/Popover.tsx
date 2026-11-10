@@ -14,6 +14,9 @@ interface PopoverProps {
   label: string;
 }
 
+/** Closes the popover from inside it: wrap the item that was chosen (asChild). */
+export const PopoverClose = RadixPopover.Close;
+
 /** A small floating panel for desktop menus (the account menu). Sheets are for tasks; this is for settings at hand. */
 export function Popover({ trigger, children, side = "top", align = "start", className, label }: PopoverProps) {
   return (

@@ -43,7 +43,17 @@ function activityLine(item: ItemView) {
  * A build in progress: its newest photo first (what came off the bed last),
  * how the last attempt went over it, and when.
  */
-export function BuildCard({ item, person, landing }: { item: ItemView; person?: Person; landing?: boolean }) {
+export function BuildCard({
+  item,
+  person,
+  via,
+  landing,
+}: {
+  item: ItemView;
+  person?: Person;
+  via?: string;
+  landing?: boolean;
+}) {
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
   return (
@@ -69,6 +79,7 @@ export function BuildCard({ item, person, landing }: { item: ItemView; person?: 
         }
         meta={activityLine(item)}
         person={person}
+        via={via}
         className="h-full"
       />
     </m.li>

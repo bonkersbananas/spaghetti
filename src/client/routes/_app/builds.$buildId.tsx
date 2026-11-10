@@ -38,6 +38,7 @@ import { Overline } from "@/components/ui/Overline";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
@@ -251,6 +252,7 @@ function Build({ item }: { item: ItemView }) {
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
   const alt = photoAlt({ title, note });
   const creator = byId.get(item.createdBy);
+  const via = useVia();
 
   const stageActions = (
     <>
@@ -413,6 +415,7 @@ function Build({ item }: { item: ItemView }) {
                     attempt={attempt}
                     photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
                     person={byId.get(attempt.createdBy)}
+                    via={via(attempt.createdVia)}
                     selected={attempt.id === selected}
                     first={index === 0}
                     onOpen={() => {
@@ -428,7 +431,7 @@ function Build({ item }: { item: ItemView }) {
 
           <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
             <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-            {creator && <Avatar person={creator} size="xs" />}
+            {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
             {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
             <p>
               {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}

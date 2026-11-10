@@ -7,14 +7,13 @@ import { LAST_USED_EVERY_MS } from "../../src/worker/auth/agent.ts";
 import { addUser, request, resetDb, signIn, uploadPhoto } from "./helpers.ts";
 
 let alex: string;
-let sam: string;
 let cookie: string;
 let samCookie: string;
 
 beforeEach(async () => {
   await resetDb();
   alex = await addUser("alex", "correct horse", "Alex Rivera", "tomato");
-  sam = await addUser("sam", "battery staple", "Sam Lund", "basil");
+  await addUser("sam", "battery staple", "Sam Lund", "basil");
   cookie = await signIn("alex", "correct horse");
   samCookie = await signIn("sam", "battery staple");
 });

@@ -25,6 +25,8 @@ interface AttemptEntryProps {
   attempt: AttemptView;
   photos: PhotoView[];
   person?: Person;
+  /** The agent it was logged through. */
+  via?: string;
   /** Highlighted by the arrow keys on desktop. */
   selected?: boolean;
   /** The newest entry: the timeline's line stops above the first one. */
@@ -41,7 +43,7 @@ interface AttemptEntryProps {
  * and the settings in a line. Tapping it opens the attempt.
  */
 export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(function AttemptEntry(
-  { attempt, photos, person, selected, first, last, onOpen, onFinish },
+  { attempt, photos, person, via, selected, first, last, onOpen, onFinish },
   ref,
 ) {
   const failureOptions = useTagOptions("failure");
@@ -96,7 +98,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
                   {relativeTime(attempt.printedAt)}
                 </time>
-                {person && <Avatar person={person} size="xs" />}
+                {person && <Avatar person={person} size="xs" via={via} />}
               </span>
             </div>
 

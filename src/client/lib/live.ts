@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "@/components/ui/Toast";
+import { agentsQuery } from "./agents";
 import { api } from "./api";
 import { isOnline, subscribeConnection } from "./connection";
 import { itemKeys } from "./items";
@@ -88,6 +89,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "tag":
         roots.add("tags");
         break;
+      case "agent":
+        roots.add("agents");
+        break;
     }
     if (change.itemId && change.entity !== "spool") details.add(change.itemId);
   }
@@ -127,7 +131,14 @@ function sayAboutScreen(queryClient: QueryClient, screen: LiveScreen, changes: C
   const people = queryClient.getQueryData(peopleQuery.queryKey);
   const who = (change: Change) =>
     change.actor.id === me ? "You" : firstName(people?.find((person) => person.id === change.actor.id));
-  const mine = (change: Change) => change.actor.id === me;
+  const mine = (change: Change) => change.actor.kind === "person" && change.actor.id === me;
+  const agents = queryClient.getQueryData(agentsQuery.queryKey);
+  // "Sam logged an attempt", or for an agent, quietly: "Logged an attempt via Claude for Alex".
+  const said = (change: Change, did: string) => {
+    if (change.actor.kind !== "agent") return `${who(change)} ${did}`;
+    const name = agents?.find((agent) => agent.id === change.actor.id)?.name;
+    return name ? `${did.charAt(0).toUpperCase()}${did.slice(1)} via ${name}` : `An agent ${did}`;
+  };
 
   if (open.kind === "pantry") {
     const gone = changes.findLast((c) => c.entity === "spool" && c.id === open.id && c.action === "deleted");
@@ -158,11 +169,11 @@ function sayAboutScreen(queryClient: QueryClient, screen: LiveScreen, changes: C
   const photos = theirs.filter((change) => change.entity === "photo" && change.action === "created");
   const attempt = theirs.findLast((change) => change.entity === "attempt" && change.action === "created");
   const removed = theirs.findLast((change) => change.entity === "attempt" && change.action === "deleted");
-  if (attempt) toast.message(`${who(attempt)} logged an attempt`);
+  if (attempt) toast.message(said(attempt, "logged an attempt"));
   else if (photos.length) {
     const first = photos[0];
-    if (first) toast.message(`${who(first)} added ${plural(photos.length, "a photo", `${photos.length} photos`)}`);
-  } else if (removed) toast.message(`${who(removed)} deleted an attempt`);
+    if (first) toast.message(said(first, `added ${plural(photos.length, "a photo", `${photos.length} photos`)}`));
+  } else if (removed) toast.message(said(removed, "deleted an attempt"));
 }
 
 /** New things from the other person land with a little bounce when their card mounts. */

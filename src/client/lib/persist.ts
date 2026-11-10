@@ -28,6 +28,7 @@ export const PERSISTED_ROOTS = [
   "what-worked",
   "spools",
   "printer",
+  "agents",
 ] as const;
 /** The roots that are "what you saw" (the offline strip dates them); tags and people are support data. */
 const SEEN_ROOTS = ["items", "journal", "search"];

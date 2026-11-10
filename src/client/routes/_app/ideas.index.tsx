@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { CardSkeleton } from "@/components/ui/Skeleton";
+import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { useIdeas } from "@/lib/items";
@@ -26,6 +27,7 @@ function Ideas() {
   const { data: people } = useQuery(peopleQuery);
   const { landed } = useCapture();
   const arrived = useArrived();
+  const via = useVia();
   const byId = new Map(people?.map((person) => [person.id, person]));
 
   return (
@@ -45,6 +47,7 @@ function Ideas() {
               key={item.id}
               item={item}
               person={byId.get(item.createdBy)}
+              via={via(item.createdVia)}
               landing={item.id === landed || arrived.has(item.id)}
             />
           ))}

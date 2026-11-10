@@ -17,7 +17,7 @@ import { SpoolCard } from "@/components/pantry/SpoolCard";
 import { OfflineBanner } from "@/components/shell/OfflineNotice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ThemeSwitch } from "@/components/shell/ThemeSwitch";
-import { Avatar, AvatarStack } from "@/components/ui/Avatar";
+import { Avatar, AvatarStack, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
@@ -728,6 +728,18 @@ function AvatarSection() {
           ))}
         </div>
       </Panel>
+      <Panel className="mt-4 flex flex-wrap items-center gap-6">
+        {(["xs", "sm", "md", "lg"] as const).map((size) => (
+          <Avatar key={size} person={people[0] as Person} size={size} via="Claude for Alex" />
+        ))}
+        <p className="text-small text-ink-faint">
+          Alex <ViaText name="Claude for Alex" />
+        </p>
+      </Panel>
+      <p className="text-small text-ink-faint mt-3 max-w-prose">
+        Done through an agent: the owner's avatar with a small agent mark (<code>via</code>), and where there is room,
+        “via Claude for Alex” in faint text. Never a badge.
+      </p>
     </Section>
   );
 }
