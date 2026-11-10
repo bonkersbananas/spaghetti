@@ -21,6 +21,7 @@ const origin = (page: Page) => new URL(page.url()).origin;
  */
 const BUDGET_KB = {
   "/sign-in": 245,
+  "/today": 330,
   "/ideas": 330,
   "/builds": 335,
   "/journal": 345,

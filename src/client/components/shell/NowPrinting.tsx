@@ -6,7 +6,7 @@ import { BuildsIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto, printingAttempts } from "@/lib/builds";
-import { useBuilds } from "@/lib/items";
+import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { useNow } from "@/lib/use-now";
@@ -18,6 +18,49 @@ function shortLabel(startedAt: number, estimatedMinutes: number | undefined, now
   if (state === "due") return "Done by now";
   if (state === "unknown") return "On the bed";
   return label.replace(/^About /, "");
+}
+
+interface NowPrintingCardProps {
+  item: ItemView;
+  attempt: AttemptView;
+  now: number;
+}
+
+/** The sidebar's small card: a thumbnail, the build's name, a ring and a few words on how far along it is. */
+export function NowPrintingCard({ item, attempt, now }: NowPrintingCardProps) {
+  const hero = heroPhoto(item);
+  return (
+    <Link
+      to="/builds/$buildId"
+      params={{ buildId: item.id }}
+      search={{ attempt: attempt.id }}
+      className="bg-cream shadow-soft hover:shadow-raised pressable focus-ring flex items-center gap-2.5 rounded-md p-2"
+    >
+      {hero ? (
+        <Photo
+          src={photoSrc(hero.id, "thumb")}
+          alt=""
+          color={hero.color || undefined}
+          className="size-9 shrink-0 rounded-sm"
+        />
+      ) : (
+        <span className="bg-ink/5 text-ink-faint flex size-9 shrink-0 items-center justify-center rounded-sm">
+          <BuildsIcon size={18} aria-hidden />
+        </span>
+      )}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-small text-ink truncate font-semibold">{itemName(item).text}</span>
+        <span className="text-caption text-ink-faint tabular flex items-center gap-1.5">
+          <PrintProgress
+            variant="ring"
+            startedAt={attempt.printedAt}
+            estimatedMinutes={attempt.settings.estimatedMinutes}
+          />
+          {shortLabel(attempt.printedAt, attempt.settings.estimatedMinutes, now)}
+        </span>
+      </span>
+    </Link>
+  );
 }
 
 /**
@@ -32,7 +75,6 @@ export function NowPrinting() {
   const printing = useMemo(() => printingAttempts(items, now), [items, now]);
   const first = printing[0];
   const show = !!first && !onToday;
-  const hero = first ? heroPhoto(first.item) : undefined;
 
   return (
     <AnimatePresence initial={false}>
@@ -45,36 +87,7 @@ export function NowPrinting() {
           transition={{ duration: duration.base, ease: ease.out }}
           className="mb-3 flex flex-col gap-1.5"
         >
-          <Link
-            to="/builds/$buildId"
-            params={{ buildId: first.item.id }}
-            search={{ attempt: first.attempt.id }}
-            className="bg-cream shadow-soft hover:shadow-raised pressable focus-ring flex items-center gap-2.5 rounded-md p-2"
-          >
-            {hero ? (
-              <Photo
-                src={photoSrc(hero.id, "thumb")}
-                alt=""
-                color={hero.color || undefined}
-                className="size-9 shrink-0 rounded-sm"
-              />
-            ) : (
-              <span className="bg-ink/5 text-ink-faint flex size-9 shrink-0 items-center justify-center rounded-sm">
-                <BuildsIcon size={18} aria-hidden />
-              </span>
-            )}
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-small text-ink truncate font-semibold">{itemName(first.item).text}</span>
-              <span className="text-caption text-ink-faint tabular flex items-center gap-1.5">
-                <PrintProgress
-                  variant="ring"
-                  startedAt={first.attempt.printedAt}
-                  estimatedMinutes={first.attempt.settings.estimatedMinutes}
-                />
-                {shortLabel(first.attempt.printedAt, first.attempt.settings.estimatedMinutes, now)}
-              </span>
-            </span>
-          </Link>
+          <NowPrintingCard item={first.item} attempt={first.attempt} now={now} />
           {printing.length > 1 && (
             <Link
               to="/today"

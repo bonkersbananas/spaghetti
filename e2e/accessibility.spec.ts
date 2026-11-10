@@ -126,6 +126,9 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, `/ideas/${data.ideaId}`, "Bath tugboat");
     await expectAccessible(page, "An idea");
 
+    await screen(page, "/today", "Today");
+    await expectAccessible(page, "Today");
+
     await screen(page, "/builds", "Builds");
     await expectAccessible(page, "Builds");
 
@@ -205,6 +208,7 @@ test("empty states and sign-in pass axe", async ({ page }) => {
   await clearIdeas(page);
   await clearSpools(page);
   for (const [path, heading] of [
+    ["/today", "Today"],
     ["/ideas", "Ideas"],
     ["/builds", "Builds"],
     ["/journal", "Journal"],

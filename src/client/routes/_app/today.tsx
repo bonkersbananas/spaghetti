@@ -91,7 +91,8 @@ function Today() {
   const loading = builds.isPending || ideas.isPending;
   const brandNew = !loading && builds.items.length === 0 && ideas.items.length === 0;
   const hasPrinter = !!printer.data && Object.keys(printer.data.slots).length > 0 && (spools.data?.length ?? 0) > 0;
-  const lately = entries.length > 0 || !!summary.data;
+  const summaryText = summary.data ? summaryLine(summary.data) : "";
+  const lately = entries.length > 0 || summaryText !== "";
   const quiet =
     !loading && !brandNew && onBed.length === 0 && waiting.length === 0 && !burner && !hasPrinter && !lately;
 
@@ -149,35 +150,43 @@ function Today() {
           Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
         </EmptyState>
       ) : (
-        <div className="lg:flex lg:items-start lg:gap-14">
-          <div className="flex min-w-0 flex-col gap-10 lg:flex-3">
-            {loading ? (
-              <div className="flex flex-col gap-4" aria-hidden>
-                <CardSkeleton />
-                <RowSkeleton />
-                <RowSkeleton />
-                <RowSkeleton />
-              </div>
-            ) : (
-              <>
-                {bedSection}
-                <PickUpAgain builds={builds.items} />
-                <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />
-              </>
-            )}
+        // On a phone the blocks run in one column in the order below (bed, pick up, printer, month, back burner).
+        // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
+        <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
+          <div className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
+            <div className="order-1 empty:hidden">
+              {loading ? (
+                <div className="flex flex-col gap-4" aria-hidden>
+                  <CardSkeleton />
+                  <RowSkeleton />
+                  <RowSkeleton />
+                  <RowSkeleton />
+                </div>
+              ) : (
+                bedSection
+              )}
+            </div>
+            <div className="order-2 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
+            <div className="order-5 empty:hidden">
+              {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
+            </div>
           </div>
-          <div className="mt-10 flex min-w-0 flex-col gap-10 lg:sticky lg:top-8 lg:mt-0 lg:flex-2">
-            {printer.data && spools.data && (
-              <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
-            )}
-            <Lately
-              label={`${monthLabel(month.start)} so far`}
-              summary={summary.data ? summaryLine(summary.data) : summary.isPending ? null : ""}
-              entries={entries}
-              items={items}
-              people={byId}
-              via={via}
-            />
+          <div className="contents lg:sticky lg:top-8 lg:flex lg:min-w-0 lg:flex-2 lg:flex-col lg:gap-10">
+            <div className="order-3 empty:hidden">
+              {printer.data && spools.data && (
+                <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
+              )}
+            </div>
+            <div className="order-4 empty:hidden">
+              <Lately
+                label={`${monthLabel(month.start)} so far`}
+                summary={summary.data ? summaryText : summary.isPending ? null : ""}
+                entries={entries}
+                items={items}
+                people={byId}
+                via={via}
+              />
+            </div>
           </div>
         </div>
       )}
