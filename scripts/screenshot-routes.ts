@@ -91,7 +91,8 @@ async function newModelIdea(page: Page, note: string) {
 /** Opens that idea's page and waits for it. */
 async function openIdea(page: Page, id: string) {
   await page.goto(`/ideas/${id}`);
-  await page.getByRole("textbox", { name: "Title" }).waitFor();
+  await page.locator("h1").first().waitFor({ state: "attached" });
+  await page.getByRole("button", { name: "Start building" }).first().waitFor();
 }
 
 const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";

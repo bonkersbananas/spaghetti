@@ -138,7 +138,20 @@ async function storePictures(db: Db, env: Env, itemId: string, urls: string[], o
           createdBy: owner,
           createdAt: now,
         })
-        .onConflictDoNothing(),
+        // The same ids every time: drafting again after an Undo brings the soft-deleted pictures back.
+        .onConflictDoUpdate({
+          target: photos.id,
+          set: {
+            deletedAt: null,
+            position: stored.length,
+            width: image.width,
+            height: image.height,
+            color: NEUTRAL,
+            contentType: image.contentType,
+            needsResize: true,
+            resizeClaimedAt: null,
+          },
+        }),
       recordChange(db, {
         entity: "photo",
         id: photoId,

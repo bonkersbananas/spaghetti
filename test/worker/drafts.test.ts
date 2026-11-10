@@ -176,6 +176,11 @@ describe("drafting an idea from a model page", () => {
     expect(item.title).toBe("Cable comb, my way");
     expect(item.note).toBe(PAGE);
     expect(item.photos).toHaveLength(0);
+
+    // Asking again brings the pictures back (same ids, so the deleted rows are revived).
+    const again = await (await draftIt(id)).json<DraftResponse>();
+    expect(again.draft?.applied).toContain("photos");
+    expect((await getItem(id)).photos).toHaveLength(1);
   });
 
   it("leaves the idea as captured, with a reason, when Claude refuses or can't read the page", async () => {

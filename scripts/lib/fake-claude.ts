@@ -55,10 +55,10 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
                 {
                   type: "text",
                   text: JSON.stringify(
-                asked.includes("broken")
-                  ? { ...draft, readable: false }
-                  : { ...draft, imageUrls: [1, 2, 3].map((n) => `${base}/images/${n}.jpg`) },
-              ),
+                    asked.includes("broken")
+                      ? { ...draft, readable: false }
+                      : { ...draft, imageUrls: [1, 2, 3].map((n) => `${base}/images/${n}.jpg`) },
+                  ),
                 },
               ],
           stop_reason: refused ? "refusal" : "end_turn",
