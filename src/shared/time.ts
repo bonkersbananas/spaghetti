@@ -41,3 +41,11 @@ export function fullTime(time: number): string {
     minute: "2-digit",
   });
 }
+
+/** 130 → "2 h 10 min". */
+export function formatDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.round(minutes % 60);
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}

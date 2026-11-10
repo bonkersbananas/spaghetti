@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   colorDistance,
+  colorTone,
   DEFAULT_PRINTER,
   filamentFromSpool,
   matchFilaments,
@@ -192,5 +193,36 @@ describe("gentle printer checks", () => {
       "filament0: PLA-CF wears a nozzle that isn't hardened.",
     ]);
     expect(texts({ nozzle: "auxiliary", filaments: [{ type: "PLA-CF" }], nozzleDiameter: 0.4 }, soft)).toEqual([]);
+  });
+});
+
+describe("colorTone", () => {
+  it("sorts the seed colors", () => {
+    expect(colorTone("#f4f1ea")).toBe("light");
+    expect(colorTone("#1d1d1f")).toBe("dark");
+    expect(colorTone("#00ae42")).toBe("mid");
+  });
+
+  it("calls pure white light and pure black dark", () => {
+    expect(colorTone("#ffffff")).toBe("light");
+    expect(colorTone("#000000")).toBe("dark");
+  });
+
+  it("reads short hex and ignores case", () => {
+    expect(colorTone("#FFF")).toBe("light");
+    expect(colorTone("#000")).toBe("dark");
+    expect(colorTone("#F4F1EA")).toBe("light");
+  });
+
+  it("keeps mid grays, yellows and blues in the middle", () => {
+    expect(colorTone("#8e9089")).toBe("mid");
+    expect(colorTone("#f0b323")).toBe("mid");
+    expect(colorTone("#0a2989")).toBe("dark");
+  });
+
+  it("treats anything that isn't a hex color as mid", () => {
+    expect(colorTone("")).toBe("mid");
+    expect(colorTone("white")).toBe("mid");
+    expect(colorTone("#12")).toBe("mid");
   });
 });

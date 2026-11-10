@@ -2,7 +2,7 @@ import { type ComponentPropsWithRef, forwardRef, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { CloseIcon, type Icon } from "./icons";
 import { Photo } from "./Photo";
-import { ProgressRing } from "./UploadBadge";
+import { ProgressRing } from "./ProgressRing";
 
 interface AddPhotoTileProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
   icon: Icon;

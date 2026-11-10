@@ -49,6 +49,19 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
     },
   },
+  // The print on the bed: its entry in the story, with the progress bar and how long is left.
+  {
+    name: "build-progress",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    selector: "li[data-attempt-id]:first-child",
+    // High in the window, clear of the tab bar and the action bar.
+    beforeShot: async (page) => {
+      await page
+        .locator("li[data-attempt-id]:first-child")
+        .evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -90));
+    },
+  },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
   {
@@ -215,6 +228,9 @@ export const shots: Shot[] = [
     },
   },
   { name: "pantry", path: "/pantry", fullPage: true },
+  // The design system's own pages for the building blocks: print progress and the outcome strip, spool rims.
+  { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",
