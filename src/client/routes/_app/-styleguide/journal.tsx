@@ -19,6 +19,7 @@ const photo = (id: string, attemptId: string | null): Photo => ({
   height: 300,
   color: "#8d7a66", // design-lint-ignore: a photo's average color is data
   takenAt: null,
+  needsResize: false,
   attemptId,
   createdBy: "a",
   createdAt: now,
