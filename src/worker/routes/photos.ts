@@ -1,6 +1,7 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { PHOTO_VARIANTS, type PhotoResponse, type PhotoVariant } from "../../shared/api.ts";
+import { actorOf, afterChange, recordChange } from "../changes.ts";
 import { items, photos } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
@@ -28,22 +29,53 @@ export const photoRoutes = new Hono<AppEnv>()
 
   /** Removes a photo from its item at once; restore brings it back (undo). */
   .delete("/:id", async (c) => {
-    const result = await c.var.db
-      .update(photos)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(photos.id, c.req.param("id")), isNull(photos.deletedAt)))
-      .returning({ itemId: photos.itemId });
+    const photoId = c.req.param("id");
+    const db = c.var.db;
+    const itemOfPhoto = sql`(SELECT item_id FROM photos WHERE id = ${photoId})`;
+    const [result] = await db.batch([
+      db
+        .update(photos)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(photos.id, photoId), isNull(photos.deletedAt)))
+        .returning({ itemId: photos.itemId }),
+      recordChange(db, {
+        entity: "photo",
+        id: photoId,
+        itemId: itemOfPhoto,
+        action: "deleted",
+        actor: actorOf(c.var.user),
+      }),
+      db
+        .update(items)
+        .set({ updatedAt: new Date() })
+        .where(and(sql`${items.id} = ${itemOfPhoto}`, afterChange)),
+    ]);
     if (!result[0]) return apiError(c, 404, "not_found", "That photo isn't here.");
-    await c.var.db.update(items).set({ updatedAt: new Date() }).where(eq(items.id, result[0].itemId));
     return c.body(null, 204);
   })
 
   .post("/:id/restore", async (c) => {
-    const [photo] = await c.var.db
-      .update(photos)
-      .set({ deletedAt: null })
-      .where(and(eq(photos.id, c.req.param("id")), isNotNull(photos.deletedAt)))
-      .returning();
+    const photoId = c.req.param("id");
+    const db = c.var.db;
+    const itemOfPhoto = sql`(SELECT item_id FROM photos WHERE id = ${photoId})`;
+    const [[photo]] = await db.batch([
+      db
+        .update(photos)
+        .set({ deletedAt: null })
+        .where(and(eq(photos.id, photoId), isNotNull(photos.deletedAt)))
+        .returning(),
+      recordChange(db, {
+        entity: "photo",
+        id: photoId,
+        itemId: itemOfPhoto,
+        action: "restored",
+        actor: actorOf(c.var.user),
+      }),
+      db
+        .update(items)
+        .set({ updatedAt: new Date() })
+        .where(and(sql`${items.id} = ${itemOfPhoto}`, afterChange)),
+    ]);
     const existing =
       photo ??
       (await c.var.db

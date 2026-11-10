@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, isNull, max, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, max, or } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -8,6 +9,7 @@ import {
   PHOTO_CONTENT_TYPES,
   type PhotoResponse,
 } from "../../shared/api.ts";
+import { actorOf, afterChange, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import {
   type Attempt,
@@ -184,20 +186,29 @@ export const itemRoutes = new Hono<AppEnv>()
     // A capture made offline keeps the time it was made, but never one in the future.
     const created = new Date(Math.min(createdAt ?? now, now));
     // A retried capture finds its item already there and gets it back unchanged.
-    await c.var.db
-      .insert(items)
-      .values({
+    await c.var.db.batch([
+      c.var.db
+        .insert(items)
+        .values({
+          id: itemId,
+          title: itemTitle ?? null,
+          note: itemNote ?? "",
+          stage,
+          // A build started from scratch starts when it was made.
+          startedAt: stage === "building" ? created : null,
+          createdBy: c.var.user.id,
+          createdAt: created,
+          updatedAt: created,
+        })
+        .onConflictDoNothing(),
+      recordChange(c.var.db, {
+        entity: "item",
         id: itemId,
-        title: itemTitle ?? null,
-        note: itemNote ?? "",
-        stage,
-        // A build started from scratch starts when it was made.
-        startedAt: stage === "building" ? created : null,
-        createdBy: c.var.user.id,
-        createdAt: created,
-        updatedAt: created,
-      })
-      .onConflictDoNothing();
+        itemId,
+        action: "created",
+        actor: actorOf(c.var.user),
+      }),
+    ]);
     const item = await loadItem(c.var.db, itemId);
     if (!item) return apiError(c, 409, "deleted", "That was deleted.");
     return c.json<ItemResponse>({ item }, 201);
@@ -239,26 +250,33 @@ export const itemRoutes = new Hono<AppEnv>()
       if (!photo) return apiError(c, 400, "invalid", "That photo isn't one of this build's.");
     }
     const now = new Date();
-    await db
-      .update(items)
-      .set({
-        ...changes,
-        ...(stage ? stageDates(current, stage, now) : {}),
-        ...(coverPhotoId !== undefined ? { coverPhotoId } : {}),
-        updatedAt: now,
-      })
-      .where(eq(items.id, itemId));
+    await db.batch([
+      db
+        .update(items)
+        .set({
+          ...changes,
+          ...(stage ? stageDates(current, stage, now) : {}),
+          ...(coverPhotoId !== undefined ? { coverPhotoId } : {}),
+          updatedAt: now,
+        })
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt))),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: actorOf(c.var.user) }),
+    ]);
     const item = await loadItem(db, itemId);
     if (!item) return apiError(c, 404, "not_found", notFound);
     return c.json<ItemResponse>({ item });
   })
 
   .delete("/:id", async (c) => {
-    const result = await c.var.db
-      .update(items)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(items.id, c.req.param("id")), isNull(items.deletedAt)))
-      .returning({ id: items.id });
+    const itemId = c.req.param("id");
+    const [result] = await c.var.db.batch([
+      c.var.db
+        .update(items)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
+        .returning({ id: items.id }),
+      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "deleted", actor: actorOf(c.var.user) }),
+    ]);
     if (!result.length) return apiError(c, 404, "not_found", notFound);
     return c.body(null, 204);
   })
@@ -266,13 +284,17 @@ export const itemRoutes = new Hono<AppEnv>()
   /** Undo for a delete: the item and its photos come back as they were. */
   .post("/:id/restore", async (c) => {
     const itemId = c.req.param("id");
-    const result = await c.var.db
-      .update(items)
-      .set({ deletedAt: null })
-      .where(eq(items.id, itemId))
-      .returning({ id: items.id });
-    if (!result.length) return apiError(c, 404, "not_found", goneForGood);
+    const [restored] = await c.var.db.batch([
+      c.var.db
+        .update(items)
+        .set({ deletedAt: null })
+        .where(and(eq(items.id, itemId), isNotNull(items.deletedAt)))
+        .returning({ id: items.id }),
+      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "restored", actor: actorOf(c.var.user) }),
+    ]);
+    // Restoring something that isn't deleted is harmless and records nothing.
     const item = await loadItem(c.var.db, itemId);
+    if (!restored.length && !item) return apiError(c, 404, "not_found", goneForGood);
     if (!item) return apiError(c, 404, "not_found", goneForGood);
     return c.json<ItemResponse>({ item });
   })
@@ -297,8 +319,11 @@ export const itemRoutes = new Hono<AppEnv>()
         .set({ position })
         .where(and(eq(photos.id, photoId), eq(photos.itemId, itemId))),
     );
-    if (statements.length) await db.batch(statements as [(typeof statements)[number], ...typeof statements]);
-    await db.update(items).set({ updatedAt: new Date() }).where(eq(items.id, itemId));
+    await db.batch([
+      ...statements,
+      db.update(items).set({ updatedAt: new Date() }).where(eq(items.id, itemId)),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: actorOf(c.var.user) }),
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
     return c.json<ItemResponse>({ item: (await loadItem(db, itemId)) ?? item });
   })
 
@@ -351,6 +376,7 @@ export const itemRoutes = new Hono<AppEnv>()
       return apiError(c, 409, "conflict", "That photo belongs to something else.");
     }
 
+    const actor = actorOf(c.var.user);
     const httpMetadata = { contentType };
     await Promise.all([
       c.env.PHOTOS.put(photoKey(photoId, "large"), large.stream(), { httpMetadata }),
@@ -361,7 +387,17 @@ export const itemRoutes = new Hono<AppEnv>()
       // An upload means the client wants the photo shown: one deleted meanwhile
       // (removed, then brought back with undo while its upload was in flight) returns.
       if (existing.deletedAt) {
-        await c.var.db.update(photos).set({ deletedAt: null }).where(eq(photos.id, photoId));
+        await c.var.db.batch([
+          c.var.db
+            .update(photos)
+            .set({ deletedAt: null })
+            .where(and(eq(photos.id, photoId), isNotNull(photos.deletedAt))),
+          recordChange(c.var.db, { entity: "photo", id: photoId, itemId, action: "restored", actor }),
+          c.var.db
+            .update(items)
+            .set({ updatedAt: new Date() })
+            .where(and(eq(items.id, itemId), afterChange)),
+        ]);
       }
       return c.json<PhotoResponse>({ photo: toApiPhoto(existing) });
     }
@@ -377,24 +413,30 @@ export const itemRoutes = new Hono<AppEnv>()
       position = (last?.value ?? -1) + 1;
     }
     const now = new Date();
-    const [row] = await c.var.db
-      .insert(photos)
-      .values({
-        id: photoId,
-        itemId,
-        position,
-        width,
-        height,
-        color,
-        contentType,
-        takenAt: takenAt ? new Date(takenAt) : null,
-        attemptId,
-        createdBy: c.var.user.id,
-        createdAt: now,
-      })
-      .onConflictDoNothing()
-      .returning();
-    await c.var.db.update(items).set({ updatedAt: now }).where(eq(items.id, itemId));
+    const [[row]] = await c.var.db.batch([
+      c.var.db
+        .insert(photos)
+        .values({
+          id: photoId,
+          itemId,
+          position,
+          width,
+          height,
+          color,
+          contentType,
+          takenAt: takenAt ? new Date(takenAt) : null,
+          attemptId,
+          createdBy: c.var.user.id,
+          createdAt: now,
+        })
+        .onConflictDoNothing()
+        .returning(),
+      recordChange(c.var.db, { entity: "photo", id: photoId, itemId, action: "created", actor }),
+      c.var.db
+        .update(items)
+        .set({ updatedAt: now })
+        .where(and(eq(items.id, itemId), afterChange)),
+    ]);
     const photo = row ?? (await c.var.db.select().from(photos).where(eq(photos.id, photoId)).get());
     if (!photo) return apiError(c, 500, "server_error", "The photo wasn't saved.");
     return c.json<PhotoResponse>({ photo: toApiPhoto(photo) }, 201);

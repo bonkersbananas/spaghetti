@@ -1,4 +1,5 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AttemptResponse, FinishAttemptResponse } from "../../shared/api.ts";
@@ -12,6 +13,7 @@ import {
   SUPPORT_TYPES,
   unionTags,
 } from "../../shared/attempts.ts";
+import { actorOf, afterChange, itemOfAttempt, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { type Attempt, attemptFiles, attempts, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -105,6 +107,8 @@ const finishAttempt = z.object({
 
 const notFound = "That attempt isn't here any more.";
 
+const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every((tag, index) => tag === b[index]);
+
 /** An item's attempts that aren't deleted. */
 function liveAttempts(db: Db, itemId: string) {
   return db
@@ -183,31 +187,33 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
   }
   const outcomeValue = body.outcome ?? null;
 
-  const [inserted] = await db
-    .insert(attempts)
-    .values({
-      id: body.id,
-      itemId,
-      outcome: outcomeValue,
-      printedAt: printed,
-      finishedAt: outcomeValue ? now : null,
-      finishedBy: outcomeValue ? c.var.user.id : null,
-      note: body.note ?? "",
-      failureTags: body.failureTags ?? [],
-      successNotes: body.successNotes ?? [],
-      settings: attemptSettings,
-      createdBy: c.var.user.id,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing()
-    .returning();
-  if (inserted) {
-    await db
+  const [[inserted]] = await db.batch([
+    db
+      .insert(attempts)
+      .values({
+        id: body.id,
+        itemId,
+        outcome: outcomeValue,
+        printedAt: printed,
+        finishedAt: outcomeValue ? now : null,
+        finishedBy: outcomeValue ? c.var.user.id : null,
+        note: body.note ?? "",
+        failureTags: body.failureTags ?? [],
+        successNotes: body.successNotes ?? [],
+        settings: attemptSettings,
+        createdBy: c.var.user.id,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning(),
+    recordChange(db, { entity: "attempt", id: body.id, itemId, action: "created", actor: actorOf(c.var.user) }),
+    // Logging an attempt on an idea makes it a build: only if this request's insert landed.
+    db
       .update(items)
       .set({ ...(item.stage === "idea" ? stageDates(item, "building", now) : {}), updatedAt: now })
-      .where(eq(items.id, itemId));
-  }
+      .where(and(eq(items.id, itemId), afterChange)),
+  ]);
   // A retry that raced the first request finds its attempt there.
   const attempt = inserted ?? (await db.select().from(attempts).where(eq(attempts.id, body.id)).get());
   if (!attempt || attempt.itemId !== itemId) {
@@ -237,19 +243,31 @@ export const attemptRoutes = new Hono<AppEnv>()
       finishedBy = c.var.user.id;
     } else if (nextOutcome) finishedAt ??= now;
 
-    const [attempt] = await db
-      .update(attempts)
-      .set({
-        ...changes,
-        ...(nextOutcome !== undefined ? { outcome: nextOutcome } : {}),
-        ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
-        finishedAt,
-        finishedBy,
-        updatedAt: now,
-      })
-      .where(eq(attempts.id, current.id))
-      .returning();
-    await db.update(items).set({ updatedAt: now }).where(eq(items.id, current.itemId));
+    const [[attempt]] = await db.batch([
+      db
+        .update(attempts)
+        .set({
+          ...changes,
+          ...(nextOutcome !== undefined ? { outcome: nextOutcome } : {}),
+          ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
+          finishedAt,
+          finishedBy,
+          updatedAt: now,
+        })
+        .where(and(eq(attempts.id, current.id), isNull(attempts.deletedAt)))
+        .returning(),
+      recordChange(db, {
+        entity: "attempt",
+        id: current.id,
+        itemId: current.itemId,
+        action: "updated",
+        actor: actorOf(c.var.user),
+      }),
+      db
+        .update(items)
+        .set({ updatedAt: now })
+        .where(and(eq(items.id, current.itemId), afterChange)),
+    ]);
     if (!attempt) return apiError(c, 404, "not_found", notFound);
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
   })
@@ -288,7 +306,13 @@ export const attemptRoutes = new Hono<AppEnv>()
                   : unionTags(current.successNotes, body.successNotes ?? []),
             }
           : {};
-      const [attempt] = await db
+      // Only a write that changed something is a change (a repeated finish says nothing new).
+      const modified =
+        finishing ||
+        note !== current.note ||
+        (tags.failureTags !== undefined && !sameTags(tags.failureTags, current.failureTags)) ||
+        (tags.successNotes !== undefined && !sameTags(tags.successNotes, current.successNotes));
+      const write = db
         .update(attempts)
         .set({
           note,
@@ -315,10 +339,24 @@ export const attemptRoutes = new Hono<AppEnv>()
           ),
         )
         .returning();
+      const statements: BatchItem<"sqlite">[] = [write];
+      if (modified) {
+        statements.push(
+          recordChange(db, {
+            entity: "attempt",
+            id: current.id,
+            itemId: current.itemId,
+            action: "updated",
+            actor: actorOf(c.var.user),
+          }),
+          db
+            .update(items)
+            .set({ updatedAt: now })
+            .where(and(eq(items.id, current.itemId), afterChange)),
+        );
+      }
+      const [attempt] = (await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]))[0] as Attempt[];
       if (attempt) {
-        if (finishing || note !== current.note) {
-          await db.update(items).set({ updatedAt: now }).where(eq(items.id, current.itemId));
-        }
         return c.json<FinishAttemptResponse>({ attempt: await loadAttempt(db, attempt), finished });
       }
       const again = await findLive(db, current.id);
@@ -331,26 +369,52 @@ export const attemptRoutes = new Hono<AppEnv>()
   /** Hides the attempt and its photos at once; restore is the undo. */
   .delete("/:id", async (c) => {
     const now = new Date();
-    const [result] = await c.var.db
-      .update(attempts)
-      .set({ deletedAt: now })
-      .where(and(eq(attempts.id, c.req.param("id")), isNull(attempts.deletedAt)))
-      .returning({ itemId: attempts.itemId });
+    const attemptId = c.req.param("id");
+    const db = c.var.db;
+    const [[result]] = await db.batch([
+      db
+        .update(attempts)
+        .set({ deletedAt: now })
+        .where(and(eq(attempts.id, attemptId), isNull(attempts.deletedAt)))
+        .returning({ itemId: attempts.itemId }),
+      recordChange(db, {
+        entity: "attempt",
+        id: attemptId,
+        itemId: itemOfAttempt(attemptId),
+        action: "deleted",
+        actor: actorOf(c.var.user),
+      }),
+      db
+        .update(items)
+        .set({ updatedAt: now })
+        .where(and(sql`${items.id} = ${itemOfAttempt(attemptId)}`, afterChange)),
+    ]);
     if (!result) return apiError(c, 404, "not_found", notFound);
-    await c.var.db.update(items).set({ updatedAt: now }).where(eq(items.id, result.itemId));
     return c.body(null, 204);
   })
 
   .post("/:id/restore", async (c) => {
     const db = c.var.db;
     const attemptId = c.req.param("id");
-    const [restored] = await db
-      .update(attempts)
-      .set({ deletedAt: null })
-      .where(and(eq(attempts.id, attemptId), isNotNull(attempts.deletedAt)))
-      .returning();
+    const [[restored]] = await db.batch([
+      db
+        .update(attempts)
+        .set({ deletedAt: null })
+        .where(and(eq(attempts.id, attemptId), isNotNull(attempts.deletedAt)))
+        .returning(),
+      recordChange(db, {
+        entity: "attempt",
+        id: attemptId,
+        itemId: itemOfAttempt(attemptId),
+        action: "restored",
+        actor: actorOf(c.var.user),
+      }),
+      db
+        .update(items)
+        .set({ updatedAt: new Date() })
+        .where(and(sql`${items.id} = ${itemOfAttempt(attemptId)}`, afterChange)),
+    ]);
     const attempt = restored ?? (await db.select().from(attempts).where(eq(attempts.id, attemptId)).get());
     if (!attempt) return apiError(c, 404, "not_found", "That attempt is gone for good.");
-    if (restored) await db.update(items).set({ updatedAt: new Date() }).where(eq(items.id, attempt.itemId));
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
   });

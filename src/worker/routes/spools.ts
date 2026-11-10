@@ -10,6 +10,7 @@ import {
   type SpoolsResponse,
 } from "../../shared/api.ts";
 import { REMAINING } from "../../shared/spools.ts";
+import { actorOf, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { amsSlots, type Spool, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -108,17 +109,20 @@ export const spoolRoutes = new Hono<AppEnv>()
     const { id: spoolId, createdAt, driedAt, ...values } = parsed.data;
     const now = Date.now();
     const created = new Date(Math.min(createdAt ?? now, now));
-    await c.var.db
-      .insert(spools)
-      .values({
-        id: spoolId,
-        ...values,
-        driedAt: driedAt ? new Date(Math.min(driedAt, now)) : null,
-        createdBy: c.var.user.id,
-        createdAt: created,
-        updatedAt: created,
-      })
-      .onConflictDoNothing();
+    await c.var.db.batch([
+      c.var.db
+        .insert(spools)
+        .values({
+          id: spoolId,
+          ...values,
+          driedAt: driedAt ? new Date(Math.min(driedAt, now)) : null,
+          createdBy: c.var.user.id,
+          createdAt: created,
+          updatedAt: created,
+        })
+        .onConflictDoNothing(),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "created", actor: actorOf(c.var.user) }),
+    ]);
     const spool = await loadSpool(c.var.db, spoolId);
     if (!spool) return apiError(c, 409, "deleted", "That spool was deleted.");
     return c.json<SpoolResponse>({ spool }, 201);
@@ -135,15 +139,19 @@ export const spoolRoutes = new Hono<AppEnv>()
     if (!parsed.success) return apiError(c, 400, "invalid", "That change couldn't be read.");
     const { driedAt, ...values } = parsed.data;
     const now = new Date();
-    const [row] = await c.var.db
-      .update(spools)
-      .set({
-        ...values,
-        ...(driedAt !== undefined ? { driedAt: driedAt ? new Date(Math.min(driedAt, now.getTime())) : null } : {}),
-        updatedAt: now,
-      })
-      .where(and(eq(spools.id, c.req.param("id")), isNull(spools.deletedAt)))
-      .returning({ id: spools.id });
+    const spoolId = c.req.param("id");
+    const [[row]] = await c.var.db.batch([
+      c.var.db
+        .update(spools)
+        .set({
+          ...values,
+          ...(driedAt !== undefined ? { driedAt: driedAt ? new Date(Math.min(driedAt, now.getTime())) : null } : {}),
+          updatedAt: now,
+        })
+        .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+        .returning({ id: spools.id }),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: actorOf(c.var.user) }),
+    ]);
     if (!row) return apiError(c, 404, "not_found", notFound);
     const spool = await loadSpool(c.var.db, row.id);
     if (!spool) return apiError(c, 404, "not_found", notFound);
@@ -152,21 +160,28 @@ export const spoolRoutes = new Hono<AppEnv>()
 
   /** Takes it off the shelf at once (its slot reads as empty); restore is the undo. */
   .delete("/:id", async (c) => {
-    const [row] = await c.var.db
-      .update(spools)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(spools.id, c.req.param("id")), isNull(spools.deletedAt)))
-      .returning({ id: spools.id });
+    const spoolId = c.req.param("id");
+    const [[row]] = await c.var.db.batch([
+      c.var.db
+        .update(spools)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+        .returning({ id: spools.id }),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "deleted", actor: actorOf(c.var.user) }),
+    ]);
     if (!row) return apiError(c, 404, "not_found", notFound);
     return c.body(null, 204);
   })
 
   .post("/:id/restore", async (c) => {
     const spoolId = c.req.param("id");
-    await c.var.db
-      .update(spools)
-      .set({ deletedAt: null })
-      .where(and(eq(spools.id, spoolId), isNotNull(spools.deletedAt)));
+    await c.var.db.batch([
+      c.var.db
+        .update(spools)
+        .set({ deletedAt: null })
+        .where(and(eq(spools.id, spoolId), isNotNull(spools.deletedAt))),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "restored", actor: actorOf(c.var.user) }),
+    ]);
     const spool = await loadSpool(c.var.db, spoolId);
     if (!spool) return apiError(c, 404, "not_found", "That spool is gone for good.");
     return c.json<SpoolResponse>({ spool });
@@ -207,16 +222,19 @@ export const spoolRoutes = new Hono<AppEnv>()
       c.env.PHOTOS.put(photoKey(photoId, "large"), large.stream(), { httpMetadata }),
       c.env.PHOTOS.put(photoKey(photoId, "thumb"), thumb.stream(), { httpMetadata }),
     ]);
-    await db
-      .update(spools)
-      .set({
-        photoId,
-        photoWidth: parsed.data.width,
-        photoHeight: parsed.data.height,
-        photoColor: parsed.data.color,
-        updatedAt: new Date(),
-      })
-      .where(eq(spools.id, spoolId));
+    await db.batch([
+      db
+        .update(spools)
+        .set({
+          photoId,
+          photoWidth: parsed.data.width,
+          photoHeight: parsed.data.height,
+          photoColor: parsed.data.color,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt))),
+      recordChange(db, { entity: "spool", id: spoolId, action: "updated", actor: actorOf(c.var.user) }),
+    ]);
     // The photo it replaces (a retry of the same upload keeps it).
     if (current.photoId && current.photoId !== photoId) {
       await c.env.PHOTOS.delete([photoKey(current.photoId, "large"), photoKey(current.photoId, "thumb")]);

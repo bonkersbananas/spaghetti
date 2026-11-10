@@ -8,6 +8,7 @@ import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
+import { changeRoutes } from "./routes/changes.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { journalRoutes } from "./routes/journal.ts";
@@ -41,6 +42,7 @@ export const app = new Hono<AppEnv>()
   .route("/session", sessionRoutes)
   .use(requireUser)
   .route("/people", peopleRoutes)
+  .route("/changes", changeRoutes)
   .route("/items", itemRoutes)
   .route("/items", itemAttemptRoutes)
   .route("/attempts", attemptRoutes)

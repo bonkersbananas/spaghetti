@@ -40,6 +40,8 @@ export async function signIn(username: string, password: string): Promise<string
 /** Storage is shared by the tests in a file: start each one empty. */
 export async function resetDb() {
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM changes"),
+    env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'changes'"),
     env.DB.prepare("DELETE FROM attempt_files"),
     env.DB.prepare("DELETE FROM ams_slots"),
     env.DB.prepare("DELETE FROM spools"),

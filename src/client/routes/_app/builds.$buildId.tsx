@@ -42,14 +42,13 @@ import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTag
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { type AttemptView, deleteItem, type ItemView, saveItemChanges, useItem } from "@/lib/items";
+import { type AttemptView, deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
 import { scrollBehavior, spring } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { useSlicerDropTarget } from "@/lib/slicer-files";
-import { useAutosave, useFollowServer } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
@@ -118,14 +117,7 @@ function Build({ item }: { item: ItemView }) {
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
 
-  const [title, setTitle] = useState(item.title ?? "");
-  const [note, setNote] = useState(item.note);
-  // Notes added from the capture sheet, or edits by the other person, arrive from outside: show them.
-  useFollowServer(item.title ?? "", title, setTitle);
-  useFollowServer(item.note, note, setNote);
-  const saveState = useAutosave({ title, note }, (value) =>
-    saveItemChanges(queryClient, item.id, { title: value.title.trim() || null, note: value.note }),
-  );
+  const { title, setTitle, note, setNote, saveState } = useItemFields(item);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
