@@ -7,7 +7,9 @@ import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { Button } from "@/components/ui/Button";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { ArrowRightIcon, TrashIcon } from "@/components/ui/icons";
+import { Photo } from "@/components/ui/Photo";
 import { Sheet } from "@/components/ui/Sheet";
+import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 import { deleteRecipe, recipesQuery, updateRecipe } from "@/lib/recipes";
 import { useLiveFields } from "@/lib/use-autosave";
@@ -34,7 +36,7 @@ export function RecipeSheet({
       open={!!recipeId && !!recipe}
       onOpenChange={onOpenChange}
       title={recipe?.name || "Recipe"}
-      description={recipe ? recipeKind(recipe) : undefined}
+      description={recipe ? recipeKind(recipe).toUpperCase() : undefined}
     >
       {recipe && <RecipeBody key={recipe.id} recipe={recipe} onClose={() => onOpenChange(false)} />}
     </Sheet>
@@ -53,6 +55,14 @@ function RecipeBody({ recipe, onClose }: { recipe: Recipe; onClose: () => void }
   });
   return (
     <div className="flex flex-col gap-6">
+      {recipe.source?.photo && (
+        <Photo
+          src={photoSrc(recipe.source.photo.id, "large")}
+          alt={`The print it came from, attempt ${recipe.source.number}`}
+          color={recipe.source.photo.color || undefined}
+          className="aspect-4/3 max-h-64 w-full rounded-lg"
+        />
+      )}
       <fieldset disabled={readOnly} className="contents">
         <TextField
           label="Name"
@@ -89,7 +99,7 @@ function RecipeBody({ recipe, onClose }: { recipe: Recipe; onClose: () => void }
             to="/builds/$buildId"
             params={{ buildId: recipe.source.itemId }}
             search={{ attempt: recipe.source.attemptId }}
-            className="focus-ring text-small text-basil-ink inline-flex min-h-11 items-center gap-1.5 rounded-md font-semibold"
+            className="focus-ring text-small text-ink-soft hover:text-ink decoration-ink/20 inline-flex min-h-11 items-center gap-1.5 rounded-md font-semibold underline underline-offset-4"
           >
             From attempt {recipe.source.number} of {recipe.source.title?.trim() || "an untitled build"}
             <ArrowRightIcon size={16} aria-hidden />

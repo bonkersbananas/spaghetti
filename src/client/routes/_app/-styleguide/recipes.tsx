@@ -36,14 +36,14 @@ export function RecipesSection() {
       title="Recipes"
       note="A recipe is the settings of a print that worked, named: a kitchen-notebook card with the picture of that print first. Its name and note are editable, its settings never are. Cards open the recipe; in the attempt sheet they start an attempt from it."
     >
-      <div className="grid gap-4 md:grid-cols-2">
-        <Panel className="flex flex-col gap-4">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Recipe card</Label>
           <RecipeCard recipe={silk} onOpen={() => undefined} />
           <Label>Compact, as in the attempt sheet's picker (tap to pick)</Label>
           <RecipeCard compact recipe={silk} selected={selected} onOpen={() => setSelected((current) => !current)} />
         </Panel>
-        <Panel className="flex flex-col gap-4">
+        <Panel className="flex min-w-0 flex-col gap-4">
           <Label>As a search result</Label>
           <RecipeResult
             recipe={silk}

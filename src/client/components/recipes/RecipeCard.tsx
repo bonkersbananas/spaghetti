@@ -31,7 +31,7 @@ export const RecipeCard = forwardRef<HTMLButtonElement, RecipeCardProps>(functio
   ref,
 ) {
   const photo = recipe.source?.photo;
-  const parts = summarizeSettings(recipe.settings).slice(0, compact ? 3 : 4);
+  const parts = summarizeSettings(recipe.settings).slice(0, 3);
   return (
     <button
       ref={ref}

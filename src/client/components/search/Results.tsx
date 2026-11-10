@@ -231,7 +231,7 @@ export const RecipeResult = forwardRef<HTMLButtonElement, RecipeResultProps>(fun
   ref,
 ) {
   const photo = recipe.source?.photo;
-  const settings = summarizeSettings(recipe.settings).slice(0, 4);
+  const settings = summarizeSettings(recipe.settings).slice(0, 3);
   return (
     <button
       ref={ref}
@@ -258,15 +258,13 @@ export const RecipeResult = forwardRef<HTMLButtonElement, RecipeResultProps>(fun
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 py-0.5">
         <span className="flex items-center gap-2">
-          <Chip tone="basil" icon={RecipeIcon}>
-            Recipe
-          </Chip>
+          <Chip icon={RecipeIcon}>Recipe</Chip>
           <span className="text-small text-ink-faint ml-auto shrink-0">{recipeKind(recipe)}</span>
         </span>
         <span className="text-body text-ink min-w-0 truncate font-semibold">
           <Highlight text={recipe.name} terms={terms} />
         </span>
-        {recipe.note && <Highlight text={recipe.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />}
+        {recipe.note && <Highlight text={recipe.note} terms={terms} className="text-body text-ink-soft line-clamp-1" />}
         <SettingsLine
           filaments={recipe.settings.filaments ?? []}
           parts={settings}

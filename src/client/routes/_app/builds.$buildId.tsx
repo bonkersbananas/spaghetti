@@ -30,6 +30,7 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import {
+  ArrowRightIcon,
   BuildsIcon,
   CheckIcon,
   CompareIcon,
@@ -688,11 +689,12 @@ function WhatWorked({
               key={recipe.id}
               type="button"
               onClick={() => onOpenRecipe(recipe.id)}
-              className="focus-ring text-small text-basil-ink touch-target -mx-1 flex items-center gap-2 rounded-md px-1 py-1.5 text-left font-semibold"
+              className="focus-ring text-small text-ink touch-target -mx-1 flex items-center gap-2 rounded-md px-1 py-1.5 text-left font-semibold"
             >
               <RecipeIcon size={18} aria-hidden className="shrink-0" />
               <span className="min-w-0 truncate">{recipe.name}</span>
               <span className="text-ink-faint font-medium whitespace-nowrap">{recipeKind(recipe)}</span>
+              <ArrowRightIcon size={14} aria-hidden className="shrink-0" />
             </button>
           ))}
           {saved ? (
