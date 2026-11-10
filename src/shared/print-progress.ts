@@ -20,9 +20,9 @@ export interface PrintProgressResult {
   label: string;
 }
 
-/** The clock time a print is due, in the reader's locale: "10:38". */
+/** The clock time a print is due, written like every other time in the app (the journal's "9:00 AM"): no leading zero. */
 function clockTime(time: number): string {
-  return new Date(time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return new Date(time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 /** "About 45 min left" when it's close, else "Done around 10:38". Undefined once it is due. */

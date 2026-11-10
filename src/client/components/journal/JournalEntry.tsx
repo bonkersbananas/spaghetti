@@ -117,7 +117,8 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
       )}
     >
       {plate && (
-        <div className="relative aspect-4/3 shrink-0 overflow-hidden rounded-md md:w-2/5">
+        // A render isn't a photo: on a phone it gets a shorter frame, so it doesn't take more room than the print would.
+        <div className="relative aspect-video shrink-0 overflow-hidden rounded-md md:aspect-4/3 md:w-2/5">
           {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
           <Photo
             src={fileThumbSrc(plate.id)}
