@@ -76,6 +76,7 @@ export const pairs: Pair[] = [
   { label: "Body text", fg: "ink", bg: "paper", min: 4.5 },
   { label: "Body text on cards", fg: "ink", bg: "cream", min: 4.5 },
   { label: "Body text on sheets", fg: "ink", bg: "lifted", min: 4.5 },
+  { label: "A note on a note card", fg: "ink", bg: "note", min: 4.5 },
   { label: "Labels and body copy", fg: "ink-soft", bg: "paper", min: 4.5 },
   { label: "Labels on cards", fg: "ink-soft", bg: "cream", min: 4.5 },
   { label: "Meta and hints", fg: "ink-faint", bg: "paper", min: 4.5 },

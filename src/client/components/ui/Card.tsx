@@ -3,7 +3,8 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "./Avatar";
-import { ImageIcon, NoteIcon } from "./icons";
+import { ImageIcon } from "./icons";
+import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
 export interface CardProps {
@@ -77,10 +78,7 @@ export function Card({
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
         ) : noteCard ? (
-          <div className="paper-grain bg-paper relative flex size-full flex-col gap-2 p-3.5 md:p-4">
-            <NoteIcon size={18} className="text-ink-ghost shrink-0" aria-hidden />
-            <p className="text-body text-ink-soft line-clamp-8 min-h-0 break-words whitespace-pre-line">{note}</p>
-          </div>
+          <NoteFace note={note} />
         ) : (
           <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
             <ImageIcon size={32} weight="light" aria-hidden />
