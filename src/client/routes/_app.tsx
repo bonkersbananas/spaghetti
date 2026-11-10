@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
+import { ShareSheet } from "@/components/shell/ShareSheet";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
@@ -85,6 +86,7 @@ function Shell() {
       </main>
       <TabBar />
       <CaptureSheet />
+      <ShareSheet />
       {isDesktop && <DesktopOverlays />}
       <DropOverlay visible={dragging} />
     </div>

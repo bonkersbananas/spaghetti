@@ -1,5 +1,6 @@
 import type { ItemStage } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
+import { captureNote, captureTitle, MAX_CAPTURE_PHOTOS } from "@shared/capture";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -35,11 +36,29 @@ interface CaptureContextValue {
   save: () => string | null;
   /** Adds the capture to an item or an attempt. Returns false when there was nothing to add. */
   saveTo: (target: Exclude<CaptureTarget, { kind: "idea" }>) => boolean;
+  /**
+   * Saves something shared into Spaghetti (the share target, the bookmarklet) as an idea, at once, and opens the
+   * "Captured" sheet on it. Returns the idea's id, or null when there was nothing to save.
+   */
+  shareIn: (input: SharedInput) => string | null;
+  /** The idea the "Captured" sheet shows, while it is open. */
+  shared: string | null;
+  closeShared: () => void;
   /** The idea saved last in this visit, so the inbox can welcome it. */
   landed: string | null;
   /** The idea or build on screen: captures go there while it shows. */
   pageItem: PageItem | null;
   setPageItem: (item: PageItem | null) => void;
+}
+
+/** What arrived through the share target or the bookmarklet. */
+export interface SharedInput {
+  /** The idea's id; left out, one is made. */
+  id?: string;
+  title?: string | null;
+  text?: string | null;
+  url?: string | null;
+  files?: Iterable<File>;
 }
 
 /** What the capture sheet needs to know about the idea or build on screen. */
@@ -124,6 +143,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
   // The idea or build on screen, which captures go to while it shows.
   const [pageItem, setPageItem] = useState<PageItem | null>(null);
   const [landed, setLanded] = useState<string | null>(null);
+  const [shared, setShared] = useState<string | null>(null);
   // The welcome animation plays once, on the inbox the capture lands in.
   useEffect(() => {
     if (!landed) return;
@@ -271,6 +291,35 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     [draft, queryClient, setDraft, photosRef, clearPhotos],
   );
 
+  const shareIn = useCallback(
+    ({ id, title, text, url, files }: SharedInput) => {
+      const user = queryClient.getQueryData(sessionQuery.queryKey);
+      const note = captureNote(text, url);
+      const images = imageFiles(files ?? []).slice(0, MAX_CAPTURE_PHOTOS);
+      const name = captureTitle(title, text, url);
+      if (!user || (!note && !name && !images.length)) return null;
+      const itemId = id ?? crypto.randomUUID();
+      const now = Date.now();
+      const pending = images.map((file, position) => {
+        const photoId = crypto.randomUUID();
+        // Shown from the device at once; the outbox resizes the original in the background.
+        setPreview(photoId, file, file);
+        return { id: photoId, position, file };
+      });
+      void outbox.add({
+        itemId,
+        create: { title: name, note, createdAt: now, createdBy: user.id },
+        photos: pending,
+        queuedAt: now,
+      });
+      setLanded(itemId);
+      setShared(itemId);
+      return itemId;
+    },
+    [queryClient],
+  );
+  const closeShared = useCallback(() => setShared(null), []);
+
   const value = useMemo(
     () => ({
       open,
@@ -283,11 +332,29 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       openWith,
       save,
       saveTo,
+      shareIn,
+      shared,
+      closeShared,
       landed,
       pageItem,
       setPageItem,
     }),
-    [open, draft, setDraft, photos, addFiles, removePhoto, openWith, save, saveTo, landed, pageItem],
+    [
+      open,
+      draft,
+      setDraft,
+      photos,
+      addFiles,
+      removePhoto,
+      openWith,
+      save,
+      saveTo,
+      shareIn,
+      shared,
+      closeShared,
+      landed,
+      pageItem,
+    ],
   );
   return <CaptureContext value={value}>{children}</CaptureContext>;
 }
