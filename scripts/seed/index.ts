@@ -3,7 +3,7 @@
  * ideas, the pantry and builds with histories. Everything goes through the
  * real API, as a phone would.
  */
-import { type Browser, request } from "@playwright/test";
+import { type APIRequestContext, type Browser, request } from "@playwright/test";
 import { SEED_USERS } from "../lib/local-app.ts";
 import { executeSql } from "../lib/wrangler.ts";
 import { seedBridge, seedBuilds } from "./builds.ts";
@@ -59,7 +59,39 @@ export async function seedAll({
       { persistTo: stateDir },
     );
     await seedBridge(alex, origin);
+    await seedUpkeep(alex, stateDir);
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);
   }
+}
+
+const DAY = 24 * 3_600_000;
+
+/**
+ * The upkeep list: the first read seeds the starting tasks, then they are given ages (the server counts days
+ * from the real clock), so the plate and the desiccant are due and the rest are part-way. One has a history.
+ */
+async function seedUpkeep(alex: APIRequestContext, stateDir: string) {
+  const first = await alex.get("/api/printer/upkeep");
+  if (!first.ok()) throw new Error(`Seeding upkeep failed: ${first.status()}`);
+  const ages: Record<string, number> = {
+    plate: 19,
+    nozzle: 12,
+    "purge-chute": 4,
+    desiccant: 70,
+    rods: 60,
+    belts: 25,
+    "air-filter": 30,
+  };
+  const at = Date.now();
+  executeSql(
+    Object.entries(ages)
+      .map(([id, days]) => `UPDATE upkeep_tasks SET created_at = ${at - days * DAY} WHERE id = '${id}';`)
+      .join("\n"),
+    { persistTo: stateDir },
+  );
+  const done = await alex.post("/api/printer/upkeep/nozzle/done", {
+    data: { id: crypto.randomUUID(), note: "Wiper swapped, nozzle tip wiped clean.", at: at - 9 * DAY },
+  });
+  if (!done.ok()) throw new Error(`Seeding upkeep failed: ${done.status()}`);
 }
