@@ -33,6 +33,12 @@ async function printing(page: Page, title: string, ago: number, estimatedMinutes
   return { id, attempt };
 }
 
+/** The outcome the server holds for an attempt: what the sheet's autosave has saved. */
+const savedOutcome = async (page: Page, itemId: string, attemptId: string) =>
+  (await (await page.request.get(`/api/items/${itemId}`)).json()).item.attempts.find(
+    (attempt: { id: string }) => attempt.id === attemptId,
+  ).outcome;
+
 test.beforeEach(async ({ page }) => {
   await signIn(page);
 });
@@ -64,17 +70,24 @@ test("shows the print on the bed with its progress, and Finish opens that attemp
   await expect(page).not.toHaveURL(/finish=/);
 });
 
-test("asks how it went once the print should be done, and carries the answer into the sheet", async ({ page }) => {
-  await printing(page, "Old print", 3 * 60 * MINUTE, 60);
+test("asks how it went once the print should be done: the answer opens the sheet with it chosen and saved", async ({
+  page,
+}) => {
+  const { id, attempt } = await printing(page, "Old print", 3 * 60 * MINUTE, 60);
   await page.goto("/today");
 
   const bed = page.getByRole("region", { name: "On the bed" });
   await expect(bed.getByText("Should be done by now")).toBeVisible();
   await expect(bed.getByRole("button", { name: "Finish" })).toHaveCount(0);
+  // Nothing has been decided yet.
+  expect(await savedOutcome(page, id, attempt)).toBeNull();
   await bed.getByRole("radio", { name: "Worked" }).click();
+  // The sheet is where the photo, the tags and a word get added: it opens, with the outcome chosen.
   const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "Worked" })).toBeChecked();
+  // ...and its autosave keeps it.
+  await expect.poll(() => savedOutcome(page, id, attempt)).toBe("success");
 });
 
 test("a print that is off the bed asks how it went, with the three answers, instead of a progress bar", async ({
@@ -83,6 +96,7 @@ test("a print that is off the bed asks how it went, with the three answers, inst
 }) => {
   const { id, attempt } = await printing(page, "Drawer divider", 90 * MINUTE, 90);
   await printing(page, "Still going", 10 * MINUTE, 120);
+  expect(await savedOutcome(page, id, attempt)).toBeNull();
   await page.request.patch(`/api/attempts/${attempt}`, {
     headers: { Origin: origin(page) },
     data: { endedAt: Date.now() - 10 * MINUTE },
@@ -101,6 +115,7 @@ test("a print that is off the bed asks how it went, with the three answers, inst
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
   const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
   await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeChecked();
+  await expect.poll(() => savedOutcome(page, id, attempt)).toBe("failed");
 
   // The sidebar shows the print that is still printing before the one off the bed.
   if (!isMobile) {
