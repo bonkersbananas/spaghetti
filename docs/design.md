@@ -312,6 +312,14 @@ The front door (`/today`, where signing in and `/` lead): a calm answer to "what
 
 The attempt sheet offers the best match from history above the settings: the latest attempt that worked with the same material (the build's own first), with its photo, key settings and what would change, and **Use these settings** to start from them in one tap (with Undo). The spool stays the one already chosen; only the plate, temperatures and the rest change. It stays out of the way when nothing matches, or when the attempt already starts from those settings.
 
+## Recipes
+
+A recipe is "this is how we print silk PLA now": the settings of an attempt that worked, named, kept to start the next one from ([0017](decisions/0017-recipes-are-frozen-attempts.md)). It is a notebook card (`RecipeCard`): the picture of the print it came from first, the name, what it is for ("Silk PLA", uppercase caption), the settings in one quiet line, the note. Its name and note are the only editable things (autosaved in `RecipeSheet`, which also has Delete with an undo toast); the settings are the attempt's and the sheet says so.
+
+- **Saving:** "Save as recipe" on a print that worked: in the attempt sheet (the name field opens in place, not a sheet in a sheet), on an attempt in the build's story, and on the What worked card. The name is already filled in from the spool's finish and the material and selected, so one tap saves.
+- **Where they show:** under the spool ("Recipes for silk PLA", matched by material and finish), under each Pantry material group ("Recipes for PLA"), in search as their own group (the card shows a *Recipe* chip), and on the What worked card when its material has one. A shelf with no recipes draws nothing.
+- **Starting from one:** "Start from a recipe" in a new attempt's sheet, beside What worked last time, opens compact cards; picking one fills in the settings (the spool already chosen stays) and the settings line then says "Same as recipe …" or "Changed from recipe …: bed 70 °C", the way it does against the previous attempt. Undo puts the settings back. Nothing is asked afterwards.
+
 ## Accessibility
 
 - `e2e/accessibility.spec.ts` runs axe (WCAG 2.1 A and AA, best practices) on the main screens, the sheets, the palette and the empty states, at both widths and in both themes. A new screen gets a line there.

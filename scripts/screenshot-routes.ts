@@ -439,6 +439,62 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A recipe among the results, with the print it came from.
+    name: "search-recipe",
+    path: "/search?q=silk",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Recipes" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // Saving an attempt that worked as a recipe: the name is offered, one tap saves.
+    name: "recipe-save",
+    path: "/builds/5eed0000-0000-4000-8000-000000000101",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "What worked" }).getByRole("button", { name: "Save as recipe" }).click();
+      await page.getByRole("dialog", { name: "Save as a recipe" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A recipe, open: its name and note are editable, its settings are the print's.
+    name: "recipe-open",
+    path: `/pantry/${SEED_SPOOL_IDS.silkGold}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("region", { name: /Recipes for silk PLA/ })
+        .getByRole("button")
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "Silk PLA, slow outer wall" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // "Start from a recipe" in a new attempt's sheet, opened.
+    name: "recipe-picker",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: "Start from a recipe" }).click();
+      const first = sheet.getByRole("button", { name: /PETG, dried and 245/ });
+      await first.waitFor();
+      await page.waitForTimeout(400);
+      await first.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // "What worked last time" in the attempt sheet: PETG that warped, offered the PETG that didn't.
     name: "what-worked",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
@@ -674,6 +730,7 @@ export const shots: Shot[] = [
   // The design system's own pages for the building blocks: print progress and the outcome strip, spool rims.
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
+  { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",

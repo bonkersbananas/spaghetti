@@ -12,6 +12,7 @@ export const CHANGE_ENTITIES = [
   "photo",
   "file",
   "spool",
+  "recipe",
   "slot",
   "printer",
   "tag",
@@ -38,7 +39,7 @@ export interface Change {
   seq: number;
   entity: ChangeEntity;
   /**
-   * The thing's id: a uuid for items, attempts, photos, files and spools; the slot
+   * The thing's id: a uuid for items, attempts, photos, files, spools and recipes; the slot
    * name ("A1", "Ext") for a slot; "x2d" for the printer; "<kind>:<slug>" for a tag.
    */
   id: string;

@@ -306,6 +306,26 @@ describe("what writes record", () => {
     expect(await recorded(() => post(`/api/spools/${spoolId}/restore`))).toEqual([]);
   });
 
+  it("recipes: save, rename, delete and restore; repeats are silent", async () => {
+    const item = await createItem({ stage: "building" });
+    const attemptId = crypto.randomUUID();
+    await post(`/api/items/${item.id}/attempts`, {
+      id: attemptId,
+      outcome: "success",
+      settings: { filaments: [{ type: "PLA" }] },
+    });
+    const id = crypto.randomUUID();
+    const body = { id, name: "Silk PLA", sourceAttemptId: attemptId };
+    expect(shape(await recorded(() => post("/api/recipes", body)))).toEqual([["recipe", "created", id, null]]);
+    expect(await recorded(() => post("/api/recipes", body))).toEqual([]);
+    expect(shape(await recorded(() => patch(`/api/recipes/${id}`, { note: "Slow outer wall" })))).toEqual([
+      ["recipe", "updated", id, null],
+    ]);
+    expect(shape(await recorded(() => del(`/api/recipes/${id}`)))).toEqual([["recipe", "deleted", id, null]]);
+    expect(await recorded(() => del(`/api/recipes/${id}`), 404)).toEqual([]);
+    expect(shape(await recorded(() => post(`/api/recipes/${id}/restore`)))).toEqual([["recipe", "restored", id, null]]);
+  });
+
   it("tags: a new one is a change, an existing or built-in one is not", async () => {
     expect(shape(await recorded(() => post("/api/tags", { kind: "failure", label: "Ghosting" })))).toEqual([
       ["tag", "created", "failure:ghosting", null],

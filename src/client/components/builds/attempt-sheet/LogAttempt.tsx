@@ -1,6 +1,7 @@
 import { carryOver, type Outcome } from "@shared/attempts";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePicker";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
@@ -44,6 +45,7 @@ export function LogAttempt({
   });
   const [draft, setDraft] = useState(blank);
   const [when, setWhen] = useState<number | null>(null);
+  const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
   const [dirty, setDirty] = useState(false);
   const { photos, addFiles, removePhoto: removeDraftPhoto, clear } = useDraftPhotos();
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
@@ -59,7 +61,10 @@ export function LogAttempt({
   // half-filled one is kept when it closes: nothing typed is lost.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only on opening.
   useEffect(() => {
-    if (open && !dirty && !photos.length && !slicer.state) setDraft(blank());
+    if (open && !dirty && !photos.length && !slicer.state) {
+      setDraft(blank());
+      setRecipe(null);
+    }
   }, [open]);
 
   const change = (next: Partial<Omit<AttemptDraft, "photos">>) => {
@@ -76,6 +81,7 @@ export function LogAttempt({
     clear();
     setDirty(false);
     setWhen(null);
+    setRecipe(null);
     setDraft(blank());
     onOpenChange(false);
   }
@@ -161,14 +167,29 @@ export function LogAttempt({
           settings={draft.settings}
           onSettings={(settings) => change({ settings })}
           previous={previous}
+          baseline={recipe ? { label: `recipe “${recipe.recipe.name}”`, settings: recipe.settings } : undefined}
           suggestion={
             // A slicer file says what this attempt is: no other settings to offer.
             slicer.state ? null : (
-              <WhatWorkedSuggestion
-                itemId={item.id}
-                settings={draft.settings}
-                onUse={(settings) => change({ settings })}
-              />
+              <>
+                <WhatWorkedSuggestion
+                  itemId={item.id}
+                  settings={draft.settings}
+                  onUse={(settings) => change({ settings })}
+                />
+                <RecipePicker
+                  settings={draft.settings}
+                  applied={recipe}
+                  onApply={(applied) => {
+                    setRecipe(applied);
+                    change({ settings: applied.settings });
+                  }}
+                  onUndo={(applied) => {
+                    setRecipe(null);
+                    change({ settings: applied.before });
+                  }}
+                />
+              </>
             )
           }
           when={

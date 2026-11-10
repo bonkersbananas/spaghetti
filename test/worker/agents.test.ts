@@ -237,6 +237,20 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     path: "/api/tags",
     json: { kind: "failure", label: "Ghosting" },
   },
+  {
+    name: "save a recipe",
+    scope: "attempts",
+    method: "POST",
+    path: "/api/recipes",
+    json: { id: uuid(), name: "Silk PLA", sourceAttemptId: attemptId },
+  },
+  {
+    name: "rename a recipe",
+    scope: "attempts",
+    method: "PATCH",
+    path: `/api/recipes/${uuid()}`,
+    json: { name: "Silk" },
+  },
   { name: "add a spool", scope: "printer", method: "POST", path: "/api/spools", json: { id: uuid(), material: "PLA" } },
   {
     name: "update a spool",

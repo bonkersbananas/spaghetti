@@ -87,6 +87,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "printer":
         roots.add("spools").add("printer").add("upkeep");
         break;
+      case "recipe":
+        roots.add("recipes").add("search").add("what-worked");
+        break;
       case "tag":
         roots.add("tags");
         break;

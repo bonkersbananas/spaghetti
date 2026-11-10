@@ -6,7 +6,7 @@ import { m } from "motion/react";
 import { forwardRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { CompareIcon, SameAgainIcon } from "@/components/ui/icons";
+import { CompareIcon, RecipeIcon, SameAgainIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
@@ -40,6 +40,8 @@ interface AttemptEntryProps {
   onFinish?: (outcome?: Outcome) => void;
   /** With an attempt before it: compare the two. */
   onCompare?: () => void;
+  /** An attempt that worked and isn't a recipe yet: keep its settings under a name. */
+  onSaveRecipe?: () => void;
   /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
   reserveExtras?: boolean;
 }
@@ -50,7 +52,7 @@ interface AttemptEntryProps {
  * and the settings in a line. Tapping it opens the attempt.
  */
 export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(function AttemptEntry(
-  { attempt, photos, person, via, selected, first, last, onOpen, onFinish, onCompare, reserveExtras },
+  { attempt, photos, person, via, selected, first, last, onOpen, onFinish, onCompare, onSaveRecipe, reserveExtras },
   ref,
 ) {
   const offBed = isOffTheBed(attempt);
@@ -202,6 +204,18 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 className="text-small text-ink-faint"
                 filamentClassName="text-ink-soft"
               />
+            )}
+
+            {onSaveRecipe && (
+              <Button
+                variant="quiet"
+                size="sm"
+                icon={RecipeIcon}
+                onClick={onSaveRecipe}
+                className="pointer-events-auto relative z-10 -ml-2 self-start"
+              >
+                Save as recipe
+              </Button>
             )}
 
             {printing && <NotEnoughNote settings={attempt.settings} what="this print" />}

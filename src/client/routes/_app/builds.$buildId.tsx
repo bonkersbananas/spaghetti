@@ -1,5 +1,7 @@
+import type { Recipe } from "@shared/api";
 import { type Outcome, tagLabel } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
+import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -17,6 +19,9 @@ import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
+import { recipeKind } from "@/components/recipes/RecipeCard";
+import { RecipeSheet } from "@/components/recipes/RecipeSheet";
+import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar } from "@/components/ui/Avatar";
@@ -26,12 +31,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForField } from "@/components/ui/ForField";
 import {
+  ArrowRightIcon,
   BuildsIcon,
   CheckIcon,
   CompareIcon,
   FinishIcon,
   IdeasIcon,
   PlusIcon,
+  RecipeIcon,
   ReopenIcon,
   ShelveIcon,
   SparkleIcon,
@@ -47,7 +54,6 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
-import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type AttemptView, deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
 import { scrollBehavior, spring } from "@/lib/motion";
@@ -55,6 +61,7 @@ import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
+import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes";
 import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -316,6 +323,13 @@ function Build({ item }: { item: ItemView }) {
   const started = item.startedAt ?? item.createdAt;
   const fromIdea = item.startedAt !== null && item.startedAt - item.createdAt > 60_000;
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
+  const [savingRecipe, setSavingRecipe] = useState<RecipeSourceAttempt | null>(null);
+  const [openRecipe, setOpenRecipe] = useState<string | null>(null);
+  const allRecipes = useRecipes();
+  const recipeSource = (attempt: AttemptView): RecipeSourceAttempt | undefined =>
+    canBeRecipe(attempt) && !attempt.pending && !readOnly
+      ? { id: attempt.id, itemId: item.id, number: attempt.number, title: item.title, settings: attempt.settings }
+      : undefined;
   const alt = photoAlt({ title, note });
   const creator = byId.get(item.createdBy);
   const via = useVia();
@@ -453,7 +467,16 @@ function Build({ item }: { item: ItemView }) {
 
           <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} />
 
-          {worked && <WhatWorked attempt={worked} onOpen={() => openSheet(worked.id)} />}
+          {worked && (
+            <WhatWorked
+              attempt={worked}
+              onOpen={() => openSheet(worked.id)}
+              recipes={recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)}
+              saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
+              onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
+              onOpenRecipe={setOpenRecipe}
+            />
+          )}
         </div>
 
         {/* The story: every attempt, newest first. */}
@@ -505,6 +528,11 @@ function Build({ item }: { item: ItemView }) {
                     onFinish={(outcome) => openSheet(attempt.id, outcome)}
                     reserveExtras={reserveExtras}
                     onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
+                    onSaveRecipe={
+                      recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                        ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                        : undefined
+                    }
                   />
                 ))}
               </AnimatePresence>
@@ -555,6 +583,8 @@ function Build({ item }: { item: ItemView }) {
           setSelected(attemptId);
         }}
       />
+      <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
+      <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
     </article>
   );
 }
@@ -609,37 +639,92 @@ function StageChip({
   );
 }
 
-/** The answer to "what worked last time": the latest attempt that came out right, in a line. */
-function WhatWorked({ attempt, onOpen }: { attempt: AttemptView; onOpen: () => void }) {
+/**
+ * The answer to "what worked last time": the latest attempt that came out right, in a line. Under it, the recipes
+ * for its material, and "Save as recipe" to keep these settings under a name.
+ */
+function WhatWorked({
+  attempt,
+  onOpen,
+  recipes,
+  saved,
+  onSaveRecipe,
+  onOpenRecipe,
+}: {
+  attempt: AttemptView;
+  onOpen: () => void;
+  recipes: Recipe[];
+  /** This attempt is already a recipe. */
+  saved: boolean;
+  onSaveRecipe?: () => void;
+  onOpenRecipe: (id: string) => void;
+}) {
   const successOptions = useTagOptions("success");
   const settings = summarizeSettings(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
+  const readOnly = useReadOnly();
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        "pressable focus-ring bg-basil-soft/60 hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left",
-      )}
-    >
-      <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
-      <SettingsLine
-        filaments={filaments}
-        parts={settings}
-        name={filamentLabel}
-        className="text-small text-ink-soft"
-        filamentClassName="text-ink"
-      />
-      {attempt.note && <span className="text-body text-ink">{attempt.note}</span>}
-      {attempt.successNotes.length > 0 && (
-        <span className="flex flex-wrap gap-1.5">
-          {attempt.successNotes.map((slug) => (
-            <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
-              {tagLabel("success", slug, successOptions)}
-            </Chip>
+    <section aria-label="What worked" className="bg-basil-soft/60 flex flex-col rounded-lg">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="pressable focus-ring hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left"
+      >
+        <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
+        <SettingsLine
+          filaments={filaments}
+          parts={settings}
+          name={filamentLabel}
+          className="text-small text-ink-soft"
+          filamentClassName="text-ink"
+        />
+        {attempt.note && <span className="text-body text-ink">{attempt.note}</span>}
+        {attempt.successNotes.length > 0 && (
+          <span className="flex flex-wrap gap-1.5">
+            {attempt.successNotes.map((slug) => (
+              <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
+                {tagLabel("success", slug, successOptions)}
+              </Chip>
+            ))}
+          </span>
+        )}
+      </button>
+      {(recipes.length > 0 || onSaveRecipe || saved) && (
+        <div className="flex flex-col gap-1 px-4 pb-3">
+          {recipes.map((recipe) => (
+            <button
+              key={recipe.id}
+              type="button"
+              onClick={() => onOpenRecipe(recipe.id)}
+              className="focus-ring text-small text-ink touch-target -mx-1 flex items-center gap-2 rounded-md px-1 py-1.5 text-left font-semibold"
+            >
+              <RecipeIcon size={18} aria-hidden className="shrink-0" />
+              <span className="min-w-0 truncate">{recipe.name}</span>
+              <span className="text-ink-faint font-medium whitespace-nowrap">{recipeKind(recipe)}</span>
+              <ArrowRightIcon size={14} aria-hidden className="shrink-0" />
+            </button>
           ))}
-        </span>
+          {saved ? (
+            <p className="text-small text-basil-ink flex items-center gap-1.5 px-0.5 py-1.5 font-semibold">
+              <CheckIcon size={16} weight="bold" aria-hidden />
+              Saved as a recipe
+            </p>
+          ) : (
+            onSaveRecipe && (
+              <Button
+                variant="quiet"
+                size="sm"
+                icon={RecipeIcon}
+                disabled={readOnly}
+                onClick={onSaveRecipe}
+                className="-ml-2 self-start"
+              >
+                Save as recipe
+              </Button>
+            )
+          )}
+        </div>
       )}
-    </button>
+    </section>
   );
 }
