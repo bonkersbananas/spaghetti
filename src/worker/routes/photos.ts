@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { PHOTO_VARIANTS, type PhotoResponse, type PhotoVariant } from "../../shared/api.ts";
-import { actorOf, afterChange, recordChange } from "../changes.ts";
+import { afterChange, recordChange } from "../changes.ts";
 import { items, photos } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
@@ -43,7 +43,7 @@ export const photoRoutes = new Hono<AppEnv>()
         id: photoId,
         itemId: itemOfPhoto,
         action: "deleted",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
       db
         .update(items)
@@ -69,7 +69,7 @@ export const photoRoutes = new Hono<AppEnv>()
         id: photoId,
         itemId: itemOfPhoto,
         action: "restored",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
       db
         .update(items)

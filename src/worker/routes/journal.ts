@@ -44,6 +44,7 @@ interface EventRow {
   at: number;
   rank: number;
   by: string;
+  via: string | null;
 }
 
 /** Every event as one query: attempts, ideas captured, builds started, finished or shelved. */
@@ -51,7 +52,7 @@ function events(f: z.infer<typeof filters>): Clause {
   const attempt = attemptFilters(f);
   const parts: Clause[] = [
     {
-      sql: `SELECT 'attempt' AS kind, a.id AS id, a.item_id AS item_id, a.printed_at AS at, ${RANK.attempt} AS rank, a.created_by AS by
+      sql: `SELECT 'attempt' AS kind, a.id AS id, a.item_id AS item_id, a.printed_at AS at, ${RANK.attempt} AS rank, a.created_by AS by, a.created_via AS via
         FROM attempts AS a JOIN items AS i ON i.id = a.item_id
         WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL${attempt.sql}`,
       params: attempt.params,
@@ -63,17 +64,17 @@ function events(f: z.infer<typeof filters>): Clause {
     const params = f.person ? [f.person] : [];
     parts.push(
       {
-        sql: `SELECT 'idea', id, id, created_at, ${RANK.idea}, created_by FROM items
+        sql: `SELECT 'idea', id, id, created_at, ${RANK.idea}, created_by, created_via FROM items
           WHERE deleted_at IS NULL AND (started_at IS NULL OR started_at - created_at > ${CAPTURED_FIRST_MS})${person}`,
         params,
       },
       {
-        sql: `SELECT 'started', id, id, started_at, ${RANK.started}, created_by FROM items
+        sql: `SELECT 'started', id, id, started_at, ${RANK.started}, created_by, created_via FROM items
           WHERE deleted_at IS NULL AND started_at IS NOT NULL${person}`,
         params,
       },
       {
-        sql: `SELECT CASE stage WHEN 'done' THEN 'finished' ELSE 'shelved' END, id, id, finished_at, ${RANK.finished}, created_by
+        sql: `SELECT CASE stage WHEN 'done' THEN 'finished' ELSE 'shelved' END, id, id, finished_at, ${RANK.finished}, created_by, created_via
           FROM items WHERE deleted_at IS NULL AND finished_at IS NOT NULL AND stage IN ('done', 'shelved')${person}`,
         params,
       },
@@ -112,6 +113,7 @@ export const journalRoutes = new Hono<AppEnv>()
       attemptId: row.kind === "attempt" ? row.id : null,
       at: row.at,
       by: row.by,
+      via: row.via,
     }));
     const itemIds = [...new Set(entries.map((entry) => entry.itemId))];
     const list = itemIds.length

@@ -3,7 +3,7 @@ import { tagLabel } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef } from "react";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CheckIcon, SameAgainIcon } from "@/components/ui/icons";
@@ -26,6 +26,8 @@ interface AttemptEntryProps {
   attempt: AttemptView;
   photos: PhotoView[];
   person?: Person;
+  /** The agent it was logged through. */
+  via?: string;
   /** Highlighted by the arrow keys on desktop. */
   selected?: boolean;
   /** The newest entry: the timeline's line stops above the first one. */
@@ -42,7 +44,7 @@ interface AttemptEntryProps {
  * and the settings in a line. Tapping it opens the attempt.
  */
 export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(function AttemptEntry(
-  { attempt, photos, person, selected, first, last, onOpen, onFinish },
+  { attempt, photos, person, via, selected, first, last, onOpen, onFinish },
   ref,
 ) {
   const failureOptions = useTagOptions("failure");
@@ -94,10 +96,11 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               <OutcomeChip outcome={attempt.outcome} />
               <h3 className="text-body text-ink font-sans font-semibold">Attempt {attempt.number}</h3>
               <span className="text-small text-ink-faint ml-auto flex items-center gap-2">
+                <ViaText name={via} className="hidden md:inline" />
                 <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
                   {relativeTime(attempt.printedAt)}
                 </time>
-                {person && <Avatar person={person} size="xs" />}
+                {person && <Avatar person={person} size="xs" via={via} />}
               </span>
             </div>
 

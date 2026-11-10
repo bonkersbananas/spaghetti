@@ -3,10 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { Mark } from "@/components/illustrations";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { CaretUpDownIcon, PaletteIcon, PlusIcon, SearchIcon, SignOutIcon } from "@/components/ui/icons";
+import { AgentIcon, CaretUpDownIcon, PaletteIcon, PlusIcon, SearchIcon, SignOutIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
-import { Popover } from "@/components/ui/Popover";
+import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { usePalette } from "@/lib/palette";
@@ -131,6 +131,13 @@ export function Sidebar() {
           >
             <div className="flex flex-col gap-4">
               <ThemeSwitch />
+              <PopoverClose asChild>
+                <Link to="/agents" className="focus-ring rounded-md">
+                  <Button variant="quiet" icon={AgentIcon} fullWidth tabIndex={-1} className="justify-start">
+                    Agents
+                  </Button>
+                </Link>
+              </PopoverClose>
               <Button variant="quiet" icon={SignOutIcon} fullWidth onClick={signOut} className="justify-start">
                 Sign out
               </Button>

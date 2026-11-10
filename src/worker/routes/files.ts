@@ -3,7 +3,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
 import { type AttemptResponse, MAX_FILE_THUMB_BYTES, MAX_SLICER_FILE_BYTES } from "../../shared/api.ts";
-import { actorOf, afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
+import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
 import { attemptFiles, attempts, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
@@ -132,7 +132,7 @@ export const attemptFileRoutes = new Hono<AppEnv>()
         id: fields.id,
         itemId,
         action: existing ? "updated" : "created",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
       db
         .update(items)
@@ -158,7 +158,7 @@ export const attemptFileRoutes = new Hono<AppEnv>()
         id: fileOfAttempt(attemptId),
         itemId: itemOfAttempt(attemptId),
         action: "deleted",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
     ]);
     if (!row) return apiError(c, 404, "not_found", "That attempt has no file.");
@@ -180,7 +180,7 @@ export const attemptFileRoutes = new Hono<AppEnv>()
         id: fileOfAttempt(attemptId),
         itemId: found.attempt.itemId,
         action: "restored",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
     ]);
     if (!row) return apiError(c, 404, "not_found", "That file is gone for good.");

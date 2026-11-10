@@ -1,4 +1,5 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
 import type { PersonColor } from "../../shared/people.ts";
@@ -59,6 +60,8 @@ export const items = sqliteTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
+    /** The agent it was made through, when it was ("via Claude for Alex"); `createdBy` is then the agent's owner. */
+    createdVia: text("created_via"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
@@ -97,6 +100,9 @@ export const attempts = sqliteTable(
       .references(() => users.id),
     /** Who gave it its outcome (for "Sam had already finished attempt 3"). */
     finishedBy: text("finished_by").references(() => users.id),
+    /** The agent it was made / finished through, if any. */
+    createdVia: text("created_via"),
+    finishedVia: text("finished_via"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
@@ -280,3 +286,49 @@ export const changes = sqliteTable(
   },
   (table) => [index("changes_at_idx").on(table.at)],
 );
+
+/**
+ * A named identity that acts for one of the two people: "Claude for Alex",
+ * "Printer bridge". It reaches the API with a bearer token (`agent_tokens`);
+ * what it writes is recorded as the owner's (so avatars and "captured by" work
+ * as they do) with `created_via` / `finished_via` naming the agent, and in the
+ * change feed with the actor `{ kind: "agent", id }`.
+ */
+export const agents = sqliteTable(
+  "agents",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("agents_owner_idx").on(table.ownerId)],
+);
+
+/**
+ * An agent's tokens (`Authorization: Bearer spg_…`). Only the SHA-256 hash is
+ * stored, plus the first characters (`prefix`) so a person can tell tokens apart.
+ * Revoking sets `revokedAt` and takes effect on the next request.
+ */
+export const agentTokens = sqliteTable(
+  "agent_tokens",
+  {
+    id: text("id").primaryKey(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    hash: text("hash").notNull().unique(),
+    prefix: text("prefix").notNull(),
+    scopes: text("scopes", { mode: "json" }).$type<AgentScope[]>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** Updated at most every few minutes, not on every request. */
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("agent_tokens_agent_idx").on(table.agentId)],
+);
+
+export type Agent = typeof agents.$inferSelect;
+export type AgentToken = typeof agentTokens.$inferSelect;

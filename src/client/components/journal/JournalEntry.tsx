@@ -6,7 +6,7 @@ import { forwardRef } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { PhotoCountBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
@@ -57,6 +57,8 @@ interface JournalEntryProps {
   entry: Entry;
   item: Item;
   person?: Person;
+  /** The agent it was made through. */
+  via?: string;
   /** Picked with J and K on desktop. */
   selected?: boolean;
   /** "time" under a day heading ("14:05"), "date" under a week heading ("Tue 27"). */
@@ -74,7 +76,7 @@ export const JournalEntry = forwardRef<HTMLAnchorElement, JournalEntryProps>(fun
 });
 
 const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function AttemptCard(
-  { entry, item, person, selected, when },
+  { entry, item, person, via, selected, when },
   ref,
 ) {
   const failureOptions = useTagOptions("failure");
@@ -122,7 +124,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         {!photo && (
           <div className="flex items-center gap-2">
             <OutcomeChip outcome={attempt.outcome} />
-            <Meta at={attempt.printedAt} time={time} person={person} />
+            <Meta at={attempt.printedAt} time={time} person={person} via={via} />
           </div>
         )}
         <div className="flex items-baseline gap-2">
@@ -132,7 +134,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
               <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
             </MetaList>
           </h3>
-          {photo && <Meta at={attempt.printedAt} time={time} person={person} />}
+          {photo && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
         </div>
         {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
         {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
@@ -165,13 +167,14 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   );
 });
 
-function Meta({ at, time, person }: { at: number; time: string; person?: Person }) {
+function Meta({ at, time, person, via }: { at: number; time: string; person?: Person; via?: string }) {
   return (
     <span className="text-small text-ink-faint tabular ml-auto flex shrink-0 items-center gap-2 self-center pl-2">
+      <ViaText name={via} className="hidden md:inline" />
       <time dateTime={new Date(at).toISOString()} title={fullTime(at)}>
         {time}
       </time>
-      {person && <Avatar person={person} size="xs" />}
+      {person && <Avatar person={person} size="xs" via={via} />}
     </span>
   );
 }
@@ -194,7 +197,7 @@ const events: Record<Exclude<Entry["kind"], "attempt">, { icon: Icon; label: (it
 };
 
 const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function EventRow(
-  { entry, item, person, selected, when },
+  { entry, item, person, via, selected, when },
   ref,
 ) {
   if (entry.kind === "attempt") return null;
@@ -260,7 +263,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           {name.text}
         </span>
       </span>
-      {person && <Avatar person={person} size="xs" className="shrink-0" />}
+      {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
     </Link>
   );
 });

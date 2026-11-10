@@ -36,10 +36,10 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 
 ## Next: agents using the service
 
-- [ ] Agent identities and scoped tokens ("via Claude for Alex" in the journal)
+- [x] Agent identities and scoped tokens ("via Claude for Alex" in the journal): named agents with bearer tokens in four scopes, shown quietly as "via"; see [docs/api.md](api.md)
 - [ ] MCP server on the Worker: search, what worked, capture idea, log and finish attempt, load slot
 - [ ] OpenAPI from the zod schemas; a build's whole story as one markdown document
-- [ ] Events: a cursor and webhooks
+- [ ] Events: a cursor and webhooks (the cursor is done: the change feed, `GET /api/changes`; webhooks are left)
 - [ ] Resident agents, suggest-only: failure coach, idea scout, label photo to spool fields, weekly digest
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
