@@ -1,10 +1,24 @@
 import type { Spool } from "@shared/api";
 import { amsUnitLetters, EXTERNAL_SLOT, type PrinterSetup, slotPlace, spoolName, unitSlots } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import { Button } from "@/components/ui/Button";
 import { Overline } from "@/components/ui/Overline";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { useIdle } from "@/lib/use-idle";
+
+const DryMentionView = lazy(() => import("./DryMention"));
+
+/** One sentence about a loaded spool past its drying window; its rules load from an idle moment. */
+function DryMention({ loaded }: { loaded: Array<{ slot: string; spool?: Spool }> }) {
+  if (!useIdle()) return null;
+  return (
+    <Suspense fallback={null}>
+      <DryMentionView loaded={loaded} />
+    </Suspense>
+  );
+}
 
 interface InThePrinterProps {
   setup: PrinterSetup;
@@ -77,6 +91,7 @@ export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
           )}
         </ul>
       )}
+      <DryMention loaded={loaded} />
     </section>
   );
 }

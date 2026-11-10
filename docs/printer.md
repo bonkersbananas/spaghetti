@@ -193,3 +193,33 @@ Storage principle: record what the user saw or chose as plain values; never stor
 `great-first-layer`, `clean-supports`, `strong-and-tight-fit`, `nice-surface`, `colors-crisp`, `fast-profile-ok`, `dried-filament-helped`, `settings-worth-reusing`, `would-print-again`.
 
 Both lists are a seed. Expect the users to add their own; keep slugs in the data and wording in the UI so labels can change without a migration. The pasta theme can live in the labels' flavor, not the slugs.
+
+## 8. Upkeep and drying (starting values)
+
+Spaghetti seeds this list and these windows; people edit them in the app (Printer → Upkeep, Staying dry). None of the intervals below is confirmed for the X2D: Bambu's wiki did not load for us, so they follow the maintenance guidance for its other enclosed printers and common practice. **Check Bambu's wiki before trusting a number.**
+
+| Task | Every | Status |
+| --- | --- | --- |
+| Clean the build plate | 20 print hours or 14 days | [uncertain] Bambu says to wash the plate when adhesion drops; the interval is ours |
+| Clean the nozzle and wiper | 50 print hours or 30 days | [uncertain] |
+| Empty the purge chute | 15 print hours or 14 days | [uncertain] depends on how many colour changes you print |
+| Replace the AMS desiccant | 60 days | [uncertain] when the indicator changes colour; AMS 2 Pro has a heater and humidity sensor, so the real need may differ |
+| Lubricate the rods | 200 print hours or 180 days | [uncertain] |
+| Check the belts | 300 print hours or 90 days | [uncertain] |
+| Replace the air filter | 300 print hours or 90 days | [uncertain] the X2D's 3-stage filter's life isn't stated in our sources |
+
+Print hours are summed from attempts (actual minutes, else the bridge's, else the estimate), so they are as honest as the data people log.
+
+### How long a spool stays dry
+
+Days after drying (or from when it was added). All values are [uncertain]: they are rules of thumb for open air, not measurements, and a spool kept in the AMS or a sealed box lasts longer.
+
+| Material | Days |
+| --- | --- |
+| PLA | 60 |
+| ABS, ASA | 30 |
+| PETG, PCTG | 21 |
+| PET, TPU | 14 |
+| PC | 5 |
+| PA, PPA | 3 |
+| PVA, BVOH | 2 |

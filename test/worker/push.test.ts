@@ -264,7 +264,7 @@ describe("the devices routes", () => {
     expect(mine).toEqual({
       publicKey: env.VAPID_PUBLIC_KEY,
       canSend: true,
-      subscriptions: [{ endpoint, alsoOthers: true, timeZone: "UTC" }],
+      subscriptions: [{ endpoint, alsoOthers: true, upkeepNudges: false, timeZone: "UTC" }],
     });
     expect(
       ((await (await request("/api/push", { cookie: sam })).json()) as { subscriptions: unknown[] }).subscriptions,

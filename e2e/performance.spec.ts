@@ -16,20 +16,21 @@ const origin = (page: Page) => new URL(page.url()).origin;
 
 /**
  * First-load JavaScript per screen, gzip, in kB: today's sizes plus about
- * 10%. Most of it is React, the router, TanStack Query, sheets (vaul and
+ * 5 kB, so work in flight has room (it should still load what's rarely used on demand). PERF_FILES=1 prints each screen's files with their gzip sizes. Most of it is React, the router, TanStack Query, sheets (vaul and
  * Radix), toasts and motion, which every screen needs at once.
  */
 const BUDGET_KB = {
-  "/sign-in": 245,
+  "/sign-in": 214,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 345,
-  // Sharing in (the share target's intake) added about 2 kB to every signed-in screen, and notifications a little more (two menu rows, the service worker messages); the settings sheet itself loads on first open.
-  "/ideas": 340,
-  "/builds": 340,
-  "/journal": 345,
-  "/search": 345,
-  "/pantry": 345,
-  "/printer": 345,
+  "/today": 318,
+  // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
+  // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
+  "/ideas": 309,
+  "/builds": 310,
+  "/journal": 311,
+  "/search": 314,
+  "/pantry": 319,
+  "/printer": 319,
 } as const;
 
 /**
@@ -65,8 +66,13 @@ async function scriptsLoadedBy(page: Page, path: string, ready: () => Promise<vo
   );
   const first = [...bodies].filter(([file]) => before.has(file));
   const kb = (bytes: number) => bytes / 1024;
+  if (process.env.PERF_FILES) {
+    const sizes = first.map(([file, body]) => `${(gzipSync(body).length / 1024).toFixed(1).padStart(6)} ${file}`);
+    console.log(`${path}:\n${sizes.sort().reverse().join("\n")}`);
+  }
   return {
     files: [...bodies.keys()],
+    zod: first.some(([, body]) => body.includes("ZodError")),
     raw: kb(first.reduce((sum, [, body]) => sum + body.length, 0)),
     gzip: kb(first.reduce((sum, [, body]) => sum + gzipSync(body).length, 0)),
   };
@@ -102,9 +108,10 @@ test("each screen's first load stays within its JavaScript budget, without the r
       observer.observe(document, { childList: true, subtree: true });
     });
     const page = await context.newPage();
-    const { files, raw, gzip } = await scriptsLoadedBy(page, path, async () => {
+    const { files, zod, raw, gzip } = await scriptsLoadedBy(page, path, async () => {
       await expect(page.locator("h1").first()).toBeVisible();
     });
+    if (process.env.PERF_FILES) console.log(path, files.map((f) => f.split("/").pop()).join(" "));
     rows.push(`${path.padEnd(10)} ${raw.toFixed(0).padStart(5)} kB  ${gzip.toFixed(0).padStart(4)} kB gzip`);
     // The styleguide, the .3mf reader, the command palette and the shortcut list wait until they are needed
     // (nothing loads them until asked, except the palette's idle prefetch, switched off here).
@@ -114,6 +121,8 @@ test("each screen's first load stays within its JavaScript budget, without the r
         `${path} loads ${lazy}`,
       ).toEqual([]);
     }
+    // zod is for the Worker; a route's validateSearch loads with the app, so the client checks search params by hand.
+    expect(zod, `${path} loads zod`).toBe(false);
     over.push(...(gzip > budget ? [`${path}: ${gzip.toFixed(0)} kB gzip, budget ${budget} kB`] : []));
     await context.close();
   }

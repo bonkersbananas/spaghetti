@@ -41,6 +41,7 @@ export const SEED_SPOOL_IDS = {
   bluePetg: id(4),
   silkGold: id(5),
   bambuGreen: id(6),
+  tealPetg: id(10),
 };
 
 export const SEED_SPOOLS: SeedSpool[] = [
@@ -154,7 +155,7 @@ export const SEED_SPOOLS: SeedSpool[] = [
     colorName: "Teal",
     colorHex: "#2c8a87",
     remaining: "full",
-    driedAgo: 20 * DAY,
+    driedAgo: 24 * DAY,
     addedAgo: 45 * DAY,
   },
   {

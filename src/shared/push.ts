@@ -2,6 +2,7 @@
 import type { Outcome } from "./attempts.ts";
 
 export type NudgeKind = "off_the_bed" | "overdue";
+export type PushKind = NudgeKind | "upkeep" | "test";
 
 /** No nudges from 22:00 until 07:00 in the device's time zone. */
 export const QUIET_FROM_HOUR = 22;
@@ -85,7 +86,7 @@ export function answerHint(platform: NotificationPlatform): string {
 
 /** What the service worker shows. `url` opens the attempt sheet; `actions` are for platforms that have buttons. */
 export interface PushMessage {
-  kind: NudgeKind | "test";
+  kind: PushKind;
   title: string;
   body: string;
   /** Replaces an earlier notification for the same thing. */
@@ -119,6 +120,21 @@ export function nudgeMessage(
   };
 }
 
+/** At most one upkeep nudge a day, for all tasks and people together. */
+export const UPKEEP_NUDGE_GAP_HOURS = 24;
+
+/** The nudge for a task that has become due: a fact, no alarm. `since` reads like "42 print hours since". */
+export function upkeepMessage(task: { id: string; name: string }, since: string): PushMessage {
+  return {
+    kind: "upkeep",
+    title: `Time to ${task.name.charAt(0).toLowerCase()}${task.name.slice(1)}`,
+    body: `${since[0]?.toUpperCase()}${since.slice(1)} it was last done.`,
+    tag: `upkeep-${task.id}`,
+    url: "/printer",
+    actions: [],
+  };
+}
+
 export const testMessage: PushMessage = {
   kind: "test",
   title: "Spaghetti can reach you here",
@@ -134,6 +150,7 @@ export interface PushSubscriptionBody {
   keys: { p256dh: string; auth: string };
   timeZone: string;
   alsoOthers?: boolean;
+  upkeepNudges?: boolean;
 }
 
 export interface PushConfig {
@@ -142,5 +159,5 @@ export interface PushConfig {
   /** False when the private half is missing (a local server): subscribing works, sending doesn't. */
   canSend: boolean;
   /** This person's devices. */
-  subscriptions: Array<{ endpoint: string; alsoOthers: boolean; timeZone: string }>;
+  subscriptions: Array<{ endpoint: string; alsoOthers: boolean; upkeepNudges: boolean; timeZone: string }>;
 }

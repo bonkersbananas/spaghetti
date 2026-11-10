@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { type FormEvent, useState } from "react";
-import { z } from "zod";
 import { Mark } from "@/components/illustrations";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
@@ -15,7 +14,9 @@ import { rememberUser, sessionQuery } from "@/lib/queries";
 import { signOutSettled } from "@/lib/use-sign-out";
 
 export const Route = createFileRoute("/sign-in")({
-  validateSearch: z.object({ redirect: z.string().optional() }),
+  // By hand, not zod: route search checks load with the app (see share.tsx).
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
+    typeof search.redirect === "string" ? { redirect: search.redirect } : {},
   beforeLoad: async ({ context }) => {
     const user = await context.queryClient.ensureQueryData(sessionQuery);
     if (user) throw redirect({ to: "/today" });

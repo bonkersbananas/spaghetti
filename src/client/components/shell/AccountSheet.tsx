@@ -1,5 +1,5 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon } from "@/components/ui/icons";
@@ -9,8 +9,8 @@ import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
-import { ChangePasswordSheet } from "./ChangePasswordSheet";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
+import { ChangePasswordSheet } from "./lazy-account";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -21,6 +21,9 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
+  const [asked, setAsked] = useState({ notifying: false, password: false });
+  if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
+  if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
 
   return (
     <>
@@ -84,8 +87,13 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
         </MenuGroup>
         <ThemeSwitch className="mt-6" />
       </Sheet>
-      <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />
-      <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
+      {/* Mounted once asked for: their code loads then (lazy-account.ts), and a closed sheet that mounts while another is open looped in the production build. */}
+      {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
+      {asked.password && (
+        <Suspense fallback={null}>
+          <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -720,6 +720,25 @@ export const shots: Shot[] = [
   },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
   { name: "printer", path: "/printer", fullPage: true },
+  // Upkeep: the list with its meters, and the Done sheet of the most due task.
+  { name: "printer-upkeep", path: "/printer", selector: "section[aria-labelledby=printer-upkeep]" },
+  {
+    name: "upkeep-done",
+    path: "/printer",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Done: / })
+        .first()
+        .click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  // A spool past its drying window (teal PETG, dried 24 days ago).
+  { name: "spool-needs-drying", path: `/pantry/${SEED_SPOOL_IDS.tealPetg}`, fullPage: true },
   // The printer bridge's states (docs/bridge.md): a print on the bed with the printer's own progress ...
   { name: "build-live-progress", path: `/builds/${SEED_BUILD_IDS.towelHook}`, fullPage: true },
   // ... a print that stopped and waits to hear how it went, on the build, in the builds list and the journal ...
