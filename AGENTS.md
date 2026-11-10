@@ -184,6 +184,11 @@ Never edit a migration that has been merged; add a new one.
 - The client (`lib/live.ts`, started in `_app.tsx`) polls every 10 s while the tab is visible and online, and at once on focus, on coming back to the tab and when the connection returns; the first answer only learns the feed's end. `refresh` maps changes to query keys: a new query root that other people's writes can change needs a case there. At most one quiet toast for the open screen; a deleted item closes its screen.
 - Autosaved fields must follow the server only when untouched (`useFollowServer`) and must send only what this screen changed (`useItemFields`; `useLiveFields` for a form of several fields, as on the spool page and the printer setup), or they undo the other person's edit.
 
+### Sharing in
+
+- Four ways in ([docs/share.md](docs/share.md), [0015](docs/decisions/0015-share-targets-by-device.md)): the manifest's `share_target` (`POST /api/share`, taken by the service worker's `receiveShare`, which keeps the form in the `sg-share` cache and redirects to `/share?id=…`; `lib/share.ts` reads it, `routes/_app/share.tsx` saves it with `useCapture().shareIn` and `ShareSheet` shows "Captured"), the bookmarklet (`/share?title&url&text`, `shared/shortcut.ts`), and `POST /api/capture` (`worker/routes/capture.ts`) for the iOS Shortcuts built from the Agents page's card. Notes are composed by `shared/capture.ts` so the browser and the Worker agree.
+- The share target and its service worker only exist in the production build: test them in `e2e/share.spec.ts` (the `offline` and `share-desktop` projects, port 5175).
+
 ### Agents and tokens
 
 - Agents (`agents`, `agent_tokens`) act through `Authorization: Bearer spg_…` with scopes `read`, `capture`, `attempts`, `printer`; full reference in [docs/api.md](docs/api.md). `requireAuth` in `src/worker/app.ts` sets `c.var.user` (the owner), `c.var.actor` (what the feed records), `c.var.via` (the agent id or null) and `c.var.scopes` (null for a person).
@@ -206,7 +211,7 @@ Never edit a migration that has been merged; add a new one.
 
 ### Push notifications
 
-- Web Push for the "how did it go?" nudges ([0015](docs/decisions/0015-web-push-nudges.md), setup in [docs/deploy.md](docs/deploy.md)): `worker/push/webpush.ts` is VAPID plus aes128gcm on WebCrypto (unit-tested against RFC 8291's example), `worker/push/nudges.ts` runs from the 5-minute cron (`index.ts` tells the two schedules apart by `controller.cron`) and decides who is nudged when (`shared/push.ts` has the pure rules and the message text). Once per attempt and person is `push_nudges`' primary key, claimed before sending; devices are `push_subscriptions` (`routes/push.ts`, person-only).
+- Web Push for the "how did it go?" nudges ([0016](docs/decisions/0016-web-push-nudges.md), setup in [docs/deploy.md](docs/deploy.md)): `worker/push/webpush.ts` is VAPID plus aes128gcm on WebCrypto (unit-tested against RFC 8291's example), `worker/push/nudges.ts` runs from the 5-minute cron (`index.ts` tells the two schedules apart by `controller.cron`) and decides who is nudged when (`shared/push.ts` has the pure rules and the message text). Once per attempt and person is `push_nudges`' primary key, claimed before sending; devices are `push_subscriptions` (`routes/push.ts`, person-only).
 - The service worker (`src/sw/sw.js`) shows the push and answers its buttons through `POST /attempts/:id/finish`; offline it writes a finish into the outbox's IndexedDB itself and tells open pages (`outbox-changed`, handled by `outbox.pickUp()`). Its `answer-nudge` message is what e2e/push.spec.ts uses, since a test can't tap a button. The app side is `lib/push.ts` (`usePushDevice`) and `components/shell/NotificationsSheet.tsx`; permission is asked for only when the switch is turned on.
 - The private key is the `VAPID_PRIVATE_KEY` secret (typed in `worker/secrets.d.ts`); tests use a throwaway pair set in `vitest.config.ts`. The push e2e tests run on the production build (`push-desktop`, `push-phone` projects) because the dev server has no service worker.
 

@@ -16,6 +16,7 @@ import { Route as AppAgentsRouteImport } from './routes/_app/agents'
 import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppPrinterRouteImport } from './routes/_app/printer'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
+import { Route as AppShareRouteImport } from './routes/_app/share'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppBuildsIndexRouteImport } from './routes/_app/builds.index'
@@ -57,6 +58,11 @@ const AppPrinterRoute = AppPrinterRouteImport.update({
 const AppSearchRoute = AppSearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppShareRoute = AppShareRouteImport.update({
+  id: '/share',
+  path: '/share',
   getParentRoute: () => AppRoute,
 } as any)
 const AppStyleguideRoute = AppStyleguideRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/journal': typeof AppJournalRoute
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
+  '/share': typeof AppShareRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/journal': typeof AppJournalRoute
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
+  '/share': typeof AppShareRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
   '/': typeof AppIndexRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/_app/journal': typeof AppJournalRoute
   '/_app/printer': typeof AppPrinterRoute
   '/_app/search': typeof AppSearchRoute
+  '/_app/share': typeof AppShareRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/today': typeof AppTodayRoute
   '/_app/': typeof AppIndexRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/printer'
     | '/search'
+    | '/share'
     | '/styleguide'
     | '/today'
     | '/builds/$buildId'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/printer'
     | '/search'
+    | '/share'
     | '/styleguide'
     | '/today'
     | '/'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/_app/journal'
     | '/_app/printer'
     | '/_app/search'
+    | '/_app/share'
     | '/_app/styleguide'
     | '/_app/today'
     | '/_app/'
@@ -258,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSearchRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/share': {
+      id: '/_app/share'
+      path: '/share'
+      fullPath: '/share'
+      preLoaderRoute: typeof AppShareRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/styleguide': {
       id: '/_app/styleguide'
       path: '/styleguide'
@@ -322,6 +341,7 @@ interface AppRouteChildren {
   AppJournalRoute: typeof AppJournalRoute
   AppPrinterRoute: typeof AppPrinterRoute
   AppSearchRoute: typeof AppSearchRoute
+  AppShareRoute: typeof AppShareRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppTodayRoute: typeof AppTodayRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -338,6 +358,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppJournalRoute: AppJournalRoute,
   AppPrinterRoute: AppPrinterRoute,
   AppSearchRoute: AppSearchRoute,
+  AppShareRoute: AppShareRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppTodayRoute: AppTodayRoute,
   AppIndexRoute: AppIndexRoute,

@@ -13,6 +13,7 @@ import { apiError } from "./http.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
+import { captureRoutes } from "./routes/capture.ts";
 import { changeRoutes } from "./routes/changes.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { itemRoutes } from "./routes/items.ts";
@@ -93,6 +94,7 @@ export const app = new Hono<AppEnv>()
   .route("/people", peopleRoutes)
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)
+  .route("/capture", captureRoutes)
   .route("/items", itemRoutes)
   .route("/items", itemAttemptRoutes)
   .route("/attempts", attemptRoutes)

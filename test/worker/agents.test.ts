@@ -190,6 +190,7 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
   { name: "read the people", scope: "read", method: "GET", path: "/api/people" },
   { name: "read the feed", scope: "read", method: "GET", path: "/api/changes" },
   { name: "capture an idea", scope: "capture", method: "POST", path: "/api/items", json: { id: uuid(), note: "x" } },
+  { name: "share an idea in", scope: "capture", method: "POST", path: "/api/capture", json: { text: "x" } },
   { name: "add a note", scope: "capture", method: "PATCH", path: `/api/items/${itemId}`, json: { note: "more" } },
   {
     name: "reorder photos",

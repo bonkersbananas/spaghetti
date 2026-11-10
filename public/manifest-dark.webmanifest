@@ -34,5 +34,21 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/api/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*"]
+        }
+      ]
+    }
+  }
 }

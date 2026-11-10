@@ -165,6 +165,13 @@ export interface ItemResponse {
   item: Item;
 }
 
+/** POST /api/capture: the idea a share became, and its link. */
+export interface CaptureResponse {
+  id: string;
+  url: string;
+  photos: number;
+}
+
 export interface PhotoResponse {
   photo: Photo;
 }

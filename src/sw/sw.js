@@ -23,6 +23,8 @@ const SHELL_CACHE = `sg-shell-${version}`;
 const PHOTO_CACHE = "sg-photos";
 const SHELL_URL = "/";
 const MAX_PHOTOS = 400;
+const SHARE_PATH = "/api/share";
+const SHARE_CACHE = "sg-share";
 const PHOTO_PATH = /^\/api\/photos\/[^/]+\/(thumb|large)$/;
 
 self.addEventListener("install", (event) => {
@@ -199,9 +201,14 @@ function queueFinish(itemId, finish) {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // The share target (see public/manifest.webmanifest): the one POST the worker takes, so sharing works offline too.
+  if (request.method === "POST" && url.pathname === SHARE_PATH) {
+    event.respondWith(receiveShare(request));
+    return;
+  }
+  if (request.method !== "GET") return;
 
   if (url.pathname.startsWith("/api/")) {
     // Only photos are ever kept; the rest of the API is always live.
@@ -214,6 +221,38 @@ self.addEventListener("fetch", (event) => {
   }
   event.respondWith(asset(request));
 });
+
+/**
+ * Keeps what was shared (title, text, url and image files) in a cache and redirects to the app's /share page, which
+ * saves it as an idea and clears it. Nothing is lost if the page can't be reached right now: it is read later.
+ */
+async function receiveShare(request) {
+  try {
+    const form = await request.formData();
+    const id = crypto.randomUUID();
+    const cache = await caches.open(SHARE_CACHE);
+    const text = (name) => {
+      const value = form.get(name);
+      return typeof value === "string" ? value : "";
+    };
+    const files = form.getAll("media").filter((value) => typeof value !== "string" && value.size > 0);
+    await Promise.all(
+      files.map((file, index) =>
+        cache.put(`/__share/${id}/${index}`, new Response(file, { headers: { "Content-Type": file.type } })),
+      ),
+    );
+    const meta = {
+      title: text("title"),
+      text: text("text"),
+      url: text("url"),
+      files: files.map((file) => ({ name: file.name, type: file.type })),
+    };
+    await cache.put(`/__share/${id}/meta`, Response.json(meta));
+    return Response.redirect(new URL(`/share?id=${id}`, self.location.origin).href, 303);
+  } catch {
+    return Response.redirect(new URL("/share", self.location.origin).href, 303);
+  }
+}
 
 async function shell(request) {
   const cached = await caches.match(SHELL_URL, { cacheName: SHELL_CACHE });

@@ -60,7 +60,7 @@ SPAGHETTI_PASSWORD="$SPAGHETTI_PASSWORD_XIXA" pnpm user:add --remote --username 
 
 ## Push notifications
 
-The "how did it go?" nudges ([0015](decisions/0015-web-push-nudges.md)) are Web Push signed with a VAPID key pair. The public half is `vars.VAPID_PUBLIC_KEY` in `wrangler.jsonc` (not secret); the private half is the `VAPID_PRIVATE_KEY` secret on the Worker, which `wrangler deploy` keeps. Without it the app works as before (subscribing still works, nothing is sent). To make or replace the pair (replacing it makes every device's subscription useless: people turn notifications on again):
+The "how did it go?" nudges ([0016](decisions/0016-web-push-nudges.md)) are Web Push signed with a VAPID key pair. The public half is `vars.VAPID_PUBLIC_KEY` in `wrangler.jsonc` (not secret); the private half is the `VAPID_PRIVATE_KEY` secret on the Worker, which `wrangler deploy` keeps. Without it the app works as before (subscribing still works, nothing is sent). To make or replace the pair (replacing it makes every device's subscription useless: people turn notifications on again):
 
 ```sh
 pnpm vapid:generate --out /tmp/vapid.key        # writes the private key to the file (mode 600) and prints the public key

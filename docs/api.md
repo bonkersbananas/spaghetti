@@ -28,7 +28,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | Scope | Allows |
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
-| `capture` | `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
+| `capture` | `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
 | `attempts` | `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`. |
 | `printer` | `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 

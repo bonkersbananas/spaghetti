@@ -21,12 +21,12 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
-      testIgnore: /(offline|performance|push)\.spec/,
+      testIgnore: /(offline|performance|push|share)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
       name: "phone",
-      testIgnore: /(offline|performance|push)\.spec/,
+      testIgnore: /(offline|performance|push|share)\.spec/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
     },
     {
@@ -66,13 +66,24 @@ export default defineConfig({
     },
     {
       name: "offline",
-      testMatch: /offline\.spec/,
+      testMatch: /(offline|share)\.spec/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: `http://127.0.0.1:${builtPort}`,
         viewport: { width: 390, height: 844 },
         isMobile: true,
         hasTouch: true,
+        serviceWorkers: "allow",
+      },
+    },
+    {
+      // The share target at desktop width, also on the production build.
+      name: "share-desktop",
+      testMatch: /share\.spec/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://127.0.0.1:${builtPort}`,
+        viewport: { width: 1440, height: 900 },
         serviceWorkers: "allow",
       },
     },

@@ -14,6 +14,8 @@ export type Needs = readonly AgentScope[] | "person";
 const id = "[^/]+";
 const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   // An idea needs "capture"; a build started from scratch (stage "building") needs "attempts".
+  // Sharing in: an idea from a link, some text or photos (iOS Shortcuts, the bookmarklet).
+  ["POST", /^\/capture$/, ["capture"]],
   ["POST", /^\/items$/, ["capture", "attempts"]],
   // The route narrows it: a stage move or a cover photo needs "attempts".
   ["PATCH", new RegExp(`^/items/${id}$`), ["capture", "attempts"]],

@@ -436,6 +436,37 @@ export const shots: Shot[] = [
       await sheet.getByRole("textbox", { name: "Note" }).blur();
     },
   },
+  {
+    // Shared into Spaghetti (the share target and the bookmarklet end here): saved already, with a word to add.
+    name: "share-captured",
+    path: `/share?title=${encodeURIComponent("Drawer bins, 42 mm grid")}&text=${encodeURIComponent("Saw this on the bus")}&url=${encodeURIComponent("https://makerworld.com/en/models/drawer-bins")}`,
+    prepare: async (page) => {
+      const sheet = page.getByRole("dialog", { name: "Into the pot" });
+      await sheet.waitFor();
+      await sheet.getByText("Drawer bins, 42 mm grid").first().waitFor();
+      await page.waitForTimeout(600);
+    },
+  },
+  { name: "agents", path: "/agents" },
+  {
+    // The iPhone Shortcut's steps, with the key already in them (a stand-in here: the real one is random).
+    name: "agents-share-setup",
+    path: "/agents",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Set up sharing from iPhone" }).click();
+      const steps = page.getByTestId("share-setup");
+      await steps.waitFor();
+      await steps.evaluate((element) => {
+        for (const node of Array.from(element.querySelectorAll("p"))) {
+          if (node.textContent?.startsWith("Bearer spg_")) node.textContent = "Bearer spg_Xk3vRq9TmWz2…";
+        }
+      });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
   // The same idea in full: its note's link as a card under it.
   {
