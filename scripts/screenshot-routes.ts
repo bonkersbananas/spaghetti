@@ -31,11 +31,26 @@ type Slice = "all" | "none" | "young";
  * Shows Today with parts of the workspace missing, by answering the app's own requests with less: the ideas,
  * the builds, the journal and the spools it fetches. The real data stays in the database; unmockToday puts it back.
  */
-async function mockToday(page: Page, show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice }) {
+async function mockToday(
+  page: Page,
+  show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice; late?: boolean },
+) {
   const DAY = 24 * 60 * 60 * 1000;
   await page.route(/\/api\/items\?stage=/, async (route) => {
     const response = await route.fetch();
-    const json = (await response.json()) as { items: Array<{ stage: string; createdAt: number }> };
+    const json = (await response.json()) as {
+      items: Array<{
+        stage: string;
+        createdAt: number;
+        attempts?: Array<{ outcome: string | null; printedAt: number }>;
+      }>;
+    };
+    // Prints on the bed started earlier, so they are due.
+    if (show.late) {
+      for (const item of json.items)
+        for (const attempt of item.attempts ?? [])
+          if (attempt.outcome === null) attempt.printedAt -= 4 * 60 * 60 * 1000;
+    }
     const isIdeas = route.request().url().includes("stage=idea");
     const mode = isIdeas ? show.ideas : show.builds;
     const items =
@@ -66,19 +81,15 @@ async function mockToday(page: Page, show: { builds: Slice; journal: Slice; spoo
 }
 
 /**
- * Waits for a heading and for the empty state around it to finish easing in. It starts late (motion's code
- * loads first, a couple of seconds on a busy machine), so a shot taken once the heading exists shows nothing.
+ * Waits for a heading, then lets the empty state around it finish easing in. Its entrance animation can stall at
+ * "invisible" when it follows a full-page shot, so it is finished by hand rather than waited for.
  */
 async function waitUntilEased(page: Page, title: string) {
   await page.getByRole("heading", { name: title }).waitFor();
-  await page.waitForFunction(
-    (text) => {
-      const heading = Array.from(document.querySelectorAll("main h2")).find((h) => h.textContent === text);
-      return !!heading?.parentElement && getComputedStyle(heading.parentElement).opacity === "1";
-    },
-    title,
-    { timeout: 15_000 },
-  );
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+  await page.waitForTimeout(300);
 }
 
 async function unmockToday(page: Page) {
@@ -94,18 +105,16 @@ export const shots: Shot[] = [
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
   { name: "today", path: "/today", fullPage: true },
   {
-    // Four hours on: both prints are past their estimate, so each asks how it went.
+    // Both prints started four hours earlier than the seed says: past their estimates, so each asks how it went.
+    // (The data is moved, not the browser's clock: jumping the clock back and forth stalls motion's animations.)
     name: "today-due",
     path: "/today",
     fullPage: true,
     prepare: async (page) => {
-      await page.context().clock.setFixedTime(SEED_NOW + 4 * 60 * 60 * 1000);
-      await page.reload({ waitUntil: "networkidle" });
+      await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", late: true });
       await page.getByText("How did it go?").first().waitFor();
     },
-    cleanup: async (page) => {
-      await page.context().clock.setFixedTime(SEED_NOW);
-    },
+    cleanup: unmockToday,
   },
   {
     // Nothing printing, no builds, nothing loaded: only the old idea left on the back burner.
