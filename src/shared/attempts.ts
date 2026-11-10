@@ -265,15 +265,135 @@ function filamentChanges(before: AttemptFilament[] = [], after: AttemptFilament[
   return changes;
 }
 
+/** One known setting of an attempt, set against the same setting on another one. */
+export interface SettingDiff {
+  /** The setting: "bedTemperature", "brim", "filament.0". */
+  key: string;
+  /** What to call it in a table: "Bed", "Filament", "Plate". */
+  label: string;
+  /** How the first attempt had it, as words: "60 °C", "not dried", "none". */
+  before: string;
+  after: string;
+  /** The two differ. */
+  changed: boolean;
+  /** Neither attempt says anything about it (so there is nothing to show, changed or not). */
+  unset: boolean;
+  /** The plain-words chips for what changed ("bed 60 → 65 °C"), empty when nothing did. */
+  changes: SettingChange[];
+}
+
+function numberDiff(
+  key: string,
+  label: string,
+  words: string,
+  before: number | undefined,
+  after: number | undefined,
+  format: (value: number) => string,
+  unit: string,
+  cleared?: string,
+  empty = "not set",
+): SettingDiff {
+  const show = (value: number | undefined) => (value === undefined ? empty : `${format(value)}${unit}`);
+  const change = numberChange(key, words, before, after, format, unit, cleared);
+  return {
+    key,
+    label,
+    before: show(before),
+    after: show(after),
+    changed: change !== null,
+    unset: before === undefined && after === undefined,
+    changes: change ? [change] : [],
+  };
+}
+
+function textDiff(
+  key: string,
+  label: string,
+  before: string | undefined,
+  after: string | undefined,
+  show: (value: string) => string,
+  phrase: (before: string | undefined, after: string | undefined) => string,
+  empty = "not set",
+): SettingDiff {
+  const change = textChange(key, before, after, phrase);
+  return {
+    key,
+    label,
+    before: before ? show(before) : empty,
+    after: after ? show(after) : empty,
+    changed: change !== null,
+    unset: !before && !after,
+    changes: change ? [change] : [],
+  };
+}
+
+function flagDiff(
+  key: string,
+  label: string,
+  before: boolean | undefined,
+  after: boolean | undefined,
+  [off, on]: [string, string],
+  phrase: [string, string],
+): SettingDiff {
+  const changed = !!before !== !!after;
+  return {
+    key,
+    label,
+    before: before ? on : off,
+    after: after ? on : off,
+    changed,
+    unset: before === undefined && after === undefined,
+    changes: changed ? [{ key, text: after ? phrase[1] : phrase[0] }] : [],
+  };
+}
+
+function supportsDiff(before: AttemptSettings, after: AttemptSettings): SettingDiff {
+  const show = (settings: AttemptSettings) =>
+    settings.supportEnabled ? (settings.supportType === "tree" ? "tree" : "normal") : "none";
+  const change = supportChange(before, after);
+  return {
+    key: "supports",
+    label: "Supports",
+    before: show(before),
+    after: show(after),
+    changed: change !== null,
+    unset: before.supportEnabled === undefined && after.supportEnabled === undefined,
+    changes: change ? [change] : [],
+  };
+}
+
+function filamentDiffs(before: AttemptFilament[] = [], after: AttemptFilament[] = []): SettingDiff[] {
+  const rows: SettingDiff[] = [];
+  const count = Math.max(before.length, after.length);
+  const all = filamentChanges(before, after);
+  for (let i = 0; i < count; i++) {
+    const key = `filaments.${i}`;
+    const changes = all.filter((change) => change.key === key || change.key.startsWith(`${key}.`));
+    const a = before[i];
+    const b = after[i];
+    rows.push({
+      key,
+      label: count > 1 ? `Filament ${i + 1}` : "Filament",
+      before: a ? filamentName(a) : "none",
+      after: b ? filamentName(b) : "none",
+      changed: changes.length > 0,
+      unset: !a && !b,
+      changes,
+    });
+  }
+  return rows;
+}
+
 /**
- * What someone tried differently from one attempt to the next, in a few
- * plain words each: "bed 60 → 65 °C", "added a brim", "PETG instead of PLA".
- * Results (times, weight, where it failed) and AMS slots are left out.
+ * Every setting an attempt can carry, one against another: what the table in
+ * the compare sheet shows, changed or not. `describeChanges` is made from
+ * these rows, so the chips on an attempt and the table can never disagree.
+ * Results (times, weight, where it failed) and AMS slots are not settings.
  */
-export function describeChanges(before: AttemptSettings, after: AttemptSettings): SettingChange[] {
-  const changes: Array<SettingChange | null> = [
-    ...filamentChanges(before.filaments, after.filaments),
-    textChange("bedType", before.bedType, after.bedType, (a, b) =>
+export function diffSettings(before: AttemptSettings, after: AttemptSettings): SettingDiff[] {
+  return [
+    ...filamentDiffs(before.filaments, after.filaments),
+    textDiff("bedType", "Plate", before.bedType, after.bedType, plateName, (a, b) =>
       b
         ? a
           ? `${plateName(a)} → ${plateName(b)}`
@@ -282,22 +402,35 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
             : `${plateName(b)} plate`
         : "no plate set",
     ),
-    textChange("nozzle", before.nozzle, after.nozzle, (a, b) =>
-      b ? (a ? `${a} → ${b} nozzle` : `${b} nozzle`) : "no nozzle set",
+    textDiff(
+      "nozzle",
+      "Nozzle",
+      before.nozzle,
+      after.nozzle,
+      (value) => value,
+      (a, b) => (b ? (a ? `${a} → ${b} nozzle` : `${b} nozzle`) : "no nozzle set"),
     ),
-    numberChange("nozzleDiameter", "nozzle", before.nozzleDiameter, after.nozzleDiameter, num, " mm", "no nozzle size"),
-    numberChange("layerHeight", "layers", before.layerHeight, after.layerHeight, mm2, " mm"),
-    numberChange("infillDensity", "infill", before.infillDensity, after.infillDensity, num, "%"),
-    numberChange("wallLoops", "walls", before.wallLoops, after.wallLoops, num, "", "no wall count"),
-    supportChange(before, after),
-    before.brim === after.brim || (!before.brim && !after.brim)
-      ? null
-      : { key: "brim", text: after.brim ? "added a brim" : "no brim" },
-    textChange("processPreset", before.processPreset, after.processPreset, (a, b) =>
+    numberDiff(
+      "nozzleDiameter",
+      "Nozzle size",
+      "nozzle",
+      before.nozzleDiameter,
+      after.nozzleDiameter,
+      num,
+      " mm",
+      "no nozzle size",
+    ),
+    numberDiff("layerHeight", "Layers", "layers", before.layerHeight, after.layerHeight, mm2, " mm"),
+    numberDiff("infillDensity", "Infill", "infill", before.infillDensity, after.infillDensity, num, "%"),
+    numberDiff("wallLoops", "Walls", "walls", before.wallLoops, after.wallLoops, num, "", "no wall count"),
+    supportsDiff(before, after),
+    flagDiff("brim", "Brim", before.brim, after.brim, ["no brim", "brim"], ["no brim", "added a brim"]),
+    textDiff("processPreset", "Profile", before.processPreset, after.processPreset, shortPreset, (a, b) =>
       b ? (a ? `${shortPreset(a)} → ${shortPreset(b)}` : `${shortPreset(b)} profile`) : "no profile set",
     ),
-    numberChange(
+    numberDiff(
       "nozzleTemperature",
+      "Nozzle temp",
       "nozzle",
       before.nozzleTemperature,
       after.nozzleTemperature,
@@ -305,8 +438,9 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
       " °C",
       "no nozzle temperature",
     ),
-    numberChange(
+    numberDiff(
       "bedTemperature",
+      "Bed",
       "bed",
       before.bedTemperature,
       after.bedTemperature,
@@ -314,20 +448,35 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
       " °C",
       "no bed temperature",
     ),
-    numberChange(
+    numberDiff(
       "chamberTemperature",
+      "Chamber",
       "chamber",
       before.chamberTemperature,
       after.chamberTemperature,
       num,
       " °C",
       "no chamber temperature",
+      "none",
     ),
-    before.filamentDried === after.filamentDried || (!before.filamentDried && !after.filamentDried)
-      ? null
-      : { key: "filamentDried", text: after.filamentDried ? "dried the filament" : "filament not dried" },
+    flagDiff(
+      "filamentDried",
+      "Filament",
+      before.filamentDried,
+      after.filamentDried,
+      ["not dried", "dried"],
+      ["filament not dried", "dried the filament"],
+    ),
   ];
-  return changes.filter((change): change is SettingChange => change !== null);
+}
+
+/**
+ * What someone tried differently from one attempt to the next, in a few
+ * plain words each: "bed 60 → 65 °C", "added a brim", "PETG instead of PLA".
+ * Results (times, weight, where it failed) and AMS slots are left out.
+ */
+export function describeChanges(before: AttemptSettings, after: AttemptSettings): SettingChange[] {
+  return diffSettings(before, after).flatMap((row) => row.changes);
 }
 
 function supportChange(before: AttemptSettings, after: AttemptSettings): SettingChange | null {
@@ -358,3 +507,98 @@ export function mergeNote(existing: string, added: string): string {
 
 /** Tag slugs of both lists, each once, in order. */
 export const unionTags = (a: readonly string[], b: readonly string[]): string[] => [...new Set([...a, ...b])];
+
+/** The least summarizeBuild needs to know of an attempt. */
+export interface SummarizableAttempt {
+  /** Null while it is printing. */
+  outcome: Outcome | null;
+  settings: AttemptSettings;
+}
+
+export interface BuildSummary {
+  counts: Record<Outcome | "printing", number>;
+  /** "1 spaghetti, 1 partly, printing now"; empty without attempts. */
+  words: string;
+  /**
+   * Time on the bed from the finished attempts: what each took, else its
+   * estimate. `approximate` when any of them had to be guessed or had nothing,
+   * so it reads "about 6 h 22 min". Null when no figure is known at all.
+   */
+  minutes: { value: number; approximate: boolean } | null;
+  /** Grams from the finished attempts; `atLeast` when some have none. Null when none has one. */
+  grams: { value: number; atLeast: boolean } | null;
+  /** Every filament used, once each (by spool, else by type and color), in the order first used. */
+  filaments: AttemptFilament[];
+}
+
+const OUTCOME_WORDS: Array<[Outcome, string]> = [
+  ["failed", "spaghetti"],
+  ["partial", "partly"],
+  ["success", "worked"],
+];
+
+/** "1 spaghetti, 1 partly, printing now". */
+export function outcomeWords(counts: Record<Outcome | "printing", number>): string {
+  const parts = OUTCOME_WORDS.filter(([outcome]) => counts[outcome] > 0).map(
+    ([outcome, word]) => `${counts[outcome]} ${word}`,
+  );
+  if (counts.printing > 0) parts.push(counts.printing === 1 ? "printing now" : `${counts.printing} printing now`);
+  return parts.join(", ");
+}
+
+const filamentIdentity = (filament: AttemptFilament) =>
+  filament.spoolId
+    ? `spool:${filament.spoolId}`
+    : `${(filament.type ?? "").toLowerCase()}|${(filament.colorHex ?? filament.colorName ?? "").toLowerCase()}`;
+
+/**
+ * What a build's attempts add up to: how they went, the time and filament
+ * spent, and what was used. An attempt still printing has spent nothing yet,
+ * so it counts for the words but not the sums. Time never claims more than
+ * it knows: a guess reads "about", and a total with gaps reads "at least".
+ */
+export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildSummary {
+  const counts: Record<Outcome | "printing", number> = { success: 0, partial: 0, failed: 0, printing: 0 };
+  let minutes = 0;
+  let minutesKnown = false;
+  let minutesApproximate = false;
+  let grams = 0;
+  let gramsKnown = false;
+  let gramsMissing = false;
+  const filaments: AttemptFilament[] = [];
+  const seen = new Set<string>();
+  for (const attempt of attempts) {
+    counts[attempt.outcome ?? "printing"] += 1;
+    for (const filament of attempt.settings.filaments ?? []) {
+      const identity = filamentIdentity(filament);
+      if (identity === "|" || seen.has(identity)) continue;
+      seen.add(identity);
+      filaments.push(filament);
+    }
+    if (attempt.outcome === null) continue;
+    const { actualMinutes, estimatedMinutes, weightGrams } = attempt.settings;
+    if (actualMinutes !== undefined) {
+      minutes += actualMinutes;
+      minutesKnown = true;
+    } else if (estimatedMinutes !== undefined) {
+      minutes += estimatedMinutes;
+      minutesKnown = true;
+      minutesApproximate = true;
+    } else {
+      minutesApproximate = true;
+    }
+    if (weightGrams !== undefined) {
+      grams += weightGrams;
+      gramsKnown = true;
+    } else {
+      gramsMissing = true;
+    }
+  }
+  return {
+    counts,
+    words: outcomeWords(counts),
+    minutes: minutesKnown ? { value: minutes, approximate: minutesApproximate } : null,
+    grams: gramsKnown ? { value: grams, atLeast: gramsMissing } : null,
+    filaments,
+  };
+}

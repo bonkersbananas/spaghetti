@@ -4,8 +4,11 @@ import {
   byPrintTime,
   carryOver,
   describeChanges,
+  diffSettings,
+  outcomeWords,
   plateName,
   slugify,
+  summarizeBuild,
   tagLabel,
 } from "../../src/shared/attempts.ts";
 
@@ -141,5 +144,177 @@ describe("plateName", () => {
     expect(plateName("High Temp Plate")).toBe("High Temp Plate");
     expect(plateName("Supertack Plate")).toBe("Supertack Plate");
     expect(plateName("Garolite")).toBe("Garolite");
+  });
+});
+
+describe("diffSettings", () => {
+  const row = (before: AttemptSettings, after: AttemptSettings, key: string) => {
+    const found = diffSettings(before, after).find((r) => r.key === key);
+    if (!found) throw new Error(`no row ${key}`);
+    return found;
+  };
+
+  it("has a row for every known setting, changed or not", () => {
+    const keys = diffSettings({}, {}).map((r) => r.key);
+    expect(keys).toEqual([
+      "bedType",
+      "nozzle",
+      "nozzleDiameter",
+      "layerHeight",
+      "infillDensity",
+      "wallLoops",
+      "supports",
+      "brim",
+      "processPreset",
+      "nozzleTemperature",
+      "bedTemperature",
+      "chamberTemperature",
+      "filamentDried",
+    ]);
+    expect(diffSettings({}, {}).every((r) => r.unset && !r.changed)).toBe(true);
+  });
+
+  it("gives before and after as words, for the table in the compare sheet", () => {
+    expect(row({ bedTemperature: 60 }, { bedTemperature: 65 }, "bedTemperature")).toMatchObject({
+      label: "Bed",
+      before: "60 °C",
+      after: "65 °C",
+      changed: true,
+      unset: false,
+    });
+    expect(row({}, { chamberTemperature: 35 }, "chamberTemperature")).toMatchObject({ before: "none", after: "35 °C" });
+    expect(row({}, { filamentDried: true }, "filamentDried")).toMatchObject({ before: "not dried", after: "dried" });
+    expect(row({ bedType: "Smooth PEI Plate" }, { bedType: "Textured PEI Plate" }, "bedType")).toMatchObject({
+      before: "Smooth PEI",
+      after: "Textured PEI",
+    });
+    expect(row({ supportEnabled: true }, { supportEnabled: true, supportType: "tree" }, "supports")).toMatchObject({
+      before: "normal",
+      after: "tree",
+      changed: true,
+    });
+  });
+
+  it("marks what is the same, with its value, and what neither attempt says", () => {
+    const same = row({ layerHeight: 0.2 }, { layerHeight: 0.2 }, "layerHeight");
+    expect(same).toMatchObject({ before: "0.20 mm", after: "0.20 mm", changed: false, unset: false, changes: [] });
+    expect(row({}, {}, "brim")).toMatchObject({ changed: false, unset: true });
+    expect(row({ brim: false }, {}, "brim")).toMatchObject({ changed: false, unset: false });
+  });
+
+  it("has a row per filament, with the chips that describe it", () => {
+    const pla = { type: "PLA", colorName: "White" };
+    const petg = { type: "PETG", colorName: "White" };
+    const [first, second] = diffSettings({ filaments: [pla, pla] }, { filaments: [petg, pla] });
+    expect(first).toMatchObject({ label: "Filament 1", changed: true });
+    expect(first?.changes.map((c) => c.text)).toEqual(["filament 1: PETG instead of PLA"]);
+    expect(second).toMatchObject({ label: "Filament 2", changed: false, before: "White PLA" });
+    const added = diffSettings({}, { filaments: [pla] })[0];
+    expect(added).toMatchObject({ label: "Filament", before: "none", after: "White PLA", changed: true });
+  });
+
+  it("agrees with describeChanges: the chips are exactly the changed rows' chips", () => {
+    const before: AttemptSettings = {
+      filaments: [{ type: "PLA", brand: "Bambu", colorName: "Yellow", colorHex: "#f0b323" }],
+      bedType: "Smooth PEI Plate",
+      layerHeight: 0.2,
+      infillDensity: 15,
+      bedTemperature: 55,
+      brim: false,
+      supportEnabled: true,
+      processPreset: "0.20mm Standard @BBL X2D",
+    };
+    const after: AttemptSettings = {
+      filaments: [{ type: "PETG", brand: "Bambu", colorName: "Teal", colorHex: "#2c8a87" }],
+      bedType: "Textured PEI Plate",
+      layerHeight: 0.16,
+      infillDensity: 15,
+      bedTemperature: 60,
+      chamberTemperature: 35,
+      brim: true,
+      supportEnabled: false,
+      processPreset: "0.16mm Optimal @BBL X2D",
+      filamentDried: true,
+      weightGrams: 40,
+    };
+    const rows = diffSettings(before, after);
+    expect(describeChanges(before, after)).toEqual(rows.flatMap((r) => r.changes));
+    for (const r of rows) expect(r.changed).toBe(r.changes.length > 0);
+    // Results are not settings.
+    expect(rows.some((r) => r.key === "weightGrams")).toBe(false);
+  });
+});
+
+describe("summarizeBuild", () => {
+  const done = (outcome: "success" | "partial" | "failed", settings: AttemptSettings = {}) => ({ outcome, settings });
+  const printing = (settings: AttemptSettings = {}) => ({ outcome: null, settings });
+
+  it("says how the attempts went, worst first, with what is printing last", () => {
+    const summary = summarizeBuild([done("failed"), done("partial"), done("failed"), printing()]);
+    expect(summary.counts).toEqual({ success: 0, partial: 1, failed: 2, printing: 1 });
+    expect(summary.words).toBe("2 spaghetti, 1 partly, printing now");
+    expect(outcomeWords({ success: 3, partial: 0, failed: 0, printing: 0 })).toBe("3 worked");
+    expect(summarizeBuild([]).words).toBe("");
+  });
+
+  it("adds the time on the bed exactly when every attempt knows it", () => {
+    const summary = summarizeBuild([
+      done("failed", { actualMinutes: 197 }),
+      done("success", { actualMinutes: 185, estimatedMinutes: 190 }),
+    ]);
+    expect(summary.minutes).toEqual({ value: 382, approximate: false });
+  });
+
+  it("falls back to the estimate and then says 'about'", () => {
+    const summary = summarizeBuild([done("failed", { actualMinutes: 100 }), done("success", { estimatedMinutes: 60 })]);
+    expect(summary.minutes).toEqual({ value: 160, approximate: true });
+    // An attempt with no time at all makes the total a guess too, but it still shows what is known.
+    expect(summarizeBuild([done("failed", { actualMinutes: 100 }), done("success")]).minutes).toEqual({
+      value: 100,
+      approximate: true,
+    });
+  });
+
+  it("leaves out a figure nobody has", () => {
+    const summary = summarizeBuild([done("failed"), done("success")]);
+    expect(summary.minutes).toBeNull();
+    expect(summary.grams).toBeNull();
+  });
+
+  it("adds the weight, and says 'at least' when some attempts have none", () => {
+    expect(summarizeBuild([done("failed", { weightGrams: 64 }), done("success", { weightGrams: 66 })]).grams).toEqual({
+      value: 130,
+      atLeast: false,
+    });
+    expect(summarizeBuild([done("failed", { weightGrams: 64 }), done("success")]).grams).toEqual({
+      value: 64,
+      atLeast: true,
+    });
+  });
+
+  it("counts nothing from a print still on the bed", () => {
+    const summary = summarizeBuild([
+      done("failed", { actualMinutes: 100, weightGrams: 50 }),
+      printing({ estimatedMinutes: 190 }),
+    ]);
+    expect(summary.minutes).toEqual({ value: 100, approximate: false });
+    expect(summary.grams).toEqual({ value: 50, atLeast: false });
+    expect(summary.counts.printing).toBe(1);
+  });
+
+  it("lists each filament once: by spool, else by type and color", () => {
+    const yellow = { type: "PLA", colorName: "Yellow", colorHex: "#F0B323" };
+    const summary = summarizeBuild([
+      done("failed", { filaments: [yellow, { type: "PLA", colorName: "White", spoolId: "s1" }] }),
+      done("partial", {
+        filaments: [
+          { ...yellow, colorHex: "#f0b323" },
+          { type: "PLA", colorName: "Jade white", spoolId: "s1" },
+          { type: "PETG", colorName: "Teal", colorHex: "#2c8a87" },
+          {},
+        ],
+      }),
+    ]);
+    expect(summary.filaments.map((f) => f.colorName)).toEqual(["Yellow", "White", "Teal"]);
   });
 });
