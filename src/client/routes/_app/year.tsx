@@ -29,11 +29,6 @@ function Year() {
       <PageHeader
         title={`${year}${current ? " so far" : ""}`}
         subtitle="What the prints add up to, and what has helped when they went wrong."
-        actions={
-          <Link to="/journal" className="text-small text-ink-soft hover:text-ink focus-ring rounded-md">
-            Back to the journal
-          </Link>
-        }
       />
       {!data ? (
         <div className="flex flex-col gap-8" aria-hidden>
@@ -51,6 +46,8 @@ function Year() {
   );
 }
 
+const sentenceLink = "text-ink decoration-ink/30 hover:decoration-ink underline underline-offset-4";
+
 const percent = (insights: Insights) => Math.round((insights.outcomes.success / insights.prints) * 100);
 
 function Story({ insights, current }: { insights: Insights; current: boolean }) {
@@ -61,13 +58,12 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
       <section aria-label="In numbers" className="flex flex-row flex-wrap items-end gap-x-8 gap-y-5 md:gap-16">
         <Figure value={String(insights.prints)} words={insights.prints === 1 ? "print" : "prints"} />
         <Figure value={`${percent(insights)}%`} words="worked" tone="basil" />
-        <p className="text-lead text-ink-soft w-full max-w-sm md:w-auto md:pb-2">
-          {outcomes.partial} came out {OUTCOME_LABELS.partial.toLowerCase()}, and{" "}
-          <Link
-            to="/journal"
-            search={{ outcome: "failed" }}
-            className="text-ink decoration-ink/30 hover:decoration-ink underline underline-offset-4"
-          >
+        <p className="text-lead text-ink-soft w-full text-balance">
+          <Link to="/journal" search={{ outcome: "partial" }} className={sentenceLink}>
+            {outcomes.partial} came out {OUTCOME_LABELS.partial.toLowerCase()}
+          </Link>
+          , and{" "}
+          <Link to="/journal" search={{ outcome: "failed" }} className={sentenceLink}>
             {outcomes.failed} turned to spaghetti
           </Link>
           .
@@ -82,7 +78,7 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
       </section>
 
       {(insights.byMaterial.length > 0 || insights.byPlate.length > 0) && (
-        <div className="grid gap-12 md:max-w-4xl md:grid-cols-2 md:gap-16">
+        <div className="grid gap-12 md:max-w-3xl md:grid-cols-2 md:gap-12">
           {insights.byMaterial.length > 0 && (
             <Rates title="By material" id="by-material" rows={insights.byMaterial} link="material" />
           )}

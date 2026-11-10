@@ -196,27 +196,25 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
   return (
     <section aria-label={monthLabel(month.start)} className="render-lazy flex flex-col gap-7 md:gap-8">
       <header className={cn("flex flex-col gap-1", !first && "pt-4 md:pt-6")}>
-        <Overline as="h2">
-          {monthLabel(month.start)}
-          {current && " so far"}
-        </Overline>
+        <div className="flex items-baseline justify-between gap-4">
+          <Overline as="h2">
+            {monthLabel(month.start)}
+            {current && " so far"}
+          </Overline>
+          {first && line && (
+            <Link
+              to="/year"
+              search={{ year: new Date(month.start).getFullYear() }}
+              className="text-small text-ink-faint hover:text-ink focus-ring -my-2 rounded-sm py-2 whitespace-nowrap"
+            >
+              See the year
+            </Link>
+          )}
+        </div>
         {line === null ? (
           <Skeleton className="h-6 w-64 max-w-full" />
         ) : (
-          line && (
-            <p className="font-display text-title text-ink-soft">
-              {line}
-              {first && (
-                <Link
-                  to="/year"
-                  search={{ year: new Date(month.start).getFullYear() }}
-                  className="text-small text-ink-faint hover:text-ink focus-ring decoration-ink/20 ml-3 rounded-sm font-sans underline underline-offset-4"
-                >
-                  See the year
-                </Link>
-              )}
-            </p>
-          )
+          line && <p className="font-display text-title text-ink-soft">{line}</p>
         )}
       </header>
       {month.groups.map((group) => (

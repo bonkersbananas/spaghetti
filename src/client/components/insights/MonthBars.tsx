@@ -4,7 +4,6 @@ import { outcomeDots } from "@/components/builds/Outcome";
 import { cn } from "@/lib/cn";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const LETTERS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
 const total = (bar: MonthBar) => bar.success + bar.partial + bar.failed;
 
@@ -26,7 +25,7 @@ interface MonthBarsProps {
 /**
  * Prints by month as quiet stacked bars in the outcome colors (worked at the
  * bottom, spaghetti on top). No legend and no axis: the busiest month names
- * its count above its bar, and the figures under it say it all in words for
+ * each month its count above its bar, and the figures under it say it all in words for
  * screen readers. Not interactive.
  */
 export function MonthBars({ months, through = 11, className }: MonthBarsProps) {
@@ -44,8 +43,14 @@ export function MonthBars({ months, through = 11, className }: MonthBarsProps) {
           return (
             <li key={bar.month} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
               <span className="sr-only">{monthSentence(bar)}</span>
-              {sum > 0 && bar === busiest && (
-                <span className="text-caption text-ink-soft tabular font-semibold" aria-hidden>
+              {sum > 0 && (
+                <span
+                  className={cn(
+                    "text-caption tabular",
+                    bar === busiest ? "text-ink-soft font-semibold" : "text-ink-faint",
+                  )}
+                  aria-hidden
+                >
                   {sum}
                 </span>
               )}
@@ -72,8 +77,7 @@ export function MonthBars({ months, through = 11, className }: MonthBarsProps) {
       <div className="text-caption text-ink-faint mt-2 flex gap-1.5 md:gap-2.5" aria-hidden>
         {months.map((bar) => (
           <span key={bar.month} className="min-w-0 flex-1 text-center">
-            <span className="md:hidden">{LETTERS[bar.month]}</span>
-            <span className="hidden md:inline">{MONTHS[bar.month]}</span>
+            {MONTHS[bar.month]}
           </span>
         ))}
       </div>

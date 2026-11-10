@@ -22,7 +22,7 @@ export function YearSection() {
     <Section
       id="year"
       title="Year so far"
-      note="The year in a few large figures and sentences. Two quiet components draw it: MonthBars (prints by month, stacked in the outcome colors, the busiest month named, no legend or axis) and RateRows (success rate per group as a basil bar with its figure in words). Both are labelled in words for screen readers and nothing on them is interactive; links around them lead into the journal."
+      note="The year as large figures and sentences, with two quiet components: MonthBars (stacked outcome colors, counts above the bars, no legend) and RateRows (a basil bar and its figure in words)."
     >
       <div className="grid min-w-0 gap-6 md:grid-cols-2">
         <Panel className="flex min-w-0 flex-col gap-3">
