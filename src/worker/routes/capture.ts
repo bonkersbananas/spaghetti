@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { CaptureResponse } from "../../shared/api.ts";
@@ -34,56 +35,140 @@ async function photoIdFor(itemId: string, position: number): Promise<string> {
 
 const blank = (value: string | null | undefined) => value?.trim() || undefined;
 
+/** What a request body held, whatever shape it came in. */
+interface Body {
+  fields: z.infer<typeof fields>;
+  /** Photos, as bytes. */
+  files: Uint8Array[];
+}
+
+const SINGLE_URL = /^https?:\/\/\S+$/i;
+const isImage = (bytes: Uint8Array) =>
+  (bytes[0] === 0xff && bytes[1] === 0xd8) || // JPEG
+  (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) || // RIFF (WebP)
+  (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70); // ftyp (HEIC: refused with a clear message)
+
+/** Fills the fields from loose text: a lone link is the link, anything else is the words. */
+function addText(into: Record<string, string | undefined>, value: string, name?: string) {
+  const words = value.trim();
+  if (!words) return;
+  if (name === "url" || name === "title" || name === "text" || name === "id") {
+    into[name] = into[name] ? `${into[name]}\n${words}` : words;
+  } else if (SINGLE_URL.test(words) && !into.url) into.url = words;
+  else into.text = into.text ? `${into.text}\n${words}` : words;
+}
+
 /**
- * The one-tap way in for things that can't run the app: an iOS Shortcut, a bookmarklet, a script.
- * Takes JSON (`{ url?, text?, title?, id? }`), a multipart form (the same fields, plus `image` files) or a
- * raw image body (`Content-Type: image/jpeg`, the fields in the query string), makes an idea of it and answers
- * with its link. Photos are stored as they came and flagged `needsResize` (decision 0004).
+ * Reads what Shortcuts, scripts and browsers actually send, in these shapes:
+ *  - `application/json`: `{ url?, text?, title?, id?, image? }`.
+ *  - `application/x-www-form-urlencoded`: a Shortcuts "Form" body with only text fields (`text=…`, `url=…`).
+ *  - `multipart/form-data`: the same fields, and photos in any file part. A Shortcuts form can also send a URL
+ *    or rich-text item as a *file part* (a filename and `text/plain` or another type): a part that isn't an image
+ *    is read as text, filed under its field name when that is text, url or title, and otherwise as loose text.
+ *  - `image/*` (or anything that starts like a JPEG, WebP or HEIC): a photo, with the fields in the query string.
+ *  - `text/plain`, `text/uri-list` or any other text: the words, or the link when it is only a link.
+ * The query string may carry `id`, `title`, `text` and `url` for any shape.
+ */
+async function readBody(c: Context<AppEnv>): Promise<Body> {
+  const type = (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const loose: Record<string, string | undefined> = {};
+  const files: Uint8Array[] = [];
+  const query = c.req.query();
+  for (const name of ["id", "title", "text", "url"]) if (blank(query[name])) loose[name] = blank(query[name]);
+
+  if (type === "application/json") {
+    const parsed = fields.parse(await c.req.json());
+    if (parsed.image) files.push(fromBase64(parsed.image));
+    return { fields: { ...loose, ...parsed }, files };
+  }
+  if (type === "application/x-www-form-urlencoded" || type === "multipart/form-data") {
+    const form = await c.req.formData();
+    for (const [name, entry] of form.entries()) {
+      if (typeof entry === "string") {
+        addText(loose, entry, name);
+        continue;
+      }
+      if (entry.size === 0) continue;
+      const bytes = new Uint8Array(await entry.arrayBuffer());
+      if (entry.type.startsWith("image/") || isImage(bytes)) files.push(bytes);
+      else addText(loose, new TextDecoder().decode(bytes), name);
+    }
+    return { fields: fields.parse(loose), files };
+  }
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  if (type.startsWith("image/") || isImage(bytes)) files.push(bytes);
+  else if (bytes.length) {
+    const body = new TextDecoder().decode(bytes);
+    // A JSON body sent without its Content-Type.
+    if (/^\s*\{/.test(body) && type !== "text/plain") {
+      const parsed = fields.safeParse(JSON.parse(body));
+      if (parsed.success) return { fields: { ...loose, ...parsed.data }, files };
+    }
+    // text/uri-list may start with comment lines.
+    addText(
+      loose,
+      type === "text/uri-list"
+        ? body
+            .split(/\r?\n/)
+            .filter((line) => !line.startsWith("#"))
+            .join("\n")
+        : body,
+    );
+  }
+  return { fields: fields.parse(loose), files };
+}
+
+/** The sentence a Shortcut can show: what was saved, in a few words. */
+function savedSentence(title: string | null, note: string, photos: number): string {
+  const what = title ?? (note.split("\n")[0] || undefined) ?? (photos > 1 ? `${photos} photos` : "a photo");
+  return `Saved to Spaghetti: ${what.length > 80 ? `${what.slice(0, 79)}…` : what}`;
+}
+
+/**
+ * The one-tap way in for things that can't run the app: an iOS Shortcut, a bookmarklet, a script. It reads the
+ * body in any of the shapes above, makes an idea of it and answers with its link. A JSON request (or one with
+ * `Accept: application/json`) gets JSON; anything else gets one plain sentence, so a Shortcut can show it.
+ * Photos are stored as they came and flagged `needsResize` (decision 0004).
  */
 export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
-  const type = (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const wantsJson =
+    (c.req.header("content-type") ?? "").includes("application/json") ||
+    (c.req.header("accept") ?? "").includes("application/json");
+  /** An error in the shape the caller reads. */
+  const refuse = (status: 400 | 409 | 415, code: string, message: string) =>
+    wantsJson ? apiError(c, status, code, message) : c.text(`Spaghetti couldn't save that: ${message}`, status);
+
   let input: z.infer<typeof fields>;
-  const files: Uint8Array[] = [];
+  let files: Uint8Array[];
   try {
-    if (type.startsWith("image/")) {
-      const q = c.req.query();
-      input = fields.parse({ id: blank(q.id), title: blank(q.title), text: blank(q.text), url: blank(q.url) });
-      files.push(new Uint8Array(await c.req.arrayBuffer()));
-    } else if (type === "multipart/form-data") {
-      const form = await c.req.formData();
-      const value = (name: string) => {
-        const entry = form.get(name);
-        return typeof entry === "string" ? blank(entry) : undefined;
-      };
-      input = fields.parse({ id: value("id"), title: value("title"), text: value("text"), url: value("url") });
-      for (const entry of form.values()) {
-        if (typeof entry !== "string" && entry.size > 0) files.push(new Uint8Array(await entry.arrayBuffer()));
-      }
-    } else {
-      input = fields.parse(await c.req.json());
-      if (input.image) files.push(fromBase64(input.image));
-    }
+    ({ fields: input, files } = await readBody(c));
   } catch (error) {
-    if (error instanceof z.ZodError) return apiError(c, 400, "invalid", "That couldn't be read.");
     if (error instanceof Error && /base64|JPEG|WebP|photo/i.test(error.message)) {
-      return apiError(c, 400, "invalid", error.message);
+      return refuse(400, "invalid", error.message);
     }
-    return apiError(c, 400, "invalid", "That couldn't be read. Send JSON, a form or an image.");
+    return refuse(
+      400,
+      "invalid",
+      "that couldn't be read. Send a link or text as a form or JSON, or a JPEG or WebP photo.",
+    );
+  }
+  // A lone link in `text` is the link.
+  if (!input.url && input.text && SINGLE_URL.test(input.text.trim())) {
+    input = { ...input, url: input.text.trim(), text: undefined };
   }
 
   const note = captureNote(input.text, input.url);
   const title = captureTitle(input.title, input.text, input.url);
-  if (!note && !title && !files.length)
-    return apiError(c, 400, "invalid", "Send a link, some text, a title or a photo.");
+  if (!note && !title && !files.length) return refuse(400, "invalid", "there was no link, text, title or photo in it.");
   if (files.length > MAX_CAPTURE_PHOTOS) {
-    return apiError(c, 400, "invalid", `At most ${MAX_CAPTURE_PHOTOS} photos at a time.`);
+    return refuse(400, "invalid", `at most ${MAX_CAPTURE_PHOTOS} photos at a time.`);
   }
   const images: ImageInfo[] = [];
   try {
     for (const bytes of files) images.push(readImage(bytes));
   } catch (error) {
     // iPhones take HEIC: the Shortcut converts to JPEG first (see docs/share.md).
-    return apiError(c, 415, "unsupported", error instanceof Error ? error.message : "That photo couldn't be read.");
+    return refuse(415, "unsupported", error instanceof Error ? error.message : "that photo couldn't be read.");
   }
 
   const db = c.var.db;
@@ -110,7 +195,7 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
     .from(items)
     .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
     .get();
-  if (!item) return apiError(c, 409, "deleted", "That was deleted.");
+  if (!item) return refuse(409, "deleted", "that was deleted.");
 
   // Each photo's id follows from the idea's id and its place, so a retry after a half-finished upload
   // stores the photos that are missing and finds the others where they were.
@@ -150,8 +235,10 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
         .where(and(eq(items.id, itemId), afterChange)),
     ]);
   }
+  const link = `${new URL(c.req.url).origin}/ideas/${itemId}`;
+  if (!wantsJson) return c.text(savedSentence(title, note, images.length), 201);
   return c.json<CaptureResponse>(
-    { id: itemId, url: `${new URL(c.req.url).origin}/ideas/${itemId}`, photos: images.length },
+    { id: itemId, url: link, photos: images.length, message: savedSentence(title, note, images.length) },
     201,
   );
 });

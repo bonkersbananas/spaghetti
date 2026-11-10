@@ -80,7 +80,7 @@ describe("POST /api/capture", () => {
     const bearer = await token(["capture"]);
     const raw = await asAgent(bearer, {
       body: jpeg(),
-      headers: { "Content-Type": "image/jpeg" },
+      headers: { "Content-Type": "image/jpeg", Accept: "application/json" },
     });
     expect(raw.status).toBe(201);
     const rawBody = await raw.json<CaptureResponse>();
@@ -93,7 +93,7 @@ describe("POST /api/capture", () => {
     const form = new FormData();
     form.set("text", "Phone stand");
     form.set("image", new File([jpeg()], "IMG_1.jpg", { type: "image/jpeg" }));
-    const formed = await asAgent(bearer, { body: form });
+    const formed = await asAgent(bearer, { body: form, headers: { Accept: "application/json" } });
     expect(formed.status).toBe(201);
     const item = await getItem((await formed.json<CaptureResponse>()).id);
     expect(item.note).toBe("Phone stand");
@@ -141,6 +141,113 @@ describe("POST /api/capture", () => {
     expect((await getItem(id)).photos).toHaveLength(2);
     await send();
     expect((await getItem(id)).photos).toHaveLength(2);
+  });
+
+  /**
+   * What the iOS Shortcuts app sends (its "Get Contents of URL" action): a Form body with text fields is
+   * urlencoded; a Form body with a file field is multipart, and a URL or rich-text item can come as a file part;
+   * a Text or File body is sent as it is, with its own type. None of them says Accept: application/json.
+   */
+  describe("the shapes Shortcuts sends", () => {
+    const saved = async (response: Response) => {
+      expect(response.status, await response.clone().text()).toBe(201);
+      expect(response.headers.get("content-type")).toContain("text/plain");
+      return response.text();
+    };
+    const latest = async () => {
+      const list = await (await request("/api/items", { cookie })).json<{
+        items: Array<{ title: string | null; note: string }>;
+      }>();
+      return list.items[0];
+    };
+
+    it("urlencoded text", async () => {
+      const bearer = await token(["capture"]);
+      const body = new URLSearchParams({ text: "A hook for the garage door" });
+      const reply = await saved(
+        await asAgent(bearer, { body, headers: { "Content-Type": "application/x-www-form-urlencoded" } }),
+      );
+      expect(reply).toBe("Saved to Spaghetti: A hook for the garage door");
+      expect((await latest())?.note).toBe("A hook for the garage door");
+    });
+
+    it("urlencoded URL: a lone link in text is the link", async () => {
+      const bearer = await token(["capture"]);
+      const body = new URLSearchParams({ text: "https://makerworld.com/en/models/55", title: "Hex bin" });
+      const reply = await saved(
+        await asAgent(bearer, { body, headers: { "Content-Type": "application/x-www-form-urlencoded" } }),
+      );
+      expect(reply).toBe("Saved to Spaghetti: Hex bin");
+      expect(await latest()).toMatchObject({ title: "Hex bin", note: "https://makerworld.com/en/models/55" });
+    });
+
+    it("multipart with the URL as a file part", async () => {
+      const bearer = await token(["capture"]);
+      const form = new FormData();
+      form.set("text", new File(["https://example.com/model/9"], "Safari page.txt", { type: "text/plain" }));
+      const reply = await saved(await asAgent(bearer, { body: form }));
+      expect(reply).toBe("Saved to Spaghetti: https://example.com/model/9");
+      const made = await latest();
+      expect(made?.note).toBe("https://example.com/model/9");
+      // No photo came of it.
+      const items = await (await request("/api/items", { cookie })).json<{ items: Array<{ photos: unknown[] }> }>();
+      expect(items.items[0]?.photos).toHaveLength(0);
+    });
+
+    it("multipart with a file part of any name and type text/* is text, and a photo in the same form stays a photo", async () => {
+      const bearer = await token(["capture"]);
+      const form = new FormData();
+      form.set("file", new File(["Look at this"], "note.txt", { type: "text/plain" }));
+      form.set("image", new File([jpeg()], "IMG.jpg", { type: "image/jpeg" }));
+      const reply = await saved(await asAgent(bearer, { body: form }));
+      expect(reply).toBe("Saved to Spaghetti: Look at this");
+      const items = await (await request("/api/items", { cookie })).json<{ items: Array<{ photos: unknown[] }> }>();
+      expect(items.items[0]?.photos).toHaveLength(1);
+    });
+
+    it("text/plain and text/uri-list bodies", async () => {
+      const bearer = await token(["capture"]);
+      const plain = await saved(
+        await asAgent(bearer, { body: "Phone stand, 15 degrees", headers: { "Content-Type": "text/plain" } }),
+      );
+      expect(plain).toBe("Saved to Spaghetti: Phone stand, 15 degrees");
+      const uri = await saved(
+        await asAgent(bearer, {
+          body: "# a comment\r\nhttps://example.com/x\r\n",
+          headers: { "Content-Type": "text/uri-list" },
+        }),
+      );
+      expect(uri).toBe("Saved to Spaghetti: https://example.com/x");
+      expect((await latest())?.note).toBe("https://example.com/x");
+    });
+
+    it("a photo says so in the sentence", async () => {
+      const bearer = await token(["capture"]);
+      const reply = await saved(await asAgent(bearer, { body: jpeg(), headers: { "Content-Type": "image/jpeg" } }));
+      expect(reply).toBe("Saved to Spaghetti: a photo");
+    });
+
+    it("says in a sentence what was wrong, with the right status", async () => {
+      const bearer = await token(["capture"]);
+      const empty = await asAgent(bearer, {
+        body: new URLSearchParams({ text: "  " }),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+      expect(empty.status).toBe(400);
+      expect(await empty.text()).toBe("Spaghetti couldn't save that: there was no link, text, title or photo in it.");
+      const heic = await asAgent(bearer, {
+        body: new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]),
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      expect(heic.status).toBe(415);
+      expect(await heic.text()).toContain("JPEG or WebP");
+    });
+
+    it("JSON callers still get JSON, with the sentence in it", async () => {
+      const bearer = await token(["capture"]);
+      const reply = await (await asAgent(bearer, { json: { text: "plain json" } })).json<CaptureResponse>();
+      expect(reply.message).toBe("Saved to Spaghetti: plain json");
+    });
   });
 
   it("works for a signed-in person too", async () => {
