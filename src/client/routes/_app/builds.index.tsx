@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { createBuild } from "@/lib/builds";
@@ -116,12 +116,14 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4 md:gap-5">
-      <SectionHeading size={quiet ? "title" : "headline"} count={count}>
-        {title}
-      </SectionHeading>
+    <PageSection
+      id={`builds-${title.toLowerCase().replace(/\W+/g, "-")}`}
+      title={title}
+      size={quiet ? "title" : "headline"}
+      count={count}
+    >
       {children}
-    </section>
+    </PageSection>
   );
 }
 

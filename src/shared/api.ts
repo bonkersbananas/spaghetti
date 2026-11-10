@@ -1,5 +1,6 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
 import type { BridgeStatus } from "./bridge.ts";
+import type { ItemDraft } from "./draft.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { PersonColor } from "./people.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
@@ -159,6 +160,19 @@ export interface Item {
   photos: Photo[];
   /** Oldest first: the first is attempt 1. Always empty for ideas. */
   attempts: Attempt[];
+  /** Claude's draft from a model page, while it is being read or after; null when there is none. */
+  draft: ItemDraft | null;
+}
+
+/** GET /api/features: what this Worker can do beyond the basics. */
+export interface FeaturesResponse {
+  /** Claude can draft an idea from a model page (the Worker has an ANTHROPIC_API_KEY). */
+  drafts: boolean;
+}
+
+/** POST and DELETE /api/items/:id/draft. */
+export interface DraftResponse {
+  draft: ItemDraft | null;
 }
 
 export interface ItemsResponse {

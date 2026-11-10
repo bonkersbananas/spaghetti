@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CopyIcon } from "@/components/ui/icons";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
@@ -38,11 +38,12 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
   const isDesktop = useIsDesktop();
   if (!low.length) return null;
   return (
-    <section aria-labelledby="running-low" className="flex flex-col gap-4 md:max-w-2xl md:gap-5">
-      <div className="flex items-center justify-between gap-3">
-        <SectionHeading id="running-low" count={low.length}>
-          Running low
-        </SectionHeading>
+    <Section
+      id="running-low"
+      title="Running low"
+      count={low.length}
+      className="md:max-w-2xl"
+      aside={
         <Button
           variant="secondary"
           size="sm"
@@ -51,7 +52,8 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
         >
           {isDesktop ? "Copy list" : "Share list"}
         </Button>
-      </div>
+      }
+    >
       <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label="Spools running low">
         {low.map(({ spool, needs }) => {
           const name = spoolName(spool);
@@ -83,6 +85,6 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
           );
         })}
       </ul>
-    </section>
+    </Section>
   );
 }

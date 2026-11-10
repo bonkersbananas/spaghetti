@@ -75,6 +75,28 @@ export interface Shot {
   cleanup?: (page: Page) => Promise<void>;
 }
 
+/** An idea made through the API with this note (no draft is started: only a capture starts one by itself). */
+async function newModelIdea(page: Page, note: string) {
+  return page.evaluate(async (text) => {
+    const id = crypto.randomUUID();
+    await fetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, note: text }),
+    });
+    return id;
+  }, note);
+}
+
+/** Opens that idea's page and waits for it. */
+async function openIdea(page: Page, id: string) {
+  await page.goto(`/ideas/${id}`);
+  await page.locator("h1").first().waitFor({ state: "attached" });
+  await page.getByRole("button", { name: "Start building" }).first().waitFor();
+}
+
+const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
+
 type Slice = "all" | "none" | "young";
 
 /**
@@ -585,6 +607,77 @@ export const shots: Shot[] = [
       await sheet.waitFor();
       await sheet.getByRole("radio", { name: "This print" }).click();
       await page.waitForTimeout(400);
+    },
+  },
+  {
+    // A model link typed into the capture sheet: saving is the same one tap, Claude drafts after.
+    name: "draft-capture",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("textbox", { name: "Note" }).fill("https://makerworld.com/en/models/1-cable-comb");
+      await page.waitForTimeout(400);
+      await sheet.getByRole("textbox", { name: "Note" }).blur();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The idea while Claude reads the page: the answer is held back (route) so the state stays still.
+    name: "draft-reading",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      await page.route(`**/api/items/${id}`, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        json.item.draft = {
+          status: "reading",
+          site: "makerworld",
+          url: GOOD_LINK,
+          failure: null,
+          applied: [],
+          title: null,
+          note: null,
+          findings: null,
+          draftedAt: null,
+        };
+        await route.fulfill({ response, json });
+      });
+      await openIdea(page, id);
+      await page.getByText("Reading the MakerWorld page…").waitFor();
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    // The drafted idea with its undo toast, from the real flow (the Worker asks the stand-in for Anthropic).
+    name: "draft-drafted",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Drafted by Claude from MakerWorld").waitFor();
+      await page.getByText("Drafted from MakerWorld").waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // A page that couldn't be read: the idea is as captured, with one line and a retry.
+    name: "draft-failed",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, "https://www.printables.com/model/3-broken-hook");
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Claude couldn't read that page.").waitFor();
+      await page.waitForTimeout(300);
     },
   },
   {

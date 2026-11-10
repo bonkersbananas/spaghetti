@@ -39,7 +39,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 
 Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the Cloudflare dashboard and kept across `wrangler deploy`; locally it goes in `.dev.vars`, which is never committed. The features are hidden when the key is absent, so the app works fully without it. Both are for people only, with a per-day cap so a key can't run up a bill, and both use the official `@anthropic-ai/sdk` (fetch-based; check it bundles on workerd) with `claude-opus-5-5`.
 
-- [ ] **Import an idea from a model page:** paste a MakerWorld, Printables or Thingiverse link (or share it from the phone), and Spaghetti drafts the idea: a title, a short note, the source link, the model's pictures, the designer, the license, and suggested material and settings. The person tidies it up.
+- [x] **Import an idea from a model page** (see [0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)): paste a MakerWorld, Printables or Thingiverse link (or share it from the phone), and Spaghetti drafts the idea: a title, a short note, the source link, the model's pictures, the designer, the license, and suggested material and settings. The person tidies it up.
   - Anthropic's server-side web fetch tool (`web_fetch_20260209`, `allowed_domains` limited to the model sites) reads the page, so the Worker never fetches arbitrary URLs for it. The draft comes back structured through `output_config.format` (a JSON schema); handle `stop_reason: "refusal"`.
   - Pictures come from an allowlist of the sites' image CDNs and are stored with `needsResize`, so the next browser makes the thumbnails ([0004](decisions/0004-photos-resized-in-the-browser.md)).
   - Agents may get an `import_idea` MCP tool later.
