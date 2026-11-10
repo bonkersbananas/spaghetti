@@ -46,3 +46,24 @@ export const PROGRESS_FRESH_MS = 3 * 60_000;
 export const BRIDGE_CONNECTED_MS = 3 * 60_000;
 
 export const isFresh = (at: number, now: number, within = PROGRESS_FRESH_MS) => now - at <= within;
+
+export type BridgeLineState = "none" | "connected" | "no-printer" | "quiet";
+
+/**
+ * The Printer page's one quiet line about the bridge. `since` is a phrase for the last time it was heard
+ * ("5 min ago"), made by the caller from `lastSeenAt` so this stays free of the clock's wording.
+ */
+export function bridgeLine(
+  status: BridgeStatus | null | undefined,
+  now: number,
+  since: (time: number) => string,
+): { state: BridgeLineState; text: string } {
+  if (!status) return { state: "none", text: "No printer bridge set up." };
+  if (!isFresh(status.lastSeenAt, now, BRIDGE_CONNECTED_MS)) {
+    return { state: "quiet", text: `Printer bridge last heard ${since(status.lastSeenAt).toLowerCase()}.` };
+  }
+  if (status.printerState === "offline") {
+    return { state: "no-printer", text: "Printer bridge is running but can't reach the printer." };
+  }
+  return { state: "connected", text: "Printer bridge connected." };
+}

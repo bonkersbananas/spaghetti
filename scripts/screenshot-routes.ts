@@ -4,6 +4,9 @@ import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
 
+/** The spool that sat in A4 before the unknown-tray shot emptied it. */
+let unknownTraySlot: string | null = null;
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -369,6 +372,41 @@ export const shots: Shot[] = [
   { name: "spool-black", path: `/pantry/${SEED_SPOOL_IDS.black}` },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
   { name: "printer", path: "/printer", fullPage: true },
+  // The printer bridge's states (docs/bridge.md): a print on the bed with the printer's own progress ...
+  { name: "build-live-progress", path: `/builds/${SEED_BUILD_IDS.towelHook}`, fullPage: true },
+  // ... a print that stopped and waits to hear how it went, on the build, in the builds list and the journal ...
+  { name: "build-off-bed", path: `/builds/${SEED_BUILD_IDS.drawerDivider}`, fullPage: true },
+  {
+    name: "build-off-bed-sheet",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      await page.getByRole("radio", { name: "Spaghetti" }).first().click();
+      await page.getByRole("dialog").getByText("suggested").first().waitFor();
+    },
+    // The sheet autosaves the outcome it opened with: put the attempt back off the bed for the shots after it.
+    cleanup: async (page) => {
+      await page.waitForTimeout(1500);
+      await page.request.patch(`/api/attempts/${SEED_BUILD_IDS.drawerDividerAttempt}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { outcome: null, failureTags: [] },
+      });
+    },
+  },
+  {
+    name: "journal-off-bed",
+    path: "/journal",
+    prepare: async (page) => {
+      await page
+        .getByText(/how did it go\?/)
+        .first()
+        .waitFor();
+      await page.evaluate(() =>
+        Array.from(document.querySelectorAll("p"))
+          .find((p) => /how did it go\?/.test(p.textContent ?? ""))
+          ?.scrollIntoView({ block: "center" }),
+      );
+    },
+  },
   // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.
@@ -476,6 +514,33 @@ async function fillFinish(page: Page) {
   await note.blur();
   return sheet;
 }
+
+// The bridge sees a spool in A4 that the pantry can't place. Late, because it empties the slot for the shot.
+shots.push({
+  name: "printer-unknown-tray",
+  path: "/printer",
+  fullPage: true,
+  prepare: async (page) => {
+    const origin = new URL(page.url()).origin;
+    const before = await (await page.request.get("/api/printer")).json();
+    unknownTraySlot = before.slots.A4;
+    await page.request.put("/api/printer/slots/A4", { headers: { Origin: origin }, data: { spoolId: null } });
+    await page.request.put("/api/printer/bridge", {
+      headers: { Origin: origin },
+      data: { unknownTrays: [{ slot: "A4", material: "PLA", colorHex: "#2c8a87", brand: null }] },
+    });
+    await page.reload();
+    await page.locator('[data-slot="A4"][data-unknown]').waitFor();
+  },
+  cleanup: async (page) => {
+    const origin = new URL(page.url()).origin;
+    await page.request.put("/api/printer/slots/A4", {
+      headers: { Origin: origin },
+      data: { spoolId: unknownTraySlot },
+    });
+    await page.request.put("/api/printer/bridge", { headers: { Origin: origin }, data: { unknownTrays: [] } });
+  },
+});
 
 // Last: the queued finish stays offline and unsent, so nothing after it would work.
 shots.push(

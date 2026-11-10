@@ -331,3 +331,32 @@ describe("summarizeBuild", () => {
     expect(summary.filaments.map((f) => f.colorName)).toEqual(["Yellow", "White", "Teal"]);
   });
 });
+
+describe("summarizeBuild with a print off the bed", () => {
+  it("says off the bed, not printing now, once the printer saw the print stop", () => {
+    const summary = summarizeBuild([
+      { outcome: "partial", settings: {} },
+      { outcome: null, endedAt: 5, settings: {} },
+    ]);
+    expect(summary.words).toBe("1 partly, off the bed");
+    expect(summary.counts.printing).toBe(0);
+    expect(summarizeBuild([{ outcome: null, endedAt: null, settings: {} }]).words).toBe("printing now");
+  });
+});
+
+describe("summarizeBuild: time and grams of a print off the bed", () => {
+  it("counts what the printer said it took, but nothing for one still printing", () => {
+    const ran = { actualMinutes: 62, weightGrams: 20 };
+    const summary = summarizeBuild([
+      { outcome: "partial", settings: { actualMinutes: 101, weightGrams: 30 } },
+      { outcome: null, endedAt: 5, settings: ran },
+    ]);
+    expect(summary.minutes).toEqual({ value: 163, approximate: false });
+    expect(summary.grams).toEqual({ value: 50, atLeast: false });
+    const printing = summarizeBuild([
+      { outcome: "partial", settings: { actualMinutes: 101 } },
+      { outcome: null, endedAt: null, settings: ran },
+    ]);
+    expect(printing.minutes).toEqual({ value: 101, approximate: false });
+  });
+});

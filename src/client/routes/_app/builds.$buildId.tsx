@@ -1,4 +1,5 @@
-import { tagLabel } from "@shared/attempts";
+import { type Outcome, tagLabel } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -144,8 +145,11 @@ function Build({ item }: { item: ItemView }) {
     open: boolean;
     attemptId: string | null;
     file?: { file: File; key: number } | null;
+    /** An outcome picked on the attempt's card (a print off the bed): the sheet opens with it chosen. */
+    outcome?: Outcome | null;
   }>({ open: false, attemptId: null });
-  const openSheet = (attemptId: string | null) => setSheet({ open: true, attemptId, file: null });
+  const openSheet = (attemptId: string | null, outcome?: Outcome) =>
+    setSheet({ open: true, attemptId, file: null, outcome: outcome ?? null });
   // A .3mf dropped on the build starts a new attempt from it; dropped on an attempt, it goes on that one.
   useSlicerDropTarget((file, attemptId) => {
     const onto = attemptId ? item.attempts.find((attempt) => attempt.id === attemptId) : undefined;
@@ -378,7 +382,12 @@ function Build({ item }: { item: ItemView }) {
               }}
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-              <StageChip item={item} printing={!!printing} celebrate={justFinished} />
+              <StageChip
+                item={item}
+                printing={!!printing}
+                offBed={!!printing && isOffTheBed(printing)}
+                celebrate={justFinished}
+              />
               <div className="text-small text-ink-faint">
                 {item.stage === "done" && item.finishedAt ? (
                   `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
@@ -427,7 +436,7 @@ function Build({ item }: { item: ItemView }) {
             </SectionHeading>
             {isDesktop && (
               <Button
-                variant="primary"
+                variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
                 icon={printing ? CheckIcon : PlusIcon}
                 shortcut={shortcutCaps("buildLog")}
                 onClick={primary}
@@ -465,7 +474,7 @@ function Build({ item }: { item: ItemView }) {
                       setSelected(attempt.id);
                       openSheet(attempt.id);
                     }}
-                    onFinish={() => openSheet(attempt.id)}
+                    onFinish={(outcome) => openSheet(attempt.id, outcome)}
                     reserveExtras={reserveExtras}
                     onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
                   />
@@ -490,7 +499,8 @@ function Build({ item }: { item: ItemView }) {
         </section>
       </div>
 
-      {!isDesktop && (active || printing) && (
+      {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
+      {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
         <ActionBar>
           <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
             {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
@@ -509,6 +519,7 @@ function Build({ item }: { item: ItemView }) {
         item={item}
         attemptId={sheet.attemptId}
         incomingFile={sheet.file}
+        initialOutcome={sheet.outcome}
         open={sheet.open}
         onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
       />
@@ -517,10 +528,20 @@ function Build({ item }: { item: ItemView }) {
 }
 
 /** Where a build stands, as a chip. Marking it done pops it, with a sparkle. */
-function StageChip({ item, printing, celebrate }: { item: ItemView; printing: boolean; celebrate: boolean }) {
+function StageChip({
+  item,
+  printing,
+  offBed,
+  celebrate,
+}: {
+  item: ItemView;
+  printing: boolean;
+  offBed: boolean;
+  celebrate: boolean;
+}) {
   if (item.stage === "building") {
     return printing ? (
-      <OutcomeChip outcome={null} />
+      <OutcomeChip outcome={null} offTheBed={offBed} />
     ) : (
       <Chip tone="semolina" icon={BuildsIcon}>
         On the bed

@@ -1,4 +1,6 @@
 import type { Person } from "@shared/api";
+import type { Outcome } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef } from "react";
@@ -15,6 +17,7 @@ import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { AttemptTags } from "./AttemptTags";
 import { EstimateLine } from "./Estimate";
+import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, outcomeDots } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
 import { SavedFileCard } from "./SlicerFile";
@@ -32,8 +35,8 @@ interface AttemptEntryProps {
   first?: boolean;
   last?: boolean;
   onOpen: () => void;
-  /** For a printing attempt: open it to finish it. */
-  onFinish?: () => void;
+  /** For a printing attempt, or one that is off the bed: open it to finish it (with the outcome, if one was picked). */
+  onFinish?: (outcome?: Outcome) => void;
   /** With an attempt before it: compare the two. */
   onCompare?: () => void;
   /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
@@ -49,7 +52,9 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   { attempt, photos, person, via, selected, first, last, onOpen, onFinish, onCompare, reserveExtras },
   ref,
 ) {
-  const printing = attempt.outcome === null;
+  const offBed = isOffTheBed(attempt);
+  // Still on the bed: printing, as far as anyone knows. Off it, and waiting for a verdict, is a state of its own.
+  const printing = attempt.outcome === null && !offBed;
   const settings = summarizeSettings(attempt.settings);
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
@@ -72,7 +77,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
         <span
           className={cn(
             "ring-paper relative mt-5 size-3 rounded-full ring-4",
-            outcomeDots[attempt.outcome ?? "printing"],
+            outcomeDots[attempt.outcome ?? (offBed ? "offBed" : "printing")],
             printing && "animate-pulse",
           )}
         />
@@ -88,12 +93,12 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
           <button
             type="button"
             onClick={onOpen}
-            aria-label={`Attempt ${attempt.number}: ${printing ? "printing" : attempt.outcome}. Open`}
+            aria-label={`Attempt ${attempt.number}: ${printing ? "printing" : offBed ? "off the bed" : attempt.outcome}. Open`}
             className="focus-ring absolute inset-0 z-0 rounded-lg"
           />
           <div className="pointer-events-none relative flex flex-col gap-3 p-3.5 md:p-4">
             <div className="flex items-center gap-2.5">
-              <OutcomeChip outcome={attempt.outcome} />
+              <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
               <h3 className="text-body text-ink font-sans font-semibold">Attempt {attempt.number}</h3>
               <span className="text-small text-ink-faint ml-auto flex items-center gap-2">
                 <ViaText name={via} className="hidden md:inline" />
@@ -198,14 +203,19 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               />
             )}
 
+            {offBed && attempt.endedAt !== null && (
+              <OffTheBed endedAt={attempt.endedAt} onPick={onFinish} className="pointer-events-auto" />
+            )}
+
             {printing && onFinish && (
               <div className="pointer-events-auto flex items-center gap-3">
                 <PrintProgress
                   startedAt={attempt.printedAt}
                   estimatedMinutes={attempt.settings.estimatedMinutes}
+                  attemptId={attempt.id}
                   className="flex-1"
                 />
-                <Button size="sm" variant="secondary" onClick={onFinish} className="ml-auto">
+                <Button size="sm" variant="secondary" onClick={() => onFinish()} className="ml-auto">
                   Finish
                 </Button>
               </div>

@@ -20,6 +20,8 @@ export interface FieldsProps {
   note: string;
   onNote: (note: string) => void;
   failureTags: string[];
+  /** The failure tag the printer suggested; shown marked as a suggestion while it is picked. */
+  suggestedFailureTag?: string;
   onFailureTags: (tags: string[]) => void;
   successNotes: string[];
   onSuccessNotes: (tags: string[]) => void;
@@ -132,7 +134,13 @@ export function AttemptFields(props: FieldsProps) {
           }}
         />
         {(outcome === "failed" || outcome === "partial") && (
-          <TagPicker kind="failure" label="What went wrong?" value={props.failureTags} onChange={props.onFailureTags} />
+          <TagPicker
+            kind="failure"
+            label="What went wrong?"
+            value={props.failureTags}
+            onChange={props.onFailureTags}
+            suggested={props.suggestedFailureTag}
+          />
         )}
         {(outcome === "success" || outcome === "partial") && (
           <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />

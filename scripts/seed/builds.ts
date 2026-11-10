@@ -36,6 +36,10 @@ interface SeedAttempt {
   outcome: Outcome | null;
   /** How long after printing the outcome was given. */
   finishedAfter?: number;
+  /** The printer bridge saw the print end this long after it started, with no outcome yet (off the bed). */
+  endedAfter?: number;
+  /** The failure tag the bridge suggested. */
+  suggestedTag?: string;
   note?: string;
   failureTags?: string[];
   successNotes?: string[];
@@ -63,6 +67,12 @@ export const SEED_BUILD_IDS = {
   tugboatSpaghetti: "5eed0000-0000-4000-8000-0000000a0001",
   /** PETG that warped: its next attempt is offered what worked for the desiccant hook. */
   cableChain: SEED_IDS.cableChain,
+  /** The print on the bed, with the printer's own progress (see seedBridge). */
+  towelHook: "5eed0000-0000-4000-8000-000000000107",
+  towelHookAttempt: "5eed0000-0000-4000-8000-0000000f0802",
+  /** A print that finished printing and waits to hear how it went. */
+  drawerDivider: "5eed0000-0000-4000-8000-000000000108",
+  drawerDividerAttempt: "5eed0000-0000-4000-8000-0000000f0902",
 };
 
 const yellowPla = { type: "PLA", brand: "Bambu", colorHex: "#f2c230", colorName: "Sunflower yellow", amsSlot: "A2" };
@@ -718,6 +728,50 @@ const OLDER_BUILDS: SeedBuild[] = [
     ],
   },
   {
+    // Off the bed at the printer's say-so, with no verdict yet.
+    id: "5eed0000-0000-4000-8000-000000000108",
+    by: "alex",
+    create: { title: "Drawer divider", note: "Splits the cutlery tray in three.", createdAgo: 2 * DAY },
+    stage: "building",
+    startedAgo: 26 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0901",
+        by: "alex",
+        ago: 26 * HOUR,
+        outcome: "partial",
+        finishedAfter: 2 * HOUR,
+        note: "Fits, but the corners curled a little.",
+        failureTags: ["warping"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          estimatedMinutes: 95,
+          actualMinutes: 101,
+        },
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000f0902",
+        by: "alex",
+        ago: 95 * MIN,
+        outcome: null,
+        endedAfter: 62 * MIN,
+        suggestedTag: "spaghetti",
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          estimatedMinutes: 62,
+          actualMinutes: 62,
+        },
+        slicerFile: true,
+      },
+    ],
+  },
+  {
     id: SEED_IDS.cableChain,
     by: "sam",
     stage: "building",
@@ -827,7 +881,11 @@ export async function seedBuilds(
         );
         sql.push(`UPDATE photos SET created_at = ${finished} WHERE attempt_id = '${attempt.id}';`);
       } else {
-        sql.push(`UPDATE attempts SET created_at = ${now - attempt.ago} WHERE id = '${attempt.id}';`);
+        const ended = attempt.endedAfter === undefined ? "NULL" : String(now - attempt.ago + attempt.endedAfter);
+        const tag = attempt.suggestedTag ? `'${attempt.suggestedTag}'` : "NULL";
+        sql.push(
+          `UPDATE attempts SET created_at = ${now - attempt.ago}, ended_at = ${ended}, suggested_failure_tag = ${tag} WHERE id = '${attempt.id}';`,
+        );
       }
     }
     if (build.stage !== "building") {
@@ -857,4 +915,27 @@ export async function seedBuilds(
     "UPDATE photos SET created_at = (SELECT created_at FROM items WHERE items.id = photos.item_id) WHERE attempt_id IS NULL;",
   );
   executeSql(sql.join("\n"), { persistTo: stateDir });
+}
+
+/**
+ * What the printer bridge would have told the app: it is connected, and the towel hook on the bed is 34% through
+ * (the printer's own layer and minutes left). Sent now, because the app's "heard it lately" is judged against the
+ * real clock the server stamps it with.
+ */
+export async function seedBridge(request: APIRequestContext, origin: string) {
+  const told = await request.put("/api/printer/bridge", {
+    headers: { Origin: origin },
+    data: {
+      printerState: "printing",
+      progress: {
+        attemptId: SEED_BUILD_IDS.towelHookAttempt,
+        percent: 34,
+        remainingMinutes: 30,
+        layer: 70,
+        totalLayers: 205,
+      },
+      unknownTrays: [],
+    },
+  });
+  if (!told.ok()) throw new Error(`Seeding the bridge failed: ${told.status()}`);
 }
