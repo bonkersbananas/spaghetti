@@ -93,8 +93,18 @@ function Today() {
   const hasPrinter = !!printer.data && Object.keys(printer.data.slots).length > 0 && (spools.data?.length ?? 0) > 0;
   const summaryText = summary.data ? summaryLine(summary.data) : "";
   const lately = entries.length > 0 || summaryText !== "";
+  // "All quiet" only once everything that could fill the page has answered (not while offline with nothing saved:
+  // a paused query isn't loading), or it would show first and then swap to the blocks.
+  const settling = journal.isLoading || summary.isLoading || printer.isLoading || spools.isLoading;
   const quiet =
-    !loading && !brandNew && onBed.length === 0 && waiting.length === 0 && !burner && !hasPrinter && !lately;
+    !loading &&
+    !settling &&
+    !brandNew &&
+    onBed.length === 0 &&
+    waiting.length === 0 &&
+    !burner &&
+    !hasPrinter &&
+    !lately;
 
   const subtitle = new Date(now).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 

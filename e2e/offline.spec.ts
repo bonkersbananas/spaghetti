@@ -420,7 +420,7 @@ test("is installable: manifests for both themes, maskable icons, and a worker th
     ["manifest-dark.webmanifest", "#1b1714"],
   ] as const) {
     const manifest = await (await page.request.get(`/${file}`)).json();
-    expect(manifest).toMatchObject({ display: "standalone", start_url: "/ideas", theme_color: color });
+    expect(manifest).toMatchObject({ display: "standalone", start_url: "/today", theme_color: color });
     expect(manifest.background_color).toBe(color);
     expect(manifest.icons.map((icon: { purpose: string }) => icon.purpose)).toContain("maskable");
     for (const icon of manifest.icons) expect((await page.request.get(icon.src)).status()).toBe(200);
