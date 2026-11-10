@@ -225,6 +225,8 @@ test("the attempt sheet follows the other person's edits and the printer's repor
   page,
   browser,
 }) => {
+  // Two waits on the feed (it is asked every ten seconds) and a lot to check: more than the default 30 s on a slow runner.
+  test.setTimeout(90_000);
   const samContext = await browser.newContext({ viewport: page.viewportSize(), baseURL: origin() });
   const samPage = await samContext.newPage();
   await signInAs(page, alex);
