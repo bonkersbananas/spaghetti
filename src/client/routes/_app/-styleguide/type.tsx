@@ -1,7 +1,8 @@
 import { Overline } from "@/components/ui/Overline";
+import { Section as PageSection } from "@/components/ui/Section";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { cn } from "@/lib/cn";
-import { Panel, Section } from "./shared";
+import { Label, Panel, Section } from "./shared";
 
 const typeScale: Array<[token: string, className: string, sample: string]> = [
   ["display", "font-display text-display", "Spaghetti"],
@@ -49,6 +50,23 @@ export function TypeSection() {
             </SectionHeading>
           </div>
         </div>
+      </Panel>
+      <Label>Section: the heading, its count and aside, and one distance to what it holds</Label>
+      <Panel className="flex flex-col gap-10">
+        <PageSection
+          id="specimen-headline"
+          title="Running low"
+          count={3}
+          aside={<span className="text-small text-ink-faint">52 h of printing so far</span>}
+        >
+          <div className="bg-paper h-16 rounded-lg" />
+        </PageSection>
+        <PageSection id="specimen-title" title="Done" size="title" count={7}>
+          <div className="bg-paper h-16 rounded-lg" />
+        </PageSection>
+        <PageSection id="specimen-overline" title="Pick up again" size="overline">
+          <div className="bg-paper h-16 rounded-lg" />
+        </PageSection>
       </Panel>
     </Section>
   );

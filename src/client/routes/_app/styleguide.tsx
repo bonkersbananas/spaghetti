@@ -18,6 +18,7 @@ import { NotificationSection } from "./-styleguide/notifications";
 import { PaletteSection } from "./-styleguide/palette";
 import { PantrySection } from "./-styleguide/pantry";
 import { PhotoSection } from "./-styleguide/photos";
+import { RecipesSection } from "./-styleguide/recipes";
 import { SearchSection } from "./-styleguide/search";
 import { SheetSection } from "./-styleguide/sheets";
 import { SkeletonSection } from "./-styleguide/skeletons";
@@ -50,6 +51,7 @@ const toc = [
   ["photos", "Photos"],
   ["builds", "Builds & attempts"],
   ["pantry", "Pantry & printer"],
+  ["recipes", "Recipes"],
   ["search", "Journal & search"],
   ["journal", "Journal entries"],
   ["today", "Today"],
@@ -93,6 +95,7 @@ function Styleguide() {
           <PhotoSection />
           <BuildsSection />
           <PantrySection />
+          <RecipesSection />
           <SearchSection />
           <JournalSection />
           <TodaySection />

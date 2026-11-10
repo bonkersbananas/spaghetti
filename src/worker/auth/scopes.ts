@@ -28,6 +28,9 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["POST", new RegExp(`^/attempts/${id}/finish$`), ["attempts"]],
   ["PUT", new RegExp(`^/attempts/${id}/file$`), ["attempts"]],
   ["POST", /^\/tags$/, ["attempts"]],
+  // A recipe is saved from an attempt that worked; its name and note change the same way. Deleting is for people.
+  ["POST", /^\/recipes$/, ["attempts"]],
+  ["PATCH", new RegExp(`^/recipes/${id}$`), ["attempts"]],
   ["POST", /^\/spools$/, ["printer"]],
   ["PATCH", new RegExp(`^/spools/${id}$`), ["printer"]],
   ["PUT", new RegExp(`^/spools/${id}/photo/${id}$`), ["printer"]],
@@ -47,7 +50,7 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
  * Reading is `read`, except the session and agent management, which tokens never see, and link
  * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
  */
-const PERSON_ONLY_READS = /^\/(session|agents|links|push)(\/|$)/;
+const PERSON_ONLY_READS = /^\/(session|agents|links|push|features)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {

@@ -10,6 +10,7 @@ import { serviceWorker } from "./scripts/vite-service-worker.ts";
 // harness and e2e tests use a throwaway directory). Default: .wrangler/state,
 // the same place `wrangler d1 ... --local` uses.
 const stateDir = process.env.SPAGHETTI_STATE_DIR;
+const fakeClaude = process.env.SPAGHETTI_FAKE_CLAUDE;
 
 export default defineConfig({
   plugins: [
@@ -22,7 +23,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     serviceWorker(),
-    cloudflare({ persistState: stateDir ? { path: stateDir } : true }),
+    cloudflare({
+      persistState: stateDir ? { path: stateDir } : true,
+      // The e2e tests and screenshots point drafting at a stand-in for the Anthropic API (scripts/lib/fake-claude.ts).
+      config: fakeClaude ? { vars: { ANTHROPIC_API_KEY: "sk-ant-fake", ANTHROPIC_BASE_URL: fakeClaude } } : undefined,
+    }),
   ],
   resolve: {
     alias: {

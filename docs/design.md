@@ -125,6 +125,7 @@ The scale has one set of names and two sets of sizes: phones read slightly large
 | `text-body`     | 16    | 15      | Default                                              |
 | `text-small`    | 14    | 13      | Labels, meta, chips                                  |
 | `text-caption`  | 12    | 12      | Tab labels, overlines (uppercase + `tracking-wider`) |
+| `text-micro`    | 11    | 11      | Two initials in the 24 px avatar (xs); nothing else  |
 
 Use `tabular` for numbers that line up (temperatures, durations, weights).
 
@@ -201,9 +202,10 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **ChipRow / ChipDivider / FilterGroup** — rows of filter or suggestion chips: on phones a row scrolls sideways edge to edge (with a thin divider between kinds of chips), on desktop it wraps. `FilterGroup` is one kind of filter in a desktop filter column, a caption over its chips.
 - **MetaList** — a line of short pieces with a dot between them ("Black PETG · 0.20 mm · Cool Plate"): settings lines, "attempt 3 · 2 h ago", what changed. It wraps cleanly: a dot never begins or ends a line (each piece carries its dot in a gutter the row clips). Use it for every dot-separated line; `SettingsLine` is built on it.
 - **Highlight** — text with the words a search matched on a semolina highlight, like a pen stroke. A tag chip that matched gets a ring instead.
-- **Avatar / AvatarStack** — initials on the person's color. `decorative` when the person's name is already beside it (a filter chip, the account button), so screen readers don't read it twice. `via="Claude for Alex"` marks work done through an agent, and its name reads "Alex, via Claude for Alex": at xs and sm the circle keeps the owner's color and shows an agent glyph instead of the letter, at md and lg the initials stay and a badge sits outside the circle with a cutout ring; where there is room add `<ViaText>` (faint, from tablet width up). **AgentAvatar** is an agent itself on its own card: a rounded square in its owner's color with its own first letter, never a circle, so it can't pass for a person. Resolve agent names with `useVia()` (lib/agents.ts).
+- **Avatar / AvatarStack** — initials on the person's color: the first and last word's initial ("Carl Oscar" → "CO"), two letters at every size, xs included (24 px, `text-micro`). `decorative` when the person's name is already beside it (a filter chip, the account button), so screen readers don't read it twice. `via="Claude for Alex"` marks work done through an agent, and its name reads "Alex, via Claude for Alex": at xs and sm the circle keeps the owner's color and shows an agent glyph instead of the letter, at md and lg the initials stay and a badge sits outside the circle with a cutout ring; where there is room add `<ViaText>` (faint, from tablet width up). **AgentAvatar** is an agent itself on its own card: a rounded square in its owner's color with its own first letter, never a circle, so it can't pass for a person. Resolve agent names with `useVia()` (lib/agents.ts).
 - **Overline** — the small uppercase caption over a group ("November so far", "Attempts 3", "Workshop"), with an optional `count`. No padding of its own: it lines up with what is under it.
 - **SectionHeading** — a section's Fraunces title with an optional count ("Attempts 3", "PLA 8"); `size="title"` for quieter groups.
+- **Section** — a section of a page: `<section>` named by its heading, the heading (`headline` for a page's main sections, `title` for quieter groups, `overline` for the blocks of a dense page such as Today) with its count and an optional `aside` on its baseline (a hint, a link, a small button, a figure), then what it holds, always at the same distance: `gap-4 md:gap-5` under a headline or title, `gap-3` under an overline. Sections on a page sit `gap-12 md:gap-16` apart. Build a section with it rather than a heading plus spacing classes, so screens built by different hands line up.
 - **Skeleton / CardSkeleton / RowSkeleton** — loading states shaped like the content.
 - **Kbd** — keyboard hints, hidden on phones (`always` for the shortcut list).
 - **PaletteSurface / PaletteDialog** — the command palette: a search box over grouped rows (photo or icon, name, a line of meta, an outcome chip or the row's shortcut), the picked row on a quiet fill, key hints along the bottom. See Keyboard and the command palette.
@@ -311,6 +313,14 @@ The front door (`/today`, where signing in and `/` lead): a calm answer to "what
 ## What worked last time
 
 The attempt sheet offers the best match from history above the settings: the latest attempt that worked with the same material (the build's own first), with its photo, key settings and what would change, and **Use these settings** to start from them in one tap (with Undo). The spool stays the one already chosen; only the plate, temperatures and the rest change. It stays out of the way when nothing matches, or when the attempt already starts from those settings.
+
+## Recipes
+
+A recipe is "this is how we print silk PLA now": the settings of an attempt that worked, named, kept to start the next one from ([0017](decisions/0017-recipes-are-frozen-attempts.md)). It is a notebook card (`RecipeCard`): the picture of the print it came from first, the name, what it is for ("Silk PLA", uppercase caption), the settings in one quiet line, the note. Its name and note are the only editable things (autosaved in `RecipeSheet`, which also has Delete with an undo toast); the settings are the attempt's and the sheet says so.
+
+- **Saving:** "Save as recipe" on a print that worked: in the attempt sheet (the name field opens in place, not a sheet in a sheet), on an attempt in the build's story, and on the What worked card. The name is already filled in from the spool's finish and the material and selected, so one tap saves.
+- **Where they show:** under the spool ("Recipes for silk PLA", matched by material and finish), under each Pantry material group ("Recipes for PLA"), in search as their own group (the card shows a *Recipe* chip), and on the What worked card when its material has one. A shelf with no recipes draws nothing.
+- **Starting from one:** "Start from a recipe" in a new attempt's sheet, beside What worked last time, opens compact cards; picking one fills in the settings (the spool already chosen stays) and the settings line then says "Same as recipe …" or "Changed from recipe …: bed 70 °C", the way it does against the previous attempt. Undo puts the settings back. Nothing is asked afterwards.
 
 ## Accessibility
 

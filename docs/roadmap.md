@@ -26,7 +26,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 
 - [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
 - [x] Push notifications: "Tugboat is off the bed. How did it go?", with Worked / Partly / Spaghetti buttons where the platform has them ([0016](decisions/0016-web-push-nudges.md); setup in [deploy.md](deploy.md))
-- [ ] Insights and recipes: success rate by material and plate, which change fixed which failure, a year in review; promote a what-worked attempt to a named recipe on the spool's page
+- [ ] Insights and recipes: recipes are done (a what-worked attempt saved under a name, on the spool's page, in the Pantry, in search and in the attempt sheet; [0017](decisions/0017-recipes-are-frozen-attempts.md)); left: insights (success rate by material and plate, which change fixed which failure, a year in review)
 - [x] Richer ideas: an "Up next" queue (the inbox section, Today's row) and who it's for (comments between you two are still to do)
 - [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [ ] Parts and quantities ("print the hull in two halves")
@@ -39,7 +39,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 
 Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the Cloudflare dashboard and kept across `wrangler deploy`; locally it goes in `.dev.vars`, which is never committed. The features are hidden when the key is absent, so the app works fully without it. Both are for people only, with a per-day cap so a key can't run up a bill, and both use the official `@anthropic-ai/sdk` (fetch-based; check it bundles on workerd) with `claude-opus-5-5`.
 
-- [ ] **Import an idea from a model page:** paste a MakerWorld, Printables or Thingiverse link (or share it from the phone), and Spaghetti drafts the idea: a title, a short note, the source link, the model's pictures, the designer, the license, and suggested material and settings. The person tidies it up.
+- [x] **Import an idea from a model page** (see [0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)): paste a MakerWorld, Printables or Thingiverse link (or share it from the phone), and Spaghetti drafts the idea: a title, a short note, the source link, the model's pictures, the designer, the license, and suggested material and settings. The person tidies it up.
   - Anthropic's server-side web fetch tool (`web_fetch_20260209`, `allowed_domains` limited to the model sites) reads the page, so the Worker never fetches arbitrary URLs for it. The draft comes back structured through `output_config.format` (a JSON schema); handle `stop_reason: "refusal"`.
   - Pictures come from an allowlist of the sites' image CDNs and are stored with `needsResize`, so the next browser makes the thumbnails ([0004](decisions/0004-photos-resized-in-the-browser.md)).
   - Agents may get an `import_idea` MCP tool later.

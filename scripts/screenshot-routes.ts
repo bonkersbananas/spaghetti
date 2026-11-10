@@ -75,6 +75,28 @@ export interface Shot {
   cleanup?: (page: Page) => Promise<void>;
 }
 
+/** An idea made through the API with this note (no draft is started: only a capture starts one by itself). */
+async function newModelIdea(page: Page, note: string) {
+  return page.evaluate(async (text) => {
+    const id = crypto.randomUUID();
+    await fetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, note: text }),
+    });
+    return id;
+  }, note);
+}
+
+/** Opens that idea's page and waits for it. */
+async function openIdea(page: Page, id: string) {
+  await page.goto(`/ideas/${id}`);
+  await page.locator("h1").first().waitFor({ state: "attached" });
+  await page.getByRole("button", { name: "Start building" }).first().waitFor();
+}
+
+const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
+
 type Slice = "all" | "none" | "young";
 
 /**
@@ -248,6 +270,26 @@ export const shots: Shot[] = [
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A card in the middle of the queue: its menu has Move up and Move down. A third idea joins the queue for the shot.
+    name: "ideas-up-next-menu-middle",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Options for Hook for the bike helmet/ }).click();
+      await page.getByRole("button", { name: "Up next", exact: true }).click();
+      // Let the "Up next" toast go, so it doesn't cover the menu's rows.
+      await page.locator("[data-sonner-toast]").first().waitFor({ state: "detached", timeout: 10_000 });
+      await page.getByRole("button", { name: /^Options for Replacement knob/ }).click();
+      await page.getByRole("button", { name: "Move down" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+      await page.getByRole("button", { name: /^Options for Hook for the bike helmet/ }).click();
+      await page.getByRole("button", { name: "Take off Up next" }).click();
     },
   },
   { name: "builds", path: "/builds", fullPage: true },
@@ -439,6 +481,62 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A recipe among the results, with the print it came from.
+    name: "search-recipe",
+    path: "/search?q=silk",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Recipes" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // Saving an attempt that worked as a recipe: the name is offered, one tap saves.
+    name: "recipe-save",
+    path: "/builds/5eed0000-0000-4000-8000-000000000101",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "What worked" }).getByRole("button", { name: "Save as recipe" }).click();
+      await page.getByRole("dialog", { name: "Save as a recipe" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A recipe, open: its name and note are editable, its settings are the print's.
+    name: "recipe-open",
+    path: `/pantry/${SEED_SPOOL_IDS.silkGold}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("region", { name: /Recipes for silk PLA/ })
+        .getByRole("button")
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "Silk PLA, slow outer wall" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // "Start from a recipe" in a new attempt's sheet, opened.
+    name: "recipe-picker",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: "Start from a recipe" }).click();
+      const first = sheet.getByRole("button", { name: /PETG, dried and 245/ });
+      await first.waitFor();
+      await page.waitForTimeout(400);
+      await first.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // "What worked last time" in the attempt sheet: PETG that warped, offered the PETG that didn't.
     name: "what-worked",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
@@ -465,6 +563,77 @@ export const shots: Shot[] = [
       await sheet.getByRole("button", { name: "Remove Photo 1" }).waitFor();
       await page.waitForTimeout(400);
       await sheet.getByRole("textbox", { name: "Note" }).blur();
+    },
+  },
+  {
+    // A model link typed into the capture sheet: saving is the same one tap, Claude drafts after.
+    name: "draft-capture",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("textbox", { name: "Note" }).fill("https://makerworld.com/en/models/1-cable-comb");
+      await page.waitForTimeout(400);
+      await sheet.getByRole("textbox", { name: "Note" }).blur();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The idea while Claude reads the page: the answer is held back (route) so the state stays still.
+    name: "draft-reading",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      await page.route(`**/api/items/${id}`, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        json.item.draft = {
+          status: "reading",
+          site: "makerworld",
+          url: GOOD_LINK,
+          failure: null,
+          applied: [],
+          title: null,
+          note: null,
+          findings: null,
+          draftedAt: null,
+        };
+        await route.fulfill({ response, json });
+      });
+      await openIdea(page, id);
+      await page.getByText("Reading the MakerWorld page…").waitFor();
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    // The drafted idea with its undo toast, from the real flow (the Worker asks the stand-in for Anthropic).
+    name: "draft-drafted",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Drafted by Claude from MakerWorld").waitFor();
+      await page.getByText("Drafted from MakerWorld").waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // A page that couldn't be read: the idea is as captured, with one line and a retry.
+    name: "draft-failed",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, "https://www.printables.com/model/3-broken-hook");
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Claude couldn't read that page.").waitFor();
+      await page.waitForTimeout(300);
     },
   },
   {
@@ -674,6 +843,7 @@ export const shots: Shot[] = [
   // The design system's own pages for the building blocks: print progress and the outcome strip, spool rims.
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
+  { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",

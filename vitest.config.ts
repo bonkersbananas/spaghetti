@@ -19,6 +19,8 @@ export default defineConfig(async () => {
                   VAPID_PUBLIC_KEY:
                     "BBxnnFAUPlUsGEZ8Pa-IDPsQuQ8VmvkEfM-gNO8wCBupZWGUkdkkQGzwC1tHzQs7cQG8YM4S5epLdcSOutLISbo",
                   VAPID_PRIVATE_KEY: "JRWTuy9_i4-619ppiGZN_VeMcThGOk0QoCwJK-F1NAo",
+                  // Drafting is on in the tests; the Anthropic API itself is stubbed (test/worker/drafts.test.ts).
+                  ANTHROPIC_API_KEY: "sk-ant-test-key",
                 },
               },
             }),

@@ -30,6 +30,8 @@ export interface FieldsProps {
   onSettings: (settings: AttemptSettings) => void;
   /** The attempt before, for "same as attempt 3" and what changed. */
   previous?: AttemptView;
+  /** Started from something else (a recipe): what changed is told against this instead of the attempt before. */
+  baseline?: { label: string; settings: AttemptSettings };
   when: ReactNode;
   photos: ReactNode;
   /** Shown above the outcome while printing. */
@@ -63,18 +65,20 @@ export function AttemptFields(props: FieldsProps) {
   }, [props.settingsKey]);
   const setup = usePrinterSetup();
   const hints = printerHints(settings, setup);
-  const changes = previous ? describeChanges(previous.settings, settings) : [];
+  const base =
+    props.baseline ?? (previous ? { label: `attempt ${previous.number}`, settings: previous.settings } : undefined);
+  const changes = base ? describeChanges(base.settings, settings) : [];
   const summary = summarizeSettings(settings);
   const filamentNames = (settings.filaments ?? [])
     .map((f) => [f.brand, f.type].filter(Boolean).join(" "))
     .filter(Boolean);
   const pieces = [...filamentNames, ...summary];
-  const settingsSummary: ReactNode = previous ? (
+  const settingsSummary: ReactNode = base ? (
     changes.length ? (
-      `Changed from attempt ${previous.number}: ${changes.map((c) => c.text).join(", ")}`
+      `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
     ) : (
       <MetaList>
-        {[`Same as attempt ${previous.number}`, ...pieces.slice(0, 4)].map((piece) => (
+        {[`Same as ${base.label}`, ...pieces.slice(0, 4)].map((piece) => (
           <span key={piece}>{piece}</span>
         ))}
       </MetaList>

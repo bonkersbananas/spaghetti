@@ -1,14 +1,23 @@
 import { and, asc, inArray, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AttemptHit, FacetsResponse, ItemHit, SearchResponse, WhatWorkedResponse } from "../../shared/api.ts";
+import type {
+  AttemptHit,
+  FacetsResponse,
+  ItemHit,
+  Recipe,
+  SearchResponse,
+  WhatWorkedResponse,
+} from "../../shared/api.ts";
 import { byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
 import { OUTCOME_FILTERS, outcomesFor } from "../../shared/journal.ts";
+import { recipeMatchesTerms, recipesFor } from "../../shared/recipes.ts";
 import { ftsQuery, SNIPPET_CLOSE, SNIPPET_OPEN, searchTerms } from "../../shared/search.ts";
 import type { Db } from "../db/index.ts";
 import { type Attempt, attempts, items, type Photo, photos, tags } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
+import { liveRecipes } from "./recipes.ts";
 
 /** A filament type as people type it: "petg " → "PETG". */
 export const material = z
@@ -224,7 +233,16 @@ export const searchRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const terms = searchTerms(q);
     const narrowsAttempts = !!(f.outcome || f.material || f.tag);
-    const empty: SearchResponse = { builds: [], ideas: [], attempts: [] };
+    const empty: SearchResponse = { builds: [], ideas: [], attempts: [], recipes: [] };
+    // Recipes are found by words, or by a material alone; an outcome or tag describes attempts only.
+    const recipeFilters = !f.outcome && !f.tag;
+    const findRecipes = async (): Promise<Recipe[]> => {
+      if (!recipeFilters) return [];
+      let list = await liveRecipes(db);
+      if (f.material) list = recipesFor(list, { material: f.material });
+      if (f.person) list = list.filter((recipe) => recipe.createdBy === f.person);
+      return terms.length ? list.filter((recipe) => recipeMatchesTerms(recipe, terms)) : list;
+    };
     if (!terms.length && !narrowsAttempts && !f.person) return c.json<SearchResponse>(empty);
 
     const filter = attemptFilters(f);
@@ -242,6 +260,7 @@ export const searchRoutes = new Hono<AppEnv>()
           db,
           rows.map((row) => row.id),
         ),
+        recipes: f.material ? await findRecipes() : [],
       });
     }
 
@@ -267,7 +286,7 @@ export const searchRoutes = new Hono<AppEnv>()
             params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
           }),
     ]);
-    const [attemptList, itemList] = await Promise.all([
+    const [attemptList, itemList, recipeList] = await Promise.all([
       attemptHits(
         db,
         attemptRows.map((row) => row.id),
@@ -276,11 +295,13 @@ export const searchRoutes = new Hono<AppEnv>()
         db,
         itemRows.map((row) => ({ id: row.id, snippet: row.snippet || null })),
       ),
+      findRecipes(),
     ]);
     return c.json<SearchResponse>({
       builds: itemList.filter((hit) => hit.item.stage !== "idea").slice(0, LIMIT.items),
       ideas: itemList.filter((hit) => hit.item.stage === "idea").slice(0, LIMIT.items),
       attempts: attemptList,
+      recipes: recipeList,
     });
   })
 
@@ -332,5 +353,6 @@ export const searchRoutes = new Hono<AppEnv>()
     );
     return c.json<WhatWorkedResponse>({
       matches: hits.map((hit) => ({ ...hit, sameBuild: hit.item.id === item })),
+      recipes: type ? recipesFor(await liveRecipes(c.var.db), { material: type }).slice(0, 3) : [],
     });
   });

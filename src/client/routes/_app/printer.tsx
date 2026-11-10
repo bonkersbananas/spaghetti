@@ -20,6 +20,7 @@ import {
   TemperatureIcon,
 } from "@/components/ui/icons";
 import { SaveStatus } from "@/components/ui/SaveStatus";
+import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
@@ -58,18 +59,13 @@ function Printer() {
   );
 }
 
-function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+/** A shared Section whose id comes from its title. */
+function PrinterSection({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   const id = `printer-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id={id} className="text-title text-ink">
-          {title}
-        </h2>
-        {aside}
-      </div>
+    <Section id={id} title={title} aside={aside}>
       {children}
-    </section>
+    </Section>
   );
 }
 
@@ -145,7 +141,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
   const units = setup.amsUnits;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-12">
+    <div className="flex max-w-3xl flex-col gap-12 md:gap-16">
       <div className="bg-cream shadow-soft flex flex-col gap-5 rounded-xl p-5 md:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col">
@@ -186,7 +182,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
       )}
 
       <fieldset disabled={readOnly} className="contents">
-        <Section title="Nozzles">
+        <PrinterSection title="Nozzles">
           <div className="grid gap-3 md:grid-cols-2">
             {(["main", "auxiliary"] as const).map((nozzle) => {
               const fitted = setup.nozzles[nozzle];
@@ -222,9 +218,9 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               );
             })}
           </div>
-        </Section>
+        </PrinterSection>
 
-        <Section title="Plates you own">
+        <PrinterSection title="Plates you own">
           {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
           <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
             {[...BED_TYPES, ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate))].map(
@@ -235,9 +231,9 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               ),
             )}
           </div>
-        </Section>
+        </PrinterSection>
 
-        <Section
+        <PrinterSection
           title="AMS"
           aside={
             <Link
@@ -272,9 +268,9 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
             />
           </div>
-        </Section>
+        </PrinterSection>
 
-        <Section title="Staying dry">
+        <PrinterSection title="Staying dry">
           <Disclosure
             open={dryingOpen}
             onOpenChange={setDryingOpen}
@@ -290,7 +286,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
               </Suspense>
             )}
           </Disclosure>
-        </Section>
+        </PrinterSection>
       </fieldset>
       <p className="text-small text-ink-faint flex items-start gap-2">
         <InfoIcon size={16} className="mt-0.5 shrink-0" aria-hidden />

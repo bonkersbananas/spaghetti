@@ -19,6 +19,7 @@ const origin = (page: Page) => new URL(page.url()).origin;
  * 5 kB, so work in flight has room (it should still load what's rarely used on demand). PERF_FILES=1 prints each screen's files with their gzip sizes. Most of it is React, the router, TanStack Query, sheets (vaul and
  * Radix), toasts and motion, which every screen needs at once.
  */
+// Recipes added about 1 kB of shared code to every screen (cache roots, change feed, an icon); its sheet and shelves load on demand, and search draws recipe results (about 4 kB).
 const BUDGET_KB = {
   "/sign-in": 214,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.

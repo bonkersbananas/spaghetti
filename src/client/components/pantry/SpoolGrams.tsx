@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/Button";
 import { MetaList } from "@/components/ui/MetaList";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { spoolUsageQuery } from "@/lib/pantry";
 
 /**
@@ -74,10 +74,7 @@ export function UsedBy({ spool }: { spool: Spool }) {
     .slice(0, 8);
   if (!rows.length) return null;
   return (
-    <section aria-labelledby="used-by" className="flex flex-col gap-3">
-      <SectionHeading id="used-by" size="title">
-        What used it
-      </SectionHeading>
+    <Section id="used-by" title="What used it" size="title">
       <ul className="flex flex-col gap-2.5 md:max-w-md">
         {rows.map((row) => (
           <li
@@ -111,6 +108,6 @@ export function UsedBy({ spool }: { spool: Spool }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }

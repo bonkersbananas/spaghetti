@@ -15,6 +15,7 @@ import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
 import { captureRoutes } from "./routes/capture.ts";
 import { changeRoutes } from "./routes/changes.ts";
+import { draftRoutes } from "./routes/drafts.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { journalRoutes } from "./routes/journal.ts";
@@ -23,6 +24,7 @@ import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { printerRoutes } from "./routes/printer.ts";
 import { pushRoutes } from "./routes/push.ts";
+import { recipeRoutes } from "./routes/recipes.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { spoolRoutes } from "./routes/spools.ts";
@@ -95,12 +97,14 @@ export const app = new Hono<AppEnv>()
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)
   .route("/capture", captureRoutes)
+  .route("/", draftRoutes)
   .route("/items", itemRoutes)
   .route("/items", itemAttemptRoutes)
   .route("/attempts", attemptRoutes)
   .route("/attempts", attemptFileRoutes)
   .route("/files", fileRoutes)
   .route("/spools", spoolRoutes)
+  .route("/recipes", recipeRoutes)
   .route("/printer", printerRoutes)
   .route("/photos", photoRoutes)
   .route("/tags", tagRoutes)
