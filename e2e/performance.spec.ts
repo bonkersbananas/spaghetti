@@ -22,14 +22,15 @@ const origin = (page: Page) => new URL(page.url()).origin;
 const BUDGET_KB = {
   "/sign-in": 245,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 345,
+  // Upkeep and drying added about 3 kB here and to /pantry and /printer: the rules, the due check and the shared chunks they reshuffle; the sheets, drying table and upkeep section load on demand.
+  "/today": 348,
   // Sharing in (the share target's intake) added about 2 kB to every signed-in screen, and notifications a little more (two menu rows, the service worker messages); the settings sheet itself loads on first open.
   "/ideas": 340,
   "/builds": 340,
   "/journal": 345,
   "/search": 345,
-  "/pantry": 345,
-  "/printer": 345,
+  "/pantry": 348,
+  "/printer": 348,
 } as const;
 
 /**
