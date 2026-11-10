@@ -116,6 +116,9 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
   // stores the photos that are missing and finds the others where they were.
   for (const [position, image] of images.entries()) {
     const photoId = await photoIdFor(itemId, position);
+    // Already there (a retry): a browser may have resized it by now, and the original must not replace that.
+    const existing = await db.select({ id: photos.id }).from(photos).where(eq(photos.id, photoId)).get();
+    if (existing) continue;
     const httpMetadata = { contentType: image.contentType };
     // The original is both sizes until a browser resizes it; "provisional" keeps it out of long-lived caches.
     const customMetadata = { provisional: "1" };
