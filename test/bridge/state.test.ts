@@ -112,6 +112,18 @@ describe("the job machine", () => {
     expect(events.filter((event) => event.type === "started")).toHaveLength(1);
   });
 
+  it("ends a print whose id firmed up under the key it started with", () => {
+    const { events } = play([
+      fullReport({ state: "IDLE" }),
+      delta({ gcode_state: "PREPARE", job_id: "0", subtask_name: NAME }),
+      delta({ gcode_state: "RUNNING", job_id: JOB }),
+      delta({ gcode_state: "FINISH" }),
+    ]);
+    const [started, ended] = events;
+    expect(events.map((event) => event.type)).toEqual(["started", "ended"]);
+    expect(ended && "job" in ended && ended.job.key).toBe(started && "job" in started && started.job.key);
+  });
+
   it("falls back to the subtask id, then the name, when there is no job id", () => {
     const first = play([
       fullReport({ state: "IDLE" }),

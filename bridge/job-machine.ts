@@ -19,6 +19,8 @@ export interface Job {
 
 /** What is kept across restarts for the job in progress. */
 export interface TrackedJob extends Job {
+  /** The id the printer reports now, when it firmed up after the start; `key` stays what the app knows the print by. */
+  seenKey?: string;
   /** The printer reported the end and the bridge has said so. */
   ended: boolean;
   /** The printer's HMS or AI detection reported spaghetti while it printed. */
@@ -109,16 +111,17 @@ export class JobMachine {
 
     if (ACTIVE.has(gcodeState) && key) {
       const current = this.current;
+      const seen = current ? (current.seenKey ?? current.key) : null;
       if (
         current &&
         !current.ended &&
-        current.key !== key &&
+        seen !== key &&
         current.name === print.subtask_name &&
         now - current.startedAt < 120_000
       ) {
-        // The id firmed up between PREPARE and RUNNING: the same print.
-        current.key = key;
-      } else if (!current || current.ended || current.key !== key) {
+        // The id firmed up between PREPARE and RUNNING: the same print, still known by the key it started with.
+        current.seenKey = key;
+      } else if (!current || current.ended || seen !== key) {
         if (current && !current.ended) events.push({ type: "lost", job: toJob(current) });
         this.current = {
           key,
