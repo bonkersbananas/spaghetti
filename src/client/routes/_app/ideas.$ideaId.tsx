@@ -154,6 +154,7 @@ function Idea({ item }: { item: ItemView }) {
   });
 
   const hasPhotos = photos.length > 0;
+  const reading = item.draft?.status === "reading";
   const alt = photoAlt({ title, note });
 
   return (
@@ -206,23 +207,29 @@ function Idea({ item }: { item: ItemView }) {
         )}
 
         <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
-          {!hasPhotos && <AddFirstPhotos itemId={item.id} />}
-          <TextArea
-            appearance="title"
-            aria-label="Title"
-            placeholder="Untitled idea"
-            minRows={1}
-            maxLength={200}
-            readOnly={readOnly}
-            value={title}
-            onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === "Escape") {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-            }}
-          />
+          {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
+          {!hasPhotos &&
+            (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
+          {reading && !title.trim() ? (
+            <Skeleton className="my-1.5 h-8 w-3/4" />
+          ) : (
+            <TextArea
+              appearance="title"
+              aria-label="Title"
+              placeholder="Untitled idea"
+              minRows={1}
+              maxLength={200}
+              readOnly={readOnly}
+              value={title}
+              onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "Escape") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          )}
           <ForField
             aria-label="For"
             value={forWhom}

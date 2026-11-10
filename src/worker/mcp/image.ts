@@ -78,14 +78,19 @@ export function fromBase64(data: string): Uint8Array {
 }
 
 /** Fetches a photo from an https URL, with a size cap and a timeout. */
-export async function fromUrl(url: string, redirect: "follow" | "manual" = "follow"): Promise<Uint8Array> {
+export async function fromUrl(
+  url: string,
+  redirect: "follow" | "manual" = "follow",
+  allowHttp = false,
+): Promise<Uint8Array> {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
     throw new Error("The photo URL isn't a valid URL.");
   }
-  if (parsed.protocol !== "https:") throw new Error("The photo URL must be https.");
+  if (parsed.protocol !== "https:" && !(allowHttp && parsed.protocol === "http:"))
+    throw new Error("The photo URL must be https.");
   let response: Response;
   try {
     response = await fetch(parsed, { signal: AbortSignal.timeout(10_000), redirect });

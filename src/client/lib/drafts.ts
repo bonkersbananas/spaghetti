@@ -25,6 +25,8 @@ const announced = new Set<string>();
 const refreshItem = (queryClient: QueryClient, id: string) => {
   void queryClient.invalidateQueries({ queryKey: itemKeys.detail(id) });
   void queryClient.invalidateQueries({ queryKey: [itemKeys.all[0], "list"] });
+  // The note's link card takes the page's title from the draft.
+  void queryClient.invalidateQueries({ queryKey: ["link-preview"] });
 };
 
 /**

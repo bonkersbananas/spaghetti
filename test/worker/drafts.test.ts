@@ -119,6 +119,19 @@ describe("drafting an idea from a model page", () => {
       .first<{ needs_resize: number }>();
     expect(row?.needs_resize).toBe(1);
 
+    // The note's link card gets the page's title too.
+    const preview = await env.DB.prepare("SELECT title, site FROM link_previews WHERE url = ?")
+      .bind(PAGE)
+      .first<{ title: string; site: string }>();
+    expect(preview).toEqual({ title: "Cable comb", site: "MakerWorld" });
+    // The run says how it went, without the page's words.
+    const run = await env.DB.prepare("SELECT outcome, detail FROM draft_runs").first<{
+      outcome: string;
+      detail: string;
+    }>();
+    expect(run?.outcome).toBe("drafted");
+    expect(JSON.parse(run?.detail ?? "{}")).toEqual({ stopReason: "end_turn" });
+
     // Opus, the web fetch tool limited to the three sites, and a JSON schema for the answer.
     const sent = web.bodies[0] as {
       model: string;
@@ -187,6 +200,13 @@ describe("drafting an idea from a model page", () => {
     vi.restoreAllMocks();
     stubWeb({ status: 529 });
     expect((await (await draftIt(id)).json<DraftResponse>()).draft?.failure).toBe("unreadable");
+    const { results } = await env.DB.prepare("SELECT outcome, detail FROM draft_runs ORDER BY at, rowid").all<{
+      outcome: string;
+      detail: string | null;
+    }>();
+    expect(results.map((run) => run.outcome)).toEqual(["refusal", "not_readable", "api_error"]);
+    expect(JSON.parse(results[2]?.detail ?? "{}")).toMatchObject({ httpStatus: 529, errorType: "api_error" });
+    expect(results[2]?.detail).not.toContain("sk-ant");
 
     // A retry that works clears the failure.
     vi.restoreAllMocks();

@@ -5,7 +5,10 @@
  * `slow` takes a few seconds (the "reading the page" state stays long enough to look at), `broken` can't be read,
  * `refused` is refused, anything else is a good draft.
  */
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { join } from "node:path";
+import { root } from "./wrangler.ts";
 
 /** How long a `slow` page takes. */
 export const SLOW_MS = 4000;
@@ -19,11 +22,20 @@ const draft = {
   material: "PETG",
   plate: "Textured PEI plate",
   settings: "0.2 mm layers, 15% infill, no supports",
-  imageUrls: [],
+  imageUrls: [] as string[],
 };
 
 export async function startFakeClaude(port: number): Promise<{ url: string; stop: () => void; server: Server }> {
+  const base = `http://127.0.0.1:${port}`;
+  // The model's pictures, served from here (the Worker allows this one origin for pictures while it talks to a stand-in).
+  const pictures = [1, 2, 3].map((n) => readFileSync(join(root, `e2e/fixtures/model-${n}.jpg`)));
   const server = createServer((request, response) => {
+    const picture = /^\/images\/(\d)\.jpg$/.exec(request.url ?? "");
+    if (picture) {
+      response.setHeader("Content-Type", "image/jpeg");
+      response.end(pictures[Number(picture[1]) - 1] ?? "");
+      return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
@@ -42,7 +54,11 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
             : [
                 {
                   type: "text",
-                  text: JSON.stringify(asked.includes("broken") ? { ...draft, readable: false } : draft),
+                  text: JSON.stringify(
+                asked.includes("broken")
+                  ? { ...draft, readable: false }
+                  : { ...draft, imageUrls: [1, 2, 3].map((n) => `${base}/images/${n}.jpg`) },
+              ),
                 },
               ],
           stop_reason: refused ? "refusal" : "end_turn",

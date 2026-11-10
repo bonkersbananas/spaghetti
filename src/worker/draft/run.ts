@@ -4,7 +4,7 @@ import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/
 import { isModelImageUrl, modelSite } from "../../shared/model-links.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
-import { draftRuns, type ItemDraftRow, itemDrafts, items, photos } from "../db/schema.ts";
+import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
 import { fromUrl, readImage } from "../mcp/image.ts";
 import { photoKey } from "../photos.ts";
 import { NEUTRAL, photoIdFor } from "../routes/capture.ts";
@@ -96,12 +96,15 @@ const ownerOf = async (db: Db, itemId: string) =>
 
 /** The pictures the draft pointed at that come from the three sites' own image hosts, as stored photos. */
 async function storePictures(db: Db, env: Env, itemId: string, urls: string[], owner: string): Promise<string[]> {
-  const wanted = [...new Set(urls)].filter(isModelImageUrl).slice(0, MAX_DRAFT_IMAGES);
+  // The e2e tests and screenshots serve pictures from their stand-in Anthropic server; nothing else is allowed.
+  const standIn = env.ANTHROPIC_BASE_URL?.trim() ? new URL(env.ANTHROPIC_BASE_URL.trim()).origin : null;
+  const allowed = (url: string) => isModelImageUrl(url) || (!!standIn && new URL(url).origin === standIn);
+  const wanted = [...new Set(urls)].filter((url) => URL.canParse(url) && allowed(url)).slice(0, MAX_DRAFT_IMAGES);
   const downloaded = await Promise.all(
     wanted.map(async (url) => {
       try {
         // A redirect off the image host would be a way past the allowlist: they aren't followed.
-        const bytes = await fromUrl(url, "manual");
+        const bytes = await fromUrl(url, "manual", !!standIn);
         return readImage(bytes);
       } catch {
         return null;
@@ -175,12 +178,19 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   const since = new Date(now - (now % DAY_MS));
   const used = await db.$count(draftRuns, gte(draftRuns.at, since));
   if (used >= DRAFTS_PER_DAY) return fail(db, row, "cap");
-  await db.insert(draftRuns).values({ id: crypto.randomUUID(), itemId, at: new Date(now) });
+  const runId = crypto.randomUUID();
+  await db.insert(draftRuns).values({ id: runId, itemId, at: new Date(now) });
 
   const site = modelSite(row.url);
   const answer: AskResult = site
     ? await askClaude(apiKey, row.url, site.site, env.ANTHROPIC_BASE_URL?.trim())
-    : { ok: false, failure: "unreadable" };
+    : { ok: false, failure: "unreadable", diagnosis: { outcome: "bad_link" } };
+  // Why it went the way it did stays on the run (read it with wrangler d1 execute; docs/deploy.md).
+  const { outcome, ...detail } = answer.diagnosis ?? { outcome: "bad_link" };
+  await db
+    .update(draftRuns)
+    .set({ outcome, detail: Object.keys(detail).length ? JSON.stringify(detail) : null })
+    .where(eq(draftRuns.id, runId));
   if (!answer.ok) return fail(db, row, answer.failure);
   const draft = answer.draft;
 
@@ -228,6 +238,17 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   if (!hasPhotos) photoIds = await storePictures(db, env, itemId, draft.imageUrls, owner);
   if (photoIds.length) applied.push("photos");
 
+  // The note's link card then reads "Cable comb for the desk · makerworld.com" instead of the bare address.
+  if (title && site) {
+    const fetchedAt = new Date();
+    await db
+      .insert(linkPreviews)
+      .values({ url: site.url.href, title, site: site.site.name, failed: false, fetchedAt })
+      .onConflictDoUpdate({
+        target: linkPreviews.url,
+        set: { title, site: site.site.name, failed: false, fetchedAt },
+      });
+  }
   await db.batch([
     db
       .update(itemDrafts)

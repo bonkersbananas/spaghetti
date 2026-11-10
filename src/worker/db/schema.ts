@@ -267,6 +267,10 @@ export const draftRuns = sqliteTable("draft_runs", {
   id: text("id").primaryKey(),
   itemId: text("item_id").notNull(),
   at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  /** How it ended: "drafted", or why not (see RunDiagnosis in worker/draft/claude.ts). Null while it runs or if the Worker was lost. */
+  outcome: text("outcome"),
+  /** The rest of the diagnosis as JSON: HTTP status, error type, stop reason, web fetch error codes, the SDK's message. */
+  detail: text("detail"),
 });
 
 export type ItemDraftRow = typeof itemDrafts.$inferSelect;

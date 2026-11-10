@@ -88,6 +88,7 @@ Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea 
 - Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
 - It only fills empty fields: a title that is empty, a note that is only links, an idea without photos. Pictures come only from the three sites' image hosts (`src/shared/model-links.ts`), at most four, stored like an agent's photos (`needsResize`).
 - People only: no scope lists these routes, so a token gets `403 person_only`. `POST /api/capture` starts a draft by itself when the capture is just a model link, for a person's session or a token whose only scope is `capture` (the sharing Shortcut), never for an agent that can do more.
+- Every call is a row in `draft_runs` with its `outcome` and a `detail` (statuses and codes, no page content); how to read them is in [deploy.md](deploy.md). The page's title also goes into the link preview cache, so the note's link card shows it.
 - Capped at 30 Claude calls a day for the whole workspace (UTC days, `draft_runs`); past it a draft fails with `failure: "cap"`.
 
 ## Upkeep and drying

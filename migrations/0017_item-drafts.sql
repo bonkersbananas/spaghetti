@@ -1,7 +1,9 @@
 CREATE TABLE `draft_runs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`item_id` text NOT NULL,
-	`at` integer NOT NULL
+	`at` integer NOT NULL,
+	`outcome` text,
+	`detail` text
 );
 --> statement-breakpoint
 CREATE TABLE `item_drafts` (

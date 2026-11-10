@@ -54,6 +54,9 @@ test("a saved model link shows at once, reads the page and fills in the idea, wi
   await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible();
   await expect(page.getByText("Mila Okafor")).toBeVisible();
   await expect(page.getByText("CC BY 4.0")).toBeVisible();
+  // The page's pictures came with it (the first is the cover), and its link card reads the page's title.
+  await expect(page.getByRole("button", { name: /Photo 1 of 3|photo/i }).first()).toBeVisible();
+  await expect(page.getByRole("list", { name: "Links in the note" })).toContainText("Cable comb for the desk");
   await expect(page.getByText("Drafted from MakerWorld")).toBeVisible(); // the toast
 
   await page.getByRole("button", { name: "Undo" }).first().click();

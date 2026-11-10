@@ -76,6 +76,15 @@ The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily pur
 
 Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)) uses the `ANTHROPIC_API_KEY` secret, already set on the live Worker (`pnpm exec wrangler secret put ANTHROPIC_API_KEY`; it is kept across `pnpm ship`). Without it the feature is hidden. Locally, put `ANTHROPIC_API_KEY=sk-ant-…` in `.dev.vars` (never committed). The e2e tests and screenshots don't need a key: they point `ANTHROPIC_BASE_URL` at a stand-in server (`scripts/lib/fake-claude.ts`). The 5-minute cron also finishes drafts whose request was lost.
 
+If a real link doesn't draft, read why from the runs (never the page's content or the key, only statuses and codes):
+
+```sh
+pnpm exec wrangler d1 execute spaghetti --remote --command \
+  "SELECT datetime(at/1000,'unixepoch') AS at, item_id, outcome, detail FROM draft_runs ORDER BY at DESC LIMIT 10"
+```
+
+`outcome` is `drafted`, `refusal`, `not_readable` (Claude said the page wasn't a readable model page), `max_tokens` or another `stop:…`, `bad_json` or `bad_shape` (the answer didn't match the schema; `detail` names the fields), `timeout`, `api_error` or `exception`. `detail` is JSON: `httpStatus`, `errorType` and the SDK's `message` for an API error (401 is a wrong key, 404 a model the key can't use, 400 a request the API refused), `stopReason`, and `fetchErrors`, the web fetch tool's codes (`url_not_allowed`, `url_not_accessible`, `unsupported_content_type`, `too_many_requests` …). A draft that failed before calling Claude (the day's cap) has no run.
+
 ## Where agents and the bridge point
 
 - MCP server: `https://spaghetti.day/mcp` ([mcp.md](mcp.md)).
