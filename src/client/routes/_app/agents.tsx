@@ -100,17 +100,12 @@ function AgentCard({
   const live = agent.tokens.filter((token) => !token.revokedAt);
   return (
     <li className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-5">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3.5">
         {owner && <Avatar person={owner} size="md" via={agent.name} />}
         <div className="min-w-0 flex-1">
-          <h2 className="text-lead text-ink truncate font-semibold">{agent.name}</h2>
-          <p className="text-small text-ink-faint">
-            Acts for {owner?.name.split(" ")[0] ?? "you"} · since {relativeTime(agent.createdAt).toLowerCase()}
-          </p>
+          <h2 className="text-lead text-ink font-semibold break-words">{agent.name}</h2>
+          <p className="text-small text-ink-faint">Acts for {owner?.name.split(" ")[0] ?? "you"}</p>
         </div>
-        <Button variant="quiet" size="sm" icon={KeyIcon} onClick={onAddToken} disabled={readOnly}>
-          New token
-        </Button>
       </div>
       {live.length ? (
         <ul className="flex flex-col" aria-label={`Tokens for ${agent.name}`}>
@@ -121,6 +116,9 @@ function AgentCard({
       ) : (
         <p className="text-small text-ink-faint">No working tokens. Make one when it's needed.</p>
       )}
+      <Button variant="quiet" size="sm" icon={KeyIcon} onClick={onAddToken} disabled={readOnly} className="self-start">
+        New token
+      </Button>
     </li>
   );
 }
@@ -129,31 +127,33 @@ function TokenRow({ agent, token, readOnly }: { agent: AgentInfo; token: AgentTo
   const queryClient = useQueryClient();
   const revoking = usePendingRevokes().has(token.id);
   return (
-    <li className="border-ink/6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t py-3 first:border-t-0 first:pt-0">
-      <span className="text-small text-ink-soft min-w-24 font-mono">{token.prefix}…</span>
-      <ul className="flex flex-1 flex-wrap gap-1.5" aria-label="Scopes">
+    <li className="border-ink/6 flex flex-col gap-2 border-t py-3 first:border-t-0 first:pt-0">
+      <div className="flex items-center gap-3">
+        <span className="text-small text-ink-soft font-mono">{token.prefix}…</span>
+        <span className="text-small text-ink-faint flex-1">
+          {revoking
+            ? "Revoked"
+            : token.lastUsedAt
+              ? `Used ${relativeTime(token.lastUsedAt).toLowerCase()}`
+              : "Never used"}
+        </span>
+        <Button
+          variant="quiet"
+          size="sm"
+          disabled={readOnly || revoking}
+          onClick={() => revokeToken(queryClient, agent, token)}
+          aria-label={`Revoke ${token.prefix}`}
+        >
+          Revoke
+        </Button>
+      </div>
+      <ul className="flex flex-wrap gap-1.5" aria-label="Scopes">
         {token.scopes.map((scope) => (
           <li key={scope}>
             <Chip>{SCOPE_INFO[scope].label}</Chip>
           </li>
         ))}
       </ul>
-      <span className="text-small text-ink-faint">
-        {revoking
-          ? "Revoked"
-          : token.lastUsedAt
-            ? `Used ${relativeTime(token.lastUsedAt).toLowerCase()}`
-            : "Never used"}
-      </span>
-      <Button
-        variant="quiet"
-        size="sm"
-        disabled={readOnly || revoking}
-        onClick={() => revokeToken(queryClient, agent, token)}
-        aria-label={`Revoke ${token.prefix}`}
-      >
-        Revoke
-      </Button>
     </li>
   );
 }

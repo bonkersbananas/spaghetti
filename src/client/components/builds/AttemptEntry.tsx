@@ -3,7 +3,7 @@ import { tagLabel } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef } from "react";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CheckIcon, SameAgainIcon } from "@/components/ui/icons";
@@ -95,6 +95,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               <OutcomeChip outcome={attempt.outcome} />
               <h3 className="text-body text-ink font-sans font-semibold">Attempt {attempt.number}</h3>
               <span className="text-small text-ink-faint ml-auto flex items-center gap-2">
+                <ViaText name={via} className="hidden md:inline" />
                 <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
                   {relativeTime(attempt.printedAt)}
                 </time>

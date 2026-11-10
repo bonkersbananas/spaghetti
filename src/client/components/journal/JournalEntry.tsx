@@ -6,7 +6,7 @@ import { forwardRef } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { PhotoCountBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
@@ -170,6 +170,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
 function Meta({ at, time, person, via }: { at: number; time: string; person?: Person; via?: string }) {
   return (
     <span className="text-small text-ink-faint tabular ml-auto flex shrink-0 items-center gap-2 self-center pl-2">
+      <ViaText name={via} className="hidden md:inline" />
       <time dateTime={new Date(at).toISOString()} title={fullTime(at)}>
         {time}
       </time>

@@ -32,8 +32,8 @@ interface AvatarProps {
   className?: string;
 }
 
-const markSizes = { xs: "size-3", sm: "size-3.5", md: "size-4", lg: "size-5" } as const;
-const markIcons = { xs: 8, sm: 9, md: 10, lg: 12 } as const;
+const markSizes = { xs: "size-3", sm: "size-3.5", md: "size-5", lg: "size-6" } as const;
+const markIcons = { xs: 8, sm: 9, md: 12, lg: 14 } as const;
 
 /** A person's initials on their color. Shown beside what they wrote. With `via`, it was done through their agent. */
 export function Avatar({ person, size = "md", ringed = false, decorative = false, via, className }: AvatarProps) {

@@ -101,6 +101,7 @@ Badges over photos are measured against a white photo, the worst case.
 
 ## Type
 
+- **A monospace** (`font-mono`, the system's) only for things people copy character by character: API tokens and their prefixes.
 - **Fraunces** (variable, with the `SOFT` axis at 100) for headings: `h1`–`h3` get it automatically, or use `font-display`.
 - **Figtree** (variable) for everything people read and tap.
 - Both are self-hosted through Fontsource.
