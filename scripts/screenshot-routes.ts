@@ -393,7 +393,7 @@ export const shots: Shot[] = [
         .first()
         .waitFor();
       await page.evaluate(() =>
-        [...document.querySelectorAll("p")]
+        Array.from(document.querySelectorAll("p"))
           .find((p) => /how did it go\?/.test(p.textContent ?? ""))
           ?.scrollIntoView({ block: "center" }),
       );
