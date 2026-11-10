@@ -512,6 +512,8 @@ export const unionTags = (a: readonly string[], b: readonly string[]): string[] 
 export interface SummarizableAttempt {
   /** Null while it is printing. */
   outcome: Outcome | null;
+  /** When the printer bridge saw it stop: with no outcome yet, it is off the bed, not printing. */
+  endedAt?: number | null;
   settings: AttemptSettings;
 }
 
@@ -559,6 +561,7 @@ const filamentIdentity = (filament: AttemptFilament) =>
  */
 export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildSummary {
   const counts: Record<Outcome | "printing", number> = { success: 0, partial: 0, failed: 0, printing: 0 };
+  let offBed = 0;
   let minutes = 0;
   let minutesKnown = false;
   let minutesApproximate = false;
@@ -568,7 +571,8 @@ export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildS
   const filaments: AttemptFilament[] = [];
   const seen = new Set<string>();
   for (const attempt of attempts) {
-    counts[attempt.outcome ?? "printing"] += 1;
+    if (attempt.outcome === null && attempt.endedAt != null) offBed += 1;
+    else counts[attempt.outcome ?? "printing"] += 1;
     for (const filament of attempt.settings.filaments ?? []) {
       const identity = filamentIdentity(filament);
       if (identity === "|" || seen.has(identity)) continue;
@@ -598,7 +602,9 @@ export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildS
   }
   return {
     counts,
-    words: outcomeWords(counts),
+    words: [outcomeWords(counts), offBed > 0 ? (offBed === 1 ? "off the bed" : `${offBed} off the bed`) : ""]
+      .filter(Boolean)
+      .join(", "),
     minutes: minutesKnown ? { value: minutes, approximate: minutesApproximate } : null,
     grams: gramsKnown ? { value: grams, atLeast: gramsMissing } : null,
     filaments,

@@ -35,7 +35,7 @@ function Printer() {
     <>
       <PageHeader
         title="Printer"
-        subtitle="The X2D as it's set up here. Spaghetti never controls it; this is what you've told it, and what the optional bridge hears."
+        subtitle="The X2D as it's set up here. Spaghetti never controls it; this is what you've told it."
       />
       {isPending || !data ? (
         <div className="flex flex-col gap-6" aria-hidden>

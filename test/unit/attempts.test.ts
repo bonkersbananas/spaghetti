@@ -331,3 +331,15 @@ describe("summarizeBuild", () => {
     expect(summary.filaments.map((f) => f.colorName)).toEqual(["Yellow", "White", "Teal"]);
   });
 });
+
+describe("summarizeBuild with a print off the bed", () => {
+  it("says off the bed, not printing now, once the printer saw the print stop", () => {
+    const summary = summarizeBuild([
+      { outcome: "partial", settings: {} },
+      { outcome: null, endedAt: 5, settings: {} },
+    ]);
+    expect(summary.words).toBe("1 partly, off the bed");
+    expect(summary.counts.printing).toBe(0);
+    expect(summarizeBuild([{ outcome: null, endedAt: null, settings: {} }]).words).toBe("printing now");
+  });
+});
