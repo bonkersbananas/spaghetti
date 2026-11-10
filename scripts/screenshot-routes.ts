@@ -92,7 +92,7 @@ export const shots: Shot[] = [
       await sheet.getByRole("button", { name: /^Same in both/ }).click();
       await sheet.getByText("Layers 0.20 mm").waitFor();
       await sheet.getByRole("region", { name: "How it went" }).scrollIntoViewIfNeeded();
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(4000);
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
