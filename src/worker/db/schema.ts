@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
@@ -131,7 +132,11 @@ export const attempts = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
-  (table) => [index("attempts_item_printed_idx").on(table.itemId, table.printedAt)],
+  (table) => [
+    index("attempts_item_printed_idx").on(table.itemId, table.printedAt),
+    // The "how did it go?" nudges look at prints with no outcome, every few minutes: that is a handful of rows.
+    index("attempts_open_idx").on(table.printedAt).where(sql`${table.outcome} is null and ${table.deletedAt} is null`),
+  ],
 );
 
 /**
@@ -416,3 +421,43 @@ export const agentTokens = sqliteTable(
 
 export type Agent = typeof agents.$inferSelect;
 export type AgentToken = typeof agentTokens.$inferSelect;
+
+/**
+ * A device that gets web push: one browser's push subscription for one person. `endpoint` is the push service's
+ * address for it (unique; a 404 or 410 from it removes the row). `timeZone` is the device's, for quiet hours.
+ * `alsoOthers`: also tell this person about the other person's prints.
+ */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    timeZone: text("time_zone").notNull(),
+    alsoOthers: integer("also_others", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("push_subscriptions_user_idx").on(table.userId)],
+);
+
+/** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */
+export const pushNudges = sqliteTable(
+  "push_nudges",
+  {
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"off_the_bed" | "overdue">().notNull(),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.attemptId, table.userId] })],
+);
+
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
