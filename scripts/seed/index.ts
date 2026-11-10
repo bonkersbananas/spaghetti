@@ -6,7 +6,7 @@
 import { type Browser, request } from "@playwright/test";
 import { SEED_USERS } from "../lib/local-app.ts";
 import { executeSql } from "../lib/wrangler.ts";
-import { seedBuilds } from "./builds.ts";
+import { seedBridge, seedBuilds } from "./builds.ts";
 import { seedIdeas } from "./ideas.ts";
 import { seedPantry } from "./pantry.ts";
 
@@ -58,6 +58,7 @@ export async function seedAll({
       `INSERT OR REPLACE INTO link_previews (url, title, site, failed, fetched_at) VALUES ('https://makerworld.com/en/models/drawer-bins', 'Drawer bins, 42 mm grid', 'MakerWorld', 0, ${Date.now()});`,
       { persistTo: stateDir },
     );
+    await seedBridge(alex, origin);
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);
   }

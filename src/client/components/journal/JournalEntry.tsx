@@ -1,5 +1,6 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
 import { OUTCOME_LABELS, tagLabel } from "@shared/attempts";
+import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { forwardRef } from "react";
@@ -97,6 +98,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   const index = item.attempts.findIndex((a) => a.id === entry.attemptId);
   const attempt = item.attempts[index];
   if (!attempt) return null;
+  const offBed = isOffTheBed(attempt);
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const [photo] = photos;
   // No photo yet, but the slicer's picture of the plate: shown in the photo's place and labeled as a preview.
@@ -133,7 +135,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           <span className="absolute top-2 left-2">
             <SlicerPreviewBadge />
           </span>
-          <OutcomeChip outcome={attempt.outcome} className="shadow-soft absolute bottom-2 left-2" />
+          <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
         </div>
       )}
       {photo && (
@@ -146,7 +148,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
             className="size-full"
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
-          <OutcomeChip outcome={attempt.outcome} className="shadow-soft absolute bottom-2 left-2" />
+          <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
           {photos.length > 1 && (
             <span className="absolute top-2 right-2">
               <PhotoCountBadge count={photos.length} />
@@ -158,7 +160,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         {/* Without a picture, the outcome leads the card. */}
         {!picture && (
           <div className="flex items-center gap-2">
-            <OutcomeChip outcome={attempt.outcome} />
+            <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
             <Meta at={attempt.printedAt} time={time} person={person} via={via} />
           </div>
         )}
@@ -171,8 +173,17 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           </h3>
           {picture && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
         </div>
-        {attempt.outcome === null && (
-          <PrintProgress startedAt={attempt.printedAt} estimatedMinutes={attempt.settings.estimatedMinutes} />
+        {attempt.outcome === null && !offBed && (
+          <PrintProgress
+            startedAt={attempt.printedAt}
+            estimatedMinutes={attempt.settings.estimatedMinutes}
+            attemptId={attempt.id}
+          />
+        )}
+        {offBed && attempt.endedAt !== null && (
+          <p className="text-small text-ink-soft">
+            <span className="text-ink font-semibold">{offTheBedLabel(attempt.endedAt)}</span> · how did it go?
+          </p>
         )}
         {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
         {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
@@ -331,9 +342,10 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
   const [photo] = item.photos.filter((candidate) => candidate.attemptId === attempt.id);
   const plate = !photo && attempt.file?.hasThumb ? attempt.file : undefined;
   const name = itemName(item);
-  const OutcomeIcon = attempt.outcome ? outcomeIcons[attempt.outcome] : PrintingIcon;
+  const offBed = isOffTheBed(attempt);
+  const OutcomeIcon = attempt.outcome ? outcomeIcons[attempt.outcome] : offBed ? FinishIcon : PrintingIcon;
   const ink = outcomeInk[attempt.outcome ?? "printing"];
-  const estimated = attempt.outcome === null && attempt.settings.estimatedMinutes !== undefined;
+  const estimated = attempt.outcome === null && !offBed && attempt.settings.estimatedMinutes !== undefined;
   return (
     <Link
       ref={ref}
@@ -364,7 +376,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
         <MetaList className="text-small">
           <span className={cn("flex items-center gap-1.5 font-semibold", ink)}>
             <OutcomeIcon size={15} aria-hidden />
-            {attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "Printing"}
+            {attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : offBed ? "Off the bed" : "Printing"}
           </span>
           <time
             dateTime={new Date(attempt.printedAt).toISOString()}
@@ -386,6 +398,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           variant="ring"
           startedAt={attempt.printedAt}
           estimatedMinutes={attempt.settings.estimatedMinutes}
+          attemptId={attempt.id}
         />
       )}
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}

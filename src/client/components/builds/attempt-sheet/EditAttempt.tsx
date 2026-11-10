@@ -1,6 +1,7 @@
 import type { Outcome } from "@shared/attempts";
+import { offTheBedLabel } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
@@ -24,6 +25,7 @@ export function EditAttempt({
   attempt,
   open,
   onOpenChange,
+  initialOutcome,
   incomingFile,
   footerHost,
 }: {
@@ -31,6 +33,8 @@ export function EditAttempt({
   attempt: AttemptView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Picked on the card of a print that is off the bed: the attempt is finished with it as the sheet opens. */
+  initialOutcome?: Outcome | null;
   incomingFile?: { file: File; key: number } | null;
   /** Where the footer (Delete, the save state, Done) is drawn: the sheet's own footer. */
   footerHost: HTMLElement | null;
@@ -80,9 +84,27 @@ export function EditAttempt({
       printing && value.settings.actualMinutes === undefined
         ? elapsedIfPlausible(attempt.printedAt, value.settings.estimatedMinutes)
         : undefined;
-    change({ outcome, ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}) });
+    // A failure tag the printer suggested is offered (marked as a suggestion) once it didn't go well; it's the
+    // person's to take off.
+    const suggested =
+      outcome !== "success" && attempt.suggestedFailureTag && value.failureTags.length === 0
+        ? { failureTags: [attempt.suggestedFailureTag] }
+        : {};
+    change({
+      outcome,
+      ...suggested,
+      ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}),
+    });
   };
   const { estimatedMinutes, actualMinutes } = value.settings;
+  // The outcome was picked on the card: take it as the sheet opens, once.
+  const picked = useRef(false);
+  useEffect(() => {
+    if (open && initialOutcome && printing && !picked.current) {
+      picked.current = true;
+      finish(initialOutcome);
+    }
+  });
 
   const footer = (
     <>
@@ -150,6 +172,7 @@ export function EditAttempt({
         note={value.note}
         onNote={(note) => change({ note })}
         failureTags={value.failureTags}
+        suggestedFailureTag={attempt.suggestedFailureTag ?? undefined}
         onFailureTags={(failureTags) => change({ failureTags })}
         successNotes={value.successNotes}
         onSuccessNotes={(successNotes) => change({ successNotes })}

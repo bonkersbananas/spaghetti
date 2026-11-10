@@ -1,4 +1,5 @@
 import type { Spool } from "@shared/api";
+import type { UnknownTray } from "@shared/bridge";
 import { amsUnitLetters, EXTERNAL_SLOT, spoolName, unitSlots } from "@shared/spools";
 import { daysAgo } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,16 +44,19 @@ interface SlotProps {
   /** "bay": a tall slot in an AMS unit; "row": the external spool, a wide row. */
   shape?: "bay" | "row";
   readOnly?: boolean;
+  /** The printer bridge sees a spool here that the pantry can't place: a gentle prompt to pick one. */
+  unknown?: UnknownTray;
 }
 
 /** One slot: the spool in it, drawn as a spool, or an empty bay. Tap to change it, or drop a spool on it. */
-function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: SlotProps) {
+function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unknown }: SlotProps) {
   const [over, setOver] = useState(false);
   const name = spool ? spoolName(spool) : null;
   return (
     <button
       type="button"
       data-slot={slot}
+      data-unknown={unknown ? "" : undefined}
       onClick={() => onOpen(slot)}
       disabled={readOnly}
       {...(spool && !readOnly ? spoolDragProps(spool.id, slot) : {})}
@@ -80,7 +84,11 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
           : "w-full items-center gap-3 px-3 py-2.5 text-left",
       )}
     >
-      <SpoolDisc color={spool?.colorHex} empty={!spool} size={shape === "bay" ? "lg" : "md"} />
+      <SpoolDisc
+        color={spool?.colorHex ?? unknown?.colorHex}
+        empty={!spool && !unknown}
+        size={shape === "bay" ? "lg" : "md"}
+      />
       <span
         className={cn(
           "flex min-w-0 flex-col",
@@ -96,13 +104,18 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly }: Slo
             // A bay is narrow on a phone: the name steps down a size and may take two lines, breaking between
             // words, rather than lose its end ("Sunflow…").
             shape === "bay"
-              ? "text-caption md:text-small line-clamp-2 break-words lg:line-clamp-1"
+              ? cn("text-caption md:text-small break-words", unknown && !spool ? "" : "line-clamp-2 lg:line-clamp-1")
               : "text-small truncate",
             spool ? "text-ink" : "text-ink-faint",
           )}
         >
-          {spool ? (name?.title ?? spool.material) : "Empty"}
+          {spool ? (name?.title ?? spool.material) : unknown ? "Which spool?" : "Empty"}
         </span>
+        {!spool && unknown && (
+          <span className="text-caption text-ink-soft block w-full min-w-0 font-medium">
+            Printer sees {unknown.material ?? "a spool"}
+          </span>
+        )}
         {spool && (
           <>
             <span
@@ -164,6 +177,7 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
   const [sheetOpen, setSheetOpen] = useState(false);
   const byId = new Map((spools.data ?? []).map((spool) => [spool.id, spool]));
   const slots = printer.data?.slots ?? {};
+  const unknownTray = (slot: string) => printer.data?.bridge?.unknownTrays.find((tray) => tray.slot === slot);
   const spoolIn = (slot: string) => {
     const id = slots[slot];
     return id ? byId.get(id) : undefined;
@@ -202,6 +216,7 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
                   onOpen={open}
                   onDropSpool={drop}
                   readOnly={readOnly}
+                  unknown={unknownTray(slot)}
                 />
               ))}
             </div>
@@ -216,6 +231,7 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
           onDropSpool={drop}
           shape="row"
           readOnly={readOnly}
+          unknown={unknownTray(EXTERNAL_SLOT)}
         />
       </section>
       {!onSlot && !readOnly && (

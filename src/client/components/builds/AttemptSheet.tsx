@@ -1,4 +1,5 @@
 import type { Outcome } from "@shared/attempts";
+import { offTheBedLabel } from "@shared/print-progress";
 import { fullTime, relativeTime } from "@shared/time";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
@@ -67,6 +68,7 @@ export function AttemptSheet({
           <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
             {printing ? "Started printing " : "Printed "}
             {relativeTime(attempt.printedAt).toLowerCase()}
+            {printing && attempt.endedAt !== null && <> · {offTheBedLabel(attempt.endedAt).toLowerCase()}</>}
           </time>
         }
         headerActions={
@@ -109,6 +111,7 @@ export function AttemptSheet({
               attempt={attempt}
               open={open}
               onOpenChange={onOpenChange}
+              initialOutcome={initialOutcome}
               incomingFile={incomingFile}
               footerHost={footerHost}
             />
