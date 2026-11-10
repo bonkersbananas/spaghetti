@@ -13,7 +13,7 @@ import {
   SUPPORT_TYPES,
   unionTags,
 } from "../../shared/attempts.ts";
-import { actorOf, afterChange, itemOfAttempt, recordChange } from "../changes.ts";
+import { afterChange, itemOfAttempt, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { type Attempt, attemptFiles, attempts, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -197,6 +197,8 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
         printedAt: printed,
         finishedAt: outcomeValue ? now : null,
         finishedBy: outcomeValue ? c.var.user.id : null,
+        createdVia: c.var.via,
+        finishedVia: outcomeValue ? c.var.via : null,
         note: body.note ?? "",
         failureTags: body.failureTags ?? [],
         successNotes: body.successNotes ?? [],
@@ -207,7 +209,7 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
       })
       .onConflictDoNothing()
       .returning(),
-    recordChange(db, { entity: "attempt", id: body.id, itemId, action: "created", actor: actorOf(c.var.user) }),
+    recordChange(db, { entity: "attempt", id: body.id, itemId, action: "created", actor: c.var.actor }),
     // Logging an attempt on an idea makes it a build: only if this request's insert landed.
     db
       .update(items)
@@ -235,12 +237,15 @@ export const attemptRoutes = new Hono<AppEnv>()
     const now = new Date();
     let finishedAt = current.finishedAt;
     let finishedBy = current.finishedBy;
+    let finishedVia = current.finishedVia;
     if (nextOutcome === null) {
       finishedAt = null;
       finishedBy = null;
+      finishedVia = null;
     } else if (nextOutcome && !current.outcome) {
       finishedAt = now;
       finishedBy = c.var.user.id;
+      finishedVia = c.var.via;
     } else if (nextOutcome) finishedAt ??= now;
 
     const [[attempt]] = await db.batch([
@@ -252,6 +257,7 @@ export const attemptRoutes = new Hono<AppEnv>()
           ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
           finishedAt,
           finishedBy,
+          finishedVia,
           updatedAt: now,
         })
         .where(and(eq(attempts.id, current.id), isNull(attempts.deletedAt)))
@@ -261,7 +267,7 @@ export const attemptRoutes = new Hono<AppEnv>()
         id: current.id,
         itemId: current.itemId,
         action: "updated",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
       db
         .update(items)
@@ -324,6 +330,7 @@ export const attemptRoutes = new Hono<AppEnv>()
                   Math.min(Math.max(body.finishedAt ?? now.getTime(), current.printedAt.getTime()), now.getTime()),
                 ),
                 finishedBy: c.var.user.id,
+                finishedVia: c.var.via,
               }
             : {}),
           updatedAt: note !== current.note || finishing ? now : current.updatedAt,
@@ -347,7 +354,7 @@ export const attemptRoutes = new Hono<AppEnv>()
             id: current.id,
             itemId: current.itemId,
             action: "updated",
-            actor: actorOf(c.var.user),
+            actor: c.var.actor,
           }),
           db
             .update(items)
@@ -382,7 +389,7 @@ export const attemptRoutes = new Hono<AppEnv>()
         id: attemptId,
         itemId: itemOfAttempt(attemptId),
         action: "deleted",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
       db
         .update(items)
@@ -407,7 +414,7 @@ export const attemptRoutes = new Hono<AppEnv>()
         id: attemptId,
         itemId: itemOfAttempt(attemptId),
         action: "restored",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
       db
         .update(items)

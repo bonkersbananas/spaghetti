@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { Tag, TagResponse, TagsResponse } from "../../shared/api.ts";
 import { BUILT_IN_TAGS, slugify } from "../../shared/attempts.ts";
-import { actorOf, recordChange } from "../changes.ts";
+import { recordChange } from "../changes.ts";
 import { tags } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
@@ -47,7 +47,7 @@ export const tagRoutes = new Hono<AppEnv>()
         entity: "tag",
         id: `${kind}:${slug}`,
         action: "created",
-        actor: actorOf(c.var.user),
+        actor: c.var.actor,
       }),
     ]);
     if (inserted) return c.json<TagResponse>({ tag: toTag(inserted) }, 201);
