@@ -121,6 +121,8 @@ describe("the MCP endpoint", () => {
       "list_spools",
       "weigh_spool",
       "load_slot",
+      "list_upkeep",
+      "log_upkeep",
     ]);
     for (const tool of listed) {
       expect(tool.description, String(tool.name)).toMatch(/scope/);
@@ -374,6 +376,14 @@ describe("tools, scopes and attribution", () => {
     ).toBe("Weighed: about 562 g left.");
     expect((await callTool(bridge.token, "list_spools")).text).toContain("about 562 g left");
     expect((await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool })).isError).toBe(true);
+
+    const upkeepList = await callTool(bridge.token, "list_upkeep");
+    expect(upkeepList.text).toContain("Clean the build plate");
+    expect(upkeepList.text).toContain("(task_id: plate)");
+    expect((await callTool(bridge.token, "log_upkeep", { task_id: "plate", note: "Soap" })).text).toBe(
+      "Logged: Clean the build plate.",
+    );
+    expect((await callTool(bridge.token, "log_upkeep", { task_id: "nope" })).isError).toBe(true);
 
     const reader = (await makeAgent(["read", "capture", "attempts"], "reader")).token;
     const refused = await callTool(reader, "load_slot", { slot: "A1", spool_id: spoolId });

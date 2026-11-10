@@ -39,6 +39,11 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["PUT", /^\/printer$/, ["printer"]],
   ["PUT", /^\/printer\/bridge$/, ["printer"]],
   ["PUT", new RegExp(`^/printer/slots/${id}$`), ["printer"]],
+  // Upkeep: agents add, edit and log; removing a task or a "Done" is for people.
+  ["POST", /^\/printer\/upkeep$/, ["printer"]],
+  ["PATCH", new RegExp(`^/printer/upkeep/${id}$`), ["printer"]],
+  ["POST", new RegExp(`^/printer/upkeep/${id}/done$`), ["printer"]],
+  ["PUT", new RegExp(`^/printer/upkeep/logs/${id}/photo/${id}$`), ["printer"]],
 ];
 
 /**

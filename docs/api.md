@@ -30,7 +30,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
 | `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
 | `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`. |
-| `printer` | `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
+| `printer` | `POST /printer/upkeep`, `PATCH /printer/upkeep/:id`, `POST /printer/upkeep/:id/done`, `PUT /printer/upkeep/logs/:logId/photo/:photoId`, `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
 The rules are one table, `src/worker/auth/scopes.ts`: any route not listed there is person-only, so a new endpoint is closed to tokens until it is given a scope. Routes that need to look at the body (a photo's `attemptId`, the fields of a `PATCH`) narrow it with `canUse` / `missingScope`. `test/worker/agents.test.ts` has a case per row.
 
@@ -77,6 +77,18 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 ## Changing your own password
 
 `PUT /api/account/password` with `{ currentPassword, newPassword }` (person-only). The new password needs at least 10 characters and no other rule, and must differ from the current one. It signs out the person's **other** sessions and keeps the one making the request; the answer is `{ signedOut }`, how many devices that was. Errors: `400 too_short`, `400 same_password`, `403 wrong_password`, and `429 rate_limited` after five wrong current passwords in 15 minutes (counted per person in `password_failures`, cleared on success).
+
+## Upkeep and drying
+
+The printer's maintenance list (`src/shared/upkeep.ts`, routes in `src/worker/routes/upkeep.ts`). The first read seeds the starting list for the X2D; people and agents edit it.
+
+- `GET /api/printer/upkeep` (`read`) → `{ printHours, tasks }`, most due first. A task has `intervalHours` and/or `intervalDays` (whichever comes first makes it due), `sinceHours`, `sinceDays`, `fraction` (1 is due), `due`, `lastDone` and the latest five `history` entries.
+- `POST /api/printer/upkeep` `{ id, name, note?, intervalHours?, intervalDays? }` adds a task (idempotent on `id`; at least one interval). `PATCH /api/printer/upkeep/:id` changes any of them. `printer` scope.
+- `POST /api/printer/upkeep/:id/done` `{ id, note?, at? }` logs a "Done": who (an agent's work is its owner's), when, and the printer's print hours at that moment; it resets the task. Idempotent on `id`. `PUT /api/printer/upkeep/logs/:logId/photo/:photoId` attaches a photo (multipart, like a spool's). `printer` scope.
+- Removing a task (`DELETE /printer/upkeep/:id`, undone by `POST …/restore`) and taking a "Done" back (`DELETE /printer/upkeep/logs/:logId`) are person-only.
+- **Print hours** are the sum over attempts of their `actualMinutes`, else the bridge's started-to-off-the-bed time, else the slicer's estimate (a failed print only as far as `failedAtPercent`); a print still going counts what it has run so far.
+- **Drying windows**: `PUT /api/printer` also takes `dryingDays` (`{ "PETG": 14 }`, whole: a material left out goes back to its starting value). A spool is past its window after that many days since `driedAt` (or since it was added). The app says "Dry it before printing"; the API only carries the numbers.
+- **Nudge**: devices with `upkeepNudges` (`PUT/PATCH /push/subscription`) get one push when a task becomes due: at most one a day for the whole printer, outside quiet hours.
 
 ## Notifications (people only)
 

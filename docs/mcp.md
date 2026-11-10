@@ -50,6 +50,8 @@ Any client that takes a JSON config:
 | `finish_attempt` | Give a printing attempt its outcome | `attempts` |
 | `list_spools` | The pantry, with each spool's slot, level and (where it has gram data) grams left | `read` |
 | `weigh_spool` | A weighing: a fresh baseline for the grams left on a spool (`on_scale` minus its empty weight, or `grams_left`) | `printer` |
+| `list_upkeep` | The printer's maintenance tasks, most due first, with how long since each was done and the print-hour total | `read` |
+| `log_upkeep` | A task was done (now, or `at`), with an optional note: resets it and records the printer hours | `printer` |
 | `load_slot` | Record which spool is in an AMS slot (never touches the printer) | `printer` |
 
 Everything an agent writes is recorded as you, "via Claude for Alex" in the journal, attempts and idea cards, and in the change feed as the agent. The server can't delete anything; deleting stays with people.

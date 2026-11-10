@@ -29,6 +29,7 @@ export const PERSISTED_ROOTS = [
   "spools",
   "recipes",
   "printer",
+  "upkeep",
   "agents",
   "link-preview",
 ] as const;

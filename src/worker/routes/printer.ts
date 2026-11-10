@@ -9,6 +9,7 @@ import type { Db } from "../db/index.ts";
 import { amsSlots, attempts, bridge, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { upkeepRoutes } from "./upkeep.ts";
 
 const PRINTER_ID = "x2d";
 
@@ -25,6 +26,8 @@ const setupSchema = z.object({
     .transform((list) => [...new Set(list)])
     .optional(),
   amsUnits: z.number().int().min(0).max(X2D.maxAmsUnits).optional(),
+  /** Days each material stays dry, whole: a material left out goes back to its starting value. */
+  dryingDays: z.record(z.string().trim().toUpperCase().min(1).max(20), z.number().int().min(1).max(365)).optional(),
 });
 
 const setSlot = z.object({ spoolId: z.uuid().nullable() });
@@ -81,6 +84,7 @@ async function loadPrinter(db: Db): Promise<PrinterResponse> {
 
 /** /api/printer: the X2D as it's set up here, and what is loaded where. Never a live connection. */
 export const printerRoutes = new Hono<AppEnv>()
+  .route("/upkeep", upkeepRoutes)
   .get("/", async (c) => c.json<PrinterResponse>(await loadPrinter(c.var.db)))
 
   /** Saves the setup: nozzles fitted, plates owned, AMS units. Whatever is sent replaces that part; the rest stays. */
@@ -93,6 +97,9 @@ export const printerRoutes = new Hono<AppEnv>()
       nozzles: { ...current.nozzles, ...parsed.data.nozzles },
       plates: parsed.data.plates ?? current.plates,
       amsUnits: parsed.data.amsUnits ?? current.amsUnits,
+      ...((parsed.data.dryingDays ?? current.dryingDays) && {
+        dryingDays: parsed.data.dryingDays ?? current.dryingDays,
+      }),
     };
     await c.var.db.batch([
       c.var.db

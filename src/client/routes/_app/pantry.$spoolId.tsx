@@ -17,6 +17,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { AmsLoadout } from "@/components/pantry/Ams";
+import { DryIt } from "@/components/pantry/DryIt";
 import { GramsHero, UsedBy } from "@/components/pantry/SpoolGrams";
 import { SetWeightSheet, WeighSheet } from "@/components/pantry/WeightSheets";
 import { LazyRecipeShelf } from "@/components/recipes/LazyRecipeSheet";
@@ -295,6 +296,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               <span className="text-body text-ink">
                 {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
               </span>
+              <DryIt spool={{ ...spool, driedAt: value.driedAt, material: value.material }} />
             </div>
 
             <div className="flex flex-col gap-2.5">

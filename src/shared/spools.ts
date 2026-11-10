@@ -123,6 +123,8 @@ export interface PrinterSetup {
   plates: string[];
   /** AMS 2 Pro units attached: the Combo comes with one. */
   amsUnits: number;
+  /** Days a dried spool stays dry, per material, where people changed the starting values (shared/drying.ts). */
+  dryingDays?: Record<string, number>;
 }
 
 export const DEFAULT_PRINTER: PrinterSetup = {

@@ -4,6 +4,7 @@ import { amsUnitLetters, EXTERNAL_SLOT, spoolName, unitSlots } from "@shared/spo
 import { daysAgo } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DragEvent, useState } from "react";
+import { DryIt } from "@/components/pantry/DryIt";
 import { Button } from "@/components/ui/Button";
 import { DriedIcon, PlusIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
@@ -137,6 +138,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
                 </span>
               </MetaList>
             )}
+            {shape === "bay" && <DryIt spool={spool} className="text-caption justify-center lg:justify-start" />}
             {shape === "bay" && (
               <RemainingMeter
                 remaining={spool.remaining}

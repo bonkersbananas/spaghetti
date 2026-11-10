@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
 import type { BridgeStatusData } from "../../shared/bridge.ts";
@@ -466,6 +466,8 @@ export const pushSubscriptions = sqliteTable(
     auth: text("auth").notNull(),
     timeZone: text("time_zone").notNull(),
     alsoOthers: integer("also_others", { mode: "boolean" }).notNull().default(false),
+    /** Also tell this device when printer upkeep is due (at most one nudge a day, shared/upkeep.ts). */
+    upkeepNudges: integer("upkeep_nudges", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("push_subscriptions_user_idx").on(table.userId)],
@@ -488,3 +490,44 @@ export const pushNudges = sqliteTable(
 );
 
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+
+/**
+ * A printer upkeep task ("Clean the build plate") with its interval in print hours and/or days, whichever
+ * comes first. The starting list is seeded on first read (shared/upkeep.ts). `nudgedAt` is when its "due" nudge
+ * went out (cleared by Done), so it is nudged once. Deleting is soft, with undo.
+ */
+export const upkeepTasks = sqliteTable("upkeep_tasks", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  note: text("note").notNull().default(""),
+  intervalHours: integer("interval_hours"),
+  intervalDays: integer("interval_days"),
+  position: integer("position").notNull(),
+  nudgedAt: integer("nudged_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+});
+
+/** One "Done" on a task: who, when, the printer's hours at that moment, an optional note and photo (in R2 like any photo). */
+export const upkeepLogs = sqliteTable(
+  "upkeep_logs",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => upkeepTasks.id, { onDelete: "cascade" }),
+    doneBy: text("done_by")
+      .notNull()
+      .references(() => users.id),
+    doneVia: text("done_via"),
+    doneAt: integer("done_at", { mode: "timestamp_ms" }).notNull(),
+    printerHours: real("printer_hours").notNull(),
+    note: text("note").notNull().default(""),
+    photoId: text("photo_id"),
+    photoWidth: integer("photo_width"),
+    photoHeight: integer("photo_height"),
+    photoColor: text("photo_color"),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("upkeep_logs_task_idx").on(table.taskId, table.doneAt)],
+);

@@ -23,14 +23,15 @@ const origin = (page: Page) => new URL(page.url()).origin;
 const BUDGET_KB = {
   "/sign-in": 245,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 350,
+  // Upkeep and drying added about 3 kB here and to /pantry and /printer: the rules, the due check and the shared chunks they reshuffle; the sheets, drying table and upkeep section load on demand.
+  "/today": 348,
   // Sharing in (the share target's intake) added about 2 kB to every signed-in screen, and notifications a little more (two menu rows, the service worker messages); the settings sheet itself loads on first open.
   "/ideas": 340,
   "/builds": 340,
-  "/journal": 350,
-  "/search": 350,
-  "/pantry": 350,
-  "/printer": 350,
+  "/journal": 345,
+  "/search": 345,
+  "/pantry": 348,
+  "/printer": 348,
 } as const;
 
 /**
@@ -106,6 +107,7 @@ test("each screen's first load stays within its JavaScript budget, without the r
     const { files, raw, gzip } = await scriptsLoadedBy(page, path, async () => {
       await expect(page.locator("h1").first()).toBeVisible();
     });
+    if (process.env.PERF_FILES) console.log(path, files.map((f) => f.split("/").pop()).join(" "));
     rows.push(`${path.padEnd(10)} ${raw.toFixed(0).padStart(5)} kB  ${gzip.toFixed(0).padStart(4)} kB gzip`);
     // The styleguide, the .3mf reader, the command palette and the shortcut list wait until they are needed
     // (nothing loads them until asked, except the palette's idle prefetch, switched off here).
