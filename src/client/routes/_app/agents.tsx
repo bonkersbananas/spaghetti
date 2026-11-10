@@ -1,6 +1,7 @@
 import type { AgentInfo, AgentTokenInfo } from "@shared/agents";
 import { SCOPE_INFO } from "@shared/agents";
 import type { PersonColor } from "@shared/people";
+import { displayName } from "@shared/people";
 import { relativeTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -109,7 +110,7 @@ function AgentCard({
         {owner && <AgentAvatar name={agent.name} owner={owner} size="lg" />}
         <div className="min-w-0 flex-1">
           <h2 className="text-lead text-ink font-semibold break-words">{agent.name}</h2>
-          <p className="text-small text-ink-faint">Acts for {owner?.name.split(" ")[0] ?? "you"}</p>
+          <p className="text-small text-ink-faint">Acts for {displayName(owner, "you")}</p>
         </div>
       </div>
       {live.length ? (

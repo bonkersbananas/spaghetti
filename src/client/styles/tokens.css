@@ -92,7 +92,8 @@
   --sg-text-display-lh: 2.5rem;
 
   /* Layout */
-  --sg-tabbar-height: 4.25rem;
+  /* The tab bar's buttons; the bar itself also holds the home indicator's room below them. */
+  --sg-tabbar-row: 4.25rem;
   /* A screen's own action bar on phones, which sits on the tab bar. */
   --sg-actionbar-height: 4.75rem;
   --sg-sidebar-width: 16rem;
@@ -100,6 +101,8 @@
   --sg-wide-width: 72rem;
   --sg-safe-top: env(safe-area-inset-top, 0px);
   --sg-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The whole tab bar, home indicator included: everything that floats above it or clears it uses this one. */
+  --sg-tabbar-height: calc(var(--sg-tabbar-row) + var(--sg-safe-bottom));
   /* What the on-screen keyboard covers, and what is left above it (lib/viewport.ts keeps them current). */
   --sg-keyboard-inset: 0px;
   --sg-visible-height: 100dvh;
@@ -285,6 +288,7 @@
   --ease-bounce: var(--sg-ease-bounce);
 
   --spacing-tabbar: var(--sg-tabbar-height);
+  --spacing-tabbar-row: var(--sg-tabbar-row);
   --spacing-actionbar: var(--sg-actionbar-height);
   --spacing-sidebar: var(--sg-sidebar-width);
   /* A note card's margins and the gap under its rule, in container units like its type. */
@@ -334,14 +338,9 @@
 @utility pb-safe {
   padding-bottom: var(--sg-safe-bottom);
 }
-@utility pb-tabbar {
-  padding-bottom: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom) + 1.5rem);
-}
-@utility bottom-tabbar {
-  bottom: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom));
-}
-@utility h-tabbar-safe {
-  height: calc(var(--sg-tabbar-height) + var(--sg-safe-bottom));
+/* Phone pages end clear of the tab bar (bottom-tabbar and h-tabbar come from --spacing-tabbar above). */
+@utility pb-page {
+  padding-bottom: calc(var(--sg-tabbar-height) + 1.5rem);
 }
 @utility tabular {
   font-variant-numeric: tabular-nums;

@@ -131,7 +131,7 @@ Use `tabular` for numbers that line up (temperatures, durations, weights).
 ## Space, layout and radii
 
 - Spacing is Tailwind's 4 px scale. Prefer generous space to dividers.
-- Phone pages: `px-5`, content clears the tab bar with `pb-tabbar`; the shell handles safe-area insets (`pt-safe`, `pb-safe`).
+- Phone pages: `px-5`, content clears the tab bar with `pb-page`; the shell handles safe-area insets (`pt-safe`, `pb-safe`). Read the insets only through `--sg-safe-top` / `--sg-safe-bottom` (never `env()` in a component): tests and `pnpm screenshots --iphone` override them. `--sg-tabbar-height` is the whole tab bar, home indicator included: floating bottom actions sit at `bottom-tabbar` (use `ActionBar`), and nothing is placed with its own number. A frosted strip belongs only over the status bar (`StatusBarCap`, clear until the page scrolls), never over a page title.
 - Desktop: the sidebar is `w-sidebar` (16 rem); content sits in `max-w-wide` (72 rem) with `px-12`. A page with a single column of content (header text, fields, empty states) keeps it in one left-aligned `max-w-content` (45 rem) column, and empty states center within that column, not across the main area.
 - Touch targets: at least 44 px on phones. Controls drawn smaller (`Button`/`IconButton` `sm`, chips, a thumbnail's remove button, a toast's action) get `touch-target`, an invisible 44 px hit area on touch screens that doesn't change how they look.
 - Phone sheets sit on the on-screen keyboard: `lib/viewport.ts` keeps `--sg-keyboard-inset` and `--sg-visible-height` from `visualViewport` (iOS Safari doesn't shrink `100dvh` for the keyboard), so a sheet's footer button stays in view while typing. Fields are 16 px or more on phones (`text-body`), or iOS Safari zooms in.

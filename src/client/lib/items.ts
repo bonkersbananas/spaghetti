@@ -220,7 +220,7 @@ export function connectOutbox(queryClient: QueryClient) {
       if (finished) return;
       // Someone else gave it an outcome first: theirs stands, and what was added is said once.
       const people = queryClient.getQueryData<Person[]>(peopleQuery.queryKey);
-      const who = people?.find((person) => person.id === attempt.finishedBy)?.name.split(" ")[0] ?? "Someone";
+      const who = people?.find((person) => person.id === attempt.finishedBy)?.name ?? "Someone";
       const saved = cachedItem(queryClient, attempt.itemId);
       const number = saved ? viewAttempts(saved.attempts).find((a) => a.id === attempt.id)?.number : undefined;
       const added = [photos > 0 && (photos === 1 ? "photo" : "photos"), pending.note.trim() && "note"].filter(Boolean);
