@@ -28,7 +28,7 @@ export function startedStatus(item: ItemView): { stage: string; detail?: string;
     return { stage: "Printed", detail: last?.outcome === "success" ? "Worked" : undefined, tone: "good" };
   }
   if (!last) return { stage: "Building", detail: "no attempts yet" };
-  if (last.outcome === null) return { stage: "Building", detail: `attempt ${last.number} is printing` };
+  if (last.outcome === null) return { stage: "Printing", detail: `attempt ${last.number}` };
   const outcome = { success: "worked", partial: "partly", failed: "didn't work" }[last.outcome];
   return { stage: "Building", detail: `attempt ${last.number} ${outcome}` };
 }
@@ -57,7 +57,7 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
           to="/builds"
           className="text-small text-ink-soft hover:text-ink focus-ring mt-2 inline-flex items-center gap-1.5 rounded-md py-2 font-semibold"
         >
-          See all in Builds <ArrowRightIcon size={14} weight="bold" aria-hidden />
+          See all {started.length} in Builds <ArrowRightIcon size={14} weight="bold" aria-hidden />
         </Link>
       )}
     </section>

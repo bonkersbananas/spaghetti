@@ -1,6 +1,6 @@
 import { OUTCOME_LABELS } from "@shared/attempts";
 import { daysLeft } from "@shared/deleted";
-import { relativeTime } from "@shared/time";
+import { inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { EmptyPot } from "@/components/illustrations";
@@ -75,7 +75,7 @@ function RecentlyDeleted() {
                         <span className="text-body text-ink truncate font-semibold">{name.text}</span>
                         <MetaList className="text-small text-ink-faint">
                           <span>{entry.stage === "idea" ? "Idea" : "Build"}</span>
-                          <span>deleted {relativeTime(entry.deletedAt)}</span>
+                          <span>deleted {inlineTime(entry.deletedAt)}</span>
                           <span>{goesFor(entry.deletedAt)}</span>
                         </MetaList>
                       </span>
@@ -116,7 +116,7 @@ function RecentlyDeleted() {
                         <span className="text-body text-ink truncate font-semibold">Attempt of {of}</span>
                         <MetaList className="text-small text-ink-faint">
                           <span>{entry.outcome ? OUTCOME_LABELS[entry.outcome] : "Was printing"}</span>
-                          <span>printed {relativeTime(entry.printedAt)}</span>
+                          <span>printed {inlineTime(entry.printedAt)}</span>
                           <span>{goesFor(entry.deletedAt)}</span>
                         </MetaList>
                       </span>
