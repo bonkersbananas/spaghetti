@@ -2,15 +2,17 @@ import type { Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
+import { lazy, Suspense } from "react";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
-import { MoreIcon, MoveDownIcon, MoveUpIcon, UpNextIcon } from "@/components/ui/icons";
-import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { useOutbox } from "@/lib/outbox";
 import { photoSrc } from "@/lib/previews";
+
+// The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
+const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
 
 /** What a photo shows, for screen readers: the title, else the start of the note. */
 export function photoAlt(item: Pick<ItemView, "title" | "note">): string {
@@ -109,6 +111,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           link={{ to: "/ideas/$ideaId", params: { ideaId: item.id } }}
           aspect="portrait"
           headingLevel={headingLevel}
+          reserveEnd={!!menu && !item.pending}
           photo={
             cover
               ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
@@ -129,54 +132,6 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
         <CardMenu menu={menu} name={item.title || item.note.split("\n")[0]?.slice(0, 40) || "this idea"} />
       )}
     </m.li>
-  );
-}
-
-/** The card's "…" button: Up next, and where it stands in the queue. A link can't hold a button, so it sits over the card. */
-function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
-  const item =
-    "text-body text-ink hover:bg-ink/5 focus-visible:bg-ink/5 flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left outline-none";
-  return (
-    <Popover
-      label={`Up next options for ${name}`}
-      side="bottom"
-      align="start"
-      className="w-56 p-1.5"
-      trigger={
-        <button
-          type="button"
-          aria-label={`Options for ${name}`}
-          className="pressable focus-ring touch-target bg-veil text-on-veil hover:bg-veil-strong absolute top-3 left-3 flex size-8 items-center justify-center rounded-full backdrop-blur-md transition-opacity md:opacity-0 md:group-focus-within/idea:opacity-100 md:group-hover/idea:opacity-100"
-        >
-          <MoreIcon size={18} weight="bold" aria-hidden />
-        </button>
-      }
-    >
-      <div className="flex flex-col">
-        <PopoverClose asChild>
-          <button type="button" className={item} onClick={menu.onToggle}>
-            <UpNextIcon size={20} aria-hidden />
-            {menu.queued ? "Take off Up next" : "Up next"}
-          </button>
-        </PopoverClose>
-        {menu.onMoveUp && (
-          <PopoverClose asChild>
-            <button type="button" className={item} onClick={menu.onMoveUp}>
-              <MoveUpIcon size={20} aria-hidden />
-              Move up
-            </button>
-          </PopoverClose>
-        )}
-        {menu.onMoveDown && (
-          <PopoverClose asChild>
-            <button type="button" className={item} onClick={menu.onMoveDown}>
-              <MoveDownIcon size={20} aria-hidden />
-              Move down
-            </button>
-          </PopoverClose>
-        )}
-      </div>
-    </Popover>
   );
 }
 

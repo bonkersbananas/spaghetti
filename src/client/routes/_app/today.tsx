@@ -163,7 +163,7 @@ function Today() {
           Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
         </EmptyState>
       ) : (
-        // On a phone the blocks run in one column in the order below (bed, pick up, up next, printer, month, back burner).
+        // On a phone the blocks run in one column in the order below (bed, up next, pick up, printer, month, back burner).
         // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
           <div className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
@@ -179,8 +179,8 @@ function Today() {
                 bedSection
               )}
             </div>
-            <div className="order-2 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
-            <div className="order-3 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
+            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
+            <div className="order-2 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
             <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>

@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { ImageIcon } from "@/components/ui/icons";
-import { NoteFace } from "@/components/ui/NoteFace";
 import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
@@ -18,7 +17,7 @@ export function upNextIdeas(ideas: ItemView[]): ItemView[] {
   return splitQueue(ideas.filter((idea) => !idea.pending)).queue;
 }
 
-function Row({ item, position }: { item: ItemView; position: number }) {
+function Row({ item }: { item: ItemView }) {
   const photo = item.photos[0];
   const name = itemName(item);
   return (
@@ -30,8 +29,6 @@ function Row({ item, position }: { item: ItemView; position: number }) {
       <span className="relative size-12 shrink-0 overflow-hidden rounded-md" aria-hidden>
         {photo ? (
           <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
-        ) : item.note ? (
-          <NoteFace note={item.note} />
         ) : (
           <span className="bg-ink/5 text-ink-faint flex size-full items-center justify-center">
             <ImageIcon size={22} />
@@ -45,9 +42,6 @@ function Row({ item, position }: { item: ItemView; position: number }) {
           {name.text}
         </span>
         {item.forWhom && <span className="text-small text-ink-faint truncate">for {item.forWhom}</span>}
-      </span>
-      <span className="text-small text-ink-faint tabular shrink-0 font-semibold" aria-hidden>
-        {position}
       </span>
     </Link>
   );
@@ -63,8 +57,8 @@ export function UpNext({ ideas }: { ideas: ItemView[] }) {
         Up next
       </Overline>
       <div className="flex flex-col gap-1">
-        {queue.slice(0, FIRST).map((item, index) => (
-          <Row key={item.id} item={item} position={index + 1} />
+        {queue.slice(0, FIRST).map((item) => (
+          <Row key={item.id} item={item} />
         ))}
       </div>
       {queue.length > FIRST && (

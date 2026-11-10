@@ -21,8 +21,8 @@ const origin = (page: Page) => new URL(page.url()).origin;
  */
 const BUDGET_KB = {
   "/sign-in": 245,
-  // Today pulls in the journal rows, the print card and the printer strip on top of what Ideas needs.
-  "/today": 340,
+  // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
+  "/today": 345,
   // Sharing in (the share target's intake in the capture state) added about 2 kB to every signed-in screen.
   "/ideas": 335,
   "/builds": 335,
