@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
+import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
 
 /** The spool that sat in A4 before the unknown-tray shot emptied it. */
@@ -27,12 +28,167 @@ export interface Shot {
   cleanup?: (page: Page) => Promise<void>;
 }
 
+type Slice = "all" | "none" | "young";
+
+/**
+ * Shows Today with parts of the workspace missing, by answering the app's own requests with less: the ideas,
+ * the builds, the journal and the spools it fetches. The real data stays in the database; unmockToday puts it back.
+ */
+async function mockToday(
+  page: Page,
+  show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice; late?: boolean; offBed?: boolean },
+) {
+  const DAY = 24 * 60 * 60 * 1000;
+  await page.route(/\/api\/items\?stage=/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as {
+      items: Array<{
+        stage: string;
+        createdAt: number;
+        attempts?: Array<{ outcome: string | null; printedAt: number; endedAt?: number | null }>;
+      }>;
+    };
+    // The printer says the towel hook's print stopped ten minutes ago: nobody has said how it went.
+    if (show.offBed) {
+      for (const item of json.items)
+        for (const attempt of item.attempts ?? [])
+          if (attempt.outcome === null && attempt.printedAt > SEED_NOW - 30 * 60 * 1000)
+            attempt.endedAt = SEED_NOW - 10 * 60 * 1000;
+    }
+    // Prints on the bed started earlier, so they are due.
+    if (show.late) {
+      for (const item of json.items)
+        for (const attempt of item.attempts ?? [])
+          if (attempt.outcome === null) attempt.printedAt -= 4 * 60 * 60 * 1000;
+    }
+    const isIdeas = route.request().url().includes("stage=idea");
+    const mode = isIdeas ? show.ideas : show.builds;
+    const items =
+      mode === "none"
+        ? []
+        : mode === "young"
+          ? json.items.filter((item) => SEED_NOW - item.createdAt < 14 * DAY)
+          : json.items;
+    await route.fulfill({ response, json: { ...json, items } });
+  });
+  await page.route(/\/api\/journal\/summary/, (route) =>
+    show.journal === "none"
+      ? route.fulfill({ json: { summary: { prints: 0, worked: 0, partly: 0, spaghetti: 0, finished: [] } } })
+      : route.continue(),
+  );
+  await page.route(/\/api\/journal\?/, (route) =>
+    show.journal === "none" ? route.fulfill({ json: { entries: [], items: [], next: null } }) : route.continue(),
+  );
+  await page.route(/\/api\/spools$/, (route) =>
+    show.spools === "none" ? route.fulfill({ json: { spools: [] } }) : route.continue(),
+  );
+  await page.route(/\/api\/printer$/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as { slots: object };
+    await route.fulfill({ response, json: show.spools === "none" ? { ...json, slots: {} } : json });
+  });
+  await page.reload({ waitUntil: "networkidle" });
+}
+
+/**
+ * Waits for a heading, then lets the empty state around it finish easing in. Its entrance animation can stall at
+ * "invisible" when it follows a full-page shot, so it is finished by hand rather than waited for.
+ */
+async function waitUntilEased(page: Page, title: string) {
+  await page.getByRole("heading", { name: title }).waitFor();
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+  await page.waitForTimeout(300);
+}
+
+async function unmockToday(page: Page) {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+}
+
 /**
  * The screens `pnpm screenshots` captures, at 390×844 and 1440×900.
  * Add your feature's screens here.
  */
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
+  // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
+  { name: "today", path: "/today", fullPage: true },
+  {
+    // Both prints started four hours earlier than the seed says: past their estimates, so each asks how it went.
+    // (The data is moved, not the browser's clock: jumping the clock back and forth stalls motion's animations.)
+    name: "today-due",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", late: true });
+      await page.getByText("How did it go?").first().waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // The bridge saw the towel hook's print stop: a calm question with three answers instead of a bar.
+    name: "today-off-the-bed",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", offBed: true });
+      await page
+        .getByText(/Off the bed at/)
+        .first()
+        .waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // Nothing printing, no builds, nothing loaded: only the old idea left on the back burner.
+    name: "today-partly-empty",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "all" });
+      await page.getByRole("heading", { name: "On the back burner" }).waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // Only young ideas and nothing else: a quiet kitchen.
+    name: "today-quiet",
+    path: "/today",
+    prepare: async (page) => {
+      await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "young" });
+      await waitUntilEased(page, "All quiet in the kitchen");
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // A brand-new notebook.
+    name: "today-empty",
+    path: "/today",
+    prepare: async (page) => {
+      await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "none" });
+      await waitUntilEased(page, "Nothing on the stove yet");
+    },
+    cleanup: unmockToday,
+  },
+  // With a print running, the sidebar's card (hidden on Today) and the phone's four tabs around capture.
+  {
+    name: "sidebar-printing",
+    path: "/ideas",
+    width: 1440,
+    selector: "aside",
+    // The card arrives once the builds are fetched, and eases in.
+    prepare: async (page) => {
+      await page
+        .getByRole("complementary")
+        .getByRole("link", { name: /Towel hook/ })
+        .waitFor();
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+  },
+  { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
   { name: "builds", path: "/builds", fullPage: true },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
@@ -552,6 +708,14 @@ export const shots: Shot[] = [
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
   { name: "styleguide-cards", path: "/styleguide", selector: "#cards" },
+  {
+    name: "styleguide-today",
+    path: "/styleguide",
+    selector: "#today",
+    prepare: async (page) => {
+      await page.locator("#today img").first().waitFor({ state: "attached" });
+    },
+  },
   {
     name: "styleguide-journal",
     path: "/styleguide",

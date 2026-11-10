@@ -32,6 +32,7 @@ export {
   CloudArrowUp as DropIcon,
   Columns as CompareIcon,
   Command as CommandIcon,
+  CookingPot as TodayIcon,
   Copy as CopyIcon,
   Cube as BuildsIcon,
   Disc as SpoolIcon,

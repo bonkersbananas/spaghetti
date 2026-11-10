@@ -8,6 +8,9 @@ async function signIn(page: Page) {
   await page.getByLabel("Name").fill(user.username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
+  // Signing in lands on Today; these tests start from the inbox.
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
 }
 

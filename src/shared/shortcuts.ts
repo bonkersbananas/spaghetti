@@ -56,6 +56,7 @@ export const SHORTCUTS = define([
   { id: "palette", group: "anywhere", label: "Open the command palette", keys: ["mod+k"] },
   { id: "help", group: "anywhere", label: "Show the shortcuts", keys: ["?"] },
   { id: "capture", group: "anywhere", label: "New idea", keys: ["c"] },
+  { id: "goToday", group: "anywhere", label: "Go to Today", keys: ["g t"] },
   { id: "goIdeas", group: "anywhere", label: "Go to Ideas", keys: ["g i"] },
   { id: "goBuilds", group: "anywhere", label: "Go to Builds", keys: ["g b"] },
   { id: "goJournal", group: "anywhere", label: "Go to Journal", keys: ["g j"] },

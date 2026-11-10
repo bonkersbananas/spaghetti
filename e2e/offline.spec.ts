@@ -420,7 +420,7 @@ test("is installable: manifests for both themes, maskable icons, and a worker th
     ["manifest-dark.webmanifest", "#1b1714"],
   ] as const) {
     const manifest = await (await page.request.get(`/${file}`)).json();
-    expect(manifest).toMatchObject({ display: "standalone", start_url: "/ideas", theme_color: color });
+    expect(manifest).toMatchObject({ display: "standalone", start_url: "/today", theme_color: color });
     expect(manifest.background_color).toBe(color);
     expect(manifest.icons.map((icon: { purpose: string }) => icon.purpose)).toContain("maskable");
     for (const icon of manifest.icons) expect((await page.request.get(icon.src)).status()).toBe(200);
@@ -465,4 +465,38 @@ test("shows the pantry as last seen with no connection, read-only", async ({ pag
     await context.setOffline(false);
     await page.request.delete(`/api/spools/${spoolId}`, { headers });
   }
+});
+
+test("Today opens with no connection from what was last seen, and a print can still be finished", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Bath tugboat", stage: "building" } });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: {
+      id: crypto.randomUUID(),
+      outcome: null,
+      printedAt: Date.now() - 20 * 60_000,
+      settings: { estimatedMinutes: 120 },
+    },
+  });
+
+  // Looked at once, online: its queries are kept on the device.
+  await page.goto("/today");
+  const bed = page.getByRole("region", { name: "On the bed" });
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
+  await expect.poll(() => cacheHolds(page, "Bath tugboat")).toBe(true);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("status").filter({ hasText: "Offline" })).toContainText("Showing what you saw");
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
+  // Finishing goes through the outbox, so it is still possible next to the printer.
+  await bed.getByRole("button", { name: "Finish" }).click();
+  await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
 });
