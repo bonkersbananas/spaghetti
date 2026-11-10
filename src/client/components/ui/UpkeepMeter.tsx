@@ -17,6 +17,7 @@ export function UpkeepMeter({
 }) {
   const filled = Math.min(1, Math.max(0, fraction));
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a styled bar; <meter> can't be drawn to the design.
     <span
       role="meter"
       aria-label="Time since it was done"
