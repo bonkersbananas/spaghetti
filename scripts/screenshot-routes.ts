@@ -69,7 +69,15 @@ export const shots: Shot[] = [
     name: "journal-months",
     path: "/journal",
     prepare: async (page) => {
-      const heading = page.getByRole("heading", { level: 2 }).nth(1);
+      // September is two months before the seed's date (SEED_NOW) and several
+      // pages down: the journal loads a page when its end scrolls into view,
+      // so scroll until the month is there rather than count on how many
+      // entries fit a page.
+      const heading = page.getByRole("heading", { level: 2, name: /September/ });
+      for (let step = 0; step < 12 && !(await heading.isVisible()); step++) {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await page.waitForTimeout(400);
+      }
       await heading.waitFor();
       await heading.evaluate((element) => element.scrollIntoView({ block: "start" }));
       await page.evaluate(() => window.scrollBy(0, -24));
@@ -196,7 +204,10 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.keyboard.press("ControlOrMeta+k");
       await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("stand");
-      await page.getByRole("option", { name: /^Headphone stand\b/ }).waitFor();
+      await page
+        .getByRole("option", { name: /^Headphone stand\b/ })
+        .first()
+        .waitFor();
       await page.getByRole("group", { name: "Builds" }).waitFor();
     },
     cleanup: async (page) => {
@@ -247,6 +258,7 @@ export const shots: Shot[] = [
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
   { name: "printer", path: "/printer", fullPage: true },
+  // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.
     name: "attempt-file-plates",
@@ -285,7 +297,12 @@ export const shots: Shot[] = [
       });
       await sheet.getByRole("button", { name: /Cable clips/ }).click();
       await sheet.getByLabel("Layer height").waitFor();
-      await sheet.getByText(SLICER_FILE_NAME).evaluate((element) => element.scrollIntoView({ block: "start" }));
+      // The settings open with an animation that changes the sheet's height: scroll once it has finished, or
+      // where the sheet ends up depends on how far along it was (the shot came out differently from run to run).
+      await page.waitForTimeout(900);
+      await sheet
+        .getByText(SLICER_FILE_NAME)
+        .evaluate((element) => element.scrollIntoView({ block: "start", behavior: "instant" }));
       await page.waitForTimeout(500);
     },
     cleanup: async (page) => {
