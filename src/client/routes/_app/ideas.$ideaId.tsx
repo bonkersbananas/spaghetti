@@ -11,9 +11,11 @@ import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { BuildsIcon, TrashIcon } from "@/components/ui/icons";
+import { ForField } from "@/components/ui/ForField";
+import { BuildsIcon, TrashIcon, UpNextIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { SaveStatus } from "@/components/ui/SaveStatus";
@@ -27,6 +29,7 @@ import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
+import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/ideas/$ideaId")({
@@ -90,7 +93,7 @@ function Idea({ item }: { item: ItemView }) {
   const person = people?.find((p) => p.id === item.createdBy);
   const via = useVia()(item.createdVia);
 
-  const { title, setTitle, note, setNote, saveState } = useItemFields(item);
+  const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
 
   const photos = item.photos.filter((photo) => !photo.attemptId);
   const [selectedId, setSelectedId] = useState(photos[0]?.id);
@@ -210,6 +213,21 @@ function Idea({ item }: { item: ItemView }) {
               }
             }}
           />
+          <ForField
+            aria-label="For"
+            value={forWhom}
+            onChange={(event) => setForWhom(event.target.value)}
+            readOnly={readOnly || item.pending}
+          />
+          <ToggleChip
+            selected={item.upNext !== null}
+            icon={UpNextIcon}
+            disabled={readOnly || item.pending}
+            onClick={() => setUpNext(queryClient, item, item.upNext === null)}
+            className="self-start"
+          >
+            Up next
+          </ToggleChip>
           <NoteField
             value={note}
             onChange={setNote}

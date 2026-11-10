@@ -28,7 +28,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | Scope | Allows |
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
-| `capture` | `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
+| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
 | `attempts` | `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`. |
 | `printer` | `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
@@ -53,6 +53,10 @@ A spool can count itself down (decision [0009](decisions/0009-filament-tracked-i
 - `POST /spools/:id/weighings` with `{ "id": "<uuid>", "onScale": 812 }` (the empty spool's weight is taken off) or `{ "id", "gramsLeft": 562 }`, optionally `tareGrams` and `at`: a fresh baseline. Idempotent on `id`. `printer` scope. `DELETE /spools/:id/weighings/:weighingId` takes one back; it is person-only.
 - `GET /spools/:id/usage` lists what used the spool (attempt, build, grams, whether the amount is a guess, whether it still counts) and its weighings.
 - Usage is read off finished attempts, never stored: `settings.filaments[].grams` (from the slicer file) of each filament whose `spoolId` is the spool. Editing an attempt, or deleting and restoring it, changes the answer.
+
+## Up next and "for"
+
+An idea can be queued as **Up next**: `upNext` on an item is its place in the queue (1 is first) or `null`. `PATCH /items/:id { "upNext": true }` puts it at the end, `false` or `null` takes it off, a number puts it at that place (the undo of taking it off). Only ideas are queued, and a stage change to a build takes the idea off the queue. `PUT /items/up-next/order { "ids": [...] }` sets the order (those first, in that order; queued ideas not listed follow) and answers with the queue. `forWhom` ("Mila", up to 80 characters, empty clears it) is optional and searchable. All of these are `capture` scope.
 
 ## Also here
 

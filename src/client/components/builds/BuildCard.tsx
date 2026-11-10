@@ -101,7 +101,12 @@ export function BuildCard({
             <Chip className="bg-veil text-on-veil backdrop-blur-md">Not printed yet</Chip>
           )
         }
-        meta={<ActivityLine item={item} />}
+        meta={
+          <>
+            {item.forWhom && <span className="block">for {item.forWhom}</span>}
+            <ActivityLine item={item} />
+          </>
+        }
         person={person}
         via={via}
         className="h-full"

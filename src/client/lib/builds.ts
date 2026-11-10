@@ -45,10 +45,16 @@ async function changeStage(
   queryClient: QueryClient,
   id: string,
   stage: ItemStage,
-  extra: { coverPhotoId?: string | null } = {},
+  extra: { coverPhotoId?: string | null; upNext?: number | null } = {},
 ) {
   const before = cachedItem(queryClient, id);
-  patchCachedItem(queryClient, id, (item) => ({ ...item, ...stageFields(item, stage), ...extra }));
+  // Starting a build takes the idea off the Up next queue; the undo can put it back (extra.upNext).
+  patchCachedItem(queryClient, id, (item) => ({
+    ...item,
+    ...stageFields(item, stage),
+    ...(stage !== "idea" ? { upNext: null } : {}),
+    ...extra,
+  }));
   if (outbox.updatePending(id, { stage })) return;
   try {
     const { item: saved } = await api<ItemResponse>(`/items/${id}`, {
@@ -61,6 +67,7 @@ async function changeStage(
       startedAt: saved.startedAt,
       finishedAt: saved.finishedAt,
       coverPhotoId: saved.coverPhotoId,
+      upNext: saved.upNext,
       updatedAt: saved.updatedAt,
     }));
   } catch {
@@ -71,6 +78,7 @@ async function changeStage(
         startedAt: before.startedAt,
         finishedAt: before.finishedAt,
         coverPhotoId: before.coverPhotoId,
+        upNext: before.upNext,
       }));
     }
     toast.error("Couldn't save that change", "It's back the way it was. Try again in a moment.");
@@ -80,10 +88,14 @@ async function changeStage(
 /** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
 export function startBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
+  const wasUpNext = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;
   void changeStage(queryClient, item.id, "building");
   toast.undo("Moved to Builds", {
-    description: "Same idea, same photos. Log the first attempt when it prints.",
-    onUndo: () => void changeStage(queryClient, item.id, "idea"),
+    description:
+      wasUpNext !== null
+        ? "Off the Up next list. Same idea, same photos."
+        : "Same idea, same photos. Log the first attempt when it prints.",
+    onUndo: () => void changeStage(queryClient, item.id, "idea", wasUpNext !== null ? { upNext: wasUpNext } : {}),
   });
 }
 

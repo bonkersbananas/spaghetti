@@ -237,6 +237,19 @@ export const shots: Shot[] = [
   },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
+  {
+    // The card's menu in the Up next queue: a place up or down, or off the queue.
+    name: "ideas-up-next-menu",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Options for Replacement knob/ }).click();
+      await page.getByRole("button", { name: "Move up" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "builds", path: "/builds", fullPage: true },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
   {
