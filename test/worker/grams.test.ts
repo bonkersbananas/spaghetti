@@ -91,6 +91,34 @@ describe("grams on a spool", () => {
     ).toBe(404);
   });
 
+  it("goes back to a hand-set level when the net weight is cleared, even after weighings", async () => {
+    const spool = await addSpool({ netGrams: 1000, remaining: "half" });
+    await request(`/api/spools/${spool.id}/weighings`, {
+      method: "POST",
+      cookie,
+      json: { id: crypto.randomUUID(), gramsLeft: 200 },
+    });
+    expect(await getSpool(spool.id)).toMatchObject({ gramsLeft: 200, remaining: "low" });
+    // While it has grams, a level sent by hand is ignored.
+    await request(`/api/spools/${spool.id}`, { method: "PATCH", cookie, json: { remaining: "full" } });
+    expect((await getSpool(spool.id)).remaining).toBe("low");
+
+    const cleared = await request(`/api/spools/${spool.id}/weight`, {
+      method: "PUT",
+      cookie,
+      json: { netGrams: null },
+    });
+    expect((await cleared.json<SpoolResponse>()).spool).toMatchObject({
+      gramsLeft: null,
+      weighedAt: null,
+      remaining: "half",
+    });
+    const usage = await (await request(`/api/spools/${spool.id}/usage`, { cookie })).json<SpoolUsageResponse>();
+    expect(usage.weighings).toEqual([]);
+    const patched = await request(`/api/spools/${spool.id}`, { method: "PATCH", cookie, json: { remaining: "empty" } });
+    expect((await patched.json<SpoolResponse>()).spool.remaining).toBe("empty");
+  });
+
   it("counts a finished attempt's grams off the spool, and follows edits, deletes and undo", async () => {
     const spool = await addSpool({ netGrams: 1000 });
     const item = await build();

@@ -241,19 +241,23 @@ export const spoolRoutes = new Hono<AppEnv>()
     const parsed = weightBody.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That weight couldn't be read.");
     const spoolId = c.req.param("id");
-    const [[row]] = await c.var.db.batch([
-      c.var.db
-        .update(spools)
-        .set({ ...parsed.data, updatedAt: new Date() })
-        .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
-        .returning({ id: spools.id }),
-      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
-    ]);
+    const update = c.var.db
+      .update(spools)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+      .returning({ id: spools.id });
+    const change = recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor });
+    // Clearing the net weight stops counting in grams altogether: the weighings go in the same batch, or they
+    // would keep the grams (and a refetch between two writes would see the old ones).
+    const [[row]] =
+      parsed.data.netGrams === null
+        ? await c.var.db.batch([
+            update,
+            c.var.db.delete(spoolWeighings).where(eq(spoolWeighings.spoolId, spoolId)),
+            change,
+          ])
+        : await c.var.db.batch([update, change]);
     if (!row) return apiError(c, 404, "not_found", notFound);
-    // Clearing the net weight stops counting in grams altogether: the weighings go too, or they would keep the grams.
-    if (parsed.data.netGrams === null) {
-      await c.var.db.delete(spoolWeighings).where(eq(spoolWeighings.spoolId, spoolId));
-    }
     const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
