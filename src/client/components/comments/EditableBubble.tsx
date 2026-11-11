@@ -1,11 +1,11 @@
 import type { Comment } from "@shared/comments";
-import { COMMENT_MAX } from "@shared/comments";
+import { COMMENT_MAX, splitTrailingLink } from "@shared/comments";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";
 import { TextArea } from "@/components/ui/Field";
 import { EditIcon, MoreIcon, TrashIcon } from "@/components/ui/icons";
+import { LinkCard } from "@/components/ui/LinkCard";
 import { Bubble } from "@/components/ui/Message";
-import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { Sheet } from "@/components/ui/Sheet";
 import { deleteComment, editComment } from "@/lib/comments";
@@ -93,7 +93,7 @@ export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: Edi
       aria-label="Options for your comment"
       disabled={readOnly}
       onClick={isDesktop ? undefined : () => setMenuOpen(true)}
-      className="pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink flex size-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40 md:opacity-0 md:group-focus-within/bubble:opacity-100 md:group-hover/bubble:opacity-100 md:data-[state=open]:opacity-100"
+      className="pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink flex size-8 shrink-0 items-center justify-center rounded-full opacity-0 transition-colors group-hover/bubble:opacity-100 focus-visible:opacity-100 disabled:opacity-40 data-[state=open]:opacity-100 max-md:pointer-events-none"
     >
       <MoreIcon size={18} weight="bold" aria-hidden />
     </button>
@@ -112,14 +112,17 @@ export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: Edi
     </>
   );
 
+  // A message that ends with a link shows it as a card instead of the raw address; mid-sentence links stay in the text.
+  const { text: shown, url } = splitTrailingLink(comment.body);
   return (
     <Bubble
       mine={mine}
       edited={comment.editedAt !== null}
       aside={aside}
-      below={<NoteLinks note={comment.body} label="Links in the comment" />}
+      onTap={mine && !isDesktop && !readOnly ? () => setMenuOpen(true) : undefined}
+      below={url ? <LinkCard url={url} className="w-72 max-w-full" /> : undefined}
     >
-      {linkify(comment.body, "text-ink font-medium underline decoration-ink/30 underline-offset-2")}
+      {shown ? linkify(shown, "text-ink font-medium underline decoration-ink/30 underline-offset-2") : undefined}
     </Bubble>
   );
 }

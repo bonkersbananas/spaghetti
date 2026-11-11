@@ -65,6 +65,16 @@ const settle = (page: Page) =>
       }),
   );
 
+/** Opens the menu of your message: a tap on it on a phone; on a keyboard the options button beside it (shown on hover). */
+async function openMessageMenu(page: Page, isMobile: boolean, text: string) {
+  const message = thread(page).getByText(text);
+  if (isMobile) await message.click();
+  else {
+    await message.hover();
+    await page.getByRole("button", { name: "Options for your comment" }).click();
+  }
+}
+
 const thread = (page: Page) => page.getByRole("list", { name: "Comments" });
 
 test.beforeEach(async ({ page }) => {
@@ -93,7 +103,6 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
   await send(page, isMobile);
   await expect(thread(page).getByText("Could you print this one in the blue PETG?")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(thread(page).getByText("You", { exact: true })).toBeVisible();
 
   // It is saved on the server, not just on screen.
   await page.reload();
@@ -101,7 +110,7 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
 
   // Edit in place.
   await settle(page);
-  await page.getByRole("button", { name: "Options for your comment" }).click();
+  await openMessageMenu(page, isMobile, "Could you print this one in the blue PETG?");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("textbox", { name: "Edit your comment" });
   await editor.fill("Could you print this one in the blue PETG, please?");
@@ -110,7 +119,7 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
   await expect(thread(page).getByText("(edited)")).toBeVisible();
 
   // Delete, and take it back.
-  await page.getByRole("button", { name: "Options for your comment" }).click();
+  await openMessageMenu(page, isMobile, "Could you print this one in the blue PETG, please?");
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText("Comment deleted")).toBeVisible();
   await expect(thread(page)).toHaveCount(0);
@@ -210,6 +219,26 @@ test("a build has its thread too, and the story includes it", async ({ page, isM
   expect(story).toContain("Printing the first one tonight.");
 });
 
+test("a message that ends with a link shows a card in place of the address, and a link mid-sentence stays text", async ({
+  page,
+  isMobile,
+}) => {
+  const id = await newIdea(page);
+  await page.goto(`/ideas/${id}`);
+  const field = await openComposer(page, isMobile);
+  await field.fill("These would fit https://example.com/models/7");
+  await send(page, isMobile);
+  await expect(thread(page).getByText("These would fit")).toBeVisible();
+  await expect(thread(page).getByRole("link", { name: /example\.com\/models\/7/ })).toHaveCount(1);
+  await expect(thread(page).getByText("https://example.com/models/7")).toHaveCount(0);
+  await expect(page.getByRole("list", { name: /Links/ })).toHaveCount(0);
+  const second = await openComposer(page, isMobile);
+  await second.fill("See https://example.com/models/8 for the grid");
+  await send(page, isMobile);
+  const link = thread(page).getByRole("link", { name: "example.com/models/8" });
+  await expect(link).toBeVisible();
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`axe: idea and build with a thread, the sheet and the menu, ${theme}`, async ({ page, isMobile }) => {
     await page.emulateMedia({ colorScheme: theme });
@@ -238,7 +267,7 @@ for (const theme of ["light", "dark"] as const) {
       // So does the "New" line over it: the page has stopped moving.
       await expect(thread(page).getByText("New", { exact: true })).toBeVisible();
       await settle(page);
-      await page.getByRole("button", { name: "Options for your comment" }).click();
+      await openMessageMenu(page, isMobile, "Yes, tonight.");
       await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
       const { violations } = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])

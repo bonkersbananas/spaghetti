@@ -616,12 +616,16 @@ function Build({ item }: { item: ItemView }) {
               </p>
             </div>
 
+            {/* On a phone the thread comes before the closing actions, which stay the last thing on the page. */}
+            {!isDesktop && !item.pending && (
+              <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-12" />
+            )}
             {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
           </div>
         </Section>
       </div>
 
-      {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
+      {isDesktop && !item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
 
       {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
       {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (

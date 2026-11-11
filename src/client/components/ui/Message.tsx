@@ -27,14 +27,14 @@ interface MessageGroupProps {
 export function MessageGroup({ person, name, via, mine = false, time, children, className }: MessageGroupProps) {
   return (
     <li className={cn("flex list-none items-start gap-2.5", mine && "flex-row-reverse", className)}>
-      <Avatar person={person} size="sm" via={via} className="mt-5" />
+      {/* Yours carry no avatar and no name: the side and the tint already say it is you. */}
+      {!mine && <Avatar person={person} size="sm" via={via} className="mt-5" />}
       <div
         className={cn("flex min-w-0 flex-col gap-1", mine ? "w-full items-end" : "max-w-[min(100%,34rem)] items-start")}
       >
         <p className="text-caption text-ink-faint px-1 font-medium">
-          <span className="text-ink-soft font-semibold">{name}</span>
-          {via && <span> via {via}</span>}
-          {" · "}
+          {!mine && <span className="text-ink-soft font-semibold">{name} · </span>}
+          {via && <span>via {via} · </span>}
           <time dateTime={new Date(time).toISOString()} title={fullTime(time)}>
             {relativeTime(time)}
           </time>
@@ -49,21 +49,39 @@ interface BubbleProps {
   mine?: boolean;
   /** Shown quietly after the text once the message was changed. */
   edited?: boolean;
-  /** At the side of the bubble (its menu). */
+  /**
+   * The message's options button. It sits beside the bubble and shows only on hover or keyboard focus, but stays a
+   * real button, so keyboards and screen readers find it.
+   */
   aside?: ReactNode;
-  /** Under the bubble (link cards). */
+  /** A tap on the bubble's text (not on a link): on phones it opens the options. */
+  onTap?: () => void;
+  /** Under the bubble (a link card). */
   below?: ReactNode;
-  children: ReactNode;
+  /** Without text (a message that is only a link) there is no bubble, just what is `below`. */
+  children?: ReactNode;
 }
 
 /** One message. Text wraps and keeps its line breaks; yours sit on a tomato tint, the other person's on cream. */
-export function Bubble({ mine = false, edited = false, aside, below, children }: BubbleProps) {
+export function Bubble({ mine = false, edited = false, aside, onTap, below, children }: BubbleProps) {
   return (
     <div
-      className={cn("group/bubble flex max-w-full min-w-0 flex-col gap-1.5", mine ? "w-full items-end" : "items-start")}
+      className={cn(
+        "group/bubble relative flex max-w-full min-w-0 flex-col gap-1.5",
+        mine ? "items-end" : "items-start",
+      )}
     >
-      <div className={cn("flex max-w-full items-center gap-0.5", mine && "w-full flex-row-reverse")}>
+      {children !== undefined && children !== "" && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: the tap is a phone extra; the options button beside it is the keyboard's way in.
+        // biome-ignore lint/a11y/useKeyWithClickEvents: same.
         <div
+          onClick={
+            onTap
+              ? (event) => {
+                  if (!(event.target as Element).closest("a")) onTap();
+                }
+              : undefined
+          }
           className={cn(
             "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 break-words whitespace-pre-wrap",
             mine ? "bg-tomato-soft rounded-ee-xs" : "bg-cream shadow-soft rounded-es-xs",
@@ -72,9 +90,9 @@ export function Bubble({ mine = false, edited = false, aside, below, children }:
           {children}
           {edited && <span className="text-caption text-ink-faint ml-1.5 whitespace-nowrap">(edited)</span>}
         </div>
-        {aside && <div className={mine ? "mr-auto" : undefined}>{aside}</div>}
-      </div>
+      )}
       {below}
+      {aside && <div className="absolute top-1 right-full mr-1">{aside}</div>}
     </div>
   );
 }

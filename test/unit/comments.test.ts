@@ -6,6 +6,7 @@ import {
   groupThread,
   isUnread,
   PUSH_BATCH_MS,
+  splitTrailingLink,
   threadUrl,
 } from "../../src/shared/comments.ts";
 
@@ -97,5 +98,22 @@ describe("commentPushText", () => {
     expect(PUSH_BATCH_MS).toBeLessThanOrEqual(30_000);
     expect(threadUrl("abc", "idea")).toBe("/ideas/abc?thread=1");
     expect(threadUrl("abc", "building")).toBe("/builds/abc?thread=1");
+  });
+});
+
+describe("splitTrailingLink", () => {
+  it("takes a link that ends the message, or is all of it, and leaves one mid-sentence", () => {
+    expect(splitTrailingLink("These fit https://example.com/a/b")).toEqual({
+      text: "These fit",
+      url: "https://example.com/a/b",
+    });
+    expect(splitTrailingLink("https://example.com/a  ")).toEqual({ text: "", url: "https://example.com/a" });
+    expect(splitTrailingLink("See https://example.com/a for the grid").url).toBeNull();
+    expect(splitTrailingLink("no link here")).toEqual({ text: "no link here", url: null });
+    // The last link is the one that becomes a card, the earlier one stays in the text.
+    expect(splitTrailingLink("a https://x.com/1 and https://x.com/2")).toEqual({
+      text: "a https://x.com/1 and",
+      url: "https://x.com/2",
+    });
   });
 });

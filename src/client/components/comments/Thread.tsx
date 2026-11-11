@@ -9,6 +9,7 @@ import { Section } from "@/components/ui/Section";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Sheet } from "@/components/ui/Sheet";
 import { useVia } from "@/lib/agents";
+import { cn } from "@/lib/cn";
 import { sendComment, useDraft, useThread } from "@/lib/comments";
 import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -21,6 +22,8 @@ interface ThreadProps {
   writeAsk: number;
   /** Offline, saved things are only for reading. */
   readOnly: boolean;
+  /** Replaces the default distance above the thread. */
+  className?: string;
 }
 
 /**
@@ -29,7 +32,7 @@ interface ThreadProps {
  * bottom, the first one you haven't read under a "New" line. On a keyboard the field sits under the messages;
  * on a phone a field-shaped button opens a sheet that rides the keyboard.
  */
-export default function Thread({ itemId, writeAsk, readOnly }: ThreadProps) {
+export default function Thread({ itemId, writeAsk, readOnly, className }: ThreadProps) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const { data: me } = useQuery(sessionQuery);
@@ -128,7 +131,7 @@ export default function Thread({ itemId, writeAsk, readOnly }: ThreadProps) {
   );
 
   return (
-    <div ref={root} className="max-w-content mt-12 md:mt-16">
+    <div ref={root} className={cn("max-w-content", className ?? "mt-12 md:mt-16")}>
       {empty || !me ? (
         // Nothing said yet: one quiet line to write on, and a heading only screen readers see.
         <section aria-labelledby={headingId} className="flex flex-col gap-4">

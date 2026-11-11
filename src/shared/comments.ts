@@ -4,6 +4,8 @@
  * the unit tests read the same rules (decision 0023).
  */
 
+import { findLinks } from "./links.ts";
+
 export const COMMENT_MAX = 2000;
 
 /** One comment. `authorId` is the person it counts as; an agent's comment is its owner's, with `via` naming the agent. */
@@ -115,3 +117,14 @@ export function commentPushText(author: string, itemTitle: string, bodies: strin
 /** Where a comment's push opens: the thread on the idea's or build's page. */
 export const threadUrl = (itemId: string, stage: string) =>
   `/${stage === "idea" ? "ideas" : "builds"}/${encodeURIComponent(itemId)}?thread=1`;
+
+/**
+ * A message that ends with a link (or is only a link) shows that link as a card in place of the raw address;
+ * a link in the middle of a sentence stays in the text. `text` is what is left to show in the bubble (may be empty).
+ */
+export function splitTrailingLink(body: string): { text: string; url: string | null } {
+  const trimmed = body.trimEnd();
+  const last = findLinks(trimmed).at(-1);
+  if (!last || last.end !== trimmed.length) return { text: body, url: null };
+  return { text: trimmed.slice(0, last.start).trimEnd(), url: last.url };
+}
