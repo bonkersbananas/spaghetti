@@ -143,7 +143,7 @@ function Today() {
                     : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
                 }}
               >
-                <AutoHeight>
+                <AutoHeight trigger={index > 0}>
                   <PrintingCard
                     compact={index > 0}
                     item={item}

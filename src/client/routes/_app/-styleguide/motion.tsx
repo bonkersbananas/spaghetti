@@ -55,7 +55,7 @@ export function MotionSection() {
         <Button variant="secondary" size="sm" onClick={() => setTall((current) => !current)}>
           {tall ? "Make it short" : "Make it tall"}
         </Button>
-        <AutoHeight className="w-full max-w-sm">
+        <AutoHeight trigger={tall} className="w-full max-w-sm">
           <div className={cn("bg-paper rounded-lg p-4", tall ? "h-48" : "h-16")}>
             <p className="text-small text-ink-soft">{tall ? "Grown, by its real height." : "Short."}</p>
           </div>
