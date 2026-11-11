@@ -114,7 +114,8 @@ test("starting a build takes the idea off the queue", async ({ page }) => {
 test("who it is for shows under the title and is found by search", async ({ page }) => {
   const id = await makeIdea(page, "Mug stand");
   await page.goto(`/ideas/${id}`);
-  await page.getByRole("textbox", { name: "For" }).fill("Mila");
+  await page.getByRole("button", { name: "For someone" }).click();
+  await page.getByRole("textbox", { name: "For", exact: true }).fill("Mila");
   await expect.poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.forWhom).toBe("Mila");
   await page.goto("/ideas");
   await expect(page.getByRole("list", { name: "Ideas" }).getByText(/^for Mila/)).toBeVisible();
