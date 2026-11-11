@@ -1089,7 +1089,15 @@ export const shots: Shot[] = [
     fullPage: true,
   },
   // Parts and quantities: a build made of parts, with progress ...
-  { name: "build-parts", path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`, fullPage: true },
+  {
+    name: "build-parts",
+    path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`,
+    prepare: async (page) => {
+      const parts = page.getByRole("region", { name: "Parts" });
+      await parts.waitFor();
+      await parts.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
   {
     // ... the attempt sheet's "What's on the plate" row (a plate from the slicer file preselects its parts) ...
     name: "build-parts-sheet",

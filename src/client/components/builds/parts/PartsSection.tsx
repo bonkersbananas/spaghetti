@@ -32,7 +32,7 @@ export function PartLine({ progress, photo }: { progress: PartProgress; photo?: 
             <span
               // biome-ignore lint/suspicious/noArrayIndexKey: pips are positions.
               key={index}
-              className={cn("size-2 rounded-full", index < made ? "bg-basil" : "bg-ink/12")}
+              className={cn("size-2.5 rounded-full", index < made ? "bg-basil" : "bg-ink/20")}
             />
           ))}
         </span>
@@ -104,7 +104,7 @@ export function PartsSection({
       );
     }
     return (
-      <section aria-label="Parts" className="mt-1 flex flex-col items-start gap-1">
+      <section aria-label="Parts" className="mt-1 -ml-2.5 flex flex-col items-start gap-1">
         {(fromFile.length > 1 || (fromFile[0]?.quantity ?? 0) > 1) && (
           <Button
             variant="quiet"
@@ -145,7 +145,7 @@ export function PartsSection({
       {editing ? (
         editor
       ) : (
-        <ul className="flex flex-col gap-2.5" aria-label="Parts and how many are printed">
+        <ul className="flex max-w-sm flex-col gap-2.5" aria-label="Parts and how many are printed">
           {progress.map((entry) => (
             <PartLine key={entry.part.id} progress={entry} photo={photoOf(entry.part.photoId)} />
           ))}
