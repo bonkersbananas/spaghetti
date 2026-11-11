@@ -793,7 +793,7 @@ a {
   position: absolute;
   bottom: -0.04em;
   left: 0;
-  width: 0.2em;
+  width: max(1.75rem, 0.26em);
   translate: -50% 0;
 }
 

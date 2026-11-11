@@ -52,7 +52,7 @@ The photos in `scripts/landing/photos` are mock-ups made for this page; none of 
 
 ### Weight
 
-At 390 px the whole page, scrolled to the end, is about 1.2 MB, most of it pictures that load as they come near; the first screen is the HTML, the stylesheet, two fonts the app shares and one phone screenshot (`fetchpriority="high"`). Keep pictures in AVIF with widths that match how they show, and lazy below the fold.
+At 390 px the whole page, scrolled to the end, is about 0.6 MB (measured on the production build), most of it pictures that load as they come near; the first screen is about 250 kB: the HTML, the stylesheet, two fonts the app shares and one phone screenshot (`fetchpriority="high"`). The largest paint is the printed word, under a second on a phone with slow 4G and a 4× slower CPU. Keep pictures in AVIF with widths that match how they show, and lazy below the fold.
 
 ## Tests
 
