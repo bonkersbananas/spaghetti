@@ -1,9 +1,9 @@
 import type { Outcome } from "@shared/attempts";
 import type { PhotoRead } from "@shared/photo-read";
 import { offTheBedLabel } from "@shared/print-progress";
+import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
-import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
 import { OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
@@ -29,7 +29,9 @@ interface OffTheBedProps {
  * it worked, so the bridge never answers for us.
  */
 export function OffTheBed({ endedAt, onPick, photoRead, onPhotos, className }: OffTheBedProps) {
-  const camera = useFilePicker({ camera: true, onFiles: (files) => onPhotos?.(files) });
+  // Its own small input rather than PhotoTiles' picker: the question shows on screens (search, journal) that
+  // otherwise carry none of the photo tiles' code.
+  const cameraRef = useRef<HTMLInputElement>(null);
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
       {/* The sentence keeps its line; on a narrow card the Photo button goes under it instead of squeezing it. */}
@@ -42,10 +44,28 @@ export function OffTheBed({ endedAt, onPick, photoRead, onPhotos, className }: O
         </p>
         {onPhotos && !photoRead && (
           <>
-            <Button variant="secondary" size="sm" icon={CameraIcon} onClick={camera.open} className="shrink-0">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={CameraIcon}
+              onClick={() => cameraRef.current?.click()}
+              className="shrink-0"
+            >
               Take photo
             </Button>
-            {camera.input}
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              data-testid="camera-input"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                if (files.length) onPhotos(files);
+              }}
+            />
           </>
         )}
       </div>
