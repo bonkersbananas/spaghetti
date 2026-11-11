@@ -63,6 +63,7 @@ src/
     auth/session.ts       session cookie and D1 sessions
     auth/agent.ts, scopes.ts  agent bearer tokens, and which scope each route needs
     mcp/                  the MCP server at /mcp: protocol (index.ts), tools, photo reading (image.ts)
+    oauth/                OAuth for the MCP server: index.ts (metadata, register, token, revoke at /.well-known and /oauth), authorize.ts (the consent request and code), clients.ts, grants.ts (tokens, disconnect, tidy); the consent screen's calls are routes/oauth.ts and its page is client routes/authorize.tsx
     changes.ts            recordChange / actorOf: the change feed's writer (see "Change feed" below)
     openapi/              the OpenAPI 3.1 document at GET /api/openapi.json: operations.ts (one row per route), schemas.ts (answers), document.ts (builds it)
     webhooks/             secrets.ts (AES-GCM at rest, HMAC signing), deliver.ts (fan-out from the change feed, sending, retries; run by the 5-minute cron)
@@ -254,6 +255,8 @@ Never edit a migration that has been merged; add a new one.
 - Tests: `test/bridge/` (a fake printer: an in-process MQTT broker replaying `fixtures.ts`, a stub SD card and camera) and `e2e/bridge.spec.ts` (the whole bridge against the local app with a real token).
 
 ### The MCP server
+
+- OAuth ([0029](docs/decisions/0029-oauth-small-and-on-d1.md), usage in docs/mcp.md): a connected app is an agent (`agents.oauth_client_id`) whose hour-long access tokens are `agent_tokens` rows with `expires_at`, plus a rotating refresh token (`oauth_refresh_tokens`). `readAgentToken` honours `expires_at`; Disconnect (`DELETE /api/agents/:id/connection`, `disconnectAgent`) ends all of it. `/oauth/*` and `/.well-known/*` are in `run_worker_first`; the service worker leaves them alone.
 
 - `/mcp` (`src/worker/mcp/`) is MCP over Streamable HTTP for agent tokens: hand-written, stateless, JSON only ([why](docs/decisions/0014-mcp-hand-written-stateless.md); usage in [docs/mcp.md](docs/mcp.md)). `src/worker/index.ts` routes it; `wrangler.jsonc` lists it under `run_worker_first`.
 - A tool is an entry in `mcp/tools.ts`: a zod input schema (its `.describe()` texts are what the model reads, in Spaghetti's words), and a `run` that calls the API through `ctx.call` with the caller's own token, so scopes, "via" and the change feed come for free. Don't read or write the database from a tool. A new tool needs its route to have a scope in `auth/scopes.ts`, and a case in `test/worker/mcp.test.ts`.

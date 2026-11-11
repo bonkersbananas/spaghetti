@@ -4,6 +4,7 @@ import { JournalEntry } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { cn } from "@/lib/cn";
 
 interface LatelyProps {
   /** "November so far". */
@@ -48,20 +49,22 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
       }
     >
       <div className="flex flex-col gap-1">
-        {entries.slice(0, LATELY_ENTRIES).map((entry) => {
+        {entries.slice(0, LATELY_ENTRIES).map((entry, index) => {
           const item = items.get(entry.itemId);
           if (!item) return null;
           const attempt = item.attempts.find((candidate) => candidate.id === entry.attemptId);
           return (
-            <JournalEntry
-              key={entry.key}
-              entry={entry}
-              item={item}
-              person={people.get(attempt?.createdBy ?? entry.by)}
-              via={via(entry.via)}
-              when="time"
-              compact
-            />
+            // Phones show two: the third is a scroll further down a page that is already long.
+            <div key={entry.key} className={cn(index >= 2 && "max-md:hidden")}>
+              <JournalEntry
+                entry={entry}
+                item={item}
+                person={people.get(attempt?.createdBy ?? entry.by)}
+                via={via(entry.via)}
+                when="time"
+                compact
+              />
+            </div>
           );
         })}
       </div>

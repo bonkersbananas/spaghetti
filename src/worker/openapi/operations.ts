@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { AGENT_SCOPES } from "../../shared/agents.ts";
+import { authorizeParams } from "../oauth/authorize.ts";
 import { changePasswordBody } from "../routes/account.ts";
 import { createAgent, createToken } from "../routes/agents.ts";
 import { createAttempt, finishAttempt, updateAttempt } from "../routes/attempts.ts";
@@ -19,6 +21,7 @@ import {
   upNextOrder,
 } from "../routes/items.ts";
 import { journalQuery, summaryQuery } from "../routes/journal.ts";
+import { decision } from "../routes/oauth.ts";
 import { bridgeSchema, setSlot, setupSchema } from "../routes/printer.ts";
 import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
@@ -287,6 +290,27 @@ export const operations: Record<string, Operation> = {
   },
   "DELETE /agents/:id/tokens/:tokenId": {
     summary: "Revokes a token; it stops working on its next request.",
+    response: "empty",
+    status: 204,
+    errors: { 404: notFound("agent") },
+  },
+
+  // Connecting Claude's apps (OAuth, docs/mcp.md): the consent screen's two calls. The protocol's own endpoints
+  // (/.well-known/…, /oauth/register, /oauth/token, /oauth/revoke) live outside /api.
+  "GET /oauth/request": {
+    summary: "What an app asks for before it is let in: its name, where it returns to and the scopes. People only.",
+    query: authorizeParams.omit({ response_type: true }).extend({ response_type: z.literal("code") }),
+    response: z.object({ app: z.string(), returnsTo: z.string(), scopes: z.array(z.enum(AGENT_SCOPES)) }),
+    errors: { 400: "invalid_request, invalid_client or invalid_target: the request can't be asked about." },
+  },
+  "POST /oauth/decision": {
+    summary: "Approves or declines an app's request; answers with where to send the person back. People only.",
+    body: decision,
+    response: z.object({ redirectTo: z.string() }),
+    errors: { 400: "invalid_request, invalid_client or invalid_target." },
+  },
+  "DELETE /agents/:id/connection": {
+    summary: "Disconnects an app connected by OAuth: its access and refresh tokens all end at once.",
     response: "empty",
     status: 204,
     errors: { 404: notFound("agent") },

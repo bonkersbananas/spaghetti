@@ -54,7 +54,7 @@ export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
   const [adding, setAdding] = useState(false);
   if (features && !features.webhooks) {
     return (
-      <Section id="webhooks" title="Webhooks" className="max-w-2xl">
+      <Section id="webhooks" title="Webhooks" className="max-w-content">
         <p className="text-small text-ink-faint">Webhooks need a key on the server; see docs/deploy.md.</p>
       </Section>
     );
@@ -62,7 +62,7 @@ export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
   return (
     <Section
       id="webhooks"
-      className="max-w-2xl"
+      className="max-w-content"
       title="Webhooks"
       description="Tell another program when something changes, instead of it asking. Each change is sent as signed JSON."
       aside={
@@ -78,11 +78,11 @@ export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
       }
     >
       {isPending || !features ? (
-        <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
+        <div className="max-w-content flex flex-col gap-3" aria-hidden>
           <RowSkeleton />
         </div>
       ) : webhooks?.length ? (
-        <ul className="flex max-w-2xl flex-col gap-4" aria-label="Your webhooks">
+        <ul className="max-w-content flex flex-col gap-4" aria-label="Your webhooks">
           {webhooks.map((webhook) => (
             <Card key={webhook.id} webhook={webhook} agents={agents} readOnly={readOnly} />
           ))}

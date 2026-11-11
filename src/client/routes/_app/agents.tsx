@@ -17,7 +17,7 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KeyIcon, PlusIcon } from "@/components/ui/icons";
 import { RowSkeleton } from "@/components/ui/Skeleton";
-import { agentsQuery, revokeToken, usePendingRevokes } from "@/lib/agents";
+import { agentsQuery, disconnectApp, revokeToken, usePendingRevokes } from "@/lib/agents";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -39,7 +39,8 @@ function Agents() {
   const readOnly = useReadOnly();
   const [making, setMaking] = useState<Making>({ open: false });
   const owner = people?.find((person) => person.id === user?.id) ?? user ?? undefined;
-  const mine = agents?.filter((agent) => agent.ownerId === user?.id) ?? [];
+  // An app that was disconnected stays in the list for "via Claude" in the journal, but not here.
+  const mine = agents?.filter((agent) => agent.ownerId === user?.id && agent.connection?.connected !== false) ?? [];
   const open = (agent?: AgentInfo) => canEdit() && setMaking({ open: true, agent });
   const newAgent = (
     <Button variant="primary" icon={PlusIcon} onClick={() => open()} disabled={readOnly}>
@@ -57,12 +58,12 @@ function Agents() {
       />
       <ShareCard />
       {isPending ? (
-        <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
+        <div className="max-w-content flex flex-col gap-3" aria-hidden>
           <RowSkeleton />
           <RowSkeleton />
         </div>
       ) : mine.length ? (
-        <ul className="flex max-w-2xl flex-col gap-4" aria-label="Your agents">
+        <ul className="max-w-content flex flex-col gap-4" aria-label="Your agents">
           {mine.map((agent) => (
             <AgentCard key={agent.id} agent={agent} owner={owner} readOnly={readOnly} onAddToken={() => open(agent)} />
           ))}
@@ -123,6 +124,7 @@ function AgentCard({
   onAddToken: () => void;
 }) {
   const live = agent.tokens.filter((token) => !token.revokedAt);
+  if (agent.connection) return <ConnectedCard agent={agent} owner={owner} readOnly={readOnly} />;
   return (
     <li className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-5">
       <div className="flex items-center gap-3.5">
@@ -181,6 +183,58 @@ function TokenRow({ agent, token, readOnly }: { agent: AgentInfo; token: AgentTo
       >
         Revoke
       </Button>
+    </li>
+  );
+}
+
+/** An app that signed in with OAuth (Claude's own apps): one connection, with what it may do and one way to end it. */
+function ConnectedCard({
+  agent,
+  owner,
+  readOnly,
+}: {
+  agent: AgentInfo;
+  owner?: { name: string; color: PersonColor };
+  readOnly: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const ending = usePendingRevokes().has(agent.id);
+  const connection = agent.connection;
+  if (!connection) return null;
+  return (
+    <li className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-5">
+      <div className="flex items-center gap-3.5">
+        {owner && <AgentAvatar name={agent.name} owner={owner} size="lg" />}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lead text-ink font-semibold break-words">{agent.name}</h2>
+          <p className="text-small text-ink-faint">Signed in with {connection.app}</p>
+        </div>
+      </div>
+      <ul className="flex flex-wrap gap-1.5" aria-label="Scopes">
+        {connection.scopes.map((scope) => (
+          <li key={scope}>
+            <Chip>{SCOPE_INFO[scope].label}</Chip>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-small text-ink-faint flex-1">
+          {ending
+            ? "Disconnected"
+            : connection.lastUsedAt
+              ? `Used ${relativeTime(connection.lastUsedAt).toLowerCase()}`
+              : "Not used yet"}
+        </span>
+        <Button
+          variant="quiet"
+          size="sm"
+          disabled={readOnly || ending}
+          onClick={() => disconnectApp(queryClient, agent)}
+          aria-label={`Disconnect ${agent.name}`}
+        >
+          Disconnect
+        </Button>
+      </div>
     </li>
   );
 }

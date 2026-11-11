@@ -78,8 +78,8 @@ const deliveries: DeliveryInfo[] = [
 ];
 
 const agents: AgentInfo[] = [
-  { id: "claude", name: "Claude for Alex", ownerId: "a", createdAt: now, tokens: [] },
-  { id: "bridge", name: "Printer bridge", ownerId: "a", createdAt: now, tokens: [] },
+  { id: "claude", name: "Claude for Alex", ownerId: "a", createdAt: now, tokens: [], connection: null },
+  { id: "bridge", name: "Printer bridge", ownerId: "a", createdAt: now, tokens: [], connection: null },
 ];
 
 const noop = () => undefined;

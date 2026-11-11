@@ -221,6 +221,8 @@ self.addEventListener("fetch", (event) => {
     if (PHOTO_PATH.test(url.pathname)) event.respondWith(photo(event, request));
     return;
   }
+  // The OAuth endpoints (docs/mcp.md) are the Worker's, never the app shell.
+  if (url.pathname.startsWith("/oauth/") || url.pathname.startsWith("/.well-known/")) return;
   if (request.mode === "navigate") {
     event.respondWith(shell(request));
     return;
