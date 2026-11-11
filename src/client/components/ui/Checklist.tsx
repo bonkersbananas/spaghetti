@@ -51,7 +51,7 @@ export function TickBox({ checked, onChange, label, disabled, className }: TickB
           "duration-fast flex size-6 items-center justify-center rounded-full transition-colors",
           checked
             ? "bg-basil-soft text-basil-ink ring-basil/40 ring-2 ring-inset"
-            : "ring-ink/25 group-hover/tick:ring-ink/45 group-active/tick:bg-ink/8 ring-2 ring-inset",
+            : "ring-ink/55 group-hover/tick:ring-ink/75 group-active/tick:bg-ink/8 ring-2 ring-inset",
         )}
       >
         {checked && (

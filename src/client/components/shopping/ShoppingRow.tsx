@@ -3,6 +3,7 @@ import { priceSearchUrl, shoppingName, tidyPageTitle } from "@shared/shopping";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { LinkChip } from "@/components/ui/Chip";
 import { PriceIcon } from "@/components/ui/icons";

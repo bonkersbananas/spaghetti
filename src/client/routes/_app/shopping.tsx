@@ -67,9 +67,17 @@ function Shopping() {
           ) : bought.length ? (
             <p className="text-body text-ink-soft">Nothing left to buy. Add the next thing when you run low.</p>
           ) : (
-            <EmptyState className="py-6 md:py-10" illustration={<EmptyBasket />} title="The cupboard is full">
-              Add filament, glue or a spare nozzle when you run low, or paste a shop's link and it names itself. Tick
-              things off as you buy them.
+            <EmptyState
+              className="py-6 md:py-10"
+              illustration={<EmptyBasket />}
+              title="The cupboard is full"
+              action={
+                <Button variant="secondary" icon={PlusIcon} disabled={readOnly || !me} onClick={focusAdd}>
+                  Add the first thing
+                </Button>
+              }
+            >
+              When you run low on filament, glue or nozzles, add it here, or paste a shop's link and it names itself.
             </EmptyState>
           )}
         </div>
