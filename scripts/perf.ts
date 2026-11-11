@@ -63,6 +63,9 @@ try {
         await throttle(page);
         await page.goto(path, { waitUntil: "commit" });
         await page.waitForFunction(() => window.__perf.ready >= 0, undefined, { timeout: 60_000 });
+        await page.waitForFunction(() => performance.getEntriesByName("first-contentful-paint").length > 0, undefined, {
+          timeout: 10_000,
+        });
         const timing = await page.evaluate(() => ({
           ready: window.__perf.ready,
           firstScreen: window.__perf.firstScreen,
@@ -232,7 +235,7 @@ try {
       type += key;
       add(
         "search: type a letter",
-        await tapLatency(page, () => page.keyboard.press(key), `document.querySelector('[aria-label=Search]')?.value === ${JSON.stringify(type)}`),
+        await tapLatency(page, () => page.keyboard.press(key), `document.getElementById('search-box')?.value === ${JSON.stringify(type)}`),
       );
     }
   }
@@ -256,7 +259,7 @@ try {
   const opens: { inp: number[]; shown: number[] } = { inp: [], shown: [] };
   for (let run = 0; run < runs; run++) {
     await dpage.waitForTimeout(400);
-    const tap = await tapLatency(dpage, () => dpage.keyboard.press("Control+k"), onScreen("[role=dialog] input"));
+    const tap = await tapLatency(dpage, () => dpage.keyboard.press("Control+k"), onScreen("[role=dialog] [role=combobox]"));
     opens.inp.push(tap.inp);
     opens.shown.push(tap.shown);
     await dpage.keyboard.press("Escape");
