@@ -240,7 +240,10 @@ async function mockWebhooks(
     await route.fulfill({
       response,
       json: {
-        agents: [...json.agents, { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [] }],
+        agents: [
+          ...json.agents,
+          { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [], connection: null },
+        ],
       },
     });
   });

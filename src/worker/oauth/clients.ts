@@ -67,8 +67,8 @@ export async function registerClient(db: Db, input: z.infer<typeof registration>
         notExists(db.select({ id: agents.id }).from(agents).where(eq(agents.oauthClientId, oauthClients.id))),
       ),
     );
-  const [{ total }] = await db.select({ total: count() }).from(oauthClients);
-  if ((total ?? 0) >= MAX_CLIENTS) {
+  const total = (await db.select({ total: count() }).from(oauthClients))[0]?.total ?? 0;
+  if (total >= MAX_CLIENTS) {
     return {
       ok: false,
       status: 429,

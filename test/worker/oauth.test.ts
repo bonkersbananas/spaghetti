@@ -48,7 +48,7 @@ const token = async (fields: Record<string, string>) => {
 
 /** Registers, asks, approves, and returns the code. */
 async function approve(options: { scope?: string; client?: string } = {}) {
-  const clientId = options.client ?? (await register()).body.client_id;
+  const clientId = (options.client ?? (await register()).body.client_id) as string;
   const { verifier, challenge } = await pkce();
   const params = {
     response_type: "code",
@@ -284,7 +284,7 @@ describe("the code exchange", () => {
     const a = await approve();
     expect((await exchange(a, { redirect_uri: "https://claude.ai/other" })).body.error).toBe("invalid_grant");
     const b = await approve();
-    const other = (await register({ client_name: "Other" })).body.client_id;
+    const other = (await register({ client_name: "Other" })).body.client_id as string;
     expect((await exchange({ ...b, clientId: other })).body.error).toBe("invalid_grant");
   });
 

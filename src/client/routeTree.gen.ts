@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AuthorizeRouteImport } from './routes/authorize'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as LinkRouteImport } from './routes/link'
 import { Route as SignInRouteImport } from './routes/sign-in'
@@ -32,6 +33,11 @@ import { Route as AppPantrySpoolIdRouteImport } from './routes/_app/pantry.$spoo
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthorizeRoute = AuthorizeRouteImport.update({
+  id: '/authorize',
+  path: '/authorize',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JoinRoute = JoinRouteImport.update({
@@ -132,6 +138,7 @@ const AppPantrySpoolIdRoute = AppPantrySpoolIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/authorize': typeof AuthorizeRoute
   '/join': typeof JoinRoute
   '/link': typeof LinkRoute
   '/sign-in': typeof SignInRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/pantry/': typeof AppPantryIndexRoute
 }
 export interface FileRoutesByTo {
+  '/authorize': typeof AuthorizeRoute
   '/join': typeof JoinRoute
   '/link': typeof LinkRoute
   '/sign-in': typeof SignInRoute
@@ -175,6 +183,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/authorize': typeof AuthorizeRoute
   '/join': typeof JoinRoute
   '/link': typeof LinkRoute
   '/sign-in': typeof SignInRoute
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/authorize'
     | '/join'
     | '/link'
     | '/sign-in'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/pantry/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/authorize'
     | '/join'
     | '/link'
     | '/sign-in'
@@ -241,6 +252,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/authorize'
     | '/join'
     | '/link'
     | '/sign-in'
@@ -264,6 +276,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  AuthorizeRoute: typeof AuthorizeRoute
   JoinRoute: typeof JoinRoute
   LinkRoute: typeof LinkRoute
   SignInRoute: typeof SignInRoute
@@ -276,6 +289,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/authorize': {
+      id: '/authorize'
+      path: '/authorize'
+      fullPath: '/authorize'
+      preLoaderRoute: typeof AuthorizeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join': {
@@ -456,6 +476,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  AuthorizeRoute: AuthorizeRoute,
   JoinRoute: JoinRoute,
   LinkRoute: LinkRoute,
   SignInRoute: SignInRoute,

@@ -5,7 +5,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { authorizeParams, checkAuthorizeRequest, issueCode, returnTo } from "../oauth/authorize.ts";
 
-const decision = authorizeParams.extend({ approve: z.boolean() });
+export const decision = authorizeParams.extend({ approve: z.boolean() });
 
 /**
  * The consent screen's two calls, for a signed-in person only (the guard in app.ts refuses tokens): what is asked,
