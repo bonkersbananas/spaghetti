@@ -25,6 +25,7 @@ import { printingAttempts } from "@/lib/builds";
 import { useCapture } from "@/lib/capture";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { journalQuery, summaryQuery } from "@/lib/journal";
+import { useListPicker } from "@/lib/list-picker";
 import { duration, ease } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -57,6 +58,7 @@ function thisMonth(now: number) {
  * page; a brand-new notebook gets a welcome instead.
  */
 function Today() {
+  useListPicker();
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const isDesktop = useIsDesktop();
@@ -212,7 +214,7 @@ function Today() {
         // On a phone the blocks run in one column in the order below (bed, up next, pick up, printer, month, back burner).
         // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
-          <div className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
+          <div data-picks className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
             <div className="order-1 empty:hidden">
               {loading ? (
                 <div className="flex flex-col gap-4" aria-hidden>
@@ -247,8 +249,8 @@ function Today() {
                 </Suspense>
               )}
             </div>
-            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
             <div className="order-2 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
+            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
             <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>

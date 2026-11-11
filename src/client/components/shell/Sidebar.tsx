@@ -15,10 +15,33 @@ import { useWhenIdle } from "@/lib/when-idle";
 import { AccountButton } from "./AccountButton";
 import { AccountMenu, loadAccountMenu } from "./lazy-account";
 import { NowPrinting } from "./NowPrinting";
-import { sections, workshop } from "./sections";
+import { type Section, sections, workshop } from "./sections";
 
 const itemClass =
   "pressable focus-ring group flex h-9 items-center gap-3 rounded-sm px-3 text-body font-medium text-ink-soft hover:bg-ink/5 hover:text-ink data-[status=active]:bg-cream data-[status=active]:text-ink data-[status=active]:shadow-soft";
+
+/** The sidebar's links: an icon, the name, and the key to press. */
+function NavItems({ items }: { items: Section[] }) {
+  return items.map(({ to, label, icon: Icon, shortcut }) => (
+    <Link key={to} to={to} className={itemClass}>
+      {({ isActive }) => (
+        <>
+          <Icon
+            size={20}
+            weight={isActive ? "fill" : "regular"}
+            className={isActive ? "text-tomato" : "text-ink-faint group-hover:text-ink-soft"}
+            aria-hidden
+          />
+          <span className="flex-1">{label}</span>
+          <Kbd
+            keys={shortcutCaps(shortcut)}
+            className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"
+          />
+        </>
+      )}
+    </Link>
+  ));
+}
 
 /** Desktop navigation: always visible, keyboard hints beside each section. */
 export function Sidebar() {
@@ -55,48 +78,12 @@ export function Sidebar() {
       </button>
 
       <nav aria-label="Sections" className="mt-5 flex flex-col gap-0.5">
-        {sections.map(({ to, label, icon: Icon, shortcut }) => (
-          <Link key={to} to={to} className={itemClass}>
-            {({ isActive }) => (
-              <>
-                <Icon
-                  size={20}
-                  weight={isActive ? "fill" : "regular"}
-                  className={isActive ? "text-tomato" : "text-ink-faint group-hover:text-ink-soft"}
-                  aria-hidden
-                />
-                <span className="flex-1">{label}</span>
-                <Kbd
-                  keys={shortcutCaps(shortcut)}
-                  className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"
-                />
-              </>
-            )}
-          </Link>
-        ))}
+        <NavItems items={sections} />
       </nav>
 
       <nav aria-label="Workshop" className="mt-6 flex flex-col gap-0.5">
         <Overline className="mb-1 px-3">Workshop</Overline>
-        {workshop.map(({ to, label, icon: Icon, shortcut }) => (
-          <Link key={to} to={to} className={itemClass}>
-            {({ isActive }) => (
-              <>
-                <Icon
-                  size={20}
-                  weight={isActive ? "fill" : "regular"}
-                  className={isActive ? "text-tomato" : "text-ink-faint group-hover:text-ink-soft"}
-                  aria-hidden
-                />
-                <span className="flex-1">{label}</span>
-                <Kbd
-                  keys={shortcutCaps(shortcut)}
-                  className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"
-                />
-              </>
-            )}
-          </Link>
-        ))}
+        <NavItems items={workshop} />
       </nav>
 
       <div className="mt-auto flex flex-col">

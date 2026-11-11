@@ -29,7 +29,7 @@ export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 export const GROUP_LABELS: Record<ShortcutGroup, string> = {
   anywhere: "Anywhere",
   palette: "In the command palette",
-  lists: "In lists of cards",
+  lists: "In lists",
   idea: "On an idea",
   build: "On a build",
   journal: "In the journal",
@@ -77,8 +77,8 @@ export const SHORTCUTS = define([
   { id: "paletteRun", group: "palette", label: "Open it, or run it", keys: ["enter"] },
   { id: "paletteClose", group: "palette", label: "Close", keys: ["escape"] },
 
-  { id: "listNext", group: "lists", label: "Next card or row", keys: ["j"] },
-  { id: "listPrevious", group: "lists", label: "Previous card or row", keys: ["k"] },
+  { id: "listNext", group: "lists", label: "Next card", keys: ["j"] },
+  { id: "listPrevious", group: "lists", label: "Previous card", keys: ["k"] },
 
   { id: "ideaBack", group: "idea", label: "Back to Ideas", keys: ["escape"] },
   { id: "ideaBuild", group: "idea", label: "Start building", keys: ["b"] },

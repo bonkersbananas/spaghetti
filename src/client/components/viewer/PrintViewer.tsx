@@ -1,5 +1,7 @@
 import type { Layer } from "@shared/gcode";
+import { LIVE_FRESH_MS } from "@shared/print-progress";
 import { formatDuration } from "@shared/time";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { PlayIcon } from "@/components/ui/icons";
@@ -9,7 +11,9 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
+import { printerQuery } from "@/lib/pantry-queries";
 import { loadToolpaths, type ToolpathSummary } from "@/lib/toolpaths";
+import { useNow } from "@/lib/use-now";
 import { introSeen, markIntroSeen } from "./intro";
 import { type ColorBy, cssColor, legendFeatures, PrintScene } from "./scene";
 
@@ -21,8 +25,8 @@ export interface PrintViewerProps {
   plate: number;
   /** The matched spools' colours, for filaments the file doesn't colour. */
   fallbackColors?: (string | null | undefined)[];
-  /** A print in progress: the layer it is on (counting from 1) and how many there are. */
-  live?: { layer: number; totalLayers: number | null } | null;
+  /** Set while the attempt prints: the viewer follows the printer's own layer while the bridge reports it. */
+  printing?: { id: string } | null;
   className?: string;
 }
 
@@ -51,7 +55,14 @@ function prefersReducedMotion(): boolean {
  * builds itself up, layer by layer (never with reduced motion). One finger turns it, two pinch and pan; on desktop
  * drag, scroll, and the arrow keys step layers.
  */
-export default function PrintViewer({ url, fileId, plate, fallbackColors, live, className }: PrintViewerProps) {
+export default function PrintViewer({ url, fileId, plate, fallbackColors, printing, className }: PrintViewerProps) {
+  // The printer's own layer while the bridge reports it for this attempt and the report is fresh; nothing otherwise.
+  const now = useNow();
+  const report = useQuery({ ...printerQuery, enabled: !!printing }).data?.bridge?.progress;
+  const live =
+    printing && report?.attemptId === printing.id && now - report.at <= LIVE_FRESH_MS && report.layer
+      ? { layer: report.layer, totalLayers: report.totalLayers }
+      : null;
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const scene = useRef<PrintScene | null>(null);
@@ -72,6 +83,9 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
   const follow = useRef(true);
   const animation = useRef(0);
   const live0 = live ? live.layer - 1 : null;
+  // A print in progress shows where it is at once; the build-up is for finished prints.
+  const liveNow = useRef(false);
+  liveNow.current = live0 !== null;
 
   const setLayer = useCallback((index: number) => {
     scene.current?.setLayer(index);
@@ -139,7 +153,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
           setState("ready");
           setProgress(1);
           ps.fit();
-          if (!prefersReducedMotion() && !introSeen(fileId)) {
+          if (!prefersReducedMotion() && !introSeen(fileId) && !liveNow.current) {
             markIntroSeen(fileId);
             setBuilding(true);
             setReplays((n) => n + 1);
@@ -284,6 +298,12 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
       </div>
       <div className="bg-lifted shrink-0 px-5 pt-3 pb-[max(1rem,var(--sg-safe-bottom))] md:px-6 md:pb-4">
         <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-3">
+          {live && (
+            <p className="text-small text-semolina-ink order-0 w-full font-semibold">
+              Printing now · layer {live.layer}
+              {live.totalLayers ? ` of ${live.totalLayers}` : ""}
+            </p>
+          )}
           <p className="text-small text-ink-faint tabular order-1 w-full min-w-0 truncate md:w-auto md:flex-1">
             {state === "ready" || count > 0 ? (
               <>

@@ -3,11 +3,12 @@ import { clearIdeas, signIn } from "./helpers";
 
 /**
  * "Find what worked last time in one search": the questions people ask, answered with what worked first and the
- * words that matched in view, then one tap to start again. Phone and desktop (the project's width).
+ * words that matched in view, then one tap to start again. At desktop width; the @phone tests in journal-search.spec.ts
+ * search on a phone.
  */
 
 const origin = (page: Page) => new URL(page.url()).origin;
-const HOUR = 60 * 60_000;
+const MINUTE = 60_000;
 
 async function post(page: Page, url: string, data: object) {
   const response = await page.request.post(url, { headers: { Origin: origin(page) }, data });
@@ -31,7 +32,8 @@ async function seed(page: Page) {
     failureTags: ["warping"],
     note: "Corners lifted",
     settings: petg(70),
-    printedAt: Date.now() - 5 * HOUR,
+    // Minutes ago, not hours: "today" is the workspace's (Stockholm) day, and a few hours back is yesterday after midnight.
+    printedAt: Date.now() - 2 * MINUTE,
   });
   const worked = crypto.randomUUID();
   await post(page, `/api/items/${build}/attempts`, {
@@ -39,7 +41,7 @@ async function seed(page: Page) {
     outcome: "success",
     note: "Clean and flat",
     settings: petg(80),
-    printedAt: Date.now() - 2 * HOUR,
+    printedAt: Date.now() - MINUTE,
   });
   return { build, worked };
 }

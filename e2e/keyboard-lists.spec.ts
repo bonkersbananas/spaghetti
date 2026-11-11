@@ -34,3 +34,31 @@ test("J and K walk the cards on Ideas, Enter opens one", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/ideas\/[0-9a-f-]+$/);
 });
+
+test("J and K also walk Today's cards", async ({ page }) => {
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Today's build" } });
+  await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await page.keyboard.press("j");
+  const first = page.locator("main [data-picks] a[href]").first();
+  await expect(first).toBeFocused();
+});
+
+test("G J still goes to the journal from a list where J walks the cards", async ({ page }) => {
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title: "Any idea" } });
+  await page.goto("/ideas");
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link")).toHaveCount(1);
+  await page.keyboard.press("g");
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(/\/journal$/);
+  // And on its own, J still walks.
+  await page.goto("/ideas");
+  const card = page.getByRole("list", { name: "Ideas" }).getByRole("link").first();
+  await expect(card).toBeVisible();
+  await page.keyboard.press("j");
+  await expect(card).toBeFocused();
+});

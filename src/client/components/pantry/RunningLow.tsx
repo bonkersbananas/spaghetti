@@ -42,7 +42,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
       id="running-low"
       title="Running low"
       count={low.length}
-      className="md:max-w-2xl"
+      className="md:max-w-2xl xl:has-[li+li]:max-w-none"
       aside={
         <Button
           variant="secondary"
@@ -54,13 +54,16 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
         </Button>
       }
     >
-      <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label="Spools running low">
+      <ul
+        className="bg-cream shadow-soft overflow-hidden rounded-lg xl:has-[li+li]:grid xl:has-[li+li]:grid-cols-2"
+        aria-label="Spools running low"
+      >
         {low.map(({ spool, needs }) => {
           const name = spoolName(spool);
           return (
             <li
               key={spool.id}
-              className="after:bg-hairline relative list-none after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden"
+              className="after:bg-hairline relative list-none after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden xl:nth-last-2:odd:after:hidden"
             >
               <Link
                 to="/pantry/$spoolId"
