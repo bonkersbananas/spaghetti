@@ -485,7 +485,8 @@ export const shots: Shot[] = [
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     width: 390,
     beforeShot: async (page) => {
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      // The thread loads after the page: wait for it, then go to the very end (the closing actions above the bar).
+      await showThread(page);
     },
   },
   {

@@ -625,15 +625,19 @@ function Build({ item }: { item: ItemView }) {
               )}
 
               {folds && (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  icon={ExpandIcon}
-                  onClick={() => setShowEarlier(true)}
-                  className="mb-3 -ml-1 self-start"
-                >
-                  {story.length - SHOWN_ATTEMPTS} earlier attempts
-                </Button>
+                // On the rail like the line under it, so it reads as part of the story, not a stray button.
+                <div className="mb-1 flex items-center gap-3 pl-0.5">
+                  <span className="bg-ink/10 size-3 shrink-0 rounded-full" aria-hidden />
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    icon={ExpandIcon}
+                    onClick={() => setShowEarlier(true)}
+                    className="-ml-2"
+                  >
+                    {story.length - SHOWN_ATTEMPTS} earlier attempts
+                  </Button>
+                </div>
               )}
               <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
                 <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
@@ -648,7 +652,7 @@ function Build({ item }: { item: ItemView }) {
               </div>
             </div>
           </Section>
-          {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="" />}
+          {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
           {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
           {!isDesktop && active && (
             <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>

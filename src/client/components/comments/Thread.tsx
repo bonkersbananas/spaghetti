@@ -153,7 +153,7 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
   );
 
   return (
-    <div ref={root} className={cn("max-w-content", className ?? "mt-12 md:mt-16")}>
+    <div ref={root} className={cn("max-w-content", className)}>
       {empty || !me ? (
         // Nothing said yet: one quiet line to write on, and a heading only screen readers see.
         <section aria-labelledby={headingId} className="flex flex-col gap-4">
