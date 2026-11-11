@@ -1,5 +1,5 @@
 import type { Person, ShoppingItem } from "@shared/api";
-import { priceSearchUrl, shoppingName } from "@shared/shopping";
+import { priceSearchUrl, shoppingName, tidyPageTitle } from "@shared/shopping";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
@@ -28,7 +28,7 @@ export function shopName(url: string): string {
 export function useShoppingName(item: ShoppingItem): string {
   const url = !item.name.trim() ? (item.link ?? item.priceLink) : null;
   const { data } = useQuery({ ...linkPreviewQuery(url ?? ""), enabled: !!url });
-  return shoppingName(item, data?.title);
+  return shoppingName(item, data?.title ? tidyPageTitle(data.title, data.site) : null);
 }
 
 interface ShoppingRowProps {
