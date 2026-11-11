@@ -261,6 +261,7 @@ function Idea({ item }: { item: ItemView }) {
             onChange={(event) => setForWhom(event.target.value)}
             readOnly={readOnly || item.pending}
             asking={askFor}
+            onOpen={() => setAskFor(true)}
             onDone={() => setAskFor(false)}
           />
           <div className="flex flex-wrap gap-2">

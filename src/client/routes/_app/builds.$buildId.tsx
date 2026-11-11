@@ -521,6 +521,7 @@ function Build({ item }: { item: ItemView }) {
               onChange={(event) => setForWhom(event.target.value)}
               readOnly={readOnly || item.pending}
               asking={askFor}
+              onOpen={() => setAskFor(true)}
               onDone={() => setAskFor(false)}
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
