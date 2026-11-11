@@ -28,7 +28,8 @@ import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
 import { searchQuery, whatWorkedQuery } from "../routes/search.ts";
 import { credentials, signOutBody } from "../routes/session.ts";
-import { createSpool, spoolPhotoFields, updateSpool, weighBody, weightBody } from "../routes/spools.ts";
+import { createShoppingItem, shoppingOrder, updateShoppingItem } from "../routes/shopping-items.ts";
+import { createSpool, readLabelBody, spoolPhotoFields, updateSpool, weighBody, weightBody } from "../routes/spools.ts";
 import { createTag } from "../routes/tags.ts";
 import { createTask, logBody, updateTask, upkeepPhotoFields } from "../routes/upkeep.ts";
 import { createWebhook } from "../routes/webhooks.ts";
@@ -388,7 +389,13 @@ export const operations: Record<string, Operation> = {
   },
   "GET /features": {
     summary: "What this server can do beyond the basics (Claude drafts and photo reads, webhooks).",
-    response: z.object({ drafts: z.boolean(), photoReads: z.boolean(), coach: z.boolean(), webhooks: z.boolean() }),
+    response: z.object({
+      drafts: z.boolean(),
+      photoReads: z.boolean(),
+      labelReads: z.boolean(),
+      coach: z.boolean(),
+      webhooks: z.boolean(),
+    }),
   },
 
   // Items.
@@ -645,6 +652,23 @@ export const operations: Record<string, Operation> = {
     multipart: { fields: spoolPhotoFields, files: photoFiles, required: ["large", "thumb"] },
     response: one("spool", Spool),
   },
+  "POST /spools/:id/label-read": {
+    summary:
+      "Has Claude read the label in the spool's photo (people only; 404 without the key). Answers at once; the spool fills in through the change feed and `fromLabel` lists what it filled.",
+    body: readLabelBody,
+    response: one("spool", Spool),
+    errors: { 400: "invalid: there is no photo yet.", 404: notFound("spool") },
+  },
+  "POST /spools/:id/label-read/accept": {
+    summary: "Confirms the several spools a label photo showed: the first fills this spool, the rest are added.",
+    response: z.object({ spool: Spool, created: z.array(Spool) }),
+    status: 201,
+    errors: { 404: "not_found: nothing from the label is waiting." },
+  },
+  "DELETE /spools/:id/label-read": {
+    summary: "Puts away a label read that is waiting for a tap or didn't work out.",
+    response: one("spool", Spool),
+  },
   "GET /spools/:id/attempts": {
     summary: "The attempts that were printed from a spool.",
     response: any("Attempts.", { attempts: z.array(z.looseObject({})) }),
@@ -670,6 +694,38 @@ export const operations: Record<string, Operation> = {
   },
   "DELETE /recipes/:id": { summary: "Deletes a recipe (it can be restored).", response: "empty", status: 204 },
   "POST /recipes/:id/restore": { summary: "Restores a deleted recipe.", response: one("recipe", z.looseObject({})) },
+
+  // The shopping list.
+  "GET /shopping-items": {
+    summary: "The shopping list: what's still to buy in its order, then what was bought, the latest first.",
+    response: list("shoppingItems", z.looseObject({})),
+  },
+  "POST /shopping-items": {
+    summary: "Adds something to buy (a name, a shop link or both) at the top of the list.",
+    body: createShoppingItem,
+    response: one("shoppingItem", z.looseObject({})),
+    status: 201,
+    errors: { 409: "deleted: that id was taken off the list.", 422: "too_many: the list is full." },
+  },
+  "PUT /shopping-items/order": {
+    summary: "Orders what's still to buy: the named things trade places in this order; the rest stay put.",
+    body: shoppingOrder,
+    response: list("shoppingItems", z.looseObject({})),
+  },
+  "PATCH /shopping-items/:id": {
+    summary: "Renames it, changes its shop or Prisjakt link, or ticks it off (`bought`) or back on.",
+    body: updateShoppingItem,
+    response: one("shoppingItem", z.looseObject({})),
+  },
+  "DELETE /shopping-items/:id": {
+    summary: "Takes something off the list (it can be restored).",
+    response: "empty",
+    status: 204,
+  },
+  "POST /shopping-items/:id/restore": {
+    summary: "Puts something taken off the list back.",
+    response: one("shoppingItem", z.looseObject({})),
+  },
 
   // The printer.
   "GET /printer/upkeep": {
@@ -719,9 +775,31 @@ export const operations: Record<string, Operation> = {
     response: any("The printer."),
   },
   "PUT /printer/bridge": {
-    summary: "The printer bridge's heartbeat: progress, AMS levels and unknown trays.",
+    summary: "The printer bridge's heartbeat: progress, unknown trays, its version and what is wrong.",
     body: bridgeSchema,
     response: any("The printer."),
+  },
+  "DELETE /printer/bridge": {
+    summary: "Disconnects the printer bridge: its tokens end and its status is forgotten.",
+    response: any("The printer."),
+  },
+  "POST /bridge/pairing": {
+    summary: "Makes a short-lived, single-use code (about ten minutes) for the bridge's installer on a Mac.",
+    response: z.object({ code: z.string(), expiresAt: z.number().int() }),
+    status: 201,
+    errors: { 429: "rate_limited." },
+  },
+  "POST /bridge/pair": {
+    summary: "The installer's exchange of a pairing code for the bridge's token (scopes read, attempts, printer).",
+    body: z.object({ code: z.string() }),
+    response: z.object({
+      token: z.string(),
+      agentId: z.string(),
+      appUrl: z.string(),
+      scopes: z.array(z.string()),
+    }),
+    errors: { 410: "code_gone: used or expired.", 429: "rate_limited." },
+    public: true,
   },
   "PUT /printer/slots/:slot": {
     summary: "Loads a spool into an AMS slot, or empties it.",
@@ -771,6 +849,12 @@ export const operations: Record<string, Operation> = {
     summary: "The year so far, worked out from attempts.",
     query: insightsQuery,
     response: any("The year.", { insights: z.looseObject({}) }),
+  },
+  "GET /weeks/:monday": {
+    summary:
+      "One week (Monday to Sunday, the workspace's time zone): its prints and how they went, builds finished, ideas, comments, filament used, what is waiting, and Claude's paragraph when there is one.",
+    response: any("The week.", { week: z.looseObject({}) }),
+    errors: { 400: "invalid: not a Monday, as YYYY-MM-DD." },
   },
   "GET /links/preview": {
     summary: "The title and site of a public web page.",

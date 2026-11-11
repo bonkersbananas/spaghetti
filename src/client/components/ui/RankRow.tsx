@@ -1,7 +1,7 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
-import type { KeyboardEvent, PointerEvent, ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { DragIcon, IdeasIcon, NoteIcon } from "./icons";
+import { IdeasIcon, NoteIcon } from "./icons";
 import { MetaList } from "./MetaList";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
@@ -117,52 +117,6 @@ export function RankMark({
   );
 }
 
-interface DragHandleProps {
-  /** "Move Tugboat": what it moves. */
-  label: string;
-  /** Starts a drag (pointer, mouse or touch); the list follows the finger. */
-  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
-  /** Arrow keys move it a place up (-1) or down (+1). */
-  onMove: (step: -1 | 1) => void;
-  /** Delete or Backspace takes it off (with an undo). */
-  onRemove?: () => void;
-  disabled?: boolean;
-  ref?: Ref<HTMLButtonElement>;
-}
-
-/**
- * The grip a row is dragged by: six dots, a 44 px target that doesn't scroll the page under a finger
- * (`touch-none`). With the keyboard, the arrow keys move the row and focus stays on it.
- */
-export function DragHandle({ label, onPointerDown, onMove, onRemove, disabled, ref }: DragHandleProps) {
-  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      event.preventDefault();
-      event.stopPropagation();
-      onMove(event.key === "ArrowUp" ? -1 : 1);
-    } else if (onRemove && (event.key === "Delete" || event.key === "Backspace")) {
-      event.preventDefault();
-      event.stopPropagation();
-      onRemove();
-    }
-  }
-  return (
-    <button
-      ref={ref}
-      type="button"
-      aria-label={label}
-      aria-keyshortcuts={onRemove ? "ArrowUp ArrowDown Delete" : "ArrowUp ArrowDown"}
-      aria-roledescription="drag handle"
-      disabled={disabled}
-      onPointerDown={disabled ? undefined : onPointerDown}
-      onKeyDown={disabled ? undefined : onKeyDown}
-      className="focus-ring text-ink-faint hover:text-ink-soft hover:bg-ink/5 active:bg-ink/8 disabled:text-ink-ghost flex h-14 w-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md transition-colors select-none active:cursor-grabbing disabled:cursor-not-allowed md:h-16 md:w-9"
-    >
-      <DragIcon size={20} weight="bold" aria-hidden />
-    </button>
-  );
-}
-
 interface PickTileProps {
   photo?: { src: string; color?: string };
   note?: string;
@@ -210,3 +164,6 @@ export function PickTile({ photo, note, title, rank, onToggle, disabled }: PickT
     </button>
   );
 }
+
+/** The handle lives in its own file (the shopping list uses it too); wishlists import it from here as before. */
+export { DragHandle } from "./DragHandle";

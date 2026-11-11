@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
-import { addPhotosToItem, type PhotoView, removePhoto, reorderPhotos } from "@/lib/items";
+import { addPhotosToItem, type PhotoView, reorderPhotos } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -18,8 +18,8 @@ interface PhotoStripProps {
 
 /**
  * An idea's photos in a row: tap one to show it, drag to reorder (the first
- * is the cover; Alt+arrows with the keyboard), remove the selected one, or
- * add more.
+ * is the cover; Alt+arrows with the keyboard), or add more. Removing the shown photo is on the photo itself
+ * (`PhotoViewer`), so the thumbnails stay plain.
  */
 export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripProps) {
   const queryClient = useQueryClient();
@@ -119,16 +119,6 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripP
                   busy={!!photo.upload}
                 />
               </button>
-              {selected && (!offline || photo.upload) && (
-                <button
-                  type="button"
-                  onClick={() => removePhoto(queryClient, photo)}
-                  aria-label="Remove this photo"
-                  className="pressable focus-ring touch-target bg-veil-strong text-on-veil shadow-raised absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full"
-                >
-                  <PlusIcon size={14} weight="bold" className="rotate-45" aria-hidden />
-                </button>
-              )}
             </Reorder.Item>
           );
         })}

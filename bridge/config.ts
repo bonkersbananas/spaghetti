@@ -1,6 +1,8 @@
 /** The bridge's settings, from the environment or a JSON config file (`--config path`, or BRIDGE_CONFIG). */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
+import { macPaths } from "./mac/paths.ts";
 
 export interface Config {
   /** The printer's address on the home network. */
@@ -17,6 +19,12 @@ export interface Config {
   dataDir: string;
   /** MQTT address; defaults to mqtts://<host>:8883. */
   mqttUrl: string;
+  /** The printer's FTPS port (990); only tests and the smoke test change it. */
+  ftpPort: number;
+  /** True when mqttUrl was given (then the printer's address isn't looked for again). */
+  mqttUrlGiven: boolean;
+  /** The settings file in use, if any. */
+  file: string | undefined;
   /** Turn the camera frame off. */
   camera: boolean;
   ffmpeg: string;
@@ -37,11 +45,15 @@ export function loadConfig(
   argv: readonly string[] = process.argv.slice(2),
 ): Config {
   const flag = argv.indexOf("--config");
-  const file = (flag >= 0 ? argv[flag + 1] : undefined) ?? env.BRIDGE_CONFIG;
+  // Without --config, the file the Mac installer wrote is used if it is there.
+  const installed = macPaths(homedir()).config;
+  const file =
+    (flag >= 0 ? argv[flag + 1] : undefined) ?? env.BRIDGE_CONFIG ?? (existsSync(installed) ? installed : undefined);
   const fromFile: Record<string, unknown> = file ? JSON.parse(readFileSync(file, "utf8")) : {};
   const pick = (name: keyof Config, envName?: string): string | undefined => {
     const fromEnv = envName ? env[envName] : undefined;
     const value = fromEnv ?? fromFile[name];
+    if (typeof value === "number") return String(value);
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
   };
   const missing: string[] = [];
@@ -66,6 +78,9 @@ export function loadConfig(
     token,
     dataDir,
     mqttUrl: pick("mqttUrl", "BRIDGE_MQTT_URL") ?? `mqtts://${printerHost}:8883`,
+    ftpPort: Number(pick("ftpPort", "BRIDGE_FTP_PORT") ?? 990),
+    mqttUrlGiven: pick("mqttUrl", "BRIDGE_MQTT_URL") !== undefined,
+    file,
     camera: (pick("camera", "BRIDGE_CAMERA") ?? "on") !== "off",
     ffmpeg: pick("ffmpeg", "BRIDGE_FFMPEG") ?? "ffmpeg",
     trustNewCertificate: argv.includes("--trust-new-certificate") || env.BRIDGE_TRUST_NEW_CERTIFICATE === "1",

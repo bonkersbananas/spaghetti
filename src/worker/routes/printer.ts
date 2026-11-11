@@ -1,14 +1,15 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { PrinterResponse } from "../../shared/api.ts";
-import type { BridgeStatusData } from "../../shared/bridge.ts";
+import { BRIDGE_PROBLEM_CODES, type BridgeStatusData } from "../../shared/bridge.ts";
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { amsSlots, attempts, bridge, printer, spools } from "../db/schema.ts";
+import { amsSlots, attempts, bridge, bridgePairings, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { disconnectBridge } from "./bridge.ts";
 import { upkeepRoutes } from "./upkeep.ts";
 
 const PRINTER_ID = "x2d";
@@ -62,10 +63,16 @@ const bridgeSchema = z.object({
     )
     .max(20)
     .optional(),
+  version: z.string().trim().max(40).nullable().optional(),
+  platform: z.string().trim().max(40).nullable().optional(),
+  problems: z
+    .array(z.object({ code: z.enum(BRIDGE_PROBLEM_CODES), message: z.string().trim().min(1).max(400) }))
+    .max(5)
+    .optional(),
 });
 
 async function loadPrinter(db: Db): Promise<PrinterResponse> {
-  const [row, slots, bridgeRow] = await Promise.all([
+  const [row, slots, bridgeRow, paired] = await Promise.all([
     db.select().from(printer).where(eq(printer.id, PRINTER_ID)).get(),
     // A deleted spool's slot reads as empty (and fills again with undo).
     db
@@ -74,11 +81,20 @@ async function loadPrinter(db: Db): Promise<PrinterResponse> {
       .innerJoin(spools, eq(spools.id, amsSlots.spoolId))
       .where(isNull(spools.deletedAt)),
     db.select().from(bridge).where(eq(bridge.id, BRIDGE_ID)).get(),
+    db
+      .select({ usedAt: bridgePairings.usedAt })
+      .from(bridgePairings)
+      .where(isNotNull(bridgePairings.usedAt))
+      .orderBy(desc(bridgePairings.usedAt))
+      .limit(1)
+      .get(),
   ]);
   return {
     setup: row?.setup ?? DEFAULT_PRINTER,
     slots: Object.fromEntries(slots.map((slot) => [slot.slot, slot.spoolId])),
-    bridge: bridgeRow ? { ...bridgeRow.status, lastSeenAt: bridgeRow.lastSeenAt.getTime() } : null,
+    bridge: bridgeRow
+      ? { ...bridgeRow.status, lastSeenAt: bridgeRow.lastSeenAt.getTime(), pairedAt: paired?.usedAt?.getTime() ?? null }
+      : null,
   };
 }
 
@@ -148,6 +164,9 @@ export const printerRoutes = new Hono<AppEnv>()
       printerState: body.printerState === undefined ? before.printerState : body.printerState,
       progress,
       unknownTrays: body.unknownTrays ?? before.unknownTrays,
+      version: body.version === undefined ? before.version : body.version,
+      platform: body.platform === undefined ? before.platform : body.platform,
+      problems: body.problems ?? before.problems ?? [],
     };
     // Progress is stamped at each message; what counts as a change is the printer's own numbers.
     const same = (a: BridgeStatusData, b: BridgeStatusData) =>
@@ -156,8 +175,11 @@ export const printerRoutes = new Hono<AppEnv>()
     const statements = [
       db
         .insert(bridge)
-        .values({ id: BRIDGE_ID, lastSeenAt: now, status })
-        .onConflictDoUpdate({ target: bridge.id, set: { lastSeenAt: now, status } }),
+        .values({ id: BRIDGE_ID, lastSeenAt: now, status, agentId: c.var.via })
+        .onConflictDoUpdate({
+          target: bridge.id,
+          set: { lastSeenAt: now, status, ...(c.var.via ? { agentId: c.var.via } : {}) },
+        }),
     ] as const;
     if (!row || !same(before, status)) {
       await db.batch([
@@ -166,6 +188,12 @@ export const printerRoutes = new Hono<AppEnv>()
       ]);
     } else await db.batch([...statements]);
     return c.json<PrinterResponse>(await loadPrinter(db));
+  })
+
+  /** Disconnects the bridge: its tokens end at once and the Printer page goes back to "No printer bridge". */
+  .delete("/bridge", async (c) => {
+    await disconnectBridge(c.var.db, c.var.actor);
+    return c.json<PrinterResponse>(await loadPrinter(c.var.db));
   })
 
   /**

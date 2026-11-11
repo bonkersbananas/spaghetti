@@ -14,16 +14,23 @@ import { type CertPin, fingerprintOf } from "./pin.ts";
 export interface PrinterLink {
   /** Asks the printer for its full state (the status request `pushall`). The only thing this link sends. */
   requestFullStatus(): void;
+  /** Drops the connection and connects again (after the computer woke, or the printer's address changed). */
+  restart(): void;
   close(): Promise<void>;
 }
 
 export interface LinkOptions {
-  /** "mqtts://192.168.1.20:8883" (TLS); a plain "mqtt://" address is for tests. */
-  url: string;
+  /**
+   * "mqtts://192.168.1.20:8883" (TLS); a plain "mqtt://" address is for tests. A function is asked at every
+   * connection, so a changed address is picked up.
+   */
+  url: string | (() => string);
   serial: string;
   accessCode: string;
   onReport: (payload: Uint8Array) => void;
   onConnection: (connected: boolean) => void;
+  /** Called with each error the link meets (a refused login, no route…), so the bridge can say what is wrong. */
+  onError?: (error: Error) => void;
   log?: (message: string) => void;
   /** Pins the printer's certificate; without it a TLS address is not verified at all (tests only). */
   pin?: CertPin;
@@ -43,10 +50,12 @@ export function connectToPrinter(options: LinkOptions): PrinterLink {
     connectTimeout: 15_000,
     clean: true,
   };
-  const address = new URL(options.url);
+  const current = () => new URL(typeof options.url === "function" ? options.url() : options.url);
+  const first = current();
   const client =
-    address.protocol === "mqtts:"
+    first.protocol === "mqtts:"
       ? new MqttClient(() => {
+          const address = current();
           // The certificate is self-signed, so it isn't verified by a CA: its fingerprint is pinned instead. The
           // socket is corked, so the MQTT login (with the access code) waits in memory until the check passes.
           const socket = tls.connect({
@@ -62,7 +71,7 @@ export function connectToPrinter(options: LinkOptions): PrinterLink {
           });
           return socket;
         }, clientOptions)
-      : mqtt.connect(options.url, clientOptions);
+      : mqtt.connect(typeof options.url === "string" ? options.url : first.toString(), clientOptions);
 
   const requestFullStatus = () => {
     client.publish(requestTopic, PUSHALL, { qos: 0 });
@@ -76,8 +85,15 @@ export function connectToPrinter(options: LinkOptions): PrinterLink {
     options.onConnection(true);
   });
   client.on("close", () => options.onConnection(false));
-  client.on("error", (error) => options.log?.(`Printer link: ${error.message}`));
+  client.on("error", (error) => {
+    options.log?.(`Printer link: ${error.message}`);
+    options.onError?.(error);
+  });
   client.on("message", (_topic, payload) => options.onReport(payload));
 
-  return { requestFullStatus, close: () => client.endAsync() };
+  return {
+    requestFullStatus,
+    restart: () => client.reconnect(),
+    close: () => client.endAsync(),
+  };
 }

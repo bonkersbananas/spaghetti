@@ -17,7 +17,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForField } from "@/components/ui/ForField";
+import { ForChip, ForField } from "@/components/ui/ForField";
 import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -28,7 +28,7 @@ import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
+import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -93,6 +93,8 @@ function Idea({ item }: { item: ItemView }) {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
+  // Saved photos can't be removed without a connection; one still uploading can.
+  const offline = useReadOnly();
   const { data: people } = useQuery(peopleQuery);
   const { data: user } = useQuery(sessionQuery);
   const wished = useWishlistIds(user?.id).includes(item.id);
@@ -101,6 +103,7 @@ function Idea({ item }: { item: ItemView }) {
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const [askFor, setAskFor] = useState(false);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
   const draftStatus = useRef(item.draft?.status);
@@ -214,6 +217,9 @@ function Idea({ item }: { item: ItemView }) {
               index={selectedIndex}
               onIndexChange={select}
               alt={alt}
+              onRemove={
+                offline && !photos[selectedIndex]?.upload ? undefined : (photo) => removePhoto(queryClient, photo)
+              }
               className="-mx-5 md:mx-0"
             />
             <PhotoStrip
@@ -254,6 +260,9 @@ function Idea({ item }: { item: ItemView }) {
             value={forWhom}
             onChange={(event) => setForWhom(event.target.value)}
             readOnly={readOnly || item.pending}
+            asking={askFor}
+            onOpen={() => setAskFor(true)}
+            onDone={() => setAskFor(false)}
           />
           <div className="flex flex-wrap gap-2">
             <ToggleChip
@@ -272,6 +281,7 @@ function Idea({ item }: { item: ItemView }) {
             >
               My wishlist
             </ToggleChip>
+            {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
           </div>
           <NoteField
             value={note}

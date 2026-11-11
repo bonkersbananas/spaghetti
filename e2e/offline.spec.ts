@@ -129,12 +129,13 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   // Looked at once, online.
   await page.goto("/ideas");
   await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toContainText("Spool holder");
+  // The saved copy is written about a second after the data arrives: leaving the page sooner loses the inbox.
+  await expect.poll(() => cacheHolds(page, "Spool holder")).toBe(true);
   await page.goto(`/builds/${buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   const attempts = page.getByRole("list", { name: "Attempts, newest first" });
   await expect(attempts.getByRole("listitem")).toHaveCount(2);
   await expect.poll(() => cacheHolds(page, "Brim and a hotter bed did it")).toBe(true);
-  await expect.poll(() => cacheHolds(page, "Spool holder")).toBe(true);
   // The journal, looked at once online (its last results are kept like the rest).
   await page.goto("/journal");
   await expect(page.getByText("Brim and a hotter bed did it").first()).toBeVisible();
@@ -430,6 +431,32 @@ test("is installable: manifests for both themes, maskable icons, and a worker th
   expect(worker).toContain("/manifest.webmanifest");
   expect(worker).toMatch(/\/assets\/index-[\w-]+\.js/);
   expect(worker).toMatch(/\.woff2/);
+});
+
+test("with the worker installed, / is the landing page signed out, the app signed in, and the app offline", async ({
+  page,
+  context,
+}) => {
+  // A visitor who once opened Sign in has the worker, which must not answer / with the app shell.
+  await page.goto("/sign-in");
+  await waitForServiceWorker(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Spaghetti" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+  // Its pictures and code are the network's, not part of the app's precache.
+  const worker = await (await page.request.get("/sw.js")).text();
+  expect(worker).not.toContain("/assets/landing/");
+
+  await signIn(page);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+
+  // No connection: / opens the app from the cache, as the person still signed in here.
+  await context.setOffline(true);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
 });
 
 test("shows the pantry as last seen with no connection, read-only", async ({ page, context }) => {

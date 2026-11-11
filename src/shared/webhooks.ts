@@ -21,6 +21,7 @@ export const WEBHOOK_KIND_LABELS: Record<WebhookKind, string> = {
   comment: "Comments",
   spool: "Spools",
   recipe: "Recipes",
+  shopping: "Shopping list",
   slot: "AMS slots",
   printer: "Printer",
   tag: "Tags",

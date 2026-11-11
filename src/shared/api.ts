@@ -4,6 +4,7 @@ import type { Coach } from "./coach.ts";
 import type { ItemDraft } from "./draft.ts";
 import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
+import type { LabelField, LabelRead } from "./label-read.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
@@ -201,6 +202,8 @@ export interface FeaturesResponse {
   drafts: boolean;
   /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
+  /** Claude can read a spool's label from a photo (decision 0031); the same key. */
+  labelReads: boolean;
   /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
   coach: boolean;
   /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
@@ -432,6 +435,8 @@ export interface AttemptHit {
   partsLabel: string | null;
   /** The attempt's first photo, else its build's. */
   photo: Photo | null;
+  /** In search: the failure coach's suggestion that matched the words (not saved on the attempt). */
+  coachIdea?: string | null;
 }
 
 /** An idea or a build found by search. */
@@ -454,6 +459,16 @@ export interface SearchResponse {
   attempts: AttemptHit[];
   /** Recipes whose name, note or material match; none while an outcome or tag filter is on. */
   recipes: Recipe[];
+  /** Spools on the shelf whose material, brand, colour or finish match (a few); none while a filter is on. */
+  spools: Spool[];
+  /** The words the answer is for, as the server read the question (filler dropped, typos mended, synonyms added): what to mark. */
+  terms?: Array<{ text: string; prefix: boolean }>;
+  /** The question with its mistyped words mended ("petgg" → "petg") when nothing matched as typed. */
+  corrected?: string | null;
+  /** "what worked" or "what failed" in the question: attempts that did are first. */
+  intent?: "worked" | "failed" | null;
+  /** A time phrase in the question ("last week"); `weekMonday` is set for weeks, to link the week's page. */
+  when?: { label: string; weekMonday: string | null } | null;
 }
 
 /** Where a recipe came from: the attempt that worked, while it and its build still exist. */
@@ -540,6 +555,25 @@ export interface Spool {
   slot: string | null;
   /** The RFID tray UUID of a Bambu spool, as the AMS reports it; the printer bridge finds the spool by it. */
   trayUuid: string | null;
+  /** From the label (decision 0031), or typed. Millimetres: 1.75 or 2.85. */
+  diameterMm: number | null;
+  /** The filament's printing range in °C, as the label gives it. */
+  nozzleTempMin: number | null;
+  nozzleTempMax: number | null;
+  bedTempMin: number | null;
+  bedTempMax: number | null;
+  /** How hot and how long to dry it, as the label says. */
+  dryTempC: number | null;
+  dryHours: number | null;
+  /** Bambu's RFID or product code, when the label prints one (not the AMS's tray UUID). */
+  productCode: string | null;
+  /**
+   * The fields Claude filled in from a label photo and nobody has touched since; each is shown as "from the label".
+   * A person's edit to a field takes it off this list.
+   */
+  fromLabel: LabelField[];
+  /** A label read in progress, waiting for a tap, or that didn't work out; null otherwise. */
+  labelRead: LabelRead | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -568,7 +602,31 @@ export interface CreateSpoolRequest {
   note?: string;
   driedAt?: number | null;
   trayUuid?: string | null;
+  diameterMm?: number | null;
+  nozzleTempMin?: number | null;
+  nozzleTempMax?: number | null;
+  bedTempMin?: number | null;
+  bedTempMax?: number | null;
+  dryTempC?: number | null;
+  dryHours?: number | null;
+  productCode?: string | null;
   createdAt?: number;
+}
+
+/**
+ * POST /api/spools/:id/label-read: reads the label in the spool's photo (people only). `placeholders` are the fields
+ * the person hadn't set when the spool was made (the sheet's starting material and weight), which the label may
+ * replace; any other field that already has a value is left alone.
+ */
+export interface ReadLabelRequest {
+  placeholders?: Array<"material" | "netGrams">;
+}
+
+/** POST /api/spools/:id/label-read and /accept, DELETE /api/spools/:id/label-read. */
+export interface LabelReadResponse {
+  spool: Spool;
+  /** The other spools a confirmed read made (accept only). */
+  created?: Spool[];
 }
 
 /** PUT /api/spools/:id/weight: what it held when new, and what the empty spool weighs. Either can be null to clear (back to a hand-set level). */
@@ -660,6 +718,9 @@ export interface UpdateBridgeRequest {
     totalLayers?: number | null;
   } | null;
   unknownTrays?: BridgeStatus["unknownTrays"];
+  version?: BridgeStatus["version"];
+  platform?: BridgeStatus["platform"];
+  problems?: BridgeStatus["problems"];
 }
 
 /** PUT /api/printer/slots/:slot. Loading a spool takes it out of the slot it was in. */
@@ -760,4 +821,33 @@ export interface LogUpkeepRequest {
   note?: string;
   /** When it was done, epoch ms (not in the future); the printer's hours are those at that moment. Default: now. */
   at?: number;
+}
+
+/** /api/shopping-items: things to buy for the printer. */
+export interface ShoppingItem {
+  id: string;
+  /** May be empty when there is a link; show `shoppingName` (shared/shopping.ts). */
+  name: string;
+  /** The shop's page. */
+  link: string | null;
+  /** A price comparison page (Prisjakt). */
+  priceLink: string | null;
+  /** Its place among what's still to buy, smallest first. */
+  position: number;
+  /** When it was ticked off, epoch ms; null while it's still to buy. */
+  boughtAt: number | null;
+  boughtBy: string | null;
+  createdBy: string;
+  /** The agent that added it, if one did. */
+  createdVia: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ShoppingItemsResponse {
+  shoppingItems: ShoppingItem[];
+}
+
+export interface ShoppingItemResponse {
+  shoppingItem: ShoppingItem;
 }

@@ -6,8 +6,7 @@ import { useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
-import { CheckIcon, CloseIcon, SparkleIcon, UndoIcon } from "@/components/ui/icons";
-import { Overline } from "@/components/ui/Overline";
+import { CheckIcon, CloseIcon, UndoIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { setCoachDismissed } from "@/lib/coach";
 import { useReadOnly } from "@/lib/read-only";
@@ -25,12 +24,7 @@ function Thinking({ className }: { className?: string }) {
 }
 
 function Heading({ children }: { children: string }) {
-  return (
-    <Overline as="span" className="flex items-center gap-1.5">
-      <SparkleIcon size={12} weight="fill" aria-hidden />
-      {children}
-    </Overline>
-  );
+  return <ClaudeLine className="font-semibold">{children}</ClaudeLine>;
 }
 
 interface CoachNoteProps {
@@ -44,7 +38,7 @@ interface CoachNoteProps {
 
 /**
  * Claude's ideas for the next try, under the attempt that went wrong on the build page: quietly marked as Claude's
- * (dashed, like every suggestion), at most three short lines each with its one-line why, and one tap to dismiss.
+ * at most three short lines each with its one-line why, and one tap to dismiss.
  * It never asks for anything. Taking one is in the Log attempt sheet (`CoachSuggestions`).
  */
 export function CoachNote({ coach, itemId, attemptId, className, label = IDEAS }: CoachNoteProps) {
@@ -54,7 +48,7 @@ export function CoachNote({ coach, itemId, attemptId, className, label = IDEAS }
   const items = liveCoachItems(coach);
   if (!items.length) return null;
   return (
-    <section aria-label={label} className={cn("flex flex-col gap-2 pt-1", className)}>
+    <section aria-label={label} className={cn("flex flex-col gap-2 pt-3", className)}>
       <Heading>Claude's ideas for the next try</Heading>
       <ul className="flex flex-col gap-2.5">
         {items.map((item) => (
@@ -163,9 +157,7 @@ export function CoachSuggestions({
                   <ul className="flex flex-wrap gap-1.5" aria-label="Fills in">
                     {words.slice(0, 3).map((word) => (
                       <li key={word} className="max-w-full">
-                        <Chip suggested tone="semolina" className="max-w-full">
-                          {word}
-                        </Chip>
+                        <Chip className="max-w-full">{word}</Chip>
                       </li>
                     ))}
                   </ul>

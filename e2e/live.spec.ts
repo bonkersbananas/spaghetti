@@ -1,18 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { signIn as signInThroughApi } from "./helpers";
 
 const [alex, sam] = SEED_USERS;
 
-async function signInAs(page: Page, user: { username: string }) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Name").fill(user.username);
-  await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  // Signing in lands on Today; these tests start from the inbox.
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-  await page.goto("/ideas");
-  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
-}
+const signInAs = (page: Page, user: { username: string }) => signInThroughApi(page, user);
 
 /** The app's origin (the pages may not have loaded anything yet). */
 const origin = (_page?: Page) => new URL(test.info().project.use.baseURL ?? "").origin;
@@ -88,10 +80,12 @@ test("one person's attempt and photo show up on the other's open build, without 
   ];
   for (const response of sent) expect(response.ok()).toBe(true);
 
-  // Alex's screen follows on its own (the feed is asked every ten seconds), with one quiet word.
+  // Alex's screen follows on its own, with one quiet word (the feed is asked every ten seconds and when the window
+  // regains focus: the test wakes it the way coming back to the tab does, instead of waiting for the next round).
+  await focus(page);
   const attempts = page.getByRole("list", { name: "Attempts, newest first" });
-  await expect(attempts.getByText("Let go of the bed at 40%")).toBeVisible({ timeout: 25_000 });
-  await expect(attempts.getByRole("img", { name: "Attempt 1" })).toBeVisible({ timeout: 15_000 });
+  await expect(attempts.getByText("Let go of the bed at 40%")).toBeVisible();
+  await expect(attempts.getByRole("img", { name: "Attempt 1" })).toBeVisible();
   await expect(page.getByText("Sam Okafor logged an attempt")).toBeVisible();
   // What Alex was typing is theirs: kept as typed, and saved.
   await expect(title).toHaveValue("Cable chain v2");
@@ -199,8 +193,10 @@ test("the spool page and the printer setup follow the other person's edits, and 
     expect(after.remaining).toBe("low");
     expect(after.note).toBe("Dry it first");
 
-    // Alex's screen takes Sam's edits on its own, and what Alex typed stays.
-    await expect(page.getByRole("radio", { name: "Low" })).toBeChecked({ timeout: 25_000 });
+    // Alex's screen takes Sam's edits on its own (the window regaining focus asks the feed at once, as it does
+    // for a person coming back to the tab), and what Alex typed stays.
+    await focus(page);
+    await expect(page.getByRole("radio", { name: "Low" })).toBeChecked();
     await expect(brand).toHaveValue("Bambu Eco");
 
     // The printer's setup works the same way, a part at a time.
@@ -214,7 +210,8 @@ test("the spool page and the printer setup follow the other person's edits, and 
       .toContain("Cool Plate");
     // Alex's save didn't undo Sam's change, and Alex's screen shows it.
     expect((await (await page.request.get("/api/printer")).json()).setup.amsUnits).toBe(2);
-    await expect(page.getByText("Combo · 2 AMS 2 Pro")).toBeVisible({ timeout: 25_000 });
+    await focus(page);
+    await expect(page.getByText("Combo · 2 AMS 2 Pro")).toBeVisible();
     await expect(page.getByRole("button", { name: "Cool Plate" })).toHaveAttribute("aria-pressed", "true");
   } finally {
     await page.request.delete(`/api/spools/${spoolId}`, { headers });
@@ -230,8 +227,6 @@ test("the attempt sheet follows the other person's edits and the printer's repor
   page,
   browser,
 }) => {
-  // Two waits on the feed (it is asked every ten seconds) and a lot to check: more than the default 30 s on a slow runner.
-  test.setTimeout(90_000);
   const samContext = await browser.newContext({ viewport: page.viewportSize(), baseURL: origin() });
   const samPage = await samContext.newPage();
   await signInAs(page, alex);
@@ -295,9 +290,8 @@ test("the attempt sheet follows the other person's edits and the printer's repor
   expect(after.settings).toMatchObject({ bedTemperature: 60, layerHeight: 0.16, nozzleTemperature: 230 });
 
   // Alex's sheet takes what Sam did on its own, and keeps what Alex typed.
-  await expect(sheet.getByRole("button", { name: "Great first layer" })).toHaveAttribute("aria-pressed", "true", {
-    timeout: 25_000,
-  });
+  await focus(page);
+  await expect(sheet.getByRole("button", { name: "Great first layer" })).toHaveAttribute("aria-pressed", "true");
   await expect(sheet.getByRole("button", { name: "0.16 mm" })).toHaveAttribute("aria-pressed", "true");
   await expect(infill).toHaveValue("20");
   await expect(note).toHaveValue("Original plus");
@@ -316,7 +310,8 @@ test("the attempt sheet follows the other person's edits and the printer's repor
     data: { endedAt: Date.now() - 1000, suggestedFailureTag: "warping" },
   });
   expect(reported.ok()).toBe(true);
-  await expect(finishing.getByText(/off the bed at/i)).toBeVisible({ timeout: 25_000 });
+  await focus(page);
+  await expect(finishing.getByText(/off the bed at/i)).toBeVisible();
   // Picking "Spaghetti" now offers the tag the printer suggested.
   await finishing.getByRole("radio", { name: "Spaghetti" }).click();
   await expect(finishing.getByRole("button", { name: "Warping" })).toHaveAttribute("aria-pressed", "true");

@@ -134,7 +134,13 @@ describe("search", () => {
     expect(ids((await search({ q: "spaghetti snapped" })).attempts)).toEqual([attempt.id]);
     expect(ids((await search({ q: "textured" })).attempts)).toEqual([attempt.id]);
     expect(ids((await search({ q: "blue bambu" })).attempts)).toEqual([attempt.id]);
-    expect(await search({ q: "nothing like this" })).toEqual({ builds: [], ideas: [], attempts: [], recipes: [] });
+    expect(await search({ q: "nothing like this" })).toMatchObject({
+      builds: [],
+      ideas: [],
+      attempts: [],
+      recipes: [],
+      spools: [],
+    });
   });
 
   it("ranks a match in the title above one in a note", async () => {
@@ -181,7 +187,13 @@ describe("search", () => {
 
     // So does a deleted build, with its attempts.
     await request(`/api/items/${build.id}`, { method: "DELETE", cookie });
-    expect(await search({ q: "ferry" })).toEqual({ builds: [], ideas: [], attempts: [], recipes: [] });
+    expect(await search({ q: "ferry" })).toMatchObject({
+      builds: [],
+      ideas: [],
+      attempts: [],
+      recipes: [],
+      spools: [],
+    });
 
     // Rows removed for good leave the index too.
     await env.DB.prepare("DELETE FROM items WHERE id = ?").bind(build.id).run();
@@ -221,7 +233,7 @@ describe("search", () => {
     expect((await search({ q: "hook", material: "petg" })).builds).toEqual([]);
     // Filters alone list the newest attempts that pass them.
     expect(ids((await search({ outcome: "failures" })).attempts)).toEqual([partial.id, failed.id]);
-    expect(await search({})).toEqual({ builds: [], ideas: [], attempts: [], recipes: [] });
+    expect(await search({})).toMatchObject({ builds: [], ideas: [], attempts: [], recipes: [], spools: [] });
   });
 
   it("shows an attempt's own photo, else its build's", async () => {

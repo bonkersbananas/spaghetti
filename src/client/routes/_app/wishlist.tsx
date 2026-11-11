@@ -83,11 +83,7 @@ function WishlistPage() {
     <>
       <PageHeader
         title="Wishlists"
-        subtitle={
-          others.length
-            ? "The ideas each of you would print first. Drag yours into order whenever you change your mind."
-            : "The ideas you would print first. Drag them into order whenever you change your mind."
-        }
+        subtitle={others.length ? "What each of you would print first." : "What you would print first."}
       />
       {isWide || lists.length === 1 ? (
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-10 xl:gap-14">{lists.map(column)}</div>

@@ -1,0 +1,89 @@
+name: Bridge release
+
+# Builds the printer bridge as single programs for macOS (Apple silicon and Intel), smoke-tests each one on a runner of
+# its own kind (macos-latest is Apple silicon; macos-15-intel is Intel) against the bridge's stand-in printer, and publishes them with checksums as the assets of a GitHub
+# release. Tag a commit `bridge-v1.0.0` to release; "Run workflow" builds and tests without publishing.
+# The installer (public/bridge/install.sh) downloads these files and checks SHA256SUMS.
+
+on:
+  push:
+    tags: ["bridge-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.target }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-latest
+          - target: darwin-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: pnpm install --frozen-lockfile
+      - name: Work out the version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then v="${GITHUB_REF_NAME#bridge-v}"; else v="0.0.0-${GITHUB_SHA::7}"; fi
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+      - name: Build the program
+        run: node scripts/build-bridge.ts --version "${{ steps.version.outputs.value }}" --targets ${{ matrix.target }}
+      # The same check the unit tests run on the source, on the compiled program: it starts against stand-ins for the
+      # printer (MQTT and FTPS over TLS) and the app, starts the attempt, fetches and attaches the file, sends only pushall.
+      - name: Smoke test the program
+        run: node scripts/bridge-smoke.ts dist/bridge/spaghetti-bridge-${{ matrix.target }} "${{ steps.version.outputs.value }}"
+      # What the installer does to the download, on a real Mac: unpack, sign ad hoc, and run it.
+      - name: The program starts after unpacking and ad-hoc signing
+        run: |
+          gunzip -c dist/bridge/spaghetti-bridge-${{ matrix.target }}.gz > /tmp/spaghetti-bridge
+          chmod 755 /tmp/spaghetti-bridge
+          codesign --force --sign - /tmp/spaghetti-bridge
+          test "$(/tmp/spaghetti-bridge version)" = "${{ steps.version.outputs.value }}"
+          /tmp/spaghetti-bridge discover || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-${{ matrix.target }}
+          path: dist/bridge/spaghetti-bridge-${{ matrix.target }}.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: assets
+        run: |
+          sha256sum -- *.gz | tee SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 2
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#bridge-v}"
+          gh release create "$GITHUB_REF_NAME" assets/*.gz assets/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Spaghetti printer bridge $version" \
+            --notes "The printer bridge for macOS (Apple silicon and Intel), built by CI and smoke-tested against the bridge's stand-in printer. Install it from the Printer page in Spaghetti; see docs/bridge.md. Check a download yourself with \`shasum -a 256 -c SHA256SUMS\`."

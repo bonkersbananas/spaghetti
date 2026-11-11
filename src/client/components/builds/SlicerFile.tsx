@@ -1,7 +1,7 @@
 import { fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptFilament } from "@shared/attempts";
 import type { Plate } from "@shared/threemf/types.ts";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
@@ -12,6 +12,7 @@ import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
 import { formatBytes, plateThumb, type SlicerFileDraft } from "@/lib/slicer-files";
 import { useObjectUrl } from "@/lib/use-object-url";
+import { canView3d, ThreeDButton } from "../viewer/ThreeDButton";
 import { formatMinutes } from "./settings";
 
 /** A plate's picture on a quiet well (slicers render them on transparent ground). */
@@ -40,15 +41,20 @@ interface FileCardProps {
   /** A line under it, such as "Too big to keep". */
   note?: string;
   download?: string;
+  /** Sits on the plate picture's corner (the "3D" control). */
+  plateOverlay?: ReactNode;
   onRemove?: () => void;
   className?: string;
 }
 
 /** A slicer file on an attempt: the plate that was meant to print, the file's name, and a way to get it back. */
-export function FileCard({ name, thumbSrc, meta, note, download, onRemove, className }: FileCardProps) {
+export function FileCard({ name, thumbSrc, meta, note, download, plateOverlay, onRemove, className }: FileCardProps) {
   return (
     <div className={cn("bg-ink/3 flex items-center gap-3 rounded-lg p-2.5 pr-1.5", className)}>
-      <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-16" />
+      <span className="relative shrink-0">
+        <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-16" />
+        {plateOverlay}
+      </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-small text-ink truncate font-semibold" title={name}>
           {name}
@@ -96,10 +102,13 @@ export function savedFileMeta(file: AttemptFileView): { meta: string[]; note?: s
 /** The card for a file on a saved attempt. */
 export function SavedFileCard({
   file,
+  filaments,
   onRemove,
   className,
 }: {
   file: AttemptFileView;
+  /** The attempt's filaments: their colours stand in for any the file doesn't give. */
+  filaments?: AttemptFilament[];
   onRemove?: () => void;
   className?: string;
 }) {
@@ -111,6 +120,9 @@ export function SavedFileCard({
       meta={meta}
       note={note}
       download={file.stored && !file.pending ? fileUrl(file.id) : undefined}
+      plateOverlay={
+        canView3d(file) ? <ThreeDButton file={file} fallbackColors={filaments?.map((f) => f.colorHex)} /> : undefined
+      }
       onRemove={onRemove}
       className={className}
     />

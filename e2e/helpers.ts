@@ -1,7 +1,27 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 
-export async function signIn(page: Page) {
+/**
+ * Signs in as `user` and lands on the Ideas inbox (what most tests start from). The session is made through the
+ * API: the browser context keeps its cookie, so the sign-in form's page loads (two of them, about three seconds on
+ * CI, for hundreds of tests) are skipped. The form itself is tested in smoke.spec.ts and passkeys.spec.ts.
+ */
+export async function signIn(
+  page: Page,
+  user: { username: string } = SEED_USERS[0],
+  origin = new URL(page.url() === "about:blank" ? (test.info().project.use.baseURL ?? "") : page.url()).origin,
+) {
+  const response = await page.request.post("/api/session", {
+    headers: { Origin: origin },
+    data: { username: user.username, password: SEED_PASSWORD },
+  });
+  expect(response.ok(), "signing in through the API").toBe(true);
+  await page.goto("/ideas");
+  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
+}
+
+/** The same through the sign-in form, for the tests that are about signing in (the quiet passkey offer follows a password sign-in). */
+export async function signInWithForm(page: Page) {
   await page.goto("/sign-in");
   await page.getByLabel("Name").fill(SEED_USERS[0].username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);

@@ -9,7 +9,7 @@ import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto, printingAttempts } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
-import { printerQuery } from "@/lib/pantry";
+import { printerQuery } from "@/lib/pantry-queries";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useIsDesktop } from "@/lib/use-media-query";

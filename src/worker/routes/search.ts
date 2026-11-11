@@ -1,4 +1,4 @@
-import { and, asc, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type {
@@ -7,18 +7,42 @@ import type {
   ItemHit,
   Recipe,
   SearchResponse,
+  Spool,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
-import { byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
+import { BUILT_IN_TAGS, byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
 import { OUTCOME_FILTERS, outcomesFor } from "../../shared/journal.ts";
 import { attemptPartsLabel } from "../../shared/parts.ts";
-import { recipeMatchesTerms, recipesFor } from "../../shared/recipes.ts";
-import { ftsQuery, SNIPPET_CLOSE, SNIPPET_OPEN, searchTerms } from "../../shared/search.ts";
+import { recipesFor } from "../../shared/recipes.ts";
+import { ftsQuery, matchesTerm, type SearchTerm, SNIPPET_CLOSE, SNIPPET_OPEN, words } from "../../shared/search.ts";
+import {
+  correctTerms,
+  type Intent,
+  markTerms,
+  parseQuery,
+  splitNames,
+  textMatchesTerms,
+  type When,
+} from "../../shared/search-intent.ts";
 import type { Db } from "../db/index.ts";
-import { type Attempt, attempts, items, type Photo, parts, photos, tags } from "../db/schema.ts";
+import {
+  type Attempt,
+  amsSlots,
+  attempts,
+  coachRuns,
+  items,
+  type Photo,
+  parts,
+  photos,
+  spools,
+  tags,
+  users,
+} from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
+import { gramsFor } from "../ledger.ts";
 import { liveRecipes } from "./recipes.ts";
+import { toApiSpool } from "./spools.ts";
 
 /** A filament type as people type it: "petg " → "PETG". */
 export const material = z
@@ -233,6 +257,249 @@ async function itemHits(
 const RANK = "bm25(search, 0, 0, 0, 8.0, 3.0, 5.0, 5.0, 2.0)";
 const LIMIT = { items: 12, attempts: 30 };
 
+const hasHits = (r: SearchResponse) =>
+  r.builds.length + r.ideas.length + r.attempts.length + r.recipes.length + r.spools.length > 0;
+
+interface SearchInput {
+  terms: SearchTerm[];
+  intent: Intent | null;
+  when: When | null;
+  outcome?: z.infer<typeof filters>["outcome"];
+  material?: string;
+  person?: string;
+  tag?: string;
+}
+
+/** Whether the typed words name a spool on the shelf: every one starts a word of its material, brand, colour, finish or note. */
+function spoolMatches(spool: Spool, terms: readonly SearchTerm[]) {
+  if (!terms.length) return false;
+  const haystack = words(
+    [spool.material, spool.brand, spool.colorName, spool.finish, spool.note, spool.slot ? "loaded ams" : ""].join(" "),
+  );
+  return textMatchesTerms(haystack.join(" "), terms);
+}
+
+/** The words the notebook knows, most used first: what a mistyped word is corrected to. */
+async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<string[]> {
+  const [itemRows, spoolRows] = await Promise.all([
+    db.select({ title: items.title, note: items.note }).from(items).where(isNull(items.deletedAt)).limit(2000),
+    db
+      .select({ material: spools.material, brand: spools.brand, color: spools.colorName, finish: spools.finish })
+      .from(spools)
+      .where(isNull(spools.deletedAt)),
+  ]);
+  const counts = new Map<string, number>();
+  const add = (text: string | null | undefined, weight = 1) => {
+    for (const word of words(text ?? "")) if (word.length >= 4) counts.set(word, (counts.get(word) ?? 0) + weight);
+  };
+  for (const row of itemRows) {
+    add(row.title, 3);
+    add(row.note);
+  }
+  for (const row of spoolRows) add(`${row.material} ${row.brand} ${row.color} ${row.finish}`, 2);
+  for (const tag of [...BUILT_IN_TAGS.failure, ...BUILT_IN_TAGS.success, ...custom]) add(tag.label, 5);
+  add(KNOWN_WORDS, 4);
+  return [...counts].sort((a, b) => b[1] - a[1]).map(([word]) => word);
+}
+
+/** The failure coach's suggestion that a search matched, shown under the attempt it was made for. */
+async function withCoachIdeas(db: Db, hits: AttemptHit[], terms: readonly SearchTerm[]): Promise<AttemptHit[]> {
+  if (!hits.length) return hits;
+  const runs = await db
+    .select()
+    .from(coachRuns)
+    .where(
+      and(
+        inArray(
+          coachRuns.attemptId,
+          hits.map((hit) => hit.attempt.id),
+        ),
+        eq(coachRuns.status, "done"),
+      ),
+    );
+  return hits.map((hit) => {
+    const run = runs.find((row) => row.attemptId === hit.attempt.id);
+    const idea = run?.suggestions.find(
+      (suggestion) =>
+        !run.dismissed.includes(suggestion.id) &&
+        words(`${suggestion.title} ${suggestion.why}`).some((word) => matchesTerm(word, markTerms(terms))),
+    );
+    return idea ? { ...hit, coachIdea: idea.title } : hit;
+  });
+}
+
+/** What anyone prints about, so a typo in "warping" is mended even in an empty notebook. */
+const KNOWN_WORDS =
+  "petg nozzle bed plate temperature warping stringing adhesion brim supports support layer infill filament spool " +
+  "silk matte printer first dried drying wet clog overhang seam banding purge";
+
+/** One search for these terms and filters. */
+async function searchWith(
+  env: Env,
+  db: Db,
+  input: SearchInput,
+  custom: Array<{ kind: TagKind; slug: string; label: string }>,
+): Promise<SearchResponse> {
+  const { terms, intent, when, ...f } = input;
+  // "what worked" with nothing else asked is the outcome filter (unless one is chosen).
+  const outcome =
+    f.outcome ??
+    (!terms.length && intent === "worked" ? "success" : !terms.length && intent === "failed" ? "failures" : undefined);
+  const narrowsAttempts = !!(outcome || f.material || f.tag);
+  const empty: SearchResponse = { builds: [], ideas: [], attempts: [], recipes: [], spools: [] };
+  const recipeFilters = !outcome && !f.tag;
+  const findRecipes = async (): Promise<Recipe[]> => {
+    if (!recipeFilters) return [];
+    let list = await liveRecipes(db);
+    if (f.material) list = recipesFor(list, { material: f.material });
+    if (f.person) list = list.filter((recipe) => recipe.createdBy === f.person);
+    return terms.length
+      ? list.filter((recipe) =>
+          textMatchesTerms(`${recipe.name} ${recipe.note} ${recipe.material} ${recipe.finish ?? ""}`, terms),
+        )
+      : list;
+  };
+  const findSpools = async (): Promise<Spool[]> => {
+    if (!terms.length || narrowsAttempts || f.person || when) return [];
+    const rows = await db
+      .select({ spool: spools, slot: amsSlots.slot })
+      .from(spools)
+      .leftJoin(amsSlots, eq(amsSlots.spoolId, spools.id))
+      .where(isNull(spools.deletedAt));
+    const hits = rows.map((row) => toApiSpool(row.spool, row.slot)).filter((spool) => spoolMatches(spool, terms));
+    if (!hits.length) return [];
+    const grams = await gramsFor(
+      db,
+      env.DB,
+      rows.filter((row) => hits.some((hit) => hit.id === row.spool.id)).map((row) => row.spool),
+    );
+    return hits.slice(0, 6).map((hit) => {
+      const row = rows.find((r) => r.spool.id === hit.id);
+      return row ? toApiSpool(row.spool, row.slot, grams.get(hit.id)) : hit;
+    });
+  };
+  if (!terms.length && !narrowsAttempts && !f.person && !when) return empty;
+
+  const filter = attemptFilters({ ...f, outcome });
+  const span = when
+    ? { sql: " AND a.printed_at >= ? AND a.printed_at < ?", params: [when.from, when.to] }
+    : { sql: "", params: [] };
+  if (!terms.length) {
+    // Filters alone: the newest attempts that pass them.
+    const rows = await all<{ id: string }>(env, {
+      sql: `SELECT a.id FROM attempts AS a JOIN items AS i ON i.id = a.item_id
+        WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL${filter.sql}${span.sql}
+        ORDER BY a.printed_at DESC LIMIT ${LIMIT.attempts}`,
+      params: [...filter.params, ...span.params],
+    });
+    return {
+      ...empty,
+      attempts: await attemptHits(
+        db,
+        rows.map((row) => row.id),
+      ),
+      recipes: f.material ? await findRecipes() : [],
+    };
+  }
+
+  const match = ftsQuery(terms, custom);
+  const itemSpan = when
+    ? { sql: " AND i.created_at >= ? AND i.created_at < ?", params: [when.from, when.to] }
+    : { sql: "", params: [] };
+  const commentSpan = when
+    ? { sql: " AND c.created_at >= ? AND c.created_at < ?", params: [when.from, when.to] }
+    : { sql: "", params: [] };
+  // A question about what worked puts attempts that worked first (and about what failed, the ones that didn't).
+  const prefers = intent === "failed" ? FAILED_FIRST : WORKED_FIRST;
+  const [attemptRows, itemRows, commentRows] = await Promise.all([
+    all<{ id: string }>(env, {
+      sql: `SELECT a.id FROM search
+        JOIN attempts AS a ON a.id = search.ref_id
+        JOIN items AS i ON i.id = a.item_id
+        WHERE search MATCH ? AND search.kind = 'attempt' AND a.deleted_at IS NULL AND i.deleted_at IS NULL${filter.sql}${span.sql}
+        ORDER BY ${RANK} * ${prefers}, a.printed_at DESC LIMIT ${LIMIT.attempts}`,
+      params: [match, ...filter.params, ...span.params],
+    }),
+    // Outcome, material and tag describe attempts: with one of them on, only attempts are found.
+    narrowsAttempts
+      ? Promise.resolve([])
+      : all<{ id: string; snippet: string | null }>(env, {
+          sql: `SELECT i.id, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
+            JOIN items AS i ON i.id = search.ref_id
+            WHERE search MATCH ? AND search.kind = 'item' AND i.deleted_at IS NULL${f.person ? " AND i.created_by = ?" : ""}${itemSpan.sql}
+            ORDER BY ${RANK}, i.created_at DESC LIMIT ${LIMIT.items * 2}`,
+          params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : []), ...itemSpan.params],
+        }),
+    // What the two of you said in a thread (migrations/0022_comment-search.sql): found as the item it belongs to.
+    narrowsAttempts
+      ? Promise.resolve([])
+      : all<{
+          id: string;
+          item_id: string;
+          author_id: string;
+          via: string | null;
+          created_at: number;
+          snippet: string;
+        }>(env, {
+          sql: `SELECT c.id, c.item_id, c.author_id, c.via, c.created_at, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
+            JOIN comments AS c ON c.id = search.ref_id
+            JOIN items AS i ON i.id = c.item_id
+            WHERE search MATCH ? AND search.kind = 'comment' AND c.deleted_at IS NULL AND i.deleted_at IS NULL${f.person ? " AND (i.created_by = ? OR c.author_id = ?)" : ""}${commentSpan.sql}
+            ORDER BY ${RANK}, c.created_at DESC LIMIT ${LIMIT.items * 2}`,
+          params: [
+            SNIPPET_OPEN,
+            SNIPPET_CLOSE,
+            match,
+            ...(f.person ? [f.person, f.person] : []),
+            ...commentSpan.params,
+          ],
+        }),
+  ]);
+  // An item that matched on its own words keeps its note's snippet; one found only by a comment shows the best comment.
+  const found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }> = itemRows.map((row) => ({
+    id: row.id,
+    snippet: row.snippet || null,
+    comment: null,
+  }));
+  const seen = new Set(found.map((row) => row.id));
+  for (const row of commentRows) {
+    if (seen.has(row.item_id)) continue;
+    seen.add(row.item_id);
+    found.push({
+      id: row.item_id,
+      snippet: row.snippet || null,
+      comment: { id: row.id, authorId: row.author_id, via: row.via, createdAt: row.created_at },
+    });
+  }
+  const [attemptList, itemList, recipeList, spoolList] = await Promise.all([
+    withCoachIdeas(
+      db,
+      await attemptHits(
+        db,
+        attemptRows.map((row) => row.id),
+      ),
+      terms,
+    ),
+    itemHits(db, found),
+    findRecipes(),
+    findSpools(),
+  ]);
+  return {
+    builds: itemList.filter((hit) => hit.item.stage !== "idea").slice(0, LIMIT.items),
+    ideas: itemList.filter((hit) => hit.item.stage === "idea").slice(0, LIMIT.items),
+    attempts: attemptList,
+    recipes: recipeList,
+    spools: spoolList,
+  };
+}
+
+/**
+ * How much more an attempt's score counts for its outcome (bm25 is negative: more is better). Worked attempts
+ * come before partly and failed ones, so a settings question leads with what to copy.
+ */
+const WORKED_FIRST = "CASE a.outcome WHEN 'success' THEN 1.5 WHEN 'partial' THEN 1.0 ELSE 0.8 END";
+const FAILED_FIRST = "CASE a.outcome WHEN 'failed' THEN 1.5 WHEN 'partial' THEN 1.2 ELSE 0.8 END";
+
 /**
  * Search, filter chips and "what worked last time". Search runs on the FTS5
  * index (migrations/0003_search.sql), which triggers keep up to date.
@@ -243,108 +510,56 @@ export const searchRoutes = new Hono<AppEnv>()
     if (!parsed.success) return apiError(c, 400, "invalid", "That search couldn't be read.");
     const { q = "", ...f } = parsed.data;
     const db = c.var.db;
-    const terms = searchTerms(q);
-    const narrowsAttempts = !!(f.outcome || f.material || f.tag);
-    const empty: SearchResponse = { builds: [], ideas: [], attempts: [], recipes: [] };
-    // Recipes are found by words, or by a material alone; an outcome or tag describes attempts only.
-    const recipeFilters = !f.outcome && !f.tag;
-    const findRecipes = async (): Promise<Recipe[]> => {
-      if (!recipeFilters) return [];
-      let list = await liveRecipes(db);
-      if (f.material) list = recipesFor(list, { material: f.material });
-      if (f.person) list = list.filter((recipe) => recipe.createdBy === f.person);
-      return terms.length ? list.filter((recipe) => recipeMatchesTerms(recipe, terms)) : list;
-    };
-    if (!terms.length && !narrowsAttempts && !f.person) return c.json<SearchResponse>(empty);
-
-    const filter = attemptFilters(f);
-    if (!terms.length) {
-      // Filters alone: the newest attempts that pass them.
-      const rows = await all<{ id: string }>(c.env, {
-        sql: `SELECT a.id FROM attempts AS a JOIN items AS i ON i.id = a.item_id
-          WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL${filter.sql}
-          ORDER BY a.printed_at DESC LIMIT ${LIMIT.attempts}`,
-        params: filter.params,
-      });
-      return c.json<SearchResponse>({
-        ...empty,
-        attempts: await attemptHits(
-          db,
-          rows.map((row) => row.id),
-        ),
-        recipes: f.material ? await findRecipes() : [],
-      });
-    }
-
+    const read = parseQuery(q, Date.now());
+    const people = await db.select({ id: users.id, name: users.name }).from(users);
+    // Every word of a name counts ("Carl Oscar's idea": carl and oscar are both Carl Oscar).
+    const nameWords = people.map((person) => ({ id: person.id, words: words(person.name) }));
+    const named = splitNames(
+      read.terms,
+      nameWords.flatMap((person) => person.words),
+    );
+    // "Marie's idea about the coffee clips": a first name narrows to what that person wrote, unless that finds nothing.
+    const whose = nameWords.filter((person) => person.words.some((word) => named.names.includes(word)));
+    // Only a name beside other words narrows; "Sam" alone is a word to find (a build called "Sam's coaster").
+    const personFromWords = whose.length === 1 && named.terms.length > 0 ? whose[0]?.id : undefined;
     const custom = await db.select({ kind: tags.kind, slug: tags.slug, label: tags.label }).from(tags);
-    const match = ftsQuery(terms, custom);
-    const [attemptRows, itemRows, commentRows] = await Promise.all([
-      all<{ id: string }>(c.env, {
-        sql: `SELECT a.id FROM search
-          JOIN attempts AS a ON a.id = search.ref_id
-          JOIN items AS i ON i.id = a.item_id
-          WHERE search MATCH ? AND search.kind = 'attempt' AND a.deleted_at IS NULL AND i.deleted_at IS NULL${filter.sql}
-          ORDER BY ${RANK}, a.printed_at DESC LIMIT ${LIMIT.attempts}`,
-        params: [match, ...filter.params],
-      }),
-      // Outcome, material and tag describe attempts: with one of them on, only attempts are found.
-      narrowsAttempts
-        ? Promise.resolve([])
-        : all<{ id: string; snippet: string | null }>(c.env, {
-            sql: `SELECT i.id, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
-              JOIN items AS i ON i.id = search.ref_id
-              WHERE search MATCH ? AND search.kind = 'item' AND i.deleted_at IS NULL${f.person ? " AND i.created_by = ?" : ""}
-              ORDER BY ${RANK}, i.created_at DESC LIMIT ${LIMIT.items * 2}`,
-            params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
-          }),
-      // What the two of you said in a thread (migrations/0022_comment-search.sql): found as the item it belongs to.
-      narrowsAttempts
-        ? Promise.resolve([])
-        : all<{
-            id: string;
-            item_id: string;
-            author_id: string;
-            via: string | null;
-            created_at: number;
-            snippet: string;
-          }>(c.env, {
-            sql: `SELECT c.id, c.item_id, c.author_id, c.via, c.created_at, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
-              JOIN comments AS c ON c.id = search.ref_id
-              JOIN items AS i ON i.id = c.item_id
-              WHERE search MATCH ? AND search.kind = 'comment' AND c.deleted_at IS NULL AND i.deleted_at IS NULL${f.person ? " AND i.created_by = ?" : ""}
-              ORDER BY ${RANK}, c.created_at DESC LIMIT ${LIMIT.items * 2}`,
-            params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
-          }),
-    ]);
-    // An item that matched on its own words keeps its note's snippet; one found only by a comment shows the best comment.
-    const found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }> = itemRows.map((row) => ({
-      id: row.id,
-      snippet: row.snippet || null,
-      comment: null,
-    }));
-    const seen = new Set(found.map((row) => row.id));
-    for (const row of commentRows) {
-      if (seen.has(row.item_id)) continue;
-      seen.add(row.item_id);
-      found.push({
-        id: row.item_id,
-        snippet: row.snippet || null,
-        comment: { id: row.id, authorId: row.author_id, via: row.via, createdAt: row.created_at },
-      });
-    }
-    const [attemptList, itemList, recipeList] = await Promise.all([
-      attemptHits(
+    const ask = (terms: SearchTerm[], narrowTo?: string) =>
+      searchWith(
+        c.env,
         db,
-        attemptRows.map((row) => row.id),
-      ),
-      itemHits(db, found),
-      findRecipes(),
-    ]);
+        { terms, intent: read.intent, when: read.when, ...f, person: f.person ?? narrowTo },
+        custom,
+      );
+
+    let terms = read.terms;
+    let result: SearchResponse | null = null;
+    if (personFromWords && !f.person) {
+      const narrowed = await ask(named.terms, personFromWords);
+      if (hasHits(narrowed)) {
+        terms = named.terms;
+        result = narrowed;
+      }
+    }
+    result ??= await ask(read.terms);
+    let corrected: string | null = null;
+    if (!hasHits(result) && read.terms.length) {
+      // Nothing found: a typo, maybe. Correct the words from what the notebook knows.
+      const fixed = correctTerms(read.terms, await vocabulary(db, custom));
+      if (fixed) {
+        const retry = await ask(fixed);
+        if (hasHits(retry)) {
+          result = retry;
+          terms = fixed;
+          corrected = fixed.map((term) => term.text).join(" ");
+        }
+      }
+    }
     return c.json<SearchResponse>({
-      builds: itemList.filter((hit) => hit.item.stage !== "idea").slice(0, LIMIT.items),
-      ideas: itemList.filter((hit) => hit.item.stage === "idea").slice(0, LIMIT.items),
-      attempts: attemptList,
-      recipes: recipeList,
+      ...result,
+      terms: markTerms(terms),
+      corrected,
+      intent: read.intent,
+      when: read.when ? { label: read.when.label, weekMonday: read.when.weekMonday } : null,
     });
   })
 

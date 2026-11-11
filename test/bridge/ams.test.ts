@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { findSpool, planAmsSync, remainingFrom, type Tray, traysOf } from "../../bridge/ams.ts";
 import { emptyState, foldReport } from "../../bridge/printer-state.ts";
 import type { Spool } from "../../src/shared/api.ts";
+import { NO_LABEL } from "../../src/shared/label-read.ts";
 import { fullReport } from "./fixtures.ts";
 
 let counter = 0;
@@ -23,6 +24,7 @@ const spool = (fields: Partial<Spool>): Spool => ({
   photo: null,
   slot: null,
   trayUuid: null,
+  ...NO_LABEL,
   createdBy: "u",
   createdAt: 0,
   updatedAt: 0,

@@ -1,4 +1,4 @@
-import type { AttemptHit, ItemHit, Recipe } from "@shared/api";
+import type { AttemptHit, ItemHit, Recipe, Spool } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +28,9 @@ import { forgetSearches, recentSearches, rememberSearch, SEARCH_BOX_ID, searchQu
 /** Recipe results are drawn only when the search found one. */
 const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then((m) => ({ default: m.RecipeResult })));
 
+/** What only some answers need (a spool, a mended typo, "Start again" on one that worked) loads when one appears. */
+const Extra = lazy(() => import("@/components/search/Extra"));
+
 type SearchParams = FilterValues & { q?: string };
 
 export const Route = createFileRoute("/_app/search")({
@@ -44,7 +47,12 @@ const DEBOUNCE_MS = 140;
 type Result =
   | { kind: "item"; hit: ItemHit; link: LinkProps }
   | { kind: "attempt"; hit: AttemptHit; link: LinkProps }
-  | { kind: "recipe"; hit: Recipe };
+  | { kind: "recipe"; hit: Recipe }
+  | { kind: "spool"; hit: Spool; link: LinkProps };
+
+/** An attempt that worked: the answer to "what worked". */
+const didWork = (r: Result): r is Extract<Result, { kind: "attempt" }> =>
+  r.kind === "attempt" && r.hit.attempt.outcome === "success";
 
 function Search() {
   const { q = "", ...filters } = Route.useSearch();
@@ -81,15 +89,24 @@ function Search() {
     enabled: searching && (!filters.person || !!people),
   });
   const shown = searching ? results.data : undefined;
-  const shownTerms = useMemo(() => searchTerms(shown?.q ?? ""), [shown?.q]);
+  // What the server made of the question (filler dropped, typos mended, synonyms added) is what gets marked.
+  const shownTerms = useMemo(() => shown?.terms ?? searchTerms(shown?.q ?? ""), [shown?.terms, shown?.q]);
 
   const list = useMemo<Result[]>(() => {
     if (!shown) return [];
+    // In the order they are drawn, so the arrow keys follow the page: what worked leads the attempts.
+    const attempts = shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) }));
     return [
       ...shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })),
+      ...attempts.filter(didWork),
       ...shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
-      ...shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) })),
+      ...attempts.filter((r) => !didWork(r)),
       ...shown.ideas.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
+      ...(shown.spools ?? []).map((hit) => ({
+        kind: "spool" as const,
+        hit,
+        link: { to: "/pantry/$spoolId", params: { spoolId: hit.id } } as LinkProps,
+      })),
     ];
   }, [shown]);
 
@@ -151,14 +168,34 @@ function Search() {
         key={
           result.kind === "attempt"
             ? result.hit.attempt.id
-            : result.kind === "recipe"
+            : result.kind === "recipe" || result.kind === "spool"
               ? result.hit.id
               : result.hit.item.id
         }
         className="list-none"
       >
         {result.kind === "attempt" ? (
-          <AttemptResult hit={result.hit} {...common} />
+          <>
+            <AttemptResult hit={result.hit} {...common} />
+            {didWork(result) && (
+              // Beside the link, not in it: a button can't live inside a link.
+              <Suspense fallback={null}>
+                <Extra part="start" hit={result.hit} onStart={common.onOpen} />
+              </Suspense>
+            )}
+          </>
+        ) : result.kind === "spool" ? (
+          <Suspense fallback={<RowSkeleton />}>
+            <Extra
+              part="spool"
+              innerRef={common.ref}
+              spool={result.hit}
+              terms={common.terms}
+              selected={common.selected}
+              onHover={common.onHover}
+              onOpen={common.onOpen}
+            />
+          </Suspense>
         ) : result.kind === "recipe" ? (
           <Suspense fallback={<RowSkeleton />}>
             <RecipeResult
@@ -182,9 +219,11 @@ function Search() {
   const groups: Array<[string, Result[]]> = shown
     ? [
         ["Recipes", list.filter((r) => r.kind === "recipe")],
+        ["What worked", list.filter(didWork)],
         ["Builds", list.filter((r) => r.kind === "item" && r.hit.item.stage !== "idea")],
-        ["Attempts", list.filter((r) => r.kind === "attempt")],
+        ["Attempts", list.filter((r) => r.kind === "attempt" && !didWork(r))],
         ["Ideas", list.filter((r) => r.kind === "item" && r.hit.item.stage === "idea")],
+        ["Spools", list.filter((r) => r.kind === "spool")],
       ]
     : [];
 
@@ -243,6 +282,11 @@ function Search() {
               <p className="sr-only" aria-live="polite">
                 {shown ? `${total} ${total === 1 ? "result" : "results"}` : ""}
               </p>
+              {shown && (shown.corrected || shown.when || shown.intent === "worked") && (
+                <Suspense fallback={null}>
+                  <Extra part="understood" shown={shown} />
+                </Suspense>
+              )}
               {!shown ? (
                 <div aria-hidden>
                   <RowSkeleton />
@@ -266,7 +310,12 @@ function Search() {
                     ([label, rows]) =>
                       rows.length > 0 && (
                         <section key={label} aria-label={label}>
-                          <Overline as="h2" count={rows.length} className="mb-2 block">
+                          <Overline
+                            as="h2"
+                            count={rows.length}
+                            tone={label === "What worked" ? "basil" : "faint"}
+                            className="mb-2 block"
+                          >
                             {label}
                           </Overline>
                           <ol className="-mx-2 flex flex-col gap-1">{rows.map(row)}</ol>

@@ -14,31 +14,37 @@
 export const SHORTCUT_GROUPS = [
   "anywhere",
   "palette",
+  "lists",
   "idea",
   "build",
   "journal",
+  "week",
   "search",
   "pantry",
   "spool",
+  "shopping",
 ] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 export const GROUP_LABELS: Record<ShortcutGroup, string> = {
   anywhere: "Anywhere",
   palette: "In the command palette",
+  lists: "In lists of cards",
   idea: "On an idea",
   build: "On a build",
   journal: "In the journal",
+  week: "On a week",
   search: "In search",
   pantry: "In the pantry",
   spool: "On a spool",
+  shopping: "On the shopping list",
 };
 
 /** How the overlay lays the groups out in three columns of about the same height. */
 export const SHORTCUT_COLUMNS: readonly (readonly ShortcutGroup[])[] = [
-  ["anywhere", "search"],
+  ["anywhere", "search", "week"],
   ["build", "journal", "pantry"],
-  ["idea", "spool", "palette"],
+  ["lists", "idea", "spool", "shopping", "palette"],
 ];
 
 interface ShortcutDefinition {
@@ -64,11 +70,15 @@ export const SHORTCUTS = define([
   { id: "search", group: "anywhere", label: "Search", keys: ["/"] },
   { id: "goPantry", group: "anywhere", label: "Go to the Pantry", keys: ["g p"] },
   { id: "goPrinter", group: "anywhere", label: "Go to the Printer", keys: ["g r"] },
+  { id: "goShopping", group: "anywhere", label: "Go to the shopping list", keys: ["g s"] },
 
   { id: "paletteNext", group: "palette", label: "Next result", keys: ["arrowdown"] },
   { id: "palettePrevious", group: "palette", label: "Previous result", keys: ["arrowup"] },
   { id: "paletteRun", group: "palette", label: "Open it, or run it", keys: ["enter"] },
   { id: "paletteClose", group: "palette", label: "Close", keys: ["escape"] },
+
+  { id: "listNext", group: "lists", label: "Next card or row", keys: ["j"] },
+  { id: "listPrevious", group: "lists", label: "Previous card or row", keys: ["k"] },
 
   { id: "ideaBack", group: "idea", label: "Back to Ideas", keys: ["escape"] },
   { id: "ideaBuild", group: "idea", label: "Start building", keys: ["b"] },
@@ -98,11 +108,15 @@ export const SHORTCUTS = define([
   { id: "journalOpen", group: "journal", label: "Open the picked entry", keys: ["enter"] },
   { id: "journalClear", group: "journal", label: "Let go of the picked entry", keys: ["escape"] },
 
+  { id: "weekPrevious", group: "week", label: "Previous week", keys: ["arrowleft"] },
+  { id: "weekNext", group: "week", label: "Next week", keys: ["arrowright"] },
+
   { id: "searchNext", group: "search", label: "Next result", keys: ["arrowdown"] },
   { id: "searchPrevious", group: "search", label: "Previous result", keys: ["arrowup"] },
   { id: "searchOpen", group: "search", label: "Open the picked result", keys: ["enter"] },
 
   { id: "pantryAdd", group: "pantry", label: "Add a spool", keys: ["n"] },
+  { id: "shoppingAdd", group: "shopping", label: "Add something to buy", keys: ["n"] },
 
   { id: "spoolBack", group: "spool", label: "Back to the Pantry", keys: ["escape"] },
   { id: "spoolDelete", group: "spool", label: "Take it out of the pantry, with undo", keys: ["backspace", "delete"] },

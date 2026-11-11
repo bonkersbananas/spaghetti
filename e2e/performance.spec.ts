@@ -16,38 +16,31 @@ import { clearIdeas, signIn } from "./helpers";
 const origin = (page: Page) => new URL(page.url()).origin;
 
 /**
- * First-load JavaScript per screen, gzip, in kB: today's sizes plus about
- * 5 kB, so work in flight has room (it should still load what's rarely used on demand). PERF_FILES=1 prints each screen's files with their gzip sizes. Most of it is React, the router, TanStack Query, sheets (vaul and
- * Radix), toasts and motion, which every screen needs at once.
+ * First-load JavaScript per screen, gzip, in kB. Each budget is the measured size plus 1 kB of headroom (the sum of
+ * PERF_FILES=1's per-file sizes, rounded up, plus 1), so the next small feature doesn't have to raise it; a budget is
+ * only raised after moving what isn't needed at first paint out of the first load (dynamic import, a lazy sheet, a file
+ * of its own: see AGENTS.md and the notes on illustrations, Chip, sonner and lib/pantry-queries). PERF_FILES=1 prints
+ * each screen's files with their gzip sizes: diff them against a main worktree to see what grew.
+ * Most of the size is React, the router, TanStack Query, sheets (vaul and Radix), toasts and motion, which every
+ * screen needs at once.
+ *
+ * Measured on 2026-11-11 (after merging main with the spool labels) after moving the pantry and printer queries out of lib/pantry.ts (about 2.4 kB of the
+ * pantry's writes, weighing and photo upload had come into every screen's first load through the sidebar's printing card):
+ *   /sign-in 193.4   /today 297.0   /ideas 285.9   /builds 284.8   /journal 285.1   /search 290.0   /pantry 294.9   /printer 295.0
+ * (Sign-in keeps 194: 0.6 kB of headroom, the screen hasn't changed.)
  */
-// Recipes added about 1 kB of shared code to every screen (cache roots, change feed, an icon); its sheet and shelves load on demand, and search draws recipe results (about 4 kB).
-// Profile pictures (the photo layer in Avatar, toasts above sheets) added about 2 kB gzip to the shell, so the
-// budgets of the screens near their limit went up by 2 kB; the crop and upload code loads on demand.
-// Comments added about 1 kB to the lists (the unread marker on cards: its query, a badge and an icon); the thread and its
-// composer are a lazy chunk of the idea and build pages, and the palette's "New comments" row loads with the palette.
-// Merging main (photo reads, spare parts) and comments together took the lists about 1 kB past their old limits: budgets +1 to +2 kB.
-// Cutting the first load (#225): Phosphor's thin and duotone weights left out of the build (about 15 kB), motion's layout and drag
-// features and sonner loaded once idle (about 20 kB), section code preloaded when idle rather than with the first render.
-// Budgets are the measured sizes plus about 2 kB.
+// The shopping list adds its sidebar row (basket icon, two shortcuts, feed and cache wiring) to the shell, about 1 kB: after merging
+// main (spool labels, weeks, search questions) Ideas, Builds, Search and Pantry were a fraction over their limits, +1 kB each. Its page,
+// sheet, rows and illustration load on demand.
 const BUDGET_KB = {
-  // Passkeys (the sign-in button, the quiet offer in the shell) add about 1.5 kB everywhere; the WebAuthn browser code, the QR renderer and the sheets load on demand.
   "/sign-in": 194,
-  // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  // Wishlists add a sidebar section (its star icon is on every signed-in screen); the page, its drag code, the picker and
-  // the phones' row on Ideas load on demand. Today and Ideas went past their limits: measured plus about 2 kB again.
-  // After merging main (#73) with OAuth, Today was under 0.5 kB over (the shared parts named below): +1 kB.
   "/today": 299,
-  // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
-  // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 289,
-  // OAuth for the MCP server: diffed per file against main (PERF_FILES=1), Builds grew by about 0.6 kB raw, all of it small: the router's entry for /authorize (index +0.2), Overline becoming a shared chunk now that the consent screen uses it too (+0.3) and Disconnect in lib/agents (+0.1). The consent screen's own code, the connected-app card (with the Agents page) and the scope words are not in any other screen's first load. Builds, Pantry and Printer were left under 1 kB over: +1 kB each (Today too, below).
+  "/ideas": 288,
   "/builds": 287,
-  // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
-  "/journal": 286,
-  // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 292,
+  "/journal": 287,
+  "/search": 293,
   "/pantry": 297,
-  "/printer": 295,
+  "/printer": 297,
 } as const;
 
 /**
@@ -374,6 +367,97 @@ test("the taps people make most answer quickly on a mid-range phone", async ({ b
       over.push(`${name}: ${shown} ms to the result, budget ${TAP_BUDGET_MS.shown}`);
   }
   console.log(`Taps on a phone, 4× CPU:\n${rows.join("\n")}`);
+  expect(over, "slower than the budget").toEqual([]);
+  await clearIdeas(page);
+  await context.close();
+});
+
+test("capturing, queueing and starting an idea answer quickly on a mid-range phone", async ({ browser, baseURL }) => {
+  test.setTimeout(180_000);
+  const context = await browser.newContext({ baseURL, ...PHONE });
+  await installProbe(context);
+  const page = await context.newPage();
+  await signIn(page);
+  await clearIdeas(page);
+  const headers = { Origin: origin(page) };
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const id = crypto.randomUUID();
+    ids.push(id);
+    await page.request.post("/api/items", { headers, data: { id, title: `Idea ${i + 1}`, note: "A quick sketch" } });
+  }
+  await page.goto("/ideas");
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(2500);
+  await throttle(page, { network: false });
+
+  const taps: Record<string, TapResult[]> = {};
+  const add = (name: string, tap: TapResult) => (taps[name] = [...(taps[name] ?? []), tap]);
+  const settle = () => page.waitForTimeout(400);
+  const dialog = page.getByRole("dialog");
+  for (let run = 0; run < 3; run++) {
+    await settle();
+    await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "New idea" }).tap();
+    const note = dialog.getByRole("textbox", { name: "Note" });
+    await note.tap();
+    await settle();
+    add(
+      "capture: type a letter",
+      await tapLatency(
+        page,
+        () => page.keyboard.press("t"),
+        `document.querySelector('[role=dialog] textarea')?.value === 't'`,
+      ),
+    );
+    await settle();
+    // The sheet takes its time to slide away; what counts is that it starts at once and the idea is saved.
+    add(
+      "capture: Save idea",
+      await tapLatency(page, () => dialog.getByRole("button", { name: "Save idea" }).tap(), "true"),
+    );
+    await dialog.waitFor({ state: "detached" });
+    await page.goto(`/ideas/${ids[run]}`);
+    const chip = page.getByRole("button", { name: "Up next", pressed: false });
+    await chip.waitFor();
+    await settle();
+    add(
+      "chip: Up next",
+      await tapLatency(
+        page,
+        () => chip.tap(),
+        `!!document.querySelector('button[aria-pressed=true]')?.textContent?.includes('Up next')`,
+      ),
+    );
+    await settle();
+    add(
+      "Start building",
+      await tapLatency(
+        page,
+        () => page.getByRole("button", { name: "Start building" }).tap(),
+        `location.pathname.startsWith('/builds/') && !!document.querySelector('textarea, input[type=text]')`,
+      ),
+    );
+    await page
+      .getByRole("button", { name: /^(Log|Finish) attempt/ })
+      .first()
+      .waitFor();
+    await page.goto("/ideas");
+    await page.locator('main a[href^="/ideas/"]').first().waitFor();
+  }
+  const rows: string[] = [];
+  const over: string[] = [];
+  for (const [name, results] of Object.entries(taps)) {
+    const inp = median(results.map((r) => r.inp));
+    const shown = median(results.map((r) => r.shown));
+    rows.push(
+      `${name.padEnd(24)} input to paint ${inp.toFixed(0).padStart(4)} ms, tap to result ${shown.toFixed(0).padStart(4)} ms`,
+    );
+    if (inp > TAP_BUDGET_MS.inp) over.push(`${name}: ${inp} ms to the next paint, budget ${TAP_BUDGET_MS.inp}`);
+    if (shown < 0 || shown > TAP_BUDGET_MS.shown)
+      over.push(`${name}: ${shown} ms to the result, budget ${TAP_BUDGET_MS.shown}`);
+  }
+  console.log(`Capture, Up next and Start building on a phone, 4× CPU:\n${rows.join("\n")}`);
   expect(over, "slower than the budget").toEqual([]);
   await clearIdeas(page);
   await context.close();

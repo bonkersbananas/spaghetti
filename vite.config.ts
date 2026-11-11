@@ -5,6 +5,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { bundleReport } from "./scripts/vite-bundle-report.ts";
+import { landingPage } from "./scripts/vite-landing.ts";
 import { phosphorWeights } from "./scripts/vite-phosphor-weights.ts";
 import { serviceWorker } from "./scripts/vite-service-worker.ts";
 
@@ -30,6 +31,7 @@ export default defineConfig(({ command }) => ({
     react(),
     tailwindcss(),
     serviceWorker(),
+    landingPage(),
     ...(process.env.SPAGHETTI_BUNDLE_REPORT ? [bundleReport()] : []),
     cloudflare({
       persistState: stateDir ? { path: stateDir } : true,
@@ -52,7 +54,9 @@ export default defineConfig(({ command }) => ({
   ],
   // Loaded on demand, so the dev server would only find them mid-session, re-bundle and reload the page under the
   // person (and under the e2e tests): list them up front.
-  optimizeDeps: { include: ["@simplewebauthn/browser", "qrcode-generator"] },
+  optimizeDeps: {
+    include: ["@simplewebauthn/browser", "qrcode-generator", "three", "three/addons/controls/OrbitControls.js"],
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src/client", import.meta.url)),

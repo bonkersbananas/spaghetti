@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { AmsLoadout } from "@/components/pantry/Ams";
-import { PrinterBridgeLine } from "@/components/pantry/BridgeLine";
+import { BridgeCard } from "@/components/printer/BridgeCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -23,7 +23,8 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
+import { loadSlot, savePrinterSetup } from "@/lib/pantry";
+import { printerQuery } from "@/lib/pantry-queries";
 import { useReadOnly } from "@/lib/read-only";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIdle } from "@/lib/use-idle";
@@ -43,10 +44,7 @@ function Printer() {
   const { data, isPending } = useQuery(printerQuery);
   return (
     <>
-      <PageHeader
-        title="Printer"
-        subtitle="The X2D as it's set up here. Spaghetti never controls it; this is what you've told it."
-      />
+      <PageHeader title="Printer" subtitle="Set up here. Spaghetti never controls it." />
       {isPending || !data ? (
         <div className="flex flex-col gap-6" aria-hidden>
           <Skeleton className="h-36 w-full rounded-xl md:max-w-3xl" />
@@ -170,7 +168,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           />
           <Fact icon={TemperatureIcon} label="Heated chamber" value={`up to ${X2D.maxChamberTemperature} °C`} />
         </div>
-        <PrinterBridgeLine />
+        <BridgeCard className="mt-2" />
       </div>
 
       {idle ? (
@@ -303,6 +301,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
                 ? `It goes straight into ${adding === "Ext" ? "the external holder" : `slot ${adding}`}.`
                 : undefined
             }
+            stayPut
             onAdded={(spool, saved) => {
               if (adding) void loadSlot(queryClient, adding, spool.id, saved);
             }}

@@ -208,8 +208,43 @@
     {
       "idx": 29,
       "version": "6",
-      "when": 1794408765212,
-      "tag": "0029_reactions",
+      "when": 1794404888151,
+      "tag": "0029_weeks",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1794409622866,
+      "tag": "0030_spool_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1794415131834,
+      "tag": "0031_search_settings_coach",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794418739699,
+      "tag": "0032_bridge_pairing",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794422109611,
+      "tag": "0033_shopping-items",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1794433953635,
+      "tag": "0034_reactions",
       "breakpoints": true
     }
   ]

@@ -7,6 +7,10 @@
  *
  * A request that asks what to try on the next attempt is the failure coach (decision 0027): see answerCoach.
  *
+ * A request that asks for the pattern in a week is the week's paragraph (decision 0030): a word in the notebook (a
+ * build's title or a print's note) decides the answer: `slow` takes ten seconds, `refused` is refused, `broken` is an
+ * API error, `quiet` has nothing to add, anything else is a short paragraph.
+ *
  * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
  * note decides the answer: `slow` takes ten seconds ("Looking at the photo…" stays long enough to look at), `refused`
  * is refused, `broken` is an API error, `unsure` can't tell, `spaghetti` or `tangle` is a failed print, `partly` a
@@ -55,6 +59,86 @@ const reads = {
   },
   unsure: { outcome: null, failureTags: [], successNotes: [], reason: null },
 };
+
+const noLabelValues = {
+  brand: null,
+  material: null,
+  variant: null,
+  colorName: null,
+  colorHex: null,
+  netGrams: null,
+  diameterMm: null,
+  nozzleTempMin: null,
+  nozzleTempMax: null,
+  bedTempMin: null,
+  bedTempMax: null,
+  dryTempC: null,
+  dryHours: null,
+  productCode: null,
+};
+const jadeLabel = {
+  ...noLabelValues,
+  brand: "Bambu Lab",
+  material: "PLA",
+  variant: "Basic",
+  colorName: "Jade White",
+  colorHex: "#f4f1ea",
+  netGrams: 1000,
+  diameterMm: 1.75,
+  nozzleTempMin: 190,
+  nozzleTempMax: 230,
+  bedTempMin: 45,
+  bedTempMax: 65,
+  dryTempC: 55,
+  dryHours: 8,
+  productCode: "10100",
+};
+const labels = {
+  good: [jadeLabel],
+  partly: [{ ...noLabelValues, brand: "Polymaker", material: "PETG", nozzleTempMin: 240, nozzleTempMax: 260 }],
+  two: [
+    jadeLabel,
+    { ...jadeLabel, material: "PETG", variant: "HF", colorName: "Black", colorHex: "#1d1d1f", productCode: "33102" },
+  ],
+  none: [] as unknown[],
+};
+
+/**
+ * A request for a spool's label (decision 0031). A word in what the person wrote about the spool (its brand, color
+ * or note) decides the answer: `slow` takes ten seconds, `refused` is refused, `broken` is an API error,
+ * `unreadable` finds no label, `partly` reads only a brand, a material and the nozzle range, `two` finds two spools,
+ * anything else is a good read of one spool.
+ */
+async function answerLabel(body: string, response: import("node:http").ServerResponse) {
+  const written = (/What they already wrote about this spool:([^"]*)/.exec(body)?.[1] ?? "").toLowerCase();
+  if (written.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (written.includes("broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = written.includes("refused");
+  const spools = written.includes("unreadable")
+    ? labels.none
+    : written.includes("partly")
+      ? labels.partly
+      : written.includes("two")
+        ? labels.two
+        : labels.good;
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      content: refused ? [] : [{ type: "text", text: JSON.stringify({ spools }) }],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
 
 async function answerPhoto(body: string, response: import("node:http").ServerResponse) {
   const title = [/The build is called: ([^"\\]*)/, /Their note on this attempt: ([^"\\]*)/]
@@ -168,6 +252,41 @@ async function answerCoach(body: string, response: import("node:http").ServerRes
   );
 }
 
+/** The week's paragraph, as the stand-in writes it. */
+export const WEEK_NOTE =
+  "PETG warped twice this week, and both times the bed was 70 °C. The prints that worked all had a brim: worth keeping for the next one.";
+
+async function answerWeek(body: string, response: import("node:http").ServerResponse) {
+  // Only the notebook decides, not the instructions in the system prompt.
+  let words = "";
+  try {
+    words = String(JSON.parse(body).messages?.[0]?.content ?? "").toLowerCase();
+  } catch {
+    // An unreadable request gets the good answer.
+  }
+  if (words.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (words.includes("broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = words.includes("refused");
+  const answer = { note: words.includes("quiet") ? null : WEEK_NOTE };
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      content: refused ? [] : [{ type: "text", text: JSON.stringify(answer) }],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
+
 /** What the webhook receiver below was sent: the signature headers and the body, for the tests to check. */
 export interface ReceivedHook {
   path: string;
@@ -227,7 +346,9 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
+      if (body.includes("Read the spool label")) return answerLabel(body, response);
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
+      if (body.includes("What is the pattern in this week, if there is one?")) return answerWeek(body, response);
       if (body.includes('"type":"image"')) return answerPhoto(body, response);
       const asked = body.match(/https?:\/\/[^"\\\s]+/)?.[0] ?? "";
       if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));

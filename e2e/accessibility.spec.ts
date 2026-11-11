@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { mondayOf } from "../src/shared/week.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
@@ -173,6 +174,14 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.getByText("Corners lifted").first()).toBeVisible();
     await expectAccessible(page, "Journal");
 
+    // The week: this week holds the seeded prints, and a week long ago is empty.
+    await screen(page, `/week/${mondayOf(Date.now())}`, "This week");
+    await expect(page.getByRole("heading", { level: 2, name: /^The week in a few lines/ })).toBeVisible();
+    await expectAccessible(page, "The week");
+    await screen(page, "/week/2024-01-01", /2024/);
+    await expect(page.getByRole("heading", { level: 2, name: "Not a strand this week" })).toBeVisible();
+    await expectAccessible(page, "An empty week");
+
     await page.goto("/year");
     await expect(page.getByRole("heading", { level: 2, name: "Prints by month" })).toBeVisible();
     await expectAccessible(page, "Year so far");
@@ -198,10 +207,14 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, "/printer", /X2D|Printer/);
     await expectAccessible(page, "Printer");
 
+    await screen(page, "/shopping", "Shopping list");
+    await expectAccessible(page, "Shopping list");
+
     // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
     await screen(page, "/styleguide", "Styleguide");
     await expectAccessible(page, "Styleguide: builds and attempts", "#builds");
     await expectAccessible(page, "Styleguide: pantry and printer", "#pantry");
+    await expectAccessible(page, "Styleguide: checklist", "#checklist");
 
     // Sheets: capture, an attempt, and the account (phone) or account menu (desktop).
     await screen(page, "/ideas", "Ideas");
@@ -278,8 +291,10 @@ const CHECKED_ROUTES = [
   "pantry.index",
   "pantry.$spoolId",
   "printer",
+  "shopping",
   "agents",
   "year",
+  "week.$monday",
   "deleted",
   "styleguide",
   // Redirects and hand-offs with no screen of their own.
@@ -325,8 +340,8 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, "/year", /\d{4}/);
     await expectAccessible(page, "The year so far");
 
-    await screen(page, "/deleted", "Recently deleted");
-    await expectAccessible(page, "Recently deleted");
+    await screen(page, "/deleted", "Deleted");
+    await expectAccessible(page, "Deleted");
 
     // Every specimen in the design system, not just a few sections.
     await screen(page, "/styleguide", "Styleguide");
@@ -445,7 +460,7 @@ test("every control on a phone has a 44 px target", async ({ page, isMobile }) =
     ["/printer", /X2D|Printer/],
     ["/agents", "Agents"],
     ["/year", /\d{4}/],
-    ["/deleted", "Recently deleted"],
+    ["/deleted", "Deleted"],
   ];
   for (const [path, heading] of screens) {
     await screen(page, path, heading);

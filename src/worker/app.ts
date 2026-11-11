@@ -14,6 +14,7 @@ import { buildOpenApi } from "./openapi/document.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
+import { bridgePairRoutes, bridgeRoutes } from "./routes/bridge.ts";
 import { captureRoutes } from "./routes/capture.ts";
 import { changeRoutes } from "./routes/changes.ts";
 import { commentRoutes, itemCommentRoutes } from "./routes/comments.ts";
@@ -34,11 +35,13 @@ import { commentReactionRoutes, itemReactionRoutes } from "./routes/reactions.ts
 import { recipeRoutes } from "./routes/recipes.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
+import { shoppingItemsRoutes } from "./routes/shopping-items.ts";
 import { signingInRoutes } from "./routes/signing-in.ts";
 import { spoolRoutes } from "./routes/spools.ts";
 import { storyRoutes } from "./routes/story.ts";
 import { tagRoutes } from "./routes/tags.ts";
 import { webhookRoutes } from "./routes/webhooks.ts";
+import { weekRoutes } from "./routes/weeks.ts";
 import { wishlistRoutes } from "./routes/wishlists.ts";
 import { runWebhooks } from "./webhooks/deliver.ts";
 
@@ -114,6 +117,8 @@ export const app = new Hono<AppEnv>()
   .get("/health", (c) => c.json({ ok: true }))
   .route("/session", sessionRoutes)
   .route("/join", joinRoutes)
+  // The bridge installer's exchange of a pairing code: no session yet, the code is the way in.
+  .route("/bridge", bridgePairRoutes)
   .use(requireAuth)
   .use(requireScope)
   // What this caller may do, as OpenAPI 3.1 (made from the code: worker/openapi).
@@ -124,6 +129,7 @@ export const app = new Hono<AppEnv>()
   .route("/people", peopleRoutes)
   .route("/wishlists", wishlistRoutes)
   .route("/agents", agentRoutes)
+  .route("/bridge", bridgeRoutes)
   .route("/oauth", oauthRoutes)
   .route("/changes", changeRoutes)
   .route("/webhooks", webhookRoutes)
@@ -146,8 +152,10 @@ export const app = new Hono<AppEnv>()
   .route("/tags", tagRoutes)
   .route("/journal", journalRoutes)
   .route("/insights", insightRoutes)
+  .route("/weeks", weekRoutes)
   .route("/links", linkRoutes)
   .route("/builds", storyRoutes)
+  .route("/shopping-items", shoppingItemsRoutes)
   .route("/", searchRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))
   .onError((err, c) => {

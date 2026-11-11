@@ -21,6 +21,7 @@ import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppPrinterRouteImport } from './routes/_app/printer'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppShareRouteImport } from './routes/_app/share'
+import { Route as AppShoppingRouteImport } from './routes/_app/shopping'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppWishlistRouteImport } from './routes/_app/wishlist'
@@ -31,6 +32,7 @@ import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
 import { Route as AppIdeasIdeaIdRouteImport } from './routes/_app/ideas.$ideaId'
 import { Route as AppPantryIndexRouteImport } from './routes/_app/pantry.index'
 import { Route as AppPantrySpoolIdRouteImport } from './routes/_app/pantry.$spoolId'
+import { Route as AppWeekMondayRouteImport } from './routes/_app/week.$monday'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -91,6 +93,11 @@ const AppShareRoute = AppShareRouteImport.update({
   path: '/share',
   getParentRoute: () => AppRoute,
 } as any)
+const AppShoppingRoute = AppShoppingRouteImport.update({
+  id: '/shopping',
+  path: '/shopping',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppStyleguideRoute = AppStyleguideRouteImport.update({
   id: '/styleguide',
   path: '/styleguide',
@@ -141,6 +148,11 @@ const AppPantrySpoolIdRoute = AppPantrySpoolIdRouteImport.update({
   path: '/pantry/$spoolId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWeekMondayRoute = AppWeekMondayRouteImport.update({
+  id: '/week/$monday',
+  path: '/week/$monday',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -154,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/share': typeof AppShareRoute
+  '/shopping': typeof AppShoppingRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
   '/wishlist': typeof AppWishlistRoute
@@ -161,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/week/$monday': typeof AppWeekMondayRoute
   '/builds/': typeof AppBuildsIndexRoute
   '/ideas/': typeof AppIdeasIndexRoute
   '/pantry/': typeof AppPantryIndexRoute
@@ -176,6 +190,7 @@ export interface FileRoutesByTo {
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/share': typeof AppShareRoute
+  '/shopping': typeof AppShoppingRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
   '/wishlist': typeof AppWishlistRoute
@@ -184,6 +199,7 @@ export interface FileRoutesByTo {
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/week/$monday': typeof AppWeekMondayRoute
   '/builds': typeof AppBuildsIndexRoute
   '/ideas': typeof AppIdeasIndexRoute
   '/pantry': typeof AppPantryIndexRoute
@@ -201,6 +217,7 @@ export interface FileRoutesById {
   '/_app/printer': typeof AppPrinterRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/share': typeof AppShareRoute
+  '/_app/shopping': typeof AppShoppingRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/today': typeof AppTodayRoute
   '/_app/wishlist': typeof AppWishlistRoute
@@ -209,6 +226,7 @@ export interface FileRoutesById {
   '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/_app/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/_app/week/$monday': typeof AppWeekMondayRoute
   '/_app/builds/': typeof AppBuildsIndexRoute
   '/_app/ideas/': typeof AppIdeasIndexRoute
   '/_app/pantry/': typeof AppPantryIndexRoute
@@ -227,6 +245,7 @@ export interface FileRouteTypes {
     | '/printer'
     | '/search'
     | '/share'
+    | '/shopping'
     | '/styleguide'
     | '/today'
     | '/wishlist'
@@ -234,6 +253,7 @@ export interface FileRouteTypes {
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
+    | '/week/$monday'
     | '/builds/'
     | '/ideas/'
     | '/pantry/'
@@ -249,6 +269,7 @@ export interface FileRouteTypes {
     | '/printer'
     | '/search'
     | '/share'
+    | '/shopping'
     | '/styleguide'
     | '/today'
     | '/wishlist'
@@ -257,6 +278,7 @@ export interface FileRouteTypes {
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
+    | '/week/$monday'
     | '/builds'
     | '/ideas'
     | '/pantry'
@@ -273,6 +295,7 @@ export interface FileRouteTypes {
     | '/_app/printer'
     | '/_app/search'
     | '/_app/share'
+    | '/_app/shopping'
     | '/_app/styleguide'
     | '/_app/today'
     | '/_app/wishlist'
@@ -281,6 +304,7 @@ export interface FileRouteTypes {
     | '/_app/builds/$buildId'
     | '/_app/ideas/$ideaId'
     | '/_app/pantry/$spoolId'
+    | '/_app/week/$monday'
     | '/_app/builds/'
     | '/_app/ideas/'
     | '/_app/pantry/'
@@ -380,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppShareRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/shopping': {
+      id: '/_app/shopping'
+      path: '/shopping'
+      fullPath: '/shopping'
+      preLoaderRoute: typeof AppShoppingRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/styleguide': {
       id: '/_app/styleguide'
       path: '/styleguide'
@@ -450,6 +481,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPantrySpoolIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/week/$monday': {
+      id: '/_app/week/$monday'
+      path: '/week/$monday'
+      fullPath: '/week/$monday'
+      preLoaderRoute: typeof AppWeekMondayRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -460,6 +498,7 @@ interface AppRouteChildren {
   AppPrinterRoute: typeof AppPrinterRoute
   AppSearchRoute: typeof AppSearchRoute
   AppShareRoute: typeof AppShareRoute
+  AppShoppingRoute: typeof AppShoppingRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppTodayRoute: typeof AppTodayRoute
   AppWishlistRoute: typeof AppWishlistRoute
@@ -468,6 +507,7 @@ interface AppRouteChildren {
   AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
   AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
   AppPantrySpoolIdRoute: typeof AppPantrySpoolIdRoute
+  AppWeekMondayRoute: typeof AppWeekMondayRoute
   AppBuildsIndexRoute: typeof AppBuildsIndexRoute
   AppIdeasIndexRoute: typeof AppIdeasIndexRoute
   AppPantryIndexRoute: typeof AppPantryIndexRoute
@@ -480,6 +520,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPrinterRoute: AppPrinterRoute,
   AppSearchRoute: AppSearchRoute,
   AppShareRoute: AppShareRoute,
+  AppShoppingRoute: AppShoppingRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppTodayRoute: AppTodayRoute,
   AppWishlistRoute: AppWishlistRoute,
@@ -488,6 +529,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,
   AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,
   AppPantrySpoolIdRoute: AppPantrySpoolIdRoute,
+  AppWeekMondayRoute: AppWeekMondayRoute,
   AppBuildsIndexRoute: AppBuildsIndexRoute,
   AppIdeasIndexRoute: AppIdeasIndexRoute,
   AppPantryIndexRoute: AppPantryIndexRoute,

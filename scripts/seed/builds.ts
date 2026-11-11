@@ -6,15 +6,15 @@
  * started and finished, when an attempt got its outcome) are backdated in
  * D1 afterwards, so the timeline reads like days of work.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { APIRequestContext, Browser } from "@playwright/test";
+import { TUGBOAT_FILE_NAME, tugboatFile } from "../../e2e/fixtures/gcode-tugboat.ts";
 import { PARTS_FILE_NAME, partsSlicerFile, SLICER_FILE_NAME, slicerFile } from "../../e2e/fixtures/slicer-file.ts";
 import type { AttemptSettings, Outcome } from "../../src/shared/attempts.ts";
 import { readThreeMf, settingsFromFile } from "../../src/shared/threemf/index.ts";
-import { executeSql, root } from "../lib/wrangler.ts";
+import { executeSql } from "../lib/wrangler.ts";
 import { type PhotoVariant, render, SEED_IDS } from "./ideas.ts";
 import { linkSeedSpools } from "./pantry.ts";
+import { seedPhotoSvg } from "./stand-ins.ts";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -47,6 +47,8 @@ interface SeedAttempt {
   photos?: SeedPhoto[];
   /** Printed from the fixture slicer file (e2e/fixtures/slicer-file.ts): true is plate 1, 2 is the hook plate. */
   slicerFile?: boolean | 2;
+  /** Printed from the tugboat's sliced file (e2e/fixtures/gcode-tugboat.ts): 317 layers of real G-code for the 3D view. */
+  tugboatFile?: boolean;
   /** Printed from the paddle steamer's file (plate 1: hull halves and deck, 2: the wheel). */
   partsFile?: 1 | 2;
   /** What it printed of the build's parts, by name, with the good pieces. */
@@ -144,6 +146,7 @@ export const SEED_BUILDS: SeedBuild[] = [
       {
         id: "5eed0000-0000-4000-8000-0000000a0002",
         by: "sam",
+        tugboatFile: true,
         ago: DAY + 2 * HOUR,
         outcome: "partial",
         finishedAfter: 3 * HOUR + 20 * MIN,
@@ -172,6 +175,7 @@ export const SEED_BUILDS: SeedBuild[] = [
       {
         id: "5eed0000-0000-4000-8000-0000000a0003",
         by: "alex",
+        tugboatFile: true,
         ago: 52 * MIN,
         outcome: null,
         settings: {
@@ -949,9 +953,13 @@ export async function seedBuilds(
         },
       });
       if (!created.ok()) throw new Error(`Seeding attempt ${attempt.id} failed: ${created.status()}`);
-      if (attempt.slicerFile || attempt.partsFile) {
-        const bytes = attempt.partsFile ? partsSlicerFile() : slicerFile();
-        const fileName = attempt.partsFile ? PARTS_FILE_NAME : SLICER_FILE_NAME;
+      if (attempt.slicerFile || attempt.partsFile || attempt.tugboatFile) {
+        const bytes = attempt.tugboatFile ? tugboatFile() : attempt.partsFile ? partsSlicerFile() : slicerFile();
+        const fileName = attempt.tugboatFile
+          ? TUGBOAT_FILE_NAME
+          : attempt.partsFile
+            ? PARTS_FILE_NAME
+            : SLICER_FILE_NAME;
         const read = readThreeMf(bytes);
         const plate = attempt.partsFile ?? (attempt.slicerFile === 2 ? 2 : 1);
         const thumb = read.plates[plate - 1]?.thumbnail?.bytes;
@@ -973,7 +981,7 @@ export async function seedBuilds(
         if (!uploaded.ok()) throw new Error(`Adding the slicer file to ${attempt.id} failed: ${uploaded.status()}`);
       }
       for (const photo of attempt.photos ?? []) {
-        const svg = readFileSync(join(root, "scripts/seed/photos", photo.file), "utf8");
+        const svg = seedPhotoSvg(photo.file);
         const large = await render(browser, svg, 1600, photo);
         const thumb = await render(browser, svg, 600, photo);
         const uploaded = await request.put(`/api/items/${build.id}/photos/${crypto.randomUUID()}`, {

@@ -76,7 +76,7 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "item":
       case "attempt":
         lists = true;
-        roots.add("journal").add("insights").add("facets").add("search").add("what-worked").add("spools");
+        roots.add("journal").add("insights").add("week").add("facets").add("search").add("what-worked").add("spools");
         break;
       case "photo":
       case "file":
@@ -88,10 +88,13 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
         roots.add("spools").add("printer").add("upkeep");
         break;
       case "comment":
-        roots.add("comments");
+        roots.add("comments").add("week");
         break;
       case "recipe":
         roots.add("recipes").add("search").add("what-worked");
+        break;
+      case "shopping":
+        roots.add("shopping");
         break;
       case "tag":
         roots.add("tags");

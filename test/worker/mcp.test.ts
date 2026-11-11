@@ -123,6 +123,7 @@ describe("the MCP endpoint", () => {
       "list_spools",
       "weigh_spool",
       "load_slot",
+      "get_week",
       "list_upkeep",
       "log_upkeep",
     ]);
@@ -428,6 +429,11 @@ describe("tools, scopes and attribution", () => {
     ).toBe("Weighed: about 562 g left.");
     expect((await callTool(bridge.token, "list_spools")).text).toContain("about 562 g left");
     expect((await callTool(bridge.token, "weigh_spool", { spool_id: gramsSpool })).isError).toBe(true);
+
+    const week = await callTool(bridge.token, "get_week", { monday: "2026-03-02" });
+    expect(week.text).toContain("Week of 2026-03-02 to 2026-03-08.");
+    expect(week.text).toContain("No prints.");
+    expect((await callTool(bridge.token, "get_week", { monday: "2026-03-03" })).isError).toBe(true);
 
     const upkeepList = await callTool(bridge.token, "list_upkeep");
     expect(upkeepList.text).toContain("Clean the build plate");

@@ -5,8 +5,10 @@ import { AvatarSection } from "./-styleguide/avatars";
 import { BuildsSection } from "./-styleguide/builds";
 import { ButtonSection } from "./-styleguide/buttons";
 import { CardSection } from "./-styleguide/cards";
+import { ChecklistSection } from "./-styleguide/checklist";
 import { ChipSection } from "./-styleguide/chips";
 import { ColorSection } from "./-styleguide/color";
+import { CommandBlockSection } from "./-styleguide/command-block";
 import { ControlSection } from "./-styleguide/controls";
 import { ConversationSection } from "./-styleguide/conversation";
 import { ElevationSection } from "./-styleguide/elevation";
@@ -14,6 +16,8 @@ import { EmptySection } from "./-styleguide/empty";
 import { FieldSection } from "./-styleguide/fields";
 import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
+import { LayerSliderSection } from "./-styleguide/layer-slider";
+import { LiveStatusSection } from "./-styleguide/live-status";
 import { MotionSection } from "./-styleguide/motion";
 import { NotificationSection } from "./-styleguide/notifications";
 import { PaletteSection } from "./-styleguide/palette";
@@ -25,6 +29,7 @@ import { SheetSection } from "./-styleguide/sheets";
 import { SigningInSection } from "./-styleguide/signing-in";
 import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
+import { StepsSection } from "./-styleguide/steps";
 import { TodaySection } from "./-styleguide/today";
 import { TypeSection } from "./-styleguide/type";
 import { WebhooksSection } from "./-styleguide/webhooks";
@@ -51,6 +56,7 @@ const toc = [
   ["fields", "Fields"],
   ["controls", "Controls"],
   ["chips", "Chips"],
+  ["checklist", "Checklist"],
   ["avatars", "Avatars"],
   ["conversation", "Conversation"],
   ["cards", "Cards"],
@@ -70,12 +76,16 @@ const toc = [
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
   ["signing-in", "Signing in"],
+  ["layer-slider", "Layer slider"],
+  ["command-block", "Command block"],
+  ["steps", "Steps"],
+  ["live-status", "Live status"],
 ] as const;
 
 function Styleguide() {
   return (
     <>
-      <PageHeader title="Styleguide" subtitle="The kitchen's tools: every token and component, live." />
+      <PageHeader title="Styleguide" subtitle="Every token and component, live." />
       <div className="flex gap-12">
         <nav aria-label="Styleguide sections" className="sticky top-8 hidden h-fit w-40 shrink-0 flex-col lg:flex">
           {toc.map(([id, label]) => (
@@ -100,6 +110,7 @@ function Styleguide() {
           <FieldSection />
           <ControlSection />
           <ChipSection />
+          <ChecklistSection />
           <AvatarSection />
           <ConversationSection />
           <CardSection />
@@ -118,6 +129,10 @@ function Styleguide() {
           <WebhooksSection />
           <EmptySection />
           <SkeletonSection />
+          <LayerSliderSection />
+          <LiveStatusSection />
+          <StepsSection />
+          <CommandBlockSection />
           <SigningInSection />
         </div>
       </div>

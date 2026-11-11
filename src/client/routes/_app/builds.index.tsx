@@ -14,6 +14,7 @@ import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { createBuild } from "@/lib/builds";
 import { type ItemView, useBuilds } from "@/lib/items";
+import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -35,6 +36,7 @@ function byActivity(a: ItemView, b: ItemView) {
 const byFinished = (a: ItemView, b: ItemView) => (b.finishedAt ?? b.updatedAt) - (a.finishedAt ?? a.updatedAt);
 
 function Builds() {
+  useListPicker();
   const { items, isPending } = useBuilds();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
@@ -62,7 +64,7 @@ function Builds() {
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
           <Section title="On the bed" count={active.length}>
-            <ul className={grid} aria-label="On the bed">
+            <ul data-picks className={grid} aria-label="On the bed">
               {active.map((item) => (
                 <BuildCard
                   key={item.id}
@@ -83,7 +85,7 @@ function Builds() {
           </Section>
           {done.length > 0 && (
             <Section title="Done" count={done.length} quiet>
-              <ul className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="Done">
+              <ul data-picks className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="Done">
                 {done.map((item) => (
                   <BuildRow key={item.id} item={item} />
                 ))}
@@ -92,7 +94,7 @@ function Builds() {
           )}
           {shelved.length > 0 && (
             <Section title="On the shelf" count={shelved.length} quiet>
-              <ul className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="On the shelf">
+              <ul data-picks className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="On the shelf">
                 {shelved.map((item) => (
                   <BuildRow key={item.id} item={item} />
                 ))}

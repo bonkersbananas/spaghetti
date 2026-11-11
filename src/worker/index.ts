@@ -2,12 +2,15 @@ import { app } from "./app.ts";
 import { resumeCoaches } from "./coach/run.ts";
 import { getDb } from "./db/index.ts";
 import { resumeDrafts } from "./draft/run.ts";
+import { home } from "./home.ts";
+import { resumeLabelReads } from "./label-read/run.ts";
 import { mcpRoutes } from "./mcp/index.ts";
 import { pruneOauth } from "./oauth/grants.ts";
 import { oauthEndpoints } from "./oauth/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
+import { sendWeekPush } from "./push/week.ts";
 import { pruneDeliveries, runWebhooks } from "./webhooks/deliver.ts";
 
 const DAILY = "0 4 * * *";
@@ -28,9 +31,13 @@ async function shareFallback(request: Request): Promise<Response> {
 }
 
 export default {
-  /** /mcp is the MCP server; everything else is the API (the app's static files never reach the Worker). */
+  /**
+   * / is the app or the landing page (home.ts); /mcp is the MCP server; everything else is the API (the app's other
+   * static files never reach the Worker).
+   */
   fetch: (request, env, ctx) => {
     const { pathname } = new URL(request.url);
+    if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) return home(request, env);
     if (pathname === "/mcp") return mcpRoutes.fetch(request, env, ctx);
     if (pathname.startsWith("/.well-known/oauth-") || pathname.startsWith("/oauth/")) {
       return oauthEndpoints.fetch(request, env, ctx);
@@ -58,8 +65,15 @@ export default {
       // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
       ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));
       ctx.waitUntil(resumeReads(env).catch((error) => console.error("photo read resume failed", error)));
+      ctx.waitUntil(resumeLabelReads(env).catch((error) => console.error("label read resume failed", error)));
       ctx.waitUntil(resumeCoaches(env).catch((error) => console.error("coach resume failed", error)));
       ctx.waitUntil(sendUpkeepNudge(env).then((result) => result.sent && console.log("upkeep nudged", result)));
+      // "Your week", Sunday 19:00 in the workspace's time zone (does nothing at any other time).
+      ctx.waitUntil(
+        sendWeekPush(env)
+          .then((result) => result.sent && console.log("week pushed", result))
+          .catch((error) => console.error("week push failed", error)),
+      );
     }
   },
 } satisfies ExportedHandler<Env>;

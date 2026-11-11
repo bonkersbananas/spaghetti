@@ -2,7 +2,7 @@ import { type BridgeStatus, bridgeLine } from "@shared/bridge";
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/cn";
-import { printerQuery } from "@/lib/pantry";
+import { printerQuery } from "@/lib/pantry-queries";
 import { useNow } from "@/lib/use-now";
 
 export const BRIDGE_DOCS = "https://github.com/bonkersbananas/spaghetti/blob/main/docs/bridge.md";
@@ -17,7 +17,10 @@ export function BridgeLine({ status, className }: { status?: BridgeStatus | null
   return (
     <p className={cn("text-small text-ink-faint mt-1 flex items-center gap-2", className)} data-bridge={state}>
       <span
-        className={cn("size-2 shrink-0 rounded-full", state === "connected" ? "bg-basil" : "bg-ink/20")}
+        className={cn(
+          "size-2 shrink-0 rounded-full",
+          state === "connected" ? "bg-basil" : state === "problem" ? "bg-semolina" : "bg-ink/20",
+        )}
         aria-hidden
       />
       <span>

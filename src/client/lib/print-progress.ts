@@ -1,6 +1,6 @@
 import { livePrintProgress, type PrintProgressResult, printProgress } from "@shared/print-progress";
 import { useQuery } from "@tanstack/react-query";
-import { printerQuery } from "./pantry";
+import { printerQuery } from "./pantry-queries";
 import { useNow } from "./use-now";
 
 /**
