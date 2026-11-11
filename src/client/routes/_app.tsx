@@ -19,6 +19,7 @@ import { useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { isSigningOut } from "@/lib/use-sign-out";
 import { useWhenIdle } from "@/lib/when-idle";
 
 // Desktop-only overlays, loaded once the app is idle rather than with the first screen.
@@ -58,7 +59,10 @@ function AppLayout() {
   const navigate = useNavigate();
   const { data: user } = useQuery(sessionQuery);
   useEffect(() => {
-    if (user === null) void navigate({ to: "/sign-in" });
+    // Signing out navigates by itself; a session the server ended keeps the page for after signing in again.
+    if (user === null && !isSigningOut()) {
+      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } });
+    }
   }, [user, navigate]);
   return (
     <CaptureProvider>
