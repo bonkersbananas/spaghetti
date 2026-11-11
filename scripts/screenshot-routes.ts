@@ -316,13 +316,11 @@ async function labelSpool(page: Page, note: string, photo: "jade" | "two") {
   labelSpoolIds.push(id);
   await page.goto(`/pantry/${id}`);
   await page.getByRole("button", { name: "Read the label" }).waitFor();
-  await page
-    .getByTestId("photo-input")
-    .setInputFiles({
-      name: `label-${photo}.jpg`,
-      mimeType: "image/jpeg",
-      buffer: readFileSync(`e2e/fixtures/label-${photo}.jpg`),
-    });
+  await page.getByTestId("photo-input").setInputFiles({
+    name: `label-${photo}.jpg`,
+    mimeType: "image/jpeg",
+    buffer: readFileSync(`e2e/fixtures/label-${photo}.jpg`),
+  });
 }
 
 /** Takes the spools the label shots made off the shelf again. */
