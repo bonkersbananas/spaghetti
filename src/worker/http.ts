@@ -9,8 +9,9 @@ import type {
   Person,
 } from "../shared/api.ts";
 import { byPrintTime, describeChanges } from "../shared/attempts.ts";
+import type { Coach } from "../shared/coach.ts";
 import type { PhotoRead } from "../shared/photo-read.ts";
-import type { Attempt, AttemptFileRow, Item, ItemDraftRow, Part, Photo, User } from "./db/schema.ts";
+import type { Attempt, AttemptFileRow, CoachRunRow, Item, ItemDraftRow, Part, Photo, User } from "./db/schema.ts";
 import { toApiDraft } from "./draft/run.ts";
 
 export function apiError(c: Context, status: ContentfulStatusCode, code: string, message: string) {
@@ -77,12 +78,27 @@ export type FilesByAttempt = ReadonlyMap<string, AttemptFileRow>;
 /** What Claude made of each attempt's photos (worker/photo-read/run.ts toApiPhotoRead), by attempt id. */
 export type ReadsByAttempt = ReadonlyMap<string, PhotoRead>;
 
+/** The failure coach's rows, by attempt id (worker/coach/run.ts coachesByAttempt). */
+export type CoachesByAttempt = ReadonlyMap<string, CoachRunRow>;
+
+/** The attempt's coach as the API shows it: nothing unless it is still Partly or Spaghetti. */
+export function toApiCoach(row: CoachRunRow | undefined, outcome: string | null): Coach | null {
+  if (!row || (outcome !== "partial" && outcome !== "failed")) return null;
+  if (row.status === "thinking") return { status: "thinking", items: [] };
+  if (row.status !== "done" || !row.suggestions.length) return null;
+  return {
+    status: "ready",
+    items: row.suggestions.map((item) => ({ ...item, dismissed: row.dismissed.includes(item.id) })),
+  };
+}
+
 /** An attempt, with what changed since `previous` (the non-deleted attempt printed before it, if any). */
 export function toApiAttempt(
   attempt: Attempt,
   previous: Attempt | null | undefined,
   files: FilesByAttempt = new Map(),
   reads: ReadsByAttempt = new Map(),
+  coaches: CoachesByAttempt = new Map(),
 ): ApiAttempt {
   const file = files.get(attempt.id);
   return {
@@ -95,6 +111,7 @@ export function toApiAttempt(
     suggestedFailureTag: attempt.suggestedFailureTag,
     // Once someone said how it went, "looking at the photo" is moot; the suggestion stays so the tags it gave stay marked.
     photoRead: attempt.outcome && reads.get(attempt.id)?.status === "reading" ? null : (reads.get(attempt.id) ?? null),
+    coach: toApiCoach(coaches.get(attempt.id), attempt.outcome),
     note: attempt.note,
     failureTags: attempt.failureTags,
     successNotes: attempt.successNotes,
@@ -116,6 +133,7 @@ export function toApiAttempts(
   itemAttempts: Attempt[],
   files: FilesByAttempt = new Map(),
   reads: ReadsByAttempt = new Map(),
+  coaches: CoachesByAttempt = new Map(),
 ): ApiAttempt[] {
   const ordered = byPrintTime(
     itemAttempts.map((row) => ({
@@ -125,7 +143,7 @@ export function toApiAttempts(
       createdAt: row.createdAt.getTime(),
     })),
   ).map(({ row }) => row);
-  return ordered.map((attempt, index) => toApiAttempt(attempt, ordered[index - 1], files, reads));
+  return ordered.map((attempt, index) => toApiAttempt(attempt, ordered[index - 1], files, reads, coaches));
 }
 
 /** `itemAttempts` are the item's non-deleted attempts, in any order. */
@@ -137,6 +155,7 @@ export function toApiItem(
   draft: ItemDraftRow | null = null,
   itemParts: Part[] = [],
   reads: ReadsByAttempt = new Map(),
+  coaches: CoachesByAttempt = new Map(),
 ): ApiItem {
   return {
     id: item.id,
@@ -154,7 +173,7 @@ export function toApiItem(
     forWhom: item.forWhom,
     parts: itemParts.map(toApiPart),
     photos: itemPhotos.map(toApiPhoto),
-    attempts: toApiAttempts(itemAttempts, files, reads),
+    attempts: toApiAttempts(itemAttempts, files, reads, coaches),
     draft: toApiDraft(draft),
   };
 }

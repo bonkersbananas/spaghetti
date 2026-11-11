@@ -5,6 +5,8 @@
  * `slow` takes a few seconds (the "reading the page" state stays long enough to look at), `broken` can't be read,
  * `refused` is refused, anything else is a good draft.
  *
+ * A request that asks what to try on the next attempt is the failure coach (decision 0027): see answerCoach.
+ *
  * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
  * note decides the answer: `slow` takes ten seconds ("Looking at the photo…" stays long enough to look at), `refused`
  * is refused, `broken` is an API error, `unsure` can't tell, `spaghetti` or `tangle` is a failed print, `partly` a
@@ -88,6 +90,84 @@ async function answerPhoto(body: string, response: import("node:http").ServerRes
   );
 }
 
+const noChange = {
+  bedTemperature: null,
+  nozzleTemperature: null,
+  chamberTemperature: null,
+  brim: null,
+  supportEnabled: null,
+  supportType: null,
+  layerHeight: null,
+  infillDensity: null,
+  wallLoops: null,
+  filamentDried: null,
+  bedType: null,
+  nozzleDiameter: null,
+};
+
+/** What the coach suggests (decision 0027): a brim, a warmer bed and drying as settings, a speed as a note. */
+const coachAnswer = {
+  suggestions: [
+    {
+      title: "Add a brim",
+      why: "The corners lifted first; a brim holds them down.",
+      change: { ...noChange, brim: true },
+      note: null,
+    },
+    {
+      title: "Warm the bed a little",
+      why: "The stern corners curled as they cooled; 5 °C more keeps them down.",
+      change: { ...noChange, bedTemperature: 65 },
+      note: null,
+    },
+    {
+      title: "Dry the filament first",
+      why: "A spool that sat open for weeks picks up moisture, and wet filament warps.",
+      change: { ...noChange, filamentDried: true },
+      note: null,
+    },
+    {
+      title: "Slow the outer wall to 60 mm/s",
+      why: "Fine strings on the walls point at speed.",
+      change: null,
+      note: "Outer wall 60 mm/s",
+    },
+  ],
+};
+
+/**
+ * A request that asks what to try next is the failure coach. A word in the build's title or the attempt's note picks
+ * the answer: `slow`, `broken`, `refused`; `coach` (or the seed's "curled" stern) gets the good suggestions; anything
+ * else has nothing useful to say, so the many failed attempts of other tests and the seed stay quiet.
+ */
+async function answerCoach(body: string, response: import("node:http").ServerResponse) {
+  const words = [/The build: ([^"\\]*)/, /Their note: ([^"\\]*)/]
+    .map((pattern) => pattern.exec(body)?.[1] ?? "")
+    .join(" ")
+    .toLowerCase();
+  if (words.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (words.includes("broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = words.includes("refused");
+  const answer = words.includes("coach") || words.includes("curled") ? coachAnswer : { suggestions: [] };
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      content: refused ? [] : [{ type: "text", text: JSON.stringify(answer) }],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
+
 /** What the webhook receiver below was sent: the signature headers and the body, for the tests to check. */
 export interface ReceivedHook {
   path: string;
@@ -147,6 +227,7 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
+      if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
       if (body.includes('"type":"image"')) return answerPhoto(body, response);
       const asked = body.match(/https?:\/\/[^"\\\s]+/)?.[0] ?? "";
       if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));

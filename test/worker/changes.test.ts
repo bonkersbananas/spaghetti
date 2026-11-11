@@ -197,10 +197,10 @@ describe("what writes record", () => {
     expect(shape(await recorded(() => patch(`/api/attempts/${attemptId}`, { note: "stringing" })))).toEqual([
       ["attempt", "updated", attemptId, idea.id],
     ]);
-    const finished = await recorded(() => post(`/api/attempts/${attemptId}/finish`, { outcome: "failed" }));
+    const finished = await recorded(() => post(`/api/attempts/${attemptId}/finish`, { outcome: "success" }));
     expect(shape(finished)).toEqual([["attempt", "updated", attemptId, idea.id]]);
     // The same finish again says nothing new.
-    expect(await recorded(() => post(`/api/attempts/${attemptId}/finish`, { outcome: "failed" }))).toEqual([]);
+    expect(await recorded(() => post(`/api/attempts/${attemptId}/finish`, { outcome: "success" }))).toEqual([]);
     expect(shape(await recorded(() => del(`/api/attempts/${attemptId}`)))).toEqual([
       ["attempt", "deleted", attemptId, idea.id],
     ]);
