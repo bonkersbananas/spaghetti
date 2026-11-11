@@ -82,8 +82,13 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       }
       meta={
         bought ? (
-          <span className="text-small text-ink-faint">
-            {boughtBy ? `${boughtBy.name.split(" ")[0]} got it` : "Got it"} {item.boughtAt && inlineTime(item.boughtAt)}
+          // Right under the name: a line of words, not a row of chips.
+          <span className="text-small text-ink-faint -mt-1.5 inline-flex items-center gap-1.5">
+            {boughtBy && <Avatar person={boughtBy} size="xs" decorative />}
+            <span>
+              {boughtBy ? `${boughtBy.name.split(" ")[0]} got it` : "Got it"}{" "}
+              {item.boughtAt && inlineTime(item.boughtAt)}
+            </span>
           </span>
         ) : item.link || item.priceLink ? (
           links
