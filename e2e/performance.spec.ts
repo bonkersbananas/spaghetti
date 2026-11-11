@@ -24,20 +24,20 @@ const origin = (page: Page) => new URL(page.url()).origin;
  * Most of the size is React, the router, TanStack Query, sheets (vaul and Radix), toasts and motion, which every
  * screen needs at once.
  *
- * Measured on 2026-11-11 after moving the pantry and printer queries out of lib/pantry.ts (about 2.4 kB of the
+ * Measured on 2026-11-11 (after merging main with the spool labels) after moving the pantry and printer queries out of lib/pantry.ts (about 2.4 kB of the
  * pantry's writes, weighing and photo upload had come into every screen's first load through the sidebar's printing card):
- *   /sign-in 193.4   /today 296.6   /ideas 285.7   /builds 284.5   /journal 284.9   /search 289.8   /pantry 296.7   /printer 294.6
+ *   /sign-in 193.4   /today 297.0   /ideas 285.9   /builds 284.8   /journal 285.1   /search 290.0   /pantry 294.9   /printer 295.0
  * (Sign-in keeps 194: 0.6 kB of headroom, the screen hasn't changed.)
  */
 const BUDGET_KB = {
   "/sign-in": 194,
-  "/today": 298,
+  "/today": 299,
   "/ideas": 287,
   "/builds": 286,
-  "/journal": 286,
-  "/search": 291,
-  "/pantry": 298,
-  "/printer": 296,
+  "/journal": 287,
+  "/search": 292,
+  "/pantry": 296,
+  "/printer": 297,
 } as const;
 
 /**
