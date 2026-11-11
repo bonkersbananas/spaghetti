@@ -170,6 +170,8 @@ describe("authenticating with a token", () => {
     await refused(asAgent(made.token, `/api/spools/${uuid()}`, { method: "DELETE" }));
     await refused(asAgent(made.token, "/api/printer/upkeep/plate", { method: "DELETE" }));
     await refused(asAgent(made.token, `/api/printer/upkeep/logs/${uuid()}`, { method: "DELETE" }));
+    await refused(asAgent(made.token, `/api/shopping-items/${uuid()}`, { method: "DELETE" }));
+    await refused(asAgent(made.token, `/api/shopping-items/${uuid()}/restore`, { method: "POST" }));
     // The session is a cookie's business: a token reads none, and can't sign in as anyone.
     expect(await status(asAgent(made.token, "/api/session"))).toBe(401);
     expect(await status(asAgent(made.token, "/api/session", { method: "DELETE" }))).toBe(204);
@@ -304,6 +306,28 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     method: "PATCH",
     path: "/api/printer/upkeep/plate",
     json: { intervalDays: 10 },
+  },
+  { name: "read the shopping list", scope: "read", method: "GET", path: "/api/shopping-items" },
+  {
+    name: "add to the shopping list",
+    scope: "printer",
+    method: "POST",
+    path: "/api/shopping-items",
+    json: { id: uuid(), name: "Bambu PLA Basic, black" },
+  },
+  {
+    name: "tick something off the shopping list",
+    scope: "printer",
+    method: "PATCH",
+    path: `/api/shopping-items/${uuid()}`,
+    json: { bought: true },
+  },
+  {
+    name: "sort the shopping list",
+    scope: "printer",
+    method: "PUT",
+    path: "/api/shopping-items/order",
+    json: { ids: [] },
   },
   {
     name: "log upkeep",

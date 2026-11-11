@@ -183,6 +183,13 @@
       "when": 1794383200821,
       "tag": "0025_coach-runs",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794390713255,
+      "tag": "0026_shopping-items",
+      "breakpoints": true
     }
   ]
 }

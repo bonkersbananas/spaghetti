@@ -1796,6 +1796,7 @@ export const shots: Shot[] = [
       );
     },
   },
+  { name: "shopping", path: "/shopping", fullPage: true },
   // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.

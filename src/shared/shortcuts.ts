@@ -64,6 +64,7 @@ export const SHORTCUTS = define([
   { id: "goPantry", group: "anywhere", label: "Go to the Pantry", keys: ["g p"] },
   { id: "goPrinter", group: "anywhere", label: "Go to the Printer", keys: ["g r"] },
 
+  { id: "goShopping", group: "anywhere", label: "Go to Shopping", keys: ["g s"] },
   { id: "paletteNext", group: "palette", label: "Next result", keys: ["arrowdown"] },
   { id: "palettePrevious", group: "palette", label: "Previous result", keys: ["arrowup"] },
   { id: "paletteRun", group: "palette", label: "Open it, or run it", keys: ["enter"] },

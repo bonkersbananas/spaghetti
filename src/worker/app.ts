@@ -32,6 +32,7 @@ import { pushRoutes } from "./routes/push.ts";
 import { recipeRoutes } from "./routes/recipes.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
+import { shoppingItemsRoutes } from "./routes/shopping-items.ts";
 import { signingInRoutes } from "./routes/signing-in.ts";
 import { spoolRoutes } from "./routes/spools.ts";
 import { storyRoutes } from "./routes/story.ts";
@@ -141,6 +142,7 @@ export const app = new Hono<AppEnv>()
   .route("/insights", insightRoutes)
   .route("/links", linkRoutes)
   .route("/builds", storyRoutes)
+  .route("/shopping-items", shoppingItemsRoutes)
   .route("/", searchRoutes)
   .notFound((c) => apiError(c, 404, "not_found", "No such endpoint."))
   .onError((err, c) => {

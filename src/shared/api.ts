@@ -756,3 +756,32 @@ export interface LogUpkeepRequest {
   /** When it was done, epoch ms (not in the future); the printer's hours are those at that moment. Default: now. */
   at?: number;
 }
+
+/** /api/shopping-items: things to buy for the printer. */
+export interface ShoppingItem {
+  id: string;
+  /** May be empty when there is a link; show `shoppingName` (shared/shopping.ts). */
+  name: string;
+  /** The shop's page. */
+  link: string | null;
+  /** A price comparison page (Prisjakt). */
+  priceLink: string | null;
+  /** Its place among what's still to buy, smallest first. */
+  position: number;
+  /** When it was ticked off, epoch ms; null while it's still to buy. */
+  boughtAt: number | null;
+  boughtBy: string | null;
+  createdBy: string;
+  /** The agent that added it, if one did. */
+  createdVia: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ShoppingItemsResponse {
+  shoppingItems: ShoppingItem[];
+}
+
+export interface ShoppingItemResponse {
+  shoppingItem: ShoppingItem;
+}

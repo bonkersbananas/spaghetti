@@ -2,6 +2,7 @@ import {
   BuildsIcon,
   type Icon,
   IdeasIcon,
+  InfoIcon,
   JournalIcon,
   PantryIcon,
   PrinterIcon,
@@ -10,11 +11,11 @@ import {
 } from "@/components/ui/icons";
 
 export interface Section {
-  to: "/today" | "/ideas" | "/builds" | "/journal" | "/search" | "/pantry" | "/printer";
+  to: "/today" | "/ideas" | "/builds" | "/journal" | "/search" | "/pantry" | "/printer" | "/shopping";
   label: string;
   icon: Icon;
   /** The shortcut that opens it (see shared/shortcuts.ts); the sidebar shows its keys. */
-  shortcut: "goToday" | "goIdeas" | "goBuilds" | "goJournal" | "search" | "goPantry" | "goPrinter";
+  shortcut: "goToday" | "goIdeas" | "goBuilds" | "goJournal" | "search" | "goPantry" | "goPrinter" | "goShopping";
 }
 
 const today: Section = { to: "/today", label: "Today", icon: TodayIcon, shortcut: "goToday" };
@@ -39,4 +40,5 @@ export const tabs = [today, ideas, builds, journal] as const;
 export const workshop: Section[] = [
   { to: "/pantry", label: "Pantry", icon: PantryIcon, shortcut: "goPantry" },
   { to: "/printer", label: "Printer", icon: PrinterIcon, shortcut: "goPrinter" },
+  { to: "/shopping", label: "Shopping", icon: InfoIcon, shortcut: "goShopping" }, // TODO: a Phosphor icon in components/ui/icons.tsx
 ];

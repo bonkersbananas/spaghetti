@@ -882,3 +882,30 @@ export const webhookDeliveries = sqliteTable(
 
 export type Webhook = typeof webhooks.$inferSelect;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+
+/**
+ * The shopping list: things to buy for the printer (filament, glue, a spare nozzle). People sort what's still to
+ * buy (`position`, smallest first); ticking one off sets `boughtAt`/`boughtBy` and untick clears them. `link` is
+ * the shop's page, `priceLink` a price comparison page (Prisjakt). The client picks the id. Deleting is soft, with
+ * undo; the daily purge removes rows deleted a month ago.
+ */
+export const shoppingItems = sqliteTable("shopping_items", {
+  id: text("id").primaryKey(),
+  /** May be empty when there is a link: the app shows the page's title instead. */
+  name: text("name").notNull().default(""),
+  link: text("link"),
+  priceLink: text("price_link"),
+  position: integer("position").notNull(),
+  boughtAt: integer("bought_at", { mode: "timestamp_ms" }),
+  boughtBy: text("bought_by").references(() => users.id),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id),
+  /** The agent that added it, if one did. */
+  createdVia: text("created_via"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+});
+
+export type ShoppingItemRow = typeof shoppingItems.$inferSelect;
