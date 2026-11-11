@@ -188,6 +188,8 @@ describe("setup", () => {
     expect(said.join("\n")).toContain("allow Local Network");
     expect(existsSync(macPaths(home).config)).toBe(false);
     expect(launchctl).toEqual([]);
+    // The code wasn't spent: the same command can be run again.
+    expect(paired).toEqual([]);
   });
 
   it("explains a spent code in plain words", async () => {
