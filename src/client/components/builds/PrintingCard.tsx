@@ -7,8 +7,8 @@ import { m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { NoteFace } from "@/components/ui/NoteFace";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto } from "@/lib/builds";
@@ -111,7 +111,9 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         <div
           className={cn(
             "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
-            layout.picture,
+            // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
+            // print's state down.
+            !hero && !plate && !compact ? "aspect-5/2" : layout.picture,
           )}
         >
           {hero ? (
@@ -124,7 +126,10 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               className={cn("size-full", compact ? "p-1 md:p-3" : "p-3")}
             />
           ) : (
-            <NoteFace note={name.text} />
+            // No picture yet: a plain tile, not the name a second time (it is right under it).
+            <div className="bg-well text-ink-ghost flex size-full items-center justify-center" aria-hidden>
+              <BuildsIcon size={compact ? 28 : 36} />
+            </div>
           )}
           {/* On a compact card the words under it say the same, and a chip would cover the small picture. */}
           <OutcomeChip

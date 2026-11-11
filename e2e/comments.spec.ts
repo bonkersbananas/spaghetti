@@ -292,7 +292,8 @@ for (const theme of ["light", "dark"] as const) {
     const other = await newIdea(page, "Lamp base", "building");
     await page.goto("/today");
     const line = page.getByRole("link", { name: /on Bath tugboat/ });
-    await expect(page.getByRole("link", { name: /new comments?/ })).toHaveCount(0);
+    // No block at all: its label is the heading "New comment(s)".
+    await expect(page.getByRole("heading", { name: /^New comments?/ })).toHaveCount(0);
     const sams = await samSession(page);
     await sams.say(id, "Started it tonight, the first layer looked great.");
     await page.reload();
@@ -302,16 +303,15 @@ for (const theme of ["light", "dark"] as const) {
       .analyze();
     expect(violations.map((violation) => `today: ${violation.id}`)).toEqual([]);
 
-    // Several: one line with the count, for the newest thread.
+    // Several: the label counts them, and the one line is for the newest thread.
     await sams.say(other, "Could it be taller?");
     await sams.say(other, "Maybe 12 cm.");
     await page.reload();
-    await expect(page.getByRole("link", { name: /3 new comments · latest from Sam Okafor on Lamp base/ })).toHaveCount(
-      1,
-    );
+    await expect(page.getByRole("heading", { name: /^New comments\s*3$/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Sam Okafor on Lamp base/ })).toHaveCount(1);
 
     // Reading a thread clears it from the line; reading all clears the line.
-    await page.getByRole("link", { name: /3 new comments/ }).click();
+    await page.getByRole("link", { name: /^Sam Okafor on Lamp base/ }).click();
     await expect(thread(page).getByText("Maybe 12 cm.")).toBeVisible();
     await page.goto("/today");
     await expect(page.getByRole("link", { name: /on Bath tugboat: Started it tonight/ })).toBeVisible();
