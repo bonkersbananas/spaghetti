@@ -29,7 +29,7 @@ const BUDGET_KB = {
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 311,
-  "/builds": 310,
+  "/builds": 311,
   "/journal": 311,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
   "/search": 317,

@@ -8,6 +8,7 @@
  */
 import type { AttemptSettings, Outcome, SettingKey } from "./attempts.ts";
 import { SETTING_KEYS } from "./attempts.ts";
+import type { AttemptPart } from "./parts.ts";
 
 type SettingFields = { [K in SettingKey as `s.${K}`]?: AttemptSettings[K] };
 
@@ -17,6 +18,8 @@ export type SheetFields = {
   note: string;
   failureTags: string[];
   successNotes: string[];
+  /** What's on the plate: the build's parts and their good pieces, one field (the list is replaced as a whole). */
+  parts: AttemptPart[];
 } & SettingFields;
 
 /** The parts of an attempt the sheet edits. */
@@ -26,6 +29,7 @@ export interface EditableAttempt {
   note: string;
   failureTags: string[];
   successNotes: string[];
+  parts: AttemptPart[];
   settings: AttemptSettings;
 }
 
@@ -42,6 +46,7 @@ export function toFields(attempt: EditableAttempt): SheetFields {
     note: attempt.note,
     failureTags: attempt.failureTags,
     successNotes: attempt.successNotes,
+    parts: attempt.parts,
   };
   for (const key of SETTING_KEYS) fields[`s.${key}`] = attempt.settings[key];
   return fields as SheetFields;
@@ -60,6 +65,7 @@ export function toValue(fields: SheetFields): SheetValue {
     note: fields.note,
     failureTags: fields.failureTags,
     successNotes: fields.successNotes,
+    parts: fields.parts,
     settings: settings as AttemptSettings,
   };
 }

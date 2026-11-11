@@ -19,6 +19,7 @@ import {
   type TagKind,
 } from "@shared/attempts";
 import type { BridgeProgress } from "@shared/bridge";
+import type { AttemptPart } from "@shared/parts";
 import { isOffTheBed, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -195,6 +196,8 @@ export interface AttemptDraft {
   failureTags: string[];
   successNotes: string[];
   settings: AttemptSettings;
+  /** What it printed of the build's parts. */
+  parts: AttemptPart[];
   photos: DraftPhoto[];
 }
 
@@ -216,6 +219,7 @@ export function logAttempt(item: Pick<ItemView, "id">, draft: AttemptDraft, crea
         failureTags: draft.outcome && draft.outcome !== "success" ? draft.failureTags : [],
         successNotes: draft.outcome && draft.outcome !== "failed" ? draft.successNotes : [],
         settings: draft.settings,
+        ...(draft.parts.length ? { parts: draft.parts } : {}),
         createdBy,
         createdAt: now,
       },

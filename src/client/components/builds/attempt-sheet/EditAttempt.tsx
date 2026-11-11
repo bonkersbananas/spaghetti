@@ -1,5 +1,6 @@
 import { fieldsFor, type SheetFields, type SheetValue, toChanges, toFields, toValue } from "@shared/attempt-fields";
 import type { Outcome } from "@shared/attempts";
+import { partsOnPlate } from "@shared/parts";
 import { offTheBedLabel } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
@@ -20,6 +21,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { EstimateLine, elapsedIfPlausible } from "../Estimate";
 import { SavedFileCard } from "../SlicerFile";
 import { AttemptFields } from "./AttemptFields";
+import { useOutcomeCounts } from "./PlateParts";
 import { SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
 import { WhenField } from "./WhenField";
 
@@ -76,12 +78,17 @@ export function EditAttempt({
   });
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const previous = item.attempts[attempt.number - 2];
+  const outcomeCounts = useOutcomeCounts();
   const slicer = useSlicerFile({
     // Offline, a saved attempt's settings are only for reading: no file can go on it.
     open: open && !readOnly,
     settings: value.settings,
     onSettings: (settings) => change({ settings }),
     onReady: (draft, plate, prefill) => queueSlicerFile(item.id, attempt.id, draft, plate, prefill),
+    onObjects: (objects) => {
+      const found = partsOnPlate(objects, item.parts);
+      if (found.length && !value.parts.length) change({ parts: outcomeCounts(found, value.outcome) });
+    },
     incomingFile,
   });
   const finish = (outcome: Outcome) => {
@@ -98,6 +105,7 @@ export function EditAttempt({
         : {};
     change({
       outcome,
+      ...(value.parts.length ? { parts: outcomeCounts(value.parts, outcome) } : {}),
       ...suggested,
       ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}),
     });
@@ -154,6 +162,7 @@ export function EditAttempt({
         readOnly={readOnly}
         outcome={value.outcome}
         onOutcome={finish}
+        plate={{ parts: item.parts, value: value.parts, onChange: (parts) => change({ parts }) }}
         fromFile={attempt.file?.prefill}
         settingsKey={slicer.settingsKey}
         estimate={

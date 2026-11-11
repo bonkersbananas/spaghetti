@@ -31,6 +31,21 @@ const fileFields = z.object({
       }
     })
     .pipe(settings),
+  /** The object names on the plate (JSON array), for a build's parts; left out when the file said none. */
+  objects: z
+    .string()
+    .max(64_000)
+    .optional()
+    .transform((value, ctx) => {
+      if (value === undefined) return [];
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Not JSON." });
+        return z.NEVER;
+      }
+    })
+    .pipe(z.array(z.string().trim().min(1).max(200)).max(500)),
 });
 
 /** An attempt that isn't deleted, of an item that isn't. */
@@ -117,6 +132,7 @@ export const attemptFileRoutes = new Hono<AppEnv>()
       plateCount: fields.plateCount,
       slicer: fields.slicer || null,
       prefill: fields.prefill,
+      objects: fields.objects,
       deletedAt: null,
     };
     const itemId = found.attempt.itemId;

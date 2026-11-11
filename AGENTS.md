@@ -170,6 +170,11 @@ Never edit a migration that has been merged; add a new one.
 - Slicer files (`attempt_files`, one live per attempt) are read in the browser (`shared/threemf`); the client sends what it read (`prefill`), the plate's PNG and, under `MAX_SLICER_FILE_BYTES`, the bytes, through the outbox behind the attempt (`files` in an outbox entry). R2 keys are `files/<id>/file` and `/thumb`, served at `/api/files/:id` and `/api/files/:id/thumb` only while the file, its attempt and its build are live. The purge removes them with their attempt.
 - The fields marked "from the file" are the ones still equal to `file.prefill` (`sameAsFile`, `filamentFromFile`).
 
+### Parts and quantities
+
+- Optional ([0022](docs/decisions/0022-parts-are-optional-counts-live-on-attempts.md)): `parts` table (`item.parts`), hard-deleted (the app's undo PUTs the same id back), and `attempts.parts` JSON `[{ partId, count }]`. The rules (tidying and grouping object names, progress, labels, counts per outcome) are pure in `shared/parts.ts`; `lib/parts.ts` has the optimistic writes; the UI is `components/builds/parts/` (`PartsSection` on the build page, `PartsEditor` lazy) and `attempt-sheet/PlateParts` (the sheet's `parts` field, `useOutcomeCounts`). An attempt's slicer file stores its plate's object names (`attempt_files.objects`), which feed "Parts from the file" and the preselected plate parts.
+- Part names are searchable through the item row's `tags` column (the `search_item_tags` view and triggers in migration 0018; `scripts/db-export.ts` re-creates them).
+
 ### Recipes
 
 - A recipe (`recipes` table, [0017](docs/decisions/0017-recipes-are-frozen-attempts.md)) is an attempt that worked, named: `POST /api/recipes { id, name, note?, sourceAttemptId }` reads the settings from the attempt (`recipeSettings` in `shared/recipes.ts`), so settings are never sent or edited; `PATCH` changes the name and note only. Pure rules (matching by material and finish, search terms, `startFromRecipe`) are in `shared/recipes.ts`; the client's cache and writes (optimistic save, rename, delete with undo) in `lib/recipes.ts`, query root `recipes` (persisted, refreshed by `recipe` changes in `lib/live.ts`).

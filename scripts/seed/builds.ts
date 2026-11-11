@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { APIRequestContext, Browser } from "@playwright/test";
-import { SLICER_FILE_NAME, slicerFile } from "../../e2e/fixtures/slicer-file.ts";
+import { PARTS_FILE_NAME, partsSlicerFile, SLICER_FILE_NAME, slicerFile } from "../../e2e/fixtures/slicer-file.ts";
 import type { AttemptSettings, Outcome } from "../../src/shared/attempts.ts";
 import { readThreeMf, settingsFromFile } from "../../src/shared/threemf/index.ts";
 import { executeSql, root } from "../lib/wrangler.ts";
@@ -47,6 +47,10 @@ interface SeedAttempt {
   photos?: SeedPhoto[];
   /** Printed from the fixture slicer file (e2e/fixtures/slicer-file.ts): true is plate 1, 2 is the hook plate. */
   slicerFile?: boolean | 2;
+  /** Printed from the paddle steamer's file (plate 1: hull halves and deck, 2: the wheel). */
+  partsFile?: 1 | 2;
+  /** What it printed of the build's parts, by name, with the good pieces. */
+  parts?: Array<{ name: string; count: number }>;
 }
 
 interface SeedBuild {
@@ -58,6 +62,8 @@ interface SeedBuild {
   startedAgo: number;
   finishedAgo?: number;
   attempts: SeedAttempt[];
+  /** A build made of parts (the others stay simple). */
+  parts?: Array<{ name: string; quantity: number }>;
 }
 
 /** Stable ids, so screenshots can open a build or an attempt. */
@@ -73,6 +79,8 @@ export const SEED_BUILD_IDS = {
   /** A print that finished printing and waits to hear how it went. */
   drawerDivider: "5eed0000-0000-4000-8000-000000000108",
   drawerDividerAttempt: "5eed0000-0000-4000-8000-0000000f0902",
+  /** The one build with parts: a hull in two halves, a deck and a paddle wheel, from a slicer file. */
+  paddleSteamer: "5eed0000-0000-4000-8000-000000000109",
 };
 
 const yellowPla = { type: "PLA", brand: "Bambu", colorHex: "#f2c230", colorName: "Sunflower yellow", amsSlot: "A2" };
@@ -813,6 +821,75 @@ const OLDER_BUILDS: SeedBuild[] = [
       },
     ],
   },
+  {
+    id: SEED_BUILD_IDS.paddleSteamer,
+    by: "alex",
+    create: {
+      title: "Paddle steamer",
+      note: "Hull in two halves, a deck and a paddle wheel. Glue them up when all four are done.",
+      createdAgo: 9 * DAY,
+      asIdea: true,
+    },
+    stage: "building",
+    startedAgo: 8 * DAY,
+    parts: [
+      { name: "Hull half", quantity: 2 },
+      { name: "Deck", quantity: 1 },
+      { name: "Paddle wheel", quantity: 1 },
+    ],
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000fa001",
+        by: "alex",
+        ago: 6 * DAY,
+        outcome: "failed",
+        finishedAfter: 95 * MIN,
+        note: "Both halves curled at the stern.",
+        failureTags: ["warping"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          bedTemperature: 55,
+          estimatedMinutes: 150,
+          failedAtPercent: 60,
+        },
+        partsFile: 1,
+        parts: [
+          { name: "Hull half", count: 0 },
+          { name: "Deck", count: 0 },
+        ],
+        photos: [{ file: "spaghetti-fail.svg", color: "#756f67" }],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000fa002",
+        by: "alex",
+        ago: 4 * DAY,
+        outcome: "partial",
+        finishedAfter: 160 * MIN,
+        note: "Brim helped. One hull half is clean, the other has a rough bow.",
+        successNotes: ["great-first-layer"],
+        failureTags: ["layer-lines"],
+        settings: {
+          filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
+          bedType: "Textured PEI Plate",
+          layerHeight: 0.2,
+          infillDensity: 15,
+          brim: true,
+          bedTemperature: 60,
+          estimatedMinutes: 150,
+          actualMinutes: 158,
+        },
+        partsFile: 1,
+        parts: [
+          { name: "Hull half", count: 1 },
+          { name: "Deck", count: 1 },
+        ],
+        photos: [{ file: "tugboat.svg", color: "#867362", crop: [120, 200, 700, 520] }],
+      },
+    ],
+  },
 ];
 
 /** Logs the attempts through the API, then backdates the dates the API sets to "now". */
@@ -834,6 +911,20 @@ export async function seedBuilds(
       });
       if (!created.ok()) throw new Error(`Seeding build ${build.id} failed: ${created.status()}`);
     }
+    const partIds = new Map<string, string>();
+    if (build.parts) {
+      const created = await requests[build.by].put(`/api/items/${build.id}/parts`, {
+        headers,
+        data: {
+          parts: build.parts.map((part) => {
+            const id = crypto.randomUUID();
+            partIds.set(part.name, id);
+            return { id, ...part };
+          }),
+        },
+      });
+      if (!created.ok()) throw new Error(`Seeding the parts of ${build.id} failed: ${created.status()}`);
+    }
     for (const attempt of build.attempts) {
       const request = requests[attempt.by];
       const created = await request.post(`/api/items/${build.id}/attempts`, {
@@ -846,25 +937,30 @@ export async function seedBuilds(
           failureTags: attempt.failureTags ?? [],
           successNotes: attempt.successNotes ?? [],
           settings: linkSeedSpools(attempt.settings),
+          ...(attempt.parts
+            ? { parts: attempt.parts.map((part) => ({ partId: partIds.get(part.name), count: part.count })) }
+            : {}),
         },
       });
       if (!created.ok()) throw new Error(`Seeding attempt ${attempt.id} failed: ${created.status()}`);
-      if (attempt.slicerFile) {
-        const bytes = slicerFile();
+      if (attempt.slicerFile || attempt.partsFile) {
+        const bytes = attempt.partsFile ? partsSlicerFile() : slicerFile();
+        const fileName = attempt.partsFile ? PARTS_FILE_NAME : SLICER_FILE_NAME;
         const read = readThreeMf(bytes);
-        const plate = attempt.slicerFile === 2 ? 2 : 1;
+        const plate = attempt.partsFile ?? (attempt.slicerFile === 2 ? 2 : 1);
         const thumb = read.plates[plate - 1]?.thumbnail?.bytes;
         const uploaded = await request.put(`/api/attempts/${attempt.id}/file`, {
           headers,
           multipart: {
             id: crypto.randomUUID(),
-            name: SLICER_FILE_NAME,
+            name: fileName,
             size: String(bytes.length),
             plate: String(plate),
             plateCount: String(read.plates.length),
             slicer: "BambuStudio 02.01.00.00",
             prefill: JSON.stringify(settingsFromFile(read, plate)),
-            file: { name: SLICER_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
+            objects: JSON.stringify((read.plates[plate - 1]?.objects ?? []).map((object) => object.name)),
+            file: { name: fileName, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
             ...(thumb ? { thumb: { name: "plate_1.png", mimeType: "image/png", buffer: Buffer.from(thumb) } } : {}),
           },
         });
