@@ -512,14 +512,16 @@ export const searchRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const read = parseQuery(q, Date.now());
     const people = await db.select({ id: users.id, name: users.name }).from(users);
-    const firstNames = people.map((person) => ({ id: person.id, name: words(person.name)[0] ?? "" }));
+    // Every word of a name counts ("Carl Oscar's idea": carl and oscar are both Carl Oscar).
+    const nameWords = people.map((person) => ({ id: person.id, words: words(person.name) }));
     const named = splitNames(
       read.terms,
-      firstNames.map((person) => person.name),
+      nameWords.flatMap((person) => person.words),
     );
     // "Marie's idea about the coffee clips": a first name narrows to what that person wrote, unless that finds nothing.
-    const personFromWords =
-      named.names.length === 1 ? firstNames.find((p) => p.name === named.names[0])?.id : undefined;
+    const whose = nameWords.filter((person) => person.words.some((word) => named.names.includes(word)));
+    // Only a name beside other words narrows; "Sam" alone is a word to find (a build called "Sam's coaster").
+    const personFromWords = whose.length === 1 && named.terms.length > 0 ? whose[0]?.id : undefined;
     const custom = await db.select({ kind: tags.kind, slug: tags.slug, label: tags.label }).from(tags);
     const ask = (terms: SearchTerm[], narrowTo?: string) =>
       searchWith(

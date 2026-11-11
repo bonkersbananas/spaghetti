@@ -218,3 +218,27 @@ describe("spools", () => {
     expect((await search("blue")).spools).toEqual([]);
   });
 });
+
+describe("people by name", () => {
+  it("reads a two-word name: 'Carl Oscar's idea about the coffee clips'", async () => {
+    await addUser("carl", "tabby cat fish", "Carl Oscar Aaro", "basil");
+    const carlCookie = await signIn("carl", "tabby cat fish");
+    const mine = await createItem({ title: "Coffee clips", note: "For the desk" });
+    const carls = await createItem({ title: "Coffee clips, round", note: "Thinner" }, carlCookie);
+    for (const q of ["Carl Oscar's idea about the coffee clips", "carl oscar coffee clips", "Oscar's coffee clips"]) {
+      expect(
+        (await search(q)).ideas.map((hit) => hit.item.id),
+        q,
+      ).toEqual([carls.id]);
+    }
+    expect(mine.id).not.toBe(carls.id);
+  });
+
+  it("finds a build called after a person when only the name is typed", async () => {
+    const coaster = await createItem({ title: "Sam's coaster", stage: "building" });
+    await logAttempt(coaster.id, { outcome: "success" }, samCookie);
+    const found = await search("Sam");
+    expect(found.builds.map((hit) => hit.item.id)).toEqual([coaster.id]);
+    expect((await search("Sam's")).builds.map((hit) => hit.item.id)).toEqual([coaster.id]);
+  });
+});
