@@ -104,6 +104,8 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | Column names and labels in the compare sheet | 4.5:1 | 5.6 | 5.6 |
 | A link card's letter tile | 4.5:1 | 6.6 | 7.5 |
 | Attempt count on the outcome strip | 4.5:1 | 5.6 | 6.2 |
+| An open tick box on a card | 3:1 | 3.6 | 4.8 |
+| An open tick box on a sheet | 3:1 | 3.6 | 4.6 |
 
 Badges over photos are measured against a white photo, the worst case. The decorative rim on a spool (below) is the one thing that does not reach 3:1, by design: ink at 35% on a card measures 2.1:1 in light and 2.8:1 in dark (the old 15% rim measured 1.3 and 1.5). A spool's name is always written beside it, so the rim only has to make the disc easy to find, not carry meaning.
 
@@ -205,6 +207,8 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Caution / FromFileMark** — a gentle printer check as one semolina line with a warning icon ("The bed tops out at 120 °C."), beside the field it's about; fields take it as `caution`. Never a dialog, never blocking. `FromFileMark` is the small file glyph after a label (fields take it as `mark`) for a value that came from a slicer file and still matches it.
 - **Disclosure** — optional detail behind one tap, with a one-line summary while closed (an attempt's settings).
 - **ActionBar** — a screen's main action within thumb reach on phones, sitting on the tab bar ("Log attempt", "Start building"). Hidden on desktop, where the action lives in the page. Toasts move up above it while it shows.
+- **LinkChip** (`ui/LinkChip.tsx`) — a small link that leaves the app, as a neutral chip with a small arrow, opened in a new tab: the shop a thing on the shopping list is sold in, its Prisjakt page.
+- **Checklist** (`ui/Checklist.tsx`) — a list to tick off and sort. `TickBox`: a round box (a 24 px ring of ink at 55%, 3:1 on cards and sheets, in a 44 px target, `role="checkbox"`) that turns into a basil-soft disc with a check, springing in (`spring.snappy`) with a `tap()` only when ticked here. `DragHandle` (`ui/DragHandle.tsx`, shared with wishlists; `size="line"` for a 44 px square on a checklist line) starts a drag (motion's `Reorder` with `dragControls`, so a finger on the row still scrolls the page) and moves the row with Up and Down. `ChecklistRow`: the tick box, the name, a line of `LinkChip`s or detail under it, the handle; rows sit on one `checklistSurface` with an inset hairline between them (`last` drops it), `done` steps the name back, `lifted` floats the row on `shadow-float` while it moves.
 - **ChipRow / ChipDivider / FilterGroup** — rows of filter or suggestion chips: on phones a row scrolls sideways edge to edge (with a thin divider between kinds of chips), on desktop it wraps. `FilterGroup` is one kind of filter in a desktop filter column, a caption over its chips.
 - **MetaList** — a line of short pieces with a dot between them ("Black PETG · 0.20 mm · Cool Plate"): settings lines, "attempt 3 · 2 h ago", what changed. It wraps cleanly: a dot never begins or ends a line (each piece carries its dot in a gutter the row clips). Use it for every dot-separated line; `SettingsLine` is built on it.
 - **Highlight** — text with the words a search matched on a semolina highlight, like a pen stroke. A tag chip that matched gets a ring instead.
@@ -230,8 +234,8 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 
 - **Phone (< 768 px):** a page header with a large title (and one line under it: a page's title and subtitle are each written to fit 390 px on one line beside search and the avatar, so the content starts high: "Deleted", not "Recently deleted"), a search button and the account avatar; a bottom tab bar (Today, Ideas, capture, Builds, Journal) with the capture button in the middle. Tabs are places and search is a tool, so search lives in every top-level page header (not on Search itself) and opens the box with the keyboard up.
 - **Desktop:** a fixed left sidebar on `paper-deep` with the mark (which leads to Today), a "New idea" button, the sections (Today first) with keyboard hints, the workshop, and the signed-in person. When a print is on the bed a small card above the account button shows it (thumbnail, name, a ring and "45 min left"; "and 1 more" when there are several), hidden on Today, which shows every print in full. The styleguide is in the account menu and the command palette, not the sidebar.
-- **Workshop:** the Pantry and the Printer sit under a quiet "Workshop" caption in the sidebar (`G P`, `G R`); on phones they are the first rows of the account sheet, so the tab bar keeps its four sections.
-- **Keyboard (desktop):** `⌘K` (Ctrl+K elsewhere) the command palette, `?` the list of shortcuts, `C` capture, `G T` Today, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search, `G P` Pantry, `G R` Printer. Shortcuts are ignored while typing or while a sheet is open; only `⌘K` also works inside a field. Every shortcut is defined once in `src/shared/shortcuts.ts` (see Keyboard and the command palette below).
+- **Workshop:** the Pantry, the Printer and the Shopping list sit under a quiet "Workshop" caption in the sidebar (`G P`, `G R`, `G S`); on phones they are the first rows of the account sheet, so the tab bar keeps its four sections.
+- **Keyboard (desktop):** `⌘K` (Ctrl+K elsewhere) the command palette, `?` the list of shortcuts, `C` capture, `G T` Today, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search, `G P` Pantry, `G R` Printer, `G S` Shopping list. Shortcuts are ignored while typing or while a sheet is open; only `⌘K` also works inside a field. Every shortcut is defined once in `src/shared/shortcuts.ts` (see Keyboard and the command palette below).
 - **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
 - **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
 
@@ -323,6 +327,16 @@ A short thread on every idea and build ("Talk it over", `components/comments/`, 
 - **The printer page** is quiet: the X2D's facts (build volume, limits) and what people change: the nozzles fitted (size, hardened), the plates they own, the AMS units. Spaghetti never talks to the printer, and says so.
 - **Gentle checks** while logging an attempt (`printerHints` in `shared/spools.ts`, from docs/printer.md): a nozzle over 300 °C or a bed over 120 °C, TPU on the auxiliary nozzle or through the AMS, PVA through the AMS, PPS at all, abrasive filament on a nozzle that isn't hardened, a nozzle size that isn't the one fitted. Each is a Caution beside its field; with the settings closed, the first one shows under them.
 
+## Shopping list
+
+`/shopping`, the third row of the Workshop (`G S`; on phones a row of the account sheet): what the printer needs next, shared by both people.
+
+- **One field adds.** "Filament, glue… or paste a link" over the list; Enter adds the line at the top and the field stays for the next (`N` focuses it on desktop). Words are the name, a Prisjakt link (any of its countries) is the price link, any other link is the shop. A thing added as a bare link shows its page's title (`GET /api/links/preview`, without the shop's name after it: `tidyPageTitle`) and keeps it as its name.
+- **What's still to buy** is one `Checklist`: tick box, the name (a button that opens its sheet), the shop's name and "Prisjakt" as `LinkChip`s under it, and a drag handle when there are two or more. Order is the people's own, dragged by the handle or moved with the arrow keys on it, saved when let go.
+- **Ticking off** shows the check at once and leaves the row in place for 450 ms, so the tick is seen, then it moves to **Bought**: a quieter `title` section (newest first, eight then "Show all"), the name struck through and stepped back, the person's avatar and "Sam got it 2 days ago" right under it. Unticking puts it back on top of the list. No toast: the Bought list is the undo. "Clear" takes every bought thing off at once, with one Undo.
+- **A thing's sheet** (a dialog on desktop, a bottom sheet on phones) autosaves its name, shop link and Prisjakt link. With no Prisjakt link the hint offers "Find it on Prisjakt", Prisjakt's search for the name, to find the page and paste it. "Got it" / "Back on the list", and Delete with an Undo toast.
+- **Empty:** the basket (`EmptyBasket`), "The cupboard is full", one sentence and "Add the first thing" (secondary: it focuses the field). Offline the list is readable from the saved copy and nothing changes (`useReadOnly`).
+
 ## Slicer files
 
 - **Drop a .3mf** (Bambu Studio or Orca, project or sliced) on a build (a new attempt), on an attempt in its story (that attempt), or on the open attempt sheet; phones pick one from the sheet's "Add the slicer file" well. The drop overlay says so while dragging over a build.
@@ -404,6 +418,10 @@ Short, warm, plain. Second person, sentence case, no exclamation marks. A pasta 
 2. If a screen needs something the system lacks, add it to the system (a token or a component in `components/ui`), document it here, and show it in `/styleguide`.
 3. Design both layouts: check every screen at 390 px and 1440 px with `pnpm screenshots`, and look at the result before calling it done.
 4. Loading is a skeleton, saving is automatic, deleting is undoable.
+
+## The landing page
+
+What someone signed out sees at `/` ([docs/landing.md](landing.md)): the one place the design language is turned up. Bright and light only, a stack of coloured sheets (sunflower, pink, paper, teal, tomato, the AMS's filament colours) with rounded tops laid over each other, Fraunces at poster size, photos of prints and the app shown in a phone and a laptop drawn around real screenshots. It keeps the app's tokens, faces, chips, outcome colours and voice, so it is clearly the same product, but its pieces are its own (`lp-…` in `src/landing/landing.css`) and never the app's components. On sunflower, pink and teal all text is ink (ink-soft doesn't reach AA there); on tomato it is cream, as on the app's tomato buttons (ink measures only about 3.3:1 on it). Motion is the point here (the name prints itself, things arrive as they come into view, spools turn with the scroll), always transform and opacity, and with reduced motion every piece is at its end state. It never offers sign-up.
 
 ## Offline
 

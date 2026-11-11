@@ -73,6 +73,17 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 - `DELETE /recipes/:id` and `POST /recipes/:id/restore`: soft delete and its undo, people only.
 - A recipe carries `source` (`attemptId`, `itemId`, `title`, `number`, `photo`) while that attempt and its build exist, else `null`.
 
+## The shopping list
+
+Things to buy for the printer, shared by both people. A thing is `{ id, name, link, priceLink, position, boughtAt, boughtBy, createdBy, createdVia, createdAt, updatedAt }`: `link` is the shop's page, `priceLink` its Prisjakt page, `name` may be empty when there is a link (the app shows the page's title), `boughtAt` is null while it is still to buy.
+
+- `GET /shopping-items` (`read`): `{ shoppingItems }`, what's still to buy in its order (`position`, smallest first), then what was bought, the latest first.
+- `POST /shopping-items` `{ id, name?, link?, priceLink? }` (`printer`): needs a name or a link; links must be http(s). It goes on top of the list. Idempotent on `id`; `409 deleted` for an id taken off the list, `422 too_many` past 300 things.
+- `PATCH /shopping-items/:id` `{ name?, link?, priceLink?, bought? }` (`printer`): an empty string or `null` clears a link. `bought: true` ticks it off (now, by whoever asks; ticking again keeps the first), `bought: false` puts it back on top of the list.
+- `PUT /shopping-items/order` `{ ids }` (`printer`): what's still to buy in this order; anything not mentioned keeps its turn after them, bought things are left out. Answers the whole list.
+- `DELETE /shopping-items/:id` and `POST /shopping-items/:id/restore`: soft delete and its undo, people only; purged 30 days after.
+- Every write records a `shopping` change (no `itemId`).
+
 ## Comments
 
 The short thread under an idea or build (decision [0024](decisions/0024-comments-read-state-and-push-batching.md)). A comment is `{ id, itemId, authorId, via, body, createdAt, editedAt }`: `authorId` is the person it counts as (an agent's comment is its owner's, with `via` the agent's id, shown as "via Claude for Alex"), `editedAt` is null until the text changes.
@@ -221,7 +232,7 @@ A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with
 
 A webhook sends the change feed to an address instead of making an agent poll `GET /api/changes`. A person adds one on the Agents page (Webhooks): an `https` address, the kinds of change it wants, and optionally which agent it is for (a label; it doesn't limit what is sent). Managing webhooks is for signed-in people only (`403 person_only` for a token): `GET /api/webhooks`, `POST /api/webhooks` `{ url, kinds, agentId? }`, `DELETE /api/webhooks/:id` and `POST /api/webhooks/:id/restore` (the Undo), `GET /api/webhooks/:id/deliveries`, `POST /api/webhooks/:id/test` ("Send a test event", sent at once) and `POST /api/webhooks/:id/deliveries/:deliveryId/retry`.
 
-**Kinds** are the change feed's `entity`: `item` (ideas and builds), `attempt`, `photo`, `file`, `comment`, `spool`, `recipe`, `slot`, `printer`, `tag`, `agent`, `person`; or `all`. A webhook starts at the feed's end when it is made: what already happened isn't sent.
+**Kinds** are the change feed's `entity`: `item` (ideas and builds), `attempt`, `photo`, `file`, `comment`, `spool`, `recipe`, `shopping` (the shopping list), `slot`, `printer`, `tag`, `agent`, `person`, `wishlist`; or `all`. A webhook starts at the feed's end when it is made: what already happened isn't sent.
 
 **The secret** (`whsec_…`) is shown once, when the webhook is made, and only its first characters can be read afterwards. It is kept encrypted so Spaghetti can sign with it ([decision 0025](decisions/0025-webhooks-signed-from-the-cron.md)); lost it? Add a new webhook and remove the old one.
 

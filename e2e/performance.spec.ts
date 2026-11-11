@@ -29,14 +29,17 @@ const origin = (page: Page) => new URL(page.url()).origin;
  *   /sign-in 193.4   /today 297.0   /ideas 285.9   /builds 284.8   /journal 285.1   /search 290.0   /pantry 294.9   /printer 295.0
  * (Sign-in keeps 194: 0.6 kB of headroom, the screen hasn't changed.)
  */
+// The shopping list adds its sidebar row (basket icon, two shortcuts, feed and cache wiring) to the shell, about 1 kB: after merging
+// main (spool labels, weeks, search questions) Ideas, Builds, Search and Pantry were a fraction over their limits, +1 kB each. Its page,
+// sheet, rows and illustration load on demand.
 const BUDGET_KB = {
   "/sign-in": 194,
   "/today": 299,
-  "/ideas": 287,
-  "/builds": 286,
+  "/ideas": 288,
+  "/builds": 287,
   "/journal": 287,
-  "/search": 292,
-  "/pantry": 296,
+  "/search": 293,
+  "/pantry": 297,
   "/printer": 297,
 } as const;
 

@@ -27,6 +27,7 @@ import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
 import { searchQuery, whatWorkedQuery } from "../routes/search.ts";
 import { credentials, signOutBody } from "../routes/session.ts";
+import { createShoppingItem, shoppingOrder, updateShoppingItem } from "../routes/shopping-items.ts";
 import { createSpool, readLabelBody, spoolPhotoFields, updateSpool, weighBody, weightBody } from "../routes/spools.ts";
 import { createTag } from "../routes/tags.ts";
 import { createTask, logBody, updateTask, upkeepPhotoFields } from "../routes/upkeep.ts";
@@ -666,6 +667,38 @@ export const operations: Record<string, Operation> = {
   },
   "DELETE /recipes/:id": { summary: "Deletes a recipe (it can be restored).", response: "empty", status: 204 },
   "POST /recipes/:id/restore": { summary: "Restores a deleted recipe.", response: one("recipe", z.looseObject({})) },
+
+  // The shopping list.
+  "GET /shopping-items": {
+    summary: "The shopping list: what's still to buy in its order, then what was bought, the latest first.",
+    response: list("shoppingItems", z.looseObject({})),
+  },
+  "POST /shopping-items": {
+    summary: "Adds something to buy (a name, a shop link or both) at the top of the list.",
+    body: createShoppingItem,
+    response: one("shoppingItem", z.looseObject({})),
+    status: 201,
+    errors: { 409: "deleted: that id was taken off the list.", 422: "too_many: the list is full." },
+  },
+  "PUT /shopping-items/order": {
+    summary: "Orders what's still to buy: these ids first; the rest keep their turn after them.",
+    body: shoppingOrder,
+    response: list("shoppingItems", z.looseObject({})),
+  },
+  "PATCH /shopping-items/:id": {
+    summary: "Renames it, changes its shop or Prisjakt link, or ticks it off (`bought`) or back on.",
+    body: updateShoppingItem,
+    response: one("shoppingItem", z.looseObject({})),
+  },
+  "DELETE /shopping-items/:id": {
+    summary: "Takes something off the list (it can be restored).",
+    response: "empty",
+    status: 204,
+  },
+  "POST /shopping-items/:id/restore": {
+    summary: "Puts something taken off the list back.",
+    response: one("shoppingItem", z.looseObject({})),
+  },
 
   // The printer.
   "GET /printer/upkeep": {

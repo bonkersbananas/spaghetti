@@ -2150,6 +2150,37 @@ export const shots: Shot[] = [
       );
     },
   },
+  { name: "shopping", path: "/shopping", fullPage: true },
+  {
+    // A thing on the list, open: its name, the shop and its Prisjakt page.
+    name: "shopping-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Hardened steel nozzle, 0.4 mm", exact: true }).click();
+      await page.getByRole("dialog").getByLabel("Prisjakt").waitFor();
+    },
+  },
+  {
+    // Nothing on the list yet.
+    name: "shopping-empty",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.route("**/api/shopping-items", (route) =>
+        route.request().method() === "GET" ? route.fulfill({ json: { shoppingItems: [] } }) : route.continue(),
+      );
+      await page.reload();
+      await page.getByRole("heading", { name: "The cupboard is full" }).waitFor();
+    },
+    // The empty state's entrance can sit at opacity 0 in a shot: finish it by hand.
+    beforeShot: async (page) => {
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/shopping-items");
+    },
+  },
   // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.

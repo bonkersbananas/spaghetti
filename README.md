@@ -8,6 +8,7 @@ It runs on Cloudflare Workers with D1 and R2, and just as well entirely locally 
 - **Server:** a Hono Worker serving the JSON API under `/api`; the client is served as Workers static assets with SPA fallback.
 - **Data:** D1 through Drizzle ORM (migrations in `migrations/`), photos in the R2 bucket bound as `PHOTOS`.
 - **Design:** [docs/design.md](docs/design.md), live at `/styleguide` once signed in.
+- **Landing page:** what someone signed out sees at `/`, a static page of its own ([docs/landing.md](docs/landing.md)); its pictures come from `pnpm landing:shots`.
 
 ## Run it locally
 

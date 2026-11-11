@@ -1,4 +1,4 @@
-# 0034. The 3D view reads the slicer file in the browser and loads only when asked for
+# 0036. The 3D view reads the slicer file in the browser and loads only when asked for
 
 Status: Accepted
 
