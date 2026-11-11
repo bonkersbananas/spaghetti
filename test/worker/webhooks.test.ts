@@ -380,6 +380,25 @@ describe("delivering changes", () => {
     );
   });
 
+  it("says so, without contacting the receiver or retrying, when the stored secret can't be read", async () => {
+    const { made } = await make();
+    await createItem();
+    const key = env.WEBHOOK_SECRET_KEY;
+    env.WEBHOOK_SECRET_KEY = "another-key";
+    const sent = stubWeb();
+    try {
+      await runWebhooks(env);
+    } finally {
+      env.WEBHOOK_SECRET_KEY = key;
+    }
+    expect(sent).toHaveLength(0);
+    expect((await deliveries(made?.webhook.id ?? ""))[0]).toMatchObject({
+      status: "failed",
+      attempts: 1,
+      error: "The signing secret can't be read on the server. Add the webhook again.",
+    });
+  });
+
   it("sends nothing for a deleted webhook", async () => {
     const { made } = await make();
     await request(`/api/webhooks/${made?.webhook.id}`, { method: "DELETE", cookie });

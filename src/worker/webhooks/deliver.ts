@@ -73,7 +73,18 @@ export async function post(
       }
     }
     const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = await sign(await openSecret(env, webhook.secretEnc), timestamp, delivery.payload);
+    let signature: string;
+    try {
+      signature = await sign(await openSecret(env, webhook.secretEnc), timestamp, delivery.payload);
+    } catch {
+      // Our side, not the receiver's: the stored secret can't be read (the server key changed or is gone). Retrying won't help.
+      return {
+        ok: false,
+        status: null,
+        error: "The signing secret can't be read on the server. Add the webhook again.",
+        final: true,
+      };
+    }
     const response = await fetch(url, {
       method: "POST",
       redirect: "manual",
