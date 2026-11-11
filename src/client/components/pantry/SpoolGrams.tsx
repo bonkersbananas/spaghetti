@@ -74,7 +74,7 @@ export function UsedBy({ spool }: { spool: Spool }) {
     .slice(0, 8);
   if (!rows.length) return null;
   return (
-    <Section id="used-by" title="What used it" size="title">
+    <Section id="used-by" title="What used it">
       <ul className="flex flex-col gap-2.5 md:max-w-md">
         {rows.map((row) => (
           <li

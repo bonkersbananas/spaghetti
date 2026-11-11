@@ -14,8 +14,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon, PrinterIcon } from "@/components/ui/icons";
-import { Overline } from "@/components/ui/Overline";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -88,6 +87,38 @@ function Pantry() {
     ? `${spools.length} ${spools.length === 1 ? "spool" : "spools"} on hand, ${loaded} loaded in the printer.`
     : "Every spool on hand, and what's loaded in the AMS.";
 
+  // The spools by material: under "All spools" on desktop, straight on the page on phones.
+  const materials = (
+    <div className="flex flex-col gap-10 md:gap-12">
+      {groups(spools ?? []).map((group) => (
+        <Section
+          key={group.material}
+          id={`material-${group.material}`}
+          // Under "All spools" on desktop; on phones, where that heading isn't drawn, they are the page's own sections.
+          as={isDesktop ? "h3" : "h2"}
+          title={group.material}
+          count={group.spools.length}
+          size={view === "list" ? "overline" : "title"}
+        >
+          {view === "list" ? (
+            <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label={`${group.material} spools`}>
+              {[...group.spools].sort(byRemaining).map((spool) => (
+                <SpoolRow key={spool.id} spool={spool} draggable={!readOnly} />
+              ))}
+            </ul>
+          ) : (
+            <ul className={grid} aria-label={`${group.material} spools`}>
+              {group.spools.map((spool) => (
+                <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
+              ))}
+            </ul>
+          )}
+          <GroupRecipesIfAny material={group.material} />
+        </Section>
+      ))}
+    </div>
+  );
+
   return (
     <>
       <PageHeader
@@ -143,68 +174,41 @@ function Pantry() {
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
-          <section aria-labelledby="loaded" className="flex flex-col gap-4 md:gap-5">
-            <div className="flex items-baseline justify-between gap-3">
-              <SectionHeading id="loaded">In the printer</SectionHeading>
-              {isDesktop && (
+          <Section
+            id="loaded"
+            title="In the printer"
+            aside={
+              isDesktop && (
                 <p className="text-small text-ink-faint">Drag a spool onto a slot, or click a slot to change it.</p>
-              )}
-            </div>
+              )
+            }
+          >
             <AmsLoadout readOnly={readOnly} onAddSpool={(slot) => openAdd(slot)} />
-          </section>
+          </Section>
           <RunningLow low={low} />
-          {isDesktop && (
-            <div className="-mb-6 flex items-center justify-between gap-4">
-              <SectionHeading id="all-spools" count={spools.length}>
-                All spools
-              </SectionHeading>
-              <SegmentedControl<PantryView>
-                label="View"
-                labelHidden
-                options={[
-                  { value: "cards", label: "Cards" },
-                  { value: "list", label: "List" },
-                ]}
-                value={view}
-                onChange={setView}
-                className="w-48"
-              />
-            </div>
-          )}
-          {groups(spools).map((group) =>
-            view === "list" ? (
-              <section
-                key={group.material}
-                aria-labelledby={`material-${group.material}`}
-                className="flex flex-col gap-3"
-              >
-                <Overline id={`material-${group.material}`} as="h3" count={group.spools.length}>
-                  {group.material}
-                </Overline>
-                <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label={`${group.material} spools`}>
-                  {[...group.spools].sort(byRemaining).map((spool) => (
-                    <SpoolRow key={spool.id} spool={spool} draggable={!readOnly} />
-                  ))}
-                </ul>
-                <GroupRecipesIfAny material={group.material} />
-              </section>
-            ) : (
-              <section
-                key={group.material}
-                aria-labelledby={`material-${group.material}`}
-                className="flex flex-col gap-4"
-              >
-                <SectionHeading id={`material-${group.material}`} size="title" count={group.spools.length}>
-                  {group.material}
-                </SectionHeading>
-                <ul className={grid} aria-label={`${group.material} spools`}>
-                  {group.spools.map((spool) => (
-                    <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
-                  ))}
-                </ul>
-                <GroupRecipesIfAny material={group.material} />
-              </section>
-            ),
+          {isDesktop ? (
+            <Section
+              id="all-spools"
+              title="All spools"
+              count={spools.length}
+              aside={
+                <SegmentedControl<PantryView>
+                  label="View"
+                  labelHidden
+                  options={[
+                    { value: "cards", label: "Cards" },
+                    { value: "list", label: "List" },
+                  ]}
+                  value={view}
+                  onChange={setView}
+                  className="w-48"
+                />
+              }
+            >
+              {materials}
+            </Section>
+          ) : (
+            materials
           )}
         </div>
       )}
