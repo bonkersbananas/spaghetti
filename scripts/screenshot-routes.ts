@@ -1356,6 +1356,7 @@ export const shots: Shot[] = [
   {
     name: "authorize",
     path: "/agents",
+    fullPage: true,
     prepare: async (page) => {
       const registered = await page.request.post("/oauth/register", {
         data: { client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] },

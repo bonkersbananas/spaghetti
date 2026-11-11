@@ -208,7 +208,7 @@ function ConnectedCard({
         <div className="min-w-0 flex-1">
           <h2 className="text-lead text-ink font-semibold break-words">{agent.name}</h2>
           <p className="text-small text-ink-faint">
-            Signed in with {connection.app} for {displayName(owner, "you")}
+            Signed in with {connection.app} · acts for {displayName(owner, "you")}
           </p>
         </div>
       </div>
