@@ -94,3 +94,14 @@ test("a file with no G-code says so instead of drawing nothing", async ({ page }
     timeout: 20_000,
   });
 });
+
+test("when the viewer's code can't be fetched, the sheet says so and the page stays", async ({ page }) => {
+  await signIn(page);
+  const itemId = await buildWithTugboat(page);
+  await page.goto(`/builds/${itemId}`);
+  await page.route(/PrintViewer/, (route) => route.abort());
+  await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await expect(dialog.getByText(/needs a connection/)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Try again" })).toBeVisible();
+});
