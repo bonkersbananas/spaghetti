@@ -27,6 +27,8 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   // Comments: agents write and edit their own (through their owner's name); deleting is for people.
   ["POST", new RegExp(`^/items/${id}/comments$`), ["capture", "attempts"]],
   ["PATCH", new RegExp(`^/comments/${id}$`), ["capture", "attempts"]],
+  // A build's parts: agents add and change them; removing one is for people.
+  ["PUT", new RegExp(`^/items/${id}/parts$`), ["attempts"]],
   ["PATCH", new RegExp(`^/attempts/${id}$`), ["attempts"]],
   ["POST", new RegExp(`^/attempts/${id}/finish$`), ["attempts"]],
   ["PUT", new RegExp(`^/attempts/${id}/file$`), ["attempts"]],

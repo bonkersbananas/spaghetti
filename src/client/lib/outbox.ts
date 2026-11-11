@@ -9,6 +9,7 @@ import type {
   PhotoResponse,
 } from "@shared/api";
 import type { AttemptSettings, Outcome } from "@shared/attempts";
+import type { AttemptPart } from "@shared/parts";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
 import { isOnline, reportReachable, reportUnreachable, subscribeConnection } from "./connection";
@@ -36,6 +37,8 @@ export interface PendingAttempt {
   failureTags: string[];
   successNotes: string[];
   settings: AttemptSettings;
+  /** What it printed of the build's parts. */
+  parts?: AttemptPart[];
   createdBy: string;
   createdAt: number;
 }
@@ -56,11 +59,13 @@ export interface PendingFile {
   plateCount: number;
   slicer?: string;
   prefill: AttemptSettings;
+  /** The object names on the plate (for parts). */
+  objects?: string[];
   queuedAt: number;
 }
 
 export type PendingAttemptChanges = Partial<
-  Pick<PendingAttempt, "outcome" | "printedAt" | "note" | "failureTags" | "successNotes" | "settings">
+  Pick<PendingAttempt, "outcome" | "printedAt" | "note" | "failureTags" | "successNotes" | "settings" | "parts">
 >;
 
 /**
@@ -505,6 +510,7 @@ class Outbox {
           failureTags: pending.failureTags,
           successNotes: pending.successNotes,
           settings: pending.settings,
+          ...(pending.parts?.length ? { parts: pending.parts } : {}),
         },
       }));
     } catch (error) {
@@ -533,6 +539,7 @@ class Outbox {
           failureTags: current.failureTags,
           successNotes: current.successNotes,
           settings: current.settings,
+          ...(current.parts ? { parts: current.parts } : {}),
         },
       }).catch(() => ({ attempt })));
     }
@@ -595,6 +602,7 @@ class Outbox {
     form.set("plateCount", String(pending.plateCount));
     if (pending.slicer) form.set("slicer", pending.slicer);
     form.set("prefill", JSON.stringify(pending.prefill));
+    if (pending.objects?.length) form.set("objects", JSON.stringify(pending.objects));
     if (pending.thumb) form.set("thumb", pending.thumb, "thumb.png");
     if (pending.file) form.set("file", pending.file, pending.name);
     const response = await send(`/api/attempts/${pending.attemptId}/file`, form, () => undefined);

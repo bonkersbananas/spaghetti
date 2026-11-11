@@ -37,8 +37,17 @@ const tables = listed.flatMap((result) => result.results.map((row) => row.name))
 if (!tables.length) throw new Error("No tables found: has the database been migrated?");
 
 wrangler(["d1", "export", "DB", target, "--output", output, ...tables.flatMap((table) => ["--table", table])]);
+// Later migrations changed the item row's triggers (for whom, part names): the tail of 0019 has the final ones.
+const parts = readFileSync(join(root, "migrations/0019_parts-and-quantities.sql"), "utf8");
+const itemTags = parts.slice(parts.indexOf("CREATE VIEW `search_item_tags`"));
 appendFileSync(
   output,
-  `\n-- The search index (FTS5), rebuilt from the rows above.\n${readFileSync(join(root, "migrations/0003_search.sql"), "utf8")}`,
+  `\n-- The search index (FTS5), rebuilt from the rows above.\n${readFileSync(join(root, "migrations/0003_search.sql"), "utf8")}` +
+    `\n--> statement-breakpoint\nDROP TRIGGER \`search_items_insert\`;\n--> statement-breakpoint\n` +
+    "CREATE TRIGGER `search_items_insert` AFTER INSERT ON `items` BEGIN\n" +
+    "\tINSERT INTO search (kind, ref_id, item_id, title, body, tags)\n" +
+    "\tVALUES ('item', NEW.id, NEW.id, coalesce(NEW.title, ''), NEW.note, coalesce(NEW.for_whom, ''));\nEND;\n" +
+    `--> statement-breakpoint\n${itemTags}\n--> statement-breakpoint\n` +
+    "UPDATE search SET tags = (SELECT tags FROM search_item_tags WHERE item_id = ref_id) WHERE kind = 'item';\n",
 );
 console.log(`✓ Exported ${tables.length} tables and the search index to ${output}`);

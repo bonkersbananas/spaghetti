@@ -1,4 +1,4 @@
-# 0022. Comments between the two of you: read state per person, one push for a burst
+# 0023. Comments between the two of you: read state per person, one push for a burst
 
 Status: Accepted
 

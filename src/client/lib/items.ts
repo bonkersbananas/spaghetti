@@ -115,6 +115,8 @@ export function viewAttempts(
     const waiting = pendingFiles.find((file) => file.attemptId === attempt.id);
     return {
       ...attempt,
+      // A copy saved before parts existed has none.
+      parts: attempt.parts ?? [],
       changes: before ? describeChanges(before.settings, attempt.settings) : [],
       file: waiting ? { ...fromPendingFile(waiting), replaces: attempt.file } : attempt.file,
       number: index + 1,
@@ -135,6 +137,7 @@ function fromPendingFile(file: PendingFile): AttemptFileView {
     plateCount: file.plateCount,
     slicer: file.slicer ?? null,
     prefill: file.prefill,
+    objects: file.objects ?? [],
     createdAt: file.queuedAt,
     pending: true,
   };
@@ -281,6 +284,7 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     finishedBy: attempt.outcome ? attempt.createdBy : null,
     createdVia: null,
     finishedVia: null,
+    parts: attempt.parts ?? [],
     changes: [],
     file: null,
     updatedAt: attempt.createdAt,
@@ -333,6 +337,7 @@ function withOutbox(item: Item, state: OutboxState): ItemView {
     // A pending attempt on an idea makes it a build straight away, as the server will.
     stage: item.stage === "idea" && entry?.attempts?.length ? "building" : item.stage,
     photos: entry ? sortPhotos(photos) : photos,
+    parts: item.parts ?? [],
     attempts: withAttempts(item.id, item.attempts, entry),
     pending: false,
   };
@@ -355,6 +360,7 @@ function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
     coverPhotoId: null,
     upNext: null,
     forWhom: null,
+    parts: [],
     photos: sortPhotos(pendingPhotos(entry, state, [])),
     attempts: withAttempts(entry.itemId, [], entry),
     draft: null,

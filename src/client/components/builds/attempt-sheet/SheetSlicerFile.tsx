@@ -42,12 +42,15 @@ export function useSlicerFile({
   settings,
   onSettings,
   onReady,
+  onObjects,
   incomingFile,
 }: {
   open: boolean;
   settings: AttemptSettings;
   onSettings: (settings: AttemptSettings) => void;
   onReady?: (draft: SlicerFileDraft, plate: number | null, prefill: AttemptSettings) => void;
+  /** The object names on the plate that was read: the build's parts it prints. */
+  onObjects?: (objects: string[]) => void;
   incomingFile?: { file: File; key: number } | null;
 }) {
   const queryClient = useQueryClient();
@@ -65,6 +68,7 @@ export function useSlicerFile({
     setState({ draft, plate, prefill, unknown: linked.unknown });
     setSettingsKey((key) => key + 1);
     onReady?.(draft, plate, prefill);
+    onObjects?.((plateOf(draft, plate)?.objects ?? []).map((object) => object.name));
   };
   const receive = async (file: File) => {
     const draft = await readSlicerFile(file);

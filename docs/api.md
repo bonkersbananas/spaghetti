@@ -29,7 +29,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
 | `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`, `POST /items/:id/comments` and `PATCH /comments/:id` (your agent's own comments; see Comments). |
-| `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`, `POST /items/:id/comments` and `PATCH /comments/:id` (as with `capture`). |
+| `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `PUT /items/:id/parts`, `POST /tags`, `POST /items/:id/comments` and `PATCH /comments/:id` (as with `capture`). |
 | `printer` | `POST /printer/upkeep`, `PATCH /printer/upkeep/:id`, `POST /printer/upkeep/:id/done`, `PUT /printer/upkeep/logs/:logId/photo/:photoId`, `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
 The rules are one table, `src/worker/auth/scopes.ts`: any route not listed there is person-only, so a new endpoint is closed to tokens until it is given a scope. Routes that need to look at the body (a photo's `attemptId`, the fields of a `PATCH`) narrow it with `canUse` / `missingScope`. `test/worker/agents.test.ts` has a case per row.
@@ -72,7 +72,7 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 
 ## Comments
 
-The short thread under an idea or build (decision [0022](decisions/0022-comments-read-state-and-push-batching.md)). A comment is `{ id, itemId, authorId, via, body, createdAt, editedAt }`: `authorId` is the person it counts as (an agent's comment is its owner's, with `via` the agent's id, shown as "via Claude for Alex"), `editedAt` is null until the text changes.
+The short thread under an idea or build (decision [0023](decisions/0023-comments-read-state-and-push-batching.md)). A comment is `{ id, itemId, authorId, via, body, createdAt, editedAt }`: `authorId` is the person it counts as (an agent's comment is its owner's, with `via` the agent's id, shown as "via Claude for Alex"), `editedAt` is null until the text changes.
 
 - `GET /items/:id/comments` (`read`): `{ comments, readAt }`, oldest first, deleted ones left out. `readAt` is how far the signed-in person has read (epoch ms, null if never); the other person's comments after it are the unread ones.
 - `POST /items/:id/comments` `{ id, body }` (`capture` or `attempts`): `body` is trimmed, 1 to 2000 characters. Idempotent on `id` (a repeat returns the same comment). A person writing also counts as having read the thread; an agent doesn't. Records a `comment` change (`created`) for the item.
@@ -81,6 +81,16 @@ The short thread under an idea or build (decision [0022](decisions/0022-comments
 - `POST /items/:id/comments/read` and `GET /comments/unread` (`{ threads: [{ itemId, count, latestAt }] }`): the signed-in person's read state; people only.
 
 A new comment also sends one web push to the other person, with a short wait so a burst is one push. Comments are not in search yet. `GET /builds/:id/story.md` ends with a "Comments" section.
+
+## Parts and quantities
+
+A build may be made of parts ("Hull half" ×2, "Deck" ×1); most builds have none. Parts come with the item (`item.parts`, in order: `{ id, itemId, name, quantity, position, photoId }`), and an attempt says what it printed with `attempt.parts`: `[{ partId, count }]`, the good pieces that came out (while the print is still printing, how many are on the plate; they count once it has an outcome). Worked and partly worked prints count their pieces; a spaghetti counts none unless counts are sent. A part's progress is the sum of its counts over the build's finished attempts (`shared/parts.ts`).
+
+- `PUT /items/:id/parts` `{ parts: [{ id, name, quantity, photoId?, position? }] }` adds the parts listed and changes the ones that exist; the others are left alone. Idempotent on `id`, and it is the undo of a removal too. `attempts` scope. `photoId` is one of the build's photos.
+- `DELETE /items/:id/parts/:partId` removes a part (people only). Attempts keep their counts for it; they show nothing once the part is gone.
+- `parts` is accepted on `POST /items/:id/attempts`, `PATCH /attempts/:id` (replaces the list) and `POST /attempts/:id/finish`. Without `parts`, an attempt that goes from printing to spaghetti has its counts set to 0; one that worked keeps what was on the plate.
+- `GET /search` finds builds by part name, and each attempt hit has a `partsLabel` ("Hull half ×2, Deck"). `GET /builds/:id/story.md` has a Parts section and names parts on attempts.
+- An attempt's slicer file keeps the object names of its plate (`file.objects`, sent as the `objects` JSON field of `PUT /attempts/:id/file`); the app offers them as parts.
 
 ## Insights
 

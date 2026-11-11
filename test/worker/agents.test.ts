@@ -212,6 +212,13 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     json: { id: uuid() },
   },
   {
+    name: "add a build's parts",
+    scope: "attempts",
+    method: "PUT",
+    path: `/api/items/${itemId}/parts`,
+    json: { parts: [{ id: uuid(), name: "Deck", quantity: 1 }] },
+  },
+  {
     name: "edit an attempt",
     scope: "attempts",
     method: "PATCH",
