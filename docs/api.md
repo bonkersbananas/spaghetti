@@ -18,7 +18,7 @@ Authorization: Bearer spg_…
 - With an `Authorization` header only the token counts: an unknown, malformed or revoked one is `401 invalid_token`, never retried as a cookie. Revoking takes effect on the next request.
 - A token never needs CSRF headers (cookies do; a bearer header can't be sent cross-site by a browser).
 - Signed-out or no credentials: `401 signed_out`.
-- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), change a password (`PUT /api/account/password`), or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
+- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), change a password (`PUT /api/account/password`), manage passkeys, sign-in links, invites or devices, or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
 - `last_used` on a token moves at most every 5 minutes.
 
 ## Scopes
@@ -98,6 +98,23 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 ## Changing your own password
 
 `PUT /api/account/password` with `{ currentPassword, newPassword }` (person-only). The new password needs at least 10 characters and no other rule, and must differ from the current one. It signs out the person's **other** sessions and keeps the one making the request; the answer is `{ signedOut }`, how many devices that was. Errors: `400 too_short`, `400 same_password`, `403 wrong_password`, and `429 rate_limited` after five wrong current passwords in 15 minutes (counted per person in `password_failures`, cleared on success).
+
+## Passkeys, sign-in links, invites and devices (people only)
+
+Everything here is person-only: a token gets `403 person_only` on every route below, including the reads, and can never add a passkey, make a link or an invite, or see any of them ([0023](decisions/0023-passkeys-sign-in-links-and-invites.md)). Types are in `src/shared/signing-in.ts`. Secrets are single-use, only their SHA-256 is stored, and they are shown once, in the response that makes them. Ceremonies use `@simplewebauthn`'s JSON: `{ ceremonyId, options }` to start, and `{ ceremonyId, response }` to answer; a ceremony is good for five minutes and one answer.
+
+Signed in (cookie):
+
+- `GET /api/account/passkeys` → `{ passkeys: [{ id, name, createdAt, lastUsedAt, backedUp }] }`; `POST /api/account/passkeys/options` starts adding one (user verification required, discoverable) and `POST /api/account/passkeys` finishes it (`201`; `400 not_verified` for a wrong challenge, origin or relying party, `400 expired`, `409 exists`, `409 too_many` above 12). `PATCH /api/account/passkeys/:id { name }` renames, `DELETE` removes (your own only).
+- `POST /api/account/sign-in-links` → `201 { id, url, code, createdAt, expiresAt, usedOn, usedAt }`: a link (`/link#spl_…`, the secret is in the fragment) and a code (`ABCD-EFGH`), valid ten minutes, once; it replaces the person's earlier unused link. `GET /api/account/sign-in-links/:id` says whether and where it was used (`usedOn`: "iPhone"), `DELETE` withdraws it. Using one records a `signin` change.
+- `GET /api/account/invites` lists pending invites (anyone signed in sees all of them); `POST` makes one (`201 { id, url, … }`, `url` is `/join#spi_…`, valid seven days, at most 10 waiting); `DELETE /api/account/invites/:id` withdraws it.
+- `GET /api/account/devices` lists your signed-in sessions (device from the user agent, `lastSeenAt`, `current`); `DELETE /api/account/devices/:id` signs one out (`400 current` for this one); `POST /api/account/devices/sign-out-others` → `{ signedOut }`.
+
+Not signed in (rate limited; `429 rate_limited`):
+
+- `POST /api/session/passkey/options`, then `POST /api/session/passkey { ceremonyId, response }`: signs in with a passkey (`401 wrong_credentials` for anything wrong, replayed, expired, from another origin or with a counter that went backwards).
+- `POST /api/session/link { token }` or `{ code }`: signs in as the person who made the link (`410 link_gone` when used or expired).
+- `POST /api/join/peek { token }` → `{ invitedBy, expiresAt }` (`410 invite_gone`); `POST /api/join/options { token, name, username, color }` starts a passkey for the new person; `POST /api/join { token, name, username, color, password | passkey: { ceremonyId, response } }` creates that one person, claims the invite and signs them in (`201`; `409 username_taken` leaves the invite usable, `400 too_short` for a password under 10 characters).
 
 ## Drafting an idea from a model page (people only)
 

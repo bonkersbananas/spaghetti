@@ -516,7 +516,7 @@ test("empty states and sign-in pass axe", async ({ page }) => {
   }
   await page.context().clearCookies();
   await page.goto("/sign-in");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expectAccessible(page, "Sign-in");
 });
 

@@ -230,6 +230,12 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
 - **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
 
+## Signing in
+
+The sign-in screen, the "sign in on another device" page (`/link`) and the invite page (`/join`) share one frame, `AuthPage`: the mark, the name, a line of lead, one card, one obvious action. On the sign-in screen the primary button is the passkey ("Sign in with Face ID" on an iPhone, "Touch ID" on a Mac, "a passkey" elsewhere) and the name and password form sits right under it, a quiet "or with your name and password" between them, its button secondary; where passkeys aren't available the password button is the primary one. A used or expired link or invite is one calm sentence and a way back, never an error page.
+
+In the account menu the rows live under a quiet "Signing in" heading: the passkey row (named "Sign in with Face ID next time" until this device has one, then "Passkeys"), "Sign in on another device", "Signed-in devices", "Change password". "Invite someone" sits with Agents and Notifications. Each opens a sheet. New pieces, all on the styleguide ("Signing in"): `QrCard` (dark on light in both themes, tokens `qr-bg` and `qr-ink`; desktop shows the QR, phones the link to share), `CodeDisplay` (the short code, large and grouped, with Copy), `InfoRow` (a passkey, a signed-in device, a waiting invite: icon, name, a quiet line, actions) and `PersonColorPicker`. "Next time, just Face ID?" is a quiet toast (`toast.offer`) shown once per device.
+
 ## Keyboard and the command palette
 
 Desktop only. Phones have no palette and no shortcut list; their layouts are untouched.

@@ -38,7 +38,8 @@ const suggest = (name: string) =>
 function JoinPage() {
   const arrive = useArrive();
   const navigate = useNavigate();
-  const [token, setToken] = useState<string | null | undefined>(undefined);
+  // Read in the initializer, which changes nothing: React runs it (and effects) twice in development.
+  const [token] = useState<string | null>(() => window.location.hash.slice(1) || null);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [usernameTouched, setUsernameTouched] = useState(false);
@@ -47,10 +48,9 @@ function JoinPage() {
   const [password, setPassword] = useState("");
   const [shown, setShown] = useState(false);
 
+  // Then take the secret out of the address bar and the history entry.
   useEffect(() => {
-    const secret = window.location.hash.slice(1);
-    setToken(secret || null);
-    if (secret) history.replaceState(null, "", window.location.pathname);
+    if (window.location.hash) history.replaceState(null, "", window.location.pathname);
   }, []);
 
   const peek = useQuery({
@@ -103,7 +103,7 @@ function JoinPage() {
     join.mutate();
   }
 
-  if (token === undefined || (token && peek.isPending)) return <AuthPage lead="One moment…">{null}</AuthPage>;
+  if (token && peek.isPending) return <AuthPage lead="One moment…">{null}</AuthPage>;
 
   if (!token || peek.isError) {
     return (

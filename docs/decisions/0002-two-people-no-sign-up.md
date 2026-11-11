@@ -6,4 +6,4 @@ Status: Accepted
 
 **Why:** it is a private notebook for a couple. Everything that supports many users (invites, billing, access control) would cost design and code and give them nothing.
 
-**Consequences:** every item, photo and attempt is visible to both people and either may edit it; rows record who made them (`createdBy`, `finishedBy`) for attribution only. Adding people in the app and passkeys are on the [roadmap](../roadmap.md), but still for these two. Agents using the service later get scoped tokens, not roles.
+**Consequences:** every item, photo and attempt is visible to both people and either may edit it; rows record who made them (`createdBy`, `finishedBy`) for attribution only. Adding people in the app and passkeys are done ([0023](0023-passkeys-sign-in-links-and-invites.md)): still no public sign-up, a person is added only by someone already in, with a single-use invite link. Agents using the service later get scoped tokens, not roles.

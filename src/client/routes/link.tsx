@@ -23,15 +23,14 @@ export const Route = createFileRoute("/link")({
 function LinkPage() {
   const arrive = useArrive();
   const navigate = useNavigate();
-  const [token, setToken] = useState<string | null | undefined>(undefined);
+  // Read in the initializer, which changes nothing: React runs it (and effects) twice in development.
+  const [token] = useState<string | null>(() => window.location.hash.slice(1) || null);
   const [code, setCode] = useState("");
   const [person, setPerson] = useState<Person | null>(null);
 
-  // Read the secret once and take it out of the address bar and the history entry.
+  // Then take the secret out of the address bar and the history entry.
   useEffect(() => {
-    const secret = window.location.hash.slice(1);
-    setToken(secret || null);
-    if (secret) history.replaceState(null, "", window.location.pathname);
+    if (window.location.hash) history.replaceState(null, "", window.location.pathname);
   }, []);
 
   const redeem = useMutation({
@@ -57,8 +56,6 @@ function LinkPage() {
   }
 
   if (person) return <AddHere person={person} onDone={() => void arrive.goToday()} />;
-
-  if (token === undefined) return <AuthPage lead="One moment…">{null}</AuthPage>;
 
   if (gone) {
     return (

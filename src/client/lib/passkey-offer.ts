@@ -22,13 +22,18 @@ export function usePasskeyOffer() {
     let asked = false;
     try {
       asked = sessionStorage.getItem(PENDING) === "1";
-      sessionStorage.removeItem(PENDING);
     } catch {
       return;
     }
     if (!asked || !canOfferPasskey()) return;
-    offerSettled();
+    // Taken and settled when the toast shows, not before: React's double effect in development must find it still pending.
     const timer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem(PENDING);
+      } catch {
+        // Nothing to clear.
+      }
+      offerSettled();
       toast.offer(`Next time, just ${biometric()}?`, "Sign in with a touch instead of a password.", {
         label: "Set it up",
         onClick: () => {
