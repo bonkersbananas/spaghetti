@@ -8,7 +8,6 @@ import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
-import { cn } from "@/lib/cn";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -38,14 +37,12 @@ async function shareList(text: string, canShare: boolean) {
 export function RunningLow({ low }: { low: readonly LowSpool[] }) {
   const isDesktop = useIsDesktop();
   if (!low.length) return null;
-  // From xl, a few spools sit in two columns to use the width; one alone stays a short list.
-  const many = low.length > 1;
   return (
     <Section
       id="running-low"
       title="Running low"
       count={low.length}
-      className={cn("md:max-w-2xl", many && "xl:max-w-none")}
+      className="md:max-w-2xl xl:has-[li:nth-child(2)]:max-w-none"
       aside={
         <Button
           variant="secondary"
@@ -58,7 +55,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
       }
     >
       <ul
-        className={cn("bg-cream shadow-soft overflow-hidden rounded-lg", many && "xl:grid xl:grid-cols-2")}
+        className="bg-cream shadow-soft overflow-hidden rounded-lg xl:has-[li:nth-child(2)]:grid xl:has-[li:nth-child(2)]:grid-cols-2"
         aria-label="Spools running low"
       >
         {low.map(({ spool, needs }) => {
