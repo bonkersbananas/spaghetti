@@ -52,8 +52,13 @@ jobs:
       # that need the production build builds it.
       - name: Run this shard's specs
         run: |
-          if [ "$(node scripts/e2e-shard.ts ${{ matrix.shard }} 5 --needs-built)" = "0" ]; then export E2E_BUILT_SERVER=off; fi
-          pnpm test:e2e $(node scripts/e2e-shard.ts ${{ matrix.shard }} 5)
+          set -e
+          specs="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 5)"
+          needs_built="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 5 --needs-built)"
+          # No list would mean no file filter, and Playwright would run the whole suite.
+          test -n "$specs"
+          if [ "$needs_built" = "0" ]; then export E2E_BUILT_SERVER=off; fi
+          pnpm test:e2e $specs
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

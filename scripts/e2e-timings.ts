@@ -1,7 +1,7 @@
 /**
  * Refreshes e2e/timings.json from the logs of CI's Playwright shards (the list reporter's lines, as
  * `gh api repos/OWNER/REPO/actions/jobs/ID/logs --allow-escape-sequences` prints them): the seconds each spec
- * file took, summed over its projects. Pass the logs of one full run (all shards); several runs are averaged.
+ * file took, summed over its projects. Pass the logs of the shards of ONE full run: the seconds of every log are added up (a second run's logs would double them).
  *
  *   node scripts/e2e-timings.ts shard1.log shard2.log shard3.log …
  */
