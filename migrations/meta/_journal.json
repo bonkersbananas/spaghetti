@@ -173,8 +173,15 @@
     {
       "idx": 24,
       "version": "6",
-      "when": 1794381794461,
-      "tag": "0024_wishlists",
+      "when": 1794380275942,
+      "tag": "0024_passkeys-links-invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794384643419,
+      "tag": "0025_wishlists",
       "breakpoints": true
     }
   ]

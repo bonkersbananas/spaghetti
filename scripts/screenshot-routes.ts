@@ -64,6 +64,91 @@ async function subscribedDevice(page: Page) {
   }, endpoint);
 }
 
+/** One row of the account menu (phone: account sheet; desktop: the sidebar's popover), by its text. */
+async function openAccountRow(page: Page, width: 390 | 1440, row: string | RegExp) {
+  await openAccount(page, width);
+  await page.getByRole("dialog").getByRole("button", { name: row }).click();
+}
+
+const wide = (page: Page): 390 | 1440 => (page.viewportSize()?.width === 390 ? 390 : 1440);
+
+/** What the passkeys and devices lists say, in a shot: a real passkey needs a real site (localhost), a shot opens 127.0.0.1. */
+async function mockSigningIn(page: Page) {
+  const ago = (ms: number) => SEED_NOW - ms;
+  await page.route(/\/api\/account\/passkeys$/, (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          json: {
+            passkeys: [
+              {
+                id: "pk1",
+                name: "iPhone",
+                createdAt: ago(40 * 86_400_000),
+                lastUsedAt: ago(3_600_000),
+                backedUp: true,
+              },
+              { id: "pk2", name: "Mac", createdAt: ago(9 * 86_400_000), lastUsedAt: null, backedUp: true },
+            ],
+          },
+        })
+      : route.fallback(),
+  );
+  await page.route(/\/api\/account\/devices$/, (route) =>
+    route.fulfill({
+      json: {
+        devices: [
+          {
+            id: "d1",
+            device: "Mac · Chrome",
+            createdAt: ago(5 * 86_400_000),
+            lastSeenAt: SEED_NOW,
+            current: true,
+          },
+          {
+            id: "d2",
+            device: "iPhone",
+            createdAt: ago(30 * 86_400_000),
+            lastSeenAt: ago(2 * 3_600_000),
+            current: false,
+          },
+          {
+            id: "d3",
+            device: "iPad",
+            createdAt: ago(80 * 86_400_000),
+            lastSeenAt: ago(12 * 86_400_000),
+            current: false,
+          },
+        ],
+      },
+    }),
+  );
+}
+
+/** A phone's share sheet exists: the sheets offer it first (a headless browser has none). */
+const withShare = (page: Page) =>
+  page.evaluate(() => Object.defineProperty(navigator, "share", { value: async () => undefined, configurable: true }));
+
+/** Makes an invite as Alex, then leaves the page signed out: what a guest opening the link sees. */
+async function guestInvite(page: Page) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  const made = await (await page.request.post("/api/account/invites", { headers: { Origin: origin } })).json();
+  await page.context().clearCookies();
+  return String(made.url).split("#")[1] ?? "";
+}
+
+/** Lets the entrance animation of a signed-out page finish: a shot taken mid-fade is blank. */
+const settle = async (page: Page) => {
+  await page.locator("h1").first().waitFor();
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+  await page.waitForTimeout(500);
+};
+
 /** Webhooks as the Agents page sees them, with times counted back from the shots' clock (SEED_NOW); the page is reloaded to show them. */
 const minutesAgo = (n: number) => SEED_NOW - n * 60_000;
 const webhookBase = {
@@ -419,6 +504,124 @@ async function unmockToday(page: Page) {
  */
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
+  { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },
+  {
+    // An invite link opened by someone who isn't signed in: the form, filled in a little.
+    name: "join",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    beforeShot: settle,
+    prepare: async (page) => {
+      const token = await guestInvite(page);
+      await page.goto(`/join#${token}`);
+      await page.getByLabel("Your name").fill("Mina Park");
+      await page.getByRole("radio", { name: "plum" }).click();
+    },
+  },
+  {
+    // A link that has done its job: one calm sentence.
+    name: "link-used",
+    path: "/link#spl_used",
+    signedOut: true,
+    beforeShot: settle,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await page.getByText("That link has done its job.").waitFor();
+    },
+  },
+  {
+    // After a password sign-in on a device with no passkey: one quiet offer.
+    name: "passkey-offer",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.evaluate(() => {
+        sessionStorage.setItem("sg-passkey-ask", "1");
+        sessionStorage.setItem("sg-force-offer", "1");
+        localStorage.removeItem("sg-passkey-offer");
+        localStorage.removeItem("sg-passkey-here");
+      });
+      await page.reload();
+      await page.getByText(/^Next time, just /).waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The account menu's "Signing in" rows.
+    name: "account-signing-in",
+    path: "/ideas",
+    prepare: async (page) => {
+      await openAccount(page, wide(page));
+      await page.getByRole("dialog").getByRole("button", { name: "Passkeys and password" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: "passkeys",
+    path: "/ideas",
+    prepare: async (page) => {
+      await mockSigningIn(page);
+      await openAccountRow(page, wide(page), "Passkeys and password");
+      await page.getByRole("dialog", { name: "Passkeys and password" }).getByText("iPhone").first().waitFor();
+    },
+  },
+  {
+    name: "sign-in-on-another-device",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withShare(page);
+      await openAccountRow(page, wide(page), "Sign in on another device");
+      await page.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).waitFor();
+      if (wide(page) === 1440) await page.getByRole("img", { name: /QR code/ }).waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: "invite",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withShare(page);
+      // The server counts a week from its own clock; the shot's browser clock is fixed to the seed date.
+      const alex = (await (await page.request.get("/api/people")).json()).people[0].id;
+      await page.route(/\/api\/account\/invites$/, (route) =>
+        route.request().method() === "GET"
+          ? route.fulfill({
+              json: {
+                invites: [
+                  { id: "i1", createdBy: alex, createdAt: SEED_NOW - 86_400_000, expiresAt: SEED_NOW + 6 * 86_400_000 },
+                ],
+              },
+            })
+          : route.fallback(),
+      );
+      await openAccountRow(page, wide(page), "Invite someone");
+      const sheet = page.getByRole("dialog", { name: "Invite someone" });
+      await sheet.getByRole("button", { name: /^Make (an invite link|another invite)$/ }).click();
+      await sheet.getByText(/\/join#spi_/).waitFor();
+      await sheet.getByText("Waiting").waitFor();
+    },
+  },
+  {
+    // The same sheet, scrolled to the devices at its bottom.
+    name: "passkeys-devices",
+    path: "/ideas",
+    prepare: async (page) => {
+      await mockSigningIn(page);
+      await openAccountRow(page, wide(page), "Passkeys and password");
+      const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
+      await sheet.getByText("iPad").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: "styleguide-signing-in",
+    path: "/styleguide",
+    selector: "#signing-in",
+    // The styleguide's avatar specimen has a deliberately missing picture: let it fall back before the images are checked.
+    prepare: async (page) => {
+      await page.waitForTimeout(1200);
+    },
+  },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
   { name: "today", path: "/today", fullPage: true },
   {

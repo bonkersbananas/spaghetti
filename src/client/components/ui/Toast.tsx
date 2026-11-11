@@ -73,6 +73,39 @@ export const toast = {
   /** A toast with one action, such as "View" after saving from another screen. */
   action: (message: string, action: { label: string; onClick: () => void }, description?: string) =>
     sonnerToast(message, { description, action }),
+  /**
+   * A quiet offer that stays until answered: the words on a full-width line, one action and "Not now" in a row
+   * beneath (the person's choice; the caller never repeats it).
+   */
+  offer: (message: string, description: string, action: { label: string; onClick: () => void }) =>
+    sonnerToast.custom(
+      (id) => (
+        <div role="status" className="bg-toast text-toast-fg shadow-float w-full rounded-md p-4">
+          <p className="text-body font-semibold">{message}</p>
+          <p className="text-small mt-0.5 opacity-70">{description}</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className="pressable focus-ring touch-target bg-toast-fg text-toast text-small relative h-9 rounded-sm px-4 font-semibold"
+              onClick={() => {
+                sonnerToast.dismiss(id);
+                action.onClick();
+              }}
+            >
+              {action.label}
+            </button>
+            <button
+              type="button"
+              className="pressable focus-ring touch-target hover:bg-toast-fg/15 text-small relative h-9 rounded-sm px-4 font-semibold"
+              onClick={() => sonnerToast.dismiss(id)}
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: Number.POSITIVE_INFINITY, dismissible: true },
+    ),
   /** A new version of the app is installed and waiting: stays until it is taken or dismissed. */
   update: (onRefresh: () => void) =>
     sonnerToast("A new version is ready", {

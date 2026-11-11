@@ -64,6 +64,99 @@ export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 
 /**
+ * A passkey (WebAuthn credential) that signs one person in on one device. `id` is the credential id
+ * (base64url), `publicKey` the COSE key (base64url): nothing in here can sign in without the device.
+ * `counter` and `backedUp` are checked and kept up to date at every sign-in (docs/decisions/0026).
+ */
+export const passkeys = sqliteTable(
+  "passkeys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    publicKey: text("public_key").notNull(),
+    counter: integer("counter").notNull().default(0),
+    transports: text("transports", { mode: "json" }).$type<string[]>(),
+    deviceType: text("device_type").notNull(),
+    backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
+    /** What the person calls it ("iPhone"); they can rename it. */
+    name: text("name").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("passkeys_user_idx").on(table.userId)],
+);
+
+/**
+ * The random challenge of one WebAuthn ceremony. Single use (taken with DELETE ... RETURNING), short-lived,
+ * and bound to what it was made for: `purpose`, plus the person (adding a passkey) or the invite (accepting
+ * one). A sign-in's challenge belongs to no one yet.
+ */
+export const webauthnChallenges = sqliteTable("webauthn_challenges", {
+  id: text("id").primaryKey(),
+  challenge: text("challenge").notNull(),
+  purpose: text("purpose").$type<"register" | "authenticate" | "invite">().notNull(),
+  userId: text("user_id"),
+  inviteId: text("invite_id"),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/**
+ * "Sign in on another device": a single-use link (and a short code) a signed-in person makes. Only hashes
+ * are stored. `usedAt` is set by the one redeeming it, with the device they redeemed it on.
+ */
+export const signInLinks = sqliteTable(
+  "sign_in_links",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    codeHash: text("code_hash").notNull().unique(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+    /** The device that used it, from its user agent ("iPhone"). */
+    usedOn: text("used_on"),
+  },
+  (table) => [index("sign_in_links_user_idx").on(table.userId)],
+);
+
+/**
+ * A single-use link that adds one new person. Any signed-in person can make or withdraw one (everyone is
+ * equal); `usedBy` is the person it made.
+ */
+export const invites = sqliteTable("invites", {
+  id: text("id").primaryKey(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  usedAt: integer("used_at", { mode: "timestamp_ms" }),
+  usedBy: text("used_by"),
+  withdrawnAt: integer("withdrawn_at", { mode: "timestamp_ms" }),
+});
+
+/** One try at something an anonymous caller could guess at (a code, a passkey sign-in), for rate limits. */
+export const authHits = sqliteTable(
+  "auth_hits",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bucket: text("bucket").notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("auth_hits_bucket_idx").on(table.bucket, table.at)],
+);
+
+export type Passkey = typeof passkeys.$inferSelect;
+export type SignInLink = typeof signInLinks.$inferSelect;
+export type Invite = typeof invites.$inferSelect;
+
+/**
  * Where an item is in its life. A build is the same record as the idea it
  * grew from, moved on; print attempts point at it.
  */

@@ -68,6 +68,11 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM item_drafts"),
     env.DB.prepare("DELETE FROM items"),
     env.DB.prepare("DELETE FROM password_failures"),
+    env.DB.prepare("DELETE FROM passkeys"),
+    env.DB.prepare("DELETE FROM webauthn_challenges"),
+    env.DB.prepare("DELETE FROM sign_in_links"),
+    env.DB.prepare("DELETE FROM invites"),
+    env.DB.prepare("DELETE FROM auth_hits"),
     env.DB.prepare("DELETE FROM sessions"),
     env.DB.prepare("DELETE FROM users"),
   ]);

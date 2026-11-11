@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as JoinRouteImport } from './routes/join'
+import { Route as LinkRouteImport } from './routes/link'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAgentsRouteImport } from './routes/_app/agents'
@@ -31,6 +33,16 @@ import { Route as AppPantrySpoolIdRouteImport } from './routes/_app/pantry.$spoo
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LinkRoute = LinkRouteImport.update({
+  id: '/link',
+  path: '/link',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -126,6 +138,8 @@ const AppPantrySpoolIdRoute = AppPantrySpoolIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/join': typeof JoinRoute
+  '/link': typeof LinkRoute
   '/sign-in': typeof SignInRoute
   '/agents': typeof AppAgentsRoute
   '/deleted': typeof AppDeletedRoute
@@ -145,6 +159,8 @@ export interface FileRoutesByFullPath {
   '/pantry/': typeof AppPantryIndexRoute
 }
 export interface FileRoutesByTo {
+  '/join': typeof JoinRoute
+  '/link': typeof LinkRoute
   '/sign-in': typeof SignInRoute
   '/agents': typeof AppAgentsRoute
   '/deleted': typeof AppDeletedRoute
@@ -167,6 +183,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/join': typeof JoinRoute
+  '/link': typeof LinkRoute
   '/sign-in': typeof SignInRoute
   '/_app/agents': typeof AppAgentsRoute
   '/_app/deleted': typeof AppDeletedRoute
@@ -190,6 +208,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/join'
+    | '/link'
     | '/sign-in'
     | '/agents'
     | '/deleted'
@@ -209,6 +229,8 @@ export interface FileRouteTypes {
     | '/pantry/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/join'
+    | '/link'
     | '/sign-in'
     | '/agents'
     | '/deleted'
@@ -230,6 +252,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/join'
+    | '/link'
     | '/sign-in'
     | '/_app/agents'
     | '/_app/deleted'
@@ -252,6 +276,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  JoinRoute: typeof JoinRoute
+  LinkRoute: typeof LinkRoute
   SignInRoute: typeof SignInRoute
 }
 
@@ -262,6 +288,20 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/link': {
+      id: '/link'
+      path: '/link'
+      fullPath: '/link'
+      preLoaderRoute: typeof LinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -437,6 +477,8 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  JoinRoute: JoinRoute,
+  LinkRoute: LinkRoute,
   SignInRoute: SignInRoute,
 }
 export const routeTree = rootRouteImport

@@ -355,13 +355,20 @@ for (const scheme of ["light", "dark"] as const) {
       await screen(page, "/ideas", "Ideas");
       if (isMobile) {
         await page.getByRole("button", { name: "Account" }).click();
-        await page.getByRole("dialog").getByRole("button", { name: row }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: row === "Change password" ? "Passkeys and password" : row })
+          .click();
       } else {
         await page.getByRole("button", { name: "Account menu" }).click();
         const menu = page.getByRole("dialog", { name: "Account" });
         await expect(menu).toBeVisible();
         if (row === "Notifications") await expectAccessible(page, "The account menu", "[role=dialog]");
-        await menu.getByRole("button", { name: row }).click();
+        await menu.getByRole("button", { name: row === "Change password" ? "Passkeys and password" : row }).click();
+      }
+      // Change password lives in the passkeys and password sheet.
+      if (row === "Change password") {
+        await page.getByRole("dialog", { name: "Passkeys and password" }).getByRole("button", { name: row }).click();
       }
       await expect(page.getByRole("dialog", { name: sheet })).toBeVisible();
       await expectAccessible(page, `The ${sheet.toLowerCase()} sheet`, "[role=dialog]");
@@ -496,7 +503,11 @@ test("keyboard focus is visible in the sheets and menus", async ({ page, isMobil
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Change password" }).click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Passkeys and password" }).click();
+  await page
+    .getByRole("dialog", { name: "Passkeys and password" })
+    .getByRole("button", { name: "Change password" })
+    .click();
   await expect(page.getByRole("dialog", { name: "Change password" })).toBeVisible();
   await tabThrough("The change-password sheet", 5);
   await page.keyboard.press("Escape");
@@ -529,7 +540,7 @@ test("empty states and sign-in pass axe", async ({ page }) => {
   }
   await page.context().clearCookies();
   await page.goto("/sign-in");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expectAccessible(page, "Sign-in");
 });
 

@@ -1,4 +1,4 @@
-# 0026. Each person keeps a ranked wishlist of ideas, shared by default
+# 0027. Each person keeps a ranked wishlist of ideas, shared by default
 
 Status: Accepted
 

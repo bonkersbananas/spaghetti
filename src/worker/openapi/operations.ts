@@ -77,6 +77,17 @@ export interface Operation {
 const photoFiles = { large: "The photo at display size (WebP or JPEG).", thumb: "The same photo as a thumbnail." };
 const notFound = (what: string) => `not_found: no such ${what}.`;
 const any = (description: string, shape?: Record<string, z.ZodType>) => loose(description, shape);
+const ceremony = (description: string) => z.object({ ceremonyId: z.string(), options: any(description) });
+const ceremonyAnswer = z.object({
+  ceremonyId: z.string(),
+  response: any("The browser's answer (@simplewebauthn JSON)."),
+});
+const joinDetails = z.object({
+  token: z.string(),
+  name: z.string(),
+  username: z.string(),
+  color: z.string(),
+});
 
 export const operations: Record<string, Operation> = {
   "GET /health": { summary: "Says the Worker is up.", response: z.object({ ok: z.literal(true) }), public: true },
@@ -105,6 +116,115 @@ export const operations: Record<string, Operation> = {
       403: "wrong_password: the current password is wrong.",
       429: "rate_limited: five wrong passwords in a quarter of an hour.",
     },
+  },
+
+  // Passkeys, sign-in links, invites and devices (docs/api.md): the ones under /account are people only.
+  "POST /session/passkey/options": {
+    summary: "Starts a passkey sign-in: the challenge for the browser's sheet.",
+    response: ceremony("WebAuthn request options (@simplewebauthn JSON)."),
+    errors: { 429: "rate_limited: too many tries." },
+    public: true,
+  },
+  "POST /session/passkey": {
+    summary: "Signs in with a passkey the browser signed; sets the session cookie.",
+    body: ceremonyAnswer,
+    response: z.object({ user: Person }),
+    errors: { 401: "wrong_credentials: wrong, replayed, expired or from another origin.", 429: "rate_limited." },
+    public: true,
+  },
+  "POST /session/link": {
+    summary: "Signs in with a single-use link's token or its short code, made on a signed-in device.",
+    body: z.object({ token: z.string().optional(), code: z.string().optional() }),
+    response: z.object({ user: Person }),
+    errors: { 410: "link_gone: used or expired.", 429: "rate_limited." },
+    public: true,
+  },
+  "POST /join/peek": {
+    summary: "Who an invite is from, if it can still be used.",
+    body: z.object({ token: z.string() }),
+    response: z.object({ invitedBy: z.string(), expiresAt: z.number().int() }),
+    errors: { 410: "invite_gone: used, withdrawn or expired." },
+    public: true,
+  },
+  "POST /join/options": {
+    summary: "Starts a passkey for the person an invite adds.",
+    body: joinDetails,
+    response: ceremony("WebAuthn creation options (@simplewebauthn JSON)."),
+    errors: { 409: "username_taken.", 410: "invite_gone." },
+    public: true,
+  },
+  "POST /join": {
+    summary: "Uses an invite: adds that one person with a password or passkey, and signs them in.",
+    body: joinDetails.extend({ password: z.string().optional(), passkey: ceremonyAnswer.optional() }),
+    response: z.object({ user: Person }),
+    status: 201,
+    errors: { 400: "too_short, not_verified or expired.", 409: "username_taken.", 410: "invite_gone." },
+    public: true,
+  },
+  "GET /account/passkeys": {
+    summary: "Your passkeys, and whether you also have a password.",
+    response: any("Passkeys.", { passkeys: z.array(z.looseObject({})), hasPassword: z.boolean() }),
+  },
+  "POST /account/passkeys/options": {
+    summary: "Starts adding a passkey for this device.",
+    response: ceremony("WebAuthn creation options (@simplewebauthn JSON)."),
+    errors: { 409: "too_many: twelve is the most." },
+  },
+  "POST /account/passkeys": {
+    summary: "Finishes adding a passkey.",
+    body: ceremonyAnswer,
+    response: any("The new passkey."),
+    status: 201,
+    errors: { 400: "not_verified or expired.", 409: "exists or too_many." },
+  },
+  "PATCH /account/passkeys/:id": {
+    summary: "Renames one of your passkeys.",
+    body: z.object({ name: z.string() }),
+    response: any("The passkey."),
+    errors: { 404: notFound("passkey") },
+  },
+  "DELETE /account/passkeys/:id": {
+    summary: "Removes one of your passkeys.",
+    response: "empty",
+    status: 204,
+    errors: { 409: "last_way_in: it is the only way you can sign in." },
+  },
+  "POST /account/sign-in-links": {
+    summary: "Makes a single-use link and code to sign in on another device, good for ten minutes.",
+    response: any("The link (its secret is after the #), the code and when it expires."),
+    status: 201,
+    errors: { 429: "rate_limited." },
+  },
+  "GET /account/sign-in-links/:id": {
+    summary: "Whether, and on which device, a link was used.",
+    response: any("The link's state."),
+    errors: { 404: notFound("link") },
+  },
+  "DELETE /account/sign-in-links/:id": { summary: "Withdraws an unused link.", response: "empty", status: 204 },
+  "GET /account/invites": {
+    summary: "The invites still waiting.",
+    response: any("Invites.", { invites: z.array(z.looseObject({})) }),
+  },
+  "POST /account/invites": {
+    summary: "Makes a single-use invite link, good for a week.",
+    response: any("The invite and its link (shown once)."),
+    status: 201,
+    errors: { 409: "too_many: withdraw one first." },
+  },
+  "DELETE /account/invites/:id": { summary: "Withdraws an invite.", response: "empty", status: 204 },
+  "GET /account/devices": {
+    summary: "The devices you are signed in on.",
+    response: any("Devices.", { devices: z.array(z.looseObject({})) }),
+  },
+  "POST /account/devices/sign-out-others": {
+    summary: "Signs you out everywhere but here.",
+    response: z.object({ signedOut: z.number().int() }),
+  },
+  "DELETE /account/devices/:id": {
+    summary: "Signs one device out.",
+    response: "empty",
+    status: 204,
+    errors: { 400: "current: that is this device." },
   },
 
   // Push.

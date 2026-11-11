@@ -22,6 +22,7 @@ import { draftRoutes } from "./routes/drafts.ts";
 import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
 import { insightRoutes } from "./routes/insights.ts";
 import { itemRoutes } from "./routes/items.ts";
+import { joinRoutes } from "./routes/join.ts";
 import { journalRoutes } from "./routes/journal.ts";
 import { linkRoutes } from "./routes/links.ts";
 import { peopleRoutes } from "./routes/people.ts";
@@ -31,6 +32,7 @@ import { pushRoutes } from "./routes/push.ts";
 import { recipeRoutes } from "./routes/recipes.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
+import { signingInRoutes } from "./routes/signing-in.ts";
 import { spoolRoutes } from "./routes/spools.ts";
 import { storyRoutes } from "./routes/story.ts";
 import { tagRoutes } from "./routes/tags.ts";
@@ -109,11 +111,13 @@ export const app = new Hono<AppEnv>()
   })
   .get("/health", (c) => c.json({ ok: true }))
   .route("/session", sessionRoutes)
+  .route("/join", joinRoutes)
   .use(requireAuth)
   .use(requireScope)
   // What this caller may do, as OpenAPI 3.1 (made from the code: worker/openapi).
   .get("/openapi.json", (c) => c.json(buildOpenApi(c.var.scopes, new URL(c.req.url).origin)))
   .route("/account", accountRoutes)
+  .route("/account", signingInRoutes)
   .route("/push", pushRoutes)
   .route("/people", peopleRoutes)
   .route("/wishlists", wishlistRoutes)

@@ -29,7 +29,8 @@ One short record per settled decision, including the things we decided **not** t
 | [0023](0023-claude-reads-a-print-from-its-photo.md) | Claude suggests how a print went from its photo, and only suggests | Accepted |
 | [0024](0024-comments-read-state-and-push-batching.md) | Comments between the two of you: read state per person, one push for a burst | Accepted |
 | [0025](0025-webhooks-signed-from-the-cron.md) | Webhooks are queued in D1, sent by the existing cron, signed with HMAC-SHA256 under a secret kept encrypted | Accepted |
-| [0026](0026-wishlists-per-person-shared-by-default.md) | Each person keeps a ranked wishlist of ideas, shared by default | Accepted |
+| [0026](0026-passkeys-sign-in-links-and-invites.md) | Passkeys, single-use sign-in links and invites, all in the app; password stays as the fallback | Accepted |
+| [0027](0027-wishlists-per-person-shared-by-default.md) | Each person keeps a ranked wishlist of ideas, shared by default | Accepted |
 
 ## Format
 

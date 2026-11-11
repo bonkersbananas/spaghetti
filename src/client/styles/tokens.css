@@ -24,6 +24,9 @@
   --sg-note: #f6f1e8;
 
   /* Ink */
+  /* A QR code is dark on light in both themes: scanners need the contrast the right way round. */
+  --sg-qr-bg: #fffcf7;
+  --sg-qr-ink: #2b2420;
   --sg-ink: #2b2420;
   --sg-ink-soft: #5e544b;
   --sg-ink-faint: #6f645a;
@@ -206,6 +209,8 @@
   --color-lifted: var(--sg-lifted);
   --color-well: var(--sg-well);
   --color-note: var(--sg-note);
+  --color-qr-bg: var(--sg-qr-bg);
+  --color-qr-ink: var(--sg-qr-ink);
   --color-ink: var(--sg-ink);
   --color-ink-soft: var(--sg-ink-soft);
   --color-ink-faint: var(--sg-ink-faint);

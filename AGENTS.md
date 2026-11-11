@@ -226,7 +226,7 @@ Never edit a migration that has been merged; add a new one.
 
 ### Wishlists
 
-- Each person's ranked top ideas ([0026](docs/decisions/0026-wishlists-per-person-shared-by-default.md)): `wishlist_entries (user_id, item_id, position, added_at)` and `users.wishlist_private`; routes in `worker/routes/wishlists.ts` (`/api/wishlists`, writes under `/me`, person-only), types and the pure `moveTo`/`moveBy` in `shared/wishlist.ts`. Entries whose item isn't a live idea are hidden by the server and keep their slot through reorders, so undoing a delete or a start brings them back in place.
+- Each person's ranked top ideas ([0027](docs/decisions/0027-wishlists-per-person-shared-by-default.md)): `wishlist_entries (user_id, item_id, position, added_at)` and `users.wishlist_private`; routes in `worker/routes/wishlists.ts` (`/api/wishlists`, writes under `/me`, person-only), types and the pure `moveTo`/`moveBy` in `shared/wishlist.ts`. Entries whose item isn't a live idea are hidden by the server and keep their slot through reorders, so undoing a delete or a start brings them back in place.
 - The client is `lib/wishlist.ts` (query root `wishlists`, persisted, refreshed by `wishlist` changes; optimistic add/remove with undo, reorder, privacy; an answer replaces the cache only when no newer write is in flight) and `wishedIdeas`, which joins a list with the ideas cache so a started idea leaves the list at once. UI pieces are `ui/RankRow.tsx` (`RankRow`, `DragHandle`, `PickTile`, in the styleguide's Wishlists section) and `components/wishlist/`.
 
 ### Agents and tokens
