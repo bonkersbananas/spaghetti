@@ -5,11 +5,11 @@
  */
 import { cn } from "@/lib/cn";
 
-interface IllustrationProps {
+export interface IllustrationProps {
   className?: string;
 }
 
-const svgProps = {
+export const svgProps = {
   viewBox: "0 0 160 120",
   fill: "none",
   strokeLinecap: "round",

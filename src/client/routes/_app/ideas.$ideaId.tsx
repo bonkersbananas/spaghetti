@@ -18,7 +18,7 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForField } from "@/components/ui/ForField";
-import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon } from "@/components/ui/icons";
+import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { SaveStatus } from "@/components/ui/SaveStatus";
@@ -30,11 +30,12 @@ import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
 import { useScreenActions } from "@/lib/palette";
-import { peopleQuery } from "@/lib/queries";
+import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
 export const Route = createFileRoute("/_app/ideas/$ideaId")({
   component: IdeaDetail,
@@ -93,6 +94,8 @@ function Idea({ item }: { item: ItemView }) {
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
   const { data: people } = useQuery(peopleQuery);
+  const { data: user } = useQuery(sessionQuery);
+  const wished = useWishlistIds(user?.id).includes(item.id);
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
   const via = useVia()(item.createdVia);
@@ -252,15 +255,24 @@ function Idea({ item }: { item: ItemView }) {
             onChange={(event) => setForWhom(event.target.value)}
             readOnly={readOnly || item.pending}
           />
-          <ToggleChip
-            selected={item.upNext !== null}
-            icon={UpNextIcon}
-            disabled={readOnly || item.pending}
-            onClick={() => setUpNext(queryClient, item, item.upNext === null)}
-            className="self-start"
-          >
-            Up next
-          </ToggleChip>
+          <div className="flex flex-wrap gap-2">
+            <ToggleChip
+              selected={item.upNext !== null}
+              icon={UpNextIcon}
+              disabled={readOnly || item.pending}
+              onClick={() => setUpNext(queryClient, item, item.upNext === null)}
+            >
+              Up next
+            </ToggleChip>
+            <ToggleChip
+              selected={wished}
+              icon={WishIcon}
+              disabled={readOnly || item.pending || !user}
+              onClick={() => user && toggleWishlist(queryClient, user.id, item)}
+            >
+              My wishlist
+            </ToggleChip>
+          </div>
           <NoteField
             value={note}
             onChange={setNote}
