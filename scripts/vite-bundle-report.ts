@@ -51,7 +51,7 @@ export function bundleReport(): Plugin {
       const biggest = lazy.sort((a, b) => gzip(b.fileName) - gzip(a.fileName));
       for (const chunk of biggest.slice(0, 8)) listChunk(chunk.fileName);
       for (const chunk of biggest.slice(8, 30)) lines.push(`${kb(gzip(chunk.fileName))} kB gzip  ${chunk.fileName}`);
-      // SPAGHETTI_BUNDLE_JSON=file also writes every chunk's modules (rendered size) and gzip size, for `pnpm perf:modules`.
+      // SPAGHETTI_BUNDLE_JSON=file also writes every chunk's modules (rendered size) and gzip size, for adding up the modules of a screen's first load (PERF_FILES=1 in e2e/performance.spec.ts lists its files).
       if (process.env.SPAGHETTI_BUNDLE_JSON) {
         const all = Object.fromEntries(
           chunks.map((chunk) => [
