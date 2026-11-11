@@ -3,16 +3,19 @@
  * landing:shots seeds the app with the screenshot seed (scripts/seed: ideas, the pantry, builds with histories), then
  * makes it look like the real thing with what is listed here:
  *
+ *   - PEOPLE: the two people, M and CO, with their pictures, in place of the seed's Alex and Sam.
  *   - STAND_INS: real photos of prints in place of some of the seed's drawings, cut to each drawing's frame.
  *   - ADDITIONS, ATTEMPT_PHOTOS and RENAMES: ideas and photos added and things renamed, so the photos and the words
  *     agree.
  *   - SHOTS: which screens are taken, on a phone and on a laptop.
  *
- * The people in the shots are the seed's own, Alex and Sam (scripts/lib/local-app.ts): the page is public, so it never
- * shows the two real people, their names, initials or pictures. Photos live in scripts/landing/photos. Nothing here is
- * real data: the app runs on a throwaway database, and the photos are the mock-ups made for the landing page.
+ * Only the app's screenshots show the people; the page's own words say what happened, not who. Photos live in
+ * scripts/landing/photos, the people's pictures in scripts/landing/people. Nothing else here is real data: the app
+ * runs on a throwaway database (the general screenshot seed, pnpm screenshots, keeps its Alex and Sam), and the
+ * photos are the mock-ups made for the landing page.
  */
 import type { Page } from "@playwright/test";
+import type { PersonColor } from "../../src/shared/people.ts";
 import type { SEED_USERS } from "../lib/local-app.ts";
 import { root } from "../lib/wrangler.ts";
 import { shots as appShots } from "../screenshot-routes.ts";
@@ -26,6 +29,20 @@ export type SeedPerson = (typeof SEED_USERS)[number]["username"];
 
 /** Who the shots are taken as. */
 export const SIGNED_IN: SeedPerson = "alex";
+
+export interface DemoPerson {
+  /** The name the app shows: on avatars, "Say something to …", "…'s wishlist". */
+  name: string;
+  color: PersonColor;
+  /** A picture in scripts/landing/people (any size; it is cut square and made 512 px, as the app does). */
+  picture: string;
+}
+
+/** The two people, as the app's screenshots show them, by the seed person each one stands in for. */
+export const PEOPLE: Record<SeedPerson, DemoPerson> = {
+  alex: { name: "CO", color: "plum", picture: "co.png" },
+  sam: { name: "M", color: "tomato", picture: "m.png" },
+};
 
 export interface StandIn {
   /** A photo in scripts/landing/photos. */
@@ -92,8 +109,9 @@ export const ATTEMPT_PHOTOS: AttemptPhoto[] = [
   },
 ];
 
-/** Seed items renamed to match their stand-in or added photo, by id. */
+/** Seed items renamed for the landing page, by id: to match a stand-in or added photo, or just for the page. */
 export const RENAMES: Record<string, { title: string; note?: string }> = {
+  [SEED_IDS.tugboat]: { title: "Bath tugboat for Clara" },
   [SEED_IDS.headphoneStand]: {
     title: "Laptop stand",
     note: "Charcoal matte PLA, with holes so it stays light. Rubber feet underneath.",
