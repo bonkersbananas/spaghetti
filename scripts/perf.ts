@@ -264,6 +264,146 @@ try {
   }
   await context.close();
 
+  // ---- The rest of the core loop (a fresh page: the earlier one has run for a while) ----
+  const loop = await browser.newContext({ ...PHONE, baseURL: app.url, serviceWorkers: "allow" });
+  await signedIn(loop);
+  await installProbe(loop);
+  const lpage = await loop.newPage();
+  await lpage.goto("/ideas");
+  await lpage.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await lpage.waitForLoadState("networkidle");
+  await lpage.locator('main a[href^="/ideas/"]').first().waitFor();
+  await lpage.waitForTimeout(2500);
+  await throttle(lpage);
+  const ltaps: Record<string, { inp: number[]; shown: number[] }> = {};
+  const ladd = (name: string, tap: { inp: number; shown: number }) => {
+    const entry = ltaps[name] ?? { inp: [], shown: [] };
+    ltaps[name] = entry;
+    entry.inp.push(tap.inp);
+    entry.shown.push(tap.shown);
+  };
+  const lsettle = () => lpage.waitForTimeout(400);
+  const dialog = lpage.getByRole("dialog");
+  for (let run = 0; run < runs; run++) {
+    // Capture: open, type a note, save.
+    await lsettle();
+    await lpage.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "New idea" }).tap();
+    const note = dialog.getByRole("textbox", { name: "Note" });
+    await note.waitFor();
+    await lsettle();
+    await note.tap();
+    await lsettle();
+    let typed = "";
+    for (const key of "tug") {
+      typed += key;
+      ladd(
+        "capture: type a letter",
+        await tapLatency(
+          lpage,
+          () => lpage.keyboard.press(key),
+          `document.querySelector('[role=dialog] textarea')?.value.length === ${typed.length}`,
+        ),
+      );
+    }
+    await lpage.keyboard.type(`${run}`);
+    await lsettle();
+    ladd(
+      "capture: Save idea",
+      await tapLatency(
+        lpage,
+        () => dialog.getByRole("button", { name: "Save idea" }).tap(),
+        `!document.querySelector('[role=dialog]')`,
+      ),
+    );
+    await lsettle();
+
+    // Open the new idea, mark it Up next, start building.
+    await lpage
+      .locator('main a[href^="/ideas/"]', { hasText: `tug${run}` })
+      .first()
+      .tap();
+    const chip = lpage.getByRole("button", { name: "Up next", pressed: false });
+    await chip.waitFor();
+    await lsettle();
+    ladd(
+      "chip: Up next",
+      await tapLatency(
+        lpage,
+        () => chip.tap(),
+        `!!document.querySelector('button[aria-pressed=true]')?.textContent?.includes('Up next')`,
+      ),
+    );
+    await lsettle();
+    ladd(
+      "Start building",
+      await tapLatency(
+        lpage,
+        () => lpage.getByRole("button", { name: "Start building" }).tap(),
+        `location.pathname.startsWith('/builds/') && !!document.querySelector('textarea, input[type=text]')`,
+      ),
+    );
+    const opener = lpage.getByRole("button", { name: /^(Log|Finish) attempt/ }).first();
+    await opener.waitFor();
+    await lsettle();
+    await opener.tap();
+    await dialog.getByRole("radio", { name: "Worked" }).waitFor();
+    await lsettle();
+    await dialog.getByRole("radio", { name: "Worked" }).tap();
+    await lsettle();
+    const finish = dialog.getByRole("button", { name: /^(Log|Finish) attempt$/ });
+    ladd(
+      "attempt: Finish with an outcome",
+      await tapLatency(lpage, () => finish.first().tap(), `!document.querySelector('[role=dialog]')`),
+    );
+    await lsettle();
+
+    // Delete the build and undo from the toast.
+    const deleteButton = lpage.getByRole("button", { name: /^Delete/ }).first();
+    if (await deleteButton.count()) {
+      await deleteButton.tap();
+      const undo = lpage.getByRole("button", { name: "Undo" });
+      await undo.waitFor();
+      await lsettle();
+      ladd(
+        "toast: Undo a delete",
+        await tapLatency(lpage, () => undo.tap(), `!document.querySelector('[data-sonner-toast]')`),
+      );
+    }
+    await lpage.goto("/ideas");
+    await lpage.locator('main a[href^="/ideas/"]').first().waitFor();
+  }
+
+  // Wishlist chip and photos, on an idea.
+  await lpage.locator('main a[href^="/ideas/"] img').first().tap();
+  await lpage.getByRole("button", { name: "My wishlist" }).first().waitFor();
+  for (let run = 0; run < runs; run++) {
+    await lsettle();
+    const chip = lpage.getByRole("button", { name: "My wishlist" }).first();
+    const pressed = (await chip.getAttribute("aria-pressed")) === "true";
+    ladd(
+      "chip: My wishlist",
+      await tapLatency(
+        lpage,
+        () => chip.tap(),
+        `!!document.querySelector('button[aria-pressed=${pressed ? "false" : "true"}]')?.textContent?.includes('wishlist')`,
+      ),
+    );
+  }
+  const nextPhoto = lpage.getByRole("button", { name: /^Next photo/ });
+  if (await nextPhoto.count()) {
+    for (let run = 0; run < runs; run++) {
+      await lsettle();
+      ladd("photo: next", await tapLatency(lpage, () => nextPhoto.tap(), `true`));
+      await lsettle();
+      await lpage.getByRole("button", { name: /^Previous photo/ }).tap();
+    }
+  }
+  for (const [name, { inp, shown }] of Object.entries(ltaps)) {
+    record(`tap ${name}`, "input to next paint (ms)", inp);
+    record(`tap ${name}`, "tap to result (ms)", shown);
+  }
+  await loop.close();
+
   // ---- Command palette on desktop ----
   const desktop = await browser.newContext({
     viewport: { width: 1440, height: 900 },

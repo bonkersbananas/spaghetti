@@ -369,6 +369,97 @@ test("the taps people make most answer quickly on a mid-range phone", async ({ b
   await context.close();
 });
 
+test("capturing, queueing and starting an idea answer quickly on a mid-range phone", async ({ browser, baseURL }) => {
+  test.setTimeout(180_000);
+  const context = await browser.newContext({ baseURL, ...PHONE });
+  await installProbe(context);
+  const page = await context.newPage();
+  await signIn(page);
+  await clearIdeas(page);
+  const headers = { Origin: origin(page) };
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const id = crypto.randomUUID();
+    ids.push(id);
+    await page.request.post("/api/items", { headers, data: { id, title: `Idea ${i + 1}`, note: "A quick sketch" } });
+  }
+  await page.goto("/ideas");
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(2500);
+  await throttle(page, { network: false });
+
+  const taps: Record<string, TapResult[]> = {};
+  const add = (name: string, tap: TapResult) => (taps[name] = [...(taps[name] ?? []), tap]);
+  const settle = () => page.waitForTimeout(400);
+  const dialog = page.getByRole("dialog");
+  for (let run = 0; run < 3; run++) {
+    await settle();
+    await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "New idea" }).tap();
+    const note = dialog.getByRole("textbox", { name: "Note" });
+    await note.tap();
+    await settle();
+    add(
+      "capture: type a letter",
+      await tapLatency(
+        page,
+        () => page.keyboard.press("t"),
+        `document.querySelector('[role=dialog] textarea')?.value === 't'`,
+      ),
+    );
+    await settle();
+    // The sheet takes its time to slide away; what counts is that it starts at once and the idea is saved.
+    add(
+      "capture: Save idea",
+      await tapLatency(page, () => dialog.getByRole("button", { name: "Save idea" }).tap(), "true"),
+    );
+    await dialog.waitFor({ state: "detached" });
+    await page.goto(`/ideas/${ids[run]}`);
+    const chip = page.getByRole("button", { name: "Up next", pressed: false });
+    await chip.waitFor();
+    await settle();
+    add(
+      "chip: Up next",
+      await tapLatency(
+        page,
+        () => chip.tap(),
+        `!!document.querySelector('button[aria-pressed=true]')?.textContent?.includes('Up next')`,
+      ),
+    );
+    await settle();
+    add(
+      "Start building",
+      await tapLatency(
+        page,
+        () => page.getByRole("button", { name: "Start building" }).tap(),
+        `location.pathname.startsWith('/builds/') && !!document.querySelector('textarea, input[type=text]')`,
+      ),
+    );
+    await page
+      .getByRole("button", { name: /^(Log|Finish) attempt/ })
+      .first()
+      .waitFor();
+    await page.goto("/ideas");
+    await page.locator('main a[href^="/ideas/"]').first().waitFor();
+  }
+  const rows: string[] = [];
+  const over: string[] = [];
+  for (const [name, results] of Object.entries(taps)) {
+    const inp = median(results.map((r) => r.inp));
+    const shown = median(results.map((r) => r.shown));
+    rows.push(
+      `${name.padEnd(24)} input to paint ${inp.toFixed(0).padStart(4)} ms, tap to result ${shown.toFixed(0).padStart(4)} ms`,
+    );
+    if (inp > TAP_BUDGET_MS.inp) over.push(`${name}: ${inp} ms to the next paint, budget ${TAP_BUDGET_MS.inp}`);
+    if (shown < 0 || shown > TAP_BUDGET_MS.shown)
+      over.push(`${name}: ${shown} ms to the result, budget ${TAP_BUDGET_MS.shown}`);
+  }
+  console.log(`Capture, Up next and Start building on a phone, 4× CPU:\n${rows.join("\n")}`);
+  expect(over, "slower than the budget").toEqual([]);
+  await clearIdeas(page);
+  await context.close();
+});
+
 test("the installed app opens from its caches, on a slow phone", async ({ browser, baseURL }) => {
   test.setTimeout(120_000);
   const context = await browser.newContext({ baseURL, ...PHONE });
