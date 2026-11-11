@@ -23,7 +23,13 @@ import {
   SystemThemeIcon,
   TrashIcon,
 } from "@/components/ui/icons";
-import { PaletteDialog, type PaletteGroup, type PaletteRow, PaletteSurface } from "@/components/ui/Palette";
+import {
+  PaletteDialog,
+  type PaletteGroup,
+  type PaletteRow,
+  PaletteSurface,
+  takeEarlyQuery,
+} from "@/components/ui/Palette";
 import { useCapture } from "@/lib/capture";
 import { comboOf, isMac } from "@/lib/hotkeys";
 import { type ItemView, useBuilds, useIdeas } from "@/lib/items";
@@ -89,7 +95,8 @@ export function CommandPalette() {
 
 function PaletteBody({ close, choose }: { close: () => void; choose: (run: () => void) => void }) {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  // Whatever was typed while the frame was waiting for this code carries over.
+  const [query, setQuery] = useState(takeEarlyQuery);
   const [asked, setAsked] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const terms = useMemo(() => searchTerms(query), [query]);

@@ -210,6 +210,8 @@ export interface FeaturesResponse {
 /** POST and DELETE /api/items/:id/draft. */
 export interface DraftResponse {
   draft: ItemDraft | null;
+  /** POST /api/items/:id/draft/pictures: how many pictures it stored. */
+  stored?: number;
 }
 
 export interface ItemsResponse {

@@ -1,7 +1,7 @@
 import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
-import { isModelImageUrl, modelSite } from "../../shared/model-links.ts";
+import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
 import { extractModelPage } from "../../shared/model-page.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
@@ -44,7 +44,14 @@ export const toApiDraft = (row: ItemDraftRow | undefined | null): ItemDraft | nu
  * at once. Does not call Claude; `runDraft` does. Returns false when the link isn't a model page, or a draft is
  * already on its way or done.
  */
-export async function startDraft(db: Db, itemId: string, url: string, actor: { id: string }): Promise<boolean> {
+export async function startDraft(
+  db: Db,
+  itemId: string,
+  url: string,
+  actor: { id: string },
+  /** The title that came with a share, which the draft may replace; a title a person typed is never passed here. */
+  sharedTitle?: string | null,
+): Promise<boolean> {
   const found = modelSite(url);
   if (!found) return false;
   const now = new Date();
@@ -53,13 +60,22 @@ export async function startDraft(db: Db, itemId: string, url: string, actor: { i
   await db.batch([
     db
       .insert(itemDrafts)
-      .values({ itemId, url: found.url.href, site: found.site.id, status: "reading", createdAt: now })
+      .values({
+        itemId,
+        url: found.url.href,
+        site: found.site.id,
+        status: "reading",
+        sharedTitle: sharedTitle?.trim() || null,
+        createdAt: now,
+      })
       .onConflictDoUpdate({
         target: itemDrafts.itemId,
         set: {
           url: found.url.href,
           site: found.site.id,
           status: "reading",
+          // A retry keeps the shared title it started with.
+          ...(sharedTitle?.trim() ? { sharedTitle: sharedTitle.trim() } : {}),
           failure: null,
           claimedAt: null,
           tries: 0,
@@ -96,19 +112,47 @@ async function fail(db: Db, row: ItemDraftRow, failure: DraftFailure) {
 const ownerOf = async (db: Db, itemId: string) =>
   (await db.select({ id: items.createdBy }).from(items).where(eq(items.id, itemId)).get())?.id;
 
-/** The pictures the draft pointed at that come from the three sites' own image hosts, as stored photos. */
-async function storePictures(db: Db, env: Env, itemId: string, urls: string[], owner: string): Promise<string[]> {
+/** What happened to the pictures a draft pointed at, for `draft_runs.detail` (no page content: counts and reasons). */
+export interface PictureReport {
+  found: number;
+  stored: number;
+  /** One short reason per picture that wasn't stored: its host and why. */
+  refused: string[];
+}
+
+/** The pictures the page pointed at that come from the three sites' own image hosts, as stored photos. */
+async function storePictures(
+  db: Db,
+  env: Env,
+  itemId: string,
+  urls: string[],
+  owner: string,
+): Promise<{ ids: string[]; report: PictureReport }> {
   // The e2e tests and screenshots serve pictures from their stand-in Anthropic server; nothing else is allowed.
   const standIn = env.ANTHROPIC_BASE_URL?.trim() ? new URL(env.ANTHROPIC_BASE_URL.trim()).origin : null;
   const allowed = (url: string) => isModelImageUrl(url) || (!!standIn && new URL(url).origin === standIn);
-  const wanted = [...new Set(urls)].filter((url) => URL.canParse(url) && allowed(url)).slice(0, MAX_DRAFT_IMAGES);
+  const unique = [...new Set(urls)].filter((url) => URL.canParse(url));
+  const report: PictureReport = { found: unique.length, stored: 0, refused: [] };
+  const refuse = (url: string, why: string) => {
+    if (report.refused.length < 8) report.refused.push(`${new URL(url).hostname}: ${why}`.slice(0, 120));
+  };
+  // More are tried than kept: one may be refused.
+  const wanted = unique
+    .filter((url) => (allowed(url) ? true : (refuse(url, "host not allowed"), false)))
+    .slice(0, MAX_DRAFT_IMAGES * 2);
   const downloaded = await Promise.all(
     wanted.map(async (url) => {
       try {
         // A redirect off the image host would be a way past the allowlist: they aren't followed.
-        const bytes = await fromUrl(url, "manual", !!standIn);
-        return readImage(bytes);
-      } catch {
+        const bytes = await fromUrl(pictureRequestUrl(url), "manual", !!standIn);
+        try {
+          return readImage(bytes);
+        } catch {
+          refuse(url, `not a JPEG or WebP (${bytes.length} bytes)`);
+          return null;
+        }
+      } catch (error) {
+        refuse(url, error instanceof Error ? error.message : "download failed");
         return null;
       }
     }),
@@ -164,7 +208,8 @@ async function storePictures(db: Db, env: Env, itemId: string, urls: string[], o
     ]);
     stored.push(photoId);
   }
-  return stored;
+  report.stored = stored.length;
+  return { ids: stored, report };
 }
 
 /**
@@ -191,7 +236,8 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
 
   // The day's cap is shared by both people (UTC days: it only has to be about right).
   const since = new Date(now - (now % DAY_MS));
-  const used = await db.$count(draftRuns, gte(draftRuns.at, since));
+  // Fetching pictures again isn't a call to Claude.
+  const used = await db.$count(draftRuns, and(gte(draftRuns.at, since), sql`${draftRuns.outcome} IS NOT 'pictures'`));
   if (used >= DRAFTS_PER_DAY) return fail(db, row, "cap");
   const runId = crypto.randomUUID();
   await db.insert(draftRuns).values({ id: runId, itemId, at: new Date(now) });
@@ -254,12 +300,21 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   const applied: ItemDraft["applied"] = [];
   const writes: BatchItem<"sqlite">[] = [];
   // Each write is conditional in the database too, so a person typing at the same moment still wins.
-  if (title && !item.title?.trim()) {
+  // A title that came with the share (the page's own) isn't the person's: the draft's replaces it while it is
+  // still exactly that. A title a person typed never is.
+  const shared = row.sharedTitle?.trim() || null;
+  const titleFree = !item.title?.trim() || (!!shared && item.title === shared);
+  if (title && titleFree) {
     writes.push(
       db
         .update(items)
         .set({ title, updatedAt: new Date() })
-        .where(and(eq(items.id, itemId), or(isNull(items.title), sql`trim(${items.title}) = ''`))),
+        .where(
+          and(
+            eq(items.id, itemId),
+            or(isNull(items.title), sql`trim(${items.title}) = ''`, shared ? eq(items.title, shared) : undefined),
+          ),
+        ),
     );
   }
   if (words && !wordsOf(item.note)) {
@@ -273,7 +328,7 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   }
   if (writes.length) await db.batch(writes as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
   const after = await db.select().from(items).where(eq(items.id, itemId)).get();
-  if (title && after?.title === title && !item.title?.trim()) applied.push("title");
+  if (title && after?.title === title && titleFree) applied.push("title");
   if (words && after?.note.startsWith(words) && !wordsOf(item.note)) applied.push("note");
 
   // Pictures only for an idea that has none.
@@ -283,7 +338,15 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
     .from(photos)
     .where(and(eq(photos.itemId, itemId), isNull(photos.deletedAt)))
     .get());
-  if (!hasPhotos) photoIds = await storePictures(db, env, itemId, draft.imageUrls, owner);
+  if (!hasPhotos) {
+    const stored = await storePictures(db, env, itemId, draft.imageUrls, owner);
+    photoIds = stored.ids;
+    // Say what happened to the pictures on the run, next to the rest of its diagnosis.
+    await db
+      .update(draftRuns)
+      .set({ detail: JSON.stringify({ ...detail, pictures: stored.report }) })
+      .where(eq(draftRuns.id, runId));
+  }
   if (photoIds.length) applied.push("photos");
 
   // The note's link card then reads "Cable comb for the desk · makerworld.com" instead of the bare address.
@@ -310,6 +373,7 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
           title,
           note: words,
           photoIds,
+          imageUrls: draft.imageUrls.slice(0, 20),
           findings: {
             designer: draft.designer?.trim() || null,
             license: draft.license?.trim() || null,
@@ -342,7 +406,7 @@ export async function undoDraft(db: Db, itemId: string, actor: { id: string }): 
     statements.push(
       db
         .update(items)
-        .set({ title: null, updatedAt: now })
+        .set({ title: row.sharedTitle?.trim() || null, updatedAt: now })
         .where(and(eq(items.id, itemId), eq(items.title, result.title))),
     );
   }
@@ -394,4 +458,67 @@ export async function resumeDrafts(env: Env, now = Date.now()): Promise<number> 
     else await runDraft(env, row.itemId, db);
   }
   return waiting.length;
+}
+
+/**
+ * "Get the pictures" on a drafted idea that has none (they were refused, or the draft came before they worked):
+ * tries the page's pictures again and fills only an idea without photos. Returns how many were stored, or null
+ * when there is nothing to do (no draft, or the idea already has pictures).
+ */
+export async function getPictures(env: Env, db: Db, itemId: string, actor: { id: string }): Promise<number | null> {
+  const row = await db.select().from(itemDrafts).where(eq(itemDrafts.itemId, itemId)).get();
+  const item = await db
+    .select()
+    .from(items)
+    .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
+    .get();
+  if (!row || row.status !== "drafted" || !item) return null;
+  const hasPhotos = await db
+    .select({ id: photos.id })
+    .from(photos)
+    .where(and(eq(photos.itemId, itemId), isNull(photos.deletedAt)))
+    .get();
+  if (hasPhotos) return null;
+
+  const runId = crypto.randomUUID();
+  await db.insert(draftRuns).values({ id: runId, itemId, at: new Date(), outcome: "pictures" });
+  let urls = row.result?.imageUrls ?? [];
+  let source: "saved" | "worker_fetch" = "saved";
+  let pageStatus: number | null | undefined;
+  if (!urls.length) {
+    const site = modelSite(row.url);
+    const base = env.ANTHROPIC_BASE_URL?.trim();
+    const page = site && !base ? await fetchModelPage(row.url) : { status: null, html: null };
+    pageStatus = page.status;
+    try {
+      urls = site && page.html ? (extractModelPage(site.site.id, page.html)?.imageUrls ?? []) : [];
+    } catch {
+      urls = [];
+    }
+    source = "worker_fetch";
+  }
+  const stored = await storePictures(db, env, itemId, urls, item.createdBy);
+  await db
+    .update(draftRuns)
+    .set({ detail: JSON.stringify({ source, pageStatus, pictures: stored.report }) })
+    .where(eq(draftRuns.id, runId));
+  if (stored.ids.length) {
+    await db.batch([
+      db
+        .update(itemDrafts)
+        .set({
+          applied: sql`json_insert(${itemDrafts.applied}, '$[#]', 'photos')`,
+          result: sql`json_set(${itemDrafts.result}, '$.photoIds', json(${JSON.stringify(stored.ids)}), '$.imageUrls', json(${JSON.stringify(urls.slice(0, 20))}))`,
+        })
+        .where(and(eq(itemDrafts.itemId, itemId), sql`${itemDrafts.applied} NOT LIKE '%photos%'`)),
+      recordChange(db, {
+        entity: "item",
+        id: itemId,
+        itemId,
+        action: "updated",
+        actor: { kind: "person", id: actor.id },
+      }),
+    ]);
+  }
+  return stored.ids.length;
 }

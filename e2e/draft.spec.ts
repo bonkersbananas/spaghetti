@@ -88,3 +88,20 @@ test("words a person wrote are never replaced; the page's link can be drafted by
   await expect(page.getByText("For Mila, the one with the little teeth").first()).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable comb for the desk");
 });
+
+// The share target and the bookmarklet both end on /share?title=…&url=…: the page's own title comes along, and
+// that doesn't count as the person's (the draft replaces it).
+test("a shared model link with the page's title is drafted, and the draft's title replaces the shared one", async ({
+  page,
+}) => {
+  await page.goto(
+    `/share?title=${encodeURIComponent("Cable comb by Mila | MakerWorld")}&url=${encodeURIComponent(GOOD)}`,
+  );
+  await expect(page.getByRole("dialog", { name: "Into the pot" })).toBeVisible();
+  await page.goto("/ideas");
+  await page.getByRole("list", { name: "Ideas" }).getByRole("link").first().click();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable comb for the desk", {
+    timeout: 20_000,
+  });
+  await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible();
+});

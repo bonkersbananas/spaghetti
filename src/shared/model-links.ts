@@ -84,3 +84,14 @@ export function firstModelLink(note: string): { site: ModelSite; url: string } |
   }
   return null;
 }
+
+/**
+ * The address to download a picture from. MakerWorld keeps its pictures as large PNGs, which can't be stored (and
+ * weigh megabytes); its image host converts and resizes on request, so ask for a 1600 px WebP.
+ */
+export function pictureRequestUrl(raw: string): string {
+  const url = new URL(raw);
+  if (url.hostname === "makerworld.bblmw.com" && !url.search)
+    url.search = "?x-oss-process=image/resize,w_1600/format,webp";
+  return url.href;
+}
