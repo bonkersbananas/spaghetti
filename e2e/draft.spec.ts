@@ -85,10 +85,15 @@ test("words a person wrote are never replaced; the page's link can be drafted by
 test("a shared model link with the page's title is drafted, and the draft's title replaces the shared one", async ({
   page,
 }) => {
+  // The draft's request stays open until Claude is done; leaving at once would drop it, and here no cron picks it up.
+  const drafted = page.waitForResponse(
+    (r) => r.request().method() === "POST" && /\/api\/items\/[^/]+\/draft$/.test(r.url()),
+  );
   await page.goto(
     `/share?title=${encodeURIComponent("Cable comb by Mila | MakerWorld")}&url=${encodeURIComponent(GOOD)}`,
   );
   await expect(page.getByRole("dialog", { name: "Into the pot" })).toBeVisible();
+  await drafted;
   await page.goto("/ideas");
   await page.getByRole("list", { name: "Ideas" }).getByRole("link").first().click();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable comb for the desk", {
