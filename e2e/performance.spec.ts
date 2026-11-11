@@ -24,19 +24,20 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // budgets of the screens near their limit went up by 2 kB; the crop and upload code loads on demand.
 // Comments added about 1 kB to the lists (the unread marker on cards: its query, a badge and an icon); the thread and its
 // composer are a lazy chunk of the idea and build pages, and the palette's "New comments" row loads with the palette.
+// Merging main (photo reads, spare parts) and comments together took the lists about 1 kB past their old limits: budgets +1 to +2 kB.
 const BUDGET_KB = {
   "/sign-in": 214,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 320,
+  "/today": 322,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 311,
-  "/builds": 311,
-  "/journal": 311,
+  "/ideas": 313,
+  "/builds": 313,
+  "/journal": 313,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 317,
-  "/pantry": 321,
-  "/printer": 321,
+  "/search": 318,
+  "/pantry": 323,
+  "/printer": 322,
 } as const;
 
 /**
