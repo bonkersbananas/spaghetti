@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BuildsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { deletedQuery, restoreDeletedAttempt, restoreDeletedItem } from "@/lib/deleted";
 import { photoSrc } from "@/lib/previews";
@@ -55,10 +55,7 @@ function RecentlyDeleted() {
       ) : (
         <div className="flex max-w-2xl flex-col gap-10">
           {data && data.items.length > 0 && (
-            <section aria-labelledby="deleted-items">
-              <SectionHeading id="deleted-items" size="title" count={data.items.length} className="mb-3">
-                Ideas and builds
-              </SectionHeading>
+            <Section id="deleted-items" title="Ideas and builds" size="title" count={data.items.length}>
               <ul className="flex flex-col">
                 {data.items.map((entry) => {
                   const name = itemName(entry);
@@ -100,13 +97,10 @@ function RecentlyDeleted() {
                   );
                 })}
               </ul>
-            </section>
+            </Section>
           )}
           {data && data.attempts.length > 0 && (
-            <section aria-labelledby="deleted-attempts">
-              <SectionHeading id="deleted-attempts" size="title" count={data.attempts.length} className="mb-3">
-                Attempts
-              </SectionHeading>
+            <Section id="deleted-attempts" title="Attempts" size="title" count={data.attempts.length}>
               <ul className="flex flex-col">
                 {data.attempts.map((entry) => {
                   const of = entry.itemTitle?.trim() || "a build";
@@ -139,7 +133,7 @@ function RecentlyDeleted() {
                   );
                 })}
               </ul>
-            </section>
+            </Section>
           )}
         </div>
       )}
