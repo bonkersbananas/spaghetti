@@ -34,6 +34,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
+const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 
 export const Route = createFileRoute("/_app/today")({
   component: Today,
@@ -185,26 +186,34 @@ function Today() {
           Capture an idea or start a build. What's printing and what to pick up next will show here.
         </EmptyState>
       ) : quiet ? (
-        <EmptyState
-          className="py-10 md:py-20"
-          illustration={<SpoolStrand />}
-          title="All quiet in the kitchen"
-          action={
-            <Link to="/ideas" className="focus-ring rounded-md">
-              <Button variant="secondary" tabIndex={-1}>
-                See the ideas
-              </Button>
-            </Link>
-          }
-        >
-          Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
-        </EmptyState>
+        <>
+          {/* Nothing on the bed is exactly when a new message from the other person is worth a line. */}
+          <div className="empty:hidden">
+            <Suspense fallback={null}>
+              <CommentsLine />
+            </Suspense>
+          </div>
+          <EmptyState
+            className="py-10 md:py-20"
+            illustration={<SpoolStrand />}
+            title="All quiet in the kitchen"
+            action={
+              <Link to="/ideas" className="focus-ring rounded-md">
+                <Button variant="secondary" tabIndex={-1}>
+                  See the ideas
+                </Button>
+              </Link>
+            }
+          >
+            Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
+          </EmptyState>
+        </>
       ) : (
         // On a phone the blocks run in one column in the order below (bed, up next, pick up, printer, month, back burner).
         // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
           <div className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
-            <div className="order-1 empty:hidden">
+            <div className="order-1 flex flex-col gap-3 empty:hidden">
               {loading ? (
                 <div className="flex flex-col gap-4" aria-hidden>
                   <CardSkeleton />
@@ -228,6 +237,12 @@ function Today() {
                     </m.div>
                   )}
                 </AnimatePresence>
+              )}
+              {/* Under what is on the bed, never above it: the print is the news, a comment is a note beside it. */}
+              {!loading && (
+                <Suspense fallback={null}>
+                  <CommentsLine />
+                </Suspense>
               )}
             </div>
             <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>

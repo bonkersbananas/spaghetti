@@ -181,7 +181,10 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
 }
 
 /** Items (by id, in this order) with their photo and how their last attempt went. */
-async function itemHits(db: Db, found: Array<{ id: string; snippet: string | null }>): Promise<ItemHit[]> {
+async function itemHits(
+  db: Db,
+  found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }>,
+): Promise<ItemHit[]> {
   if (!found.length) return [];
   const ids = found.map((row) => row.id);
   const [rows, itemAttempts] = await Promise.all([
@@ -189,7 +192,7 @@ async function itemHits(db: Db, found: Array<{ id: string; snippet: string | nul
     liveAttempts(db, ids),
   ]);
   const itemPhotos = await livePhotos(db, ids, new Set(itemAttempts.map((row) => row.id)));
-  return found.flatMap(({ id, snippet }) => {
+  return found.flatMap(({ id, snippet, comment }) => {
     const item = rows.find((row) => row.id === id);
     if (!item) return [];
     const own = itemAttempts.filter((row) => row.itemId === id);
@@ -215,6 +218,7 @@ async function itemHits(db: Db, found: Array<{ id: string; snippet: string | nul
         attempts: own.length,
         lastOutcome: (last?.row.outcome ?? null) as Outcome | null,
         snippet,
+        comment,
         photo: photo ? toApiPhoto(photo) : null,
       },
     ];
@@ -273,7 +277,7 @@ export const searchRoutes = new Hono<AppEnv>()
 
     const custom = await db.select({ kind: tags.kind, slug: tags.slug, label: tags.label }).from(tags);
     const match = ftsQuery(terms, custom);
-    const [attemptRows, itemRows] = await Promise.all([
+    const [attemptRows, itemRows, commentRows] = await Promise.all([
       all<{ id: string }>(c.env, {
         sql: `SELECT a.id FROM search
           JOIN attempts AS a ON a.id = search.ref_id
@@ -292,16 +296,47 @@ export const searchRoutes = new Hono<AppEnv>()
               ORDER BY ${RANK}, i.created_at DESC LIMIT ${LIMIT.items * 2}`,
             params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
           }),
+      // What the two of you said in a thread (migrations/0022_comment-search.sql): found as the item it belongs to.
+      narrowsAttempts
+        ? Promise.resolve([])
+        : all<{
+            id: string;
+            item_id: string;
+            author_id: string;
+            via: string | null;
+            created_at: number;
+            snippet: string;
+          }>(c.env, {
+            sql: `SELECT c.id, c.item_id, c.author_id, c.via, c.created_at, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
+              JOIN comments AS c ON c.id = search.ref_id
+              JOIN items AS i ON i.id = c.item_id
+              WHERE search MATCH ? AND search.kind = 'comment' AND c.deleted_at IS NULL AND i.deleted_at IS NULL${f.person ? " AND i.created_by = ?" : ""}
+              ORDER BY ${RANK}, c.created_at DESC LIMIT ${LIMIT.items * 2}`,
+            params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
+          }),
     ]);
+    // An item that matched on its own words keeps its note's snippet; one found only by a comment shows the best comment.
+    const found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }> = itemRows.map((row) => ({
+      id: row.id,
+      snippet: row.snippet || null,
+      comment: null,
+    }));
+    const seen = new Set(found.map((row) => row.id));
+    for (const row of commentRows) {
+      if (seen.has(row.item_id)) continue;
+      seen.add(row.item_id);
+      found.push({
+        id: row.item_id,
+        snippet: row.snippet || null,
+        comment: { id: row.id, authorId: row.author_id, via: row.via, createdAt: row.created_at },
+      });
+    }
     const [attemptList, itemList, recipeList] = await Promise.all([
       attemptHits(
         db,
         attemptRows.map((row) => row.id),
       ),
-      itemHits(
-        db,
-        itemRows.map((row) => ({ id: row.id, snippet: row.snippet || null })),
-      ),
+      itemHits(db, found),
       findRecipes(),
     ]);
     return c.json<SearchResponse>({

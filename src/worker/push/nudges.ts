@@ -10,6 +10,7 @@ import {
 import { sinceWords } from "../../shared/upkeep.ts";
 import { getDb } from "../db/index.ts";
 import { attempts, items, pushNudges, pushSubscriptions, upkeepTasks, users } from "../db/schema.ts";
+import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
 import { loadUpkeep } from "../routes/upkeep.ts";
 import { importVapidKey, type PushResult, sendPush } from "./webpush.ts";
 
@@ -52,7 +53,7 @@ export async function pushTo(
  * person's prints. Quiet hours (22:00 to 07:00 in the device's time zone) wait; a nudge that has waited past
  * the window, or whose attempt got an outcome meanwhile, is never sent.
  */
-export async function sendNudges(env: Env, now = Date.now()) {
+export async function sendNudges(env: Env, now = Date.now(), deliver: typeof pushTo = pushTo) {
   const db = getDb(env.DB);
   const open = await db
     .select({ attempt: attempts, title: items.title })
@@ -94,6 +95,11 @@ export async function sendNudges(env: Env, now = Date.now()) {
         due.map((d) => d.attempt.id),
       ),
     );
+  // What Claude made of their photos, if anything: the push says so gently.
+  const reads = await readsByAttempt(
+    db,
+    due.map((d) => d.attempt.id),
+  );
   const done = new Set(already.map((n) => `${n.attemptId}:${n.userId}`));
 
   let sent = 0;
@@ -113,10 +119,13 @@ export async function sendNudges(env: Env, now = Date.now()) {
         .bind(attempt.id, userId, kind, now)
         .run();
       if (!claim.meta.changes) continue;
-      const message = nudgeMessage(kind, attempt, title, userId === own ? undefined : names.get(own));
+      const read = toApiPhotoRead(reads.get(attempt.id) ?? []);
+      const suggestion =
+        read?.status === "read" && read.outcome ? { outcome: read.outcome, reason: read.reason } : null;
+      const message = nudgeMessage(kind, attempt, title, userId === own ? undefined : names.get(own), suggestion);
       let delivered = 0;
       for (const device of awake) {
-        if ((await pushTo(env, vapid, device, message)) === "sent") delivered++;
+        if ((await deliver(env, vapid, device, message)) === "sent") delivered++;
       }
       sent += delivered;
       // Nothing got through (a hiccup at the push service): release the claim so the next run tries again.

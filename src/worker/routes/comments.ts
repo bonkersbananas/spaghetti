@@ -148,7 +148,10 @@ export const commentRoutes = new Hono<AppEnv>()
   .get("/unread", async (c) => {
     const me = c.var.user.id;
     const result = await c.env.DB.prepare(
-      `SELECT c.item_id AS itemId, count(*) AS count, max(c.created_at) AS latestAt
+      // The bare columns come from the row max() picked: the newest unread comment of each thread.
+      `SELECT c.item_id AS itemId, count(*) AS count, max(c.created_at) AS latestAt,
+              c.id AS latestId, c.author_id AS latestAuthorId, substr(c.body, 1, 240) AS latestBody,
+              i.title AS title, i.stage AS stage
          FROM comments c
          JOIN items i ON i.id = c.item_id AND i.deleted_at IS NULL
          LEFT JOIN comment_reads r ON r.item_id = c.item_id AND r.user_id = ?1
@@ -157,7 +160,7 @@ export const commentRoutes = new Hono<AppEnv>()
         ORDER BY latestAt DESC`,
     )
       .bind(me)
-      .all<{ itemId: string; count: number; latestAt: number }>();
+      .all<UnreadCommentsResponse["threads"][number]>();
     return c.json<UnreadCommentsResponse>({ threads: result.results });
   })
 
