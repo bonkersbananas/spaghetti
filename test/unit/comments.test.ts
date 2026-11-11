@@ -131,8 +131,12 @@ describe("unreadLine", () => {
     stage: "building",
   };
   const name = () => "Marie";
-  it("quotes the one comment, or counts when there are several", () => {
-    expect(unreadLine([thread], name)).toMatchObject({ lead: "Marie on Tugboat", quote: "Started it tonight" });
+  it("quotes the latest comment and counts them all", () => {
+    expect(unreadLine([thread], name)).toMatchObject({
+      lead: "Marie on Tugboat",
+      quote: "Started it tonight",
+      total: 1,
+    });
     expect(
       unreadLine(
         [
@@ -140,8 +144,8 @@ describe("unreadLine", () => {
           { ...thread, itemId: "j" },
         ],
         name,
-      )?.lead,
-    ).toBe("3 new comments · latest from Marie on Tugboat");
+      ),
+    ).toMatchObject({ lead: "Marie on Tugboat", total: 3 });
   });
   it("names an untitled thread by its stage, and says nothing when all is read or the copy is old", () => {
     expect(unreadLine([{ ...thread, title: null, stage: "idea" }], name)?.lead).toBe("Marie on an idea");
