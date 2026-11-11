@@ -12,7 +12,7 @@ import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
 import { formatBytes, plateThumb, type SlicerFileDraft } from "@/lib/slicer-files";
 import { useObjectUrl } from "@/lib/use-object-url";
-import { canView3d, ThreeDButton } from "../viewer/ThreeDButton";
+import { canView3d, type PrintingAttempt, ThreeDButton } from "../viewer/ThreeDButton";
 import { formatMinutes } from "./settings";
 
 /** A plate's picture on a quiet well (slicers render them on transparent ground). */
@@ -103,10 +103,13 @@ export function savedFileMeta(file: AttemptFileView): { meta: string[]; note?: s
 export function SavedFileCard({
   file,
   filaments,
+  printing,
   onRemove,
   className,
 }: {
   file: AttemptFileView;
+  /** The attempt, while it prints: the 3D view then follows the printer. */
+  printing?: PrintingAttempt;
   /** The attempt's filaments: their colours stand in for any the file doesn't give. */
   filaments?: AttemptFilament[];
   onRemove?: () => void;
@@ -121,7 +124,9 @@ export function SavedFileCard({
       note={note}
       download={file.stored && !file.pending ? fileUrl(file.id) : undefined}
       plateOverlay={
-        canView3d(file) ? <ThreeDButton file={file} fallbackColors={filaments?.map((f) => f.colorHex)} /> : undefined
+        canView3d(file) ? (
+          <ThreeDButton file={file} fallbackColors={filaments?.map((f) => f.colorHex)} printing={printing} />
+        ) : undefined
       }
       onRemove={onRemove}
       className={className}
