@@ -1065,6 +1065,21 @@ export const shots: Shot[] = [
       await page.waitForTimeout(400);
     },
   },
+  {
+    // A toast (Undo) over an open sheet: it sits above it, at the top on phones, and the sheet stays usable.
+    name: "toast-over-sheet",
+    path: "/ideas",
+    prepare: async (page) => {
+      const width = page.viewportSize()?.width === 390 ? 390 : 1440;
+      await openAccount(page, width);
+      await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
+      await page.getByTestId("crop-frame").locator("img").waitFor();
+      await page.getByRole("button", { name: "Save" }).click();
+      await page.getByText("Picture changed").waitFor();
+      await openAccount(page, width);
+      await page.waitForTimeout(600);
+    },
+  },
   { name: "styleguide-avatars", path: "/styleguide", selector: "#avatars" },
   { name: "styleguide-notifications", path: "/styleguide", selector: "#notifications" },
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },

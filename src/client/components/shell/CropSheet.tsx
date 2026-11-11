@@ -16,13 +16,15 @@ interface CropSheetProps {
   onClose: () => void;
   onChooseAnother: () => void;
   onSave: (picture: Blob) => void;
+  /** Given when there is a picture to take away: shows "Remove picture". */
+  onRemove?: () => void;
 }
 
 /**
  * Places a photo in a circle: drag to move, pinch or scroll (or the slider) to zoom. What is inside the circle becomes
  * the profile picture, cut out in the browser (shared/crop.ts has the maths).
  */
-export function CropSheet({ file, onClose, onChooseAnother, onSave }: CropSheetProps) {
+export function CropSheet({ file, onClose, onChooseAnother, onSave, onRemove }: CropSheetProps) {
   const [kept, setKept] = useState<File | null>(null);
   // The sheet keeps showing the photo while it slides away.
   if (file && file !== kept) setKept(file);
@@ -62,6 +64,20 @@ export function CropSheet({ file, onClose, onChooseAnother, onSave }: CropSheetP
       }
     >
       {shown && <Cropper file={shown} {...crop} />}
+      {onRemove && (
+        <div className="flex justify-center pb-1">
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => {
+              onRemove();
+              onClose();
+            }}
+          >
+            Remove picture
+          </Button>
+        </div>
+      )}
     </Sheet>
   );
 }

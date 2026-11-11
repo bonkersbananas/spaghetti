@@ -6,7 +6,7 @@ import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useSignOut } from "@/lib/use-sign-out";
 import { AccountButton } from "./AccountButton";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhoto } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow } from "./lazy-account";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** The sidebar's account menu (desktop), loaded on demand by the Sidebar. */
@@ -14,8 +14,10 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
-  const [asked, setAsked] = useState({ notifying: false, password: false });
+  const [cropping, setCropping] = useState<File | null>(null);
+  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false });
   if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
+  if (cropping && !asked.photo) setAsked({ ...asked, photo: true });
   if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
   return (
     <>
@@ -28,7 +30,7 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
       >
         <div className="flex flex-col gap-3">
           <Suspense fallback={<div className="h-14" />}>
-            <ProfilePhoto />
+            <ProfilePhotoRow onPick={setCropping} />
           </Suspense>
           <div className="bg-hairline h-px" />
           <ThemeSwitch />
@@ -64,6 +66,11 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
       </Popover>
       {/* Mounted once asked for. In the production build, a closed sheet that mounts while another sheet is open (the share sheet) looped (React error 185). */}
       {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
+      {asked.photo && (
+        <Suspense fallback={null}>
+          <ProfilePhotoCrop file={cropping} onFile={setCropping} onClose={() => setCropping(null)} />
+        </Suspense>
+      )}
       {asked.password && (
         <Suspense fallback={null}>
           <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />

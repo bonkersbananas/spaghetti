@@ -95,14 +95,19 @@ test("sets a picture from the account menu, the other person sees it, and it can
   // Removing goes back to initials, and Undo brings the picture back.
   const again = await openAccount(page, isMobile);
   await expect(again.getByRole("button", { name: "Change photo" })).toBeVisible();
-  await again.getByRole("button", { name: "Remove" }).click();
+  await again.getByTestId("profile-photo-input").setInputFiles(portrait);
+  const removal = page.getByRole("dialog", { name: "Your picture" }).getByRole("button", { name: "Remove picture" });
+  await expect(removal).toBeVisible();
+  await removal.click();
   await expect(page.getByText("Picture removed")).toBeVisible();
   await expect
     .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
     .toBeNull();
-  // On a phone the sheet covers the toast: close it to reach Undo.
-  if (isMobile) await page.keyboard.press("Escape");
+  // The toast sits above a sheet (here the account sheet, opened again), and pressing Undo leaves the sheet open.
+  const reopened = await openAccount(page, isMobile);
+  await expect(reopened.getByRole("button", { name: "Add a photo" })).toBeVisible();
   await page.getByRole("listitem").filter({ hasText: "Picture removed" }).getByRole("button", { name: "Undo" }).click();
+  if (isMobile) await expect(reopened).toBeVisible();
   await expect
     .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
     .not.toBeNull();
