@@ -40,9 +40,10 @@ const BUDGET_KB = {
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 289,
   "/builds": 286,
-  "/journal": 285,
+  // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
+  "/journal": 286,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 291,
+  "/search": 292,
   "/pantry": 296,
   "/printer": 294,
 } as const;
