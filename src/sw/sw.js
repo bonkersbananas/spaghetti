@@ -84,11 +84,17 @@ async function showNudge(event) {
   });
 }
 
-/** Desktop Chrome shows two buttons, Android three: with two, keep the first and last (Worked, Spaghetti); Partly is one tap away in the sheet. */
+/**
+ * Desktop Chrome shows two buttons, Android three. With two: the first (the one Claude suggested, if it did,
+ * else Worked) and the first of the rest that isn't Partly (Partly is one tap away in the sheet).
+ */
 function pickActions(actions, max) {
   if (actions.length <= max) return actions;
   if (max <= 0) return [];
-  return max === 1 ? actions.slice(0, 1) : [...actions.slice(0, max - 1), actions[actions.length - 1]];
+  if (max === 1) return actions.slice(0, 1);
+  const [first, ...rest] = actions;
+  const second = rest.find((a) => a.action !== "partial") ?? rest[0];
+  return [first, second, ...rest.filter((a) => a !== second)].slice(0, max);
 }
 
 self.addEventListener("notificationclick", (event) => {

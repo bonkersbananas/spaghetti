@@ -14,4 +14,6 @@ Status: Accepted
 
 **What it reads:** the photo's large variant from R2 (already resized in the browser, [0004](0004-photos-resized-in-the-browser.md)). The bridge's frame arrives `needsResize`, with the original stored as both variants; it is read as it is when it is a JPEG or WebP within the API's limits (5 MB, 8000 px), which a camera frame is, rather than waiting for a browser to make a variant. It also gets the build's title and the attempt's note as context, and any failure tag the printer reported.
 
-**Left out:** Today's print card and the push notification (another piece of work was changing Today; both can show the hint later), asking again for a photo that wasn't read, a visible error line, server-side refusal fallbacks.
+**Also shown (follow-up):** Today's off-the-bed card hints the same button with the reason, and the "how did it go?" push says "Looks like it worked: …" and lists the suggested action first (the service worker keeps it plus the first non-Partly one where only two buttons fit). Still nothing is set until a person taps.
+
+**Left out:** asking again for a photo that wasn't read, a visible error line, server-side refusal fallbacks.

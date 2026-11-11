@@ -8,4 +8,6 @@ Status: Accepted
 
 **Why:** two people, one thread each, no need for per-message receipts or typing indicators; "read up to here" is one number and survives edits and deletes. Batching with a conditional claim needs no queue or timer storage on Workers (the wait is in `waitUntil`), and a retry or overlapping calls can't send twice.
 
-**Left out:** comments in search (the FTS view is being changed by the parts work; follow-up), a line for them on Today, a separate toggle for comment pushes (turning push on is the consent), per-message "seen" marks, reactions and threads inside threads, and writing comments offline (offline is read-only, [0005](0005-offline-read-only-with-outbox.md): the draft is kept on the device instead).
+**Follow-up:** comments are in search (`kind = 'comment'` rows in the FTS index kept by triggers, migration 0022; a hit shows as its idea or build with the comment as snippet and opens the thread with that comment lit) and Today has one quiet line for unread comments.
+
+**Left out:** a separate toggle for comment pushes (turning push on is the consent), per-message "seen" marks, reactions and threads inside threads, and writing comments offline (offline is read-only, [0005](0005-offline-read-only-with-outbox.md): the draft is kept on the device instead).

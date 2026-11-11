@@ -56,6 +56,9 @@ interface BubbleProps {
   aside?: ReactNode;
   /** A tap on the bubble's text (not on a link): on phones it opens the options. */
   onTap?: () => void;
+  id?: string;
+  /** Lit for a moment: the comment a search found. */
+  highlighted?: boolean;
   /** Under the bubble (a link card). */
   below?: ReactNode;
   /** Without text (a message that is only a link) there is no bubble, just what is `below`. */
@@ -63,9 +66,19 @@ interface BubbleProps {
 }
 
 /** One message. Text wraps and keeps its line breaks; yours sit on a tomato tint, the other person's on cream. */
-export function Bubble({ mine = false, edited = false, aside, onTap, below, children }: BubbleProps) {
+export function Bubble({
+  mine = false,
+  edited = false,
+  highlighted = false,
+  aside,
+  onTap,
+  below,
+  children,
+  id,
+}: BubbleProps) {
   return (
     <div
+      id={id}
       className={cn(
         "group/bubble relative flex max-w-full min-w-0 flex-col gap-1.5",
         mine ? "items-end" : "items-start",
@@ -83,7 +96,8 @@ export function Bubble({ mine = false, edited = false, aside, onTap, below, chil
               : undefined
           }
           className={cn(
-            "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 break-words whitespace-pre-wrap",
+            "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 break-words whitespace-pre-wrap transition-shadow duration-700",
+            highlighted && "ring-semolina ring-offset-paper ring-2 ring-offset-2",
             mine ? "bg-tomato-soft rounded-ee-xs" : "bg-cream shadow-soft rounded-es-xs",
           )}
         >

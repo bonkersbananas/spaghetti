@@ -21,6 +21,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { itemName } from "../journal/JournalEntry";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
+import { PhotoReadNote } from "./PhotoReadNote";
 import { SettingsLine } from "./SettingsLine";
 
 interface PrintingCardProps {
@@ -177,6 +178,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             <OffTheBed
               endedAt={attempt.endedAt}
               onPick={(outcome) => finish(outcome)}
+              photoRead={attempt.photoRead}
               className="pointer-events-auto md:mt-auto"
             />
           ) : (
@@ -212,7 +214,13 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               {due && (
                 <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
                   <p className="text-body text-ink font-semibold">How did it go?</p>
-                  <OutcomePicker value={null} onChange={(outcome) => finish(outcome)} size="md" />
+                  <OutcomePicker
+                    value={null}
+                    onChange={(outcome) => finish(outcome)}
+                    size="md"
+                    suggested={attempt.photoRead?.outcome ?? null}
+                  />
+                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} />}
                 </div>
               )}
             </>

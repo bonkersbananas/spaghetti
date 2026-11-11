@@ -19,10 +19,12 @@ interface EditableBubbleProps {
   editing: boolean;
   onEdit: (on: boolean) => void;
   readOnly: boolean;
+  /** Lit for a moment: the comment a search found. */
+  highlighted?: boolean;
 }
 
 /** One message; yours have a quiet "…" for Edit and Delete, and Edit turns the bubble into a field in place. */
-export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: EditableBubbleProps) {
+export function EditableBubble({ comment, mine, editing, onEdit, readOnly, highlighted }: EditableBubbleProps) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -122,6 +124,8 @@ export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: Edi
   // A message that ends with a link shows it as a card instead of the raw address; mid-sentence links stay in the text.
   return (
     <Bubble
+      id={`comment-${comment.id}`}
+      highlighted={highlighted}
       mine={mine}
       edited={comment.editedAt !== null}
       aside={aside}

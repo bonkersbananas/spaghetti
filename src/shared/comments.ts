@@ -31,7 +31,18 @@ export interface CommentsResponse {
 
 /** GET /api/comments/unread: the threads with comments the signed-in person hasn't read. */
 export interface UnreadCommentsResponse {
-  threads: Array<{ itemId: string; count: number; latestAt: number }>;
+  threads: Array<{
+    itemId: string;
+    count: number;
+    latestAt: number;
+    /** The newest unread comment (the start of its text), for Today's line; absent in a copy saved by an older version. */
+    latestId?: string;
+    latestAuthorId?: string;
+    latestBody?: string;
+    /** Its idea's or build's title (null when untitled) and stage, to name it and to link to the right page. */
+    title?: string | null;
+    stage?: string;
+  }>;
 }
 
 /** Messages by one person within this long of each other sit together under one name and time. */
@@ -112,6 +123,22 @@ export function commentPushText(author: string, itemTitle: string, bodies: strin
   const last = clean[clean.length - 1] ?? "";
   if (clean.length <= 1) return { title, body: clip(last, PUSH_BODY_MAX) };
   return { title, body: clip(`${clean.length} new comments. ${last}`, PUSH_BODY_MAX) };
+}
+
+/** Today's line for comments you haven't read: one thread's newest comment, or the count when there are several. */
+export function unreadLine(
+  threads: UnreadCommentsResponse["threads"],
+  nameOf: (authorId: string) => string,
+): { lead: string; quote: string; thread: UnreadCommentsResponse["threads"][number] } | null {
+  const [latest] = threads;
+  if (!latest?.latestId || !latest.latestAuthorId) return null;
+  const total = threads.reduce((sum, thread) => sum + thread.count, 0);
+  const what = squash(latest.title ?? "") || (latest.stage === "idea" ? "an idea" : "a build");
+  const lead = `${nameOf(latest.latestAuthorId)} on ${what}`;
+  const quote = clip(squash(latest.latestBody ?? ""), 90);
+  return total === 1
+    ? { lead, quote, thread: latest }
+    : { lead: `${total} new comments · latest from ${lead}`, quote, thread: latest };
 }
 
 /** Where a comment's push opens: the thread on the idea's or build's page. */

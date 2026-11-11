@@ -16,7 +16,7 @@ interface SeedComment {
   body: string;
 }
 
-const commentId = (n: number) => `5eed0000-0000-4000-8000-0000000c${String(n).padStart(4, "0")}`;
+export const commentId = (n: number) => `5eed0000-0000-4000-8000-0000000c${String(n).padStart(4, "0")}`;
 
 /** Two short threads, one on an idea (its last comment from Sam is unread for Alex) and one on a build (all read). */
 export const SEED_COMMENTS: SeedComment[] = [

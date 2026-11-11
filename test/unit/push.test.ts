@@ -72,6 +72,33 @@ describe("nudgeMessage", () => {
   });
 });
 
+describe("nudgeMessage with Claude's guess", () => {
+  const attempt = { id: "a-1", itemId: "i-1" };
+
+  it("mentions it gently and puts the suggested button first, still asking nothing for the person", () => {
+    const message = nudgeMessage("off_the_bed", attempt, "Tugboat", undefined, {
+      outcome: "success",
+      reason: "Clean walls and a smooth top.",
+    });
+    expect(message.title).toBe("Tugboat is off the bed");
+    expect(message.body).toBe("Looks like it worked: clean walls and a smooth top.");
+    expect(message.actions.map((a) => a.action)).toEqual(["success", "partial", "failed"]);
+    const failed = nudgeMessage("off_the_bed", attempt, "Tugboat", undefined, { outcome: "failed", reason: null });
+    expect(failed.body).toBe("Looks like spaghetti.");
+    expect(failed.actions.map((a) => a.action)).toEqual(["failed", "success", "partial"]);
+    const partly = nudgeMessage("overdue", attempt, "Hook", "Sam", {
+      outcome: "partial",
+      reason: "PLA stringing on one side",
+    });
+    expect(partly.body).toBe("Sam's print. Looks like it came out partly: PLA stringing on one side.");
+    expect(partly.actions[0]?.action).toBe("partial");
+  });
+
+  it("is the plain question without a suggestion", () => {
+    expect(nudgeMessage("off_the_bed", attempt, "Tugboat", undefined, null).body).toBe("How did it go?");
+  });
+});
+
 describe("buttons by device", () => {
   it("gives iPhone none, desktop Chrome Worked and Spaghetti, Android all three", () => {
     expect(actionsFor("ios")).toEqual([]);
