@@ -1,4 +1,5 @@
 import { carryOver, type Outcome } from "@shared/attempts";
+import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePicker";
@@ -16,6 +17,7 @@ import { queueSlicerFile } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
+import { useOutcomeCounts } from "./PlateParts";
 import { DraftFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
 import { WhenField } from "./WhenField";
 
@@ -42,6 +44,7 @@ export function LogAttempt({
     failureTags: [],
     successNotes: [],
     settings: carryOver(previous?.settings),
+    parts: [],
   });
   const [draft, setDraft] = useState(blank);
   const [when, setWhen] = useState<number | null>(null);
@@ -50,10 +53,19 @@ export function LogAttempt({
   const { photos, addFiles, removePhoto: removeDraftPhoto, clear } = useDraftPhotos();
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
   const library = useFilePicker({ multiple: true, onFiles: addFiles });
+  const outcomeCounts = useOutcomeCounts();
   const slicer = useSlicerFile({
     open,
     settings: draft.settings,
     onSettings: (settings) => change({ settings }),
+    // A plate from a file: its parts are what's on it (unless someone already said).
+    onObjects: (objects) => {
+      const found = partsOnPlate(objects, item.parts);
+      if (found.length)
+        setDraft((current) =>
+          current.parts.length ? current : { ...current, parts: outcomeCounts(found, current.outcome) },
+        );
+    },
     incomingFile,
   });
 
@@ -157,7 +169,8 @@ export function LogAttempt({
             if (draft.outcome) save(draft.outcome);
           }}
           outcome={draft.outcome}
-          onOutcome={(outcome) => change({ outcome })}
+          onOutcome={(outcome) => change({ outcome, parts: outcomeCounts(draft.parts, outcome) })}
+          plate={{ parts: item.parts, value: draft.parts, onChange: (parts) => change({ parts }) }}
           note={draft.note}
           onNote={(note) => change({ note })}
           failureTags={draft.failureTags}

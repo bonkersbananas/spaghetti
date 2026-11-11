@@ -7,6 +7,7 @@ import {
   type TagDefinition,
   tagLabel,
 } from "./attempts.ts";
+import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
 
 /** What the story needs to name people and agents. */
 export interface StoryContext {
@@ -87,12 +88,23 @@ export function buildStory(item: Item, context: StoryContext): string {
   const photos = item.photos.filter((photo) => !photo.attemptId).length;
   if (photos) lines.push(`${photos} ${photos === 1 ? "photo" : "photos"} of the idea.`, "");
 
+  if (item.parts.length) {
+    const progress = partProgress(item.parts, item.attempts);
+    lines.push("## Parts", "");
+    for (const p of progress) {
+      lines.push(`- ${p.part.name} ×${p.part.quantity}: ${progressLabel(p)} (part_id: ${p.part.id})`);
+    }
+    if (allPartsPrinted(progress)) lines.push("", "_Every part is printed._");
+    lines.push("");
+  }
+
   lines.push(`## Attempts (${item.attempts.length})`, "");
   if (!item.attempts.length) lines.push("_None yet._", "");
   item.attempts.forEach((attempt, index) => {
     const outcome = attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "Printing";
+    const printed = attemptPartsLabel(attempt, item.parts);
     lines.push(
-      `### Attempt ${index + 1}: ${outcome}`,
+      `### Attempt ${index + 1}${printed ? ` · ${printed}` : ""}: ${outcome}`,
       "",
       `_${date(attempt.printedAt)} · ${who(attempt.createdBy, attempt.createdVia)} · id: ${attempt.id}_`,
       "",

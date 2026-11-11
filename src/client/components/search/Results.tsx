@@ -111,7 +111,11 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       </span>
       <span className="text-body text-ink min-w-0 truncate font-semibold">
         <Highlight text={title} terms={terms} />
-        <span className="text-small text-ink-faint font-medium"> · attempt {hit.number}</span>
+        <span className="text-small text-ink-faint font-medium">
+          {" "}
+          · attempt {hit.number}
+          {hit.partsLabel ? ` · ${hit.partsLabel}` : ""}
+        </span>
       </span>
       {attempt.note && <Highlight text={attempt.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />}
       {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (

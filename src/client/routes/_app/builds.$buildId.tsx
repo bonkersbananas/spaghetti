@@ -1,6 +1,7 @@
 import type { Recipe } from "@shared/api";
 import { type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
+import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
@@ -13,6 +14,7 @@ import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OutcomeChip } from "@/components/builds/Outcome";
+import { PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
@@ -50,7 +52,7 @@ import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
 import { SaveStatus } from "@/components/ui/SaveStatus";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
@@ -503,6 +505,13 @@ function Build({ item }: { item: ItemView }) {
 
           <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} />
 
+          <PartsSection
+            item={item}
+            active={active}
+            readOnly={readOnly}
+            onFinishBuild={() => finishBuild(queryClient, item)}
+          />
+
           {worked && (
             <WhatWorked
               attempt={worked}
@@ -516,12 +525,13 @@ function Build({ item }: { item: ItemView }) {
         </div>
 
         {/* The story: every attempt, newest first. */}
-        <section aria-labelledby="story" className="flex min-w-0 flex-col md:flex-3">
-          <div className="mb-4 flex items-center justify-between gap-3 md:mb-5">
-            <SectionHeading id="story" count={item.attempts.length || undefined}>
-              Attempts
-            </SectionHeading>
-            {isDesktop && (
+        <Section
+          id="story"
+          title="Attempts"
+          count={item.attempts.length || undefined}
+          className="min-w-0 md:flex-3"
+          aside={
+            isDesktop && (
               <Button
                 variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
                 icon={printing ? CheckIcon : PlusIcon}
@@ -530,65 +540,69 @@ function Build({ item }: { item: ItemView }) {
               >
                 {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
               </Button>
+            )
+          }
+        >
+          {/* One child: the list and what follows it keep their own spacing, not the section's gap. */}
+          <div className="flex flex-col">
+            {story.length === 0 ? (
+              <EmptyState
+                className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
+                illustration={<SpoolStrand />}
+                title="The water's still heating"
+              >
+                Log the first attempt when it comes off the bed, or start one now and finish it when the print is done.
+              </EmptyState>
+            ) : (
+              <ol aria-label="Attempts, newest first" className="flex flex-col">
+                <AnimatePresence initial={false}>
+                  {story.map((attempt, index) => (
+                    <AttemptEntry
+                      key={attempt.id}
+                      ref={(el) => {
+                        if (el) entryRefs.current.set(attempt.id, el);
+                        else entryRefs.current.delete(attempt.id);
+                      }}
+                      attempt={attempt}
+                      partsLabel={attemptPartsLabel(attempt, item.parts)}
+                      photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
+                      person={byId.get(attempt.createdBy)}
+                      via={via(attempt.createdVia)}
+                      selected={attempt.id === selected}
+                      first={index === 0}
+                      onOpen={() => {
+                        setSelected(attempt.id);
+                        openSheet(attempt.id);
+                      }}
+                      onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                      reserveExtras={reserveExtras}
+                      onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
+                      onSaveRecipe={
+                        recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                          ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </AnimatePresence>
+              </ol>
             )}
+
+            <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
+              <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
+              {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
+              {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
+              <p>
+                {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
+                <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
+                  {inlineTime(started)}
+                </time>
+              </p>
+            </div>
+
+            {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
           </div>
-
-          {story.length === 0 ? (
-            <EmptyState
-              className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
-              illustration={<SpoolStrand />}
-              title="The water's still heating"
-            >
-              Log the first attempt when it comes off the bed, or start one now and finish it when the print is done.
-            </EmptyState>
-          ) : (
-            <ol aria-label="Attempts, newest first" className="flex flex-col">
-              <AnimatePresence initial={false}>
-                {story.map((attempt, index) => (
-                  <AttemptEntry
-                    key={attempt.id}
-                    ref={(el) => {
-                      if (el) entryRefs.current.set(attempt.id, el);
-                      else entryRefs.current.delete(attempt.id);
-                    }}
-                    attempt={attempt}
-                    photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
-                    person={byId.get(attempt.createdBy)}
-                    via={via(attempt.createdVia)}
-                    selected={attempt.id === selected}
-                    first={index === 0}
-                    onOpen={() => {
-                      setSelected(attempt.id);
-                      openSheet(attempt.id);
-                    }}
-                    onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                    reserveExtras={reserveExtras}
-                    onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
-                    onSaveRecipe={
-                      recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
-                        ? () => setSavingRecipe(recipeSource(attempt) ?? null)
-                        : undefined
-                    }
-                  />
-                ))}
-              </AnimatePresence>
-            </ol>
-          )}
-
-          <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
-            <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-            {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
-            {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
-            <p>
-              {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
-              <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
-                {inlineTime(started)}
-              </time>
-            </p>
-          </div>
-
-          {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
-        </section>
+        </Section>
       </div>
 
       {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
