@@ -12,10 +12,13 @@ export type LiveState = "waiting" | "connected" | "problem";
 export function LiveStatus({
   state,
   children,
+  detail,
   className,
 }: {
   state: LiveState;
   children: ReactNode;
+  /** A longer sentence under the status, in regular weight (what is wrong and what to do). */
+  detail?: ReactNode;
   className?: string;
 }) {
   return (
@@ -34,7 +37,10 @@ export function LiveStatus({
         {state === "connected" && <CheckCircleIcon size={20} weight="fill" />}
         {state === "problem" && <WarningIcon size={20} weight="fill" />}
       </span>
-      <span className="min-w-0 font-semibold">{children}</span>
+      <span className="min-w-0">
+        <span className="font-semibold">{children}</span>
+        {detail && <span className="text-small mt-1 block">{detail}</span>}
+      </span>
     </p>
   );
 }

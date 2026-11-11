@@ -54,11 +54,11 @@ export function BridgeCard({ className }: { className?: string }) {
       </div>
       {!readOnly && (
         <div className="flex flex-wrap gap-2 pl-5">
-          <Button variant={state === "none" ? "secondary" : "quiet"} size="sm" onClick={show}>
+          <Button variant="secondary" size="sm" onClick={show}>
             {state === "none" ? "Connect the bridge" : "Set it up again"}
           </Button>
           {state !== "none" && (
-            <Button variant="quiet" size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
+            <Button variant="danger" size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
               Disconnect
             </Button>
           )}

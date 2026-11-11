@@ -2473,6 +2473,7 @@ shots.push(
           problems: [],
         });
         await dialog.getByText("Connected to the X2D").waitFor({ timeout: 15_000 });
+        await dialog.getByText("Connected to the X2D").scrollIntoViewIfNeeded();
         await page.waitForTimeout(400);
       },
       cleanup: async (page) => {
@@ -2498,6 +2499,7 @@ shots.push(
           ],
         });
         await dialog.getByText(/macOS may be blocking/).waitFor({ timeout: 15_000 });
+        await dialog.getByText(/macOS may be blocking/).scrollIntoViewIfNeeded();
         await page.waitForTimeout(400);
       },
       cleanup: async (page) => {

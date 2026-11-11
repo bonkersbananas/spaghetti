@@ -12,7 +12,12 @@ export function LiveStatusSection() {
       <Panel className="flex flex-col gap-3 md:max-w-2xl">
         <LiveStatus state="waiting">Waiting for the bridge…</LiveStatus>
         <LiveStatus state="connected">Connected to the X2D</LiveStatus>
-        <LiveStatus state="problem">Can't reach the printer. Is it on?</LiveStatus>
+        <LiveStatus
+          state="problem"
+          detail="If it is on and on this network, macOS may be blocking Spaghetti Bridge: open System Settings, Privacy & Security, Local Network and turn it on."
+        >
+          Can't reach the printer
+        </LiveStatus>
       </Panel>
     </Section>
   );
