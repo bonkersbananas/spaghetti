@@ -50,13 +50,8 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
             </PopoverClose>
           </MenuGroup>
           <div className="bg-hairline h-px" />
-          <Suspense fallback={<div className="h-44" />}>
-            <SigningInRows
-              size="sm"
-              wrap={(row) => <PopoverClose asChild>{row}</PopoverClose>}
-              onPick={setSigningIn}
-              onChangePassword={() => setChangingPassword(true)}
-            />
+          <Suspense fallback={<div className="h-28" />}>
+            <SigningInRows size="sm" wrap={(row) => <PopoverClose asChild>{row}</PopoverClose>} onPick={setSigningIn} />
           </Suspense>
           <div className="bg-hairline h-px" />
           <MenuGroup size="sm">
@@ -85,7 +80,14 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
       )}
       {asked.signingIn && (
         <Suspense fallback={null}>
-          <SigningInSheets which={signingIn} onClose={() => setSigningIn(null)} />
+          <SigningInSheets
+            which={signingIn}
+            onClose={() => setSigningIn(null)}
+            onChangePassword={() => {
+              setSigningIn(null);
+              setChangingPassword(true);
+            }}
+          />
         </Suspense>
       )}
       {asked.password && (

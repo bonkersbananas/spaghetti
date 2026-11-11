@@ -87,8 +87,9 @@ export const WINDOW_MS = 15 * 60 * 1000;
 export const clientKey = (c: Context<AppEnv>) => c.req.header("cf-connecting-ip") ?? "local";
 
 /**
- * Records one try in `bucket` unless the window already holds `limit` of them: false means "too many".
- * One statement, so parallel guesses can't all read a low count first.
+ * Records one try in `bucket` unless the window already holds `limit` of them. Returns the try's row id, or 0 for
+ * "too many". One statement, so parallel guesses can't all read a low count first; a try that turns out fine can be
+ * handed back with `giveBack`.
  */
 export async function takeHit(c: Context<AppEnv>, bucket: string, limit: number, windowMs = WINDOW_MS) {
   const now = Date.now();
@@ -98,7 +99,12 @@ export async function takeHit(c: Context<AppEnv>, bucket: string, limit: number,
       "INSERT INTO auth_hits (bucket, at) SELECT ?1, ?2 WHERE (SELECT count(*) FROM auth_hits WHERE bucket = ?1 AND at > ?3) < ?4",
     ).bind(bucket, now, now - windowMs, limit),
   ]);
-  return Boolean(taken?.meta.changes);
+  return taken?.meta.changes ? Number(taken.meta.last_row_id) : 0;
+}
+
+/** Gives back a try that wasn't a failure after all (a right password). */
+export async function giveBack(c: Context<AppEnv>, ...ids: number[]) {
+  for (const id of ids) if (id) await c.env.DB.prepare("DELETE FROM auth_hits WHERE id = ?").bind(id).run();
 }
 
 /** How many tries `bucket` holds in the window, without adding one. */

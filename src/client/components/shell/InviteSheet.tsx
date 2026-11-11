@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
 import { invitesQuery } from "@/lib/passkey-lists";
 import { peopleQuery } from "@/lib/queries";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 const daysLeft = (time: number) => {
   const days = Math.ceil((time - Date.now()) / 86_400_000);
@@ -26,6 +27,8 @@ export function InviteSheet({ open, onOpenChange }: { open: boolean; onOpenChang
   const people = useQuery({ ...peopleQuery, enabled: open });
   const [fresh, setFresh] = useState<NewInvite | null>(null);
   const [copied, setCopied] = useState(false);
+  // On a phone the share sheet is the way to send it (Messages, AirDrop); Copy is the fallback and the desktop way.
+  const canShare = !useIsDesktop() && typeof navigator !== "undefined" && "share" in navigator;
 
   const make = useMutation({
     mutationFn: () => api<NewInvite>("/account/invites", { method: "POST" }),
@@ -74,10 +77,24 @@ export function InviteSheet({ open, onOpenChange }: { open: boolean; onOpenChang
           <p className="text-small text-ink-faint mt-2">
             Shown once. Send it to them; they pick a name and how to sign in.
           </p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-col gap-2">
+            {canShare && (
+              <Button
+                variant="primary"
+                icon={ShareIcon}
+                fullWidth
+                onClick={() =>
+                  void navigator.share({ title: "Join me on Spaghetti", url: fresh.url }).catch(() => undefined)
+                }
+              >
+                Share invite
+              </Button>
+            )}
             <Button
+              variant={canShare ? "quiet" : "secondary"}
               size="sm"
               icon={copied ? CheckIcon : CopyIcon}
+              className={canShare ? "self-center" : "self-start"}
               onClick={() => {
                 void navigator.clipboard?.writeText(fresh.url).then(() => {
                   setCopied(true);
@@ -87,17 +104,6 @@ export function InviteSheet({ open, onOpenChange }: { open: boolean; onOpenChang
             >
               {copied ? "Copied" : "Copy link"}
             </Button>
-            {"share" in navigator && (
-              <Button
-                size="sm"
-                icon={ShareIcon}
-                onClick={() =>
-                  void navigator.share({ title: "Join me on Spaghetti", url: fresh.url }).catch(() => undefined)
-                }
-              >
-                Share
-              </Button>
-            )}
           </div>
         </div>
       )}

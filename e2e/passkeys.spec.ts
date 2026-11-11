@@ -80,8 +80,8 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   await addAuthenticator(context, page);
   await signIn(page);
   await clearPasskeys(page);
-  await openRow(page, isMobile, /^Sign in with .* next time$/);
-  const sheet = page.getByRole("dialog", { name: "Passkeys" });
+  await openRow(page, isMobile, "Passkeys and password");
+  const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText(/None yet/)).toBeVisible();
   await sheet.getByRole("button", { name: /^Sign in with .* next time$/ }).click();
@@ -114,8 +114,8 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
 
   // It remembers being used. Removing it is undone with the toast, then done.
-  await openRow(page, isMobile, "Passkeys");
-  const again = page.getByRole("dialog", { name: "Passkeys" });
+  await openRow(page, isMobile, "Passkeys and password");
+  const again = page.getByRole("dialog", { name: "Passkeys and password" });
   await expect(again.getByText(/used (just now|\d+ min ago)/)).toBeVisible();
   await again.getByRole("button", { name: "Remove Kitchen laptop" }).click();
   await expect(again.getByText("Kitchen laptop")).toBeHidden();
@@ -287,10 +287,10 @@ test("the signed-in devices list signs out another device", async ({ page, brows
     headers: headers(),
   });
   expect(login.ok()).toBe(true);
-  await openRow(page, isMobile, "Signed-in devices");
-  const sheet = page.getByRole("dialog", { name: "Signed-in devices" });
+  await openRow(page, isMobile, "Passkeys and password");
+  const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
   await expect(sheet.getByText("This device")).toBeVisible();
-  await expectAccessible(page, "The signed-in devices sheet", "[role=dialog]");
+  await expectAccessible(page, "The passkeys and password sheet", "[role=dialog]");
   await sheet.getByRole("button", { name: "Sign out everywhere else" }).click();
   await expect.poll(async () => (await other.request.get("/api/session")).status()).toBe(401);
   expect((await page.request.get("/api/session")).status()).toBe(200);

@@ -261,8 +261,18 @@ describe("password sign-in", () => {
     // Another name from the same address still signs in.
     expect((await attempt("sam", "battery staple")).status).toBe(200);
     // Ten minutes later it is allowed again.
-    await env.DB.prepare("UPDATE auth_hits SET at = at - ?").bind(11 * 60 * 1000).run();
+    await env.DB.prepare("UPDATE auth_hits SET at = at - ?")
+      .bind(11 * 60 * 1000)
+      .run();
     expect((await attempt("alex", "correct horse")).status).toBe(200);
+  });
+
+  it("counts a burst of parallel wrong passwords too: no more than ten are checked", async () => {
+    const statuses = (await Promise.all(Array.from({ length: 16 }, () => attempt("alex", "nope")))).map(
+      (r) => r.status,
+    );
+    expect(statuses.filter((s) => s === 401)).toHaveLength(10);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(6);
   });
 
   it("does not count successful sign-ins", async () => {

@@ -123,6 +123,10 @@ async function mockSigningIn(page: Page) {
   );
 }
 
+/** A phone's share sheet exists: the sheets offer it first (a headless browser has none). */
+const withShare = (page: Page) =>
+  page.evaluate(() => Object.defineProperty(navigator, "share", { value: async () => undefined, configurable: true }));
+
 /** Makes an invite as Alex, then leaves the page signed out: what a guest opening the link sees. */
 async function guestInvite(page: Page) {
   const origin = new URL(page.url() || "http://127.0.0.1").origin;
@@ -382,14 +386,15 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await mockSigningIn(page);
-      await openAccountRow(page, wide(page), /^Passkeys|Sign in with .* next time$/);
-      await page.getByRole("dialog", { name: "Passkeys" }).getByText("iPhone").waitFor();
+      await openAccountRow(page, wide(page), "Passkeys and password");
+      await page.getByRole("dialog", { name: "Passkeys and password" }).getByText("iPhone").waitFor();
     },
   },
   {
     name: "sign-in-on-another-device",
     path: "/ideas",
     prepare: async (page) => {
+      await withShare(page);
       await openAccountRow(page, wide(page), "Sign in on another device");
       await page.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).waitFor();
       if (wide(page) === 1440) await page.getByRole("img", { name: /QR code/ }).waitFor();
@@ -400,21 +405,37 @@ export const shots: Shot[] = [
     name: "invite",
     path: "/ideas",
     prepare: async (page) => {
+      await withShare(page);
+      // The server counts a week from its own clock; the shot's browser clock is fixed to the seed date.
+      const alex = (await (await page.request.get("/api/people")).json()).people[0].id;
+      await page.route(/\/api\/account\/invites$/, (route) =>
+        route.request().method() === "GET"
+          ? route.fulfill({
+              json: {
+                invites: [
+                  { id: "i1", createdBy: alex, createdAt: SEED_NOW - 86_400_000, expiresAt: SEED_NOW + 6 * 86_400_000 },
+                ],
+              },
+            })
+          : route.fallback(),
+      );
       await openAccountRow(page, wide(page), "Invite someone");
       const sheet = page.getByRole("dialog", { name: "Invite someone" });
       await sheet.getByRole("button", { name: /^Make (an invite link|another invite)$/ }).click();
       await sheet.getByText(/\/join#spi_/).waitFor();
-      await sheet.getByRole("button", { name: /^Make (an invite link|another invite)$/ }).click();
       await sheet.getByText("Waiting").waitFor();
     },
   },
   {
-    name: "signed-in-devices",
+    // The same sheet, scrolled to the devices at its bottom.
+    name: "passkeys-devices",
     path: "/ideas",
     prepare: async (page) => {
       await mockSigningIn(page);
-      await openAccountRow(page, wide(page), "Signed-in devices");
-      await page.getByRole("dialog", { name: "Signed-in devices" }).getByText("iPad").waitFor();
+      await openAccountRow(page, wide(page), "Passkeys and password");
+      const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
+      await sheet.getByText("iPad").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
     },
   },
   {

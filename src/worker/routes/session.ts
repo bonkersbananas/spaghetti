@@ -20,6 +20,7 @@ import {
 import { endSession, readSession, startSession } from "../auth/session.ts";
 import {
   clientKey,
+  giveBack,
   hashSecret,
   hitsIn,
   relyingParty,
@@ -64,24 +65,22 @@ export const sessionRoutes = new Hono<AppEnv>()
     const parsed = credentials.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "Enter your name and password.");
     const { username, password } = parsed.data;
-    // Wrong passwords are counted per name and per address, and a person who is over either waits (a right password
-    // never counts, so signing in correctly is never what locks anyone out). Checked before the slow hash.
+    // Every try is counted before the slow check, in one statement per bucket that refuses once the window is full,
+    // so a burst of parallel guesses can't all read a low count first. A right password gives its try back, so
+    // signing in correctly never spends the allowance.
     const ip = clientKey(c);
-    if (
-      (await hitsIn(c, `pw-user:${username}`, PASSWORD_WINDOW_MS)) >= PASSWORD_FAILURES_PER_NAME ||
-      (await hitsIn(c, `pw-ip:${ip}`, PASSWORD_WINDOW_MS)) >= PASSWORD_FAILURES_PER_IP
-    ) {
+    const byName = await takeHit(c, `pw-user:${username}`, PASSWORD_FAILURES_PER_NAME, PASSWORD_WINDOW_MS);
+    const byIp = byName ? await takeHit(c, `pw-ip:${ip}`, PASSWORD_FAILURES_PER_IP, PASSWORD_WINDOW_MS) : 0;
+    if (!byName || !byIp) {
+      await giveBack(c, byName, byIp);
       return tooMany(c);
     }
     const user = await c.var.db.select().from(users).where(eq(users.username, username)).get();
     const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
     if (!user || !ok) {
-      await Promise.all([
-        takeHit(c, `pw-user:${username}`, PASSWORD_FAILURES_PER_NAME, PASSWORD_WINDOW_MS),
-        takeHit(c, `pw-ip:${ip}`, PASSWORD_FAILURES_PER_IP, PASSWORD_WINDOW_MS),
-      ]);
       return apiError(c, 401, "wrong_credentials", "That name and password don't match.");
     }
+    await giveBack(c, byName, byIp);
     await startSession(c, c.var.db, user.id);
     return c.json<SessionResponse>({ user: toPerson(user) });
   })

@@ -109,15 +109,8 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           </MenuItem>
         </MenuGroup>
         <div className="mt-6">
-          <Suspense fallback={<div className="h-72" />}>
-            <SigningInRows
-              size="md"
-              onPick={openSigningIn}
-              onChangePassword={() => {
-                onOpenChange(false);
-                setChangingPassword(true);
-              }}
-            />
+          <Suspense fallback={<div className="h-40" />}>
+            <SigningInRows size="md" onPick={openSigningIn} />
           </Suspense>
         </div>
         <ThemeSwitch className="mt-6" />
@@ -131,7 +124,14 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
       )}
       {asked.signingIn && (
         <Suspense fallback={null}>
-          <SigningInSheets which={signingIn} onClose={() => setSigningIn(null)} />
+          <SigningInSheets
+            which={signingIn}
+            onClose={() => setSigningIn(null)}
+            onChangePassword={() => {
+              setSigningIn(null);
+              setChangingPassword(true);
+            }}
+          />
         </Suspense>
       )}
       {asked.password && (

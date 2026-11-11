@@ -4,15 +4,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { InfoRow } from "@/components/ui/InfoRow";
-import { PasskeyIcon, PhoneIcon, RenameIcon, TrashIcon } from "@/components/ui/icons";
+import { KeyIcon, LaptopIcon, PasskeyIcon, PhoneIcon, RenameIcon, TrashIcon } from "@/components/ui/icons";
+import { MenuGroup, MenuItem } from "@/components/ui/Menu";
+import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { passkeysQuery, removePasskey, renamePasskey } from "@/lib/passkey-lists";
 import { addPasskeyHere, biometric, isCancelled } from "@/lib/passkeys";
+import { DevicesList, isPhoneLike } from "./DevicesList";
 
-/** Your passkeys: one per device, with when it was added and last used; add this device's, rename, remove (with Undo). */
-export function PasskeysSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/**
+ * How you sign in: your passkeys (one per device, when added and last used; add this device's, rename, remove with
+ * Undo), change password, and at the bottom the devices you are signed in on.
+ */
+export function PasskeysSheet({
+  open,
+  onOpenChange,
+  onChangePassword,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChangePassword: () => void;
+}) {
   const queryClient = useQueryClient();
   const list = useQuery({ ...passkeysQuery, enabled: open });
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -36,14 +50,17 @@ export function PasskeysSheet({ open, onOpenChange }: { open: boolean; onOpenCha
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Passkeys"
-      description={`Sign in with ${word === "a passkey" ? "a passkey" : word} instead of a password.`}
+      title="Passkeys and password"
+      description={`Sign in with ${word === "a passkey" ? "a passkey" : word} instead of typing a password.`}
       footer={
         <Button variant="primary" icon={PasskeyIcon} fullWidth loading={add.isPending} onClick={() => add.mutate()}>
           {passkeys.length === 0 ? `Sign in with ${word} next time` : "Add a passkey for this device"}
         </Button>
       }
     >
+      <Overline as="h3" className="mb-1 block">
+        Passkeys
+      </Overline>
       {list.isPending ? (
         <ul>
           {[0, 1].map((i) => (
@@ -68,6 +85,18 @@ export function PasskeysSheet({ open, onOpenChange }: { open: boolean; onOpenCha
           ))}
         </ul>
       )}
+      <Overline as="h3" className="mt-6 mb-2 block">
+        Password
+      </Overline>
+      <MenuGroup>
+        <MenuItem icon={KeyIcon} onClick={onChangePassword}>
+          Change password
+        </MenuItem>
+      </MenuGroup>
+      <Overline as="h3" className="mt-6 mb-1 block">
+        Signed-in devices
+      </Overline>
+      <DevicesList enabled={open} />
     </Sheet>
   );
 }
@@ -97,7 +126,7 @@ function PasskeyRow({
 
   return (
     <InfoRow
-      icon={PhoneIcon}
+      icon={isPhoneLike(passkey.name) ? PhoneIcon : LaptopIcon}
       title={
         renaming ? (
           <form onSubmit={save}>
