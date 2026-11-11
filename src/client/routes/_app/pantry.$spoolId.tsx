@@ -16,7 +16,7 @@ import {
 import { inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { DryIt } from "@/components/pantry/DryIt";
@@ -45,7 +45,7 @@ import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { SwatchPicker } from "@/components/ui/Swatch";
 import { useHotkeys } from "@/lib/hotkeys";
-import { requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
+import { pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto, spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry";
 import { photoSrc } from "@/lib/previews";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -171,6 +171,12 @@ function SpoolPage({ spool }: { spool: Spool }) {
   const camera = useFilePicker({ camera: true, onFiles: ([file]) => void takePhoto(file) });
   const library = useFilePicker({ onFiles: ([file]) => void takePhoto(file) });
   // Waiting on Claude with nothing to show for it yet: the title stands in for what is coming.
+  // A read that began elsewhere, or before a reload, still fills the page in.
+  const isReading = spool.labelRead?.status === "reading";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the query client is stable.
+  useEffect(() => {
+    if (isReading) pollWhileReading(queryClient);
+  }, [isReading]);
   const waiting = spool.labelRead?.status === "reading" && !value.colorName && !spool.fromLabel.length;
   // The marks stay until the field is edited, here or anywhere (the server's copy drops them as it saves).
   const fromLabel = (...fields: LabelField[]) =>

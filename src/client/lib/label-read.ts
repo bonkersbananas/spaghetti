@@ -8,19 +8,30 @@ import { patchSpool, spoolsQuery } from "./pantry";
 /** Whether anything about reading spool labels shows at all: without the Worker's key nothing does. */
 export const useLabelReadsEnabled = () => useQuery(featuresQuery).data?.labelReads === true;
 
-/** Reads the label in the spool's photo (already uploaded). The spool shows "Reading the label…" at once. */
-/** While Claude reads a label the fields fill in: ask again every few seconds, on this device, until none is being read. */
-function pollWhileReading(queryClient: QueryClient) {
-  let left = 40;
-  const timer = setInterval(() => {
+let polling: ReturnType<typeof setInterval> | undefined;
+
+/**
+ * While Claude reads a label the fields fill in: ask again every few seconds until no spool is being read (a read
+ * can run for minutes, and the server retries it). One timer at a time; the spool page starts it for a read that
+ * began elsewhere or before a reload.
+ */
+export function pollWhileReading(queryClient: QueryClient) {
+  if (polling) return;
+  let left = 120;
+  polling = setInterval(() => {
     const reading = queryClient
       .getQueryData<Spool[]>(spoolsQuery.queryKey)
       ?.some((s) => s.labelRead?.status === "reading");
-    if (!reading || --left <= 0) return clearInterval(timer);
+    if (!reading || --left <= 0) {
+      clearInterval(polling);
+      polling = undefined;
+      return;
+    }
     void queryClient.invalidateQueries({ queryKey: spoolsQuery.queryKey });
   }, 2500);
 }
 
+/** Reads the label in the spool's photo (already uploaded). The spool shows "Reading the label…" at once. */
 export async function requestLabelRead(
   queryClient: QueryClient,
   spoolId: string,

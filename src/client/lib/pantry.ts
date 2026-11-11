@@ -104,13 +104,24 @@ export function addSpool(
     photo: null,
     slot: null,
     trayUuid: null,
-    // The label fields start out missing (as null would); the server's copy fills them in a moment later.
     fromLabel: [],
     labelRead: null,
     createdBy,
     createdAt: now,
     updatedAt: now,
-  } as Partial<Spool> as Spool;
+    // Every other field is checked against the type; these start out missing (as null would) and the server's copy
+    // fills them in a moment later (kept out of the pantry's first load: lib/label-read.ts has the full defaults).
+  } satisfies Omit<
+    Spool,
+    | "diameterMm"
+    | "nozzleTempMin"
+    | "nozzleTempMax"
+    | "bedTempMin"
+    | "bedTempMax"
+    | "dryTempC"
+    | "dryHours"
+    | "productCode"
+  > as Partial<Spool> as Spool;
   patchSpools(queryClient, (spools) => [spool, ...spools]);
   if (!queryClient.getQueryData(spoolsQuery.queryKey)) queryClient.setQueryData(spoolsQuery.queryKey, [spool]);
   const saved = (async () => {
