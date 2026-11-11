@@ -2,15 +2,28 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
+import {
+  AgentIcon,
+  BellIcon,
+  DevicesIcon,
+  InviteIcon,
+  KeyIcon,
+  PaletteIcon,
+  PasskeyIcon,
+  QrIcon,
+  SignOutIcon,
+  TrashIcon,
+} from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
+import { biometric, hasPasskeyHere } from "@/lib/passkeys";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInSheets } from "./lazy-account";
+import type { SigningInSheet } from "./SigningInSheets";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -22,7 +35,13 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
-  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false });
+  const [signingIn, setSigningIn] = useState<SigningInSheet | null>(null);
+  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false, signingIn: false });
+  if (signingIn && !asked.signingIn) setAsked({ ...asked, signingIn: true });
+  const openSigningIn = (which: SigningInSheet) => {
+    onOpenChange(false);
+    setSigningIn(which);
+  };
   if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
   if (cropping && !asked.photo) setAsked({ ...asked, photo: true });
   if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
@@ -94,6 +113,29 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           >
             Notifications
           </MenuItem>
+          <MenuItem icon={InviteIcon} onClick={() => openSigningIn("invite")}>
+            Invite someone
+          </MenuItem>
+          <MenuItem to="/deleted" icon={TrashIcon} onClick={() => onOpenChange(false)}>
+            Recently deleted
+          </MenuItem>
+          <MenuItem to="/styleguide" icon={PaletteIcon} onClick={() => onOpenChange(false)}>
+            Styleguide
+          </MenuItem>
+        </MenuGroup>
+        <Overline as="h3" className="mt-6 mb-2 block">
+          Signing in
+        </Overline>
+        <MenuGroup>
+          <MenuItem icon={PasskeyIcon} onClick={() => openSigningIn("passkeys")}>
+            {hasPasskeyHere() ? "Passkeys" : `Sign in with ${biometric()} next time`}
+          </MenuItem>
+          <MenuItem icon={QrIcon} onClick={() => openSigningIn("link")}>
+            Sign in on another device
+          </MenuItem>
+          <MenuItem icon={DevicesIcon} onClick={() => openSigningIn("devices")}>
+            Signed-in devices
+          </MenuItem>
           <MenuItem
             icon={KeyIcon}
             onClick={() => {
@@ -103,12 +145,6 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           >
             Change password
           </MenuItem>
-          <MenuItem to="/deleted" icon={TrashIcon} onClick={() => onOpenChange(false)}>
-            Recently deleted
-          </MenuItem>
-          <MenuItem to="/styleguide" icon={PaletteIcon} onClick={() => onOpenChange(false)}>
-            Styleguide
-          </MenuItem>
         </MenuGroup>
         <ThemeSwitch className="mt-6" />
       </Sheet>
@@ -117,6 +153,11 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
       {asked.photo && (
         <Suspense fallback={null}>
           <ProfilePhotoCrop file={cropping} onFile={setCropping} onClose={() => setCropping(null)} />
+        </Suspense>
+      )}
+      {asked.signingIn && (
+        <Suspense fallback={null}>
+          <SigningInSheets which={signingIn} onClose={() => setSigningIn(null)} />
         </Suspense>
       )}
       {asked.password && (

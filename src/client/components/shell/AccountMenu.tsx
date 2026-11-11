@@ -1,12 +1,26 @@
 import type { Person } from "@shared/api";
 import { Suspense, useState } from "react";
-import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
+import {
+  AgentIcon,
+  BellIcon,
+  DevicesIcon,
+  InviteIcon,
+  KeyIcon,
+  PaletteIcon,
+  PasskeyIcon,
+  QrIcon,
+  SignOutIcon,
+  TrashIcon,
+} from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
+import { Overline } from "@/components/ui/Overline";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
+import { biometric, hasPasskeyHere } from "@/lib/passkeys";
 import { useSignOut } from "@/lib/use-sign-out";
 import { AccountButton } from "./AccountButton";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInSheets } from "./lazy-account";
+import type { SigningInSheet } from "./SigningInSheets";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** The sidebar's account menu (desktop), loaded on demand by the Sidebar. */
@@ -15,7 +29,9 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
-  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false });
+  const [signingIn, setSigningIn] = useState<SigningInSheet | null>(null);
+  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false, signingIn: false });
+  if (signingIn && !asked.signingIn) setAsked({ ...asked, signingIn: true });
   if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
   if (cropping && !asked.photo) setAsked({ ...asked, photo: true });
   if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
@@ -46,11 +62,39 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
               </MenuItem>
             </PopoverClose>
             <PopoverClose asChild>
-              <MenuItem icon={KeyIcon} onClick={() => setChangingPassword(true)}>
-                Change password
+              <MenuItem icon={InviteIcon} onClick={() => setSigningIn("invite")}>
+                Invite someone
               </MenuItem>
             </PopoverClose>
           </MenuGroup>
+          <div className="bg-hairline h-px" />
+          <div className="flex flex-col gap-1">
+            <Overline as="h3" className="px-0 pt-0.5">
+              Signing in
+            </Overline>
+            <MenuGroup size="sm">
+              <PopoverClose asChild>
+                <MenuItem icon={PasskeyIcon} onClick={() => setSigningIn("passkeys")}>
+                  {hasPasskeyHere() ? "Passkeys" : `Sign in with ${biometric()} next time`}
+                </MenuItem>
+              </PopoverClose>
+              <PopoverClose asChild>
+                <MenuItem icon={QrIcon} onClick={() => setSigningIn("link")}>
+                  Sign in on another device
+                </MenuItem>
+              </PopoverClose>
+              <PopoverClose asChild>
+                <MenuItem icon={DevicesIcon} onClick={() => setSigningIn("devices")}>
+                  Signed-in devices
+                </MenuItem>
+              </PopoverClose>
+              <PopoverClose asChild>
+                <MenuItem icon={KeyIcon} onClick={() => setChangingPassword(true)}>
+                  Change password
+                </MenuItem>
+              </PopoverClose>
+            </MenuGroup>
+          </div>
           <div className="bg-hairline h-px" />
           <MenuGroup size="sm">
             <PopoverClose asChild>
@@ -74,6 +118,11 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
       {asked.photo && (
         <Suspense fallback={null}>
           <ProfilePhotoCrop file={cropping} onFile={setCropping} onClose={() => setCropping(null)} />
+        </Suspense>
+      )}
+      {asked.signingIn && (
+        <Suspense fallback={null}>
+          <SigningInSheets which={signingIn} onClose={() => setSigningIn(null)} />
         </Suspense>
       )}
       {asked.password && (

@@ -1,15 +1,17 @@
 import type { SessionResponse } from "@shared/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { m } from "motion/react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Mark } from "@/components/illustrations";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
-import { EyeIcon, EyeSlashIcon } from "@/components/ui/icons";
+import { EyeIcon, EyeSlashIcon, PasskeyIcon } from "@/components/ui/icons";
 import { ApiError, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { ease, spring } from "@/lib/motion";
+import { askForPasskeyAfterSignIn } from "@/lib/passkey-offer";
+import { autofillSupported, biometric, isCancelled, passkeysSupported, signInWithPasskey } from "@/lib/passkeys";
 import { rememberUser, sessionQuery } from "@/lib/queries";
 import { signOutSettled } from "@/lib/use-sign-out";
 
@@ -38,6 +40,53 @@ function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
+  // Where passkeys work, they come first; the password form stays right below, never behind a menu.
+  const [passkeys] = useState(passkeysSupported);
+  const [passkeyError, setPasskeyError] = useState<string>();
+
+  async function arrive(user: SessionResponse["user"]) {
+    // Whatever an earlier session left in memory is not this person's to see.
+    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+    queryClient.setQueryData(sessionQuery.queryKey, user);
+    rememberUser(user);
+    await navigate({ href: safeRedirect(redirectTo), replace: true });
+  }
+
+  const withPasskey = useMutation({
+    mutationFn: async () => {
+      await signOutSettled();
+      return signInWithPasskey(false);
+    },
+    onMutate: () => setPasskeyError(undefined),
+    onSuccess: ({ user }) => arrive(user),
+    onError: (error) => {
+      if (isCancelled(error)) return;
+      setPasskeyError(
+        error instanceof ApiError ? error.message : "Can't reach the kitchen. Check the connection and try again.",
+      );
+    },
+  });
+
+  // Conditional UI: the browser offers this device's passkeys in the name field, so a tap on one signs in.
+  const arriveRef = useRef(arrive);
+  arriveRef.current = arrive;
+  useEffect(() => {
+    let live = true;
+    void autofillSupported().then(async (supported) => {
+      if (!supported || !live) return;
+      try {
+        await signOutSettled();
+        const { user } = await signInWithPasskey(true);
+        if (live) await arriveRef.current(user);
+      } catch {
+        // Closed, replaced by the button's own ceremony, or nothing to offer: the form still works.
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const signIn = useMutation({
     mutationFn: async () => {
       // A sign-out still on its way must not end the session this one starts.
@@ -45,11 +94,8 @@ function SignIn() {
       return api<SessionResponse>("/session", { method: "POST", json: { username, password } });
     },
     onSuccess: async ({ user }) => {
-      // Whatever an earlier session left in memory is not this person's to see.
-      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
-      queryClient.setQueryData(sessionQuery.queryKey, user);
-      rememberUser(user);
-      await navigate({ href: safeRedirect(redirectTo), replace: true });
+      askForPasskeyAfterSignIn();
+      await arrive(user);
     },
     onError: () => setAttempt((n) => n + 1),
   });
@@ -95,17 +141,42 @@ function SignIn() {
           noValidate
           className="bg-cream shadow-raised rounded-xl p-5 md:p-6"
         >
+          {passkeys && (
+            <>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                icon={PasskeyIcon}
+                loading={withPasskey.isPending}
+                onClick={() => withPasskey.mutate()}
+              >
+                Sign in with {biometric()}
+              </Button>
+              {passkeyError && (
+                <p role="alert" className="text-small text-tomato-ink mt-3 text-center font-medium">
+                  {passkeyError}
+                </p>
+              )}
+              <p className="text-small text-ink-faint my-4 flex items-center gap-3 text-center">
+                <span className="bg-hairline h-px flex-1" aria-hidden />
+                or with your name and password
+                <span className="bg-hairline h-px flex-1" aria-hidden />
+              </p>
+            </>
+          )}
           <div key={attempt} className={cn("flex flex-col gap-4", attempt > 0 && "sg-shake")}>
             <TextField
               label="Name"
               name="username"
-              autoComplete="username"
+              autoComplete="username webauthn"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              autoFocus
+              autoFocus={!passkeys}
             />
             <div className="relative">
               <TextField
@@ -131,13 +202,24 @@ function SignIn() {
               {error}
             </p>
           )}
-          <Button type="submit" variant="primary" size="lg" fullWidth loading={signIn.isPending} className="mt-6">
+          <Button
+            type="submit"
+            variant={passkeys ? "secondary" : "primary"}
+            size="lg"
+            fullWidth
+            loading={signIn.isPending}
+            className="mt-6"
+          >
             Sign in
           </Button>
         </m.form>
       </div>
       <p className="text-small text-ink-faint pb-6 text-center">
         Just the two of us here. No account? Ask the other cook.
+        <br />
+        <Link to="/link" className="focus-ring decoration-ink-ghost underline underline-offset-4">
+          Signing in from another device? Use a code
+        </Link>
       </p>
     </main>
   );

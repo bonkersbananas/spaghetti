@@ -21,6 +21,7 @@ import { PhotoSection } from "./-styleguide/photos";
 import { RecipesSection } from "./-styleguide/recipes";
 import { SearchSection } from "./-styleguide/search";
 import { SheetSection } from "./-styleguide/sheets";
+import { SigningInSection } from "./-styleguide/signing-in";
 import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
 import { TodaySection } from "./-styleguide/today";
@@ -62,6 +63,7 @@ const toc = [
   ["palette", "Palette & shortcuts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
+  ["signing-in", "Signing in"],
 ] as const;
 
 function Styleguide() {
@@ -107,6 +109,7 @@ function Styleguide() {
           <NotificationSection />
           <EmptySection />
           <SkeletonSection />
+          <SigningInSection />
         </div>
       </div>
     </>

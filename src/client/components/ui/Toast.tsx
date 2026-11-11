@@ -73,6 +73,15 @@ export const toast = {
   /** A toast with one action, such as "View" after saving from another screen. */
   action: (message: string, action: { label: string; onClick: () => void }, description?: string) =>
     sonnerToast(message, { description, action }),
+  /** A quiet offer that stays until answered: one action and "Not now" (the person's choice, never repeated by the caller). */
+  offer: (message: string, description: string, action: { label: string; onClick: () => void }) =>
+    sonnerToast(message, {
+      description,
+      duration: Number.POSITIVE_INFINITY,
+      dismissible: true,
+      action,
+      cancel: { label: "Not now", onClick: () => undefined },
+    }),
   /** A new version of the app is installed and waiting: stays until it is taken or dismissed. */
   update: (onRefresh: () => void) =>
     sonnerToast("A new version is ready", {
