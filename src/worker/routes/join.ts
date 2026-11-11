@@ -10,10 +10,18 @@ import { MIN_PASSWORD_LENGTH, type SessionResponse } from "../../shared/api.ts";
 import { toBase64Url } from "../../shared/base64url.ts";
 import { hashPassword } from "../../shared/password.ts";
 import { PERSON_COLORS, USERNAME_PATTERN } from "../../shared/people.ts";
-import { deviceName, type CeremonyOptions, type InvitePeek } from "../../shared/signing-in.ts";
+import { type CeremonyOptions, deviceName, type InvitePeek } from "../../shared/signing-in.ts";
 import { startSession } from "../auth/session.ts";
-import { clientKey, hashSecret, relyingParty, RP_NAME, saveChallenge, takeChallenge, takeHit } from "../auth/webauthn.ts";
-import { changes, invites, type Invite, passkeys, users } from "../db/schema.ts";
+import {
+  clientKey,
+  hashSecret,
+  RP_NAME,
+  relyingParty,
+  saveChallenge,
+  takeChallenge,
+  takeHit,
+} from "../auth/webauthn.ts";
+import { changes, type Invite, invites, passkeys, users } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toPerson } from "../http.ts";
 

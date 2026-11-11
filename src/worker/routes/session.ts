@@ -1,6 +1,6 @@
 import {
-  generateAuthenticationOptions,
   type AuthenticatorTransport,
+  generateAuthenticationOptions,
   type PublicKeyCredentialRequestOptionsJSON,
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
@@ -68,7 +68,8 @@ export const sessionRoutes = new Hono<AppEnv>()
   .post("/passkey", async (c) => {
     if (!(await takeHit(c, `passkey:${clientKey(c)}`, 40))) return tooMany(c);
     const body = (await c.req.json().catch(() => null)) as Partial<SignInWithPasskeyRequest> | null;
-    const refused = () => apiError(c, 401, "wrong_credentials", "That passkey didn't work. Try again, or use your password.");
+    const refused = () =>
+      apiError(c, 401, "wrong_credentials", "That passkey didn't work. Try again, or use your password.");
     if (!body?.ceremonyId || !body.response || typeof body.response.id !== "string") return refused();
     // The challenge goes first, used or not: every ceremony can be answered once.
     const challenge = await takeChallenge(c, body.ceremonyId, { purpose: "authenticate" });

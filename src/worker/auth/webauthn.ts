@@ -1,6 +1,6 @@
 import type { Context } from "hono";
-import { CHALLENGE_TTL_MS } from "../../shared/signing-in.ts";
 import { toBase64Url } from "../../shared/base64url.ts";
+import { CHALLENGE_TTL_MS } from "../../shared/signing-in.ts";
 import type { AppEnv } from "../env.ts";
 
 /** The app's name as an authenticator shows it. */
@@ -65,7 +65,13 @@ export async function takeChallenge(
     "DELETE FROM webauthn_challenges WHERE id = ? RETURNING challenge, purpose, user_id, invite_id, expires_at",
   )
     .bind(id)
-    .first<{ challenge: string; purpose: string; user_id: string | null; invite_id: string | null; expires_at: number }>();
+    .first<{
+      challenge: string;
+      purpose: string;
+      user_id: string | null;
+      invite_id: string | null;
+      expires_at: number;
+    }>();
   if (!row || row.expires_at < Date.now()) return null;
   if (row.purpose !== binding.purpose) return null;
   if (binding.userId !== undefined && row.user_id !== binding.userId) return null;

@@ -27,7 +27,7 @@ import {
   type SignInLinkInfo,
 } from "../../shared/signing-in.ts";
 import { currentSessionId } from "../auth/session.ts";
-import { hashSecret, relyingParty, RP_NAME, saveChallenge, takeChallenge, takeHit } from "../auth/webauthn.ts";
+import { hashSecret, RP_NAME, relyingParty, saveChallenge, takeChallenge, takeHit } from "../auth/webauthn.ts";
 import { recordChange } from "../changes.ts";
 import { type Invite, invites, type Passkey, passkeys, type SignInLink, sessions, signInLinks } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -98,7 +98,8 @@ export const signingInRoutes = new Hono<AppEnv>()
   .post("/passkeys/options", async (c) => {
     const user = c.var.user;
     const existing = await c.var.db.select({ id: passkeys.id }).from(passkeys).where(eq(passkeys.userId, user.id));
-    if (existing.length >= MAX_PASSKEYS) return apiError(c, 409, "too_many", "That's plenty of passkeys. Remove one first.");
+    if (existing.length >= MAX_PASSKEYS)
+      return apiError(c, 409, "too_many", "That's plenty of passkeys. Remove one first.");
     const { rpID } = relyingParty(c);
     const options = await generateRegistrationOptions({
       rpName: RP_NAME,
@@ -228,7 +229,9 @@ export const signingInRoutes = new Hono<AppEnv>()
   .delete("/sign-in-links/:id", async (c) => {
     await c.var.db
       .delete(signInLinks)
-      .where(and(eq(signInLinks.id, c.req.param("id")), eq(signInLinks.userId, c.var.user.id), isNull(signInLinks.usedAt)));
+      .where(
+        and(eq(signInLinks.id, c.req.param("id")), eq(signInLinks.userId, c.var.user.id), isNull(signInLinks.usedAt)),
+      );
     return c.body(null, 204);
   })
 

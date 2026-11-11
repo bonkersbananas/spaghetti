@@ -12,7 +12,11 @@ import { serviceWorker } from "./scripts/vite-service-worker.ts";
 const stateDir = process.env.SPAGHETTI_STATE_DIR;
 const fakeClaude = process.env.SPAGHETTI_FAKE_CLAUDE;
 
-export default defineConfig({
+// The dev server's passkeys belong to localhost on any port; the deployed relying party (spaghetti.day) is in
+// wrangler.jsonc and must never reach a build, so this only applies to `vite` (serve), never `vite build`.
+const localPasskeys = { WEBAUTHN_RP_ID: "localhost", WEBAUTHN_ORIGINS: "http://localhost:*" };
+
+export default defineConfig(({ command }) => ({
   plugins: [
     tanstackRouter({
       target: "react",
@@ -26,7 +30,12 @@ export default defineConfig({
     cloudflare({
       persistState: stateDir ? { path: stateDir } : true,
       // The e2e tests and screenshots point drafting at a stand-in for the Anthropic API (scripts/lib/fake-claude.ts).
-      config: fakeClaude ? { vars: { ANTHROPIC_API_KEY: "sk-ant-fake", ANTHROPIC_BASE_URL: fakeClaude } } : undefined,
+      config: () => ({
+        vars: {
+          ...(command === "serve" ? localPasskeys : {}),
+          ...(fakeClaude ? { ANTHROPIC_API_KEY: "sk-ant-fake", ANTHROPIC_BASE_URL: fakeClaude } : {}),
+        },
+      }),
     }),
   ],
   resolve: {
@@ -35,4 +44,4 @@ export default defineConfig({
       "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
     },
   },
-});
+}));
