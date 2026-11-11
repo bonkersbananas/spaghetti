@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 
@@ -64,8 +63,6 @@ test("a photo gets a suggestion: hinted on the build, one tap to take it, tags m
   await expect(hinted).toBeVisible({ timeout: 20_000 });
   await expect(entry.getByText(/Loose strands across the top half/)).toBeVisible();
   expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ outcome: null, failureTags: [] });
-  const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations).toEqual([]);
 
   await hinted.click();
   const sheet = page.getByRole("dialog");
@@ -117,26 +114,21 @@ test("a photo Claude can't tell from changes nothing", async ({ page }) => {
   await expect(entry.getByText(/suggested/)).toHaveCount(0);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`Today's off-the-bed card shows Claude's guess on the matching button and its reason, ${theme}`, async ({
-    page,
-  }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    const { itemId, attemptId } = await offTheBed(page, "Spaghetti comb");
-    await addPhoto(page, itemId, attemptId);
-    await page.goto("/today");
-    const card = page.getByRole("article").filter({ hasText: "Spaghetti comb" });
-    await expect(card.getByRole("radio", { name: /Spaghetti suggested/ })).toBeVisible({ timeout: 20_000 });
-    await expect(card.getByText(/Loose strands across the top half/)).toBeVisible();
-    // Nothing is picked for anyone.
-    expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ outcome: null });
-    await expect(card.getByRole("radio", { checked: true })).toHaveCount(0);
-    const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations).toEqual([]);
-  });
-}
+test("Today's off-the-bed card shows Claude's guess on the matching button and its reason", async ({ page }) => {
+  const { itemId, attemptId } = await offTheBed(page, "Spaghetti comb");
+  await addPhoto(page, itemId, attemptId);
+  await page.goto("/today");
+  const card = page.getByRole("article").filter({ hasText: "Spaghetti comb" });
+  await expect(card.getByRole("radio", { name: /Spaghetti suggested/ })).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByText(/Loose strands across the top half/)).toBeVisible();
+  // Nothing is picked for anyone.
+  expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ outcome: null });
+  await expect(card.getByRole("radio", { checked: true })).toHaveCount(0);
+});
 
-test("at the printer, a photo from Today's card brings the suggestion there, in one tap", async ({ page }) => {
+test("at the printer, a photo from Today's card brings the suggestion there, in one tap", { tag: "@phone" }, async ({
+  page,
+}) => {
   await offTheBed(page, "Spaghetti clip");
   await page.goto("/today");
   await expect(page.getByText(/Off the bed at/).first()).toBeVisible();

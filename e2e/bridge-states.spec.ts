@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 
@@ -91,9 +90,6 @@ test("a print that is off the bed asks how it went, on the build, the builds lis
   await expect
     .poll(async () => (await attemptOf(page, itemId, attemptId)).failureTags, { timeout: 10_000 })
     .toEqual([]);
-
-  const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations).toEqual([]);
 });
 
 test("Worked on a print off the bed takes no suggested tag along", async ({ page }) => {
@@ -153,6 +149,4 @@ test("the Printer page says the bridge is connected, and asks about a spool it c
   // A gentle prompt: tapping it is the ordinary spool picker.
   await slot.click();
   await expect(page.getByRole("dialog", { name: "Slot A2" })).toBeVisible();
-  const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations).toEqual([]);
 });

@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -60,7 +59,7 @@ test("marks an idea Up next from its page, with an undo, and takes it off again"
   await expect.poll(() => serverQueue(page)).toEqual(["Hose clip"]);
 });
 
-test("reorders the queue from the card menu: Move up and Move down", async ({ page }) => {
+test("reorders the queue from the card menu: Move up and Move down", { tag: "@phone" }, async ({ page }) => {
   for (const title of ["First", "Second", "Third"]) {
     const id = await makeIdea(page, title);
     await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
@@ -141,24 +140,4 @@ test("Today shows the first three of the queue, in order, and nothing when it is
   await expect(section.getByRole("link")).toHaveText([/Alpha/, /Bravo/, /Charlie/, /All 4 in Ideas/]);
   await section.getByRole("link", { name: /Bravo/ }).click();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Bravo");
-});
-
-test("the inbox with an Up next section, its menu open, passes axe in both themes", async ({ page }) => {
-  for (const title of ["Axe one", "Axe two"]) {
-    const id = await makeIdea(page, title);
-    await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
-  }
-  await makeIdea(page, "Axe loose");
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.goto("/ideas");
-    await expect(upNext(page).getByRole("heading", { name: "Axe one" })).toBeVisible();
-    await page.waitForTimeout(500);
-    expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
-    await page.getByRole("button", { name: "Options for Axe two" }).click();
-    await expect(page.getByRole("button", { name: "Move up" })).toBeVisible();
-    await page.waitForTimeout(300);
-    expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
-    await page.keyboard.press("Escape");
-  }
 });

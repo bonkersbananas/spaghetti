@@ -34,6 +34,9 @@ const args = [
   port,
   "--show-interactive-dev-session=false",
   "--live-reload=false",
+  // The Worker sees the address it was opened at, not spaghetti.day (the route in wrangler.jsonc): otherwise wrangler
+  // rewrites the Origin header to it, and a passkey made at localhost can't be verified.
+  "--infer-origin-from-routes=false",
   // Passkeys here belong to localhost, not spaghetti.day (wrangler.jsonc).
   ...["--var", "WEBAUTHN_RP_ID:localhost", "--var", "WEBAUTHN_ORIGINS:http://localhost:*"],
 ];

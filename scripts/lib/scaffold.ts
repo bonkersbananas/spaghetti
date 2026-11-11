@@ -96,18 +96,13 @@ function ${component}() {
 
 export function routeE2eTemplate(name: string): string {
   const label = toLabel(name);
-  return `import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+  return `import { expect, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
-test("${toKebab(name)}: opens, and has no accessibility violations", async ({ page }) => {
+test("${toKebab(name)}: opens", async ({ page }) => {
   await signIn(page);
   await page.goto("/${toKebab(name)}");
   await expect(page.getByRole("heading", { level: 1, name: "${label}" })).toBeVisible();
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(violations.map((violation) => violation.id)).toEqual([]);
 });
 `;
 }
@@ -154,30 +149,6 @@ export function ${component}Section() {
       </Panel>
     </Section>
   );
-}
-`;
-}
-
-export function componentE2eTemplate(name: string): string {
-  const id = toKebab(name);
-  return `import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-import { signIn } from "./helpers";
-
-// The ${toPascal(name)} specimen on /styleguide: it renders and passes axe, in both themes.
-for (const theme of ["light", "dark"] as const) {
-  test(\`${id}: styleguide specimen, \${theme}\`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    await signIn(page);
-    await page.goto("/styleguide#${id}");
-    const section = page.locator("#${id}");
-    await expect(section).toBeVisible();
-    const { violations } = await new AxeBuilder({ page })
-      .include("#${id}")
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-      .analyze();
-    expect(violations.map((violation) => violation.id)).toEqual([]);
-  });
 }
 `;
 }

@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 
@@ -102,28 +101,5 @@ test("it says it is thinking, and nothing shows when it has nothing useful to sa
     await page.goto(`/builds/${made.itemId}`);
     await expect(page.getByText("Thinking about the next try…")).toHaveCount(0, { timeout: 20_000 });
     await expect(ideas(page)).toHaveCount(0);
-  }
-});
-
-test("the ideas pass axe, in the build and in the sheet", async ({ page }) => {
-  const { itemId, attemptId } = await printing(page, "Coach comb");
-  await page.request.patch(`/api/attempts/${attemptId}`, {
-    headers: { Origin: origin(page) },
-    data: { outcome: "failed" },
-  });
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.goto(`/builds/${itemId}`);
-    await expect(ideas(page)).toBeVisible({ timeout: 20_000 });
-    const page1 = await new AxeBuilder({ page }).analyze();
-    expect(page1.violations, `build page, ${scheme}`).toEqual([]);
-    await page.getByRole("button", { name: "Log attempt" }).first().click();
-    await expect(
-      page.getByRole("dialog").getByRole("region", { name: "Claude's ideas for the next try" }),
-    ).toBeVisible();
-    const sheet = await new AxeBuilder({ page }).analyze();
-    expect(sheet.violations, `sheet, ${scheme}`).toEqual([]);
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
   }
 });

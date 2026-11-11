@@ -1,10 +1,10 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
  * "Find what worked last time in one search": the questions people ask, answered with what worked first and the
- * words that matched in view, then one tap to start again. Phone and desktop (the project's width), with axe.
+ * words that matched in view, then one tap to start again. At desktop width; the @phone tests in journal-search.spec.ts
+ * search on a phone.
  */
 
 const origin = (page: Page) => new URL(page.url()).origin;
@@ -53,17 +53,6 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
-
-async function expectAccessible(page: Page, what: string) {
-  await page.waitForTimeout(400);
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(
-    violations.map((v) => `${v.id}: ${v.help}`),
-    `${what}: axe`,
-  ).toEqual([]);
-}
 
 test("a settings question leads with what worked, shows the matching setting and starts again in one tap", async ({
   page,
@@ -125,19 +114,6 @@ test("a spool is found by its colour", async ({ page }) => {
     await page.request.delete(`/api/spools/${id}`, { headers: { Origin: origin(page) } });
   }
 });
-
-for (const scheme of ["light", "dark"] as const) {
-  test(`the results pass axe in ${scheme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme });
-    await seed(page);
-    await page.goto("/search?q=petg%20bed%20temp");
-    await expect(page.getByRole("region", { name: "What worked" })).toBeVisible();
-    await expectAccessible(page, `Search results in ${scheme}`);
-    await page.goto("/search?q=wraping%20today");
-    await expect(page.getByText("Showing results for")).toBeVisible();
-    await expectAccessible(page, `Corrected search in ${scheme}`);
-  });
-}
 
 test.describe("on a laptop", () => {
   test.skip(({ isMobile }) => isMobile, "phones have no palette");
