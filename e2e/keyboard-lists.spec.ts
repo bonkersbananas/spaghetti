@@ -45,6 +45,7 @@ test("J and K also walk Today's cards", async ({ page }) => {
   await page.keyboard.press("j");
   const first = page.locator("main [data-picks] a[href]").first();
   await expect(first).toBeFocused();
+});
 
 test("G J still goes to the journal from a list where J walks the cards", async ({ page }) => {
   const headers = { Origin: new URL(page.url()).origin };
