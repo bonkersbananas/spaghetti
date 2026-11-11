@@ -24,6 +24,9 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   // The route narrows it: a photo of an attempt may come from "attempts", any other needs "capture".
   ["PUT", new RegExp(`^/items/${id}/photos/${id}$`), ["capture", "attempts"]],
   ["POST", new RegExp(`^/items/${id}/attempts$`), ["attempts"]],
+  // Comments: agents write and edit their own (through their owner's name); deleting is for people.
+  ["POST", new RegExp(`^/items/${id}/comments$`), ["capture", "attempts"]],
+  ["PATCH", new RegExp(`^/comments/${id}$`), ["capture", "attempts"]],
   ["PATCH", new RegExp(`^/attempts/${id}$`), ["attempts"]],
   ["POST", new RegExp(`^/attempts/${id}/finish$`), ["attempts"]],
   ["PUT", new RegExp(`^/attempts/${id}/file$`), ["attempts"]],
@@ -50,7 +53,7 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
  * Reading is `read`, except the session and agent management, which tokens never see, and link
  * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
  */
-const PERSON_ONLY_READS = /^\/(session|agents|links|push|features|deleted)(\/|$)/;
+const PERSON_ONLY_READS = /^\/(session|agents|links|push|features|deleted|comments\/unread)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {
