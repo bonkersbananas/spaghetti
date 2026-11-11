@@ -42,6 +42,11 @@ const credentials = z.object({
  */
 const DUMMY_HASH = "pbkdf2-sha256$100000$c3BhZ2hldHRpLWR1bW15$Zm9yLXRpbWluZy1vbmx5LW5vdC1hLXJlYWwtaGFzaCE=";
 
+/** Wrong passwords before signing in waits: per username, and per address (two people may share one). */
+const PASSWORD_FAILURES_PER_NAME = 10;
+const PASSWORD_FAILURES_PER_IP = 30;
+const PASSWORD_WINDOW_MS = 10 * 60 * 1000;
+
 /** Wrong codes allowed anywhere in the window, before typed-code sign-in waits. */
 const CODE_FAILURES = 200;
 const CODE_WINDOW_MS = 10 * 60 * 1000;
@@ -59,9 +64,22 @@ export const sessionRoutes = new Hono<AppEnv>()
     const parsed = credentials.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "Enter your name and password.");
     const { username, password } = parsed.data;
+    // Wrong passwords are counted per name and per address, and a person who is over either waits (a right password
+    // never counts, so signing in correctly is never what locks anyone out). Checked before the slow hash.
+    const ip = clientKey(c);
+    if (
+      (await hitsIn(c, `pw-user:${username}`, PASSWORD_WINDOW_MS)) >= PASSWORD_FAILURES_PER_NAME ||
+      (await hitsIn(c, `pw-ip:${ip}`, PASSWORD_WINDOW_MS)) >= PASSWORD_FAILURES_PER_IP
+    ) {
+      return tooMany(c);
+    }
     const user = await c.var.db.select().from(users).where(eq(users.username, username)).get();
     const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
     if (!user || !ok) {
+      await Promise.all([
+        takeHit(c, `pw-user:${username}`, PASSWORD_FAILURES_PER_NAME, PASSWORD_WINDOW_MS),
+        takeHit(c, `pw-ip:${ip}`, PASSWORD_FAILURES_PER_IP, PASSWORD_WINDOW_MS),
+      ]);
       return apiError(c, 401, "wrong_credentials", "That name and password don't match.");
     }
     await startSession(c, c.var.db, user.id);

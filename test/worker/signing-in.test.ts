@@ -249,6 +249,36 @@ describe("adding a passkey", () => {
   });
 });
 
+describe("password sign-in", () => {
+  const attempt = (username: string, password: string, ip = "198.51.100.7") =>
+    request("/api/session", { method: "POST", json: { username, password }, headers: { "cf-connecting-ip": ip } });
+
+  it("waits after ten wrong passwords for one name, without counting right ones, and only for that name", async () => {
+    for (let i = 0; i < 12; i++) expect((await attempt("alex", "right?")).status).toBe(i < 10 ? 401 : 429);
+    const refused = await attempt("alex", "correct horse");
+    expect(refused.status).toBe(429);
+    expect((await errorOf(refused)).message).toMatch(/wait a few minutes/i);
+    // Another name from the same address still signs in.
+    expect((await attempt("sam", "battery staple")).status).toBe(200);
+    // Ten minutes later it is allowed again.
+    await env.DB.prepare("UPDATE auth_hits SET at = at - ?").bind(11 * 60 * 1000).run();
+    expect((await attempt("alex", "correct horse")).status).toBe(200);
+  });
+
+  it("does not count successful sign-ins", async () => {
+    for (let i = 0; i < 40; i++) expect((await attempt("alex", "correct horse")).status).toBe(200);
+  });
+
+  it("limits an address across names, and an unknown name counts too", async () => {
+    let last = 0;
+    for (let i = 0; i < 31; i++) last = (await attempt(`nobody${i}`, "x")).status;
+    expect(last).toBe(429);
+    expect((await attempt("alex", "correct horse")).status).toBe(429);
+    // Another address is untouched.
+    expect((await attempt("alex", "correct horse", "198.51.100.8")).status).toBe(200);
+  });
+});
+
 describe("the last way in", () => {
   it("keeps a passkey-only person's last passkey, and lets a person with a password remove theirs", async () => {
     const { key } = await addPasskey();
