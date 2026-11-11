@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { CheckIcon, CloseIcon, SparkleIcon, UndoIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { cn } from "@/lib/cn";
@@ -17,10 +18,9 @@ const IDEAS = "Claude's ideas for the next try";
 /** Where the suggestions will go, while Claude thinks: a pulse, not a spinner. */
 function Thinking({ className }: { className?: string }) {
   return (
-    <p className={cn("text-small text-ink-faint flex items-center gap-2 px-0.5", className)} role="status">
-      <SparkleIcon size={14} weight="fill" aria-hidden className="sg-pulse shrink-0" />
+    <ClaudeLine working className={cn("px-0.5", className)}>
       Thinking about the next try…
-    </p>
+    </ClaudeLine>
   );
 }
 

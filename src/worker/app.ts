@@ -25,6 +25,7 @@ import { itemRoutes } from "./routes/items.ts";
 import { joinRoutes } from "./routes/join.ts";
 import { journalRoutes } from "./routes/journal.ts";
 import { linkRoutes } from "./routes/links.ts";
+import { oauthRoutes } from "./routes/oauth.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { printerRoutes } from "./routes/printer.ts";
@@ -123,6 +124,7 @@ export const app = new Hono<AppEnv>()
   .route("/people", peopleRoutes)
   .route("/wishlists", wishlistRoutes)
   .route("/agents", agentRoutes)
+  .route("/oauth", oauthRoutes)
   .route("/changes", changeRoutes)
   .route("/webhooks", webhookRoutes)
   .route("/capture", captureRoutes)

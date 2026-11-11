@@ -26,7 +26,6 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // Comments added about 1 kB to the lists (the unread marker on cards: its query, a badge and an icon); the thread and its
 // composer are a lazy chunk of the idea and build pages, and the palette's "New comments" row loads with the palette.
 // Merging main (photo reads, spare parts) and comments together took the lists about 1 kB past their old limits: budgets +1 to +2 kB.
-// The week (two shortcuts, a cached query root, a link and the week rules in the Journal): the Journal +2 kB, the other lists +1 kB. The page itself loads on demand.
 // Cutting the first load (#225): Phosphor's thin and duotone weights left out of the build (about 15 kB), motion's layout and drag
 // features and sonner loaded once idle (about 20 kB), section code preloaded when idle rather than with the first render.
 // Budgets are the measured sizes plus about 2 kB.
@@ -36,12 +35,15 @@ const BUDGET_KB = {
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
   // Wishlists add a sidebar section (its star icon is on every signed-in screen); the page, its drag code, the picker and
   // the phones' row on Ideas load on demand. Today and Ideas went past their limits: measured plus about 2 kB again.
-  "/today": 298,
+  // After merging main (#73) with OAuth, Today was under 0.5 kB over (the shared parts named below): +1 kB.
+  "/today": 299,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 289,
+  // OAuth for the MCP server: diffed per file against main (PERF_FILES=1), Builds grew by about 0.6 kB raw, all of it small: the router's entry for /authorize (index +0.2), Overline becoming a shared chunk now that the consent screen uses it too (+0.3) and Disconnect in lib/agents (+0.1). The consent screen's own code, the connected-app card (with the Agents page) and the scope words are not in any other screen's first load. Builds, Pantry and Printer were left under 1 kB over: +1 kB each (Today too, below).
   "/builds": 287,
   // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
+  // The week (two shortcuts, a cached query root, a link and the week rules in the Journal): +2 kB; the page itself loads on demand.
   "/journal": 288,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
   "/search": 292,

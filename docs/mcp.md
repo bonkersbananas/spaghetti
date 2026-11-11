@@ -1,8 +1,27 @@
 # Connecting Claude (the MCP server)
 
-Spaghetti runs an MCP server at `/mcp` (Model Context Protocol over Streamable HTTP) so Claude can search the journal, read a build's story, capture ideas, log prints and keep the AMS record, as an agent of one of you. It is stateless, needs no setup beyond a token, and runs the same locally, in the container and on Cloudflare.
+Spaghetti runs an MCP server at `/mcp` (Model Context Protocol over Streamable HTTP) so Claude can search the journal, read a build's story, capture ideas, log prints and keep the AMS record, as an agent of one of you. It is stateless, needs no setup beyond a token or a sign-in, and runs the same locally, in the container and on Cloudflare.
 
-## 1. Make a token
+## Claude's apps (claude.ai and the iPhone app)
+
+Claude's own apps connect with a sign-in, no token to paste. On claude.ai (Pro, Max, Team or Enterprise; on Team and Enterprise an owner adds it for the organisation first): **Settings → Connectors → Add custom connector**, name it Spaghetti, enter `https://spaghetti.day/mcp` and add it. Choose **Connect**: Spaghetti's own sign-in opens (your name and password, or a passkey), then a screen that says which app asks and what it will be able to do. **Allow** sends you back. The connector is then in Claude on the web and, once added there, in the Claude iPhone and Android apps too: ask "what worked for PETG last time?" from the printer.
+
+It becomes an agent of yours, **Claude for Alex**, with all four scopes (the screen lists them; you approve or decline as a whole). Everything it does is marked "via Claude for Alex", like a token's work. It is on the Agents page as **Signed in with Claude**, where **Disconnect** (with an Undo) ends its tokens at once. Its access tokens last an hour and renew by themselves while the app is in use; unused for 60 days, it asks again.
+
+Other clients that speak MCP's OAuth (MCP Inspector, Claude Code's `/mcp` sign-in) work the same way against `/mcp`. The pieces, for anything else:
+
+| | |
+| --- | --- |
+| `GET /.well-known/oauth-protected-resource` (also under `/mcp`) | RFC 9728: the resource and its authorization server |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414: the endpoints below, `code_challenge_methods_supported: ["S256"]` |
+| `POST /oauth/register` | RFC 7591: JSON `{ client_name, redirect_uris }`, answers `201` with a `client_id` (a `client_secret` only if the client asks for client authentication) |
+| `/authorize` | The consent screen (a page, not an API): `response_type=code`, `client_id`, `redirect_uri`, `code_challenge` (S256 only), `state`, optional `scope` (`read capture attempts printer`, default all) and `resource` |
+| `POST /oauth/token` | `authorization_code` (with `code_verifier`) and `refresh_token` (each refresh token works once and comes back replaced); answers `access_token` (`spg_…`, one hour), `refresh_token` (`spr_…`), `scope` |
+| `POST /oauth/revoke` | RFC 7009: ends the connection from the app's side |
+
+A `401` from `/mcp` carries `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`, which is where a client starts. Redirect addresses are https, `http://localhost…`, or an app's own scheme, and must match what was registered exactly. A refresh can ask for fewer scopes than were approved, never more (`invalid_scope`). The decision is [0029](decisions/0029-oauth-small-and-on-d1.md).
+
+## 1. Make a token (Claude Code and config files)
 
 In the app: account menu → **Agents** → **New agent** (name it "Claude for Alex", pick scopes) → copy the token and the "Connect Claude" command shown with it. Or from the command line:
 
@@ -67,4 +86,4 @@ The tools are a curated slice. Everything the API can do, and what each token ma
 
 `POST /mcp` takes one JSON-RPC message (or a batch) and answers with JSON: `initialize`, `ping`, `tools/list` and `tools/call`. `GET` and `DELETE` are `405` (there are no sessions or streams), a missing or revoked token is `401`. A tool never touches the database: it calls Spaghetti's own API with the caller's token, so scopes, validation, attribution and the change feed behave exactly as for any other request (`src/worker/mcp/`). Photos sent to `capture_idea` can't be resized on the Worker, so the one image is stored as both sizes (cap 12 MB), with a neutral placeholder colour, and flagged: the next browser that opens the app resizes it quietly and replaces the copies (see decision 0004).
 
-Not built: OAuth (clients that insist on it can't connect yet; tokens only), server-sent events, and tools for deleting or editing past entries.
+Not built: server-sent events, scope choice on the consent screen (all or nothing), and tools for deleting or editing past entries.

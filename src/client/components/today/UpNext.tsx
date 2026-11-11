@@ -30,7 +30,7 @@ function Row({ item }: { item: ItemView }) {
         {photo ? (
           <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
         ) : (
-          <span className="bg-ink/5 text-ink-faint flex size-full items-center justify-center">
+          <span className="bg-well text-ink-faint flex size-full items-center justify-center">
             <IdeasIcon size={22} />
           </span>
         )}

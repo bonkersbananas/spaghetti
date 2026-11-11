@@ -273,7 +273,10 @@ async function mockWebhooks(
     await route.fulfill({
       response,
       json: {
-        agents: [...json.agents, { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [] }],
+        agents: [
+          ...json.agents,
+          { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [], connection: null },
+        ],
       },
     });
   });
@@ -1445,6 +1448,71 @@ export const shots: Shot[] = [
     },
   },
   { name: "agents", path: "/agents" },
+  // An app connected by OAuth (Claude's connector), beside a token agent: one connection, its scopes, Disconnect.
+  {
+    name: "agents-connected",
+    path: "/agents",
+    prepare: async (page) => {
+      await page.route(/\/api\/agents$/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as { agents: object[] };
+        const me = (await (await page.request.get("/api/session")).json()) as { user: { id: string; name: string } };
+        await route.fulfill({
+          response,
+          json: {
+            agents: [
+              ...json.agents,
+              {
+                id: "claude-connector",
+                name: `Claude for ${me.user.name}`,
+                ownerId: me.user.id,
+                createdAt: minutesAgo(60 * 24 * 3),
+                tokens: [],
+                connection: {
+                  app: "Claude",
+                  scopes: ["read", "capture", "attempts", "printer"],
+                  connected: true,
+                  connectedAt: minutesAgo(60 * 24 * 3),
+                  lastUsedAt: minutesAgo(25),
+                },
+              },
+            ],
+          },
+        });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  // The consent screen Claude's apps send people to: who asks, what it will be able to do, Allow or Not now.
+  {
+    name: "authorize",
+    path: "/agents",
+    fullPage: true,
+    prepare: async (page) => {
+      const registered = await page.request.post("/oauth/register", {
+        data: { client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] },
+      });
+      const { client_id: clientId } = (await registered.json()) as { client_id: string };
+      const query = new URLSearchParams({
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+        code_challenge: "E9Melhoa2OwvFIEQJdbPIbRIMPpVC7xyrXTVyQd1pZA",
+        code_challenge_method: "S256",
+        scope: "read capture attempts printer",
+        state: "shot",
+      });
+      await page.goto(`/authorize?${query}`, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Allow" }).waitFor();
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+  },
   // Webhooks, a small section under the agents: nothing yet, one that works (with its deliveries), one that is failing,
   // and the sheet that adds one, then its secret (shown once).
   {

@@ -35,7 +35,7 @@ describe("describeChanges", () => {
     expect(texts({}, { bedType: "Smooth PEI Plate" })).toEqual(["Smooth PEI plate"]);
     expect(texts({}, { bedType: "Engineering Plate" })).toEqual(["Engineering Plate"]);
     expect(texts({ processPreset: "0.20mm Standard @BBL X2D" }, { processPreset: "0.16mm Optimal @BBL X2D" })).toEqual([
-      "0.20mm Standard → 0.16mm Optimal",
+      "0.20 mm Standard → 0.16 mm Optimal",
     ]);
     expect(texts({}, { filamentDried: true })).toEqual(["dried the filament"]);
   });
