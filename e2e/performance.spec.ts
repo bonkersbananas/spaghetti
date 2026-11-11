@@ -35,11 +35,12 @@ const BUDGET_KB = {
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
   // Wishlists add a sidebar section (its star icon is on every signed-in screen); the page, its drag code, the picker and
   // the phones' row on Ideas load on demand. Today and Ideas went past their limits: measured plus about 2 kB again.
-  "/today": 298,
+  // After merging main (#73) with OAuth, Today was under 0.5 kB over (the shared parts named below): +1 kB.
+  "/today": 299,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 289,
-  // OAuth for the MCP server: diffed per file against main (PERF_FILES=1), Builds grew by about 0.6 kB raw, all of it small: the router's entry for /authorize (index +0.2), Overline becoming a shared chunk now that the consent screen uses it too (+0.3) and Disconnect in lib/agents (+0.1). The consent screen's own code, the connected-app card (with the Agents page) and the scope words are not in any other screen's first load. Builds, Pantry and Printer were left under 1 kB over: +1 kB each.
+  // OAuth for the MCP server: diffed per file against main (PERF_FILES=1), Builds grew by about 0.6 kB raw, all of it small: the router's entry for /authorize (index +0.2), Overline becoming a shared chunk now that the consent screen uses it too (+0.3) and Disconnect in lib/agents (+0.1). The consent screen's own code, the connected-app card (with the Agents page) and the scope words are not in any other screen's first load. Builds, Pantry and Printer were left under 1 kB over: +1 kB each (Today too, below).
   "/builds": 287,
   // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
   "/journal": 286,
