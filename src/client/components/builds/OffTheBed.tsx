@@ -15,6 +15,8 @@ interface OffTheBedProps {
   onPick?: (outcome: Outcome) => void;
   /** What Claude made of the print's photo: a gentle hint on the matching button, never picked for anyone. */
   photoRead?: PhotoRead | null;
+  /** Show the tags Claude would add under its reason. Today leaves them for the sheet. */
+  withTags?: boolean;
   /**
    * Standing at the printer: a photo of the print, right here (the camera on phones), so Claude can suggest an answer
    * on these same buttons. Shown while the attempt has no photo yet.
@@ -28,7 +30,7 @@ interface OffTheBedProps {
  * "Off the bed at 10:42 · how did it go?" with the three outcomes right there. The printer can't know whether
  * it worked, so the bridge never answers for us.
  */
-export function OffTheBed({ endedAt, onPick, photoRead, onPhotos, className }: OffTheBedProps) {
+export function OffTheBed({ endedAt, onPick, photoRead, withTags = true, onPhotos, className }: OffTheBedProps) {
   // Its own small input rather than PhotoTiles' picker: the question shows on screens (search, journal) that
   // otherwise carry none of the photo tiles' code.
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -70,7 +72,7 @@ export function OffTheBed({ endedAt, onPick, photoRead, onPhotos, className }: O
         )}
       </div>
       {onPick && <OutcomePicker value={null} onChange={onPick} size="md" suggested={photoRead?.outcome ?? null} />}
-      {photoRead && <PhotoReadNote read={photoRead} />}
+      {photoRead && <PhotoReadNote read={photoRead} withTags={withTags} />}
     </div>
   );
 }
