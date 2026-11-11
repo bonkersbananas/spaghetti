@@ -1,7 +1,7 @@
 import type { AgentInfo } from "@shared/agents";
 import type { DeliveryInfo, WebhookInfo } from "@shared/webhooks";
 import { useState } from "react";
-import { DeliveryRow, WebhookCard } from "@/components/agents/WebhookCard";
+import { DeliveryRow, WebhookCard, WebhooksEmpty } from "@/components/agents/WebhookCard";
 import { WebhookSheet } from "@/components/agents/WebhookSheet";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/icons";
@@ -124,6 +124,10 @@ export function WebhooksSection() {
               now={now}
             />
           </ul>
+        </Panel>
+        <Panel className="flex min-w-0 flex-col gap-4">
+          <Label>Before the first one</Label>
+          <WebhooksEmpty onAdd={noop} />
         </Panel>
         <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Delivery rows</Label>

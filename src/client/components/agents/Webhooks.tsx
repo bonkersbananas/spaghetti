@@ -8,7 +8,7 @@ import { Section } from "@/components/ui/Section";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { deliveriesQuery, removeWebhook, retryDelivery, sendTestEvent, webhooksQuery } from "@/lib/webhooks";
-import { WebhookCard } from "./WebhookCard";
+import { WebhookCard, WebhooksEmpty } from "./WebhookCard";
 import { WebhookSheet } from "./WebhookSheet";
 
 /** A card that follows its own deliveries while it is open. */
@@ -53,8 +53,8 @@ export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
   return (
     <Section
       id="webhooks"
+      className="max-w-2xl"
       title="Webhooks"
-      size="title"
       description="Tell another program when something changes, instead of it asking. Each change is sent as signed JSON."
       aside={
         <Button
@@ -79,9 +79,7 @@ export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
           ))}
         </ul>
       ) : (
-        <p className="text-small text-ink-faint max-w-prose">
-          None yet. Add one to hear about new ideas, prints and comments without polling.
-        </p>
+        <WebhooksEmpty readOnly={readOnly} onAdd={() => canEdit() && setAdding(true)} />
       )}
       <WebhookSheet open={adding} onOpenChange={setAdding} agents={agents} />
     </Section>

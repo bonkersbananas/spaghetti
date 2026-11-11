@@ -185,6 +185,7 @@ export function WebhookSheet({ open, onOpenChange, agents, create }: WebhookShee
                 </ToggleChip>
               ))}
             </div>
+            <p className="text-small text-ink-faint">Everything, or pick only the kinds you care about.</p>
           </fieldset>
           {agents.length > 0 && (
             <fieldset className="flex flex-col gap-3">

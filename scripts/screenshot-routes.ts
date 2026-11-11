@@ -135,7 +135,8 @@ async function mockWebhooks(
   page: Page,
   webhooks: object[],
   deliveries: object[] = [],
-  agent?: { id: string; name: string },
+  // The page shows an agent (the seed has none), so a shot isn't of the empty state's entrance animation.
+  agent: { id: string; name: string } = { id: "claude-for-alex", name: "Claude for Alex" },
 ) {
   await page.route(/\/api\/webhooks(\/[^/]+\/deliveries)?$/, (route) => {
     const request = route.request();
@@ -147,20 +148,22 @@ async function mockWebhooks(
     }
     return route.fulfill({ json: request.url().endsWith("/deliveries") ? { deliveries } : { webhooks } });
   });
-  if (agent) {
-    await page.route(/\/api\/agents$/, async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as { agents: object[] };
-      const me = (await (await page.request.get("/api/session")).json()) as { user: { id: string } };
-      await route.fulfill({
-        response,
-        json: {
-          agents: [...json.agents, { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [] }],
-        },
-      });
+  await page.route(/\/api\/agents$/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as { agents: object[] };
+    const me = (await (await page.request.get("/api/session")).json()) as { user: { id: string } };
+    await route.fulfill({
+      response,
+      json: {
+        agents: [...json.agents, { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [] }],
+      },
     });
-  }
+  });
   await page.reload({ waitUntil: "networkidle" });
+  // The empty state's entrance would still be at opacity 0 in a full-page shot.
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
 }
 
 const openDeliveries = async (page: Page) => {
@@ -961,10 +964,7 @@ export const shots: Shot[] = [
     path: "/agents",
     fullPage: true,
     prepare: async (page) => {
-      await mockWebhooks(page, [{ ...webhookBase, agentId: "claude-for-alex" }], workingDeliveries, {
-        id: "claude-for-alex",
-        name: "Claude for Alex",
-      });
+      await mockWebhooks(page, [{ ...webhookBase, agentId: "claude-for-alex" }], workingDeliveries);
       await openDeliveries(page);
     },
     cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
@@ -997,7 +997,7 @@ export const shots: Shot[] = [
     name: "agents-webhook-new",
     path: "/agents",
     prepare: async (page) => {
-      await mockWebhooks(page, [], [], { id: "claude-for-alex", name: "Claude for Alex" });
+      await mockWebhooks(page, [], []);
       await page.getByRole("button", { name: "New webhook" }).click();
       const sheet = page.getByRole("dialog", { name: "New webhook" });
       await sheet.getByLabel("Address").fill("https://hooks.example.org/spaghetti");

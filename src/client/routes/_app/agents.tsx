@@ -91,8 +91,7 @@ function Agents() {
           <Webhooks agents={mine} />
         </Suspense>
       </div>
-      <p className="text-small text-ink-faint max-w-content mt-12 md:mt-16">
-        Building something against Spaghetti?{" "}
+      <p className="text-small text-ink-faint mt-12 md:mt-16">
         <a
           href="/api/openapi.json"
           target="_blank"
@@ -100,9 +99,8 @@ function Agents() {
           className="focus-ring text-ink-soft decoration-ink/30 font-semibold underline underline-offset-2"
         >
           API reference
-        </a>{" "}
-        is an OpenAPI document of what a token can do. Open it signed in, or fetch it with a token to see only what that
-        token may.
+        </a>
+        : what a token can do, as OpenAPI.
       </p>
       <AgentSheet
         open={making.open}

@@ -54,7 +54,7 @@ test("adds a webhook, copies its secret once, sends a test event and sees it arr
   test.setTimeout(90_000);
   await goToAgents(page, isMobile);
   const section = page.getByRole("region", { name: "Webhooks" });
-  await expect(section.getByText("None yet.")).toBeVisible();
+  await expect(section.getByText("Nobody's listening yet")).toBeVisible();
 
   await section.getByRole("button", { name: "New webhook" }).click();
   const sheet = page.getByRole("dialog", { name: "New webhook" });
@@ -129,7 +129,7 @@ test("says why a webhook can't be reached, retries it, and removes it with an un
     .getByRole("button", { name: /^Remove/ })
     .filter({ visible: true })
     .click();
-  await expect(section.getByText("None yet.")).toBeVisible();
+  await expect(section.getByText("Nobody's listening yet")).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(section.getByRole("listitem").first()).toBeVisible();
 });
