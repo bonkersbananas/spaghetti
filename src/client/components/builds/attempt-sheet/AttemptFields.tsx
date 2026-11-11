@@ -24,8 +24,16 @@ export interface FieldsProps {
   note: string;
   onNote: (note: string) => void;
   failureTags: string[];
-  /** The failure tag the printer suggested; shown marked as a suggestion while it is picked. */
-  suggestedFailureTag?: string;
+  /** Failure tags the printer or Claude suggested; shown marked as suggestions while they are picked. */
+  suggestedFailureTag?: string | readonly string[];
+  /** Success notes Claude suggested, marked the same way. */
+  suggestedSuccessNotes?: readonly string[];
+  /** Who suggested the failure tags (success notes are only ever Claude's). */
+  suggestedFailureBy?: "printer" | "claude";
+  /** The outcome Claude suggests from the photo: hinted on its button, not picked. */
+  suggestedOutcome?: Outcome | null;
+  /** Under the outcome buttons: "Looking at the photo…", or what Claude made of it. */
+  outcomeHint?: ReactNode;
   onFailureTags: (tags: string[]) => void;
   successNotes: string[];
   onSuccessNotes: (tags: string[]) => void;
@@ -111,7 +119,8 @@ export function AttemptFields(props: FieldsProps) {
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
-          <OutcomePicker value={outcome} onChange={props.onOutcome} />
+          <OutcomePicker value={outcome} onChange={props.onOutcome} suggested={props.suggestedOutcome} />
+          {props.outcomeHint}
           {props.estimate}
         </div>
       </fieldset>
@@ -160,10 +169,18 @@ export function AttemptFields(props: FieldsProps) {
             value={props.failureTags}
             onChange={props.onFailureTags}
             suggested={props.suggestedFailureTag}
+            suggestedBy={props.suggestedFailureBy}
           />
         )}
         {(outcome === "success" || outcome === "partial") && (
-          <TagPicker kind="success" label="What worked?" value={props.successNotes} onChange={props.onSuccessNotes} />
+          <TagPicker
+            kind="success"
+            label="What worked?"
+            value={props.successNotes}
+            onChange={props.onSuccessNotes}
+            suggested={props.suggestedSuccessNotes}
+            suggestedBy="claude"
+          />
         )}
       </fieldset>
       <fieldset disabled={!!props.readOnly} className="contents">

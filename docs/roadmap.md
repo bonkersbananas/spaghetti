@@ -43,9 +43,10 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
   - Anthropic's server-side web fetch tool (`web_fetch_20260209`, `allowed_domains` limited to the model sites) reads the page, so the Worker never fetches arbitrary URLs for it. The draft comes back structured through `output_config.format` (a JSON schema); handle `stop_reason: "refusal"`.
   - Pictures come from an allowlist of the sites' image CDNs and are stored with `needsResize`, so the next browser makes the thumbnails ([0004](decisions/0004-photos-resized-in-the-browser.md)).
   - Agents may get an `import_idea` MCP tool later.
-- [ ] **Read a print from its photo:** when an attempt gets a photo (taken by hand, or the bridge's camera frame), Claude looks at it and *suggests* how it went (Worked, Partly or Spaghetti) and which failure tags fit, from the built-in list. Spaghetti, warping, layer shift, stringing and the rest each come with a short reason.
+- [x] **Read a print from its photo** (see [0023](decisions/0023-claude-reads-a-print-from-its-photo.md)): when an attempt gets a photo (taken by hand, or the bridge's camera frame), Claude looks at it and *suggests* how it went (Worked, Partly or Spaghetti) and which failure tags fit, from the built-in list. Spaghetti, warping, layer shift, stringing and the rest each come with a short reason.
   - It only ever suggests. Like the bridge's suggested tag (#24), the suggestion is pre-selected and clearly marked "suggested" in the attempt sheet, and the person confirms or changes it. It never sets an outcome on its own.
   - It reads the attempt's large photo variant from R2 (already resized in the browser) and returns a structured output whose tags are an enum of the built-in tag slugs.
+  - Left for later: the suggestion on Today's print card and in the "how did it go?" push notification (Today was being changed by another session), and a way to ask again for a photo that wasn't read.
 
 ## Next: agents using the service
 

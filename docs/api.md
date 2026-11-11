@@ -103,7 +103,7 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 
 Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
 
-- `GET /api/features`: `{ drafts: boolean }`, whether the key is set.
+- `GET /api/features`: `{ drafts: boolean, photoReads: boolean }`, whether the key is set (both follow the one secret).
 - `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
 - `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
 - Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
@@ -112,6 +112,16 @@ Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea 
 - People only: no scope lists these routes, so a token gets `403 person_only`. `POST /api/capture` starts a draft by itself when the capture is just a model link, for a person's session or a token whose only scope is `capture` (the sharing Shortcut), never for an agent that can do more.
 - Every call is a row in `draft_runs` with its `outcome` and a `detail` (statuses and codes, no page content); how to read them is in [deploy.md](deploy.md). The page's title also goes into the link preview cache, so the note's link card shows it.
 - Capped at 30 Claude calls a day for the whole workspace (UTC days, `draft_runs`); past it a draft fails with `failure: "cap"`.
+
+## Reading a print from its photo (automatic)
+
+When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos/:photoId` with an `attemptId`), Claude looks at the photo's large variant and *suggests* how it went ([decision 0023](decisions/0023-claude-reads-a-print-from-its-photo.md)). Nothing is called to start it: the upload does, after its response (`waitUntil`), and the 5-minute cron picks up a read that was lost. It needs `ANTHROPIC_API_KEY`; without it nothing happens and nothing shows.
+
+- Attempts carry `photoRead`: `null`, or `{ status: "reading", photoId, … }` while Claude looks, or `{ status: "read", photoId, outcome, failureTags, successNotes, reason }` with the built-in tag slugs and one short sentence. It is only ever a suggestion: the attempt's own `outcome`, `failureTags`, `successNotes` and `note` are never written by it. A photo Claude can't tell from, a refusal and a failed call all leave `photoRead` `null` (or the suggestion of an earlier photo). A newer photo replaces the suggestion; the same photo is never read twice. A change to it is an `attempt` update in the change feed.
+- Who starts it: a signed-in person, or a token with both the `attempts` and `printer` scopes (the printer bridge's camera frame). Any other agent's photo is not read.
+- The bridge's frame is stored as the original in both variants (`needsResize`); it is read as it is when it is a JPEG or WebP of at most 4.8 MB and 8000 px a side (the API's limits), and not read otherwise.
+- Every read is a row in `photo_reads` with its status, `run_outcome` (`read`, `unsure`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, …) and a `detail` (model, stop reason, status, how long it took); how to read them is in [deploy.md](deploy.md).
+- Capped at 30 reads a day for the whole workspace (UTC days, rows with `ran_at`); past it the read is marked `cap` and nothing is suggested.
 
 ## Upkeep and drying
 

@@ -11,19 +11,29 @@ const tones: Record<ChipTone, string> = {
   semolina: "bg-semolina-soft text-semolina-ink",
 };
 
+/** A suggestion that comes along if taken (Claude's tags from the photo): outlined, no fill, until it is picked. */
+const suggestedTones: Record<ChipTone, string> = {
+  neutral: "border border-dashed border-ink/30 text-ink-soft",
+  tomato: "border border-dashed border-tomato/60 text-tomato-ink",
+  basil: "border border-dashed border-basil/60 text-basil-ink",
+  semolina: "border border-dashed border-semolina/70 text-semolina-ink",
+};
+
 const base = "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-pill px-2.5 text-small font-semibold md:h-6";
 
 interface ChipProps {
   tone?: ChipTone;
   icon?: Icon;
+  /** Outlined instead of filled: a suggestion, not yet anyone's choice. */
+  suggested?: boolean;
   children: ReactNode;
   className?: string;
 }
 
 /** A label: status, material, tag. Static; for filters use ToggleChip. */
-export function Chip({ tone = "neutral", icon: IconComponent, children, className }: ChipProps) {
+export function Chip({ tone = "neutral", icon: IconComponent, suggested, children, className }: ChipProps) {
   return (
-    <span className={cn(base, tones[tone], className)}>
+    <span className={cn(base, suggested ? suggestedTones[tone] : tones[tone], className)}>
       {IconComponent && <IconComponent size={14} weight="bold" aria-hidden />}
       {children}
     </span>

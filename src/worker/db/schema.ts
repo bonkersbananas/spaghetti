@@ -300,6 +300,41 @@ export const draftRuns = sqliteTable("draft_runs", {
   detail: text("detail"),
 });
 
+/**
+ * Claude looking at one attempt photo (decision 0023): the job, its answer and the record of the run, in one row per
+ * photo (a photo is never read twice). Also what the day's cap counts (rows with `ranAt`).
+ */
+export const photoReads = sqliteTable(
+  "photo_reads",
+  {
+    photoId: text("photo_id")
+      .primaryKey()
+      .references(() => photos.id, { onDelete: "cascade" }),
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull(),
+    /** reading: waiting or running; read: a suggestion; unsure: Claude couldn't tell; failed: the call didn't work; skipped: the attempt had its outcome first. */
+    status: text("status").$type<"reading" | "read" | "unsure" | "failed" | "skipped">().notNull(),
+    outcome: text("outcome").$type<Outcome>(),
+    failureTags: text("failure_tags", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    successNotes: text("success_notes", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    reason: text("reason"),
+    /** When a worker took the job; a claim older than a few minutes is abandoned (the cron picks it up). */
+    claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+    tries: integer("tries").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** When the call to Claude was made (what the cap counts); null when it never got that far. */
+    ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+    /** How it ended: "read", or why not (see worker/photo-read/claude.ts). */
+    runOutcome: text("run_outcome"),
+    /** The rest of the diagnosis as JSON: model, stop reason, HTTP status, error type, the SDK's message, how long it took. */
+    detail: text("detail"),
+  },
+  (table) => [index("photo_reads_attempt_idx").on(table.attemptId, table.createdAt)],
+);
+
+export type PhotoReadRow = typeof photoReads.$inferSelect;
 export type ItemDraftRow = typeof itemDrafts.$inferSelect;
 
 export type Item = typeof items.$inferSelect;
