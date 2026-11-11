@@ -6,11 +6,11 @@ import { lazy, Suspense } from "react";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
-import { useUnreadCount } from "@/lib/comments";
 import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { useOutbox } from "@/lib/outbox";
 import { photoSrc } from "@/lib/previews";
+import { useUnreadCount } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));

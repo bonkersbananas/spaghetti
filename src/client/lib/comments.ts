@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { isOnline } from "./connection";
 import { canEdit } from "./read-only";
+import { unreadQuery } from "./unread-comments";
 
 // --- queries --------------------------------------------------------------------------------------
 
@@ -17,23 +18,6 @@ export const commentsQuery = (itemId: string) =>
     staleTime: 30_000,
     gcTime: 7 * 24 * 60 * 60 * 1000,
   });
-
-/** The threads with comments the signed-in person hasn't read: the markers on cards and the palette's way in. */
-export const unreadQuery = queryOptions({
-  queryKey: ["comments", "unread"] as const,
-  queryFn: () => api<UnreadCommentsResponse>("/comments/unread"),
-  staleTime: 30_000,
-  gcTime: 7 * 24 * 60 * 60 * 1000,
-});
-
-/** How many unread comments this idea or build has (0 for none). Cards in a list share one request. */
-export function useUnreadCount(itemId: string): number {
-  const { data } = useQuery({
-    ...unreadQuery,
-    select: (response) => response.threads.find((thread) => thread.itemId === itemId)?.count ?? 0,
-  });
-  return data ?? 0;
-}
 
 // --- drafts: a half-written comment survives navigation and reloads --------------------------------
 

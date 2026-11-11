@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/icons";
 import { PaletteDialog, type PaletteGroup, type PaletteRow, PaletteSurface } from "@/components/ui/Palette";
 import { useCapture } from "@/lib/capture";
-import { unreadQuery } from "@/lib/comments";
 import { comboOf, isMac } from "@/lib/hotkeys";
 import { type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { type ScreenAction, screenActions, usePalette } from "@/lib/palette";
@@ -33,6 +32,7 @@ import { photoSrc } from "@/lib/previews";
 import { itemName, type RecentItem, recentItems } from "@/lib/recent";
 import { focusSearch, searchQuery } from "@/lib/search";
 import { useTheme } from "@/lib/theme";
+import { unreadQuery } from "@/lib/unread-comments";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useSignOut } from "@/lib/use-sign-out";
 import { sections, workshop } from "./sections";
