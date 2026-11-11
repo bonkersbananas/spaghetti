@@ -289,6 +289,7 @@ const CHECKED_ROUTES = [
   "printer",
   "agents",
   "year",
+  "week.$monday",
   "deleted",
   "styleguide",
   // Redirects and hand-offs with no screen of their own.
