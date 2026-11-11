@@ -58,7 +58,7 @@ interface BubbleProps {
 export function Bubble({ mine = false, edited = false, aside, below, children }: BubbleProps) {
   return (
     <div className={cn("group/bubble flex max-w-full min-w-0 flex-col gap-1.5", mine ? "items-end" : "items-start")}>
-      <div className={cn("flex max-w-full items-center gap-0.5", mine && "flex-row-reverse")}>
+      <div className={cn("flex max-w-full items-center gap-0.5", mine && "w-full flex-row-reverse")}>
         <div
           className={cn(
             "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 break-words whitespace-pre-wrap",
@@ -68,7 +68,7 @@ export function Bubble({ mine = false, edited = false, aside, below, children }:
           {children}
           {edited && <span className="text-caption text-ink-faint ml-1.5 whitespace-nowrap">(edited)</span>}
         </div>
-        {aside}
+        {aside && <div className={mine ? "mr-auto" : undefined}>{aside}</div>}
       </div>
       {below}
     </div>

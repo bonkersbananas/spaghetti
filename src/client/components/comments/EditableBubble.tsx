@@ -119,10 +119,7 @@ export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: Edi
       aside={aside}
       below={<NoteLinks note={comment.body} label="Links in the comment" />}
     >
-      {linkify(
-        comment.body,
-        "text-tomato-ink font-semibold underline decoration-tomato/40 underline-offset-2 break-all",
-      )}
+      {linkify(comment.body, "text-ink font-medium underline decoration-ink/30 underline-offset-2")}
     </Bubble>
   );
 }
