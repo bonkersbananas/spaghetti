@@ -4,7 +4,7 @@ import { recipeSettings, settingsMaterial } from "@shared/recipes";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
-import { spoolsQuery } from "./pantry";
+import { spoolsQuery } from "./pantry-queries";
 import { recipesQuery } from "./recipes-query";
 
 export { recipesQuery };
