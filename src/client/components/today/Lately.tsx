@@ -29,9 +29,17 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
   return (
     <section aria-labelledby="today-lately" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <Overline as="h2" id="today-lately">
-          {label}
-        </Overline>
+        <div className="flex items-baseline justify-between gap-4">
+          <Overline as="h2" id="today-lately">
+            {label}
+          </Overline>
+          <Link
+            to="/year"
+            className="text-small text-ink-faint hover:text-ink focus-ring -my-2 rounded-sm py-2 whitespace-nowrap"
+          >
+            See the year
+          </Link>
+        </div>
         {summary === null ? (
           <Skeleton className="h-6 w-64 max-w-full" />
         ) : (

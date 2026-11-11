@@ -25,6 +25,7 @@ import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
 import { TodaySection } from "./-styleguide/today";
 import { TypeSection } from "./-styleguide/type";
+import { YearSection } from "./-styleguide/year";
 
 export const Route = createFileRoute("/_app/styleguide")({
   component: Styleguide,
@@ -52,6 +53,7 @@ const toc = [
   ["builds", "Builds & attempts"],
   ["pantry", "Pantry & printer"],
   ["recipes", "Recipes"],
+  ["year", "Year so far"],
   ["search", "Journal & search"],
   ["journal", "Journal entries"],
   ["today", "Today"],
@@ -96,6 +98,7 @@ function Styleguide() {
           <BuildsSection />
           <PantrySection />
           <RecipesSection />
+          <YearSection />
           <SearchSection />
           <JournalSection />
           <TodaySection />

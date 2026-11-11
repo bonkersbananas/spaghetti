@@ -76,7 +76,7 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "item":
       case "attempt":
         lists = true;
-        roots.add("journal").add("facets").add("search").add("what-worked").add("spools");
+        roots.add("journal").add("insights").add("facets").add("search").add("what-worked").add("spools");
         break;
       case "photo":
       case "file":
