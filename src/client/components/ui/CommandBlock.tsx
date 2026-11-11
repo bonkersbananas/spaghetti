@@ -12,8 +12,22 @@ interface CommandBlockProps {
 }
 
 /**
+ * The command with its soft break points: after a space and after each slash, nowhere else, so it wraps the way a
+ * person would break it ("…/bridge/" then "install.sh") and the pairing code stays whole.
+ */
+function breakable(command: string) {
+  return command.split(/(?<=[ /])/).map((piece, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: the pieces never reorder
+    <Fragment key={i}>
+      <span className="whitespace-pre">{piece}</span>
+      <wbr />
+    </Fragment>
+  ));
+}
+
+/**
  * A line to copy and paste somewhere else (Terminal): monospace on a recessed well, wrapping instead of scrolling
- * sideways so the whole of it can be read on a phone, the short words (a pairing code) never split, selectable in one tap, with a Copy button that says "Copied".
+ * sideways so the whole of it can be read on a phone, it breaks only after a space or a slash, selectable in one tap, with a Copy button that says "Copied".
  */
 export function CommandBlock({ command, label, className }: CommandBlockProps) {
   const [copied, setCopied] = useState(false);
@@ -26,14 +40,7 @@ export function CommandBlock({ command, label, className }: CommandBlockProps) {
         ref={line}
         className="bg-well shadow-well text-small text-ink block rounded-lg p-3 font-mono leading-relaxed select-all"
       >
-        {command.split(" ").map((word, i) => (
-          // Break between words, never inside a short one (the pairing code stays whole); only a long address may break.
-          // biome-ignore lint/suspicious/noArrayIndexKey: the words never reorder
-          <Fragment key={i}>
-            {i > 0 && " "}
-            <span className={word.length > 24 ? "break-all" : "whitespace-nowrap"}>{word}</span>
-          </Fragment>
-        ))}
+        {breakable(command)}
       </code>
       <Button
         variant="primary"

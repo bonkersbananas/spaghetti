@@ -34,16 +34,17 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
   const spools = useQuery({ ...spoolsQuery, enabled: open });
 
   // A fresh code every time the sheet opens: a spent one is no use, and an old one would show as "installed".
+  const { mutate, reset } = makeCode;
   useEffect(() => {
     if (!open) {
       asked.current = false;
-      makeCode.reset();
       return;
     }
     if (asked.current) return;
     asked.current = true;
-    makeCode.mutate();
-  }, [open, makeCode]);
+    reset();
+    mutate();
+  }, [open, mutate, reset]);
 
   const code = makeCode.data;
   // The bridge only counts once it has checked in after the code was made (by the server's clock, which the code's
