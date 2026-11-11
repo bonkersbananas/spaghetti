@@ -166,6 +166,12 @@ async function mockWebhooks(
   });
 }
 
+/** The wishlists page with both lists in. */
+async function waitForWishlist(page: Page) {
+  await page.getByRole("heading", { level: 1, name: "Wishlists" }).waitFor();
+  await page.getByRole("list", { name: "Your wishlist" }).waitFor();
+}
+
 const openDeliveries = async (page: Page) => {
   await page.getByRole("button", { name: "Recent deliveries" }).click();
   await page.getByRole("list", { name: "Recent deliveries" }).waitFor();
@@ -514,6 +520,75 @@ export const shots: Shot[] = [
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
   { name: "ideas-started", path: "/ideas", fullPage: true },
+  { name: "wishlist", path: "/wishlist", prepare: waitForWishlist },
+  {
+    // The other person's list, on the phone's switch.
+    name: "wishlist-theirs",
+    path: "/wishlist",
+    width: 390,
+    prepare: async (page) => {
+      await waitForWishlist(page);
+      await page.getByRole("radio", { name: "Sam's" }).check({ force: true });
+      await page.getByRole("list", { name: "Sam's wishlist" }).waitFor();
+    },
+  },
+  {
+    // A row picked up by its handle, halfway to its new place.
+    name: "wishlist-dragging",
+    path: "/wishlist",
+    prepare: async (page) => {
+      await waitForWishlist(page);
+      const handle = page.getByRole("button", { name: /^Move Wall mount for the router/ });
+      const box = await handle.boundingBox();
+      if (!box) throw new Error("No handle to drag");
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      for (let step = 1; step <= 8; step++) {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - step * 8);
+        await page.waitForTimeout(30);
+      }
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.mouse.up();
+    },
+  },
+  {
+    name: "wishlist-picker",
+    path: "/wishlist",
+    prepare: async (page) => {
+      await waitForWishlist(page);
+      await page.getByRole("button", { name: "Pick ideas" }).click();
+      await page.getByRole("dialog", { name: "Pick your top ideas" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // Nothing picked yet, and the other list kept private (the answer is shaped by hand).
+    name: "wishlist-empty",
+    path: "/wishlist",
+    prepare: async (page) => {
+      await page.route("**/api/wishlists", async (route) => {
+        const response = await route.fetch();
+        const { wishlists } = (await response.json()) as { wishlists: Array<Record<string, unknown>> };
+        const [mine, ...others] = wishlists;
+        await route.fulfill({
+          response,
+          json: {
+            wishlists: [{ ...mine, entries: [] }, ...others.map((list) => ({ ...list, private: true, entries: [] }))],
+          },
+        });
+      });
+      await page.reload();
+      await page.getByRole("heading", { name: "Nothing on your plate yet" }).waitFor();
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/wishlists");
+    },
+  },
   {
     // Scrapping a build that began as an idea: it is back in Ideas, with an Undo.
     name: "build-scrapped",

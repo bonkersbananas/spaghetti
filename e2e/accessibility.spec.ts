@@ -139,6 +139,11 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, `/ideas/${data.ideaId}`, "Bath tugboat");
     await expectAccessible(page, "An idea");
 
+    await page.request.put(`/api/wishlists/me/items/${data.ideaId}`, { headers: { Origin: origin(page) }, data: {} });
+    await screen(page, "/wishlist", "Wishlists");
+    await expect(page.getByRole("list", { name: "Your wishlist" })).toBeVisible();
+    await expectAccessible(page, "Wishlists");
+
     await screen(page, "/today", "Today");
     await expectAccessible(page, "Today");
 
@@ -259,6 +264,7 @@ const CHECKED_ROUTES = [
   "today",
   "ideas.index",
   "ideas.$ideaId",
+  "wishlist",
   "builds.index",
   "builds.$buildId",
   "journal",

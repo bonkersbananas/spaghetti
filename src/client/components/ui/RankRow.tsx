@@ -209,7 +209,7 @@ export function PickTile({ photo, note, title, rank, onToggle, disabled }: PickT
             <IdeasIcon size={28} />
           </span>
         )}
-        {picked && <RankMark rank={rank} tone="badge" className="absolute top-1.5 left-1.5" />}
+        {picked && <RankMark rank={rank} tone="badge" className="absolute right-1.5 bottom-1.5" />}
       </span>
       <span className={cn("text-small line-clamp-2 break-words", picked ? "text-ink font-semibold" : "text-ink-soft")}>
         {title}

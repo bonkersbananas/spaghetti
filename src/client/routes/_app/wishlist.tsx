@@ -53,6 +53,8 @@ function WishlistPage() {
   const loading = isPending || ideasPending;
   const current = lists.find((list) => list.personId === shown) ?? mine;
 
+  // On a phone the switch above names the list, so the column drops its own heading.
+  const headless = !isWide && lists.length > 1;
   const column = (list: Wishlist) =>
     list.personId === me ? (
       <MyList
@@ -62,6 +64,7 @@ function WishlistPage() {
         others={others}
         ideas={myIdeas}
         loading={loading}
+        headless={headless}
         onPick={() => setPicking(true)}
       />
     ) : (
@@ -71,6 +74,7 @@ function WishlistPage() {
         person={byId.get(list.personId)}
         ideas={wishedIdeas(list, ideas)}
         loading={loading}
+        headless={headless}
       />
     );
 
@@ -125,7 +129,7 @@ function ListSkeleton() {
 
 function Heading({ person, children }: { person?: Person; children: string }) {
   return (
-    <span className="flex items-center gap-3">
+    <span className="mr-1.5 inline-flex items-center gap-3 align-middle">
       {person && <Avatar person={person} size="sm" decorative />}
       {children}
     </span>
@@ -138,6 +142,7 @@ function MyList({
   others,
   ideas,
   loading,
+  headless,
   onPick,
 }: {
   list: Wishlist;
@@ -145,6 +150,7 @@ function MyList({
   others: Person[];
   ideas: ReturnType<typeof useIdeas>["items"];
   loading: boolean;
+  headless: boolean;
   onPick: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -155,18 +161,19 @@ function MyList({
   const shareHint = list.private
     ? "Only you can see it now."
     : `${other ?? "Everyone who signs in"} can see it. Only you can change it.`;
+  const pick = ideas.length > 0 && (
+    <Button variant="quiet" size="sm" icon={PlusIcon} onClick={onPick} disabled={readOnly} className="-mr-3">
+      Pick ideas
+    </Button>
+  );
   return (
-    <Section
+    <Column
+      headless={headless}
       id="wishlist-mine"
+      label="Yours"
       title={<Heading person={user ?? undefined}>Yours</Heading>}
       count={ideas.length || undefined}
-      aside={
-        ideas.length > 0 && (
-          <Button variant="quiet" size="sm" icon={PlusIcon} onClick={onPick} disabled={readOnly} className="-mr-3">
-            Pick ideas
-          </Button>
-        )
-      }
+      aside={pick}
     >
       {loading && !ideas.length ? (
         <ListSkeleton />
@@ -195,7 +202,7 @@ function MyList({
         onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
         className="mt-2"
       />
-    </Section>
+    </Column>
   );
 }
 
@@ -204,15 +211,19 @@ function TheirList({
   person,
   ideas,
   loading,
+  headless,
 }: {
   list: Wishlist;
   person?: Person;
   ideas: ReturnType<typeof useIdeas>["items"];
   loading: boolean;
+  headless: boolean;
 }) {
   const name = firstName(person);
   return (
-    <Section
+    <Column
+      headless={headless}
+      label={possessive(name)}
       id={`wishlist-${list.personId}`}
       title={<Heading person={person}>{possessive(name)}</Heading>}
       count={ideas.length || undefined}
@@ -229,7 +240,40 @@ function TheirList({
       ) : (
         <Quiet>{name} hasn't picked any yet. The picks will show here, top first.</Quiet>
       )}
-    </Section>
+    </Column>
+  );
+}
+
+/** A list's section: under its heading on desktop; on a phone, where the switch names it, just its aside on top. */
+function Column({
+  headless,
+  id,
+  label,
+  title,
+  count,
+  aside,
+  children,
+}: {
+  headless: boolean;
+  id: string;
+  label: string;
+  title: ReactNode;
+  count?: number;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  if (!headless) {
+    return (
+      <Section id={id} title={title} count={count} aside={aside || undefined}>
+        {children}
+      </Section>
+    );
+  }
+  return (
+    <section aria-label={label} className="flex flex-col gap-4">
+      {aside && <div className="-mt-2 flex justify-end">{aside}</div>}
+      {children}
+    </section>
   );
 }
 
