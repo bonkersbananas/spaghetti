@@ -39,7 +39,7 @@ const BUDGET_KB = {
   "/builds": 287,
   "/journal": 287,
   "/search": 293,
-  "/pantry": 297,
+  "/pantry": 298, // same as /printer: the first-load files are main's byte for byte, and main sits on 297.0x
   "/printer": 298, // main itself measured 297.0x kB after the shopping-list merge: headroom restored
 } as const;
 
