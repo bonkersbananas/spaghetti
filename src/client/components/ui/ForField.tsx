@@ -1,4 +1,4 @@
-import { type ComponentPropsWithRef, useEffect, useId, useRef } from "react";
+import { type ComponentPropsWithRef, useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ToggleChip } from "./Chip";
 
@@ -14,16 +14,18 @@ interface ForFieldProps extends Omit<ComponentPropsWithRef<"input">, "type" | "i
  * Nobody named, it draws nothing: the page offers `ForChip` among its chips, so a page without a name has no empty
  * field on it, and tapping the chip opens this line with the focus in it.
  */
-export function ForField({ className, asking = false, onDone, onBlur, ...props }: ForFieldProps) {
+export function ForField({ className, asking = false, onDone, onFocus, onBlur, ...props }: ForFieldProps) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const empty = !String(props.value ?? props.defaultValue ?? "").trim();
+  // Stays mounted while it has the focus, so clearing the last letter to type another name doesn't close it.
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     if (asking) input.current?.focus();
   }, [asking]);
 
-  if (empty && !asking) return null;
+  if (empty && !asking && !focused) return null;
   return (
     <div className={cn("text-body flex items-baseline gap-1.5", className)}>
       <label htmlFor={id} className="text-ink-faint shrink-0">
@@ -37,7 +39,12 @@ export function ForField({ className, asking = false, onDone, onBlur, ...props }
         autoComplete="off"
         placeholder="someone"
         className="text-ink placeholder:text-ink-faint focus-visible:shadow-ring min-w-0 flex-1 rounded-sm bg-transparent py-1"
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
         onBlur={(event) => {
+          setFocused(false);
           onBlur?.(event);
           if (!event.currentTarget.value.trim()) onDone?.();
         }}
