@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AGENT_SCOPES } from "../../shared/agents.ts";
 import { OUTCOMES } from "../../shared/attempts.ts";
 import { CHANGE_ACTIONS, CHANGE_ACTOR_KINDS, CHANGE_ENTITIES } from "../../shared/changes.ts";
+import { REACTION_KINDS } from "../../shared/reactions.ts";
 import { DELIVERY_STATUSES, WEBHOOK_KINDS } from "../../shared/webhooks.ts";
 import { settings } from "../routes/attempts.ts";
 
@@ -124,6 +125,10 @@ export const Attempt = z
   })
   .meta({ id: "Attempt" });
 
+export const Reaction = z
+  .object({ kind: z.enum(REACTION_KINDS), userId: id.describe("Who gave it."), at: epoch })
+  .meta({ id: "Reaction", description: "One person's reaction to an idea, build or comment." });
+
 export const Item = z
   .object({
     id,
@@ -143,6 +148,7 @@ export const Item = z
     photos: z.array(Photo),
     attempts: z.array(Attempt),
     draft: z.looseObject({}).nullable().describe("Claude's draft from a model page, while there is one."),
+    reactions: z.array(Reaction).describe("Who reacted, and how, oldest first."),
   })
   .meta({ id: "Item", description: "An idea, or a build (an idea that is being printed)." });
 

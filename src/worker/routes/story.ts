@@ -27,7 +27,7 @@ export const storyRoutes = new Hono<AppEnv>().get("/:id/story.md", async (c) => 
     agents: new Map(agentRows.map((agent) => [agent.id, agent.name])),
     customFailureTags: tagRows.filter((tag) => tag.kind === "failure"),
     customSuccessNotes: tagRows.filter((tag) => tag.kind === "success"),
-    comments: commentRows.map(toApiComment),
+    comments: commentRows.map((row) => toApiComment(row)),
   });
   return c.body(markdown, 200, { "Content-Type": "text/markdown; charset=utf-8" });
 });

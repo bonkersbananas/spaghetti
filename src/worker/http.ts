@@ -11,6 +11,7 @@ import type {
 import { byPrintTime, describeChanges } from "../shared/attempts.ts";
 import type { Coach } from "../shared/coach.ts";
 import type { PhotoRead } from "../shared/photo-read.ts";
+import type { Reaction } from "../shared/reactions.ts";
 import type { Attempt, AttemptFileRow, CoachRunRow, Item, ItemDraftRow, Part, Photo, User } from "./db/schema.ts";
 import { toApiDraft } from "./draft/run.ts";
 
@@ -156,6 +157,7 @@ export function toApiItem(
   itemParts: Part[] = [],
   reads: ReadsByAttempt = new Map(),
   coaches: CoachesByAttempt = new Map(),
+  itemReactions: Reaction[] = [],
 ): ApiItem {
   return {
     id: item.id,
@@ -175,5 +177,6 @@ export function toApiItem(
     photos: itemPhotos.map(toApiPhoto),
     attempts: toApiAttempts(itemAttempts, files, reads, coaches),
     draft: toApiDraft(draft),
+    reactions: itemReactions,
   };
 }

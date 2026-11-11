@@ -7,6 +7,7 @@ import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
+import type { Reaction } from "./reactions.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 
 /** A person as the client sees them: never includes credentials. */
@@ -190,6 +191,8 @@ export interface Item {
   attempts: Attempt[];
   /** Claude's draft from a model page, while it is being read or after; null when there is none. */
   draft: ItemDraft | null;
+  /** Who reacted to it, and how (shared/reactions.ts). Absent in a copy saved by an older version. */
+  reactions?: Reaction[];
 }
 
 /** GET /api/features: what this Worker can do beyond the basics. */

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AGENT_SCOPES } from "../../shared/agents.ts";
+import { REACTION_KINDS } from "../../shared/reactions.ts";
 import { authorizeParams } from "../oauth/authorize.ts";
 import { changePasswordBody } from "../routes/account.ts";
 import { createAgent, createToken } from "../routes/agents.ts";
@@ -44,6 +45,7 @@ import {
   one,
   Person,
   Photo,
+  Reaction,
   Spool,
   Webhook,
   Wishlist,
@@ -91,6 +93,9 @@ const joinDetails = z.object({
   username: z.string(),
   color: z.string(),
 });
+
+const reactionKinds = REACTION_KINDS.join(", ");
+const reactionsAnswer = z.object({ reactions: z.array(Reaction) });
 
 export const operations: Record<string, Operation> = {
   "GET /health": { summary: "Says the Worker is up.", response: z.object({ ok: z.literal(true) }), public: true },
@@ -538,6 +543,28 @@ export const operations: Record<string, Operation> = {
   "POST /comments/:id/restore": {
     summary: "Brings a deleted comment back.",
     response: one("comment", z.looseObject({})),
+  },
+
+  // Reactions: people only.
+  "PUT /items/:id/reactions/:kind": {
+    summary: `Gives your reaction to an idea or build (your own too); kind is one of ${reactionKinds}.`,
+    response: reactionsAnswer,
+    errors: { 400: "invalid: not one of the reactions." },
+  },
+  "DELETE /items/:id/reactions/:kind": {
+    summary: "Takes your reaction back.",
+    response: reactionsAnswer,
+    errors: { 400: "invalid: not one of the reactions." },
+  },
+  "PUT /comments/:id/reactions/:kind": {
+    summary: `Gives your reaction to a comment (your own too); kind is one of ${reactionKinds}.`,
+    response: reactionsAnswer,
+    errors: { 400: "invalid: not one of the reactions." },
+  },
+  "DELETE /comments/:id/reactions/:kind": {
+    summary: "Takes your reaction to a comment back.",
+    response: reactionsAnswer,
+    errors: { 400: "invalid: not one of the reactions." },
   },
 
   // Attempts and files.
