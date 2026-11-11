@@ -200,12 +200,12 @@ export function connectOutbox(queryClient: QueryClient) {
   // What an attempt used comes off its spools on the server: ask for their grams again once it lands.
   const spoolsMoved = () => void queryClient.invalidateQueries({ queryKey: ["spools"] });
   outbox.handlers = {
-    itemSaved: (item) => {
+    itemSaved: (item, { sharedTitle }) => {
       // Edits made on the server copy since win over the outbox's.
       const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
       insertCachedItem(queryClient, cached ? { ...item, title: cached.title, note: cached.note } : item);
       // A capture that is just a model link is drafted by Claude in the background, once it is on the server.
-      void import("./drafts").then((drafts) => drafts.draftSavedCapture(queryClient, item));
+      void import("./drafts").then((drafts) => drafts.draftSavedCapture(queryClient, item, sharedTitle));
     },
     attemptSaved: (attempt) => {
       patchCachedItem(queryClient, attempt.itemId, (item) => ({

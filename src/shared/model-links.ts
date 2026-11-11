@@ -91,6 +91,7 @@ export function firstModelLink(note: string): { site: ModelSite; url: string } |
  */
 export function pictureRequestUrl(raw: string): string {
   const url = new URL(raw);
-  if (url.hostname === "makerworld.bblmw.com" && !url.search) url.search = "?x-oss-process=image/resize,w_1600/format,webp";
+  if (url.hostname === "makerworld.bblmw.com" && !url.search)
+    url.search = "?x-oss-process=image/resize,w_1600/format,webp";
   return url.href;
 }

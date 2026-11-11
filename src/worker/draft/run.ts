@@ -44,7 +44,14 @@ export const toApiDraft = (row: ItemDraftRow | undefined | null): ItemDraft | nu
  * at once. Does not call Claude; `runDraft` does. Returns false when the link isn't a model page, or a draft is
  * already on its way or done.
  */
-export async function startDraft(db: Db, itemId: string, url: string, actor: { id: string }): Promise<boolean> {
+export async function startDraft(
+  db: Db,
+  itemId: string,
+  url: string,
+  actor: { id: string },
+  /** The title that came with a share, which the draft may replace; a title a person typed is never passed here. */
+  sharedTitle?: string | null,
+): Promise<boolean> {
   const found = modelSite(url);
   if (!found) return false;
   const now = new Date();
@@ -53,13 +60,22 @@ export async function startDraft(db: Db, itemId: string, url: string, actor: { i
   await db.batch([
     db
       .insert(itemDrafts)
-      .values({ itemId, url: found.url.href, site: found.site.id, status: "reading", createdAt: now })
+      .values({
+        itemId,
+        url: found.url.href,
+        site: found.site.id,
+        status: "reading",
+        sharedTitle: sharedTitle?.trim() || null,
+        createdAt: now,
+      })
       .onConflictDoUpdate({
         target: itemDrafts.itemId,
         set: {
           url: found.url.href,
           site: found.site.id,
           status: "reading",
+          // A retry keeps the shared title it started with.
+          ...(sharedTitle?.trim() ? { sharedTitle: sharedTitle.trim() } : {}),
           failure: null,
           claimedAt: null,
           tries: 0,
@@ -284,12 +300,21 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   const applied: ItemDraft["applied"] = [];
   const writes: BatchItem<"sqlite">[] = [];
   // Each write is conditional in the database too, so a person typing at the same moment still wins.
-  if (title && !item.title?.trim()) {
+  // A title that came with the share (the page's own) isn't the person's: the draft's replaces it while it is
+  // still exactly that. A title a person typed never is.
+  const shared = row.sharedTitle?.trim() || null;
+  const titleFree = !item.title?.trim() || (!!shared && item.title === shared);
+  if (title && titleFree) {
     writes.push(
       db
         .update(items)
         .set({ title, updatedAt: new Date() })
-        .where(and(eq(items.id, itemId), or(isNull(items.title), sql`trim(${items.title}) = ''`))),
+        .where(
+          and(
+            eq(items.id, itemId),
+            or(isNull(items.title), sql`trim(${items.title}) = ''`, shared ? eq(items.title, shared) : undefined),
+          ),
+        ),
     );
   }
   if (words && !wordsOf(item.note)) {
@@ -303,7 +328,7 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   }
   if (writes.length) await db.batch(writes as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
   const after = await db.select().from(items).where(eq(items.id, itemId)).get();
-  if (title && after?.title === title && !item.title?.trim()) applied.push("title");
+  if (title && after?.title === title && titleFree) applied.push("title");
   if (words && after?.note.startsWith(words) && !wordsOf(item.note)) applied.push("note");
 
   // Pictures only for an idea that has none.
@@ -381,7 +406,7 @@ export async function undoDraft(db: Db, itemId: string, actor: { id: string }): 
     statements.push(
       db
         .update(items)
-        .set({ title: null, updatedAt: now })
+        .set({ title: row.sharedTitle?.trim() || null, updatedAt: now })
         .where(and(eq(items.id, itemId), eq(items.title, result.title))),
     );
   }

@@ -1,0 +1,1 @@
+ALTER TABLE `item_drafts` ADD `shared_title` text;

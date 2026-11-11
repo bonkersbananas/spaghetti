@@ -464,4 +464,72 @@ describe("drafting an idea from a model page", () => {
     await asPerson(`/api/items/${id}/draft`, { method: "DELETE" });
     expect((await getItem(id)).photos).toHaveLength(0);
   });
+
+  it("a title that came with a shared link doesn't stop the draft, and the draft's replaces it (the Shortcut, the bookmarklet)", async () => {
+    stubWeb();
+    const sharing = await (
+      await asPerson("/api/agents", { method: "POST", json: { name: "Share from iPhone", scopes: ["capture"] } })
+    ).json<NewTokenResponse>();
+    const viaShortcut = await request("/api/capture", {
+      method: "POST",
+      json: { url: PAGE, title: "Cable comb by Mila | MakerWorld" },
+      headers: { Authorization: `Bearer ${sharing.token}` },
+    });
+    const { id } = await viaShortcut.json<{ id: string }>();
+    expect((await getItem(id)).title).toBe("Cable comb by Mila | MakerWorld");
+    await draftIt(id);
+    const item = await getItem(id);
+    expect(item.draft).toMatchObject({ status: "drafted", applied: expect.arrayContaining(["title", "note"]) });
+    expect(item.title).toBe("Cable comb");
+    // Undo gives the shared title back.
+    await asPerson(`/api/items/${id}/draft`, { method: "DELETE" });
+    expect((await getItem(id)).title).toBe("Cable comb by Mila | MakerWorld");
+
+    // The same from a signed-in person's capture (a script, the bookmarklet's server path).
+    const viaSession = await asPerson("/api/capture", { method: "POST", json: { url: PAGE, title: "Shared title" } });
+    const other = (await viaSession.json<{ id: string }>()).id;
+    expect((await getItem(other)).draft).not.toBeNull();
+    await draftIt(other);
+    expect((await getItem(other)).title).toBe("Cable comb");
+  });
+
+  it("from the app's share route: the shared title is replaced, a title a person typed never is", async () => {
+    stubWeb();
+    // The share route saves the idea with the page's title and then asks, saying that title was shared.
+    const shared = await addIdea({ title: "Page title from the share", note: PAGE });
+    const { draft } = await (await draftIt(shared, { sharedTitle: "Page title from the share" })).json<DraftResponse>();
+    expect(draft?.applied).toContain("title");
+    expect((await getItem(shared)).title).toBe("Cable comb");
+
+    // A person typed it: asking with no shared title (or after editing) leaves it alone.
+    const typed = await addIdea({ title: "Mila's comb", note: PAGE });
+    const typedDraft = await (await draftIt(typed, { sharedTitle: "Page title from the share" })).json<DraftResponse>();
+    expect(typedDraft.draft?.applied).not.toContain("title");
+    expect((await getItem(typed)).title).toBe("Mila's comb");
+
+    // Edited after the draft was asked for: the person's edit wins.
+    const edited = await addIdea({ title: "Page title from the share", note: PAGE });
+    await asPerson("/api/items/" + edited, { method: "PATCH", json: { title: "My title" } });
+    const editedDraft = await (
+      await draftIt(edited, { sharedTitle: "Page title from the share" })
+    ).json<DraftResponse>();
+    expect(editedDraft.draft?.applied).not.toContain("title");
+    expect((await getItem(edited)).title).toBe("My title");
+  });
+
+  it("an agent that can do more than share still can't start a draft, with a title or without", async () => {
+    stubWeb();
+    const agent = await (
+      await asPerson("/api/agents", {
+        method: "POST",
+        json: { name: "Claude", scopes: ["read", "capture", "attempts"] },
+      })
+    ).json<NewTokenResponse>();
+    const response = await request("/api/capture", {
+      method: "POST",
+      json: { url: PAGE, title: "A title" },
+      headers: { Authorization: `Bearer ${agent.token}` },
+    });
+    expect((await getItem((await response.json<{ id: string }>()).id)).draft).toBeNull();
+  });
 });

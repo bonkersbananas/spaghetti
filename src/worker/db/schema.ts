@@ -377,6 +377,8 @@ export const itemDrafts = sqliteTable("item_drafts", {
   claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
   /** How many times a worker took it, so a page that keeps timing out isn't tried for ever. */
   tries: integer("tries").notNull().default(0),
+  /** A title that arrived with a share (the page's own title): not written by a person, so the draft may replace it while it is still there. */
+  sharedTitle: text("shared_title"),
   result: text("result", { mode: "json" }).$type<DraftResult>(),
   applied: text("applied", { mode: "json" }).$type<ItemDraft["applied"]>().notNull().default(sql`'[]'`),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),

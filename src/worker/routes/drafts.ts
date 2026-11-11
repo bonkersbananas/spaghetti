@@ -10,7 +10,7 @@ import { apiError } from "../http.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
 import { secretKeySource } from "../webhooks/secrets.ts";
 
-const body = z.object({ url: z.string().max(2000).optional() });
+const body = z.object({ url: z.string().max(2000).optional(), sharedTitle: z.string().max(200).optional() });
 
 /**
  * Claude drafting an idea from a model page (decision 0019). People only, like link previews (nothing here is in
@@ -42,7 +42,14 @@ export const draftRoutes = new Hono<AppEnv>()
     const parsed = body.safeParse(await c.req.json().catch(() => ({})));
     const link = parsed.success && parsed.data.url ? { url: parsed.data.url } : firstModelLink(item.note);
     if (!link) return apiError(c, 400, "invalid", "There's no MakerWorld, Printables or Thingiverse link to read.");
-    const started = await startDraft(db, id, link.url, c.var.user);
+    const started = await startDraft(
+      db,
+      id,
+      link.url,
+      c.var.user,
+      // Only a title that is still exactly the one that came with the share counts as shared.
+      parsed.success && parsed.data.sharedTitle && parsed.data.sharedTitle === item.title ? item.title : null,
+    );
     const current = await db.select().from(itemDrafts).where(eq(itemDrafts.itemId, id)).get();
     // Nothing started and nothing there: the link isn't a model page.
     if (!started && !current)
