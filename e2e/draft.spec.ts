@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { signIn as signInThroughApi } from "./helpers";
 
 const user = SEED_USERS[0];
 // The Worker asks a stand-in for Anthropic (scripts/lib/fake-claude.ts): a word in the address picks the answer.
@@ -7,15 +8,7 @@ const GOOD = "https://makerworld.com/en/models/1-cable-comb";
 const SLOW = "https://makerworld.com/en/models/2-slow-comb";
 const BROKEN = "https://www.printables.com/model/3-broken-hook";
 
-async function signIn(page: Page) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Name").fill(user.username);
-  await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-  await page.goto("/ideas");
-  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
-}
+const signIn = (page: Page) => signInThroughApi(page);
 
 async function capture(page: Page, isMobile: boolean, note: string) {
   if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
