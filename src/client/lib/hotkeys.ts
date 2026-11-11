@@ -55,41 +55,31 @@ export function useHotkeys(handlers: HotkeyHandlers) {
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return;
       const key = comboOf(event);
-      if (key === null) return;
+      if (event.defaultPrevented || key === null || document.querySelector("[role=dialog]")) return;
       const modified = key.startsWith("mod+");
       if (!modified && isTyping(event.target)) return;
-      if (document.querySelector("[role=dialog]")) return;
-
       const map = bound();
-      if (modified) {
-        const handler = map.get(key);
-        if (handler) {
-          event.preventDefault();
-          handler();
-        }
-        return;
-      }
-
-      const combo = pending ? `${pending} ${key}` : key;
-      const handler = map.get(combo);
+      const handler = map.get(pending && !modified ? `${pending} ${key}` : key);
       if (handler) {
         event.preventDefault();
         pending = null;
         handler();
         return;
       }
-      if (!pending && [...map.keys()].some((k) => k.startsWith(`${key} `))) {
+      // Only the screen that owns two-key shortcuts (the shell) starts or ends a sequence, so another screen's own
+      // handler for "j" can't swallow the "j" of "g j", and a wrong second key ends it.
+      const keys = [...map.keys()];
+      if (modified || !keys.some((k) => k.includes(" "))) return;
+      clearTimeout(timer);
+      if (pending) pending = null;
+      else if (keys.some((k) => k.startsWith(`${key} `))) {
         pending = key;
-        clearTimeout(timer);
         timer = setTimeout(() => (pending = null), 1200);
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 }
