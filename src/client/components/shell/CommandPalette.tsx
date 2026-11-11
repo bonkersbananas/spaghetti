@@ -2,6 +2,7 @@ import type { AttemptHit, ItemHit } from "@shared/api";
 import { searchTerms, words } from "@shared/search";
 import { isShortcut, keycaps, type ShortcutId, shortcutKeys } from "@shared/shortcuts";
 import { inlineTime, relativeTime } from "@shared/time";
+import { addWeeks, mondayOf } from "@shared/week";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -201,6 +202,23 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
         "go to open year review insights statistics success rate",
       ),
     );
+    // The look back at a week: this one so far, and the one before.
+    for (const [id, label, weeks] of [
+      ["go-week-this", "This week", 0],
+      ["go-week-last", "Last week", -1],
+    ] as const) {
+      goTo.push(
+        action(
+          id,
+          "Go to",
+          label,
+          CalendarIcon,
+          () => void navigate({ to: "/week/$monday", params: { monday: addWeeks(mondayOf(Date.now()), weeks) } }),
+          undefined,
+          "go to open week look back digest summary weekly",
+        ),
+      );
+    }
     const general = [
       action("new-idea", "Actions", "New idea", PlusIcon, () => openCapture(true), "capture", "capture add photo note"),
       action(

@@ -41,13 +41,14 @@ const BUDGET_KB = {
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 289,
   // OAuth for the MCP server: diffed per file against main (PERF_FILES=1), Builds grew by about 0.6 kB raw, all of it small: the router's entry for /authorize (index +0.2), Overline becoming a shared chunk now that the consent screen uses it too (+0.3) and Disconnect in lib/agents (+0.1). The consent screen's own code, the connected-app card (with the Agents page) and the scope words are not in any other screen's first load. Builds, Pantry and Printer were left under 1 kB over: +1 kB each (Today too, below).
-  "/builds": 287,
+  "/builds": 288,
   // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
-  "/journal": 286,
+  // The week (two shortcuts, a cached query root, a link and the week rules in the Journal): +2 kB, Builds, Search, Pantry and Printer +1 kB after merging main with OAuth; the page itself loads on demand.
+  "/journal": 288,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 292,
-  "/pantry": 297,
-  "/printer": 295,
+  "/search": 293,
+  "/pantry": 298,
+  "/printer": 296,
 } as const;
 
 /**

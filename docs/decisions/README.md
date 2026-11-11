@@ -33,6 +33,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0025](0025-webhooks-signed-from-the-cron.md) | Webhooks are queued in D1, sent by the existing cron, signed with HMAC-SHA256 under a secret kept encrypted | Accepted |
 | [0026](0026-passkeys-sign-in-links-and-invites.md) | Passkeys, single-use sign-in links and invites, all in the app; password stays as the fallback | Accepted |
 | [0028](0028-wishlists-per-person-shared-by-default.md) | Each person keeps a ranked wishlist of ideas, shared by default | Accepted |
+| [0030](0030-the-week-is-computed-with-one-paragraph-by-claude.md) | The week is computed, with one paragraph by Claude and one push on Sunday evening | Accepted |
 
 ## Format
 

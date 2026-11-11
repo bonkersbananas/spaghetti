@@ -56,7 +56,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] OAuth for the MCP server, so Claude's apps (claude.ai connectors, the iPhone app) connect with a sign-in; typed-in tokens still work (decision 0029, [docs/mcp.md](mcp.md))
 - [x] OpenAPI from the zod schemas: `GET /api/openapi.json`, per caller's scopes, with a test that every route is described (a build's whole story as markdown: `GET /api/builds/:id/story.md`)
 - [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
-- [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), idea scout, label photo to spool fields, weekly digest
+- [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), ~~weekly digest~~ (done: the week page, its Claude paragraph and the Sunday push, decision 0030), idea scout, label photo to spool fields
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
 ## Deploy

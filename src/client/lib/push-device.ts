@@ -157,6 +157,28 @@ export function usePushDevice(enabled = true) {
     onSettled: refresh,
   });
 
+  const setWeekNudges = useMutation({
+    mutationFn: (weekNudges: boolean) =>
+      api("/push/subscription", { method: "PATCH", json: { endpoint: subscription?.endpoint, weekNudges } }),
+    onMutate: async (weekNudges) => {
+      await queryClient.cancelQueries({ queryKey: pushQuery.queryKey });
+      const before = queryClient.getQueryData(pushQuery.queryKey);
+      queryClient.setQueryData(
+        pushQuery.queryKey,
+        (data?: PushConfig) =>
+          data && {
+            ...data,
+            subscriptions: data.subscriptions.map((s) =>
+              s.endpoint === subscription?.endpoint ? { ...s, weekNudges } : s,
+            ),
+          },
+      );
+      return { before };
+    },
+    onError: (_error, _value, context) => queryClient.setQueryData(pushQuery.queryKey, context?.before),
+    onSettled: refresh,
+  });
+
   const sendTest = useMutation({
     mutationFn: () => api("/push/test", { method: "POST", json: { endpoint: subscription?.endpoint } }),
   });
@@ -168,6 +190,8 @@ export function usePushDevice(enabled = true) {
     alsoOthers: mine?.alsoOthers ?? false,
     upkeepNudges: mine?.upkeepNudges ?? false,
     setUpkeepNudges,
+    weekNudges: mine?.weekNudges ?? true,
+    setWeekNudges,
     turnOn,
     turnOff,
     setAlsoOthers,
