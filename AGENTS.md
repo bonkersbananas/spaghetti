@@ -49,7 +49,8 @@ src/
       capture.tsx         capture state, paste and drop
       journal.ts          journal pages, month summaries, facets, filters in the URL
       search.ts           search and "what worked" queries, recent searches
-      pantry.ts           spools, AMS slots and the printer's setup: queries and optimistic mutations
+      pantry.ts           spools, AMS slots and the printer's setup: optimistic mutations (re-exports the queries)
+      pantry-queries.ts   the spools and printer queries and usePrinterSetup, kept apart from pantry.ts because the shell and Today read them on every first load
       slicer-files.ts     reading a dropped .3mf, linking its filaments to spools, queueing the file, drop targets
     styles/tokens.css     every design token (light and dark)
     lib/theme.ts          light / dark / system, applied to <html data-theme>

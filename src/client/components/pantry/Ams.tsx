@@ -12,7 +12,8 @@ import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Sheet } from "@/components/ui/Sheet";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
-import { loadSlot, printerQuery, spoolsQuery } from "@/lib/pantry";
+import { loadSlot } from "@/lib/pantry";
+import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 
 /** The drag type for a spool being moved onto a slot. */
 export const SPOOL_DRAG_TYPE = "application/x-spaghetti-spool";

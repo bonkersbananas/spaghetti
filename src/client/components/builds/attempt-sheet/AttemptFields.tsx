@@ -9,7 +9,7 @@ import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import type { AttemptView } from "@/lib/items";
-import { usePrinterSetup } from "@/lib/pantry";
+import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { NotEnoughNote } from "../NotEnoughNote";
 import { OutcomePicker } from "../Outcome";

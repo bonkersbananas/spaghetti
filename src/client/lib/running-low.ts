@@ -4,7 +4,7 @@ import { spoolName } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useBuilds } from "./items";
-import { spoolsQuery } from "./pantry";
+import { spoolsQuery } from "./pantry-queries";
 
 export interface LowSpool {
   spool: Spool;

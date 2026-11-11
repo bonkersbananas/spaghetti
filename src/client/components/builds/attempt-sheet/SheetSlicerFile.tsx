@@ -6,7 +6,8 @@ import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-quer
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
-import { addSpool, spoolsQuery } from "@/lib/pantry";
+import { addSpool } from "@/lib/pantry";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { sessionQuery } from "@/lib/queries";
 import {
   fileSettings,

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CheckIcon, ExpandIcon, RecipeIcon, UndoIcon } from "@/components/ui/icons";
 import { duration, ease } from "@/lib/motion";
-import { spoolsQuery } from "@/lib/pantry";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { useRecipes } from "@/lib/recipes";
 import { RecipeCard } from "./RecipeCard";
 
