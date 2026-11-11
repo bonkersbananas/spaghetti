@@ -39,7 +39,7 @@ const BUDGET_KB = {
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 289,
-  // OAuth for the MCP server (the Agents page's Disconnect lives in the shared agents code, and the consent route is in the route tree) left Builds, Pantry and Printer under 1 kB over: +1 kB each; the consent screen itself loads on demand.
+  // OAuth for the MCP server: diffed per file against main (PERF_FILES=1), Builds grew by about 0.6 kB raw, all of it small: the router's entry for /authorize (index +0.2), Overline becoming a shared chunk now that the consent screen uses it too (+0.3) and Disconnect in lib/agents (+0.1). The consent screen's own code, the connected-app card (with the Agents page) and the scope words are not in any other screen's first load. Builds, Pantry and Printer were left under 1 kB over: +1 kB each.
   "/builds": 287,
   // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
   "/journal": 286,
