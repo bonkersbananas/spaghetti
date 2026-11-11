@@ -1,6 +1,6 @@
 /**
  * Which Playwright spec files a CI shard runs, balanced by how long they took (e2e/timings.json) rather than by
- * how many tests there are: `pnpm test:e2e $(node scripts/e2e-shard.ts 2 3)` is the second of three shards.
+ * how many tests there are: `pnpm test:e2e $(node scripts/e2e-shard.ts 2 2)` is the second of two shards.
  *
  * - A file runs in every project that matches it, so its time is the sum over projects (phone and desktop).
  * - Every shard starts its own servers (one per Playwright worker, on the production build), so any file can go
@@ -20,9 +20,12 @@ export function readTimings(): Timings {
   return JSON.parse(readFileSync(`${here}../e2e/timings.json`, "utf8")) as Timings;
 }
 
+/** The timing tests run in their own job, on main only (playwright.config.ts adds their project with E2E_SPEED=1). */
+export const SPEED_SPECS = new Set(["performance.spec.ts"]);
+
 export function specFiles(): string[] {
   return readdirSync(specDir)
-    .filter((name) => name.endsWith(".spec.ts"))
+    .filter((name) => name.endsWith(".spec.ts") && !SPEED_SPECS.has(name))
     .sort();
 }
 

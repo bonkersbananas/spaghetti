@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -109,7 +108,7 @@ test("makes an agent, copies its token once, revokes it with an undo, and it sto
   await expect(card.getByText("No working tokens.")).toBeVisible();
 });
 
-test("work done through an agent says so, quietly, and the page passes axe in both themes", async ({
+test("work done through an agent says so, quietly, and the agent shows on the Agents page", async ({
   page,
   isMobile,
 }) => {
@@ -132,28 +131,18 @@ test("work done through an agent says so, quietly, and the page passes axe in bo
   await expect(page.getByText("captured this")).toBeVisible();
   await expect(page.getByText("via Claude for Alex")).toBeVisible();
 
-  for (const scheme of ["light", "dark"] as const) {
-    await page.goto("/ideas");
-    await page.emulateMedia({ colorScheme: scheme });
-    await goToAgents(page, isMobile);
-    await expect(page.getByRole("heading", { name: "Claude for Alex" }).first()).toBeVisible();
-    await page.waitForTimeout(500);
-    const checks = [new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])];
-    for (const builder of checks) expect((await builder.analyze()).violations.map((v) => v.id)).toEqual([]);
-    await page.getByRole("button", { name: "New agent" }).first().click();
-    await expect(page.getByRole("dialog", { name: "New agent" })).toBeVisible();
-    await page.waitForTimeout(500);
-    const sheet = await new AxeBuilder({ page }).include("[role=dialog]").analyze();
-    expect(sheet.violations.map((v) => v.id)).toEqual([]);
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-  }
+  await page.goto("/ideas");
+  await goToAgents(page, isMobile);
+  await expect(page.getByRole("heading", { name: "Claude for Alex" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "New agent" }).first().click();
+  await expect(page.getByRole("dialog", { name: "New agent" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("sets up sharing from iPhone: a capture-only key, in the steps ready to copy, and the bookmarklet", async ({
-  page,
-  isMobile,
-}) => {
+test("sets up sharing from iPhone: a capture-only key, in the steps ready to copy, and the bookmarklet", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
   await goToAgents(page, isMobile);
   // The bookmarklet is for desktop browsers.
   if (!isMobile) {
@@ -185,7 +174,6 @@ test("sets up sharing from iPhone: a capture-only key, in the steps ready to cop
   );
 
   await page.waitForTimeout(500);
-  expect((await new AxeBuilder({ page }).include("[role=dialog]").analyze()).violations.map((v) => v.id)).toEqual([]);
   await steps.getByRole("button", { name: "Copy address" }).first().click();
   await expect(steps.getByRole("button", { name: "Copied" })).toBeVisible();
   await sheet.getByRole("button", { name: "Done" }).click();

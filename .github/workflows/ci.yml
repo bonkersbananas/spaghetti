@@ -46,7 +46,7 @@ jobs:
   # refresh with scripts/e2e-timings.ts), each on its own runner. A shard builds the app once and starts one server per
   # Playwright worker (scripts/e2e-server.ts), so its workers run side by side, each on its own database.
   e2e:
-    name: Playwright ${{ matrix.shard }}/3
+    name: Playwright ${{ matrix.shard }}/2
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Playwright's own image has the browser and its system libraries installed, so the job never calls apt
@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -66,15 +66,64 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Each screen's first-load size on main (e2e/first-load.spec.ts): a change is held to a screen's ceiling only
+      # where it made the screen heavier than this, so main's own size never fails someone else's pull request.
+      - name: Main's first-load sizes
+        uses: actions/cache/restore@v4
+        with:
+          path: .first-load/main.json
+          key: first-load-${{ github.event.pull_request.base.sha || github.event.before }}
+          restore-keys: first-load-
       - name: Run this shard's specs
+        env:
+          E2E_FIRST_LOAD_BASE: .first-load/base.json
+          E2E_FIRST_LOAD_OUT: .first-load/main.json
         run: |
-          specs="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 3)"
+          # Main's sizes are the ones to compare with; the shard that measures writes this commit's in their place.
+          if [ -f .first-load/main.json ]; then mv .first-load/main.json .first-load/base.json; fi
+          specs="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 2)"
           # No list would mean no file filter, and Playwright would run the whole suite.
           test -n "$specs"
           pnpm test:e2e $specs
+      - name: Keep main's first-load sizes for the runs after it
+        if: always() && github.event_name == 'push' && hashFiles('.first-load/main.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .first-load/main.json
+          key: first-load-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-traces-${{ matrix.shard }}
+          path: test-results/
+          retention-days: 7
+
+  # How fast it feels (e2e/performance.spec.ts: taps, the installed app opening, a hundred photos scrolling) needs a
+  # quiet runner and one worker, so it runs on main only, beside the rest. A red one holds the ship back like any
+  # failure on main, and whoever runs the ship (the autopilot) looks at it; a pull request doesn't wait for it.
+  speed:
+    name: Speed (main)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble
+      options: --ipc=host
+    env:
+      E2E_SPEED: 1
+      E2E_WORKERS: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e --project=performance
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-speed
           path: test-results/
           retention-days: 7

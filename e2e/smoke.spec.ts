@@ -66,6 +66,10 @@ test("signs in, browses the four sections, opens capture and signs out", async (
   await expect(page.getByRole("heading", { name: "Styleguide" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Buttons" })).toBeVisible();
 
+  // Sign out from a screen of the app: some styleguide specimens are wider than a phone, which widens the page and
+  // left the account sheet moving under the tap now and then (the flake this test was known for).
+  await page.goto("/ideas");
+  await expect(page.getByRole("heading", { name: "Nothing simmering yet" })).toBeVisible();
   if (isMobile) {
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();

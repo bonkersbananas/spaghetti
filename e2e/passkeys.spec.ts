@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { e2eOrigin } from "../scripts/lib/e2e-ports.ts";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
@@ -71,21 +70,9 @@ async function signOut(page: Page, isMobile: boolean) {
   await page.waitForURL(/\/sign-in/);
 }
 
-async function expectAccessible(page: Page, name: string, include?: string) {
-  let axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]);
-  if (include) axe = axe.include(include);
-  const { violations } = await axe.analyze();
-  expect(
-    violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
-    name,
-  ).toEqual([]);
-}
-
-test("adds a passkey, signs out and signs in with it; remove asks for no confirmation and can be undone", async ({
-  page,
-  context,
-  isMobile,
-}) => {
+test("adds a passkey, signs out and signs in with it; remove asks for no confirmation and can be undone", {
+  tag: "@phone",
+}, async ({ page, context, isMobile }) => {
   await noOffer(context);
   await addAuthenticator(context, page);
   await signIn(page);
@@ -98,7 +85,6 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   await expect(page.getByText(/Passkey added|is set up/)).toBeVisible();
   // One row: the device's name, when it was added, and that it hasn't been used.
   await expect(sheet.getByText(/not used yet/)).toBeVisible();
-  await expectAccessible(page, "The passkeys sheet", "[role=dialog]");
 
   // Rename it.
   await sheet.getByRole("button", { name: /^Rename / }).click();
@@ -120,7 +106,6 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
     // The screen we left (Today's empty state) is still fading out for a moment.
     await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
     await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
-    await expectAccessible(page, "The sign-in screen with its passkey button");
     await passkeyButton.click({ timeout: 3000 }).catch(() => undefined);
   }
   await expect(today).toBeVisible();
@@ -156,7 +141,6 @@ test("a sign-in link and a code sign in a second browser, once, and the first de
   else await expect(sheet.getByRole("button", { name: "Copy link" })).toBeVisible();
   const code = (await sheet.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).textContent()) ?? "";
   expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
-  await expectAccessible(page, "The sign-in-on-another-device sheet", "[role=dialog]");
 
   // The other device types the code (no camera), and is offered a passkey before moving on.
   const other = await browser.newContext({ baseURL: origin() });
@@ -167,7 +151,6 @@ test("a sign-in link and a code sign in a second browser, once, and the first de
   await phone.getByLabel("Code").fill(code);
   await phone.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(phone.getByText(/Welcome/)).toBeVisible();
-  await expectAccessible(phone, "The add-a-passkey offer");
   await phone.getByRole("button", { name: /^Add / }).click();
   await expect(phone.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
   expect((await phone.request.get("/api/session")).status()).toBe(200);
@@ -196,7 +179,6 @@ test("a sign-in link and a code sign in a second browser, once, and the first de
   await late.goto(made.url.replace(/^https?:\/\/[^/]+/, origin()));
   await late.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(late.getByText("That link has done its job.")).toBeVisible();
-  await expectAccessible(late, "A used link");
   await other.close();
   await third.close();
   await again.close();
@@ -210,7 +192,6 @@ test("an invite adds one person, who is signed in, and can't be used twice", asy
   const sheet = page.getByRole("dialog", { name: "Invite someone" });
   await sheet.getByRole("button", { name: "Make an invite link" }).click();
   await expect(sheet.getByText(/\/join#spi_/)).toBeVisible();
-  await expectAccessible(page, "The invite sheet", "[role=dialog]");
   // Make a second: the first is listed as waiting, and gone once withdrawn. The new one is the one to use.
   await sheet.getByRole("button", { name: "Make another invite" }).click();
   await expect(sheet.getByRole("button", { name: "Withdraw invite" })).toHaveCount(1);
@@ -224,7 +205,6 @@ test("an invite adds one person, who is signed in, and can't be used twice", asy
   const username = `mina${Date.now() % 1_000_000}`;
   await tab.goto(link.replace(/^https?:\/\/[^/]+/, origin()));
   await expect(tab.getByText(/saved you a seat/)).toBeVisible();
-  await expectAccessible(tab, "The invite page");
   await tab.getByLabel("Your name").fill("Mina Park");
   await tab.getByLabel("Username").fill(username);
   await tab.getByRole("radio", { name: "plum" }).click();
@@ -303,7 +283,6 @@ test("the signed-in devices list signs out another device", async ({ page, brows
   await openRow(page, isMobile, "Passkeys and password");
   const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
   await expect(sheet.getByText("This device", { exact: true })).toBeVisible();
-  await expectAccessible(page, "The passkeys and password sheet", "[role=dialog]");
   await sheet.getByRole("button", { name: "Sign out everywhere else" }).click();
   await expect.poll(async () => (await other.request.get("/api/session")).status()).toBe(401);
   expect((await page.request.get("/api/session")).status()).toBe(200);

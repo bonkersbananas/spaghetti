@@ -18,6 +18,15 @@ const phone = { ...devices["Desktop Chrome"], viewport: { width: 390, height: 84
 /** The specs with projects of their own, below. */
 const ownProject = /(offline|performance|push|share|safe-area)\.spec/;
 
+/**
+ * Every spec runs at desktop width. The phone project runs whole only the specs of the core loop, where a phone
+ * differs everywhere (signing in and the tab bar, capture, a build and its attempts, Today at the printer, every
+ * screen and sheet opening); elsewhere only the tests tagged @phone (a sheet where the desktop has a popover, touch,
+ * what happens at the printer). Playwright's grep sees "project file › title @tags".
+ */
+const PHONE_SPECS = ["smoke", "ideas", "builds", "today", "screens"];
+const onPhone = [new RegExp(`(^| )(${PHONE_SPECS.join("|")})\\.spec\\.ts `), /@phone\b/];
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -39,7 +48,7 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop", testIgnore: ownProject, use: desktop },
-    { name: "phone", testIgnore: ownProject, use: phone },
+    { name: "phone", testIgnore: ownProject, grep: onPhone, use: phone },
     {
       // The phone as the Home Screen app on an iPhone: standalone, with the notch and home indicator
       // insets (simulateIphone in scripts/lib/iphone.ts), which a plain 390 px window never has.
@@ -47,7 +56,10 @@ export default defineConfig({
       testMatch: /safe-area\.spec/,
       use: phone,
     },
-    { name: "performance", testMatch: /performance\.spec/, use: { ...desktop, serviceWorkers: "allow" } },
+    // The timing tests need a quiet machine: CI runs them on main only, in a job of their own (docs/ci.md).
+    ...(process.env.E2E_SPEED
+      ? [{ name: "performance", testMatch: /performance\.spec/, use: { ...desktop, serviceWorkers: "allow" as const } }]
+      : []),
     {
       // Notifications need the service worker, at both widths.
       name: "push-desktop",

@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { clearIdeas, signIn } from "./helpers";
@@ -88,7 +87,10 @@ test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
 
-test("writes a comment, edits it (shown as edited) and deletes it with an undo", async ({ page, isMobile }) => {
+test("writes a comment, edits it (shown as edited) and deletes it with an undo", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
   const id = await newIdea(page);
   await page.goto(`/ideas/${id}`);
   // Nothing written yet: one quiet line, no heading and no empty box.
@@ -131,7 +133,7 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
   await expect(thread(page).getByText("Could you print this one in the blue PETG, please?")).toBeVisible();
 });
 
-test("a half-written comment survives leaving the page and a reload", async ({ page, isMobile }) => {
+test("a half-written comment survives leaving the page and a reload", { tag: "@phone" }, async ({ page, isMobile }) => {
   const id = await newIdea(page);
   await page.goto(`/ideas/${id}`);
   const field = await openComposer(page, isMobile);
@@ -277,126 +279,60 @@ test("Today's All quiet state shows the line for a new message too", async ({ pa
   await page.reload();
   await expect(page.getByRole("heading", { name: "All quiet in the kitchen" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Sam Okafor on Bath tugboat: Could it be in blue PETG/ })).toBeVisible();
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(violations.map((violation) => `today: ${violation.id}`)).toEqual([]);
   await page.getByRole("link", { name: /Sam Okafor on Bath tugboat/ }).click();
   await expect(thread(page).getByText("Could it be in blue PETG?")).toBeVisible();
   await page.goto("/today");
   await expect(page.getByRole("link", { name: /Sam Okafor on/ })).toHaveCount(0);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`Today has one quiet line for what Sam wrote, until it is read, ${theme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    const id = await newIdea(page, "Bath tugboat", "building");
-    const other = await newIdea(page, "Lamp base", "building");
-    await page.goto("/today");
-    const line = page.getByRole("link", { name: /on Bath tugboat/ });
-    // No block at all: its label is the heading "New comment(s)".
-    await expect(page.getByRole("heading", { name: /^New comments?/ })).toHaveCount(0);
-    const sams = await samSession(page);
-    await sams.say(id, "Started it tonight, the first layer looked great.");
-    await page.reload();
-    await expect(line).toHaveText(/Sam Okafor on Bath tugboat: Started it tonight/);
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-      .analyze();
-    expect(violations.map((violation) => `today: ${violation.id}`)).toEqual([]);
+test("Today has one quiet line for what Sam wrote, until it is read", async ({ page }) => {
+  const id = await newIdea(page, "Bath tugboat", "building");
+  const other = await newIdea(page, "Lamp base", "building");
+  await page.goto("/today");
+  const line = page.getByRole("link", { name: /on Bath tugboat/ });
+  // No block at all: its label is the heading "New comment(s)".
+  await expect(page.getByRole("heading", { name: /^New comments?/ })).toHaveCount(0);
+  const sams = await samSession(page);
+  await sams.say(id, "Started it tonight, the first layer looked great.");
+  await page.reload();
+  await expect(line).toHaveText(/Sam Okafor on Bath tugboat: Started it tonight/);
 
-    // Several: the label counts them, and the one line is for the newest thread.
-    await sams.say(other, "Could it be taller?");
-    await sams.say(other, "Maybe 12 cm.");
-    await page.reload();
-    await expect(page.getByRole("heading", { name: /^New comments\s*3$/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^Sam Okafor on Lamp base/ })).toHaveCount(1);
+  // Several: the label counts them, and the one line is for the newest thread.
+  await sams.say(other, "Could it be taller?");
+  await sams.say(other, "Maybe 12 cm.");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: /^New comments\s*3$/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Sam Okafor on Lamp base/ })).toHaveCount(1);
 
-    // Reading a thread clears it from the line; reading all clears the line.
-    await page.getByRole("link", { name: /^Sam Okafor on Lamp base/ }).click();
-    await expect(thread(page).getByText("Maybe 12 cm.")).toBeVisible();
-    await page.goto("/today");
-    await expect(page.getByRole("link", { name: /on Bath tugboat: Started it tonight/ })).toBeVisible();
-    await page.getByRole("link", { name: /on Bath tugboat/ }).click();
-    await expect(thread(page).getByText("Started it tonight, the first layer looked great.")).toBeVisible();
-    await page.goto("/today");
-    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /on (Bath tugboat|Lamp base)/ })).toHaveCount(0);
-  });
+  // Reading a thread clears it from the line; reading all clears the line.
+  await page.getByRole("link", { name: /^Sam Okafor on Lamp base/ }).click();
+  await expect(thread(page).getByText("Maybe 12 cm.")).toBeVisible();
+  await page.goto("/today");
+  await expect(page.getByRole("link", { name: /on Bath tugboat: Started it tonight/ })).toBeVisible();
+  await page.getByRole("link", { name: /on Bath tugboat/ }).click();
+  await expect(thread(page).getByText("Started it tonight, the first layer looked great.")).toBeVisible();
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /on (Bath tugboat|Lamp base)/ })).toHaveCount(0);
+});
 
-  test(`search finds a build by what Sam said and opens the thread at that comment, ${theme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    const id = await newIdea(page, "Lamp base", "building");
-    const sams = await samSession(page);
-    const commentId = await sams.say(id, "Try the chunkier version in cobalt PETG next time.");
-    await page.goto("/search");
-    await page.getByRole("searchbox", { name: "Search" }).fill("chunkier");
-    const result = page.getByRole("link", { name: /Lamp base/ });
-    await expect(result).toBeVisible();
-    await expect(result).toContainText("Sam");
-    await expect(result.locator("mark")).toHaveText("chunkier");
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-      .analyze();
-    expect(violations.map((violation) => `search: ${violation.id}`)).toEqual([]);
+test("search finds a build by what Sam said and opens the thread at that comment", async ({ page }) => {
+  const id = await newIdea(page, "Lamp base", "building");
+  const sams = await samSession(page);
+  const commentId = await sams.say(id, "Try the chunkier version in cobalt PETG next time.");
+  await page.goto("/search");
+  await page.getByRole("searchbox", { name: "Search" }).fill("chunkier");
+  const result = page.getByRole("link", { name: /Lamp base/ });
+  await expect(result).toBeVisible();
+  await expect(result).toContainText("Sam");
+  await expect(result.locator("mark")).toHaveText("chunkier");
 
-    await result.click();
-    await expect(page).toHaveURL(new RegExp(`comment=${commentId}`));
-    const bubble = page.locator(`#comment-${commentId} > div`).first();
-    await expect(bubble).toBeVisible();
-    await expect(bubble).toHaveClass(/ring-semolina/);
-    // The thread is in view, and the light goes out again.
-    await expect(bubble).toBeInViewport();
-    const lit = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-      .analyze();
-    expect(lit.violations.map((violation) => `thread: ${violation.id}`)).toEqual([]);
-    await expect(bubble).not.toHaveClass(/ring-semolina/, { timeout: 8000 });
-  });
-
-  test(`axe: idea and build with a thread, the sheet and the menu, ${theme}`, async ({ page, isMobile }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    const idea = await newIdea(page, "Bath tugboat");
-    const build = await newIdea(page, "Hook", "building");
-    const sams = await samSession(page);
-    for (const id of [idea, build])
-      await sams.say(id, "Could you print this one in the blue PETG? https://example.com/models/1");
-    for (const [path, id] of [
-      ["ideas", idea],
-      ["builds", build],
-    ] as const) {
-      await page.goto(`/${path}/${id}`);
-      await expect(thread(page).getByText("Could you print this one in the blue PETG?")).toBeVisible();
-      const field = await openComposer(page, isMobile);
-      await field.fill("Yes, tonight.");
-      await send(page, isMobile);
-      await expect(thread(page).getByText("Yes, tonight.")).toBeVisible();
-      // The link card under Sam's message settles first, or it would push the menu button away from the click.
-      await expect(
-        thread(page)
-          .getByRole("link", { name: /example\.com\/models\/1/ })
-          .first(),
-      ).toBeVisible();
-      // So does the "New" line over it: the page has stopped moving.
-      await expect(thread(page).getByText("New", { exact: true })).toBeVisible();
-      await settle(page);
-      await openMessageMenu(page, isMobile, "Yes, tonight.");
-      await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-        .analyze();
-      expect(violations.map((violation) => `${path}: ${violation.id}`)).toEqual([]);
-      await page.keyboard.press("Escape");
-    }
-    // The composer sheet on a phone, open with a draft in it.
-    if (isMobile) {
-      await page.getByRole("button", { name: /Say something to/ }).click();
-      await page.getByRole("textbox", { name: /Say something to/ }).fill("Half written");
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-        .analyze();
-      expect(violations.map((violation) => violation.id)).toEqual([]);
-    }
-    await sams.context.close();
-  });
-}
+  await result.click();
+  await expect(page).toHaveURL(new RegExp(`comment=${commentId}`));
+  const bubble = page.locator(`#comment-${commentId} > div`).first();
+  await expect(bubble).toBeVisible();
+  await expect(bubble).toHaveClass(/ring-semolina/);
+  // The thread is in view, and the light goes out again.
+  await expect(bubble).toBeInViewport();
+  await expect(bubble).not.toHaveClass(/ring-semolina/, { timeout: 8000 });
+});

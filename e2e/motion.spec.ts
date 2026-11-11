@@ -86,7 +86,10 @@ async function buildWithAttempts(page: Page, count = 3) {
   return { id, ids };
 }
 
-test("an outcome answers the tap with a short vibration, unless motion is reduced", async ({ page, isMobile }) => {
+test("an outcome answers the tap with a short vibration, unless motion is reduced", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
   test.skip(!isMobile, "Phones");
   for (const reduced of [false, true]) {
     await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });

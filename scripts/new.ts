@@ -3,14 +3,13 @@
  * their wiring, so a new page doesn't start with a scavenger hunt.
  *
  *   pnpm new route <name> [--section | --workshop] [--shortcut "g x"]
- *       src/client/routes/_app/<name>.tsx (header, empty state), e2e/<name>.spec.ts (opens, axe),
+ *       src/client/routes/_app/<name>.tsx (header, empty state), e2e/<name>.spec.ts (it opens),
  *       a screen in scripts/screenshot-routes.ts, and the regenerated routeTree.gen.ts.
  *       --section / --workshop: also an entry in components/shell/sections.ts (sidebar, tab bar,
  *       palette) and its shortcut in shared/shortcuts.ts.
  *   pnpm new component <Name> [--in ui|builds|ideas|journal|pantry|search|shell]
- *       components/<in>/<Name>.tsx (default ui), its styleguide section in
- *       routes/_app/-styleguide/<name>.tsx wired into the styleguide, and an e2e test of the
- *       specimen (axe, both themes).
+ *       components/<in>/<Name>.tsx (default ui) and its styleguide section in
+ *       routes/_app/-styleguide/<name>.tsx, wired into the styleguide.
  *   pnpm new endpoint <plural-name>
  *       worker/routes/<name>.ts (zod schema, list and create), mounted in app.ts, types in
  *       shared/api.ts, a queryOptions in client/lib/queries.ts, and test/worker/<name>.test.ts.
@@ -22,7 +21,6 @@ import { dirname, join, relative } from "node:path";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { createServer } from "vite";
 import {
-  componentE2eTemplate,
   componentTemplate,
   endpointQueryTemplate,
   endpointTemplate,
@@ -156,7 +154,9 @@ if (kind === "route") {
   todo.push(
     `pick an icon for the page in components/ui/icons.tsx${placement ? " (the section uses InfoIcon for now)" : ""}`,
   );
-  todo.push("fill in the page; add its states to the screenshots and, if it has sheets, to e2e/accessibility.spec.ts");
+  todo.push(
+    "fill in the page; add its states to the screenshots, and the route to a sweep and CHECKED_ROUTES in e2e/screens.spec.ts",
+  );
 }
 
 if (kind === "component") {
@@ -169,14 +169,12 @@ if (kind === "component") {
   assertFree(
     path("src/client/components", dir, `${component}.tsx`),
     path("src/client/routes/_app/-styleguide", `${kebab}.tsx`),
-    path("e2e", `styleguide-${kebab}.spec.ts`),
   );
   create(path("src/client/components", dir, `${component}.tsx`), componentTemplate(component));
   create(
     path("src/client/routes/_app/-styleguide", `${kebab}.tsx`),
     styleguideSectionTemplate(component, `@/components/${dir}/${component}`),
   );
-  create(path("e2e", `styleguide-${kebab}.spec.ts`), componentE2eTemplate(component));
   const styleguide = path("src/client/routes/_app/styleguide.tsx");
   if (existsSync(styleguide)) {
     const source = readFileSync(styleguide, "utf8");

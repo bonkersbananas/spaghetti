@@ -27,7 +27,7 @@ test.afterEach(async ({ page }) => {
   for (const spool of spools) await page.request.delete(`/api/spools/${spool.id}`, { headers });
 });
 
-test("adds a spool to the pantry and loads it into the AMS", async ({ page, isMobile }) => {
+test("adds a spool to the pantry and loads it into the AMS", { tag: "@phone" }, async ({ page, isMobile }) => {
   await page.goto("/pantry");
   await expect(page.getByRole("heading", { name: "The pantry's bare" })).toBeVisible();
   await page.getByRole("button", { name: "Add a spool" }).click();
@@ -176,7 +176,7 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
   await expect.poll(async () => (await getItem(page, id)).attempts[0]?.file).toBeNull();
 });
 
-test("picks a spool from the pantry for an attempt's filament", async ({ page, isMobile }) => {
+test("picks a spool from the pantry for an attempt's filament", { tag: "@phone" }, async ({ page, isMobile }) => {
   const headers = { Origin: origin(page) };
   const silk = await addSpoolByApi(page, {
     material: "PLA",

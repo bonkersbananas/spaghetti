@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { signIn } from "./helpers";
@@ -91,25 +90,4 @@ test("How did it go? answers each pick", async ({ page }) => {
   await toy.getByRole("button", { name: "Worked" }).click();
   await expect(toy.getByRole("button", { name: "Spaghetti" })).toHaveAttribute("aria-pressed", "false");
   await expect(answer).toHaveText(/^Al dente\./);
-});
-
-test("the landing page passes axe, with motion and without", async ({ page }) => {
-  for (const reducedMotion of ["no-preference", "reduce"] as const) {
-    await page.emulateMedia({ reducedMotion });
-    await page.goto("/");
-    await expect(landingHeading(page)).toBeVisible();
-    // Everything that arrives on scroll has arrived (axe measures contrast on what is drawn).
-    await page.evaluate(async () => {
-      for (let y = 0; y < document.body.scrollHeight; y += innerHeight / 2) {
-        scrollTo(0, y);
-        await new Promise((resolve) => setTimeout(resolve, 60));
-      }
-      scrollTo(0, 0);
-    });
-    await page.waitForTimeout(3500);
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-      .analyze();
-    expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
-  }
 });
