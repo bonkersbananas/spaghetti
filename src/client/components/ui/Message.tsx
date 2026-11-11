@@ -28,7 +28,9 @@ export function MessageGroup({ person, name, via, mine = false, time, children, 
   return (
     <li className={cn("flex list-none items-start gap-2.5", mine && "flex-row-reverse", className)}>
       <Avatar person={person} size="sm" via={via} className="mt-5" />
-      <div className={cn("flex max-w-[min(100%,34rem)] min-w-0 flex-col gap-1", mine ? "items-end" : "items-start")}>
+      <div
+        className={cn("flex min-w-0 flex-col gap-1", mine ? "w-full items-end" : "max-w-[min(100%,34rem)] items-start")}
+      >
         <p className="text-caption text-ink-faint px-1 font-medium">
           <span className="text-ink-soft font-semibold">{name}</span>
           {via && <span> via {via}</span>}
@@ -57,7 +59,9 @@ interface BubbleProps {
 /** One message. Text wraps and keeps its line breaks; yours sit on a tomato tint, the other person's on cream. */
 export function Bubble({ mine = false, edited = false, aside, below, children }: BubbleProps) {
   return (
-    <div className={cn("group/bubble flex max-w-full min-w-0 flex-col gap-1.5", mine ? "items-end" : "items-start")}>
+    <div
+      className={cn("group/bubble flex max-w-full min-w-0 flex-col gap-1.5", mine ? "w-full items-end" : "items-start")}
+    >
       <div className={cn("flex max-w-full items-center gap-0.5", mine && "w-full flex-row-reverse")}>
         <div
           className={cn(
