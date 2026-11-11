@@ -42,7 +42,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
       id="running-low"
       title="Running low"
       count={low.length}
-      className="md:max-w-2xl xl:has-[li:nth-child(2)]:max-w-none"
+      className="md:max-w-2xl xl:has-[li+li]:max-w-none"
       aside={
         <Button
           variant="secondary"
@@ -55,7 +55,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
       }
     >
       <ul
-        className="bg-cream shadow-soft overflow-hidden rounded-lg xl:has-[li:nth-child(2)]:grid xl:has-[li:nth-child(2)]:grid-cols-2"
+        className="bg-cream shadow-soft overflow-hidden rounded-lg xl:has-[li+li]:grid xl:has-[li+li]:grid-cols-2"
         aria-label="Spools running low"
       >
         {low.map(({ spool, needs }) => {
