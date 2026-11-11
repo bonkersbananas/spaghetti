@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { TangledPot } from "@/components/illustrations/TangledPot";
 import { reloadIntoNewBuild } from "@/lib/stale-build";
 import { Button } from "./Button";
-import { CheckIcon, CopyIcon } from "./icons";
+import { CheckIcon, CopyIcon, ExpandIcon } from "./icons";
 
 interface ErrorScreenProps {
   error: unknown;
@@ -37,7 +37,7 @@ export default function ErrorScreen({ error, reset, updating: forced = false, cl
     if (stale) void reloadIntoNewBuild();
   }, [stale]);
   return (
-    <main
+    <div
       className={
         className ?? "bg-paper text-ink flex min-h-dvh flex-col items-center justify-center px-6 py-12 text-center"
       }
@@ -60,7 +60,15 @@ export default function ErrorScreen({ error, reset, updating: forced = false, cl
         )}
       </div>
       <details className="text-small text-ink-faint mt-8 w-full max-w-sm text-left">
-        <summary className="focus-ring cursor-pointer rounded-xs py-2 text-center font-medium">Details</summary>
+        <summary className="focus-ring text-small text-ink-faint hover:text-ink group mx-auto flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-xs py-2 font-medium [&::-webkit-details-marker]:hidden">
+          Details
+          <ExpandIcon
+            size={16}
+            weight="bold"
+            className="duration-base transition-transform ease-out group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
         <pre className="bg-ink/3 text-ink-soft mt-2 rounded-lg p-3 text-xs break-words whitespace-pre-wrap">
           {message}
         </pre>
@@ -80,6 +88,6 @@ export default function ErrorScreen({ error, reset, updating: forced = false, cl
           </Button>
         </div>
       </details>
-    </main>
+    </div>
   );
 }

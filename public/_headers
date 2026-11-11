@@ -1,4 +1,5 @@
-# The consent screen must never be framed: a hidden frame over "Allow" would be clickjacking.
+# The consent screen must never be framed: a hidden frame over "Allow" would be clickjacking. (The page itself is
+# served by the Worker, which sets these headers too: src/worker/spa.ts ROUTE_HEADERS. Keep both.)
 /authorize
   X-Frame-Options: DENY
   Content-Security-Policy: frame-ancestors 'none'

@@ -534,7 +534,7 @@ test.describe("a deploy while the app is open", () => {
   test.use({ serviceWorkers: "block" });
 
   test("a missing build file is a real 404, an app route still gets the app", async ({ request }) => {
-    for (const headers of [{}, { "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "script" }]) {
+    for (const headers of [{} as Record<string, string>, { "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "script" }]) {
       const missing = await request.get("/assets/_app-gone.js", { headers });
       expect(missing.status()).toBe(404);
       expect(missing.headers()["content-type"]).not.toContain("html");
