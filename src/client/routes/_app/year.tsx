@@ -31,10 +31,7 @@ function Year() {
   const current = year === new Date().getFullYear();
   return (
     <>
-      <PageHeader
-        title={`${year}${current ? " so far" : ""}`}
-        subtitle="What the prints add up to, and what has helped when they went wrong."
-      />
+      <PageHeader title={`${year}${current ? " so far" : ""}`} subtitle="What the prints add up to, and what helped." />
       {!data ? (
         <div className="flex flex-col gap-8" aria-hidden>
           <Skeleton className="h-16 w-72 max-w-full" />

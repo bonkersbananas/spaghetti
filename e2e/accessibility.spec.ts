@@ -335,8 +335,8 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, "/year", /\d{4}/);
     await expectAccessible(page, "The year so far");
 
-    await screen(page, "/deleted", "Recently deleted");
-    await expectAccessible(page, "Recently deleted");
+    await screen(page, "/deleted", "Deleted");
+    await expectAccessible(page, "Deleted");
 
     // Every specimen in the design system, not just a few sections.
     await screen(page, "/styleguide", "Styleguide");
@@ -455,7 +455,7 @@ test("every control on a phone has a 44 px target", async ({ page, isMobile }) =
     ["/printer", /X2D|Printer/],
     ["/agents", "Agents"],
     ["/year", /\d{4}/],
-    ["/deleted", "Recently deleted"],
+    ["/deleted", "Deleted"],
   ];
   for (const [path, heading] of screens) {
     await screen(page, path, heading);
