@@ -130,7 +130,10 @@ export function countsForOutcome(
   onPlate?: readonly AttemptPart[],
 ): AttemptPart[] {
   if (outcome === "failed") return zeroCounts(parts);
-  if (onPlate && parts.length && parts.every((p) => p.count === 0)) return onPlate.map((p) => ({ ...p }));
+  // Coming back from a spaghetti (every count zeroed): what was on the plate, or one piece of each part picked.
+  if (parts.length && parts.every((p) => p.count === 0)) {
+    return onPlate?.length ? onPlate.map((p) => ({ ...p })) : parts.map((p) => ({ partId: p.partId, count: 1 }));
+  }
   return parts.map((p) => ({ ...p }));
 }
 

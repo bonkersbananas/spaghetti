@@ -37,8 +37,8 @@ const tables = listed.flatMap((result) => result.results.map((row) => row.name))
 if (!tables.length) throw new Error("No tables found: has the database been migrated?");
 
 wrangler(["d1", "export", "DB", target, "--output", output, ...tables.flatMap((table) => ["--table", table])]);
-// Later migrations changed the item row's triggers (for whom, part names): the tail of 0018 has the final ones.
-const parts = readFileSync(join(root, "migrations/0018_parts-and-quantities.sql"), "utf8");
+// Later migrations changed the item row's triggers (for whom, part names): the tail of 0019 has the final ones.
+const parts = readFileSync(join(root, "migrations/0019_parts-and-quantities.sql"), "utf8");
 const itemTags = parts.slice(parts.indexOf("CREATE VIEW `search_item_tags`"));
 appendFileSync(
   output,

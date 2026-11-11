@@ -54,6 +54,13 @@ A spool can count itself down (decision [0009](decisions/0009-filament-tracked-i
 - `GET /spools/:id/usage` lists what used the spool (attempt, build, grams, whether the amount is a guess, whether it still counts) and its weighings.
 - Usage is read off finished attempts, never stored: `settings.filaments[].grams` (from the slicer file) of each filament whose `spoolId` is the spool. Editing an attempt, or deleting and restoring it, changes the answer.
 
+## People and profile pictures
+
+`GET /people` lists the two people; each `person` (here and in `GET /session`) has `photoUrl`: `/api/people/<id>/photo?v=<version>` or `null` (initials). The address changes with every new picture, and the bytes are served `private, max-age=31536000, immutable`; `GET /people/:id/photo` needs `read` like any read. Agents and MCP see `photoUrl` and can fetch the picture, but never change it.
+
+- `PUT /people/me/photo`: your own picture, people only (`403 person_only` for a token). Multipart with one `photo` file, WebP or JPEG (`415 unsupported` otherwise), at most 512 KB (`413 too_large`); the browser sends a 256 px square it cropped itself. Replaces the old one (its bytes are deleted) and answers `{ user }`. A `person` change in the feed lets the other person's screen refresh.
+- `DELETE /people/me/photo`: back to initials, people only. Always `200 { user }`, also when there was none.
+
 ## Recipes
 
 A recipe is the named settings of an attempt that worked (decision [0017](decisions/0017-recipes-are-frozen-attempts.md)). `GET /recipes` lists them newest first (`?material=PLA&finish=silk` narrows to what fits a spool: same material, and the same finish where both have one); `GET /search` also returns `recipes`, `GET /what-worked?item=&material=` returns the material's `recipes`.
@@ -100,6 +107,7 @@ Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea 
 - `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
 - `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
 - Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
+- The Worker fetches the page itself (the three sites only) and gives Claude its embedded data; Anthropic's web fetch tool is the fallback. See decision 0019.
 - It only fills empty fields: a title that is empty, a note that is only links, an idea without photos. Pictures come only from the three sites' image hosts (`src/shared/model-links.ts`), at most four, stored like an agent's photos (`needsResize`).
 - People only: no scope lists these routes, so a token gets `403 person_only`. `POST /api/capture` starts a draft by itself when the capture is just a model link, for a person's session or a token whose only scope is `capture` (the sharing Shortcut), never for an agent that can do more.
 - Every call is a row in `draft_runs` with its `outcome` and a `detail` (statuses and codes, no page content); how to read them is in [deploy.md](deploy.md). The page's title also goes into the link preview cache, so the note's link card shows it.

@@ -408,7 +408,6 @@ export function SettingsEditor({ value, onChange, outcome, fromFile, className }
         <SegmentedControl<Nozzle>
           label="Nozzle"
           labelHidden
-          size="sm"
           options={[
             { value: "main", label: "Main" },
             { value: "auxiliary", label: "Auxiliary" },
@@ -469,7 +468,6 @@ export function SettingsEditor({ value, onChange, outcome, fromFile, className }
         </div>
         <SegmentedControl
           label={<span className="inline-flex items-center gap-1">Supports{mark("supportEnabled")}</span>}
-          size="sm"
           options={[
             { value: "none", label: "No supports" },
             { value: "normal", label: "Normal" },

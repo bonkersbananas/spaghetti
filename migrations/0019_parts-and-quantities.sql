@@ -12,7 +12,8 @@ CREATE TABLE `parts` (
 --> statement-breakpoint
 CREATE INDEX `parts_item_idx` ON `parts` (`item_id`,`position`);--> statement-breakpoint
 ALTER TABLE `attempt_files` ADD `objects` text DEFAULT '[]' NOT NULL;--> statement-breakpoint
-ALTER TABLE `attempts` ADD `parts` text DEFAULT '[]' NOT NULL;--> statement-breakpoint
+ALTER TABLE `attempts` ADD `parts` text DEFAULT '[]' NOT NULL;
+--> statement-breakpoint
 -- A build's part names are searchable ("hull" finds the build): they go in the item row's tags column, after "for whom".
 CREATE VIEW `search_item_tags` AS
 SELECT

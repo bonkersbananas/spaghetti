@@ -17,6 +17,8 @@ export const users = sqliteTable("users", {
   name: text("name").notNull(),
   color: text("color").$type<PersonColor>().notNull(),
   passwordHash: text("password_hash").notNull(),
+  /** R2 key of the profile picture (people/<id>/<version>); null means initials. */
+  photoKey: text("photo_key"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
 

@@ -1,4 +1,4 @@
-# 0021. Parts are optional, and good-piece counts live on attempts
+# 0022. Parts are optional, and good-piece counts live on attempts
 
 Status: Accepted
 

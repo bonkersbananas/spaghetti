@@ -65,7 +65,9 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
       <div
         ref={scroller}
         onScroll={onScroll}
-        className="bg-paper-deep flex max-h-[72dvh] w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:rounded-xl [&::-webkit-scrollbar]:hidden"
+        // Reachable with Tab when it scrolls (several photos), so arrow keys can move through them without a mouse.
+        tabIndex={many ? 0 : undefined}
+        className="focus-ring bg-paper-deep flex max-h-[72dvh] w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:rounded-xl [&::-webkit-scrollbar]:hidden"
         style={{ aspectRatio: frameAspect(photos[0]), scrollbarWidth: "none" }}
       >
         {photos.map((photo, i) => (

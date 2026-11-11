@@ -131,6 +131,18 @@ describe("countsForOutcome", () => {
     expect(countsForOutcome(failed, "success", onPlate)).toEqual(onPlate);
     expect(countsForOutcome(onPlate, "partial")).toEqual(onPlate);
   });
+  it("never drops the picked parts: a saved spaghetti switched to worked gets one piece of each", () => {
+    const zeroed = [
+      { partId: "hull", count: 0 },
+      { partId: "deck", count: 0 },
+    ];
+    expect(countsForOutcome(zeroed, "success")).toEqual([
+      { partId: "hull", count: 1 },
+      { partId: "deck", count: 1 },
+    ]);
+    expect(countsForOutcome(zeroed, "success", [])).toHaveLength(2);
+    expect(countsForOutcome([], "success", [])).toEqual([]);
+  });
 });
 
 describe("attemptPartsLabel", () => {
