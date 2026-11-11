@@ -44,7 +44,7 @@ export class HttpApp {
     this.requests.push(`${request.method} ${path}`);
     const json = () =>
       raw.length && request.headers["content-type"]?.includes("json") ? JSON.parse(raw.toString()) : {};
-    let match: RegExpMatchArray | null;
+    const route = (method: string, pattern: RegExp) => (request.method === method ? path.match(pattern) : null);
     if (request.method === "PUT" && path === "/printer/bridge") {
       this.heartbeats.push(json());
       return send(200, { slots: {}, bridge: null });
@@ -55,12 +55,14 @@ export class HttpApp {
       this.items.set(body.id, { id: body.id, stage: body.stage, title: body.title ?? null, attempts: [], photos: [] });
       return send(201, {});
     }
-    if (request.method === "GET" && (match = path.match(/^\/items\/([^/]+)$/))) {
-      const item = this.items.get(match[1] as string);
+    const getItem = route("GET", /^\/items\/([^/]+)$/);
+    if (getItem) {
+      const item = this.items.get(getItem[1] as string);
       return item ? send(200, { item }) : send(404);
     }
-    if (request.method === "POST" && (match = path.match(/^\/items\/([^/]+)\/attempts$/))) {
-      const item = this.items.get(match[1] as string);
+    const addAttempt = route("POST", /^\/items\/([^/]+)\/attempts$/);
+    if (addAttempt) {
+      const item = this.items.get(addAttempt[1] as string);
       if (!item) return send(404);
       const body = json();
       let attempt = item.attempts.find((a) => a.id === body.id);
@@ -78,23 +80,25 @@ export class HttpApp {
       }
       return send(201, { attempt });
     }
-    if (request.method === "PUT" && (match = path.match(/^\/attempts\/([^/]+)\/file$/))) {
+    const putFile = route("PUT", /^\/attempts\/([^/]+)\/file$/);
+    if (putFile) {
       // The bridge uploads the slicer file as multipart; only its name and size matter here.
       const text = raw.toString("latin1");
       const name = /name="name"\r\n\r\n([^\r]*)/.exec(text)?.[1] ?? "?";
       const size = Number(/name="size"\r\n\r\n(\d+)/.exec(text)?.[1] ?? 0);
-      this.files.set(match[1] as string, { name, size });
-      const attempt = [...this.items.values()].flatMap((i) => i.attempts).find((a) => a.id === match?.[1]);
+      this.files.set(putFile[1] as string, { name, size });
+      const attempt = [...this.items.values()].flatMap((i) => i.attempts).find((a) => a.id === putFile?.[1]);
       if (attempt) attempt.file = { id: "f", name };
       return send(200, { attempt });
     }
-    if (request.method === "PATCH" && (match = path.match(/^\/attempts\/([^/]+)$/))) {
-      const attempt = [...this.items.values()].flatMap((i) => i.attempts).find((a) => a.id === match?.[1]);
+    const patchAttempt = route("PATCH", /^\/attempts\/([^/]+)$/);
+    if (patchAttempt) {
+      const attempt = [...this.items.values()].flatMap((i) => i.attempts).find((a) => a.id === patchAttempt?.[1]);
       if (!attempt) return send(404);
       Object.assign(attempt, json());
       return send(200, { attempt });
     }
-    if (request.method === "PUT" && path.match(/^\/items\/[^/]+\/photos\/[^/]+$/)) return send(200, { photo: {} });
+    if (route("PUT", /^\/items\/[^/]+\/photos\/[^/]+$/)) return send(200, { photo: {} });
     if (request.method === "GET" && path === "/spools") return send(200, { spools: [] });
     if (path.startsWith("/spools") || path.startsWith("/printer/slots")) return send(200, { spool: {}, slots: {} });
     if (request.method === "GET" && path === "/printer") return send(200, { setup: {}, slots: {}, bridge: null });
