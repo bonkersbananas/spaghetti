@@ -91,7 +91,7 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
 
   // Edit in place.
   await page.getByRole("button", { name: "Options for your comment" }).click();
-  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("textbox", { name: "Edit your comment" });
   await editor.fill("Could you print this one in the blue PETG, please?");
   await editor.evaluate((element) => (element as HTMLTextAreaElement).blur());
@@ -100,7 +100,7 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
 
   // Delete, and take it back.
   await page.getByRole("button", { name: "Options for your comment" }).click();
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText("Comment deleted")).toBeVisible();
   await expect(thread(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
@@ -217,8 +217,17 @@ for (const theme of ["light", "dark"] as const) {
       await field.fill("Yes, tonight.");
       await send(page, isMobile);
       await expect(thread(page).getByText("Yes, tonight.")).toBeVisible();
+      // The link card under Sam's message settles first, or it would push the menu button away from the click.
+      await expect(
+        thread(page)
+          .getByRole("link", { name: /example\.com\/models\/1/ })
+          .first(),
+      ).toBeVisible();
+      await expect(page.getByRole("list", { name: "Links in the comment" })).toBeVisible();
+      // So does the "New" line over it: the page has stopped moving.
+      await expect(thread(page).getByText("New", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Options for your comment" }).click();
-      await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
       const { violations } = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
         .analyze();

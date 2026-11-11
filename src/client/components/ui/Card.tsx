@@ -178,8 +178,7 @@ export function UnreadBadge({ count }: { count: number }) {
   return (
     <span className="rounded-pill bg-tomato text-caption text-on-accent shadow-soft inline-flex h-6 items-center gap-1 px-2 font-semibold">
       <CommentIcon size={13} weight="fill" aria-hidden />
-      {count > 9 ? "9+" : count}
-      <span className="sr-only">new {count === 1 ? "comment" : "comments"}</span>
+      {count > 9 ? "9+" : count} <span className="sr-only">new {count === 1 ? "comment" : "comments"}</span>
     </span>
   );
 }
