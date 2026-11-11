@@ -191,8 +191,13 @@ describe("setup", () => {
     expect(existsSync(macPaths(home).plist)).toBe(false);
     expect(launchctl).toEqual([]);
     paired.length = 0;
-    await runSetup(parseSetupArgs([]), env({ ask: null, check: async () => ({ ok: true }) })).catch(() => undefined);
+    await runSetup(
+      parseSetupArgs(["--ip", given.printerHost, "--serial", given.serial, "--access-code", given.accessCode]),
+      env(),
+    );
     expect(paired).toEqual([]);
+    expect(readSettings(macPaths(home).config)).toMatchObject({ token: "spg_secret_token", ...given });
+    expect(existsSync(macPaths(home).plist)).toBe(true);
   });
 
   it("explains a spent code in plain words", async () => {
