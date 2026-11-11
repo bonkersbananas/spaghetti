@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { CodeDisplay } from "@/components/ui/CodeDisplay";
 import { InfoRow } from "@/components/ui/InfoRow";
-import { LaptopIcon, PasskeyIcon, PhoneIcon, RenameIcon, TrashIcon } from "@/components/ui/icons";
+import { InviteIcon, LaptopIcon, PhoneIcon, RenameIcon, TrashIcon } from "@/components/ui/icons";
 import { PersonColorPicker } from "@/components/ui/PersonColorPicker";
 import { QrCard } from "@/components/ui/QrCard";
 import { Label, Panel, Section } from "./shared";
@@ -45,8 +45,8 @@ export function SigningInSection() {
               />
               <InfoRow icon={LaptopIcon} title="Mac · Chrome" meta="This device" />
               <InfoRow
-                icon={PasskeyIcon}
-                title="Invite link"
+                icon={InviteIcon}
+                title="Invite for one person"
                 meta="Made by Alex · expires in 6 days"
                 actions={
                   <Button variant="quiet" size="sm">

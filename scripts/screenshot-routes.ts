@@ -134,6 +134,15 @@ async function guestInvite(page: Page) {
   return String(made.url).split("#")[1] ?? "";
 }
 
+/** Lets the entrance animation of a signed-out page finish: a shot taken mid-fade is blank. */
+const settle = async (page: Page) => {
+  await page.locator("h1").first().waitFor();
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+  await page.waitForTimeout(500);
+};
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -260,13 +269,14 @@ async function unmockToday(page: Page) {
  */
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
-  { name: "link-code", path: "/link", signedOut: true },
+  { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },
   {
     // An invite link opened by someone who isn't signed in: the form, filled in a little.
     name: "join",
     path: "/sign-in",
     signedOut: true,
     fullPage: true,
+    beforeShot: settle,
     prepare: async (page) => {
       const token = await guestInvite(page);
       await page.goto(`/join#${token}`);
@@ -279,6 +289,7 @@ export const shots: Shot[] = [
     name: "link-used",
     path: "/link#spl_used",
     signedOut: true,
+    beforeShot: settle,
     prepare: async (page) => {
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await page.getByText("That link has done its job.").waitFor();
@@ -305,7 +316,8 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await openAccount(page, wide(page));
-      await page.getByRole("dialog").getByText("Signing in", { exact: true }).scrollIntoViewIfNeeded();
+      await page.getByRole("dialog").getByRole("button", { name: "Change password" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
     },
   },
   {
@@ -333,9 +345,9 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await openAccountRow(page, wide(page), "Invite someone");
       const sheet = page.getByRole("dialog", { name: "Invite someone" });
-      await sheet.getByRole("button", { name: "Make an invite link" }).click();
+      await sheet.getByRole("button", { name: /^Make (an invite link|another invite)$/ }).click();
       await sheet.getByText(/\/join#spi_/).waitFor();
-      await sheet.getByRole("button", { name: "Make another invite" }).click();
+      await sheet.getByRole("button", { name: /^Make (an invite link|another invite)$/ }).click();
       await sheet.getByText("Waiting").waitFor();
     },
   },
@@ -348,7 +360,15 @@ export const shots: Shot[] = [
       await page.getByRole("dialog", { name: "Signed-in devices" }).getByText("iPad").waitFor();
     },
   },
-  { name: "styleguide-signing-in", path: "/styleguide", selector: "#signing-in" },
+  {
+    name: "styleguide-signing-in",
+    path: "/styleguide",
+    selector: "#signing-in",
+    // The styleguide's avatar specimen has a deliberately missing picture: let it fall back before the images are checked.
+    prepare: async (page) => {
+      await page.waitForTimeout(1200);
+    },
+  },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
   { name: "today", path: "/today", fullPage: true },
   {

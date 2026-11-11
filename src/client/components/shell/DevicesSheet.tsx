@@ -1,5 +1,5 @@
 import type { SignedInDevice } from "@shared/signing-in";
-import { relativeTime } from "@shared/time";
+import { inlineTime } from "@shared/time";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { InfoRow } from "@/components/ui/InfoRow";
@@ -67,7 +67,7 @@ export function DevicesSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               key={device.id}
               icon={isPhone(device.device) ? PhoneIcon : LaptopIcon}
               title={device.device}
-              meta={device.current ? "This device" : `Last seen ${relativeTime(device.lastSeenAt).toLowerCase()}`}
+              meta={device.current ? "This device" : `Last seen ${inlineTime(device.lastSeenAt)}`}
               actions={
                 !device.current && (
                   <Button variant="quiet" size="sm" onClick={() => signOut.mutate(device)}>

@@ -82,7 +82,8 @@ export function DeviceLinkSheet({ open, onOpenChange }: { open: boolean; onOpenC
         ) : !isDesktop && link ? (
           <>
             <Button
-              variant="secondary"
+              variant={"share" in navigator ? "secondary" : "primary"}
+              fullWidth={!("share" in navigator)}
               icon={copied ? CheckCircleIcon : CopyIcon}
               onClick={() => {
                 void navigator.clipboard?.writeText(link.url).then(() => {

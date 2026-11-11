@@ -217,7 +217,10 @@ function SignIn() {
       <p className="text-small text-ink-faint pb-6 text-center">
         Just the two of us here. No account? Ask the other cook.
         <br />
-        <Link to="/link" className="focus-ring decoration-ink-ghost underline underline-offset-4">
+        <Link
+          to="/link"
+          className="focus-ring touch-target decoration-ink-ghost relative inline-block py-2 underline underline-offset-4"
+        >
           Signing in from another device? Use a code
         </Link>
       </p>

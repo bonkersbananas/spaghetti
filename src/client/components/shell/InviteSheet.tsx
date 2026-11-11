@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { InfoRow } from "@/components/ui/InfoRow";
 import { CheckIcon, CopyIcon, InviteIcon, ShareIcon, TrashIcon } from "@/components/ui/icons";
+import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
@@ -102,13 +103,15 @@ export function InviteSheet({ open, onOpenChange }: { open: boolean; onOpenChang
       )}
       {others.length > 0 ? (
         <>
-          <p className="text-small text-ink-faint mb-1 font-semibold">Waiting</p>
+          <Overline as="h3" className="mb-1 block">
+            Waiting
+          </Overline>
           <ul>
             {others.map((invite) => (
               <InfoRow
                 key={invite.id}
                 icon={InviteIcon}
-                title="Invite link"
+                title="Invite for one person"
                 meta={`Made by ${who(invite.createdBy)} · ${daysLeft(invite.expiresAt)}`}
                 actions={
                   <IconButton icon={TrashIcon} label="Withdraw invite" onClick={() => withdraw.mutate(invite)} />

@@ -1,5 +1,5 @@
 import type { PasskeyInfo } from "@shared/signing-in";
-import { relativeTime } from "@shared/time";
+import { inlineTime, relativeTime } from "@shared/time";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -115,7 +115,7 @@ function PasskeyRow({
           passkey.name
         )
       }
-      meta={`Added ${relativeTime(passkey.createdAt)} · ${passkey.lastUsedAt ? `used ${relativeTime(passkey.lastUsedAt).toLowerCase()}` : "not used yet"}`}
+      meta={`Added ${relativeTime(passkey.createdAt)} · ${passkey.lastUsedAt ? `used ${inlineTime(passkey.lastUsedAt)}` : "not used yet"}`}
       actions={
         !renaming && (
           <>
