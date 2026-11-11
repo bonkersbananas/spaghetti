@@ -78,8 +78,8 @@ export function toApiAttempt(
     finishedAt: attempt.finishedAt?.getTime() ?? null,
     endedAt: attempt.endedAt?.getTime() ?? null,
     suggestedFailureTag: attempt.suggestedFailureTag,
-    // Only while there is still a question: once someone said how it went, the suggestion has done its work.
-    photoRead: attempt.outcome ? null : (reads.get(attempt.id) ?? null),
+    // Once someone said how it went, "looking at the photo" is moot; the suggestion stays so the tags it gave stay marked.
+    photoRead: attempt.outcome && reads.get(attempt.id)?.status === "reading" ? null : (reads.get(attempt.id) ?? null),
     note: attempt.note,
     failureTags: attempt.failureTags,
     successNotes: attempt.successNotes,

@@ -25,6 +25,13 @@ const selectedStyles: Record<Outcome, string> = {
   failed: "bg-tomato-soft text-tomato-ink ring-tomato",
 };
 
+/** A gentle hint on the button of the outcome Claude suggests from the photo: tinted, not picked. */
+const suggestedStyles: Record<Outcome, string> = {
+  success: "bg-basil-soft/60 text-basil-ink ring-1 ring-inset ring-basil/40",
+  partial: "bg-semolina-soft/60 text-semolina-ink ring-1 ring-inset ring-semolina/40",
+  failed: "bg-tomato-soft/60 text-tomato-ink ring-1 ring-inset ring-tomato/40",
+};
+
 /** The dot on the timeline: the outcome's color, or semolina while printing. */
 export const outcomeDots: Record<Outcome | "printing" | "offBed", string> = {
   success: "bg-basil",
@@ -40,6 +47,11 @@ interface OutcomePickerProps {
   onChange: (outcome: Outcome) => void;
   /** "lg" in the attempt sheet (one tap, thumb-sized); "md" where it is a secondary choice. */
   size?: "md" | "lg";
+  /**
+   * The outcome Claude suggests from the photo (decision 0022): hinted on its button, never picked. Tapping it picks it
+   * like any other; nothing is saved until then.
+   */
+  suggested?: Outcome | null;
   className?: string;
 }
 
@@ -48,7 +60,7 @@ interface OutcomePickerProps {
  * picked one in its color. A failure is recorded with the same care as a
  * success, so spaghetti is never styled as an error.
  */
-export function OutcomePicker({ value, onChange, size = "lg", className }: OutcomePickerProps) {
+export function OutcomePicker({ value, onChange, size = "lg", suggested = null, className }: OutcomePickerProps) {
   // The picked icon springs in, but only for a pick made here: opening an attempt that already has an outcome doesn't.
   const [picked, setPicked] = useState(false);
   return (
@@ -56,6 +68,7 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
       {OUTCOMES.map((outcome) => {
         const OutcomeIcon = outcomeIcons[outcome];
         const selected = value === outcome;
+        const hinted = !value && suggested === outcome;
         return (
           // biome-ignore lint/a11y/useSemanticElements: big tactile buttons; a radio input can't be styled like this.
           <button
@@ -70,10 +83,12 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
             }}
             className={cn(
               "pressable focus-ring flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
-              size === "lg" ? "text-body h-22 md:h-20" : "text-small h-16 gap-1",
+              size === "lg" ? "text-body h-22 md:h-20" : cn("text-small gap-1", suggested && !value ? "h-19" : "h-16"),
               selected
                 ? cn(selectedStyles[outcome], "ring-2 ring-inset")
-                : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
+                : hinted
+                  ? cn(suggestedStyles[outcome], "shadow-soft hover:shadow-raised")
+                  : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
             )}
           >
             {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
@@ -88,6 +103,7 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
               <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
+            {hinted && <span className="text-micro -mt-1 font-normal">suggested</span>}
           </button>
         );
       })}

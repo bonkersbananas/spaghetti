@@ -221,7 +221,12 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             {printing && <NotEnoughNote settings={attempt.settings} what="this print" />}
 
             {offBed && attempt.endedAt !== null && (
-              <OffTheBed endedAt={attempt.endedAt} onPick={onFinish} className="pointer-events-auto" />
+              <OffTheBed
+                endedAt={attempt.endedAt}
+                onPick={onFinish}
+                photoRead={attempt.photoRead}
+                className="pointer-events-auto"
+              />
             )}
 
             {printing && onFinish && (

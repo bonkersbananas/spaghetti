@@ -25,6 +25,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0019](0019-claude-drafts-ideas-from-model-pages.md) | Claude drafts an idea from a model page, in the background, only into empty fields | Accepted |
 | [0020](0020-started-ideas-stay-and-scrap-returns.md) | Started ideas stay in Ideas, scrapping a build returns it, and deletes can be found | Accepted |
 | [0021](0021-profile-pictures.md) | Profile pictures are small squares cropped in the browser, stored in R2 under a versioned address | Accepted |
+| [0022](0022-claude-reads-a-print-from-its-photo.md) | Claude suggests how a print went from its photo, and only suggests | Accepted |
 
 ## Format
 

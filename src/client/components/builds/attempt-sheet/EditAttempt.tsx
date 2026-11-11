@@ -18,6 +18,7 @@ import { queueSlicerFile, removeSlicerFile } from "@/lib/slicer-files";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { EstimateLine, elapsedIfPlausible } from "../Estimate";
+import { PhotoReadNote } from "../PhotoReadNote";
 import { SavedFileCard } from "../SlicerFile";
 import { AttemptFields } from "./AttemptFields";
 import { SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
@@ -84,21 +85,38 @@ export function EditAttempt({
     onReady: (draft, plate, prefill) => queueSlicerFile(item.id, attempt.id, draft, plate, prefill),
     incomingFile,
   });
+  // Claude's read of the photo, while there is still a question: a suggestion only, the attempt has no outcome of its own.
+  const read =
+    attempt.outcome === null && !value.outcome && attempt.photoRead?.status === "read" ? attempt.photoRead : null;
+  const reading = attempt.outcome === null && !value.outcome ? attempt.photoRead : null;
   const finish = (outcome: Outcome) => {
     // Finishing a print that was logged as it started: how long it took, if that's believable.
     const actual =
       printing && value.settings.actualMinutes === undefined
         ? elapsedIfPlausible(attempt.printedAt, value.settings.estimatedMinutes)
         : undefined;
-    // A failure tag the printer suggested is offered (marked as a suggestion) once it didn't go well; it's the
-    // person's to take off.
-    const suggested =
-      outcome !== "success" && attempt.suggestedFailureTag && value.failureTags.length === 0
-        ? { failureTags: [attempt.suggestedFailureTag] }
-        : {};
+    // What Claude suggested from the photo, or the failure tag the printer suggested, is offered (marked as a
+    // suggestion) with the outcome that goes with it; it's the person's to take off.
+    const failureTags =
+      outcome !== "success" && value.failureTags.length === 0
+        ? read && read.outcome !== "success" && read.failureTags.length
+          ? read.failureTags
+          : attempt.suggestedFailureTag
+            ? [attempt.suggestedFailureTag]
+            : null
+        : null;
+    const successNotes =
+      outcome !== "failed" &&
+      value.successNotes.length === 0 &&
+      read &&
+      read.outcome !== "failed" &&
+      read.successNotes.length
+        ? read.successNotes
+        : null;
     change({
       outcome,
-      ...suggested,
+      ...(failureTags ? { failureTags } : {}),
+      ...(successNotes ? { successNotes } : {}),
       ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}),
     });
   };
@@ -178,7 +196,15 @@ export function EditAttempt({
         note={value.note}
         onNote={(note) => change({ note })}
         failureTags={value.failureTags}
-        suggestedFailureTag={attempt.suggestedFailureTag ?? undefined}
+        suggestedFailureTag={
+          attempt.photoRead?.status === "read"
+            ? attempt.photoRead.failureTags
+            : (attempt.suggestedFailureTag ?? undefined)
+        }
+        suggestedSuccessNotes={attempt.photoRead?.successNotes}
+        suggestedBy={attempt.photoRead?.status === "read" ? "claude" : "printer"}
+        suggestedOutcome={read?.outcome}
+        outcomeHint={reading ? <PhotoReadNote read={reading} /> : null}
         onFailureTags={(failureTags) => change({ failureTags })}
         successNotes={value.successNotes}
         onSuccessNotes={(successNotes) => change({ successNotes })}

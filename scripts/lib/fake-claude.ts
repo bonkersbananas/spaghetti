@@ -4,6 +4,10 @@
  * (ANTHROPIC_BASE_URL). The page a draft is asked for decides the answer by a word in its address:
  * `slow` takes a few seconds (the "reading the page" state stays long enough to look at), `broken` can't be read,
  * `refused` is refused, anything else is a good draft.
+ *
+ * A request with a photo in it is a print being read (decision 0022). The build's title in it decides the answer:
+ * `slow` takes a few seconds ("Looking at the photo…" stays long enough to look at), `refused` is refused, `broken`
+ * is an API error, `unsure` can't tell, `spaghetti` is a failed print, `partly` a partly good one, anything else worked.
  */
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -12,6 +16,8 @@ import { root } from "./wrangler.ts";
 
 /** How long a `slow` page takes. */
 export const SLOW_MS = 4000;
+/** A `slow` photo takes longer: the screens poll every few seconds while Claude looks, and a shot or a test needs to catch it. */
+export const SLOW_PHOTO_MS = 10_000;
 
 const draft = {
   readable: true,
@@ -24,6 +30,59 @@ const draft = {
   settings: "0.2 mm layers, 15% infill, no supports",
   imageUrls: [] as string[],
 };
+
+const reads = {
+  worked: {
+    outcome: "success",
+    failureTags: [],
+    successNotes: ["nice-surface"],
+    reason: "Clean walls and a smooth top; looks like a good one.",
+  },
+  partly: {
+    outcome: "partial",
+    failureTags: ["stringing"],
+    successNotes: [],
+    reason: "Mostly clean, with fine strings between the teeth.",
+  },
+  spaghetti: {
+    outcome: "failed",
+    failureTags: ["spaghetti", "bed-adhesion"],
+    successNotes: [],
+    reason: "Loose strands across the top half; looks like it lost adhesion early.",
+  },
+  unsure: { outcome: null, failureTags: [], successNotes: [], reason: null },
+};
+
+async function answerPhoto(body: string, response: import("node:http").ServerResponse) {
+  const title = (/The build is called: ([^"\\]*)/.exec(body)?.[1] ?? "").toLowerCase();
+  if (title.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (title.includes("broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = title.includes("refused");
+  const read = title.includes("unsure")
+    ? reads.unsure
+    : title.includes("spaghetti")
+      ? reads.spaghetti
+      : title.includes("partly")
+        ? reads.partly
+        : reads.worked;
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      content: refused ? [] : [{ type: "text", text: JSON.stringify(read) }],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
 
 export async function startFakeClaude(port: number): Promise<{ url: string; stop: () => void; server: Server }> {
   const base = `http://127.0.0.1:${port}`;
@@ -39,6 +98,7 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
+      if (body.includes('"type":"image"')) return answerPhoto(body, response);
       const asked = body.match(/https?:\/\/[^"\\\s]+/)?.[0] ?? "";
       if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
       const refused = asked.includes("refused");

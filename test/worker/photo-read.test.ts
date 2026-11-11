@@ -159,7 +159,7 @@ describe("reading a print from its photo", () => {
     expect(web.bodies).toHaveLength(0);
   });
 
-  it("drops the suggestion once someone says how it went, without touching their words", async () => {
+  it("keeps the suggestion once someone says how it went, without touching their words", async () => {
     stubClaude();
     const { itemId, attemptId } = await startPrint();
     await uploadPhoto(itemId, uuid(), cookie, { attemptId });
@@ -169,7 +169,11 @@ describe("reading a print from its photo", () => {
       json: { outcome: "partial", failureTags: ["warping"] },
     });
     const { attempt } = await finished.json<AttemptResponse>();
-    expect(attempt).toMatchObject({ outcome: "partial", failureTags: ["warping"], photoRead: null });
+    expect(attempt).toMatchObject({
+      outcome: "partial",
+      failureTags: ["warping"],
+      photoRead: { status: "read", outcome: "failed" },
+    });
   });
 
   it("never reads the same photo twice, and a newer photo replaces the suggestion", async () => {

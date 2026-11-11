@@ -234,11 +234,14 @@ export function connectOutbox(queryClient: QueryClient) {
           : undefined,
       );
     },
-    photoSaved: (photo) =>
+    photoSaved: (photo) => {
       patchCachedItem(queryClient, photo.itemId, (item) => ({
         ...item,
         photos: sortPhotos([...item.photos.filter((p) => p.id !== photo.id), photo]),
-      })),
+      }));
+      // A photo of an attempt may start Claude looking at it (decision 0022): ask for the attempt's state now.
+      if (photo.attemptId) void queryClient.invalidateQueries({ queryKey: itemKeys.detail(photo.itemId) });
+    },
     fileSaved: (attempt) =>
       patchCachedItem(queryClient, attempt.itemId, (item) => ({
         ...item,
@@ -401,6 +404,10 @@ export function useItem(id: string) {
   const query = useQuery({
     ...itemQuery(id),
     enabled: !pendingEntry,
+    // Claude is looking at a photo of one of its attempts (decision 0022): ask again now and then instead of waiting
+    // for the feed's slower beat, so the suggestion shows as soon as it is there.
+    refetchInterval: (current) =>
+      current.state.data?.attempts.some((attempt) => attempt.photoRead?.status === "reading") ? 3000 : false,
     // Opened from a list: show what the list already has, at once, as old as the list is
     // (so a list restored from the device is asked about again rather than trusted as fresh).
     initialData: () => {
