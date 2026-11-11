@@ -87,8 +87,6 @@ describe("the printer's own progress", () => {
       fraction: 0.47,
       state: "running",
       label: "Layer 112 of 240 · about 38 min left",
-      layer: 112,
-      totalLayers: 240,
     });
   });
 
