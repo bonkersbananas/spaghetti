@@ -129,12 +129,13 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   // Looked at once, online.
   await page.goto("/ideas");
   await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toContainText("Spool holder");
+  // The saved copy is written about a second after the data arrives: leaving the page sooner loses the inbox.
+  await expect.poll(() => cacheHolds(page, "Spool holder")).toBe(true);
   await page.goto(`/builds/${buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   const attempts = page.getByRole("list", { name: "Attempts, newest first" });
   await expect(attempts.getByRole("listitem")).toHaveCount(2);
   await expect.poll(() => cacheHolds(page, "Brim and a hotter bed did it")).toBe(true);
-  await expect.poll(() => cacheHolds(page, "Spool holder")).toBe(true);
   // The journal, looked at once online (its last results are kept like the rest).
   await page.goto("/journal");
   await expect(page.getByText("Brim and a hotter bed did it").first()).toBeVisible();
