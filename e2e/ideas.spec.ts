@@ -1,8 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { signIn as signInThroughApi } from "./helpers";
-
-const user = SEED_USERS[0];
 
 const signIn = (page: Page) => signInThroughApi(page);
 

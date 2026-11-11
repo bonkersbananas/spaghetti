@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { SEED_USERS } from "../scripts/lib/local-app.ts";
 import { clearIdeas, signIn as signInThroughApi } from "./helpers";
 
 const user = SEED_USERS[0];

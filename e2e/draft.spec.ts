@@ -1,8 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
-import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { signIn as signInThroughApi } from "./helpers";
 
-const user = SEED_USERS[0];
 // The Worker asks a stand-in for Anthropic (scripts/lib/fake-claude.ts): a word in the address picks the answer.
 const GOOD = "https://makerworld.com/en/models/1-cable-comb";
 const SLOW = "https://makerworld.com/en/models/2-slow-comb";
