@@ -4,7 +4,7 @@ import { itemName } from "@/components/journal/JournalEntry";
 import { ArrowRightIcon, BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { heroPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
@@ -41,10 +41,7 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
   const started = startedIdeas(builds);
   if (!started.length) return null;
   return (
-    <section aria-labelledby="started-heading" className="mt-12">
-      <SectionHeading id="started-heading" size="title" count={started.length} className="mb-3">
-        Started
-      </SectionHeading>
+    <Section id="started-heading" title="Started" size="title" count={started.length} className="mt-12 md:mt-16">
       <ul className="flex flex-col md:grid md:grid-cols-2 md:gap-x-8 xl:grid-cols-3" aria-label="Started">
         {started.slice(0, MOST).map((item) => (
           <li key={item.id}>
@@ -55,12 +52,12 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
       {started.length > MOST && (
         <Link
           to="/builds"
-          className="text-small text-ink-soft hover:text-ink focus-ring mt-2 inline-flex items-center gap-1.5 rounded-md py-2 font-semibold"
+          className="text-small text-ink-soft hover:text-ink focus-ring -mt-2 inline-flex items-center gap-1.5 self-start rounded-md py-2 font-semibold"
         >
           See all {started.length} in Builds <ArrowRightIcon size={14} weight="bold" aria-hidden />
         </Link>
       )}
-    </section>
+    </Section>
   );
 }
 

@@ -1,7 +1,6 @@
 import type { Recipe } from "@shared/api";
 import { useState } from "react";
-import { Overline } from "@/components/ui/Overline";
-import { SectionHeading } from "@/components/ui/SectionHeading";
+import { Section } from "@/components/ui/Section";
 import { LazyRecipeSheet } from "./LazyRecipeSheet";
 import { RecipeCard } from "./RecipeCard";
 
@@ -26,16 +25,14 @@ export function RecipeShelf({
   if (!recipes.length) return null;
   const id = `recipes-${title.replace(/\W+/g, "-").toLowerCase()}`;
   return (
-    <section aria-labelledby={id} className={className ?? "flex flex-col gap-3"}>
-      {heading === "overline" ? (
-        <Overline id={id} as="h3" count={recipes.length}>
-          {title}
-        </Overline>
-      ) : (
-        <SectionHeading id={id} count={recipes.length}>
-          {title}
-        </SectionHeading>
-      )}
+    <Section
+      id={id}
+      title={title}
+      count={recipes.length}
+      size={heading === "overline" ? "overline" : "headline"}
+      as={heading === "overline" ? "h3" : "h2"}
+      className={className}
+    >
       <ul className="grid gap-3 md:grid-cols-2">
         {recipes.map((recipe) => (
           <li key={recipe.id} className="list-none">
@@ -44,6 +41,6 @@ export function RecipeShelf({
         ))}
       </ul>
       <LazyRecipeSheet recipeId={open} onOpenChange={(next) => !next && setOpen(null)} />
-    </section>
+    </Section>
   );
 }
