@@ -1,6 +1,7 @@
 import type { Recipe } from "@shared/api";
 import { type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
+import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
@@ -13,6 +14,7 @@ import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OutcomeChip } from "@/components/builds/Outcome";
+import { PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
@@ -503,6 +505,13 @@ function Build({ item }: { item: ItemView }) {
 
           <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} />
 
+          <PartsSection
+            item={item}
+            active={active}
+            readOnly={readOnly}
+            onFinishBuild={() => finishBuild(queryClient, item)}
+          />
+
           {worked && (
             <WhatWorked
               attempt={worked}
@@ -552,6 +561,7 @@ function Build({ item }: { item: ItemView }) {
                       else entryRefs.current.delete(attempt.id);
                     }}
                     attempt={attempt}
+                    partsLabel={attemptPartsLabel(attempt, item.parts)}
                     photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
                     person={byId.get(attempt.createdBy)}
                     via={via(attempt.createdVia)}

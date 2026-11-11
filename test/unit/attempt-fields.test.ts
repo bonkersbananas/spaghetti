@@ -7,6 +7,7 @@ const attempt: SheetValue = {
   note: "Original",
   failureTags: ["warping"],
   successNotes: [],
+  parts: [{ partId: "hull", count: 1 }],
   settings: { bedTemperature: 60, layerHeight: 0.2, filaments: [{ type: "PLA", colorName: "White" }] },
 };
 
@@ -17,6 +18,14 @@ describe("attempt fields", () => {
     expect("s.brim" in fields).toBe(true);
     expect(fields["s.brim"]).toBeUndefined();
     expect(toValue(fields)).toEqual(attempt);
+  });
+
+  it("keeps what's on the plate as one field that goes as it is", () => {
+    const fields = toFields(attempt);
+    expect(fields.parts).toEqual([{ partId: "hull", count: 1 }]);
+    const next = [{ partId: "hull", count: 2 }, { partId: "deck", count: 1 }];
+    expect(fieldsFor(fields, { parts: next })).toEqual({ parts: next });
+    expect(toChanges({ parts: next }, attempt.settings)).toEqual({ changes: { parts: next } });
   });
 
   it("turns a change to the sheet's value into only the fields that differ", () => {

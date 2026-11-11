@@ -26,6 +26,8 @@ import { filamentLabel, summarizeResults, summarizeSettings } from "./settings";
 
 interface AttemptEntryProps {
   attempt: AttemptView;
+  /** What it printed of the build's parts: "Hull half ×2, Deck". */
+  partsLabel?: string | null;
   photos: PhotoView[];
   person?: Person;
   /** The agent it was logged through. */
@@ -52,7 +54,21 @@ interface AttemptEntryProps {
  * and the settings in a line. Tapping it opens the attempt.
  */
 export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(function AttemptEntry(
-  { attempt, photos, person, via, selected, first, last, onOpen, onFinish, onCompare, onSaveRecipe, reserveExtras },
+  {
+    attempt,
+    partsLabel,
+    photos,
+    person,
+    via,
+    selected,
+    first,
+    last,
+    onOpen,
+    onFinish,
+    onCompare,
+    onSaveRecipe,
+    reserveExtras,
+  },
   ref,
 ) {
   const offBed = isOffTheBed(attempt);
@@ -102,7 +118,10 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
           <div className="pointer-events-none relative flex flex-col gap-3 p-3.5 md:p-4">
             <div className="flex items-center gap-2.5">
               <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-              <h3 className="text-body text-ink font-sans font-semibold">Attempt {attempt.number}</h3>
+              <h3 className="text-body text-ink min-w-0 font-sans font-semibold">
+                Attempt {attempt.number}
+                {partsLabel && <span className="text-ink-soft font-medium"> · {partsLabel}</span>}
+              </h3>
               <span className="text-small text-ink-faint ml-auto flex items-center gap-2">
                 <ViaText name={via} className="hidden md:inline" />
                 <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>

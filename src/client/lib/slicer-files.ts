@@ -108,6 +108,7 @@ export function queueSlicerFile(
         plateCount: Math.max(draft.result.plates.length, 1),
         ...(draft.slicer ? { slicer: draft.slicer } : {}),
         prefill,
+        objects: (chosen?.objects ?? []).map((object) => object.name),
         queuedAt: Date.now(),
       },
     ],
