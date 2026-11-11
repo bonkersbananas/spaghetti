@@ -1,4 +1,3 @@
-import { OUTCOME_LABELS } from "@shared/attempts";
 import { type PhotoRead, suggestedTagWords } from "@shared/photo-read";
 import { SparkleIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
@@ -26,11 +25,8 @@ export function PhotoReadNote({ read, className }: PhotoReadNoteProps) {
   const tags = suggestedTagWords(read);
   return (
     <p className={cn("text-small text-ink-faint flex items-start gap-2 px-0.5", className)}>
-      <SparkleIcon size={14} weight="fill" aria-hidden className="mt-[3px] shrink-0" />
+      <SparkleIcon size={14} weight="fill" aria-hidden className="mt-1 shrink-0" />
       <span className="min-w-0">
-        {read.outcome && (
-          <span className="text-ink-soft">Claude's guess from the photo: {OUTCOME_LABELS[read.outcome]}. </span>
-        )}
         {read.reason}
         {tags.length > 0 && <span className="block">{tags.join(" · ")}</span>}
       </span>

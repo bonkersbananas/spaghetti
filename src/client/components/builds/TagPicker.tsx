@@ -67,7 +67,7 @@ export function TagPicker({
       {showing.length > 0 && (
         <p className="text-small text-ink-faint -mt-1 px-0.5">
           {suggestedBy === "claude"
-            ? `Claude suggested the marked ${showing.length === 1 ? "one" : "ones"} from the photo. Tap to take ${showing.length === 1 ? "it" : "any"} off.`
+            ? "Claude's guess from the photo. Tap to take any off."
             : "The printer suggested the marked one. Tap it to take it off."}
         </p>
       )}

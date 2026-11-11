@@ -1,4 +1,5 @@
 import type { Outcome } from "@shared/attempts";
+import type { PhotoRead } from "@shared/photo-read";
 import { livePrintProgress } from "@shared/print-progress";
 import { useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
@@ -7,6 +8,7 @@ import { CompareTable } from "@/components/builds/CompareTable";
 import { OffTheBed } from "@/components/builds/OffTheBed";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
 import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
+import { PhotoReadNote } from "@/components/builds/PhotoReadNote";
 import { TagPicker } from "@/components/builds/TagPicker";
 import * as Icons from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
@@ -16,6 +18,15 @@ import type { AttemptView } from "@/lib/items";
 import { Label, Panel, people, SAMPLE_COLOR, Section } from "./shared";
 
 const MINUTE = 60 * 1000;
+
+const sampleRead = {
+  status: "read",
+  photoId: "p",
+  outcome: "failed",
+  failureTags: ["spaghetti", "bed-adhesion"],
+  successNotes: [],
+  reason: "Loose strands across the top half; looks like it lost adhesion early.",
+} satisfies PhotoRead;
 
 /** A print mid-way, one past its estimate, and one with no estimate to go by. */
 const progressSamples = [
@@ -130,6 +141,10 @@ export function BuildsSection() {
         <Panel className="flex min-w-0 flex-col gap-5">
           <Label>Outcome picker</Label>
           <OutcomePicker value={outcome} onChange={setOutcome} />
+          <Label>Outcome picker with Claude's suggestion from the photo: hinted, never picked</Label>
+          <OutcomePicker value={null} onChange={(picked) => toast.message(`Picked ${picked}`)} suggested="failed" />
+          <PhotoReadNote read={sampleRead} />
+          <PhotoReadNote read={{ ...sampleRead, status: "reading", outcome: null, reason: null, failureTags: [] }} />
           <Label>Outcome chips</Label>
           <div className="flex flex-wrap gap-2">
             <OutcomeChip outcome={null} />
@@ -174,6 +189,12 @@ export function BuildsSection() {
           </p>
           <Label>Off the bed: stopped, no verdict yet</Label>
           <OffTheBed endedAt={Date.now() - 20 * MINUTE} onPick={(picked) => toast.message(`Opens with ${picked}`)} />
+          <Label>Off the bed, with Claude's read of the photo as a hint</Label>
+          <OffTheBed
+            endedAt={Date.now() - 20 * MINUTE}
+            photoRead={sampleRead}
+            onPick={(picked) => toast.message(`Opens with ${picked}`)}
+          />
           <Label>Outcome strip: dots, oldest first</Label>
           <div className="flex flex-col items-start gap-3">
             <OutcomeStrip attempts={[...sampleStrip]} />

@@ -5,9 +5,10 @@
  * `slow` takes a few seconds (the "reading the page" state stays long enough to look at), `broken` can't be read,
  * `refused` is refused, anything else is a good draft.
  *
- * A request with a photo in it is a print being read (decision 0022). The build's title in it decides the answer:
- * `slow` takes a few seconds ("Looking at the photo…" stays long enough to look at), `refused` is refused, `broken`
- * is an API error, `unsure` can't tell, `spaghetti` is a failed print, `partly` a partly good one, anything else worked.
+ * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
+ * note decides the answer: `slow` takes ten seconds ("Looking at the photo…" stays long enough to look at), `refused`
+ * is refused, `broken` is an API error, `unsure` can't tell, `spaghetti` or `tangle` is a failed print, `partly` a
+ * partly good one, anything else worked.
  */
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -54,7 +55,10 @@ const reads = {
 };
 
 async function answerPhoto(body: string, response: import("node:http").ServerResponse) {
-  const title = (/The build is called: ([^"\\]*)/.exec(body)?.[1] ?? "").toLowerCase();
+  const title = [/The build is called: ([^"\\]*)/, /Their note on this attempt: ([^"\\]*)/]
+    .map((pattern) => pattern.exec(body)?.[1] ?? "")
+    .join(" ")
+    .toLowerCase();
   if (title.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
   response.setHeader("Content-Type", "application/json");
   if (title.includes("broken")) {
@@ -65,7 +69,7 @@ async function answerPhoto(body: string, response: import("node:http").ServerRes
   const refused = title.includes("refused");
   const read = title.includes("unsure")
     ? reads.unsure
-    : title.includes("spaghetti")
+    : title.includes("spaghetti") || title.includes("tangle")
       ? reads.spaghetti
       : title.includes("partly")
         ? reads.partly

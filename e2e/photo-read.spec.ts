@@ -72,7 +72,7 @@ test("a photo gets a suggestion: hinted on the build, one tap to take it, tags m
   await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
   await expect(sheet.getByRole("button", { name: /^Spaghetti.*suggested/ })).toBeVisible();
   await expect(sheet.getByRole("button", { name: /Bed adhesion.*suggested/ })).toBeVisible();
-  await expect(sheet.getByText("Claude suggested the marked ones from the photo.")).toBeVisible();
+  await expect(sheet.getByText("Claude's guess from the photo.")).toBeVisible();
   await expect.poll(async () => (await attemptOf(page, itemId, attemptId)).outcome, { timeout: 10_000 }).toBe("failed");
   expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ failureTags: ["spaghetti", "bed-adhesion"] });
 });

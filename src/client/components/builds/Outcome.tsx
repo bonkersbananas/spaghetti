@@ -103,7 +103,12 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
-            {hinted && <span className="text-micro -mt-1 font-normal">suggested</span>}
+            {suggested && !value && (
+              // Every button keeps the caption's line, so the icons and words line up across the row.
+              <span aria-hidden={!hinted} className={cn("text-micro -mt-1 font-normal", !hinted && "invisible")}>
+                suggested
+              </span>
+            )}
           </button>
         );
       })}
