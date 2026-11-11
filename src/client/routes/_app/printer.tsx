@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { AmsLoadout } from "@/components/pantry/Ams";
-import { PrinterBridgeLine } from "@/components/pantry/BridgeLine";
+import { BridgeCard } from "@/components/printer/BridgeCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -168,7 +168,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           />
           <Fact icon={TemperatureIcon} label="Heated chamber" value={`up to ${X2D.maxChamberTemperature} °C`} />
         </div>
-        <PrinterBridgeLine />
+        <BridgeCard className="mt-2" />
       </div>
 
       {idle ? (

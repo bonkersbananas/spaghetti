@@ -8,6 +8,7 @@ import { CardSection } from "./-styleguide/cards";
 import { ChecklistSection } from "./-styleguide/checklist";
 import { ChipSection } from "./-styleguide/chips";
 import { ColorSection } from "./-styleguide/color";
+import { CommandBlockSection } from "./-styleguide/command-block";
 import { ControlSection } from "./-styleguide/controls";
 import { ConversationSection } from "./-styleguide/conversation";
 import { ElevationSection } from "./-styleguide/elevation";
@@ -15,6 +16,7 @@ import { EmptySection } from "./-styleguide/empty";
 import { FieldSection } from "./-styleguide/fields";
 import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
+import { LiveStatusSection } from "./-styleguide/live-status";
 import { MotionSection } from "./-styleguide/motion";
 import { NotificationSection } from "./-styleguide/notifications";
 import { PaletteSection } from "./-styleguide/palette";
@@ -26,6 +28,7 @@ import { SheetSection } from "./-styleguide/sheets";
 import { SigningInSection } from "./-styleguide/signing-in";
 import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
+import { StepsSection } from "./-styleguide/steps";
 import { TodaySection } from "./-styleguide/today";
 import { TypeSection } from "./-styleguide/type";
 import { WebhooksSection } from "./-styleguide/webhooks";
@@ -72,6 +75,9 @@ const toc = [
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
   ["signing-in", "Signing in"],
+  ["command-block", "Command block"],
+  ["steps", "Steps"],
+  ["live-status", "Live status"],
 ] as const;
 
 function Styleguide() {
@@ -121,6 +127,9 @@ function Styleguide() {
           <WebhooksSection />
           <EmptySection />
           <SkeletonSection />
+          <LiveStatusSection />
+          <StepsSection />
+          <CommandBlockSection />
           <SigningInSection />
         </div>
       </div>

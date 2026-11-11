@@ -59,6 +59,8 @@ export interface BridgeStatusData {
 }
 
 export interface BridgeStatus extends BridgeStatusData {
+  /** When the bridge last paired with a code (epoch ms), so the guide can tell a new bridge from one already running. */
+  pairedAt?: number | null;
   /** When the bridge last got in touch, epoch ms. */
   lastSeenAt: number;
 }

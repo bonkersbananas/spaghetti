@@ -1,7 +1,7 @@
 name: Bridge release
 
 # Builds the printer bridge as single programs for macOS (Apple silicon and Intel), smoke-tests each one on a runner of
-# its own kind against the bridge's stand-in printer, and publishes them with checksums as the assets of a GitHub
+# its own kind (macos-latest is Apple silicon; macos-15-intel is Intel) against the bridge's stand-in printer, and publishes them with checksums as the assets of a GitHub
 # release. Tag a commit `bridge-v1.0.0` to release; "Run workflow" builds and tests without publishing.
 # The installer (public/bridge/install.sh) downloads these files and checks SHA256SUMS.
 
