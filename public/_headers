@@ -1,0 +1,4 @@
+# The consent screen must never be framed: a hidden frame over "Allow" would be clickjacking.
+/authorize
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'

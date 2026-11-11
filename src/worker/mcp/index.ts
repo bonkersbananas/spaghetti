@@ -128,9 +128,16 @@ export const mcpRoutes = new Hono<{ Bindings: Env }>()
     const token = bearerToken(c);
     const agent = token ? await readAgentToken(getDb(c.env.DB), token) : null;
     if (!agent) {
-      return c.json(rpcError(null, -32001, "Send an agent token as Authorization: Bearer spg_…"), 401, {
-        "WWW-Authenticate": 'Bearer realm="spaghetti"',
-      });
+      // RFC 9728: the challenge points a client that has no (or an expired) token at the metadata to sign in by.
+      const metadata = `${new URL(c.req.url).origin}/.well-known/oauth-protected-resource/mcp`;
+      const problem = c.req.header("authorization") === undefined ? "" : ', error="invalid_token"';
+      return c.json(
+        rpcError(null, -32001, "Send an agent token as Authorization: Bearer spg_…, or sign in with OAuth."),
+        401,
+        {
+          "WWW-Authenticate": `Bearer realm="spaghetti", resource_metadata="${metadata}"${problem}`,
+        },
+      );
     }
     const body = await c.req.json().catch(() => undefined);
     if (body === undefined) return c.json(rpcError(null, -32700, "That wasn't JSON."), 400);
