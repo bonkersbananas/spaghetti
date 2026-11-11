@@ -15,6 +15,7 @@ import type {
   WhatWorkedResponse,
 } from "../../shared/api.ts";
 import { FAILURE_TAGS, OUTCOME_LABELS, OUTCOMES, SUCCESS_NOTES } from "../../shared/attempts.ts";
+import { COMMENT_MAX } from "../../shared/comments.ts";
 import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import { SLOT_PATTERN } from "../../shared/spools.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
@@ -289,6 +290,26 @@ export const tools: Tool[] = [
           : ` The idea was saved but its photo wasn't: ${failure(uploaded).text}`;
       }
       return { text: `Captured idea. build_id: ${itemId}.${photo}` };
+    },
+  }),
+
+  tool({
+    name: "add_comment",
+    title: "Comment on an idea or build",
+    description:
+      'Add a comment to the short thread under an idea or build, where the two people talk about it ("Could you print this one in the blue PETG?"). It shows in the app as the owner\'s comment, marked as written via this agent, and counts as new for the other person. Read the thread with get_build (it ends with the comments). Keep it short and plain. Needs the "capture" or "attempts" scope.',
+    scopes: ["capture", "attempts"],
+    readOnly: false,
+    input: z.object({
+      build_id: id.describe("The build's or idea's id (from search)."),
+      text: z.string().min(1).max(COMMENT_MAX).describe("What to say, in the voice of the person you act for."),
+    }),
+    async run(args, ctx) {
+      const comment = await ctx.call(`/api/items/${args.build_id}/comments`, {
+        method: "POST",
+        json: { id: crypto.randomUUID(), body: args.text },
+      });
+      return comment.ok ? { text: "Added your comment to the thread." } : failure(comment);
     },
   }),
 

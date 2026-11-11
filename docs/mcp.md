@@ -44,6 +44,7 @@ Any client that takes a JSON config:
 | `what_worked` | The latest attempts that worked, for a `build_id`, a `material` or free text, with the saved recipes for the material | `read` |
 | `list_recipes` | The saved recipes (named settings of attempts that worked), optionally for a `material` and `finish` | `read` |
 | `get_build` | One build as a markdown story: the idea, notes, every attempt with settings, changes and notes, what worked (the same as `GET /api/builds/:id/story.md`) | `read` |
+| `add_comment` | A `build_id` and the `text` to say in the thread under an idea or build; it shows as the owner's comment, "via" the agent, and counts as new for the other person. Read the thread with `get_build`, which ends with the comments | `capture` or `attempts` |
 | `capture_idea` | A title and/or note, optionally a photo by https URL or base64 (JPEG or WebP) | `capture` |
 | `set_parts` | Add or change a build's parts (name and quantity; give `part_id` to change one). Removing is for people | `attempts` |
 | `start_attempt` | A print has started: an attempt with no outcome yet | `attempts` |

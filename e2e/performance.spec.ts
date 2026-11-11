@@ -23,6 +23,9 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // Recipes added about 1 kB of shared code to every screen (cache roots, change feed, an icon); its sheet and shelves load on demand, and search draws recipe results (about 4 kB).
 // Profile pictures (the photo layer in Avatar, toasts above sheets) added about 2 kB gzip to the shell, so the
 // budgets of the screens near their limit went up by 2 kB; the crop and upload code loads on demand.
+// Comments added about 1 kB to the lists (the unread marker on cards: its query, a badge and an icon); the thread and its
+// composer are a lazy chunk of the idea and build pages, and the palette's "New comments" row loads with the palette.
+// Merging main (photo reads, spare parts) and comments together took the lists about 1 kB past their old limits: budgets +1 to +2 kB.
 const BUDGET_KB = {
   "/sign-in": 212,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
@@ -35,7 +38,7 @@ const BUDGET_KB = {
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
   "/search": 318,
   "/pantry": 323,
-  "/printer": 323,
+  "/printer": 322,
 } as const;
 
 /**

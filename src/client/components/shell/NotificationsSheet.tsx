@@ -49,7 +49,7 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
       open={open}
       onOpenChange={onOpenChange}
       title="Notifications"
-      description="A nudge when a print is done, and now and then when the printer needs care."
+      description="A nudge when a print is done, a note when the other person comments, and now and then when the printer needs care."
     >
       <div className="flex flex-col gap-3">
         {status === "install" ? (

@@ -33,6 +33,7 @@ src/
       builds/             BuildCard, AttemptEntry, AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
       recipes/            RecipeCard, RecipeSheet (edit name and note, delete), SaveRecipe (the form and its sheet), SaveAsRecipe (inline in the attempt sheet), RecipePicker ("Start from a recipe"), RecipeShelf ("Recipes for silk PLA")
       today/              the blocks of /today: InThePrinter, PickUpAgain, Lately, BackBurner (the print on the bed is builds/PrintingCard)
+      comments/           CommentThread (lazy) and Thread, EditableBubble: the thread under an idea or build
       journal/            JournalEntry, Filters (the chips shared by the journal and search)
       search/             Results (attempt and item results)
     lib/                  api client, queries, hotkeys, motion tokens, hooks
@@ -197,6 +198,12 @@ Never edit a migration that has been merged; add a new one.
 - Photos, attempts and files carry the `itemId` they belong to; the pantry and the printer have none. The actor is `{ kind: "person", id }` from `actorOf(c.var.user)`; agents will use `kind: "agent"` with their name, so don't assume a user id.
 - The client (`lib/live.ts`, started in `_app.tsx`) polls every 10 s while the tab is visible and online, and at once on focus, on coming back to the tab and when the connection returns; the first answer only learns the feed's end. `refresh` maps changes to query keys: a new query root that other people's writes can change needs a case there. At most one quiet toast for the open screen; a deleted item closes its screen.
 - Autosaved fields must follow the server only when untouched (`useFollowServer`) and must send only what this screen changed (`useItemFields`; `useLiveFields` for a form of several fields, as on the spool page and the printer setup), or they undo the other person's edit.
+
+### Comments
+
+- A short thread per idea or build ([0024](docs/decisions/0024-comments-read-state-and-push-batching.md)): `comments` (client-picked id, `author_id`, `via`, `edited_at`, soft `deleted_at`, `notified_at`) and `comment_reads (user_id, item_id, read_at)`. Routes are `worker/routes/comments.ts` (`/api/items/:id/comments`, `/api/comments/…`); every write records a `comment` change with the item's id (the client refreshes the `comments` query root, not the item). Pure rules (types, `groupThread`, `isUnread`, the push text) are `shared/comments.ts`.
+- The push is `worker/push/comments.ts`: the route waits `PUSH_BATCH_MS` in `waitUntil`, then `sendCommentPush` claims every unnotified comment at once, so a burst is one push. Comments aren't searchable yet (follow-up: the FTS view).
+- The client is `lib/comments.ts` (queries, optimistic send/edit/delete, per-thread drafts in `localStorage`, `useThread` which marks the thread read and keeps the "New" divider where it was when the thread opened) and `components/comments/` (`CommentThread` lazy-loads `Thread`); the pieces are in the design system (`ui/Message.tsx`, `ui/Composer.tsx`, `UnreadBadge` on `Card`) and the styleguide's Conversation section.
 
 ### Sharing in
 

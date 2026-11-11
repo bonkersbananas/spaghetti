@@ -10,6 +10,7 @@ import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { useOutbox } from "@/lib/outbox";
 import { photoSrc } from "@/lib/previews";
+import { useUnreadCount } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
@@ -69,6 +70,7 @@ interface IdeaCardProps {
 export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2 }: IdeaCardProps) {
   const cover = item.photos[0];
   const upload = useUploadState(item);
+  const unread = useUnreadCount(item.id);
   return (
     <m.li
       layout="position"
@@ -121,6 +123,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}
+          unread={unread}
           badge={item.photos.length > 1 ? <PhotoCountBadge count={item.photos.length} /> : undefined}
           chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
           meta={item.forWhom ? `for ${item.forWhom} · ${relativeTime(item.createdAt)}` : relativeTime(item.createdAt)}

@@ -2,7 +2,7 @@
 import type { Outcome } from "./attempts.ts";
 
 export type NudgeKind = "off_the_bed" | "overdue";
-export type PushKind = NudgeKind | "upkeep" | "test";
+export type PushKind = NudgeKind | "upkeep" | "comment" | "test";
 
 /** No nudges from 22:00 until 07:00 in the device's time zone. */
 export const QUIET_FROM_HOUR = 22;
