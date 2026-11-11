@@ -153,6 +153,10 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.getByText("Corners lifted").first()).toBeVisible();
     await expectAccessible(page, "Journal");
 
+    await page.goto("/year");
+    await expect(page.getByRole("heading", { level: 2, name: "Prints by month" })).toBeVisible();
+    await expectAccessible(page, "Year so far");
+
     await screen(page, "/search?q=warping", "Search");
     await expect(page.getByRole("region", { name: "Attempts" })).toBeVisible();
     await expectAccessible(page, "Search results");

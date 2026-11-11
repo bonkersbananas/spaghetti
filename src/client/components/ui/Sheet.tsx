@@ -96,7 +96,9 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, headerActi
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
           <div className="flex items-start justify-between gap-3 px-5 pt-2 pb-1">
             <div className="min-w-0">
-              <Drawer.Title className="font-display text-title text-ink font-semibold">{title}</Drawer.Title>
+              <Drawer.Title className="font-display text-title text-ink line-clamp-2 font-semibold break-words">
+                {title}
+              </Drawer.Title>
               {description ? (
                 <Drawer.Description className="text-small text-ink-faint mt-0.5">{description}</Drawer.Description>
               ) : (
@@ -150,7 +152,9 @@ function DesktopSheet({
         >
           <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-1">
             <div>
-              <Dialog.Title className="font-display text-title text-ink font-semibold">{title}</Dialog.Title>
+              <Dialog.Title className="font-display text-title text-ink line-clamp-2 font-semibold break-words">
+                {title}
+              </Dialog.Title>
               {description ? (
                 <Dialog.Description className="text-small text-ink-faint mt-0.5">{description}</Dialog.Description>
               ) : (
