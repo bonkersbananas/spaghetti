@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
+import { LANDING_ASSETS } from "./vite-landing.ts";
 
 const precached = /\.(?:js|css|woff2?|svg|png|webp|webmanifest|ico)$/;
 
@@ -25,7 +26,8 @@ export function serviceWorker(): Plugin {
     },
     generateBundle(_options, bundle) {
       if (this.environment.name !== "client") return;
-      const built = Object.keys(bundle).filter((name) => precached.test(name));
+      // The landing page (landing.html and assets/landing/) is for visitors, not part of the app.
+      const built = Object.keys(bundle).filter((name) => precached.test(name) && !name.startsWith(LANDING_ASSETS));
       const fromPublic = publicDir ? readdirSync(publicDir).filter((name) => precached.test(name)) : [];
       const precache = [...new Set([...built, ...fromPublic])].sort().map((name) => `/${name}`);
       const source = readFileSync(join(import.meta.dirname, "../src/sw/sw.js"), "utf8");

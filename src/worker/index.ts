@@ -2,6 +2,7 @@ import { app } from "./app.ts";
 import { resumeCoaches } from "./coach/run.ts";
 import { getDb } from "./db/index.ts";
 import { resumeDrafts } from "./draft/run.ts";
+import { home } from "./home.ts";
 import { resumeLabelReads } from "./label-read/run.ts";
 import { mcpRoutes } from "./mcp/index.ts";
 import { pruneOauth } from "./oauth/grants.ts";
@@ -30,9 +31,13 @@ async function shareFallback(request: Request): Promise<Response> {
 }
 
 export default {
-  /** /mcp is the MCP server; everything else is the API (the app's static files never reach the Worker). */
+  /**
+   * / is the app or the landing page (home.ts); /mcp is the MCP server; everything else is the API (the app's other
+   * static files never reach the Worker).
+   */
   fetch: (request, env, ctx) => {
     const { pathname } = new URL(request.url);
+    if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) return home(request, env);
     if (pathname === "/mcp") return mcpRoutes.fetch(request, env, ctx);
     if (pathname.startsWith("/.well-known/oauth-") || pathname.startsWith("/oauth/")) {
       return oauthEndpoints.fetch(request, env, ctx);
