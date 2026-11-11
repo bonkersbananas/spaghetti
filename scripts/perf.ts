@@ -22,6 +22,8 @@ const argv = process.argv.slice(2);
 const runs = Number(argv[argv.indexOf("--runs") + 1]) || 5;
 const asJson = argv.includes("--json");
 
+const PARTS_BUILD = "5eed0000-0000-4000-8000-000000000109";
+
 const READY = {
   "/today": `document.querySelector('h1')?.textContent === 'Today' && !document.querySelector('.sg-skeleton') && document.querySelectorAll('main a').length > 2`,
   "/ideas": `document.querySelector('h1')?.textContent === 'Ideas' && !document.querySelector('.sg-skeleton') && !!document.querySelector('main a[href^="/ideas/"]')`,
@@ -186,62 +188,55 @@ try {
       ),
     );
 
-    // On the build: the attempt sheet, an outcome, a stepper.
-    const log = page.getByRole("button", { name: "Log attempt" });
-    if (await log.count()) {
-      await settle();
-      add(
-        "log attempt → sheet",
-        await tapLatency(page, () => log.first().tap(), onScreen("[role=dialog] [role=radio]")),
-      );
-      await settle();
-      add(
-        "pick an outcome",
-        await tapLatency(
-          page,
-          () => page.getByRole("dialog").getByRole("radio", { name: "Worked" }).tap(),
-          `document.querySelector('[role=dialog] [role=radio][aria-checked=true]')?.textContent?.includes('Worked')`,
-        ),
-      );
-      await page.keyboard.press("Escape");
-      await page.locator("[role=dialog]").waitFor({ state: "detached" });
-    }
-    await page.goBack();
-  }
-
-  // A stepper: the build made of parts.
-  await tabs.getByRole("link", { name: "Builds" }).tap();
-  const links = await page
-    .locator('main a[href^="/builds/"]')
-    .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-  for (const href of links) {
-    await page.goto(href ?? "/builds");
+    // On the build made of parts: the attempt sheet, an outcome, a part, a stepper.
+    await page.goto(`/builds/${PARTS_BUILD}`);
+    await page.getByRole("button", { name: "Log attempt" }).first().waitFor();
     await page.waitForTimeout(800);
-    const plus = page.getByRole("button", { name: /: one more$/ }).first();
-    if (!(await plus.count())) continue;
-    for (let run = 0; run < runs; run++) {
+    const sheet = page.getByRole("dialog");
+    add(
+      "log attempt → sheet",
+      await tapLatency(
+        page,
+        () => page.getByRole("button", { name: "Log attempt" }).first().tap(),
+        onScreen("[role=dialog] [role=radio]"),
+      ),
+    );
+    await settle();
+    add(
+      "pick an outcome",
+      await tapLatency(
+        page,
+        () => sheet.getByRole("radio", { name: "Worked" }).tap(),
+        `document.querySelector('[role=dialog] [role=radio][aria-checked=true]')?.textContent?.includes('Worked')`,
+      ),
+    );
+    const part = sheet.getByRole("button", { name: /Hull half/ }).first();
+    if (await part.count()) {
       await settle();
-      const before = await page.getByRole("spinbutton").first().getAttribute("aria-valuenow");
+      await part.tap();
+      const plus = sheet.getByRole("button", { name: /: one more$/ }).first();
+      await plus.waitFor();
+      const count = () => sheet.getByRole("spinbutton").first().getAttribute("aria-valuenow");
+      await settle();
+      const before = await count();
       add(
         "stepper tap",
         await tapLatency(
           page,
           () => plus.tap(),
-          `document.querySelector('[role=spinbutton]')?.getAttribute('aria-valuenow') !== ${JSON.stringify(before)}`,
+          `document.querySelector('[role=dialog] [role=spinbutton]')?.getAttribute('aria-valuenow') !== ${JSON.stringify(before)}`,
         ),
       );
     }
-    break;
+    await page.keyboard.press("Escape");
+    await page.locator("[role=dialog]").waitFor({ state: "detached" });
+    await page.goBack();
   }
 
   // Typing in search.
   await page.goto("/search");
-  await page
-    .getByRole("searchbox")
-    .or(page.getByRole("textbox", { name: "Search" }))
-    .first()
-    .waitFor();
-  const box = page.getByRole("textbox", { name: "Search" }).or(page.getByRole("searchbox")).first();
+  const box = page.locator("#search-box");
+  await box.waitFor();
   await box.tap();
   for (let run = 0; run < runs; run++) {
     await box.fill("");
@@ -254,7 +249,7 @@ try {
         await tapLatency(
           page,
           () => page.keyboard.press(key),
-          `document.getElementById('search-box')?.value === ${JSON.stringify(type)}`,
+          `document.getElementById('search-box')?.value.length === ${type.length}`,
         ),
       );
     }
