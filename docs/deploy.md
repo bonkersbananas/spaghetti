@@ -94,6 +94,8 @@ Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-fr
 
 The same key lets Claude suggest how a print went from its photo ([0023](decisions/0023-claude-reads-a-print-from-its-photo.md)). Every read is a row in `photo_reads`: `pnpm exec wrangler d1 execute spaghetti --remote --command "SELECT status, run_outcome, detail, created_at FROM photo_reads ORDER BY created_at DESC LIMIT 10"` says why a photo got no suggestion (`unsure`, `refusal`, `api_error` with its HTTP status in `detail`, `timeout`, `cap`, `too_large`).
 
+And reading a spool's label ([0027](decisions/0027-claude-reads-a-spool-label-from-its-photo.md)) is a row in `label_reads`: `SELECT status, run_outcome, detail, created_at FROM label_reads ORDER BY created_at DESC LIMIT 10` says why a label filled nothing (`unreadable`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, `bad_shape`). Its cap is 20 a day, apart from the photo reads.
+
 If a real link doesn't draft, read why from the runs (never the page's content or the key, only statuses and codes):
 
 ```sh
