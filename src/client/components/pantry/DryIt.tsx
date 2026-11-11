@@ -8,6 +8,7 @@ const View = lazy(() => import("./DryItView"));
 export function DryIt(props: {
   spool: Pick<Spool, "material" | "driedAt" | "createdAt" | "remaining">;
   className?: string;
+  compact?: boolean;
 }) {
   if (!useIdle()) return null;
   return (
