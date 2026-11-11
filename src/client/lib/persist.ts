@@ -26,6 +26,7 @@ export const PERSISTED_ROOTS = [
   "people",
   "journal",
   "insights",
+  "week",
   "facets",
   "search",
   "what-worked",
@@ -51,6 +52,7 @@ const LIMITS = {
   "journal-list": 12,
   "journal-summary": 48,
   insights: 3,
+  week: 6,
   search: 10,
   "what-worked": 20,
 };

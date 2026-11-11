@@ -70,6 +70,39 @@ async function openAccountRow(page: Page, width: 390 | 1440, row: string | RegEx
   await page.getByRole("dialog").getByRole("button", { name: row }).click();
 }
 
+/**
+ * Answers the week page with what only the Worker's own clock can give: the shots' browser is set to the seed's
+ * date, the Worker is not. Reloads so the page asks again with the route in place.
+ */
+const weekApi = /\/api\/weeks\/\d{4}-\d{2}-\d{2}$/;
+async function withWeekMock(page: Page, mock: { waiting?: boolean; note?: boolean }) {
+  await page.route(weekApi, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.week.current = true;
+    if (mock.waiting) {
+      body.week.waiting = {
+        upNext: [
+          { id: SEED_IDS.desiccantHook, title: "Desiccant hook" },
+          { id: SEED_IDS.lithophane, title: "Lithophane" },
+        ],
+        failedLast: [{ id: SEED_BUILD_IDS.cableChain, title: "Cable chain" }],
+        low: [{ id: SEED_SPOOL_IDS.sunflower, name: "Sunflower yellow", gramsLeft: 40 }],
+        upkeep: [],
+      };
+    }
+    if (mock.note) {
+      body.week.note = {
+        status: "done",
+        text: "PETG warped twice this week, and both times the bed was 70 °C. The print that worked had a brim: worth keeping for the next one.",
+      };
+    }
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload();
+  await page.getByRole("heading", { level: 1 }).waitFor();
+}
+
 const wide = (page: Page): 390 | 1440 => (page.viewportSize()?.width === 390 ? 390 : 1440);
 
 /** What the passkeys and devices lists say, in a shot: a real passkey needs a real site (localhost), a shot opens 127.0.0.1. */
@@ -303,6 +336,40 @@ async function openIdea(page: Page, id: string) {
   await page.goto(`/ideas/${id}`);
   await page.locator("h1").first().waitFor({ state: "attached" });
   await page.getByRole("button", { name: "Start building" }).first().waitFor();
+}
+
+/** The spools the label shots make (removed again by their cleanup). */
+const labelSpoolIds: string[] = [];
+
+/**
+ * A spool made through the API with this note (the stand-in Claude picks its answer by a word in it, see
+ * scripts/lib/fake-claude.ts), opened on its page and given a label photo to read, the way "Read the label" does.
+ */
+async function labelSpool(page: Page, note: string, photo: "jade" | "two") {
+  const id = await page.evaluate(async (text) => {
+    const spoolId = crypto.randomUUID();
+    await fetch("/api/spools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: spoolId, material: "PLA", note: text }),
+    });
+    return spoolId;
+  }, note);
+  labelSpoolIds.push(id);
+  await page.goto(`/pantry/${id}`);
+  await page.getByRole("button", { name: "Read the label" }).waitFor();
+  await page.getByTestId("photo-input").setInputFiles({
+    name: `label-${photo}.jpg`,
+    mimeType: "image/jpeg",
+    buffer: readFileSync(`e2e/fixtures/label-${photo}.jpg`),
+  });
+}
+
+/** Takes the spools the label shots made off the shelf again. */
+async function removeLabelSpools(page: Page) {
+  await page.evaluate(async (ids) => {
+    for (const id of ids) await fetch(`/api/spools/${id}`, { method: "DELETE" });
+  }, labelSpoolIds.splice(0));
 }
 
 /** The builds the photo-read shots make (removed again by their cleanup). */
@@ -853,7 +920,7 @@ export const shots: Shot[] = [
         await page.request.delete(`/api/items/${id}`, { headers });
       }
       await page.reload();
-      await page.getByRole("heading", { level: 1, name: "Recently deleted" }).waitFor();
+      await page.getByRole("heading", { level: 1, name: "Deleted" }).waitFor();
       await page
         .getByRole("button", { name: /^Restore/ })
         .first()
@@ -1061,6 +1128,33 @@ export const shots: Shot[] = [
   { name: "journal", path: "/journal" },
   // The year so far: figures, months, success by material and plate, what fixed each failure.
   { name: "year", path: "/year?year=2026", fullPage: true },
+  // The week in Spaghetti. The shots' browser clock is the seed's date but the Worker's is the real one, so the
+  // current week (Mon 19 Oct) is "past" to the Worker: its answer is given what only the live week has (what is
+  // waiting) and, as the Sunday evening look back would, Claude's paragraph.
+  {
+    name: "week",
+    path: "/week/2026-10-19",
+    fullPage: true,
+    prepare: async (page) => {
+      await withWeekMock(page, { waiting: true, note: true });
+    },
+    cleanup: async (page) => {
+      await page.unroute(weekApi);
+    },
+  },
+  { name: "week-last", path: "/week/2026-10-12", fullPage: true },
+  {
+    name: "week-empty",
+    path: "/week/2026-01-05",
+    fullPage: true,
+    // The empty state fades in: finish it by hand.
+    beforeShot: async (page) => {
+      await page.getByRole("heading", { level: 2, name: "Not a strand this week" }).waitFor();
+      await page.evaluate(() => {
+        for (const a of document.getAnimations()) a.finish();
+      });
+    },
+  },
   {
     // Further back: a month that sums itself up, grouped by week.
     name: "journal-months",
@@ -1550,6 +1644,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  // An idea with someone named: the quiet "for the kitchen" line, no chip.
+  { name: "idea-for", path: "/ideas/5eed0000-0000-4000-8000-000000000003" },
   // The same idea in full: its note's link as a card under it.
   {
     name: "idea-links",
@@ -1772,6 +1868,61 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
+  // Read the label (decision 0031): the way in, in Add a spool ...
+  {
+    name: "spool-add-label",
+    path: "/pantry",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Add (a )?spool/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog", { name: "New spool" });
+      await dialog.getByText(/Claude fills in what the label says/).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  // ... while Claude reads it (the stand-in takes ten seconds for a "slow" one) ...
+  {
+    name: "spool-label-reading",
+    path: "/pantry",
+    prepare: async (page) => {
+      await labelSpool(page, "Slow shipping, arrived last week", "jade");
+      await page.getByText("Reading the label…").first().waitFor({ timeout: 8_000 });
+    },
+    cleanup: removeLabelSpools,
+  },
+  // ... the spool it filled, with "from the label" on what it read ...
+  {
+    name: "spool-label-filled",
+    path: "/pantry",
+    fullPage: true,
+    prepare: async (page) => {
+      await labelSpool(page, "Arrived last week", "jade");
+      await page
+        .getByRole("textbox", { name: "Brand" })
+        .and(page.locator("[value='Bambu Lab']"))
+        .waitFor({ timeout: 30_000 });
+    },
+    cleanup: removeLabelSpools,
+  },
+  // ... and a photo with two labels: the list to confirm.
+  {
+    name: "spool-label-several",
+    path: "/pantry",
+    prepare: async (page) => {
+      await labelSpool(page, "Two in one photo", "two");
+      await page.getByRole("dialog", { name: "2 spools on this label" }).waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeLabelSpools(page);
+    },
+  },
   // A spool with no label photo: its hero is the disc itself (black, to check its rim in dark mode).
   { name: "spool-black", path: `/pantry/${SEED_SPOOL_IDS.black}` },
   // Counted in grams: the figure, "Weigh it", and what used it (the tugboat's attempts, a weighing).

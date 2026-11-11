@@ -9,6 +9,8 @@ import {
   summaryLine,
   weekLabel,
 } from "@shared/journal";
+import { localDay } from "@shared/today";
+import { mondayOfDay, weekRangeLabel } from "@shared/week";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -178,6 +180,9 @@ function Journal() {
   );
 }
 
+/** The Monday (workspace calendar) of the day a group starts on: its start is local time, so read the local calendar day. */
+const weekOf = (start: number | undefined) => (start === undefined ? null : mondayOfDay(localDay(start)));
+
 interface MonthProps {
   month: JournalMonth<Entry>;
   first: boolean;
@@ -217,8 +222,16 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
           line && <p className="font-display text-title text-ink-soft">{line}</p>
         )}
       </header>
-      {month.groups.map((group) => (
-        <Group key={group.key} group={group} items={items} people={people} selected={selected} refs={refs} />
+      {month.groups.map((group, index) => (
+        <Group
+          key={group.key}
+          group={group}
+          weekEnds={weekOf(group.start) !== weekOf(month.groups[index + 1]?.start)}
+          items={items}
+          people={people}
+          selected={selected}
+          refs={refs}
+        />
       ))}
     </section>
   );
@@ -226,16 +239,17 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
 
 function Group({
   group,
+  weekEnds,
   items,
   people,
   selected,
   refs,
-}: Omit<MonthProps, "month" | "first"> & { group: JournalGroup<Entry> }) {
+}: Omit<MonthProps, "month" | "first"> & { group: JournalGroup<Entry>; weekEnds: boolean }) {
   const via = useVia();
   return (
     <section aria-label={group.kind === "day" ? dayLabel(group.start) : weekLabel(group.start, group.end)}>
       {group.kind === "day" ? (
-        <h3 className="text-title text-ink mb-3.5 flex items-baseline gap-2.5 md:mb-4">
+        <h3 className="text-body text-ink mb-3 flex items-baseline gap-2.5 font-sans font-semibold md:mb-3.5">
           {dayLabel(group.start)}
           <span className="text-small text-ink-faint font-sans font-medium">{shortDate(group.start)}</span>
         </h3>
@@ -266,6 +280,15 @@ function Group({
           );
         })}
       </ol>
+      {weekEnds && (
+        <Link
+          to="/week/$monday"
+          params={{ monday: weekOf(group.start) ?? "" }}
+          className="text-small text-ink-faint hover:text-ink focus-ring touch-target relative mt-1 inline-block rounded-sm py-2"
+        >
+          The week<span className="sr-only"> of {weekRangeLabel(weekOf(group.start) ?? "")}</span>
+        </Link>
+      )}
     </section>
   );
 }

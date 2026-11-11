@@ -2,7 +2,7 @@ import type { AttemptSettings } from "@shared/attempts";
 import { notEnough, notEnoughText } from "@shared/ledger";
 import { useQuery } from "@tanstack/react-query";
 import { Caution } from "@/components/ui/Caution";
-import { spoolsQuery } from "@/lib/pantry";
+import { spoolsQuery } from "@/lib/pantry-queries";
 
 /**
  * "Sunflower yellow has about 40 g left; this plate needs 66 g." A calm heads-up beside the filaments of a

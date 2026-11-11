@@ -17,6 +17,7 @@ export const SHORTCUT_GROUPS = [
   "idea",
   "build",
   "journal",
+  "week",
   "search",
   "pantry",
   "spool",
@@ -30,6 +31,7 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
   idea: "On an idea",
   build: "On a build",
   journal: "In the journal",
+  week: "On a week",
   search: "In search",
   pantry: "In the pantry",
   spool: "On a spool",
@@ -38,7 +40,7 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
 
 /** How the overlay lays the groups out in three columns of about the same height. */
 export const SHORTCUT_COLUMNS: readonly (readonly ShortcutGroup[])[] = [
-  ["anywhere", "search"],
+  ["anywhere", "search", "week"],
   ["build", "journal", "pantry"],
   ["idea", "spool", "shopping", "palette"],
 ];
@@ -100,6 +102,9 @@ export const SHORTCUTS = define([
   { id: "journalPrevious", group: "journal", label: "Previous entry", keys: ["k"] },
   { id: "journalOpen", group: "journal", label: "Open the picked entry", keys: ["enter"] },
   { id: "journalClear", group: "journal", label: "Let go of the picked entry", keys: ["escape"] },
+
+  { id: "weekPrevious", group: "week", label: "Previous week", keys: ["arrowleft"] },
+  { id: "weekNext", group: "week", label: "Next week", keys: ["arrowright"] },
 
   { id: "searchNext", group: "search", label: "Next result", keys: ["arrowdown"] },
   { id: "searchPrevious", group: "search", label: "Previous result", keys: ["arrowup"] },

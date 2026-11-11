@@ -28,7 +28,7 @@ import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
 import { searchQuery, whatWorkedQuery } from "../routes/search.ts";
 import { credentials, signOutBody } from "../routes/session.ts";
 import { createShoppingItem, shoppingOrder, updateShoppingItem } from "../routes/shopping-items.ts";
-import { createSpool, spoolPhotoFields, updateSpool, weighBody, weightBody } from "../routes/spools.ts";
+import { createSpool, readLabelBody, spoolPhotoFields, updateSpool, weighBody, weightBody } from "../routes/spools.ts";
 import { createTag } from "../routes/tags.ts";
 import { createTask, logBody, updateTask, upkeepPhotoFields } from "../routes/upkeep.ts";
 import { createWebhook } from "../routes/webhooks.ts";
@@ -384,7 +384,13 @@ export const operations: Record<string, Operation> = {
   },
   "GET /features": {
     summary: "What this server can do beyond the basics (Claude drafts and photo reads, webhooks).",
-    response: z.object({ drafts: z.boolean(), photoReads: z.boolean(), coach: z.boolean(), webhooks: z.boolean() }),
+    response: z.object({
+      drafts: z.boolean(),
+      photoReads: z.boolean(),
+      labelReads: z.boolean(),
+      coach: z.boolean(),
+      webhooks: z.boolean(),
+    }),
   },
 
   // Items.
@@ -619,6 +625,23 @@ export const operations: Record<string, Operation> = {
     multipart: { fields: spoolPhotoFields, files: photoFiles, required: ["large", "thumb"] },
     response: one("spool", Spool),
   },
+  "POST /spools/:id/label-read": {
+    summary:
+      "Has Claude read the label in the spool's photo (people only; 404 without the key). Answers at once; the spool fills in through the change feed and `fromLabel` lists what it filled.",
+    body: readLabelBody,
+    response: one("spool", Spool),
+    errors: { 400: "invalid: there is no photo yet.", 404: notFound("spool") },
+  },
+  "POST /spools/:id/label-read/accept": {
+    summary: "Confirms the several spools a label photo showed: the first fills this spool, the rest are added.",
+    response: z.object({ spool: Spool, created: z.array(Spool) }),
+    status: 201,
+    errors: { 404: "not_found: nothing from the label is waiting." },
+  },
+  "DELETE /spools/:id/label-read": {
+    summary: "Puts away a label read that is waiting for a tap or didn't work out.",
+    response: one("spool", Spool),
+  },
   "GET /spools/:id/attempts": {
     summary: "The attempts that were printed from a spool.",
     response: any("Attempts.", { attempts: z.array(z.looseObject({})) }),
@@ -777,6 +800,12 @@ export const operations: Record<string, Operation> = {
     summary: "The year so far, worked out from attempts.",
     query: insightsQuery,
     response: any("The year.", { insights: z.looseObject({}) }),
+  },
+  "GET /weeks/:monday": {
+    summary:
+      "One week (Monday to Sunday, the workspace's time zone): its prints and how they went, builds finished, ideas, comments, filament used, what is waiting, and Claude's paragraph when there is one.",
+    response: any("The week.", { week: z.looseObject({}) }),
+    errors: { 400: "invalid: not a Monday, as YYYY-MM-DD." },
   },
   "GET /links/preview": {
     summary: "The title and site of a public web page.",

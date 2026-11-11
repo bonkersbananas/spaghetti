@@ -1,16 +1,21 @@
 import type { Spool } from "@shared/api";
+import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeLine } from "@/components/pantry/BridgeLine";
+import { LabelFacts } from "@/components/pantry/LabelFacts";
+import { LabelReadNote } from "@/components/pantry/LabelReadNote";
+import { ReadingLine } from "@/components/pantry/ReadingLine";
 import { RunningLow } from "@/components/pantry/RunningLow";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
 import { GramsHero } from "@/components/pantry/SpoolGrams";
 import { SpoolRow } from "@/components/pantry/SpoolRow";
 import { WeightPicker } from "@/components/pantry/WeightPicker";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
-import { NumberField } from "@/components/ui/Field";
+import { NumberField, TextField } from "@/components/ui/Field";
+import { FromLabel } from "@/components/ui/FromLabel";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
@@ -40,6 +45,7 @@ const sampleSpool: Spool = {
   photo: null,
   slot: "A2",
   trayUuid: null,
+  ...NO_LABEL,
   createdBy: "a",
   createdAt: Date.now(),
   updatedAt: Date.now(),
@@ -114,6 +120,62 @@ export function PantrySection() {
           <WeightPicker value={weight} onChange={setWeight} />
           <Label>Grams left, the spool page's figure</Label>
           <GramsHero spool={sampleSpool} onWeigh={() => undefined} onSetWeight={() => undefined} />
+          <Label>Read from a label: the quiet mark on a value Claude filled in, until it is touched</Label>
+          <div className="flex flex-col gap-3">
+            <TextField size="sm" label="Brand" mark={<FromLabel />} readOnly value="Bambu Lab" className="max-w-64" />
+            <LabelFacts
+              value={{
+                diameterMm: 1.75,
+                nozzleTempMin: 190,
+                nozzleTempMax: 230,
+                bedTempMin: 45,
+                bedTempMax: 65,
+                dryTempC: 55,
+                dryHours: 8,
+                productCode: "10100",
+              }}
+              onChange={() => undefined}
+              mark={() => <FromLabel />}
+            />
+          </div>
+          <Label>While it reads, when no label could be read, and when the photo has several</Label>
+          <div className="flex flex-col gap-3">
+            <ReadingLine />
+            <LabelReadNote
+              readOnly={false}
+              spool={{ ...sampleSpool, labelRead: { status: "unreadable", photoId: "p", spools: [] } }}
+            />
+            <LabelReadNote
+              readOnly={false}
+              spool={{
+                ...sampleSpool,
+                labelRead: {
+                  status: "multiple",
+                  photoId: "p",
+                  spools: [
+                    {
+                      ...emptyLabelSpool(),
+                      brand: "Bambu Lab",
+                      material: "PLA",
+                      finish: "basic",
+                      colorName: "Jade white",
+                      colorHex: WHITE,
+                      netGrams: 1000,
+                    },
+                    {
+                      ...emptyLabelSpool(),
+                      brand: "Bambu Lab",
+                      material: "PETG",
+                      finish: "HF",
+                      colorName: "Black",
+                      colorHex: BLACK,
+                      netGrams: 1000,
+                    },
+                  ],
+                },
+              }}
+            />
+          </div>
           <Label>Running low (phones say "Share list")</Label>
           <RunningLow
             low={[
@@ -136,6 +198,19 @@ export function PantrySection() {
           <Label>A spool in the pantry</Label>
           <ul className="grid grid-cols-2 gap-3">
             <SpoolCard spool={sampleSpool} draggable={false} />
+            <SpoolCard
+              spool={{
+                ...sampleSpool,
+                id: "sample-reading",
+                colorName: null,
+                colorHex: null,
+                brand: null,
+                finish: null,
+                slot: null,
+                labelRead: { status: "reading", photoId: "p", spools: [] },
+              }}
+              draggable={false}
+            />
             <SpoolCard
               spool={{
                 ...sampleSpool,

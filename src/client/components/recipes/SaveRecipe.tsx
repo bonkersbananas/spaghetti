@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { RecipeIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
-import { spoolsQuery } from "@/lib/pantry";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { sessionQuery } from "@/lib/queries";
 import { type RecipeSourceAttempt, saveRecipe } from "@/lib/recipes";
 

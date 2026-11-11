@@ -108,6 +108,10 @@ A build may be made of parts ("Hull half" ×2, "Deck" ×1); most builds have non
 
 `GET /api/insights?year=2026&tz=-60` (read scope) is the year so far, computed from attempts and not stored: `{ insights: { year, prints, outcomes, months, byMaterial, byPlate, failures, longestBuilds, made, madeTotal } }`. `year` defaults to the current one and `tz` is the viewer's zone in minutes behind UTC (`Date.getTimezoneOffset()`), so a print late on New Year's Eve lands in their year. Each failure carries `fixes`: the changes (as phrases such as "a warmer bed") made right before an attempt of the same build that worked. `longestBuilds` (builds with three or more attempts this year) each carry a `photo` and the `outcomes` of their attempts, oldest first. `made` is the builds that had an attempt that worked this year, newest first, up to 36, each with its final photo (the cover if one was picked, else the newest picture of the attempt that worked); `madeTotal` counts them all. The logic is `src/shared/insights.ts`.
 
+## The week
+
+`GET /api/weeks/2026-11-09` (read scope; the Monday as `YYYY-MM-DD`, else `400 invalid`) is one week, Monday 00:00 to the next Monday 00:00 in the workspace's time zone (Europe/Stockholm), worked out from the notebook and not stored: `{ week: { monday, sunday, timeZone, start, end, current, prints: { total, worked, partly, spaghetti, printing }, made, onTheBed, buildsFinished, ideas, comments: { total, byPerson, threads }, grams, gramsApproximate, waiting, note, empty } }`. A print belongs to the week its attempt was printed in; deleted things are left out. `made` is the week's answered prints (an attempt id, its build, `attempt` number, `outcome`, `by` person id and its final `photo`), worked first; `onTheBed` the ones with no answer yet; `grams` is the filament the finished prints said they used (null when none did). `waiting` (Up next, builds whose last print was spaghetti, spools running low, upkeep due) is there for the current week only. `note` is the paragraph Claude wrote for the week, `{ status: "done", text }`, or `{ status: "thinking", text: null }` while it is being written, else null: only for a week that is over (or on Sunday evening), once, and never without the key. Asking for such a week with no paragraph yet makes one after the response. The MCP tool is `get_week`. The logic is `src/shared/week.ts` and `src/worker/week/`.
+
 ## Up next and "for"
 
 An idea can be queued as **Up next**: `upNext` on an item is its place in the queue (1 is first) or `null`. `PATCH /items/:id { "upNext": true }` puts it at the end, `false` or `null` takes it off, a number puts it at that place (the undo of taking it off). Only ideas are queued, and a stage change to a build takes the idea off the queue. `PUT /items/up-next/order { "ids": [...] }` sets the order (those first, in that order; queued ideas not listed follow) and answers with the queue. `forWhom` ("Mila", up to 80 characters, empty clears it) is optional and searchable. All of these are `capture` scope.
@@ -149,7 +153,7 @@ Not signed in (rate limited; `429 rate_limited`):
 
 Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
 
-- `GET /api/features`: `{ drafts: boolean, photoReads: boolean, coach: boolean, webhooks: boolean }`, whether the key is set (the first three follow the one secret).
+- `GET /api/features`: `{ drafts: boolean, photoReads: boolean, coach: boolean, labelReads: boolean, webhooks: boolean }`, whether the key is set (the first four follow the one secret).
 - `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
 - `POST /api/items/:id/draft/pictures`: "Get the pictures" for a drafted idea without any (`{ draft, stored }`, `404` when there is nothing to do). The draft body may carry `sharedTitle`, the title that came with a share: the draft replaces it while the idea still has exactly that title.
 - `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
@@ -169,6 +173,17 @@ When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos
 - The bridge's frame is stored as the original in both variants (`needsResize`); it is read as it is when it is a JPEG or WebP of at most 4.8 MB and 8000 px a side (the API's limits), and not read otherwise.
 - Every read is a row in `photo_reads` with its status, `run_outcome` (`read`, `unsure`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, …) and a `detail` (model, stop reason, status, how long it took); how to read them is in [deploy.md](deploy.md).
 - Capped at 30 reads a day for the whole workspace (UTC days, rows with `ran_at`); past it the read is marked `cap` and nothing is suggested.
+
+## Reading a spool's label from a photo (people only)
+
+"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0031](decisions/0031-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
+
+- `POST /api/spools/:id/label-read` (optional body `{ placeholders: ["material", "netGrams"] }`) reads the label in the spool's current photo (`400` without one). It answers at once with the spool, `labelRead: { status: "reading" }`; the call runs after the response and the spool changes through the change feed (a `spool` update). A photo is read once; a read that found nothing or failed is tried again by asking again. `placeholders` names the starting values the label may replace; every other field with a value is left alone.
+- Spools carry `diameterMm`, `nozzleTempMin`/`nozzleTempMax`, `bedTempMin`/`bedTempMax`, `dryTempC`, `dryHours` and `productCode` (Bambu's RFID or product code as printed; not `trayUuid`), all settable with `POST` and `PATCH /api/spools`, and **`fromLabel`**: the fields Claude filled in that nobody has edited since (`brand`, `material`, `finish` (the variant), `colorName`, `colorHex`, `netGrams`, and those above). A `PATCH` or `PUT /weight` that sets a field takes it off the list.
+- Spools also carry `labelRead`: `null`, or `{ status, photoId, spools }` with `status` `reading`, `multiple` (the photo shows several labels; `spools` lists them, nothing is made yet), `unreadable`, `failed` or `cap` (nothing was filled).
+- `POST /api/spools/:id/label-read/accept` confirms `multiple`: the first label fills this spool, each other becomes a new spool with a copy of the photo; answers `201 { spool, created }` (`404` when nothing is waiting). `DELETE /api/spools/:id/label-read` puts away a waiting list or a failure line.
+- People only: no scope lists these routes, so a token, whatever its scopes, gets `403 person_only`.
+- Every read is a row in `label_reads` with its status, `run_outcome` (`read`, `unreadable`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, `bad_shape`, …) and a `detail` (model, stop reason, status, how many labels, how long it took); how to read them is in [deploy.md](deploy.md). Capped at 20 reads a day for the whole workspace (UTC days, rows with `ran_at`).
 
 ## What to try next (the failure coach, automatic)
 
@@ -196,8 +211,8 @@ The printer's maintenance list (`src/shared/upkeep.ts`, routes in `src/worker/ro
 
 The devices that get "how did it go?" push notifications. A token is refused these (`403 person_only`), reads included.
 
-- `GET /api/push` → `{ publicKey, canSend, subscriptions: [{ endpoint, alsoOthers, timeZone }] }`: the VAPID public key (null when the server has none) and this person's devices.
-- `PUT /api/push/subscription` `{ endpoint, keys: { p256dh, auth }, timeZone, alsoOthers? }` turns notifications on for a device (https endpoints only, ten devices per person); `PATCH` changes `alsoOthers` or `timeZone`; `DELETE { endpoint }` turns them off. `DELETE /api/session` also accepts `{ pushEndpoint }` and forgets that device with the session.
+- `GET /api/push` → `{ publicKey, canSend, subscriptions: [{ endpoint, alsoOthers, upkeepNudges, weekNudges, timeZone }] }`: the VAPID public key (null when the server has none) and this person's devices.
+- `PUT /api/push/subscription` `{ endpoint, keys: { p256dh, auth }, timeZone, alsoOthers? }` turns notifications on for a device (https endpoints only, ten devices per person); `PATCH` changes `alsoOthers`, `upkeepNudges`, `weekNudges` (the Sunday-evening "Your week", on by default) or `timeZone`; `DELETE { endpoint }` turns them off. `DELETE /api/session` also accepts `{ pushEndpoint }` and forgets that device with the session.
 - `POST /api/push/test { endpoint }` sends a test notification to that device (`404` unknown, `410` the push service dropped it, `502` it didn't take it, `503` no private key).
 
 A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with the person's session cookie.

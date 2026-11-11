@@ -6,6 +6,7 @@ import type { BridgeStatusData } from "../../shared/bridge.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
 import type { CoachItem } from "../../shared/coach.ts";
 import type { DraftFailure, DraftFindings, ItemDraft } from "../../shared/draft.ts";
+import type { LabelField } from "../../shared/label-read.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
@@ -436,6 +437,41 @@ export const photoReads = sqliteTable(
 export type PhotoReadRow = typeof photoReads.$inferSelect;
 
 /**
+ * Claude reading a spool's label photo (decision 0031): the job, what it found when there are several spools, and the
+ * record of the run, one row per photo. Also what the label cap counts (rows with `ranAt`). A retry reuses the row.
+ */
+export const labelReads = sqliteTable(
+  "label_reads",
+  {
+    photoId: text("photo_id").primaryKey(),
+    spoolId: text("spool_id")
+      .notNull()
+      .references(() => spools.id, { onDelete: "cascade" }),
+    /** reading: waiting or running; multiple: several labels, waiting for a tap; done: the spool was filled (or the others added); unreadable, failed, cap: nothing was filled; dismissed: the person put it away. */
+    status: text("status")
+      .$type<"reading" | "multiple" | "done" | "unreadable" | "failed" | "cap" | "dismissed">()
+      .notNull(),
+    /** The fields the person hadn't set, which the label may replace. */
+    placeholders: text("placeholders", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    /** The spools found, as JSON, when there are several. */
+    found: text("found"),
+    claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+    tries: integer("tries").notNull().default(0),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** When the call to Claude was made (what the cap counts). */
+    ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+    /** How it ended: "read", or why not (worker/label-read/claude.ts). */
+    runOutcome: text("run_outcome"),
+    /** The rest of the diagnosis as JSON: model, stop reason, HTTP status, error type, how long it took. Never the photo. */
+    detail: text("detail"),
+  },
+  (table) => [index("label_reads_spool_idx").on(table.spoolId)],
+);
+
+export type LabelReadRow = typeof labelReads.$inferSelect;
+
+/**
  * The failure coach for one attempt (decision 0027): the job, what Claude suggested for the next try and the record of
  * the run, one row per attempt (an attempt is coached once). Also what the day's cap counts (rows with `ranAt`).
  */
@@ -504,6 +540,17 @@ export const spools = sqliteTable(
     photoColor: text("photo_color"),
     /** The RFID tray UUID of a Bambu spool, as the AMS reports it, so the printer bridge finds it again. */
     trayUuid: text("tray_uuid"),
+    /** What the label says (decision 0031), or what people typed: all optional. */
+    diameterMm: real("diameter_mm"),
+    nozzleTempMin: integer("nozzle_temp_min"),
+    nozzleTempMax: integer("nozzle_temp_max"),
+    bedTempMin: integer("bed_temp_min"),
+    bedTempMax: integer("bed_temp_max"),
+    dryTempC: integer("dry_temp_c"),
+    dryHours: integer("dry_hours"),
+    productCode: text("product_code"),
+    /** The fields a label read filled in and no person has touched since. */
+    labelFields: text("label_fields", { mode: "json" }).$type<LabelField[]>().notNull().default(sql`'[]'`),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -748,9 +795,46 @@ export const pushSubscriptions = sqliteTable(
     alsoOthers: integer("also_others", { mode: "boolean" }).notNull().default(false),
     /** Also tell this device when printer upkeep is due (at most one nudge a day, shared/upkeep.ts). */
     upkeepNudges: integer("upkeep_nudges", { mode: "boolean" }).notNull().default(false),
+    /** Also send "Your week" on Sunday evening (decision 0030): on unless switched off. */
+    weekNudges: integer("week_nudges", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("push_subscriptions_user_idx").on(table.userId)],
+);
+
+/**
+ * The week's one paragraph by Claude, written once per week and kept (decision 0030). `monday` is the week's Monday
+ * as YYYY-MM-DD in the workspace's time zone.
+ */
+export const weeks = sqliteTable("weeks", {
+  monday: text("monday").primaryKey(),
+  /** thinking: claimed, being written; done: `text` is the paragraph; nothing: Claude had nothing to add; failed: the call didn't work. */
+  status: text("status").$type<"thinking" | "done" | "nothing" | "failed">().notNull(),
+  text: text("text"),
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  tries: integer("tries").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When the call to Claude was made (what the cap counts). */
+  ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+  /** "done", or why not: nothing, refusal, api_error, timeout, cap… */
+  runOutcome: text("run_outcome"),
+  /** Model, stop reason, HTTP status, error type, how long it took; never the prompt. */
+  detail: text("detail"),
+});
+
+export type WeekRow = typeof weeks.$inferSelect;
+
+/** "Your week" went to this person for this week: the once-a-week guard, claimed before sending. */
+export const weekPushes = sqliteTable(
+  "week_pushes",
+  {
+    monday: text("monday").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.monday, table.userId] })],
 );
 
 /** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */

@@ -76,7 +76,7 @@ pnpm exec wrangler secret put VAPID_PRIVATE_KEY < /tmp/vapid.key && rm /tmp/vapi
 
 The script never prints the private key and refuses to overwrite a file. The deploy token can set secrets. For local development, `pnpm vapid:generate --dev-vars` appends a fresh pair (both lines) to `.dev.vars`, which is never committed; the dev server has no service worker, so a real subscription needs `pnpm build && pnpm start`, and a browser that can reach its push service (Chrome uses Google's).
 
-The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
+The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. "Your week" ([0030](decisions/0030-the-week-is-computed-with-one-paragraph-by-claude.md)) goes out from the same cron: on Sunday between 19:00 and 22:00 Stockholm time, once per person and week, to devices with its switch on (the default); no extra trigger is needed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
 
 ## Webhooks
 
@@ -93,6 +93,8 @@ A write that records a change also starts a delivery pass (`waitUntil`), and the
 Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)) uses the `ANTHROPIC_API_KEY` secret, already set on the live Worker (`pnpm exec wrangler secret put ANTHROPIC_API_KEY`; it is kept across `pnpm ship`). Without it the feature is hidden. Locally, put `ANTHROPIC_API_KEY=sk-ant-…` in `.dev.vars` (never committed). The e2e tests and screenshots don't need a key: they point `ANTHROPIC_BASE_URL` at a stand-in server (`scripts/lib/fake-claude.ts`). The 5-minute cron also finishes drafts whose request was lost.
 
 The same key lets Claude suggest what to try after a failed print ([0027](decisions/0027-failure-coach-suggests-what-to-try-next.md)); every run is a row in `coach_runs`: `pnpm exec wrangler d1 execute spaghetti --remote --command "SELECT status, run_outcome, detail, created_at FROM coach_runs ORDER BY created_at DESC LIMIT 10"` says why an attempt got no ideas. The same key lets Claude suggest how a print went from its photo ([0023](decisions/0023-claude-reads-a-print-from-its-photo.md)). Every read is a row in `photo_reads`: `pnpm exec wrangler d1 execute spaghetti --remote --command "SELECT status, run_outcome, detail, created_at FROM photo_reads ORDER BY created_at DESC LIMIT 10"` says why a photo got no suggestion (`unsure`, `refusal`, `api_error` with its HTTP status in `detail`, `timeout`, `cap`, `too_large`).
+
+And reading a spool's label ([0031](decisions/0031-claude-reads-a-spool-label-from-its-photo.md)) is a row in `label_reads`: `SELECT status, run_outcome, detail, created_at FROM label_reads ORDER BY created_at DESC LIMIT 10` says why a label filled nothing (`unreadable`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, `bad_shape`). Its cap is 20 a day, apart from the photo reads.
 
 If a real link doesn't draft, read why from the runs (never the page's content or the key, only statuses and codes):
 

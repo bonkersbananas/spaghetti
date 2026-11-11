@@ -78,6 +78,7 @@ export {
   PaperPlaneTilt as SendIcon,
   PencilSimple as EditIcon,
   PencilSimple as RenameIcon,
+  Play as PlayIcon,
   Plus as PlusIcon,
   Printer as PrinterIcon,
   QrCode as QrIcon,
