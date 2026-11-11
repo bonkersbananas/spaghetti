@@ -1,5 +1,5 @@
 /**
- * Claude reading a spool's label from a photo and filling in what it says (docs/decisions/0029). It only fills what
+ * Claude reading a spool's label from a photo and filling in what it says (docs/decisions/0030). It only fills what
  * is empty, marks what it filled as "from the label" until a person touches the field, and keeps the photo.
  */
 

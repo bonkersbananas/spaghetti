@@ -53,11 +53,11 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 
 - [x] Agent identities and scoped tokens ("via Claude for Alex" in the journal): named agents with bearer tokens in four scopes, shown quietly as "via"; see [docs/api.md](api.md)
 - [x] MCP server on the Worker: search, what worked, a build's story, capture idea, start, log and finish attempt, spools and slots; see [docs/mcp.md](mcp.md) and [the decision](decisions/0014-mcp-hand-written-stateless.md)
-- [ ] OAuth for the MCP server, so clients that insist on it can connect (tokens work today)
+- [x] OAuth for the MCP server, so Claude's apps (claude.ai connectors, the iPhone app) connect with a sign-in; typed-in tokens still work (decision 0029, [docs/mcp.md](mcp.md))
 - [x] OpenAPI from the zod schemas: `GET /api/openapi.json`, per caller's scopes, with a test that every route is described (a build's whole story as markdown: `GET /api/builds/:id/story.md`)
 - [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
 - [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), idea scout, weekly digest
-  - [x] Label photo to spool fields: "Read the label" in Add a spool and on the spool page ([0029](decisions/0029-claude-reads-a-spool-label-from-its-photo.md))
+  - [x] Label photo to spool fields: "Read the label" in Add a spool and on the spool page ([0030](decisions/0030-claude-reads-a-spool-label-from-its-photo.md))
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
 ## Deploy

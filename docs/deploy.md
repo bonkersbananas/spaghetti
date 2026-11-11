@@ -94,7 +94,7 @@ Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-fr
 
 The same key lets Claude suggest what to try after a failed print ([0027](decisions/0027-failure-coach-suggests-what-to-try-next.md)); every run is a row in `coach_runs`: `pnpm exec wrangler d1 execute spaghetti --remote --command "SELECT status, run_outcome, detail, created_at FROM coach_runs ORDER BY created_at DESC LIMIT 10"` says why an attempt got no ideas. The same key lets Claude suggest how a print went from its photo ([0023](decisions/0023-claude-reads-a-print-from-its-photo.md)). Every read is a row in `photo_reads`: `pnpm exec wrangler d1 execute spaghetti --remote --command "SELECT status, run_outcome, detail, created_at FROM photo_reads ORDER BY created_at DESC LIMIT 10"` says why a photo got no suggestion (`unsure`, `refusal`, `api_error` with its HTTP status in `detail`, `timeout`, `cap`, `too_large`).
 
-And reading a spool's label ([0029](decisions/0029-claude-reads-a-spool-label-from-its-photo.md)) is a row in `label_reads`: `SELECT status, run_outcome, detail, created_at FROM label_reads ORDER BY created_at DESC LIMIT 10` says why a label filled nothing (`unreadable`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, `bad_shape`). Its cap is 20 a day, apart from the photo reads.
+And reading a spool's label ([0030](decisions/0030-claude-reads-a-spool-label-from-its-photo.md)) is a row in `label_reads`: `SELECT status, run_outcome, detail, created_at FROM label_reads ORDER BY created_at DESC LIMIT 10` says why a label filled nothing (`unreadable`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, `bad_shape`). Its cap is 20 a day, apart from the photo reads.
 
 If a real link doesn't draft, read why from the runs (never the page's content or the key, only statuses and codes):
 
@@ -107,5 +107,5 @@ pnpm exec wrangler d1 execute spaghetti --remote --command \
 
 ## Where agents and the bridge point
 
-- MCP server: `https://spaghetti.day/mcp` ([mcp.md](mcp.md)).
+- MCP server: `https://spaghetti.day/mcp` ([mcp.md](mcp.md)). Claude's apps add it as a custom connector and sign in with OAuth: `/oauth/*`, `/.well-known/oauth-*` and the consent page `/authorize` are on the same domain. That needs no new binding or secret: `pnpm ship` applies migration `0028_oauth` and deploys, and `run_worker_first` in wrangler.jsonc sends the OAuth paths to the Worker. After a ship, check `curl https://spaghetti.day/.well-known/oauth-authorization-server` and that `curl -i -X POST https://spaghetti.day/mcp` answers 401 with a `resource_metadata` challenge.
 - API base for tokens and the printer bridge (`BRIDGE_APP_URL`): `https://spaghetti.day` ([api.md](api.md), [bridge.md](bridge.md)). Make a token with `pnpm agent:add --remote ...` or in the app (Account menu, Agents).

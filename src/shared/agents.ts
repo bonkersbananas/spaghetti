@@ -34,6 +34,18 @@ export interface AgentTokenInfo {
   revokedAt: number | null;
 }
 
+/** An app connected by OAuth (Claude's connector): one connection, not a list of tokens. */
+export interface AgentConnection {
+  /** What the app called itself when it registered: "Claude". */
+  app: string;
+  scopes: AgentScope[];
+  /** False once it was disconnected (it stays so "via Claude" in the journal still has a name). */
+  connected: boolean;
+  connectedAt: number;
+  /** Epoch ms of the last request with one of its tokens; null if it never made one. */
+  lastUsedAt: number | null;
+}
+
 export interface AgentInfo {
   id: string;
   name: string;
@@ -42,6 +54,8 @@ export interface AgentInfo {
   createdAt: number;
   /** Only the owner sees their agents' tokens; for anyone else this is empty. */
   tokens: AgentTokenInfo[];
+  /** Set for an agent connected by OAuth; its short-lived tokens are not listed, it is disconnected as a whole. */
+  connection: AgentConnection | null;
 }
 
 export interface AgentsResponse {
@@ -55,12 +69,16 @@ export interface NewTokenResponse {
   token: string;
 }
 
+/** Prefixes of the OAuth credentials: access tokens are `spg_` like any token (so they work wherever one does). */
+export const REFRESH_PREFIX = "spr_";
+export const CODE_PREFIX = "spc_";
+
 /** A new token: random bytes from WebCrypto, base64url, after the prefix. */
-export function generateToken(): string {
+export function generateToken(prefix: string = TOKEN_PREFIX): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return TOKEN_PREFIX + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return prefix + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /** What is stored of a token: its SHA-256, hex. */

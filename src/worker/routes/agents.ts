@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -13,9 +13,10 @@ import {
 } from "../../shared/agents.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { type Agent, type AgentToken, agents, agentTokens } from "../db/schema.ts";
+import { type Agent, type AgentToken, agents, agentTokens, oauthClients, oauthRefreshTokens } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { disconnectAgent } from "../oauth/grants.ts";
 
 const scopes = z
   .array(z.enum(AGENT_SCOPES))
@@ -41,22 +42,58 @@ const toToken = (row: AgentToken): AgentTokenInfo => ({
   revokedAt: row.revokedAt?.getTime() ?? null,
 });
 
-const toAgent = (agent: Agent, tokens: AgentToken[]): AgentInfo => ({
-  id: agent.id,
-  name: agent.name,
-  ownerId: agent.ownerId,
-  createdAt: agent.createdAt.getTime(),
-  tokens: tokens.filter((token) => token.agentId === agent.id).map(toToken),
-});
+/** What an OAuth agent's rows add up to: when it last worked, what it may do, and whether it is still connected. */
+interface Oauth {
+  apps: Map<string, string>;
+  refresh: Array<{ agentId: string; scopes: AgentToken["scopes"] }>;
+}
+
+const toAgent = (agent: Agent, tokens: AgentToken[], oauth: Oauth, owned: boolean): AgentInfo => {
+  const own = tokens.filter((token) => token.agentId === agent.id);
+  const app = agent.oauthClientId ? oauth.apps.get(agent.oauthClientId) : undefined;
+  if (!agent.oauthClientId) {
+    return {
+      id: agent.id,
+      name: agent.name,
+      ownerId: agent.ownerId,
+      createdAt: agent.createdAt.getTime(),
+      tokens: own.map(toToken),
+      connection: null,
+    };
+  }
+  const refresh = oauth.refresh.find((row) => row.agentId === agent.id);
+  const lastUsed = own.reduce((latest, token) => Math.max(latest, token.lastUsedAt?.getTime() ?? 0), 0);
+  return {
+    id: agent.id,
+    name: agent.name,
+    ownerId: agent.ownerId,
+    createdAt: agent.createdAt.getTime(),
+    // A connection's hourly tokens would only be noise: the app is one row, disconnected as a whole.
+    tokens: [],
+    connection: {
+      app: app ?? agent.name,
+      scopes: owned && refresh ? refresh.scopes : [],
+      connected: Boolean(refresh),
+      connectedAt: agent.createdAt.getTime(),
+      lastUsedAt: owned && lastUsed ? lastUsed : null,
+    },
+  };
+};
 
 /** Everyone's agents (so a card can say "via Claude for Alex"); tokens only for the person they belong to. */
 async function loadAgents(db: Db, viewerId: string): Promise<AgentInfo[]> {
-  const [rows, tokenRows] = await Promise.all([
+  const [rows, tokenRows, clients, refresh] = await Promise.all([
     db.select().from(agents).orderBy(asc(agents.createdAt)),
     db.select().from(agentTokens).orderBy(asc(agentTokens.createdAt)),
+    db.select({ id: oauthClients.id, name: oauthClients.name }).from(oauthClients),
+    db
+      .select({ agentId: oauthRefreshTokens.agentId, scopes: oauthRefreshTokens.scopes })
+      .from(oauthRefreshTokens)
+      .where(gt(oauthRefreshTokens.expiresAt, new Date())),
   ]);
+  const oauth: Oauth = { apps: new Map(clients.map((client) => [client.id, client.name])), refresh };
   const mine = new Set(rows.filter((agent) => agent.ownerId === viewerId).map((agent) => agent.id));
-  return rows.map((agent) => toAgent(agent, mine.has(agent.id) ? tokenRows : []));
+  return rows.map((agent) => toAgent(agent, mine.has(agent.id) ? tokenRows : [], oauth, mine.has(agent.id)));
 }
 
 /**
@@ -95,6 +132,9 @@ export const agentRoutes = new Hono<AppEnv>()
       .where(and(eq(agents.id, agentId), eq(agents.ownerId, c.var.user.id)))
       .get();
     if (!agent) return apiError(c, 404, "not_found", notFound);
+    if (agent.oauthClientId) {
+      return apiError(c, 400, "connected_app", "That's an app connected by sign-in: it makes its own tokens.");
+    }
     const issued = await issue(agentId, parsed.data.scopes);
     await db.batch([
       db.insert(agentTokens).values(issued.row),
@@ -130,6 +170,23 @@ export const agentRoutes = new Hono<AppEnv>()
         .get();
       if (!exists) return apiError(c, 404, "not_found", "That token isn't here.");
     }
+    return c.body(null, 204);
+  })
+
+  /** Disconnects an app that signed in with OAuth: every token it holds, refresh tokens included, ends at once. */
+  .delete("/:id/connection", async (c) => {
+    const db = c.var.db;
+    const agentId = c.req.param("id");
+    const agent = await db
+      .select()
+      .from(agents)
+      .where(and(eq(agents.id, agentId), eq(agents.ownerId, c.var.user.id)))
+      .get();
+    if (!agent?.oauthClientId) return apiError(c, 404, "not_found", notFound);
+    await db.batch([
+      ...disconnectAgent(db, agentId),
+      recordChange(db, { entity: "agent", id: agentId, action: "updated", actor: c.var.actor }),
+    ]);
     return c.body(null, 204);
   });
 

@@ -44,7 +44,9 @@ export const REVOKE_UNDO_MS = 6000;
 
 interface PendingRevoke {
   agentId: string;
+  /** The token's id; for an app connected by OAuth, the agent's own id, and the whole connection ends. */
   tokenId: string;
+  connection?: boolean;
   timer: ReturnType<typeof setTimeout>;
 }
 const pending = new Map<string, PendingRevoke>();
@@ -68,7 +70,10 @@ export function usePendingRevokes(): ReadonlySet<string> {
 }
 
 function send(entry: PendingRevoke, options: RequestInit = {}) {
-  return api(`/agents/${entry.agentId}/tokens/${entry.tokenId}`, { method: "DELETE", ...options });
+  const path = entry.connection
+    ? `/agents/${entry.agentId}/connection`
+    : `/agents/${entry.agentId}/tokens/${entry.tokenId}`;
+  return api(path, { method: "DELETE", ...options });
 }
 
 /** Someone leaving the page during the Undo meant it: send what is waiting. */
@@ -107,6 +112,38 @@ export function revokeToken(queryClient: QueryClient, agent: AgentInfo, token: A
     onUndo: () => {
       clearTimeout(entry.timer);
       pending.delete(token.id);
+      publish();
+    },
+  });
+}
+
+/** Disconnects an app that signed in with OAuth, the same way: it reads as disconnected now and ends after the Undo. */
+export function disconnectApp(queryClient: QueryClient, agent: AgentInfo) {
+  if (!canEdit() || pending.has(agent.id)) return;
+  const entry: PendingRevoke = {
+    agentId: agent.id,
+    tokenId: agent.id,
+    connection: true,
+    timer: setTimeout(async () => {
+      try {
+        await send(entry);
+      } catch {
+        toast.error("Couldn't disconnect that app", "It is still connected. Try again in a moment.");
+      } finally {
+        pending.delete(agent.id);
+        publish();
+        void queryClient.invalidateQueries({ queryKey: agentsQuery.queryKey });
+      }
+    }, REVOKE_UNDO_MS),
+  };
+  pending.set(agent.id, entry);
+  publish();
+  toast.undo("App disconnected", {
+    description: agent.name,
+    duration: REVOKE_UNDO_MS,
+    onUndo: () => {
+      clearTimeout(entry.timer);
+      pending.delete(agent.id);
       publish();
     },
   });

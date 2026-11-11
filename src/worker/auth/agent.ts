@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
 import type { Context } from "hono";
 import { type AgentScope, hashToken, TOKEN_PREFIX } from "../../shared/agents.ts";
 import type { Db } from "../db/index.ts";
@@ -32,7 +32,14 @@ export async function readAgentToken(db: Db, token: string): Promise<AgentAuth |
     .from(agentTokens)
     .innerJoin(agents, eq(agents.id, agentTokens.agentId))
     .innerJoin(users, eq(users.id, agents.ownerId))
-    .where(and(eq(agentTokens.hash, await hashToken(token)), isNull(agentTokens.revokedAt)))
+    .where(
+      and(
+        eq(agentTokens.hash, await hashToken(token)),
+        isNull(agentTokens.revokedAt),
+        // An access token from the OAuth flow lapses; a typed-in token has no end.
+        or(isNull(agentTokens.expiresAt), gt(agentTokens.expiresAt, new Date())),
+      ),
+    )
     .get();
   if (!row) return null;
   const now = Date.now();

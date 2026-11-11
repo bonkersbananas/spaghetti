@@ -4,10 +4,10 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-11-01",
   // The client is built by Vite and served as static assets. Client routes
-  // fall back to index.html; /api/* and /mcp always reach the Worker first.
+  // fall back to index.html; /api/*, /mcp and the OAuth endpoints (/oauth/*, /.well-known/*) always reach the Worker first.
   "assets": {
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp"]
+    "run_worker_first": ["/api/*", "/mcp", "/oauth/*", "/.well-known/*"]
   },
   "d1_databases": [
     {

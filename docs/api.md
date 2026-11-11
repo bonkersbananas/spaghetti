@@ -20,6 +20,7 @@ Authorization: Bearer spg_…
 - Signed-out or no credentials: `401 signed_out`.
 - A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), change a password (`PUT /api/account/password`), manage passkeys, sign-in links, invites or devices, or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
 - `last_used` on a token moves at most every 5 minutes.
+- Apps that sign in with OAuth ([mcp.md](mcp.md)) get tokens of the same kind (`spg_…`, scopes as approved) that last an hour, renewed with a refresh token; revoking is Disconnect on the Agents page (`DELETE /api/agents/:id/connection`, which also ends the refresh tokens). Their tokens are not listed: such an agent has `connection` instead of `tokens`, and `POST /api/agents/:id/tokens` refuses it (`400 connected_app`).
 
 ## Scopes
 
@@ -110,7 +111,7 @@ Each person has a ranked wishlist of ideas, shared with the others who sign in u
 - `GET /api/links/preview?url=…`: the title and site name of a link in a note (`{ url, title, site }`, the last two nullable), for the link cards. People only. https only, no IP addresses, `localhost`, one-word, `.local` or `.internal` hosts, credentials or ports; the name is resolved through Cloudflare's DNS-over-HTTPS first and refused if it points anywhere private; 3 seconds, 256 KB, `text/html`, three redirects at most with each hop checked the same way; only `og:title`, `<title>` and `og:site_name` are read. Cached in `link_previews` for 30 days, failures for one day.
 
 - `GET /api/builds/:id/story.md`: a build's (or idea's) whole story as one markdown document, with `read`. Works for any item id.
-- `/mcp`: the MCP server, with the same tokens; see [mcp.md](mcp.md). It calls this API as the agent, so everything above applies to it.
+- `/mcp`: the MCP server, with the same tokens or the OAuth flow Claude's apps use; see [mcp.md](mcp.md). OAuth's own endpoints (`/.well-known/oauth-*`, `/oauth/register`, `/oauth/token`, `/oauth/revoke`) are outside `/api` and described there; what is under `/api` is the consent screen's `GET /api/oauth/request` and `POST /api/oauth/decision` and `DELETE /api/agents/:id/connection` (disconnect an app), all person-only. It calls this API as the agent, so everything above applies to it.
 
 ## Changing your own password
 
@@ -160,7 +161,7 @@ When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos
 
 ## Reading a spool's label from a photo (people only)
 
-"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0029](decisions/0029-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
+"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0030](decisions/0030-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
 
 - `POST /api/spools/:id/label-read` (optional body `{ placeholders: ["material", "netGrams"] }`) reads the label in the spool's current photo (`400` without one). It answers at once with the spool, `labelRead: { status: "reading" }`; the call runs after the response and the spool changes through the change feed (a `spool` update). A photo is read once; a read that found nothing or failed is tried again by asking again. `placeholders` names the starting values the label may replace; every other field with a value is left alone.
 - Spools carry `diameterMm`, `nozzleTempMin`/`nozzleTempMax`, `bedTempMin`/`bedTempMax`, `dryTempC`, `dryHours` and `productCode` (Bambu's RFID or product code as printed; not `trayUuid`), all settable with `POST` and `PATCH /api/spools`, and **`fromLabel`**: the fields Claude filled in that nobody has edited since (`brand`, `material`, `finish` (the variant), `colorName`, `colorHex`, `netGrams`, and those above). A `PATCH` or `PUT /weight` that sets a field takes it off the list.
