@@ -539,10 +539,10 @@ export class PrintScene {
     const fov = (this.camera.fov * Math.PI) / 180;
     const aspect = this.width / this.height;
     const fitFov = aspect < 1 ? 2 * Math.atan(Math.tan(fov / 2) * aspect) : fov;
-    const distance = Math.max(90, (radius * 1.5) / Math.sin(fitFov / 2));
+    const distance = Math.max(50, (radius * (aspect > 1 ? 0.8 : 0.98)) / Math.sin(fitFov / 2));
     // three's frame: x → x, z → −y, y → z.
     this.controls.target.set(cx, cz, -cy);
-    this.camera.position.set(cx + distance * 0.42, cz + distance * 0.5, -cy + distance * 0.76);
+    this.camera.position.set(cx + distance * 0.4, cz + distance * 0.36, -cy + distance * 0.84);
     this.controls.maxDistance = distance * 5;
     this.controls.update();
     this.dirty();
