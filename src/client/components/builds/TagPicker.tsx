@@ -2,6 +2,7 @@ import { type TagKind, tagLabel } from "@shared/attempts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { collapseChips, MoreChip, ToggleChip } from "@/components/ui/Chip";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { PlusIcon } from "@/components/ui/icons";
 import { addTag, useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -64,13 +65,14 @@ export function TagPicker({
   return (
     <fieldset className={cn("flex flex-col gap-2.5", className)}>
       <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">{label}</legend>
-      {showing.length > 0 && (
-        <p className="text-small text-ink-faint -mt-1 px-0.5">
-          {suggestedBy === "claude"
-            ? "Claude's guess from the photo. Tap to take any off."
-            : "The printer suggested the marked one. Tap it to take it off."}
-        </p>
-      )}
+      {showing.length > 0 &&
+        (suggestedBy === "claude" ? (
+          <ClaudeLine className="-mt-1 px-0.5">Claude's guess from the photo. Tap to take any off.</ClaudeLine>
+        ) : (
+          <p className="text-small text-ink-faint -mt-1 px-0.5">
+            The printer suggested the marked one. Tap it to take it off.
+          </p>
+        ))}
       <div className="flex flex-wrap gap-2">
         {[...shown.map((option) => option.slug), ...unknown].map((slug) => {
           const selected = value.includes(slug);
