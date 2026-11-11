@@ -1,16 +1,6 @@
-import type {
-  PrinterResponse,
-  Spool,
-  SpoolAttemptsResponse,
-  SpoolResponse,
-  SpoolsResponse,
-  SpoolUsageResponse,
-  UpdatePrinterRequest,
-  UpdateSpoolRequest,
-} from "@shared/api";
+import type { PrinterResponse, Spool, SpoolResponse, UpdatePrinterRequest, UpdateSpoolRequest } from "@shared/api";
 import { gramsFromScale, levelOf } from "@shared/ledger";
-import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
-import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
 import { processPhoto } from "./images";
