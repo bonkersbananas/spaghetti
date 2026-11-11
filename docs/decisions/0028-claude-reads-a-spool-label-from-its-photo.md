@@ -1,4 +1,4 @@
-# 0027. Claude reads a spool's label from its photo, and only fills what is empty
+# 0028. Claude reads a spool's label from its photo, and only fills what is empty
 
 Status: Accepted
 

@@ -132,7 +132,7 @@ Not signed in (rate limited; `429 rate_limited`):
 
 Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
 
-- `GET /api/features`: `{ drafts: boolean, photoReads: boolean, labelReads: boolean, webhooks: boolean }`; the first three say whether the key is set (they follow the one secret).
+- `GET /api/features`: `{ drafts: boolean, photoReads: boolean, coach: boolean, labelReads: boolean, webhooks: boolean }`, whether the key is set (the first four follow the one secret).
 - `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
 - `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
 - Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
@@ -154,7 +154,7 @@ When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos
 
 ## Reading a spool's label from a photo (people only)
 
-"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0027](decisions/0027-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
+"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0028](decisions/0028-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
 
 - `POST /api/spools/:id/label-read` (optional body `{ placeholders: ["material", "netGrams"] }`) reads the label in the spool's current photo (`400` without one). It answers at once with the spool, `labelRead: { status: "reading" }`; the call runs after the response and the spool changes through the change feed (a `spool` update). A photo is read once; a read that found nothing or failed is tried again by asking again. `placeholders` names the starting values the label may replace; every other field with a value is left alone.
 - Spools carry `diameterMm`, `nozzleTempMin`/`nozzleTempMax`, `bedTempMin`/`bedTempMax`, `dryTempC`, `dryHours` and `productCode` (Bambu's RFID or product code as printed; not `trayUuid`), all settable with `POST` and `PATCH /api/spools`, and **`fromLabel`**: the fields Claude filled in that nobody has edited since (`brand`, `material`, `finish` (the variant), `colorName`, `colorHex`, `netGrams`, and those above). A `PATCH` or `PUT /weight` that sets a field takes it off the list.
@@ -162,6 +162,16 @@ When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos
 - `POST /api/spools/:id/label-read/accept` confirms `multiple`: the first label fills this spool, each other becomes a new spool with a copy of the photo; answers `201 { spool, created }` (`404` when nothing is waiting). `DELETE /api/spools/:id/label-read` puts away a waiting list or a failure line.
 - People only: no scope lists these routes, so a token, whatever its scopes, gets `403 person_only`.
 - Every read is a row in `label_reads` with its status, `run_outcome` (`read`, `unreadable`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, `bad_shape`, …) and a `detail` (model, stop reason, status, how many labels, how long it took); how to read them is in [deploy.md](deploy.md). Capped at 20 reads a day for the whole workspace (UTC days, rows with `ran_at`).
+
+## What to try next (the failure coach, automatic)
+
+When an attempt is answered Partly or Spaghetti (`PATCH /api/attempts/:id`, `POST /api/attempts/:id/finish`, or logged with that outcome), Claude *suggests* what to change for the next try ([decision 0027](decisions/0027-failure-coach-suggests-what-to-try-next.md)). It needs `ANTHROPIC_API_KEY`; without it nothing happens and `features.coach` is `false`.
+
+- Attempts carry `coach`: `null`, or `{ status: "thinking", items: [] }` while Claude works, or `{ status: "ready", items }` where each item is `{ id, title, why, settings, note, dismissed }`: a short title ("Add a brim"), one line of why, the settings it would change (a partial `settings` object using only fields the attempt sheet has, within what the X2D can do, or `null`), a line for the next attempt's note for what settings can't say (or `null`), and whether someone dismissed it. At most three. It is only ever a suggestion: the attempt's own `settings`, `note` and tags are never written by it. Nothing useful to say, a refusal and a failed call leave `coach` `null`; it is also `null` once the attempt is not Partly or Spaghetti any more. A change to it is an `attempt` update in the change feed.
+- `PUT /api/attempts/:id/coach/:suggestionId` with `{ dismissed: boolean }` dismisses an item or takes the dismissal back (people only: a token gets `403 person_only`); answers `{ attempt }`.
+- Who starts it: a signed-in person, or a token with both the `attempts` and `printer` scopes (the bridge). Any other agent's answer is not coached. An attempt is coached once.
+- The suggestions are in a build's `story.md` (`Claude suggests for the next try (only suggestions, nothing was changed): …`).
+- Every run is a row in `coach_runs` with `status`, `run_outcome` (`done`, `nothing`, `refusal`, `api_error`, `timeout`, `cap`, …) and a `detail`. Capped at 20 a day for the whole workspace (UTC days, rows with `ran_at`); past it the run is marked `cap`.
 
 ## Upkeep and drying
 

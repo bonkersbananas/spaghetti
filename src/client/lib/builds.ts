@@ -300,7 +300,9 @@ export async function saveAttemptChanges(
   patchCachedItem(queryClient, itemId, (item) => ({
     ...item,
     attempts: item.attempts.map((attempt) =>
-      attempt.id === attemptId ? { ...attempt, finishedAt: saved.finishedAt, updatedAt: saved.updatedAt } : attempt,
+      attempt.id === attemptId
+        ? { ...attempt, finishedAt: saved.finishedAt, updatedAt: saved.updatedAt, coach: saved.coach }
+        : attempt,
     ),
   }));
 }
