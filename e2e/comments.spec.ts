@@ -33,11 +33,13 @@ async function samSession(page: Page) {
   return {
     context,
     say: async (itemId: string, body: string) => {
+      const id = crypto.randomUUID();
       const result = await samPage.request.post(`/api/items/${itemId}/comments`, {
         headers: { Origin: origin(page) },
-        data: { id: crypto.randomUUID(), body },
+        data: { id, body },
       });
       expect(result.ok()).toBe(true);
+      return id;
     },
   };
 }
@@ -259,6 +261,36 @@ test("a message that ends with a link shows a card in place of the address, and 
 });
 
 for (const theme of ["light", "dark"] as const) {
+  test(`search finds a build by what Sam said and opens the thread at that comment, ${theme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    const id = await newIdea(page, "Lamp base", "building");
+    const sams = await samSession(page);
+    const commentId = await sams.say(id, "Try the chunkier version in cobalt PETG next time.");
+    await page.goto("/search");
+    await page.getByRole("searchbox", { name: "Search" }).fill("chunkier");
+    const result = page.getByRole("link", { name: /Lamp base/ });
+    await expect(result).toBeVisible();
+    await expect(result).toContainText("Sam");
+    await expect(result.locator("mark")).toHaveText("chunkier");
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+      .analyze();
+    expect(violations.map((violation) => `search: ${violation.id}`)).toEqual([]);
+
+    await result.click();
+    await expect(page).toHaveURL(new RegExp(`comment=${commentId}`));
+    const bubble = page.locator(`#comment-${commentId} > div`).first();
+    await expect(bubble).toBeVisible();
+    await expect(bubble).toHaveClass(/ring-semolina/);
+    // The thread is in view, and the light goes out again.
+    await expect(bubble).toBeInViewport();
+    const lit = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+      .analyze();
+    expect(lit.violations.map((violation) => `thread: ${violation.id}`)).toEqual([]);
+    await expect(bubble).not.toHaveClass(/ring-semolina/, { timeout: 8000 });
+  });
+
   test(`axe: idea and build with a thread, the sheet and the menu, ${theme}`, async ({ page, isMobile }) => {
     await page.emulateMedia({ colorScheme: theme });
     const idea = await newIdea(page, "Bath tugboat");
