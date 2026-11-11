@@ -135,13 +135,13 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
       {empty || !me ? (
         // Nothing said yet: one quiet line to write on, and a heading only screen readers see.
         <section aria-labelledby={headingId} className="flex flex-col gap-4">
-          <SectionHeading id={headingId} size="title" className="sr-only">
+          <SectionHeading id={headingId} className="sr-only">
             Talk it over
           </SectionHeading>
           {writing}
         </section>
       ) : (
-        <Section id={headingId} title="Talk it over" size="title">
+        <Section id={headingId} title="Talk it over">
           <ol className="flex flex-col gap-3" aria-label="Comments">
             {entries.map((entry) => {
               if (entry.kind === "new") return <NewDivider key="new" />;
