@@ -6,8 +6,9 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  # Pushes to main get their own group and are never cancelled (a queued run in a shared group would be replaced): every commit on main needs a finished run for the ship.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
