@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Chip, ToggleChip } from "@/components/ui/Chip";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { Label, Panel, Section } from "./shared";
 
@@ -29,6 +30,11 @@ export function ChipSection() {
               {m}
             </ToggleChip>
           ))}
+        </div>
+        <Label>Claude's marks: one quiet line, a sparkle first</Label>
+        <div className="flex flex-col gap-2">
+          <ClaudeLine working>Looking at the photo…</ClaudeLine>
+          <ClaudeLine>Drafted by Claude from MakerWorld</ClaudeLine>
         </div>
         <Label>Toned toggle chips, for tags</Label>
         <div className="flex flex-wrap gap-2">

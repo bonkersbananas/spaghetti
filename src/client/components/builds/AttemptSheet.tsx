@@ -35,6 +35,8 @@ interface AttemptSheetProps {
  * (an existing one, autosaved, and finishing a print), `AttemptFields` (the fields
  * both share), `WhenField`, and `SheetSlicerFile` (reading a .3mf into the sheet).
  */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 export function AttemptSheet({
   item,
   attemptId,
@@ -68,7 +70,7 @@ export function AttemptSheet({
           <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
             {printing ? "Started printing " : "Printed "}
             {relativeTime(attempt.printedAt).toLowerCase()}
-            {printing && attempt.endedAt !== null && <> · {offTheBedLabel(attempt.endedAt).toLowerCase()}</>}
+            {printing && attempt.endedAt !== null && <> · {lowerFirst(offTheBedLabel(attempt.endedAt))}</>}
           </time>
         }
         headerActions={

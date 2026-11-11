@@ -2,6 +2,7 @@ import { type DraftFailure, FAILURE_LINES, type ItemDraft } from "@shared/draft"
 import { firstModelLink } from "@shared/model-links";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { ImageIcon, SparkleIcon, UndoIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { getPictures, requestDraft, siteName, undoDraft, useDraftsEnabled } from "@/lib/drafts";
@@ -31,12 +32,9 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
 
   if (draft?.status === "reading") {
     return (
-      <div className="mt-1" role="status">
-        <p className="text-small text-ink-soft flex items-center gap-2">
-          <SparkleIcon size={16} weight="fill" className="text-ink-soft sg-pulse" />
-          Reading the {siteName(draft)} page…
-        </p>
-      </div>
+      <ClaudeLine working className="mt-1">
+        Reading the {siteName(draft)} page…
+      </ClaudeLine>
     );
   }
 
@@ -67,10 +65,7 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
       <div className="mt-1 flex flex-col gap-3">
         {untouched && (
           <p className="text-small text-ink-faint flex flex-wrap items-center gap-x-2">
-            <span className="flex items-center gap-1.5">
-              <SparkleIcon size={14} weight="fill" aria-hidden className="text-ink-soft" />
-              Drafted by Claude from {siteName(draft)}
-            </span>
+            <ClaudeLine>Drafted by Claude from {siteName(draft)}</ClaudeLine>
             <Button
               variant="quiet"
               size="sm"
