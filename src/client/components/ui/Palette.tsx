@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { type ReactNode, type Ref, useEffect, useId } from "react";
+import { type ReactNode, type Ref, useEffect, useId, useState } from "react";
 import { cn } from "@/lib/cn";
 import { type Icon, SearchIcon } from "./icons";
 import { Kbd } from "./Kbd";
@@ -268,5 +268,39 @@ export function PaletteDialog({ open, onOpenChange, onClosed, children }: Palett
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** What someone typed into the shell below before the real palette arrived: the palette starts from it. */
+let earlyQuery = "";
+export const takeEarlyQuery = () => {
+  const query = earlyQuery;
+  earlyQuery = "";
+  return query;
+};
+
+/**
+ * The palette's frame while its commands are still on the way (the first ⌘K after a page load, before its code has
+ * arrived): the dialog and the search box open at once, ready to type into, with placeholder rows. What is typed is
+ * kept for the real palette.
+ */
+export function PaletteShell({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
+  const [query, setQuery] = useState("");
+  return (
+    <PaletteDialog open onOpenChange={onOpenChange}>
+      <PaletteSurface
+        query={query}
+        onQueryChange={(next) => {
+          earlyQuery = next;
+          setQuery(next);
+        }}
+        groups={[]}
+        activeId={undefined}
+        onActiveChange={() => {}}
+        onRun={() => {}}
+        pending
+        empty={{ title: "", text: "" }}
+      />
+    </PaletteDialog>
   );
 }

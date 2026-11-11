@@ -28,6 +28,7 @@ const loadPalette = () => import("@/components/shell/CommandPalette");
 const loadShortcuts = () => import("@/components/shell/ShortcutOverlay");
 // The "Captured" sheet only exists after something was shared in: its code comes then, not with every first load.
 const ShareSheet = lazy(() => import("@/components/shell/ShareSheet").then((m) => ({ default: m.ShareSheet })));
+const PaletteShell = lazy(() => import("@/components/ui/Palette").then((m) => ({ default: m.PaletteShell })));
 const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })));
 const ShortcutOverlay = lazy(() => loadShortcuts().then((m) => ({ default: m.ShortcutOverlay })));
 
@@ -151,7 +152,7 @@ function Shell() {
  * mounts the first time it is asked for and stays (for its exit animation).
  */
 function DesktopOverlays() {
-  const { paletteOpen, helpOpen } = usePalette();
+  const { paletteOpen, helpOpen, setPaletteOpen } = usePalette();
   const [palette, setPalette] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   if (paletteOpen && !palette) setPalette(true);
@@ -160,17 +161,39 @@ function DesktopOverlays() {
     const warm = () => {
       void loadPalette();
       void loadShortcuts();
+      void import("@/components/ui/Palette");
     };
-    if (!("requestIdleCallback" in window)) {
-      const timer = setTimeout(warm, 1500);
-      return () => clearTimeout(timer);
-    }
-    const id = requestIdleCallback(warm, { timeout: 4000 });
-    return () => cancelIdleCallback(id);
+    // The first key press or touch after a page load starts the fetch at once, rather than waiting for an idle moment
+    // that a busy first second may not give (the Ctrl of ⌘K gets a head start on its K).
+    const events = ["keydown", "pointerdown"] as const;
+    const onFirst = () => {
+      for (const type of events) window.removeEventListener(type, onFirst, true);
+      warm();
+    };
+    for (const type of events) window.addEventListener(type, onFirst, { capture: true, passive: true });
+    // And a second after the first screen at the latest: a busy first second may never give the browser an idle moment.
+    const timer = setTimeout(warm, 1000);
+    const id = "requestIdleCallback" in window ? requestIdleCallback(warm, { timeout: 4000 }) : undefined;
+    return () => {
+      clearTimeout(timer);
+      if (id !== undefined) cancelIdleCallback(id);
+      for (const type of events) window.removeEventListener(type, onFirst, true);
+    };
   }, []);
   return (
     <Suspense fallback={null}>
-      {palette && <CommandPalette />}
+      {palette && (
+        // The frame and search box draw as soon as ⌘K is pressed; the commands fill in when their code arrives.
+        <Suspense
+          fallback={
+            <Suspense fallback={null}>
+              <PaletteShell onOpenChange={setPaletteOpen} />
+            </Suspense>
+          }
+        >
+          <CommandPalette />
+        </Suspense>
+      )}
       {shortcuts && <ShortcutOverlay />}
     </Suspense>
   );
