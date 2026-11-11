@@ -55,7 +55,7 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
  * Reading is `read`, except the session and agent management, which tokens never see, and link
  * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
  */
-const PERSON_ONLY_READS = /^\/(session|agents|links|push|features|deleted|comments\/unread)(\/|$)/;
+const PERSON_ONLY_READS = /^\/(session|agents|webhooks|links|push|features|deleted|comments\/unread)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {

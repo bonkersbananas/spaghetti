@@ -4,6 +4,7 @@ import { mcpRoutes } from "./mcp/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
+import { pruneDeliveries, runWebhooks } from "./webhooks/deliver.ts";
 
 const DAILY = "0 4 * * *";
 
@@ -35,8 +36,16 @@ export default {
    * the bin of things deleted a month ago.
    */
   async scheduled(controller, env, ctx) {
-    if (controller.cron === DAILY) ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
-    else {
+    if (controller.cron === DAILY) {
+      ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
+      ctx.waitUntil(pruneDeliveries(env).catch((error) => console.error("webhook tidy failed", error)));
+    } else {
+      // Webhooks: new changes become deliveries, and what is due (first tries and retries) is sent.
+      ctx.waitUntil(
+        runWebhooks(env)
+          .then((result) => result.made + result.sent + result.failed && console.log("webhooks", result))
+          .catch((error) => console.error("webhooks failed", error)),
+      );
       ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
       // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
       ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));

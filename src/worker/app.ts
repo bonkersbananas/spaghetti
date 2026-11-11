@@ -33,6 +33,7 @@ import { sessionRoutes } from "./routes/session.ts";
 import { spoolRoutes } from "./routes/spools.ts";
 import { storyRoutes } from "./routes/story.ts";
 import { tagRoutes } from "./routes/tags.ts";
+import { webhookRoutes } from "./routes/webhooks.ts";
 
 /**
  * Everything under /api except signing in needs a person's session or an
@@ -99,6 +100,7 @@ export const app = new Hono<AppEnv>()
   .route("/people", peopleRoutes)
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)
+  .route("/webhooks", webhookRoutes)
   .route("/capture", captureRoutes)
   .route("/deleted", deletedRoutes)
   .route("/", draftRoutes)
