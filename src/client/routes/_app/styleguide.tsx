@@ -16,6 +16,7 @@ import { EmptySection } from "./-styleguide/empty";
 import { FieldSection } from "./-styleguide/fields";
 import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
+import { LayerSliderSection } from "./-styleguide/layer-slider";
 import { LiveStatusSection } from "./-styleguide/live-status";
 import { MotionSection } from "./-styleguide/motion";
 import { NotificationSection } from "./-styleguide/notifications";
@@ -75,6 +76,7 @@ const toc = [
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
   ["signing-in", "Signing in"],
+  ["layer-slider", "Layer slider"],
   ["command-block", "Command block"],
   ["steps", "Steps"],
   ["live-status", "Live status"],
@@ -127,6 +129,7 @@ function Styleguide() {
           <WebhooksSection />
           <EmptySection />
           <SkeletonSection />
+          <LayerSliderSection />
           <LiveStatusSection />
           <StepsSection />
           <CommandBlockSection />

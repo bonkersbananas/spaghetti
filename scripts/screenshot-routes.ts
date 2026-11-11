@@ -298,6 +298,19 @@ const openDeliveries = async (page: Page) => {
   await page.getByRole("list", { name: "Recent deliveries" }).waitFor();
 };
 
+/** Opens the 3D view from the tugboat's second attempt and waits for the whole print to be drawn (the build-up has run). */
+async function openViewer(page: Page) {
+  await page.getByRole("button", { name: "See tugboat.gcode.3mf in 3D" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await dialog.waitFor();
+  await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+}
+
+async function closeDialog(page: Page) {
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+}
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -987,6 +1000,30 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  {
+    // The 3D view of the tugboat's sliced file, built up and showing every layer, coloured by filament.
+    name: "viewer",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: openViewer,
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
+  {
+    // The same print coloured by feature, scrubbed back to half its height.
+    name: "viewer-feature",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await openViewer(page);
+      await page.getByRole("radio", { name: "Feature" }).check({ force: true });
+      await page.getByRole("slider", { name: "Layer" }).fill("150");
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
   {
     // A saved attempt open: the arrows in its header step to the attempt before and after.
     name: "attempt-step",

@@ -62,7 +62,14 @@ export interface Toolpaths {
   /** Layer count the slicer announced (`layer num/total_layer_count`), which can exceed `layers` for a truncated file. */
   announcedLayers: number | null;
   /** Segments kept, and how many extrusion moves the file had. */
-  stats: { segments: number; moves: number; decimated: boolean; truncated: boolean; sourceBytes: number };
+  stats: {
+    layers: number;
+    segments: number;
+    moves: number;
+    decimated: boolean;
+    truncated: boolean;
+    sourceBytes: number;
+  };
   warnings: string[];
 }
 
