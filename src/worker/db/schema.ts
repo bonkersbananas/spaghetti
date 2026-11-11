@@ -709,7 +709,6 @@ export const pushSubscriptions = sqliteTable(
   (table) => [index("push_subscriptions_user_idx").on(table.userId)],
 );
 
-/** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */
 /**
  * The week's one paragraph by Claude, written once per week and kept (decision 0030). `monday` is the week's Monday
  * as YYYY-MM-DD in the workspace's time zone.
@@ -745,6 +744,7 @@ export const weekPushes = sqliteTable(
   (table) => [primaryKey({ columns: [table.monday, table.userId] })],
 );
 
+/** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */
 export const pushNudges = sqliteTable(
   "push_nudges",
   {

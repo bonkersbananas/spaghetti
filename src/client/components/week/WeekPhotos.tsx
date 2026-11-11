@@ -21,12 +21,12 @@ interface WeekPhotosProps {
  * Each opens its attempt in its build. Prints with no picture aren't drawn here, only counted in the lines.
  */
 export function WeekPhotos({ prints, people }: WeekPhotosProps) {
+  const desktop = useIsDesktop();
   const pictured = prints.filter((print) => print.photo);
   if (!pictured.length) return null;
   const shown = pictured.slice(0, WEEK_PHOTOS_SHOWN);
   const [lead, ...rest] = shown;
   const more = pictured.length - shown.length;
-  const desktop = useIsDesktop();
   const orphan = rest.length % 2 === 1;
   return (
     <Section id="week-prints" title="The prints" size="overline">
