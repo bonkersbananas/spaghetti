@@ -12,6 +12,9 @@ import type { UpNextMenu } from "./IdeaCard";
 export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
+  // A closed phone sheet still costs a vaul root with its scroll and resize listeners, and every card has one:
+  // mount it with the first tap (it stays mounted afterwards, so closing animates).
+  const [asked, setAsked] = useState(false);
   const queryClient = useQueryClient();
   const me = useQuery(sessionQuery).data?.id;
   const wished = useWishlistIds(me).includes(menu.wish?.id ?? "");
@@ -52,7 +55,14 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
     <button
       type="button"
       aria-label={`Options for ${name}`}
-      onClick={isDesktop ? undefined : () => setOpen(true)}
+      onClick={
+        isDesktop
+          ? undefined
+          : () => {
+              setAsked(true);
+              setOpen(true);
+            }
+      }
       className="pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
     >
       <MoreIcon size={20} weight="bold" aria-hidden />
@@ -62,14 +72,16 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
     return (
       <>
         {button}
-        <Sheet
-          open={open}
-          onOpenChange={setOpen}
-          title={name}
-          description="Up next is the queue you share; your wishlist is your own top ideas."
-        >
-          {actions}
-        </Sheet>
+        {asked && (
+          <Sheet
+            open={open}
+            onOpenChange={setOpen}
+            title={name}
+            description="Up next is the queue you share; your wishlist is your own top ideas."
+          >
+            {actions}
+          </Sheet>
+        )}
       </>
     );
   }
