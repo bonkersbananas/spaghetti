@@ -133,6 +133,66 @@ async function printWithPhoto(page: Page, title: string) {
   return { itemId, attemptId };
 }
 
+/**
+ * A build with everything at once, for looking at the page as a whole: three parts, eight attempts (seven
+ * finished, the newest off the bed with a camera photo that Claude reads as spaghetti), a thread of three comments.
+ */
+async function everythingBuild(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const itemId = crypto.randomUUID();
+  photoReadBuilds.push(itemId);
+  const DAY = 24 * 60 * 60_000;
+  await page.request.post("/api/items", {
+    headers,
+    data: {
+      id: itemId,
+      title: "Paddle wheel spaghetti test",
+      note: "Hull in two halves, a deck and the wheel. Model: https://makerworld.com/en/models/1-cable-comb",
+      createdAt: Date.now() - 12 * DAY,
+    },
+  });
+  const parts = ["Hull, left", "Hull, right", "Deck"].map((name, position) => ({
+    id: crypto.randomUUID(),
+    name,
+    quantity: 1,
+    position,
+  }));
+  await page.request.put(`/api/items/${itemId}/parts`, { headers, data: { parts } });
+  const outcomes = ["failed", "failed", "partial", "failed", "success", "partial", "success"] as const;
+  for (const [index, outcome] of outcomes.entries()) {
+    await page.request.post(`/api/items/${itemId}/attempts`, {
+      headers,
+      data: {
+        id: crypto.randomUUID(),
+        outcome,
+        printedAt: Date.now() - (10 - index) * DAY,
+        note: outcome === "failed" ? "Let go of the plate at the stern." : undefined,
+        failureTags: outcome === "failed" ? ["warping"] : undefined,
+        parts: [{ partId: parts[index % 3]?.id, count: outcome === "success" ? 1 : 0 }],
+        settings: { estimatedMinutes: 140, layerHeight: 0.2, bedTemperature: 60 + index },
+      },
+    });
+  }
+  const attemptId = crypto.randomUUID();
+  await page.request.post(`/api/items/${itemId}/attempts`, {
+    headers,
+    data: { id: attemptId, printedAt: Date.now() - 150 * 60_000, settings: { estimatedMinutes: 140 } },
+  });
+  await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 8 * 60_000 } });
+  const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
+  await page.request.put(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, {
+    headers,
+    multipart: { width: "1280", height: "960", color: "#8d7a66", attemptId, large: file, thumb: file },
+  });
+  for (const body of [
+    "The stern keeps lifting. Brim next time?",
+    "Tried a brim on 6, it held. The wheel is the slow part now.",
+    "Looks like it let go again on 8, sorry.",
+  ])
+    await page.request.post(`/api/items/${itemId}/comments`, { headers, data: { id: crypto.randomUUID(), body } });
+  return itemId;
+}
+
 /** Opens the attempt's sheet from its card (the card's open button is under its content: click its corner). */
 async function openOffBedSheet(page: Page) {
   await page.getByRole("button", { name: /off the bed\. Open/ }).click({ position: { x: 24, y: 24 } });
@@ -425,7 +485,8 @@ export const shots: Shot[] = [
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     width: 390,
     beforeShot: async (page) => {
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      // The thread loads after the page: wait for it, then go to the very end (the closing actions above the bar).
+      await showThread(page);
     },
   },
   {
@@ -804,6 +865,46 @@ export const shots: Shot[] = [
     },
     cleanup: async (page) => {
       await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  // Each page as a whole, with everything on it at once (the coherence pass): a build with parts, eight attempts,
+  // Claude's guess on the newest and a thread ...
+  {
+    name: "build-everything",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      const id = await everythingBuild(page);
+      await page.goto(`/builds/${id}`);
+      await page.locator("h1").first().waitFor({ state: "attached" });
+      await page
+        .getByRole("radio", { name: /suggested/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // ... and an idea Claude drafted from its model page, with a thread under it.
+  {
+    name: "idea-everything",
+    path: "/ideas",
+    fullPage: true,
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const body of ["This would tidy the cable mess under the desk.", "Print it in the jade white?"])
+        await page.request.post(`/api/items/${id}/comments`, { headers, data: { id: crypto.randomUUID(), body } });
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Drafted by Claude from MakerWorld").waitFor();
+      await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
+      // The undo toast would cover the thread: wait it out.
+      await page.getByText("Drafted from MakerWorld", { exact: true }).waitFor({ state: "hidden", timeout: 20_000 });
+      await page.waitForTimeout(500);
     },
   },
   {
