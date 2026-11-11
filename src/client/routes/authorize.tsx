@@ -37,6 +37,9 @@ export const Route = createFileRoute("/authorize")({
   component: Authorize,
 });
 
+/** Belt and braces beside the frame headers (public/_headers): a framed consent screen shows nothing to click. */
+const framed = typeof window !== "undefined" && window.top !== window.self;
+
 function Authorize() {
   const params = Route.useSearch();
   const { data: user } = useQuery(sessionQuery);
@@ -96,6 +99,7 @@ function Authorize() {
     );
   }
 
+  if (framed) return null;
   const info = query.data;
   const me = displayName(user, "you");
   return (
