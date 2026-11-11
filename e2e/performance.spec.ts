@@ -30,24 +30,25 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // features and sonner loaded once idle (about 20 kB), section code preloaded when idle rather than with the first render.
 // Budgets are the measured sizes plus about 2 kB.
 // The shopping list adds its sidebar row (the basket icon), its two shortcuts and its feed and cache wiring to the shell:
-// under 1 kB, so Today, Ideas, Journal and Search went up by 1 kB; its page, sheet, rows and illustration load on demand.
+// under 1 kB, which took the shell (with wishlists' row) just past six screens' limits: Today, Journal and Search +1 kB, and
+// Builds, Pantry and Printer, which were already at their limits, +2 kB. Its page, sheet, rows and illustration load on demand.
 const BUDGET_KB = {
   // Passkeys (the sign-in button, the quiet offer in the shell) add about 1.5 kB everywhere; the WebAuthn browser code, the QR renderer and the sheets load on demand.
   "/sign-in": 194,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
   // Wishlists add a sidebar section (its star icon is on every signed-in screen); the page, its drag code, the picker and
   // the phones' row on Ideas load on demand. Today and Ideas went past their limits: measured plus about 2 kB again.
-  "/today": 298,
+  "/today": 299,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
   "/ideas": 289,
-  "/builds": 286,
+  "/builds": 288,
   // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
-  "/journal": 286,
+  "/journal": 287,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 292,
-  "/pantry": 296,
-  "/printer": 294,
+  "/search": 293,
+  "/pantry": 298,
+  "/printer": 296,
 } as const;
 
 /**
