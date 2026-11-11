@@ -6,15 +6,14 @@
  * started and finished, when an attempt got its outcome) are backdated in
  * D1 afterwards, so the timeline reads like days of work.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { APIRequestContext, Browser } from "@playwright/test";
 import { PARTS_FILE_NAME, partsSlicerFile, SLICER_FILE_NAME, slicerFile } from "../../e2e/fixtures/slicer-file.ts";
 import type { AttemptSettings, Outcome } from "../../src/shared/attempts.ts";
 import { readThreeMf, settingsFromFile } from "../../src/shared/threemf/index.ts";
-import { executeSql, root } from "../lib/wrangler.ts";
+import { executeSql } from "../lib/wrangler.ts";
 import { type PhotoVariant, render, SEED_IDS } from "./ideas.ts";
 import { linkSeedSpools } from "./pantry.ts";
+import { seedPhotoSvg } from "./stand-ins.ts";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -973,7 +972,7 @@ export async function seedBuilds(
         if (!uploaded.ok()) throw new Error(`Adding the slicer file to ${attempt.id} failed: ${uploaded.status()}`);
       }
       for (const photo of attempt.photos ?? []) {
-        const svg = readFileSync(join(root, "scripts/seed/photos", photo.file), "utf8");
+        const svg = seedPhotoSvg(photo.file);
         const large = await render(browser, svg, 1600, photo);
         const thumb = await render(browser, svg, 600, photo);
         const uploaded = await request.put(`/api/items/${build.id}/photos/${crypto.randomUUID()}`, {
