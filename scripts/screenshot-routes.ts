@@ -1644,6 +1644,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  // An idea with someone named: the quiet "for the kitchen" line, no chip.
+  { name: "idea-for", path: "/ideas/5eed0000-0000-4000-8000-000000000003" },
   // The same idea in full: its note's link as a card under it.
   {
     name: "idea-links",
