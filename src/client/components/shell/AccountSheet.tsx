@@ -10,7 +10,7 @@ import { RowSkeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow } from "./lazy-account";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -21,8 +21,10 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
-  const [asked, setAsked] = useState({ notifying: false, password: false });
+  const [cropping, setCropping] = useState<File | null>(null);
+  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false });
   if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
+  if (cropping && !asked.photo) setAsked({ ...asked, photo: true });
   if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
 
   return (
@@ -40,13 +42,33 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
       >
         <ul className="flex flex-col">
           {people.data || people.isError
-            ? (people.data ?? (user ? [user] : [])).map((person) => (
-                <li key={person.id} className="flex items-center gap-3 py-2.5">
-                  <Avatar person={person} size="md" />
-                  <span className="text-body text-ink flex-1 font-semibold">{person.name}</span>
-                  {person.id === user?.id && <span className="text-small text-ink-faint">You</span>}
-                </li>
-              ))
+            ? (people.data ?? (user ? [user] : [])).map((person) => {
+                const row = (
+                  <>
+                    <Avatar person={person} size="md" />
+                    <span className="text-body text-ink flex-1 font-semibold">{person.name}</span>
+                    {person.id === user?.id && <span className="text-small text-ink-faint">You</span>}
+                  </>
+                );
+                return person.id === user?.id ? (
+                  // Your own row opens the photo picker; its code loads with the sheet (the plain row shows meanwhile).
+                  <li key={person.id}>
+                    <Suspense fallback={<div className="flex items-center gap-3 py-2.5">{row}</div>}>
+                      <ProfilePhotoRow
+                        variant="row"
+                        onPick={(file) => {
+                          onOpenChange(false);
+                          setCropping(file);
+                        }}
+                      />
+                    </Suspense>
+                  </li>
+                ) : (
+                  <li key={person.id} className="flex items-center gap-3 py-2.5">
+                    {row}
+                  </li>
+                );
+              })
             : [0, 1].map((i) => <RowSkeleton key={i} />)}
         </ul>
         <Overline as="h3" className="mt-6 mb-2 block">
@@ -92,6 +114,11 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
       </Sheet>
       {/* Mounted once asked for: their code loads then (lazy-account.ts), and a closed sheet that mounts while another is open looped in the production build. */}
       {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}
+      {asked.photo && (
+        <Suspense fallback={null}>
+          <ProfilePhotoCrop file={cropping} onFile={setCropping} onClose={() => setCropping(null)} />
+        </Suspense>
+      )}
       {asked.password && (
         <Suspense fallback={null}>
           <ChangePasswordSheet open={changingPassword} onOpenChange={setChangingPassword} />

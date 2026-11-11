@@ -57,6 +57,11 @@ function useReturnFocus(open: boolean) {
   };
 }
 
+/** A press on a toast (Undo) isn't "outside" the sheet: it must not close it. */
+const keepOpenForToast = (event: { target: EventTarget | null; preventDefault: () => void }) => {
+  if (event.target instanceof Element && event.target.closest("[data-sonner-toaster]")) event.preventDefault();
+};
+
 export function Sheet(props: SheetProps) {
   const isDesktop = useIsDesktop();
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
@@ -79,6 +84,7 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, headerActi
             });
           }}
           onCloseAutoFocus={returnFocus}
+          onInteractOutside={keepOpenForToast}
           // Sits on the keyboard when it is up (lib/viewport.ts), so the footer's button stays in view.
           className={cn(
             "bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex flex-col rounded-t-xl focus:outline-none",
@@ -133,6 +139,7 @@ function DesktopSheet({
         <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
         <Dialog.Content
           onCloseAutoFocus={returnFocus}
+          onInteractOutside={keepOpenForToast}
           className={cn(
             "bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel

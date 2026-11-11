@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
 import type { PersonColor } from "@shared/people";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 import { AgentIcon } from "./icons";
@@ -23,7 +24,7 @@ const sizes = {
 } as const;
 
 interface AvatarProps {
-  person: Pick<Person, "name" | "color">;
+  person: Pick<Person, "name" | "color"> & { photoUrl?: string | null };
   size?: keyof typeof sizes;
   /** Adds a paper-colored ring, for overlapping stacks. */
   ringed?: boolean;
@@ -53,7 +54,7 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
       className={cn(
-        "text-on-accent inline-flex shrink-0 items-center justify-center rounded-full font-bold select-none",
+        "text-on-accent relative inline-flex shrink-0 items-center justify-center rounded-full font-bold select-none",
         colors[person.color],
         sizes[size],
         ringed && "ring-paper ring-2",
@@ -61,6 +62,7 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
       )}
     >
       {glyphInstead ? <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden /> : initials(person.name)}
+      {!glyphInstead && person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
     </span>
   );
   if (!via) return face;
@@ -79,6 +81,31 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         <AgentIcon size={badgeGlyphs[size as "md" | "lg"]} weight="fill" />
       </span>
     </span>
+  );
+}
+
+/**
+ * The picture over the initials: the initials stay underneath while it loads, if it fails and offline, so nothing
+ * shifts; it fades in once decoded. A hairline ring (inset) keeps a picture that matches the surface from melting into it.
+ */
+function Picture({ url }: { url: string }) {
+  const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
+  if (state === "failed") return null;
+  return (
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      ref={(img) => {
+        if (img?.complete && img.naturalWidth > 0) setState("loaded");
+      }}
+      onLoad={() => setState("loaded")}
+      onError={() => setState("failed")}
+      className={cn(
+        "ring-ink/10 absolute inset-0 size-full rounded-full object-cover ring-1 transition-opacity duration-300 ring-inset dark:ring-white/15 dark:brightness-90",
+        state === "loaded" ? "opacity-100" : "opacity-0",
+      )}
+    />
   );
 }
 

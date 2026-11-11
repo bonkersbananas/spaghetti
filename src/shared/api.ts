@@ -12,7 +12,12 @@ export interface Person {
   username: string;
   name: string;
   color: PersonColor;
+  /** Their profile picture (square WebP or JPEG), versioned so a new one has a new address; null shows initials. */
+  photoUrl: string | null;
 }
+
+/** A profile picture is uploaded at most this big: the browser sends 256 px, a few KB. */
+export const MAX_PROFILE_PHOTO_BYTES = 512 * 1024;
 
 export interface SessionResponse {
   user: Person;
