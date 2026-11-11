@@ -418,18 +418,10 @@ export function useItem(id: string) {
     // for the feed's slower beat, so the suggestion shows as soon as it is there.
     // It stops with the read, or after 40 seconds of it (a read that long was lost: the cron settles it).
     refetchInterval: (current) => {
-      const attempts = current.state.data?.attempts ?? [];
-      const reading = attempts.find((attempt) => attempt.photoRead?.status === "reading");
-      // Claude is thinking about the next try (decision 0027), or an attempt was only just answered Partly or
-      // Spaghetti and its coach isn't in yet (the Worker makes the job with the answer).
-      const coaching = attempts.find(
-        (attempt) =>
-          attempt.coach?.status === "thinking" ||
-          (!attempt.coach &&
-            (attempt.outcome === "partial" || attempt.outcome === "failed") &&
-            Date.now() - (attempt.finishedAt ?? 0) < 20_000),
-      );
-      const watching = reading?.photoRead?.photoId ?? (coaching ? `coach-${coaching.id}` : null);
+      const reading = current.state.data?.attempts.find((attempt) => attempt.photoRead?.status === "reading");
+      // (Claude's ideas for the next try arrive with the change feed: polling for them ran ahead of the feed's own
+      // "Sam logged an attempt" word.)
+      const watching = reading?.photoRead?.photoId;
       if (!watching) return false;
       const since = (readingSince.get(watching) ?? Date.now()) || Date.now();
       readingSince.set(watching, since);

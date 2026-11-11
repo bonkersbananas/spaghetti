@@ -44,8 +44,14 @@ test("a Spaghetti answer brings ideas, Use this fills the next attempt, dismissi
     headers: { Origin: origin(page) },
     data: { outcome: "failed" },
   });
+  // The ideas are in the API first (the run happens after the answer); then the page shows them.
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/items/${itemId}`)).json()).item.attempts[0].coach?.status, {
+      timeout: 30_000,
+    })
+    .toBe("ready");
   await page.reload();
-  await expect(ideas(page)).toBeVisible({ timeout: 20_000 });
+  await expect(ideas(page)).toBeVisible({ timeout: 30_000 });
   await expect(ideas(page).getByText("Add a brim")).toBeVisible();
   await expect(ideas(page).getByText("Warm the bed a little")).toBeVisible();
   // Nothing was set by it.
