@@ -49,7 +49,9 @@ export function MotionSection() {
           </button>
         </div>
       </Panel>
-      <PressedPanel />
+      <div id="pressed">
+        <PressedPanel />
+      </div>
     </Section>
   );
 }
@@ -109,15 +111,14 @@ function PressedPanel() {
         Held: <code>pressable</code> shrinks to 97% in 90 ms; tappable things without it (inline links, plain rows) dim
         to 60%. Both start on the touch itself, never after it.
       </p>
-      <div className="grid grid-cols-[8rem_1fr_1fr] items-center gap-x-4 gap-y-3 md:grid-cols-[12rem_1fr_1fr]">
-        <span />
+      <div className="grid grid-cols-2 items-center gap-x-4 gap-y-2">
         <span className="text-caption text-ink-faint">Resting</span>
         <span className="text-caption text-ink-faint">Held</span>
         {rows.map(([name, specimen]) => (
           <div key={name} className="contents">
-            <span className="text-small text-ink-faint">{name}</span>
-            <div className="flex">{specimen()}</div>
-            <div className="flex">{specimen(true)}</div>
+            <span className="text-small text-ink-faint col-span-2 mt-3">{name}</span>
+            <div className="flex min-w-0">{specimen()}</div>
+            <div className="flex min-w-0">{specimen(true)}</div>
           </div>
         ))}
       </div>

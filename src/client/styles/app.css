@@ -70,6 +70,45 @@
     outline: none;
   }
 
+  /* No double-tap-to-zoom wait: a tap on anything tappable is a tap at once. */
+  :where(
+    a,
+    button,
+    input,
+    select,
+    textarea,
+    label,
+    summary,
+    [tabindex],
+    [role="button"],
+    [role="tab"],
+    [role="radio"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="option"],
+    [role="menuitem"],
+    [role="link"]
+  ) {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Pressed state for tappable things that aren't `pressable` (inline links, plain rows): they dim while held. */
+  :where(
+    a[href],
+    button,
+    summary,
+    [role="button"],
+    [role="tab"],
+    [role="radio"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="option"],
+    [role="menuitem"]
+  ):not(.pressable, :disabled, [aria-disabled="true"]):is(:active, [data-pressed]) {
+    opacity: var(--sg-press-dim);
+  }
+
   :where(a, button, input, textarea, [tabindex]):focus-visible {
     box-shadow: var(--sg-ring);
   }

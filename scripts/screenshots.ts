@@ -185,7 +185,10 @@ async function loadAllImages(page: Page, name: string) {
     const images = Array.from(document.images);
     for (const image of images) image.loading = "eager";
     await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
-    return images.filter((image) => !image.complete || image.naturalWidth === 0).map((image) => image.src);
+    // The styleguide's avatar specimen shows a picture that can't load, on purpose (the initials stay).
+    return images
+      .filter((image) => (!image.complete || image.naturalWidth === 0) && !image.src.includes("/people/none/photo"))
+      .map((image) => image.src);
   });
   if (broken.length) throw new Error(`${name}: images failed to load:\n${broken.join("\n")}`);
 }
