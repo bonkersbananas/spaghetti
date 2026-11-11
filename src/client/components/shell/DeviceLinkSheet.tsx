@@ -95,7 +95,7 @@ export function DeviceLinkSheet({ open, onOpenChange }: { open: boolean; onOpenC
               {copied ? "Copied" : "Copy link"}
             </Button>
             {"share" in navigator && (
-              <Button variant="primary" icon={ShareIcon} fullWidth onClick={share}>
+              <Button variant="primary" icon={ShareIcon} className="min-w-0 flex-1" onClick={share}>
                 Share link
               </Button>
             )}

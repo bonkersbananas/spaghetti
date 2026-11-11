@@ -379,7 +379,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await openAccount(page, wide(page));
-      await page.getByRole("dialog").getByRole("button", { name: "Change password" }).scrollIntoViewIfNeeded();
+      await page.getByRole("dialog").getByRole("button", { name: "Passkeys and password" }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(300);
     },
   },
@@ -389,7 +389,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await mockSigningIn(page);
       await openAccountRow(page, wide(page), "Passkeys and password");
-      await page.getByRole("dialog", { name: "Passkeys and password" }).getByText("iPhone").waitFor();
+      await page.getByRole("dialog", { name: "Passkeys and password" }).getByText("iPhone").first().waitFor();
     },
   },
   {
