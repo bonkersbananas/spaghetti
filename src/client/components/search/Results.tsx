@@ -2,16 +2,19 @@ import type { AttemptHit, ItemHit, Photo as PhotoData } from "@shared/api";
 import { type TagKind, tagLabel } from "@shared/attempts";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
+import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps } from "@tanstack/react-router";
+import { displayName } from "@shared/people";
 import { forwardRef, type ReactNode } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
 import { Chip } from "@/components/ui/Chip";
 import { Highlight } from "@/components/ui/Highlight";
-import { BuildsIcon, CheckIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
+import { BuildsIcon, CheckIcon, CommentIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { useTagOptions } from "@/lib/builds";
+import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { photoSrc } from "@/lib/previews";
@@ -22,9 +25,11 @@ export function attemptLink(hit: AttemptHit): LinkProps {
 }
 
 export function itemLink(hit: ItemHit): LinkProps {
+  // Found by a comment: open the page at the thread, with that comment lit for a moment (?thread=1&comment=…).
+  const search = hit.comment ? ({ thread: 1, comment: hit.comment.id } as never) : undefined;
   return hit.item.stage === "idea"
-    ? { to: "/ideas/$ideaId", params: { ideaId: hit.item.id } }
-    : { to: "/builds/$buildId", params: { buildId: hit.item.id } };
+    ? { to: "/ideas/$ideaId", params: { ideaId: hit.item.id }, search }
+    : { to: "/builds/$buildId", params: { buildId: hit.item.id }, search };
 }
 
 interface RowProps {
@@ -183,6 +188,8 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
   ref,
 ) {
   const { item } = hit;
+  const { data: people } = useQuery(peopleQuery);
+  const { data: me } = useQuery(sessionQuery);
   const look = stageLook[item.stage];
   const title = item.title?.trim();
   const snippet = hit.snippet ? snippetSegments(hit.snippet) : null;
@@ -210,12 +217,31 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
         <span className="text-small text-ink-faint ml-auto shrink-0">{meta}</span>
       </span>
       {title && <Highlight text={title} terms={terms} className="text-body text-ink truncate font-semibold" />}
-      {item.note &&
+      {hit.comment && snippet ? (
+        // Found in the thread: who said it and when, then their words.
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-caption text-ink-faint flex items-center gap-1.5 font-medium">
+            <CommentIcon size={14} aria-hidden />
+            <span>
+              {hit.comment.authorId === me?.id
+                ? "You"
+                : displayName(
+                    people?.find((person) => person.id === hit.comment?.authorId),
+                    "Someone",
+                  )}{" "}
+              · {relativeTime(hit.comment.createdAt)}
+            </span>
+          </span>
+          <Highlight segments={snippet} className="text-body text-ink-soft line-clamp-2" />
+        </span>
+      ) : (
+        item.note &&
         (snippet ? (
           <Highlight segments={snippet} className="text-body text-ink-soft line-clamp-2" />
         ) : (
           <Highlight text={item.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />
-        ))}
+        ))
+      )}
     </ResultRow>
   );
 });

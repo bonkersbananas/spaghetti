@@ -48,6 +48,8 @@ appendFileSync(
     "\tINSERT INTO search (kind, ref_id, item_id, title, body, tags)\n" +
     "\tVALUES ('item', NEW.id, NEW.id, coalesce(NEW.title, ''), NEW.note, coalesce(NEW.for_whom, ''));\nEND;\n" +
     `--> statement-breakpoint\n${itemTags}\n--> statement-breakpoint\n` +
-    "UPDATE search SET tags = (SELECT tags FROM search_item_tags WHERE item_id = ref_id) WHERE kind = 'item';\n",
+    "UPDATE search SET tags = (SELECT tags FROM search_item_tags WHERE item_id = ref_id) WHERE kind = 'item';\n" +
+    // The comments' triggers, and the rows for the comments restored above.
+    `--> statement-breakpoint\n${readFileSync(join(root, "migrations/0022_comment-search.sql"), "utf8")}`,
 );
 console.log(`✓ Exported ${tables.length} tables and the search index to ${output}`);

@@ -308,3 +308,59 @@ describe("what worked last time", () => {
     expect(await whatWorked(fresh.id)).toEqual([]);
   });
 });
+
+describe("search finds what was said in a thread", () => {
+  const say = async (itemId: string, body: string, as = cookie, id = crypto.randomUUID()) => {
+    const response = await request(`/api/items/${itemId}/comments`, { method: "POST", cookie: as, json: { id, body } });
+    expect(response.status).toBe(201);
+    return id;
+  };
+  const find = async (q: string) =>
+    (await (await request(`/api/search?q=${encodeURIComponent(q)}`, { cookie })).json<SearchResponse>());
+
+  it("shows the idea or build with the comment as its snippet", async () => {
+    const idea = await createItem({ title: "Tugboat", stage: "idea" });
+    const build = await createItem({ title: "Lamp base", stage: "building" });
+    const first = await say(idea.id, "Maybe in blue PETG?", samCookie);
+    await say(build.id, "Chunkier walls would look better");
+    const blue = await find("blue PETG");
+    expect(blue.ideas).toHaveLength(1);
+    expect(blue.ideas[0]?.item.id).toBe(idea.id);
+    expect(blue.ideas[0]?.comment).toMatchObject({ id: first, authorId: samId });
+    expect(blue.ideas[0]?.snippet).toContain("blue");
+    const chunkier = await find("chunkier");
+    expect(chunkier.builds.map((hit) => hit.item.id)).toEqual([build.id]);
+  });
+
+  it("keeps the item's own snippet when its note matched too", async () => {
+    const idea = await createItem({ title: "Tugboat", note: "Hull in blue", stage: "idea" });
+    await say(idea.id, "blue is nice");
+    const found = await find("blue");
+    expect(found.ideas).toHaveLength(1);
+    expect(found.ideas[0]?.comment).toBeNull();
+  });
+
+  it("follows edits and drops deleted comments, and brings back an undone delete", async () => {
+    const idea = await createItem({ title: "Tugboat", stage: "idea" });
+    const id = await say(idea.id, "Try blue");
+    const edit = await request(`/api/comments/${id}`, { method: "PATCH", cookie, json: { body: "Try orange instead" } });
+    expect(edit.status).toBe(200);
+    expect((await find("blue")).ideas).toHaveLength(0);
+    expect((await find("orange")).ideas).toHaveLength(1);
+
+    expect((await request(`/api/comments/${id}`, { method: "DELETE", cookie })).status).toBeLessThan(300);
+    expect((await find("orange")).ideas).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE comments SET deleted_at = NULL WHERE id = ?").bind(id).run();
+    expect((await find("orange")).ideas).toHaveLength(1);
+  });
+
+  it("follows the build's title and leaves with a deleted build", async () => {
+    const idea = await createItem({ title: "Tugboat", stage: "idea" });
+    await say(idea.id, "Try blue");
+    await request(`/api/items/${idea.id}`, { method: "PATCH", cookie, json: { title: "Barge" } });
+    expect((await find("barge")).ideas.map((hit) => hit.item.id)).toEqual([idea.id]);
+    await request(`/api/items/${idea.id}`, { method: "DELETE", cookie });
+    expect((await find("blue")).ideas).toHaveLength(0);
+  });
+});
