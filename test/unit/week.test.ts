@@ -13,6 +13,7 @@ import {
   weekIsReadyToWrite,
   weekMessage,
   weekName,
+  weekRangeLabel,
 } from "../../src/shared/week.ts";
 
 const stockholm = (iso: string) => Date.parse(iso);
@@ -75,6 +76,15 @@ describe("the Sunday evening moment", () => {
     expect(weekName("2026-11-09", now)).toBe("This week");
     expect(weekName("2026-11-02", now)).toBe("Last week");
     expect(weekName("2026-10-26", now)).toMatch(/26/);
+  });
+});
+
+describe("the dates", () => {
+  it("always say the year, and both across New Year", () => {
+    expect(weekRangeLabel("2026-01-05")).toMatch(/January 5\D+11, 2026/);
+    const across = weekRangeLabel("2025-12-29");
+    expect(across).toContain("December 29, 2025");
+    expect(across).toContain("January 4, 2026");
   });
 });
 

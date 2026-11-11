@@ -107,19 +107,14 @@ export function weekBounds(monday: string, timeZone: string = WORKSPACE_TIME_ZON
   return { start: startOfZonedDay(monday, timeZone), end: startOfZonedDay(addWeeks(monday, 1), timeZone) };
 }
 
-/** "9–15 November", "30 Nov – 6 Dec", and with the year when it isn't this one. */
-export function weekRangeLabel(monday: string, now = Date.now()): string {
-  const first = utcOf(monday);
-  const last = utcOf(sundayOf(monday));
-  const thisYear = zonedParts(now).year;
-  const sameMonth = new Date(first).getUTCMonth() === new Date(last).getUTCMonth();
-  const range = new Intl.DateTimeFormat(undefined, {
+/** "November 9 – 15, 2026", "January 5 – 11, 2026", and across New Year "December 29, 2025 – January 4, 2026". */
+export function weekRangeLabel(monday: string): string {
+  return new Intl.DateTimeFormat(undefined, {
     timeZone: "UTC",
     day: "numeric",
-    month: sameMonth ? "long" : "short",
-  }).formatRange(first, last);
-  const year = new Date(last).getUTCFullYear();
-  return year === thisYear ? range : `${range} ${year}`;
+    month: "long",
+    year: "numeric",
+  }).formatRange(utcOf(monday), utcOf(sundayOf(monday)));
 }
 
 /** "This week", "Last week", or the dates. */
@@ -127,7 +122,7 @@ export function weekName(monday: string, now = Date.now()): string {
   const current = mondayOf(now);
   if (monday === current) return "This week";
   if (monday === addWeeks(current, -1)) return "Last week";
-  return weekRangeLabel(monday, now);
+  return weekRangeLabel(monday);
 }
 
 /** Whether the zone's clock is within the hours "Your week" goes out: Sunday from 19:00 until 22:00. */

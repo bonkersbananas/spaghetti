@@ -78,7 +78,7 @@ export function WeekLines({ week, people }: WeekLinesProps) {
     prints.worked && `${prints.worked} worked`,
     prints.partly && `${prints.partly} partly`,
     prints.spaghetti && `${prints.spaghetti} spaghetti`,
-    prints.printing && `${prints.printing} on the bed`,
+    prints.printing && `${prints.printing} still to answer`,
   ].filter(Boolean);
 
   // The builds the prints belonged to, once each, in the order they were printed.

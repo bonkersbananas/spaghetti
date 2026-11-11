@@ -34,7 +34,7 @@ export async function weekNotebook(db: Db, week: Week): Promise<string> {
   const lines = [`The week: ${weekRangeLabel(week.monday)} (Monday to Sunday).`];
   const { prints } = week;
   lines.push(
-    `Prints: ${prints.total} (${prints.worked} worked, ${prints.partly} partly, ${prints.spaghetti} spaghetti, ${prints.printing} still on the bed).`,
+    `Prints: ${prints.total} (${prints.worked} worked, ${prints.partly} partly, ${prints.spaghetti} spaghetti, ${prints.printing} still to answer).`,
   );
   if (week.grams !== null) lines.push(`Filament used: about ${week.grams} g.`);
   if (rows.length) lines.push("", "## Prints, oldest first");
