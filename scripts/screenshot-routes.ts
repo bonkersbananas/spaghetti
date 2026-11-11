@@ -261,6 +261,25 @@ export const shots: Shot[] = [
     cleanup: unmockToday,
   },
   {
+    // Today with the drawer divider off the bed: Claude's guess hinted on its button, with why. Before the comment
+    // shots: opening a thread marks it read.
+    name: "today-guess",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("radio", { name: /suggested/ }).first().waitFor({ timeout: 20_000 });
+    },
+  },
+  {
+    // The one quiet line for what Sam wrote and Alex hasn't read, under what is on the bed.
+    name: "today-comments",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("link", { name: /Sam Okafor on .*: / }).waitFor();
+    },
+  },
+  {
     // The bridge saw the towel hook's print stop: a calm question with three answers instead of a bar.
     name: "today-off-the-bed",
     path: "/today",
