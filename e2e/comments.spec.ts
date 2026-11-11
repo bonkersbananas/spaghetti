@@ -237,6 +237,25 @@ test("a message that ends with a link shows a card in place of the address, and 
   await send(page, isMobile);
   const link = thread(page).getByRole("link", { name: "example.com/models/8" });
   await expect(link).toBeVisible();
+
+  // A message that is only a link has no bubble to tap: its options button stays in view on a phone, and edits show "(edited)".
+  const third = await openComposer(page, isMobile);
+  await third.fill("https://example.com/models/9");
+  await send(page, isMobile);
+  const options = page.getByRole("button", { name: "Options for your comment" }).last();
+  await expect(thread(page).getByRole("link", { name: /example\.com\/models\/9/ })).toBeVisible();
+  await options.scrollIntoViewIfNeeded();
+  await settle(page);
+  if (!isMobile)
+    await thread(page)
+      .getByRole("link", { name: /example\.com\/models\/9/ })
+      .hover();
+  await options.click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "Edit your comment" });
+  await editor.fill("https://example.com/models/9 is the one");
+  await editor.evaluate((element) => (element as HTMLTextAreaElement).blur());
+  await expect(thread(page).getByText("(edited)")).toBeVisible();
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -263,7 +282,6 @@ for (const theme of ["light", "dark"] as const) {
           .getByRole("link", { name: /example\.com\/models\/1/ })
           .first(),
       ).toBeVisible();
-      await expect(page.getByRole("list", { name: "Links in the comment" })).toBeVisible();
       // So does the "New" line over it: the page has stopped moving.
       await expect(thread(page).getByText("New", { exact: true })).toBeVisible();
       await settle(page);

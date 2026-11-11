@@ -8,6 +8,7 @@ import { LinkCard } from "@/components/ui/LinkCard";
 import { Bubble } from "@/components/ui/Message";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { Sheet } from "@/components/ui/Sheet";
+import { cn } from "@/lib/cn";
 import { deleteComment, editComment } from "@/lib/comments";
 import { linkify } from "@/lib/linkify";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -87,13 +88,19 @@ export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: Edi
     </div>
   );
 
+  const { text: shown, url } = splitTrailingLink(comment.body);
+  const cardOnly = !shown && !!url;
   const menuButton = (
     <button
       type="button"
       aria-label="Options for your comment"
       disabled={readOnly}
       onClick={isDesktop ? undefined : () => setMenuOpen(true)}
-      className="pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink flex size-8 shrink-0 items-center justify-center rounded-full opacity-0 transition-colors group-hover/bubble:opacity-100 focus-visible:opacity-100 disabled:opacity-40 data-[state=open]:opacity-100 max-md:pointer-events-none"
+      className={cn(
+        "pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink flex size-8 shrink-0 items-center justify-center rounded-full opacity-0 transition-colors group-hover/bubble:opacity-100 focus-visible:opacity-100 disabled:opacity-40 data-[state=open]:opacity-100",
+        // On a phone the bubble's tap opens the menu; a message with no bubble (only a link) keeps its button in view.
+        cardOnly ? "max-md:opacity-100" : "max-md:pointer-events-none",
+      )}
     >
       <MoreIcon size={18} weight="bold" aria-hidden />
     </button>
@@ -113,14 +120,22 @@ export function EditableBubble({ comment, mine, editing, onEdit, readOnly }: Edi
   );
 
   // A message that ends with a link shows it as a card instead of the raw address; mid-sentence links stay in the text.
-  const { text: shown, url } = splitTrailingLink(comment.body);
   return (
     <Bubble
       mine={mine}
       edited={comment.editedAt !== null}
       aside={aside}
       onTap={mine && !isDesktop && !readOnly ? () => setMenuOpen(true) : undefined}
-      below={url ? <LinkCard url={url} className="w-72 max-w-full" /> : undefined}
+      below={
+        url ? (
+          <>
+            <LinkCard url={url} className="w-72 max-w-full" />
+            {cardOnly && comment.editedAt !== null && (
+              <span className="text-caption text-ink-faint px-1">(edited)</span>
+            )}
+          </>
+        ) : undefined
+      }
     >
       {shown ? linkify(shown, "text-ink font-medium underline decoration-ink/30 underline-offset-2") : undefined}
     </Bubble>
