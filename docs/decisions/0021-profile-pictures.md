@@ -1,4 +1,4 @@
-# 0020. Profile pictures are small squares cropped in the browser, stored in R2 under a versioned address
+# 0021. Profile pictures are small squares cropped in the browser, stored in R2 under a versioned address
 
 Status: Accepted
 
