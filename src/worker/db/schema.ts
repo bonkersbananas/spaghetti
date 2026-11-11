@@ -301,7 +301,7 @@ export const draftRuns = sqliteTable("draft_runs", {
 });
 
 /**
- * Claude looking at one attempt photo (decision 0024): the job, its answer and the record of the run, in one row per
+ * Claude looking at one attempt photo (decision 0023): the job, its answer and the record of the run, in one row per
  * photo (a photo is never read twice). Also what the day's cap counts (rows with `ranAt`).
  */
 export const photoReads = sqliteTable(
