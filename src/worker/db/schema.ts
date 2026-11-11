@@ -748,9 +748,46 @@ export const pushSubscriptions = sqliteTable(
     alsoOthers: integer("also_others", { mode: "boolean" }).notNull().default(false),
     /** Also tell this device when printer upkeep is due (at most one nudge a day, shared/upkeep.ts). */
     upkeepNudges: integer("upkeep_nudges", { mode: "boolean" }).notNull().default(false),
+    /** Also send "Your week" on Sunday evening (decision 0030): on unless switched off. */
+    weekNudges: integer("week_nudges", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("push_subscriptions_user_idx").on(table.userId)],
+);
+
+/**
+ * The week's one paragraph by Claude, written once per week and kept (decision 0030). `monday` is the week's Monday
+ * as YYYY-MM-DD in the workspace's time zone.
+ */
+export const weeks = sqliteTable("weeks", {
+  monday: text("monday").primaryKey(),
+  /** thinking: claimed, being written; done: `text` is the paragraph; nothing: Claude had nothing to add; failed: the call didn't work. */
+  status: text("status").$type<"thinking" | "done" | "nothing" | "failed">().notNull(),
+  text: text("text"),
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  tries: integer("tries").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When the call to Claude was made (what the cap counts). */
+  ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+  /** "done", or why not: nothing, refusal, api_error, timeout, cap… */
+  runOutcome: text("run_outcome"),
+  /** Model, stop reason, HTTP status, error type, how long it took; never the prompt. */
+  detail: text("detail"),
+});
+
+export type WeekRow = typeof weeks.$inferSelect;
+
+/** "Your week" went to this person for this week: the once-a-week guard, claimed before sending. */
+export const weekPushes = sqliteTable(
+  "week_pushes",
+  {
+    monday: text("monday").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.monday, table.userId] })],
 );
 
 /** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */

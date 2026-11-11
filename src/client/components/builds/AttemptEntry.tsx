@@ -1,6 +1,7 @@
 import type { Person } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
+import { showsSettings } from "@shared/story-settings";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef, lazy, Suspense } from "react";
@@ -80,10 +81,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const offBed = isOffTheBed(attempt);
   // Still on the bed: printing, as far as anyone knows. Off it, and waiting for a verdict, is a state of its own.
   const printing = attempt.outcome === null && !offBed;
-  // The settings repeat from one attempt to the next, so the story shows them where they say something: on the
-  // first attempt, on one that worked (what to do again), and when nothing changed. Elsewhere the change chips are
-  // the news and the full list is one tap away, in the attempt's sheet.
-  const showSettings = attempt.number === 1 || attempt.outcome === "success" || attempt.changes.length === 0;
+  // The settings repeat from one attempt to the next: see `showsSettings` for where the story lists them.
+  const showSettings = showsSettings(attempt);
   const settings = showSettings ? summarizeSettings(attempt.settings) : [];
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];

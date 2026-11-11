@@ -745,6 +745,12 @@ export const operations: Record<string, Operation> = {
     query: insightsQuery,
     response: any("The year.", { insights: z.looseObject({}) }),
   },
+  "GET /weeks/:monday": {
+    summary:
+      "One week (Monday to Sunday, the workspace's time zone): its prints and how they went, builds finished, ideas, comments, filament used, what is waiting, and Claude's paragraph when there is one.",
+    response: any("The week.", { week: z.looseObject({}) }),
+    errors: { 400: "invalid: not a Monday, as YYYY-MM-DD." },
+  },
   "GET /links/preview": {
     summary: "The title and site of a public web page.",
     response: any("The page.", { url: z.string(), title: z.string().nullable(), site: z.string().nullable() }),

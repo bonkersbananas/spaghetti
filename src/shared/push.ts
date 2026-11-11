@@ -2,7 +2,7 @@
 import type { Outcome } from "./attempts.ts";
 
 export type NudgeKind = "off_the_bed" | "overdue";
-export type PushKind = NudgeKind | "upkeep" | "comment" | "test";
+export type PushKind = NudgeKind | "upkeep" | "comment" | "week" | "test";
 
 /** No nudges from 22:00 until 07:00 in the device's time zone. */
 export const QUIET_FROM_HOUR = 22;
@@ -185,6 +185,7 @@ export interface PushSubscriptionBody {
   timeZone: string;
   alsoOthers?: boolean;
   upkeepNudges?: boolean;
+  weekNudges?: boolean;
 }
 
 export interface PushConfig {
@@ -193,5 +194,11 @@ export interface PushConfig {
   /** False when the private half is missing (a local server): subscribing works, sending doesn't. */
   canSend: boolean;
   /** This person's devices. */
-  subscriptions: Array<{ endpoint: string; alsoOthers: boolean; upkeepNudges: boolean; timeZone: string }>;
+  subscriptions: Array<{
+    endpoint: string;
+    alsoOthers: boolean;
+    upkeepNudges: boolean;
+    weekNudges: boolean;
+    timeZone: string;
+  }>;
 }

@@ -36,11 +36,13 @@ const subscribe = z.object({
   timeZone,
   alsoOthers: z.boolean().optional(),
   upkeepNudges: z.boolean().optional(),
+  weekNudges: z.boolean().optional(),
 });
 const change = z.object({
   endpoint,
   alsoOthers: z.boolean().optional(),
   upkeepNudges: z.boolean().optional(),
+  weekNudges: z.boolean().optional(),
   timeZone: timeZone.optional(),
 });
 const target = z.object({ endpoint });
@@ -59,6 +61,7 @@ export const pushRoutes = new Hono<AppEnv>()
         endpoint: row.endpoint,
         alsoOthers: row.alsoOthers,
         upkeepNudges: row.upkeepNudges,
+        weekNudges: row.weekNudges,
         timeZone: row.timeZone,
       })),
     });
@@ -92,6 +95,7 @@ export const pushRoutes = new Hono<AppEnv>()
         timeZone: body.timeZone,
         alsoOthers: body.alsoOthers ?? false,
         upkeepNudges: body.upkeepNudges ?? false,
+        weekNudges: body.weekNudges ?? true,
         createdAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -104,6 +108,7 @@ export const pushRoutes = new Hono<AppEnv>()
           timeZone: body.timeZone,
           ...(body.alsoOthers === undefined ? {} : { alsoOthers: body.alsoOthers }),
           ...(body.upkeepNudges === undefined ? {} : { upkeepNudges: body.upkeepNudges }),
+          ...(body.weekNudges === undefined ? {} : { weekNudges: body.weekNudges }),
         },
       });
     return c.body(null, 204);
