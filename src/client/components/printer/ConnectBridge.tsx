@@ -1,6 +1,7 @@
+import type { PairingResponse } from "@shared/bridge";
 import { BRIDGE_CONNECTED_MS, type BridgePrinterState, isFresh, PAIRING_MINUTES } from "@shared/bridge";
 import { spoolName } from "@shared/spools";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CommandBlock } from "@/components/ui/CommandBlock";
@@ -8,9 +9,23 @@ import { LiveStatus } from "@/components/ui/LiveStatus";
 import { Sheet } from "@/components/ui/Sheet";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Step, Steps } from "@/components/ui/Steps";
-import { installCommand, useMakeCode } from "@/lib/bridge-setup";
+import { api } from "@/lib/api";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { useNow } from "@/lib/use-now";
+
+/** Where the installer is served, and the address it should tell the bridge to use when this isn't spaghetti.day. */
+export const PRODUCTION_ORIGIN = "https://spaghetti.day";
+
+/** The one line to paste into Terminal. The pairing code is in it; no long-lived token ever is. */
+export function installCommand(code: string, origin: string): string {
+  const app = origin === PRODUCTION_ORIGIN ? "" : ` --app ${origin}`;
+  return `curl -fsSL ${origin}/bridge/install.sh | sh -s -- ${code}${app}`;
+}
+
+/** A pairing code, valid ten minutes, once. */
+export function useMakeCode() {
+  return useMutation({ mutationFn: () => api<PairingResponse>("/bridge/pairing", { method: "POST" }) });
+}
 
 const STATE_WORDS: Record<BridgePrinterState, string> = {
   idle: "The printer is idle.",
