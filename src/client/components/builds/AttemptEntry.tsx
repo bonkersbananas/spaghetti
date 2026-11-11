@@ -213,7 +213,11 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             {attempt.file && (
               // Above the open button, so its download link works.
               <div className="pointer-events-auto relative z-10 md:max-w-md">
-                <SavedFileCard file={attempt.file} filaments={attempt.settings.filaments} />
+                <SavedFileCard
+                  file={attempt.file}
+                  filaments={attempt.settings.filaments}
+                  printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
+                />
               </div>
             )}
 

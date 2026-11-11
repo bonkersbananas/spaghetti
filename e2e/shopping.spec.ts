@@ -27,6 +27,8 @@ test("shopping: opens, and has no accessibility violations", async ({ page }) =>
 });
 
 test("shopping: add a name and links, tick it off and back, edit it, delete with undo", async ({ page }) => {
+  // Many steps, and on a cold dev server the sheet's chunk compiles on first use.
+  test.setTimeout(60_000);
   await signIn(page);
   await page.goto("/shopping");
   const name = `Liquid glue ${tag()}`;
@@ -75,17 +77,21 @@ test("shopping: add a name and links, tick it off and back, edit it, delete with
 });
 
 test("shopping: unticking within the pause keeps it on the list", async ({ page }) => {
+  await page.clock.install();
   await signIn(page);
   await page.goto("/shopping");
   const name = `Spare nozzle ${tag()}`;
   await add(page, name);
   const box = toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` });
+  // The page's timers stand still while both taps land, however slow the machine: the second is within the pause.
+  await page.clock.pauseAt(Date.now() + 60_000);
   await box.click();
   await expect(box).toBeChecked();
   await box.click();
   await expect(box).not.toBeChecked();
   // Well past the pause: nothing was sent, and a reload agrees.
-  await page.waitForTimeout(1000);
+  await page.clock.runFor(1000);
+  await page.clock.resume();
   await expect(toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` })).not.toBeChecked();
   await page.reload();
   await expect(toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` })).toBeVisible();
@@ -119,4 +125,39 @@ test("shopping: the arrow keys on a handle sort the list, and the order is kept"
   await page.unroute("**/api/shopping-items");
   await page.reload();
   await expect(names).toHaveText([a, b]);
+});
+
+test("shopping: what's added or ticked while an order is being saved stays", async ({ page }) => {
+  // It waits out a slowed order on purpose, then reloads.
+  test.setTimeout(60_000);
+  await signIn(page);
+  await page.goto("/shopping");
+  const id = tag();
+  const [a, b, c] = [`Glue ${id}`, `Brush ${id}`, `Tape ${id}`];
+  await add(page, a);
+  await add(page, b);
+  const names = toBuy(page).getByRole("button", { name: new RegExp(`^(${a}|${b}|${c})$`) });
+  await expect(names).toHaveText([b, a]);
+  // The order's answer is slow; meanwhile a third thing is added and the first is ticked off.
+  await page.route("**/api/shopping-items/order", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await toBuy(page)
+    .getByRole("button", { name: new RegExp(`^Move ${b}`) })
+    .press("ArrowDown");
+  await expect(names).toHaveText([a, b]);
+  await add(page, c);
+  await toBuy(page)
+    .getByRole("checkbox", { name: `Bought: ${a}` })
+    .click();
+  await expect(bought(page).getByText(a)).toBeVisible();
+  // Past the order's answer: nothing came back or went missing.
+  await page.waitForTimeout(2000);
+  await expect(names).toHaveText([c, b]);
+  await expect(bought(page).getByText(a)).toBeVisible();
+  await page.unroute("**/api/shopping-items/order");
+  await page.reload();
+  await expect(names).toHaveText([c, b]);
+  await expect(bought(page).getByText(a)).toBeVisible();
 });
