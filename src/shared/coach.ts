@@ -73,9 +73,9 @@ export function sanitizeCoachSettings(raw: unknown, current: AttemptSettings): P
   }
   if (input.supportType === "normal" || input.supportType === "tree") out.supportType = input.supportType;
   const layer = num(input.layerHeight);
-  if (layer !== undefined && layer >= Math.min(...LAYER_HEIGHTS) && layer <= Math.max(...LAYER_HEIGHTS)) {
-    out.layerHeight = Math.round(layer * 100) / 100;
-  }
+  // Only the heights the printer and the sheet's picker have.
+  const height = (LAYER_HEIGHTS as readonly number[]).find((h) => layer !== undefined && Math.abs(h - layer) < 1e-9);
+  if (height !== undefined) out.layerHeight = height;
   const infill = num(input.infillDensity);
   if (infill !== undefined && infill >= 0 && infill <= 100) out.infillDensity = Math.round(infill);
   const walls = num(input.wallLoops);

@@ -231,6 +231,12 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
 - **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
 
+## Signing in
+
+The sign-in screen, the "sign in on another device" page (`/link`) and the invite page (`/join`) share one frame, `AuthPage`: the mark, the name, a line of lead, one card, one obvious action. On the sign-in screen the primary button is the passkey ("Sign in with Face ID" on an iPhone, "Touch ID" on a Mac, "a passkey" elsewhere) and the name and password form sits right under it, a quiet "or with your name and password" between them, its button secondary; where passkeys aren't available the password button is the primary one. A used or expired link or invite is one calm sentence and a way back, never an error page.
+
+The account menu has three sign-in rows, kept short on purpose: "Sign in on another device" (what you reach for at the printer), "Invite someone", and one "Passkeys and password" row whose quiet second line says "Sign in with Face ID next time" until this device has a passkey. Each opens a sheet; the last holds the passkeys list (add this device's, rename, remove with Undo), "Change password", and the signed-in devices at the bottom ("Sign out" for one, "Sign out everywhere else"). On phones, sending a link (another device, an invite) uses the share sheet (`navigator.share`) as the primary action with Copy as the fallback. New pieces, all on the styleguide ("Signing in"): `QrCard` (dark on light in both themes, tokens `qr-bg` and `qr-ink`; desktop shows the QR, phones the link to share), `CodeDisplay` (the short code, large and grouped, with Copy), `InfoRow` (a passkey, a signed-in device, a waiting invite: icon by device kind, name, a quiet line, actions) and `PersonColorPicker`. "Next time, just Face ID?" is a quiet card toast (`toast.offer`: the words on a full-width line, the buttons in a row beneath) shown once per device.
+
 ## Keyboard and the command palette
 
 Desktop only. Phones have no palette and no shortcut list; their layouts are untouched.

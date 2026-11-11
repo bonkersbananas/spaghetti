@@ -22,6 +22,9 @@ describe("the failure coach's rules", () => {
       layerHeight: 0.16,
       nozzleDiameter: 0.6,
     });
+    // A layer height the picker has no option for is dropped, not rounded.
+    expect(sanitizeCoachSettings({ layerHeight: 0.15 }, {})).toBeNull();
+    expect(sanitizeCoachSettings({ layerHeight: 0.22 }, {})).toBeNull();
     expect(sanitizeCoachSettings(null, {})).toBeNull();
   });
 

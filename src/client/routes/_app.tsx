@@ -14,6 +14,7 @@ import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
 import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
+import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
 import { useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
@@ -82,6 +83,8 @@ function Shell() {
   useEffect(() => connectOutbox(queryClient), [queryClient]);
   // Follows what the other person does, while the app is open.
   useLiveUpdates();
+  // After a password sign-in on a device with no passkey: one quiet offer.
+  usePasskeyOffer();
   // A tapped notification says where to go; an answer given offline lands in the outbox behind this page's back.
   useServiceWorkerMessages(
     (path) => void navigate({ href: path }),
