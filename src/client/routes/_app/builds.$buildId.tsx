@@ -225,6 +225,12 @@ function Build({ item }: { item: ItemView }) {
   // The attempt to bring into view once it is on screen: a picked attempt that was folded away only mounts after the
   // render that unfolds the story, so the scroll waits for it here rather than looking it up at once.
   const scrollTo = useRef<string | null>(null);
+  // At once when its entry is on screen; a folded one waits for the render that unfolds it (below).
+  const bringIntoView = (attemptId: string) => {
+    const entry = entryRefs.current.get(attemptId);
+    if (entry) entry.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
+    else scrollTo.current = attemptId;
+  };
   useEffect(() => {
     const id = scrollTo.current;
     const entry = id ? entryRefs.current.get(id) : undefined;
@@ -236,7 +242,7 @@ function Build({ item }: { item: ItemView }) {
     const next = story[Math.max(0, Math.min(story.length - 1, selectedIndex + by))];
     if (!next) return;
     setSelected(next.id);
-    scrollTo.current = next.id;
+    bringIntoView(next.id);
   };
 
   // Comparing an attempt with the one before it (the sheet; desktop can swap either side from its header).
@@ -256,7 +262,7 @@ function Build({ item }: { item: ItemView }) {
   // The strip in the summary picks an attempt the way J and K do.
   const pickAttempt = (attemptId: string) => {
     setSelected(attemptId);
-    scrollTo.current = attemptId;
+    bringIntoView(attemptId);
   };
 
   // When any attempt has more than one photo, every entry keeps room for their column so the lead photos match.
