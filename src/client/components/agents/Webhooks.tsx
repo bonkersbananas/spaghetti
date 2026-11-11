@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { RowSkeleton } from "@/components/ui/Skeleton";
+import { featuresQuery } from "@/lib/drafts";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { deliveriesQuery, removeWebhook, retryDelivery, sendTestEvent, webhooksQuery } from "@/lib/webhooks";
 import { WebhookCard, WebhooksEmpty } from "./WebhookCard";
@@ -48,8 +49,16 @@ function Card({ webhook, agents, readOnly }: { webhook: WebhookInfo; agents: Age
  */
 export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
   const readOnly = useReadOnly();
-  const { data: webhooks, isPending } = useQuery(webhooksQuery);
+  const { data: features } = useQuery(featuresQuery);
+  const { data: webhooks, isPending } = useQuery({ ...webhooksQuery, enabled: features?.webhooks === true });
   const [adding, setAdding] = useState(false);
+  if (features && !features.webhooks) {
+    return (
+      <Section id="webhooks" title="Webhooks" className="max-w-2xl">
+        <p className="text-small text-ink-faint">Webhooks need a key on the server; see docs/deploy.md.</p>
+      </Section>
+    );
+  }
   return (
     <Section
       id="webhooks"
@@ -68,7 +77,7 @@ export default function Webhooks({ agents }: { agents: AgentInfo[] }) {
         </Button>
       }
     >
-      {isPending ? (
+      {isPending || !features ? (
         <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
           <RowSkeleton />
         </div>

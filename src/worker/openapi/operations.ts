@@ -236,8 +236,8 @@ export const operations: Record<string, Operation> = {
     }),
   },
   "GET /features": {
-    summary: "What this server can do beyond the basics (Claude drafts and photo reads).",
-    response: z.object({ drafts: z.boolean(), photoReads: z.boolean() }),
+    summary: "What this server can do beyond the basics (Claude drafts and photo reads, webhooks).",
+    response: z.object({ drafts: z.boolean(), photoReads: z.boolean(), webhooks: z.boolean() }),
   },
 
   // Items.

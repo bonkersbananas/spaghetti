@@ -191,6 +191,8 @@ export interface FeaturesResponse {
   drafts: boolean;
   /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
+  /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
+  webhooks: boolean;
 }
 
 /** POST and DELETE /api/items/:id/draft. */

@@ -3,7 +3,7 @@ import { SECRET_PREFIX, SECRET_SHOWN_CHARS } from "../../shared/webhooks.ts";
 /**
  * The webhook signing secrets, and how they are kept (decision 0025). The HMAC key has to be recoverable to
  * sign, so it can't be hashed like an agent token. It is stored encrypted with AES-GCM under a key derived (HKDF)
- * from a Worker secret, `WEBHOOK_SECRET_KEY` or, when that isn't set, `VAPID_PRIVATE_KEY`: a copy of the database
+ * from the Worker secret `WEBHOOK_SECRET_KEY` (no other key stands in for it, so rotating the push key can't break webhooks): a copy of the database
  * alone can't sign anything. Nothing here is ever logged.
  */
 
@@ -19,7 +19,7 @@ const unb64 = (text: string) =>
   Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
 
 /** The key material, or null when the Worker has none (webhooks are then unavailable). */
-export const secretKeySource = (env: Env) => env.WEBHOOK_SECRET_KEY || env.VAPID_PRIVATE_KEY || null;
+export const secretKeySource = (env: Env) => env.WEBHOOK_SECRET_KEY || null;
 
 async function encryptionKey(env: Env): Promise<CryptoKey> {
   const source = secretKeySource(env);

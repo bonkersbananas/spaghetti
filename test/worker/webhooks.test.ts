@@ -187,6 +187,47 @@ describe("making webhooks", () => {
   });
 });
 
+describe("without a key, and delivering from a write", () => {
+  it("answers 503 with a plain sentence on every endpoint when there is no WEBHOOK_SECRET_KEY", async () => {
+    const key = env.WEBHOOK_SECRET_KEY;
+    env.WEBHOOK_SECRET_KEY = undefined;
+    try {
+      for (const [method, path] of [
+        ["GET", "/api/webhooks"],
+        ["POST", "/api/webhooks"],
+        ["POST", `/api/webhooks/${uuid()}/test`],
+      ] as const) {
+        const response = await request(path, {
+          method,
+          cookie,
+          json: method === "POST" ? { url: URL_OK, kinds: ["all"] } : undefined,
+        });
+        expect(response.status, path).toBe(503);
+        expect((await errorOf(response)).message).toBe("Webhooks need a key on the server; see docs/deploy.md.");
+      }
+      expect((await (await request("/api/features", { cookie })).json<{ webhooks: boolean }>()).webhooks).toBe(false);
+    } finally {
+      env.WEBHOOK_SECRET_KEY = key;
+    }
+    expect((await (await request("/api/features", { cookie })).json<{ webhooks: boolean }>()).webhooks).toBe(true);
+  });
+
+  it("starts a delivery pass after a write, so it doesn't wait for the cron", async () => {
+    const { made } = await make(["item"]);
+    const sent = stubWeb();
+    env.WEBHOOKS_ON_WRITE = "on";
+    try {
+      await createItem();
+      // The pass runs in waitUntil; give it a moment.
+      for (let i = 0; i < 50 && !sent.length; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      env.WEBHOOKS_ON_WRITE = "off";
+    }
+    expect(sent).toHaveLength(1);
+    expect((await deliveries(made?.webhook.id ?? ""))[0]).toMatchObject({ status: "delivered" });
+  });
+});
+
 describe("delivering changes", () => {
   it("turns the changes it asked for into signed POSTs, in the change feed's shape", async () => {
     const { made } = await make(["item"]);

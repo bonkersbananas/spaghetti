@@ -74,13 +74,13 @@ The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily pur
 
 ## Webhooks
 
-Webhooks ([0025](decisions/0025-webhooks-signed-from-the-cron.md)) keep their signing secrets encrypted under a key made from the `WEBHOOK_SECRET_KEY` secret, or from `VAPID_PRIVATE_KEY` when that isn't set (so they work without any step here; adding a webhook without either answers `503`). Set a key of its own so that redoing push doesn't make the stored secrets unreadable, once, before the first webhook is added, and never change it afterwards (webhooks made under another key fail until they are added again):
+Webhooks ([0025](decisions/0025-webhooks-signed-from-the-cron.md)) keep their signing secrets encrypted under a key made from the `WEBHOOK_SECRET_KEY` secret, and from nothing else (not the VAPID key, so redoing push can never break them). Without it the Agents page says "Webhooks need a key on the server; see docs/deploy.md" and every `/api/webhooks` endpoint answers `503 webhooks_unavailable`. Set it once, before the first webhook is added; this generates and sets it without ever printing it, and `wrangler deploy` keeps it. Never change it afterwards (webhooks made under another key fail until they are added again):
 
 ```sh
 openssl rand -base64 32 | pnpm exec wrangler secret put WEBHOOK_SECRET_KEY
 ```
 
-The 5-minute cron sends the deliveries. The e2e tests and screenshots set `WEBHOOKS_ALLOW_LOCAL` (webhooks may then go to 127.0.0.1, where the stand-in receiver in `scripts/lib/fake-claude.ts` listens); never set it on a real Worker.
+A write that records a change also starts a delivery pass (`waitUntil`), and the 5-minute cron sends what that missed and the retries. The e2e tests and screenshots set `WEBHOOKS_ALLOW_LOCAL` (webhooks may then go to 127.0.0.1, where the stand-in receiver in `scripts/lib/fake-claude.ts` listens); never set it on a real Worker.
 
 ## Claude drafting ideas
 

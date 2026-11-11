@@ -267,6 +267,9 @@ export async function sendDue(env: Env, db: Db, now = Date.now()): Promise<{ sen
 /** The cron's job: make deliveries, send what is due, tidy old ones. Never throws (the cron runs other things too). */
 export async function runWebhooks(env: Env, now = Date.now()) {
   const db = getDb(env.DB);
+  if (!(await db.select({ id: webhooks.id }).from(webhooks).where(isNull(webhooks.deletedAt)).limit(1).get())) {
+    return { made: 0, sent: 0, failed: 0 };
+  }
   const made = await fanOut(db, now);
   const result = await sendDue(env, db, now);
   return { made, ...result };

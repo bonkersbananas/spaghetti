@@ -83,6 +83,13 @@ export const toDelivery = (row: WebhookDelivery): DeliveryInfo => ({
  * A webhook belongs to the person who made it. The secret comes back once, when it is made.
  */
 export const webhookRoutes = new Hono<AppEnv>()
+  // Without WEBHOOK_SECRET_KEY nothing here works: say so plainly, the same for every endpoint.
+  .use(async (c, next) => {
+    if (!secretKeySource(c.env)) {
+      return apiError(c, 503, "webhooks_unavailable", "Webhooks need a key on the server; see docs/deploy.md.");
+    }
+    await next();
+  })
   .get("/", async (c) => {
     const rows = await c.var.db
       .select()
@@ -93,9 +100,6 @@ export const webhookRoutes = new Hono<AppEnv>()
   })
 
   .post("/", async (c) => {
-    if (!secretKeySource(c.env)) {
-      return apiError(c, 503, "webhooks_unavailable", "This server has no key to keep webhook secrets under yet.");
-    }
     const parsed = createWebhook.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success)
       return apiError(c, 400, "invalid", "A webhook needs an address and the kinds of change it wants.");
