@@ -186,20 +186,28 @@ function Today() {
           Capture an idea or start a build. What's printing and what to pick up next will show here.
         </EmptyState>
       ) : quiet ? (
-        <EmptyState
-          className="py-10 md:py-20"
-          illustration={<SpoolStrand />}
-          title="All quiet in the kitchen"
-          action={
-            <Link to="/ideas" className="focus-ring rounded-md">
-              <Button variant="secondary" tabIndex={-1}>
-                See the ideas
-              </Button>
-            </Link>
-          }
-        >
-          Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
-        </EmptyState>
+        <>
+          {/* Nothing on the bed is exactly when a new message from the other person is worth a line. */}
+          <div className="empty:hidden">
+            <Suspense fallback={null}>
+              <CommentsLine />
+            </Suspense>
+          </div>
+          <EmptyState
+            className="py-10 md:py-20"
+            illustration={<SpoolStrand />}
+            title="All quiet in the kitchen"
+            action={
+              <Link to="/ideas" className="focus-ring rounded-md">
+                <Button variant="secondary" tabIndex={-1}>
+                  See the ideas
+                </Button>
+              </Link>
+            }
+          >
+            Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
+          </EmptyState>
+        </>
       ) : (
         // On a phone the blocks run in one column in the order below (bed, up next, pick up, printer, month, back burner).
         // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.

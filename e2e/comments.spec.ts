@@ -260,6 +260,31 @@ test("a message that ends with a link shows a card in place of the address, and 
   await expect(thread(page).getByText("(edited)")).toBeVisible();
 });
 
+test("Today's All quiet state shows the line for a new message too", async ({ page }) => {
+  // Only a young idea, nothing printing or loaded, and no journal: the quiet kitchen.
+  await page.route(/\/api\/journal\/summary/, (route) =>
+    route.fulfill({ json: { summary: { prints: 0, worked: 0, partly: 0, spaghetti: 0, finished: [] } } }),
+  );
+  await page.route(/\/api\/journal\?/, (route) => route.fulfill({ json: { entries: [], items: [], next: null } }));
+  const id = await newIdea(page, "Bath tugboat");
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "All quiet in the kitchen" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Sam Okafor on/ })).toHaveCount(0);
+  const sams = await samSession(page);
+  await sams.say(id, "Could it be in blue PETG?");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "All quiet in the kitchen" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Sam Okafor on Bath tugboat: Could it be in blue PETG/ })).toBeVisible();
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+    .analyze();
+  expect(violations.map((violation) => `today: ${violation.id}`)).toEqual([]);
+  await page.getByRole("link", { name: /Sam Okafor on Bath tugboat/ }).click();
+  await expect(thread(page).getByText("Could it be in blue PETG?")).toBeVisible();
+  await page.goto("/today");
+  await expect(page.getByRole("link", { name: /Sam Okafor on/ })).toHaveCount(0);
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`Today has one quiet line for what Sam wrote, until it is read, ${theme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme });
