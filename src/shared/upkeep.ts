@@ -129,14 +129,28 @@ export function formatHours(hours: number): string {
 /** "Clean the build plate" → "clean the build plate", for use inside a sentence. */
 export const lowerFirst = (text: string) => (text ? text[0]?.toLowerCase() + text.slice(1) : text);
 
-/** The one quiet line for Today, or null when nothing is due. */
+/** "it's been 19 days" or "it's been 42 print hours": how long since, the way a person would say it. */
+export function sinceSentence(status: UpkeepStatus, sinceHours: number, sinceDays: number): string {
+  if (status.by === "days") {
+    const days = Math.floor(sinceDays);
+    return days === 0 ? "it's been less than a day" : `it's been ${days} ${days === 1 ? "day" : "days"}`;
+  }
+  const hours = Math.floor(sinceHours);
+  return `it's been ${hours} print ${hours === 1 ? "hour" : "hours"}`;
+}
+
+/**
+ * The one quiet line for Today, or null when nothing is due: "Clean the build plate: it's been 19 days", and when
+ * more are due, `more` says so ("1 more due") for a quiet second part.
+ */
 export function dueLine(
   due: ReadonlyArray<{ name: string; status: UpkeepStatus; sinceHours: number; sinceDays: number }>,
-): string | null {
+): { text: string; more: string | null } | null {
   const [first] = [...due].sort((a, b) => b.status.fraction - a.status.fraction);
   if (!first) return null;
   const more = due.length - 1;
-  return `Time to ${lowerFirst(first.name)}, ${sinceWords(first.status, first.sinceHours, first.sinceDays)}${
-    more > 0 ? `, and ${more} more` : ""
-  }.`;
+  return {
+    text: `${first.name}: ${sinceSentence(first.status, first.sinceHours, first.sinceDays)}`,
+    more: more > 0 ? `${more} more due` : null,
+  };
 }
