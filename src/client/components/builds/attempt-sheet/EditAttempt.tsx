@@ -199,7 +199,11 @@ export function EditAttempt({
             unknown={slicer.unknownFilaments}
             card={
               attempt.file ? (
-                <SavedFileCard file={attempt.file} onRemove={() => removeSlicerFile(queryClient, item.id, attempt)} />
+                <SavedFileCard
+                  file={attempt.file}
+                  filaments={attempt.settings.filaments}
+                  onRemove={() => removeSlicerFile(queryClient, item.id, attempt)}
+                />
               ) : null
             }
           />

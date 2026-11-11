@@ -14,6 +14,8 @@ export interface ParseOptions {
   totalSeconds?: number;
   /** The most segments to keep (default 2 million, about 50 MB of positions). */
   maxSegments?: number;
+  /** Keep the layers for `end` (default). Off, the reader only counts them and hands each to `onLayer`: a viewer that takes them as they come needs no second copy. */
+  keepLayers?: boolean;
   /** Called with each layer as it is finished, before `end`. */
   onLayer?: (layer: Layer) => void;
 }
@@ -124,7 +126,9 @@ export class GcodeReader {
   // The layer being built.
   private cur: Building | null = null;
   private readonly layers: Layer[] = [];
-  private seconds = new Map<number, number | null>();
+  private layerCount = 0;
+  private lastZ = 0;
+  private firstTotal: number | null = null;
 
   // Merging consecutive collinear or very short segments.
   private hasPending = false;
@@ -180,7 +184,7 @@ export class GcodeReader {
     this.rest = "";
     this.finishLayer();
     const warnings: string[] = [];
-    if (this.layers.length === 0) {
+    if (this.layerCount === 0) {
       warnings.push(
         this.sawLayerComment
           ? "The G-code has no extrusion moves"
@@ -193,12 +197,7 @@ export class GcodeReader {
       segments: this.toolSegments[i] ?? 0,
     }));
     const decimated = this.minSegment > 0.04 || this.infillStride > 1;
-    // Elapsed time per layer, from the remaining time at its start.
-    const total = this.totalSeconds ?? firstRemaining(this.seconds);
-    for (const layer of this.layers) {
-      const remaining = this.seconds.get(layer.index);
-      layer.seconds = remaining != null && total != null ? Math.max(0, Math.round(total - remaining * 60)) : null;
-    }
+    const total = this.totalSeconds ?? this.firstTotal;
     return {
       plate,
       layers: this.layers,
@@ -207,6 +206,7 @@ export class GcodeReader {
       totalSeconds: total,
       announcedLayers: this.announced,
       stats: {
+        layers: this.layerCount,
         segments: this.kept,
         moves: this.moves,
         decimated,
@@ -370,7 +370,7 @@ export class GcodeReader {
     if (!Number.isFinite(z) || !this.cur) return;
     this.cur.z = z;
     // Prusa/Orca write ;Z: before ;HEIGHT:, Bambu Z_HEIGHT before LAYER_HEIGHT: both end up here.
-    if (!this.cur.height) this.cur.height = z - (this.layers.at(-1)?.z ?? 0);
+    if (!this.cur.height) this.cur.height = z - this.lastZ;
   }
 
   private setHeight(h: number): void {
@@ -579,26 +579,26 @@ export class GcodeReader {
     const cur = this.cur;
     this.cur = null;
     if (!cur || cur.feature.n === 0) return;
-    const index = this.layers.length;
+    const index = this.layerCount++;
+    this.lastZ = cur.z;
+    if (this.firstTotal === null && cur.remainingMinutes !== null) this.firstTotal = cur.remainingMinutes * 60;
+    const total = this.totalSeconds ?? this.firstTotal;
     const layer: Layer = {
       index,
       z: cur.z,
       height: cur.height,
-      seconds: null,
+      seconds:
+        cur.remainingMinutes !== null && total !== null
+          ? Math.max(0, Math.round(total - cur.remainingMinutes * 60))
+          : null,
       count: cur.feature.n,
       pos: cur.pos.a.slice(0, cur.pos.n),
       feature: cur.feature.a.slice(0, cur.feature.n),
       filament: cur.filament.a.slice(0, cur.filament.n),
     };
-    this.seconds.set(index, cur.remainingMinutes);
-    this.layers.push(layer);
+    if (this.opts.keepLayers !== false) this.layers.push(layer);
     this.opts.onLayer?.(layer);
   }
-}
-
-function firstRemaining(seconds: Map<number, number | null>): number | null {
-  for (const v of seconds.values()) if (v != null) return v * 60;
-  return null;
 }
 
 /** Reads a whole string of G-code at once (tests, small files). */

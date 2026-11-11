@@ -98,6 +98,15 @@ describe("the tugboat", () => {
     expect(chunked.layers[200]?.pos).toEqual(paths.layers[200]?.pos);
   });
 
+  it("can hand layers over without keeping them", () => {
+    const got: number[] = [];
+    const paths = parseGcode(gcode, { keepLayers: false, onLayer: (l) => got.push(l.count) });
+    expect(paths.layers).toHaveLength(0);
+    expect(paths.stats.layers).toBe(317);
+    expect(got.reduce((a, b) => a + b, 0)).toBe(paths.stats.segments);
+    expect(paths.totalSeconds).toBe(12000);
+  });
+
   it("hands each layer over as it finishes", () => {
     const got: number[] = [];
     parseGcode(gcode, { onLayer: (l) => got.push(l.index) });
