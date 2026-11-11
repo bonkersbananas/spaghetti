@@ -53,11 +53,11 @@ export function usePrinterSetup(): PrinterSetup {
 /** Spools as matching and hints need them. */
 export const asSpoolLike = (spool: Spool): SpoolLike => spool;
 
-function patchSpools(queryClient: QueryClient, change: (spools: Spool[]) => Spool[]) {
+export function patchSpools(queryClient: QueryClient, change: (spools: Spool[]) => Spool[]) {
   queryClient.setQueryData<Spool[]>(spoolsQuery.queryKey, (spools) => (spools ? change(spools) : spools));
 }
 
-function patchSpool(queryClient: QueryClient, id: string, change: (spool: Spool) => Spool) {
+export function patchSpool(queryClient: QueryClient, id: string, change: (spool: Spool) => Spool) {
   patchSpools(queryClient, (spools) => spools.map((spool) => (spool.id === id ? change(spool) : spool)));
 }
 
@@ -82,9 +82,11 @@ export function addSpool(
   draft: SpoolDraft,
   createdBy: string,
   photo?: File,
+  /** Given the photo's upload, for what follows it (Claude reading its label); the spool shows "Reading the label…" meanwhile. */
+  afterPhoto?: (uploaded: Promise<boolean>, spoolId: string) => void,
 ): { spool: Spool; saved: Promise<boolean> } {
   const now = Date.now();
-  const spool: Spool = {
+  const spool = {
     id: crypto.randomUUID(),
     material: draft.material.trim() || "PLA",
     brand: draft.brand?.trim() || null,
@@ -102,10 +104,24 @@ export function addSpool(
     photo: null,
     slot: null,
     trayUuid: null,
+    fromLabel: [],
+    labelRead: null,
     createdBy,
     createdAt: now,
     updatedAt: now,
-  };
+    // Every other field is checked against the type; these start out missing (as null would) and the server's copy
+    // fills them in a moment later (kept out of the pantry's first load: lib/label-read.ts has the full defaults).
+  } satisfies Omit<
+    Spool,
+    | "diameterMm"
+    | "nozzleTempMin"
+    | "nozzleTempMax"
+    | "bedTempMin"
+    | "bedTempMax"
+    | "dryTempC"
+    | "dryHours"
+    | "productCode"
+  > as Partial<Spool> as Spool;
   patchSpools(queryClient, (spools) => [spool, ...spools]);
   if (!queryClient.getQueryData(spoolsQuery.queryKey)) queryClient.setQueryData(spoolsQuery.queryKey, [spool]);
   const saved = (async () => {
@@ -125,7 +141,10 @@ export function addSpool(
         },
       });
       patchSpool(queryClient, spool.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
-      if (photo) void setSpoolPhoto(queryClient, spool.id, photo);
+      if (photo) {
+        const uploaded = setSpoolPhoto(queryClient, spool.id, photo);
+        afterPhoto?.(uploaded, spool.id);
+      }
       return true;
     } catch {
       patchSpools(queryClient, (spools) => spools.filter((s) => s.id !== spool.id));
@@ -225,7 +244,7 @@ export async function weighSpool(
 }
 
 /** A new photo of the label: shown from the device at once, then uploaded. */
-export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, file: File) {
+export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, file: File): Promise<boolean> {
   try {
     const processed = await processPhoto(file);
     const photoId = crypto.randomUUID();
@@ -241,8 +260,10 @@ export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, f
     form.set("large", processed.large, "large");
     form.set("thumb", processed.thumb, "thumb");
     await api<SpoolResponse>(`/spools/${spoolId}/photo/${photoId}`, { method: "PUT", body: form });
+    return true;
   } catch (error) {
     toast.error("Couldn't save the photo", error instanceof Error ? error.message : undefined);
+    return false;
   }
 }
 

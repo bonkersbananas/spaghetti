@@ -8,6 +8,7 @@ import { itemDrafts, items } from "../db/schema.ts";
 import { draftsEnabled, getPictures, runDraft, startDraft, toApiDraft, undoDraft } from "../draft/run.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { labelReadsEnabled } from "../label-read/run.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
 import { secretKeySource } from "../webhooks/secrets.ts";
 
@@ -23,6 +24,7 @@ export const draftRoutes = new Hono<AppEnv>()
     c.json<FeaturesResponse>({
       drafts: draftsEnabled(c.env),
       photoReads: photoReadsEnabled(c.env),
+      labelReads: labelReadsEnabled(c.env),
       coach: coachEnabled(c.env),
       webhooks: Boolean(secretKeySource(c.env)),
     }),

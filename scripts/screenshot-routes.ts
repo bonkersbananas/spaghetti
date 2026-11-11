@@ -338,6 +338,40 @@ async function openIdea(page: Page, id: string) {
   await page.getByRole("button", { name: "Start building" }).first().waitFor();
 }
 
+/** The spools the label shots make (removed again by their cleanup). */
+const labelSpoolIds: string[] = [];
+
+/**
+ * A spool made through the API with this note (the stand-in Claude picks its answer by a word in it, see
+ * scripts/lib/fake-claude.ts), opened on its page and given a label photo to read, the way "Read the label" does.
+ */
+async function labelSpool(page: Page, note: string, photo: "jade" | "two") {
+  const id = await page.evaluate(async (text) => {
+    const spoolId = crypto.randomUUID();
+    await fetch("/api/spools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: spoolId, material: "PLA", note: text }),
+    });
+    return spoolId;
+  }, note);
+  labelSpoolIds.push(id);
+  await page.goto(`/pantry/${id}`);
+  await page.getByRole("button", { name: "Read the label" }).waitFor();
+  await page.getByTestId("photo-input").setInputFiles({
+    name: `label-${photo}.jpg`,
+    mimeType: "image/jpeg",
+    buffer: readFileSync(`e2e/fixtures/label-${photo}.jpg`),
+  });
+}
+
+/** Takes the spools the label shots made off the shelf again. */
+async function removeLabelSpools(page: Page) {
+  await page.evaluate(async (ids) => {
+    for (const id of ids) await fetch(`/api/spools/${id}`, { method: "DELETE" });
+  }, labelSpoolIds.splice(0));
+}
+
 /** The builds the photo-read shots make (removed again by their cleanup). */
 const photoReadBuilds: string[] = [];
 
@@ -1832,6 +1866,61 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
+  // Read the label (decision 0031): the way in, in Add a spool ...
+  {
+    name: "spool-add-label",
+    path: "/pantry",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Add (a )?spool/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog", { name: "New spool" });
+      await dialog.getByText(/Claude fills in what the label says/).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  // ... while Claude reads it (the stand-in takes ten seconds for a "slow" one) ...
+  {
+    name: "spool-label-reading",
+    path: "/pantry",
+    prepare: async (page) => {
+      await labelSpool(page, "Slow shipping, arrived last week", "jade");
+      await page.getByText("Reading the label…").first().waitFor({ timeout: 8_000 });
+    },
+    cleanup: removeLabelSpools,
+  },
+  // ... the spool it filled, with "from the label" on what it read ...
+  {
+    name: "spool-label-filled",
+    path: "/pantry",
+    fullPage: true,
+    prepare: async (page) => {
+      await labelSpool(page, "Arrived last week", "jade");
+      await page
+        .getByRole("textbox", { name: "Brand" })
+        .and(page.locator("[value='Bambu Lab']"))
+        .waitFor({ timeout: 30_000 });
+    },
+    cleanup: removeLabelSpools,
+  },
+  // ... and a photo with two labels: the list to confirm.
+  {
+    name: "spool-label-several",
+    path: "/pantry",
+    prepare: async (page) => {
+      await labelSpool(page, "Two in one photo", "two");
+      await page.getByRole("dialog", { name: "2 spools on this label" }).waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeLabelSpools(page);
+    },
+  },
   // A spool with no label photo: its hero is the disc itself (black, to check its rim in dark mode).
   { name: "spool-black", path: `/pantry/${SEED_SPOOL_IDS.black}` },
   // Counted in grams: the figure, "Weigh it", and what used it (the tugboat's attempts, a weighing).

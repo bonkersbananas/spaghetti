@@ -4,6 +4,7 @@ import type { Coach } from "./coach.ts";
 import type { ItemDraft } from "./draft.ts";
 import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
+import type { LabelField, LabelRead } from "./label-read.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
@@ -198,6 +199,8 @@ export interface FeaturesResponse {
   drafts: boolean;
   /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
+  /** Claude can read a spool's label from a photo (decision 0031); the same key. */
+  labelReads: boolean;
   /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
   coach: boolean;
   /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
@@ -537,6 +540,25 @@ export interface Spool {
   slot: string | null;
   /** The RFID tray UUID of a Bambu spool, as the AMS reports it; the printer bridge finds the spool by it. */
   trayUuid: string | null;
+  /** From the label (decision 0031), or typed. Millimetres: 1.75 or 2.85. */
+  diameterMm: number | null;
+  /** The filament's printing range in °C, as the label gives it. */
+  nozzleTempMin: number | null;
+  nozzleTempMax: number | null;
+  bedTempMin: number | null;
+  bedTempMax: number | null;
+  /** How hot and how long to dry it, as the label says. */
+  dryTempC: number | null;
+  dryHours: number | null;
+  /** Bambu's RFID or product code, when the label prints one (not the AMS's tray UUID). */
+  productCode: string | null;
+  /**
+   * The fields Claude filled in from a label photo and nobody has touched since; each is shown as "from the label".
+   * A person's edit to a field takes it off this list.
+   */
+  fromLabel: LabelField[];
+  /** A label read in progress, waiting for a tap, or that didn't work out; null otherwise. */
+  labelRead: LabelRead | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -565,7 +587,31 @@ export interface CreateSpoolRequest {
   note?: string;
   driedAt?: number | null;
   trayUuid?: string | null;
+  diameterMm?: number | null;
+  nozzleTempMin?: number | null;
+  nozzleTempMax?: number | null;
+  bedTempMin?: number | null;
+  bedTempMax?: number | null;
+  dryTempC?: number | null;
+  dryHours?: number | null;
+  productCode?: string | null;
   createdAt?: number;
+}
+
+/**
+ * POST /api/spools/:id/label-read: reads the label in the spool's photo (people only). `placeholders` are the fields
+ * the person hadn't set when the spool was made (the sheet's starting material and weight), which the label may
+ * replace; any other field that already has a value is left alone.
+ */
+export interface ReadLabelRequest {
+  placeholders?: Array<"material" | "netGrams">;
+}
+
+/** POST /api/spools/:id/label-read and /accept, DELETE /api/spools/:id/label-read. */
+export interface LabelReadResponse {
+  spool: Spool;
+  /** The other spools a confirmed read made (accept only). */
+  created?: Spool[];
 }
 
 /** PUT /api/spools/:id/weight: what it held when new, and what the empty spool weighs. Either can be null to clear (back to a hand-set level). */
