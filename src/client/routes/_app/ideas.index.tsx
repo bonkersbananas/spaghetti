@@ -15,6 +15,7 @@ import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { useBuilds, useIdeas } from "@/lib/items";
+import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/_app/ideas/")({
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 function Ideas() {
+  useListPicker();
   const { items, isPending, error, refetch } = useIdeas();
   // Ideas that were started stay here, after the rest: they are the builds that began as an idea.
   const { items: builds } = useBuilds();
@@ -110,7 +112,7 @@ function Ideas() {
           )}
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">
-              <ul className={grid} aria-label="Up next">
+              <ul data-picks className={grid} aria-label="Up next">
                 {queue.map((item, index) => card(item, index))}
               </ul>
             </Section>
@@ -118,12 +120,12 @@ function Ideas() {
           {rest.length > 0 &&
             (queue.length > 0 ? (
               <Section id="inbox-heading" title="The rest">
-                <ul className={grid} aria-label="Ideas">
+                <ul data-picks className={grid} aria-label="Ideas">
                   {rest.map((item) => card(item, -1))}
                 </ul>
               </Section>
             ) : (
-              <ul className={grid} aria-label="Ideas">
+              <ul data-picks className={grid} aria-label="Ideas">
                 {rest.map((item) => card(item, -1))}
               </ul>
             ))}

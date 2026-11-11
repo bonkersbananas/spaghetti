@@ -14,6 +14,7 @@
 export const SHORTCUT_GROUPS = [
   "anywhere",
   "palette",
+  "lists",
   "idea",
   "build",
   "journal",
@@ -28,6 +29,7 @@ export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 export const GROUP_LABELS: Record<ShortcutGroup, string> = {
   anywhere: "Anywhere",
   palette: "In the command palette",
+  lists: "In lists of cards",
   idea: "On an idea",
   build: "On a build",
   journal: "In the journal",
@@ -42,7 +44,7 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
 export const SHORTCUT_COLUMNS: readonly (readonly ShortcutGroup[])[] = [
   ["anywhere", "search", "week"],
   ["build", "journal", "pantry"],
-  ["idea", "spool", "shopping", "palette"],
+  ["lists", "idea", "spool", "shopping", "palette"],
 ];
 
 interface ShortcutDefinition {
@@ -74,6 +76,9 @@ export const SHORTCUTS = define([
   { id: "palettePrevious", group: "palette", label: "Previous result", keys: ["arrowup"] },
   { id: "paletteRun", group: "palette", label: "Open it, or run it", keys: ["enter"] },
   { id: "paletteClose", group: "palette", label: "Close", keys: ["escape"] },
+
+  { id: "listNext", group: "lists", label: "Next card or row", keys: ["j"] },
+  { id: "listPrevious", group: "lists", label: "Previous card or row", keys: ["k"] },
 
   { id: "ideaBack", group: "idea", label: "Back to Ideas", keys: ["escape"] },
   { id: "ideaBuild", group: "idea", label: "Start building", keys: ["b"] },
