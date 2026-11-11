@@ -1,6 +1,7 @@
 import type { Spool } from "@shared/api";
 import { OUTCOME_LABELS, OUTCOMES } from "@shared/attempts";
 import type { LabelField } from "@shared/label-read";
+import { gramsText } from "@shared/ledger";
 import { recipesFor } from "@shared/recipes";
 import {
   FINISHES,
@@ -170,7 +171,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
   };
   const camera = useFilePicker({ camera: true, onFiles: ([file]) => void takePhoto(file) });
   const library = useFilePicker({ onFiles: ([file]) => void takePhoto(file) });
-  const reading = spool.labelRead?.status === "reading";
+  // Waiting on Claude with nothing to show for it yet: the title stands in for what is coming.
+  const waiting = spool.labelRead?.status === "reading" && !value.colorName && !spool.fromLabel.length;
   // The marks stay until the field is edited, here or anywhere (the server's copy drops them as it saves).
   const fromLabel = (...fields: LabelField[]) =>
     fields.some(
@@ -241,19 +243,13 @@ function SpoolPage({ spool }: { spool: Spool }) {
                   variant="secondary"
                   size="sm"
                   icon={isDesktop ? SparkleIcon : CameraIcon}
-                  disabled={readOnly || reading}
+                  disabled={readOnly}
                   onClick={isDesktop ? library.open : camera.open}
                 >
                   Read the label
                 </Button>
                 {!isDesktop && (
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    icon={ImageIcon}
-                    disabled={readOnly || reading}
-                    onClick={library.open}
-                  >
+                  <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
                     Library
                   </Button>
                 )}
@@ -290,7 +286,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
             <TextArea
               appearance="title"
               aria-label="Color name"
-              placeholder={value.material}
+              placeholder={waiting ? "Reading the label…" : value.material}
+              className={waiting ? "sg-pulse" : undefined}
               minRows={1}
               maxLength={60}
               readOnly={readOnly}
@@ -304,7 +301,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
               }}
             />
             <MetaList className="text-body text-ink-soft">
-              {[name.detail || value.material, ...(spool.slot ? [slotPlace(spool.slot)] : [])].map((piece) => (
+              {[
+                // While Claude reads an unnamed spool the title says so, and the material isn't said twice.
+                ...(waiting ? [] : [name.detail || value.material]),
+                ...(spool.slot ? [slotPlace(spool.slot)] : []),
+              ].map((piece) => (
                 <span key={piece}>{piece}</span>
               ))}
             </MetaList>
@@ -339,7 +340,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
 
             {spool.netGrams !== null && fromLabel("netGrams") && (
               <p className="text-small text-ink-soft flex flex-wrap items-baseline gap-x-2 px-0.5">
-                Net weight {spool.netGrams} g {fromLabel("netGrams")}
+                Net weight {gramsText(spool.netGrams)} {fromLabel("netGrams")}
               </p>
             )}
 
@@ -427,7 +428,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
                 size="sm"
                 label="Brand"
                 mark={fromLabel("brand")}
-                placeholder="Bambu, Polymaker…"
+                placeholder={waiting ? "Reading the label…" : "Bambu, Polymaker…"}
                 maxLength={60}
                 value={value.brand ?? ""}
                 onChange={(event) => change({ brand: event.target.value || null })}
