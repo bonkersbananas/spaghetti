@@ -534,6 +534,22 @@ async function showThread(page: Page, withComments = true) {
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 }
 
+/** Opens a comment's menu: a tap on its bubble on a phone, its button beside the bubble on desktop. */
+async function openCommentMenu(page: Page, id: string, button: string | RegExp) {
+  await showThread(page);
+  const comment = page.locator(`#comment-${id}`);
+  const phone = (page.viewportSize()?.width ?? 1440) < 768;
+  // Playwright's own scrolling lands a low message under the phone's action bar: centre it and tap it in the page.
+  await comment.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  if (phone) await comment.locator("> div").first().evaluate((el) => (el as HTMLElement).click());
+  else {
+    await comment.hover();
+    await comment.getByRole("button", { name: button }).click();
+  }
+  await page.getByRole("group", { name: "Reactions" }).last().waitFor();
+  await page.waitForTimeout(500);
+}
+
 const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
 
 type Slice = "all" | "none" | "young";
@@ -1703,6 +1719,32 @@ export const shots: Shot[] = [
   { name: "comments-idea", path: `/ideas/${SEED_IDS.deskTidy}`, prepare: (page) => showThread(page) },
   { name: "comments-build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, prepare: (page) => showThread(page) },
   { name: "comments-empty", path: `/ideas/${SEED_IDS.desiccantHook}`, prepare: (page) => showThread(page, false) },
+  // Reactions: the picker under an idea (a menu on desktop, a sheet on phones), and a comment's menu: the other
+  // person's message (reactions only) and your own (reactions over Edit and Delete).
+  {
+    name: "reactions-idea-picker",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const button = page.getByRole("button", { name: "React to this idea" });
+      // Playwright's own scrolling lands this under the phone's tab bar: centre it and press it in the page.
+      await button.evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        (el as HTMLElement).click();
+      });
+      await page.getByRole("group", { name: "Reactions" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "reactions-comment",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: (page) => openCommentMenu(page, commentId(8), /^React to /),
+  },
+  {
+    name: "reactions-own-comment",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: (page) => openCommentMenu(page, commentId(7), "Options for your comment"),
+  },
   {
     name: "comments-composing",
     path: `/ideas/${SEED_IDS.deskTidy}`,

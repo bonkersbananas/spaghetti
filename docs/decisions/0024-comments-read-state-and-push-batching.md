@@ -10,4 +10,4 @@ Status: Accepted
 
 **Follow-up:** comments are in search (`kind = 'comment'` rows in the FTS index kept by triggers, migration 0022; a hit shows as its idea or build with the comment as snippet and opens the thread with that comment lit) and Today has one quiet line for unread comments.
 
-**Left out:** a separate toggle for comment pushes (turning push on is the consent), per-message "seen" marks, reactions and threads inside threads, and writing comments offline (offline is read-only, [0005](0005-offline-read-only-with-outbox.md): the draft is kept on the device instead).
+**Left out:** a separate toggle for comment pushes (turning push on is the consent), per-message "seen" marks and threads inside threads (reactions came later: [0037](0037-reactions-a-curated-six.md)), and writing comments offline (offline is read-only, [0005](0005-offline-read-only-with-outbox.md): the draft is kept on the device instead).

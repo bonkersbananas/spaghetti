@@ -40,6 +40,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0033](0033-mac-bridge-paired-by-code.md) | The bridge runs on a Mac as one program, paired with a short code | Accepted |
 | [0035](0035-a-landing-page-at-the-root-for-visitors.md) | A landing page at the root for visitors, the app for the two people | Accepted |
 | [0036](0036-the-3d-view-reads-the-slicer-file-in-the-browser.md) | The 3D view reads the slicer file in the browser and loads only when asked for | Accepted |
+| [0037](0037-reactions-a-curated-six.md) | Reactions: a curated six on ideas, builds and comments, your own included | Accepted |
 
 ## Format
 

@@ -231,6 +231,11 @@ Never edit a migration that has been merged; add a new one.
 - The push is `worker/push/comments.ts`: the route waits `PUSH_BATCH_MS` in `waitUntil`, then `sendCommentPush` claims every unnotified comment at once, so a burst is one push. Comments aren't searchable yet (follow-up: the FTS view).
 - The client is `lib/comments.ts` (queries, optimistic send/edit/delete, per-thread drafts in `localStorage`, `useThread` which marks the thread read and keeps the "New" divider where it was when the thread opened) and `components/comments/` (`CommentThread` lazy-loads `Thread`); the pieces are in the design system (`ui/Message.tsx`, `ui/Composer.tsx`, `UnreadBadge` on `Card`) and the styleguide's Conversation section.
 
+### Reactions
+
+- Six fixed reactions ([0037](docs/decisions/0037-reactions-a-curated-six.md)), the list and pure rules in `shared/reactions.ts`. `reactions` table, keyed by `(target_id, user_id, kind)` where the target is an item or a comment; routes in `worker/routes/reactions.ts` (`PUT`/`DELETE /api/items/:id/reactions/:kind` and `/api/comments/:id/reactions/:kind`, idempotent, person-only), recorded in the change feed as an `updated` item or comment. `Item.reactions` comes from `loadItems`, `Comment.reactions` from the thread's GET.
+- The client writes through `reactTo` in `lib/reactions.ts` (optimistic; only the latest answer replaces the cache): `reactToItem` patches the item caches, `reactToComment` (lib/comments.ts) the thread. UI: `ui/Reactions.tsx` (in the styleguide's Conversation section), `components/reactions/` (`ItemReactions`, lazy, on the idea and build pages), and the comment menu in `comments/EditableBubble.tsx`.
+
 ### Sharing in
 
 - Four ways in ([docs/share.md](docs/share.md), [0015](docs/decisions/0015-share-targets-by-device.md)): the manifest's `share_target` (`POST /api/share`, taken by the service worker's `receiveShare`, which keeps the form in the `sg-share` cache and redirects to `/share?id=…`; `lib/share.ts` reads it, `routes/_app/share.tsx` saves it with `useCapture().shareIn` and `ShareSheet` shows "Captured"), the bookmarklet (`/share?title&url&text`, `shared/shortcut.ts`), and `POST /api/capture` (`worker/routes/capture.ts`) for the iOS Shortcuts built from the Agents page's card. Notes are composed by `shared/capture.ts` so the browser and the Worker agree.

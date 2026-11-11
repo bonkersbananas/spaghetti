@@ -84,7 +84,7 @@ export function ReactionPills({
               title={`${summary.label}: ${who}`}
               onClick={() => onToggle(summary.kind)}
               className={cn(
-                "pressable focus-ring touch-target rounded-pill text-small inline-flex h-8 items-center gap-1 px-2.5 font-semibold tabular-nums transition-colors disabled:opacity-60",
+                "pressable focus-ring touch-target rounded-pill text-small relative inline-flex h-8 items-center gap-1 px-2.5 font-semibold tabular-nums transition-colors disabled:opacity-60",
                 summary.mine
                   ? "bg-tomato-soft text-tomato-ink ring-tomato/30 ring-1 ring-inset"
                   : "bg-ink/5 text-ink-soft hover:bg-ink/8",
