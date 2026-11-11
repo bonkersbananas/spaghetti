@@ -17,6 +17,7 @@ import type { AttemptView, ItemView } from "@/lib/items";
 import { duration } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { itemName } from "../journal/JournalEntry";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
@@ -55,9 +56,15 @@ const layouts = {
  */
 export function PrintingCard({ item, attempt, person, via, compact = false }: PrintingCardProps) {
   const layout = layouts[compact ? "compact" : "big"];
-  // Whether it changed size since it first showed: only then does the new layout fade in.
-  const firstCompact = useRef(compact);
-  const changed = firstCompact.current !== compact;
+  // Each time a compact card becomes the big one on a phone (or back), its content is swapped and fades in; from
+  // md both layouts are the same row, so nothing is swapped there, and a change of breakpoint never remounts it.
+  const isDesktop = useIsDesktop();
+  const swaps = useRef(0);
+  const lastCompact = useRef(compact);
+  if (lastCompact.current !== compact) {
+    lastCompact.current = compact;
+    if (!isDesktop) swaps.current += 1;
+  }
   const reduce = useReducedMotion();
   const navigate = useNavigate();
   const offBed = isOffTheBed(attempt);
@@ -93,8 +100,8 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         </span>
       </Link>
       <m.div
-        key={compact ? "compact" : "big"}
-        initial={changed && !reduce ? { opacity: 0 } : false}
+        key={swaps.current}
+        initial={swaps.current > 0 && !reduce ? { opacity: 0 } : false}
         animate={{ opacity: 1, transition: { duration: duration.base } }}
         className={cn("grid md:grid-cols-5 md:grid-rows-[auto_1fr]", layout.card)}
       >

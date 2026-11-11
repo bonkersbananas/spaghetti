@@ -85,39 +85,54 @@ function Row({ item }: { item: ItemView }) {
 export function PickUpAgain({ builds }: { builds: ItemView[] }) {
   const reduce = useReducedMotion();
   const waiting = pickUpAgain(builds);
-  if (waiting.length === 0) return null;
+  // Mounted even while empty, so the section that appears when the first build starts waiting fades in too
+  // (after the card on the bed has gone); on first load everything is simply there.
   return (
-    <Section id="today-pickup" title="Pick up again" size="overline">
-      {/* A build whose print just got its answer arrives here, and the rows make room for it. */}
-      <div className="flex flex-col gap-1">
-        <AnimatePresence initial={false} mode="popLayout">
-          {waiting.slice(0, MOST).map((item) => (
-            <m.div
-              key={item.id}
-              layout={reduce ? false : "position"}
-              transition={spring.gentle}
-              initial={{ opacity: 0 }}
-              // After the card on the bed has gone, so the build seems to move here rather than show twice.
-              animate={{
-                opacity: 1,
-                transition: reduce
-                  ? { duration: 0 }
-                  : { duration: duration.base, ease: ease.out, delay: duration.base },
-              }}
-              exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.fast } }}
-            >
-              <Row item={item} />
-            </m.div>
-          ))}
-        </AnimatePresence>
-      </div>
-      {waiting.length > MOST && (
-        <Link to="/builds" className="focus-ring self-start rounded-sm">
-          <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-3">
-            All builds
-          </Button>
-        </Link>
+    <AnimatePresence initial={false}>
+      {waiting.length > 0 && (
+        <m.div
+          key="pickup"
+          initial={{ opacity: 0 }}
+          animate={{
+            opacity: 1,
+            transition: reduce ? { duration: 0 } : { duration: duration.base, ease: ease.out, delay: duration.base },
+          }}
+          exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.fast } }}
+        >
+          <Section id="today-pickup" title="Pick up again" size="overline">
+            {/* A build whose print just got its answer arrives here, and the rows make room for it. */}
+            <div className="flex flex-col gap-1">
+              <AnimatePresence initial={false} mode="popLayout">
+                {waiting.slice(0, MOST).map((item) => (
+                  <m.div
+                    key={item.id}
+                    layout={reduce ? false : "position"}
+                    transition={spring.gentle}
+                    initial={{ opacity: 0 }}
+                    // After the card on the bed has gone, so the build seems to move here rather than show twice.
+                    animate={{
+                      opacity: 1,
+                      transition: reduce
+                        ? { duration: 0 }
+                        : { duration: duration.base, ease: ease.out, delay: duration.base },
+                    }}
+                    exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.fast } }}
+                  >
+                    <Row item={item} />
+                  </m.div>
+                ))}
+              </AnimatePresence>
+            </div>
+            {waiting.length > MOST && (
+              <Link to="/builds" className="focus-ring self-start rounded-sm">
+                <Button variant="quiet" size="sm" tabIndex={-1} className="-ml-3">
+                  All builds
+                </Button>
+              </Link>
+            )}
+          </Section>
+        </m.div>
       )}
-    </Section>
+    </AnimatePresence>
   );
 }

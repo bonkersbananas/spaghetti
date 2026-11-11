@@ -30,6 +30,7 @@ import { useScreenActions } from "@/lib/palette";
 import { printerQuery, spoolsQuery } from "@/lib/pantry";
 import { peopleQuery } from "@/lib/queries";
 import { useDueUpkeep } from "@/lib/upkeep";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
@@ -57,6 +58,7 @@ function thisMonth(now: number) {
 function Today() {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
+  const isDesktop = useIsDesktop();
   const { setOpen } = useCapture();
   const now = useNow(60_000);
   const builds = useBuilds();
@@ -143,7 +145,7 @@ function Today() {
                     : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
                 }}
               >
-                <AutoHeight trigger={index > 0}>
+                <AutoHeight trigger={isDesktop ? "row" : index > 0}>
                   <PrintingCard
                     compact={index > 0}
                     item={item}
