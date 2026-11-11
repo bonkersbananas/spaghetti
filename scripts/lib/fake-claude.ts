@@ -100,7 +100,7 @@ const labels = {
 };
 
 /**
- * A request for a spool's label (decision 0028). A word in what the person wrote about the spool (its brand, color
+ * A request for a spool's label (decision 0029). A word in what the person wrote about the spool (its brand, color
  * or note) decides the answer: `slow` takes ten seconds, `refused` is refused, `broken` is an API error,
  * `unreadable` finds no label, `partly` reads only a brand, a material and the nozzle range, `two` finds two spools,
  * anything else is a good read of one spool.

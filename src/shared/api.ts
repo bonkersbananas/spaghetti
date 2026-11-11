@@ -199,7 +199,7 @@ export interface FeaturesResponse {
   drafts: boolean;
   /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
-  /** Claude can read a spool's label from a photo (decision 0028); the same key. */
+  /** Claude can read a spool's label from a photo (decision 0029); the same key. */
   labelReads: boolean;
   /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
   coach: boolean;
@@ -540,7 +540,7 @@ export interface Spool {
   slot: string | null;
   /** The RFID tray UUID of a Bambu spool, as the AMS reports it; the printer bridge finds the spool by it. */
   trayUuid: string | null;
-  /** From the label (decision 0028), or typed. Millimetres: 1.75 or 2.85. */
+  /** From the label (decision 0029), or typed. Millimetres: 1.75 or 2.85. */
   diameterMm: number | null;
   /** The filament's printing range in °C, as the label gives it. */
   nozzleTempMin: number | null;

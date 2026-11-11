@@ -33,14 +33,17 @@ const BUDGET_KB = {
   // Passkeys (the sign-in button, the quiet offer in the shell) add about 1.5 kB everywhere; the WebAuthn browser code, the QR renderer and the sheets load on demand.
   "/sign-in": 194,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 296,
+  // Wishlists add a sidebar section (its star icon is on every signed-in screen); the page, its drag code, the picker and
+  // the phones' row on Ideas load on demand. Today and Ideas went past their limits: measured plus about 2 kB again.
+  "/today": 298,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 286,
+  "/ideas": 289,
   "/builds": 286,
-  "/journal": 285,
+  // Merging main with wishlists (the sidebar entry, the wishlist cache root and its change-feed refresh) left Journal and Search under 1 kB over: +1 kB each.
+  "/journal": 286,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 291,
+  "/search": 292,
   "/pantry": 296,
   "/printer": 294,
 } as const;

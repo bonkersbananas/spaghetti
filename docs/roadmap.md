@@ -28,6 +28,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Push notifications: "Tugboat is off the bed. How did it go?", with Worked / Partly / Spaghetti buttons where the platform has them ([0016](decisions/0016-web-push-nudges.md); setup in [deploy.md](deploy.md))
 - [x] Insights and recipes: recipes are done (a what-worked attempt saved under a name, on the spool's page, in the Pantry, in search and in the attempt sheet; [0017](decisions/0017-recipes-are-frozen-attempts.md)); insights are done too: the Year so far at `/year` (success rate by material and plate, which change fixed which failure, a mosaic of what got made, the builds that took the most tries; `GET /api/insights`)
 - [x] Richer ideas: an "Up next" queue (the inbox section, Today's row) and who it's for, and a short thread of comments between you two on every idea and build ([0024](decisions/0024-comments-read-state-and-push-batching.md); searchable, with a line for unread ones on Today)
+- [x] Wishlists: each person's ranked top ideas, shared with the other unless kept private, dragged into order, a tap from a build ([0028](decisions/0028-wishlists-per-person-shared-by-default.md))
 - [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [x] Parts and quantities ("print the hull in two halves"): optional parts with a quantity on a build, attempts say which parts they printed and how many came out well, parts from a slicer file, "all printed" offers to finish ([0022](decisions/0022-parts-are-optional-counts-live-on-attempts.md), [docs/api.md](api.md))
 - [x] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
@@ -56,7 +57,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] OpenAPI from the zod schemas: `GET /api/openapi.json`, per caller's scopes, with a test that every route is described (a build's whole story as markdown: `GET /api/builds/:id/story.md`)
 - [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
 - [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), idea scout, weekly digest
-  - [x] Label photo to spool fields: "Read the label" in Add a spool and on the spool page ([0028](decisions/0028-claude-reads-a-spool-label-from-its-photo.md))
+  - [x] Label photo to spool fields: "Read the label" in Add a spool and on the spool page ([0029](decisions/0029-claude-reads-a-spool-label-from-its-photo.md))
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
 ## Deploy

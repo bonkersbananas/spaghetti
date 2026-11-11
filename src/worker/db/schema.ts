@@ -22,6 +22,8 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   /** R2 key of the profile picture (people/<id>/<version>); null means initials. */
   photoKey: text("photo_key"),
+  /** Their wishlist is shared with the others who sign in unless they keep it to themselves. */
+  wishlistPrivate: integer("wishlist_private", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
 
@@ -435,7 +437,7 @@ export const photoReads = sqliteTable(
 export type PhotoReadRow = typeof photoReads.$inferSelect;
 
 /**
- * Claude reading a spool's label photo (decision 0028): the job, what it found when there are several spools, and the
+ * Claude reading a spool's label photo (decision 0029): the job, what it found when there are several spools, and the
  * record of the run, one row per photo. Also what the label cap counts (rows with `ranAt`). A retry reuses the row.
  */
 export const labelReads = sqliteTable(
@@ -538,7 +540,7 @@ export const spools = sqliteTable(
     photoColor: text("photo_color"),
     /** The RFID tray UUID of a Bambu spool, as the AMS reports it, so the printer bridge finds it again. */
     trayUuid: text("tray_uuid"),
-    /** What the label says (decision 0028), or what people typed: all optional. */
+    /** What the label says (decision 0029), or what people typed: all optional. */
     diameterMm: real("diameter_mm"),
     nozzleTempMin: integer("nozzle_temp_min"),
     nozzleTempMax: integer("nozzle_temp_max"),
@@ -868,6 +870,26 @@ export const commentReads = sqliteTable(
 );
 
 export type CommentRow = typeof comments.$inferSelect;
+
+/**
+ * Each person's wishlist: the ideas they would print first, ranked (`position`, 1 is the top).
+ * Only ideas count: an entry whose item is deleted or became a build is hidden, not removed,
+ * so restoring the idea or undoing "start building" brings it back in its place.
+ */
+export const wishlistEntries = sqliteTable(
+  "wishlist_entries",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    addedAt: integer("added_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
+);
 
 /**
  * A webhook: the change feed POSTed to `url`, signed with a secret (decision 0025). The secret is stored

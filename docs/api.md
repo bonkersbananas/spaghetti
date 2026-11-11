@@ -100,6 +100,11 @@ A build may be made of parts ("Hull half" ×2, "Deck" ×1); most builds have non
 
 An idea can be queued as **Up next**: `upNext` on an item is its place in the queue (1 is first) or `null`. `PATCH /items/:id { "upNext": true }` puts it at the end, `false` or `null` takes it off, a number puts it at that place (the undo of taking it off). Only ideas are queued, and a stage change to a build takes the idea off the queue. `PUT /items/up-next/order { "ids": [...] }` sets the order (those first, in that order; queued ideas not listed follow) and answers with the queue. `forWhom` ("Mila", up to 80 characters, empty clears it) is optional and searchable. All of these are `capture` scope.
 
+
+## Wishlists
+
+Each person has a ranked wishlist of ideas, shared with the others who sign in unless it is private. `GET /wishlists` answers `{ wishlists: [{ personId, private, entries: [{ itemId, position, addedAt }] }] }`, yours first; someone else's private list has no entries. Only ideas show: one that was deleted or became a build is hidden and comes back in its place if that is undone. Changing a list is for people only, and only their own: `PUT /wishlists/me/items/:itemId` adds an idea at the end (`{ "position": 2 }` puts it at that place; adding it again changes nothing; 409 `not_an_idea` for a build, `full` past 50), `DELETE /wishlists/me/items/:itemId` takes it off, `PUT /wishlists/me/order { "ids": [...] }` sets the order (those first, the rest after in their turn), `PATCH /wishlists/me { "private": true }` keeps it to yourself. Each answers with your list. Every write records a `wishlist` change whose id is the owner's and whose `itemId` is null, so the feed never says what a list holds.
+
 ## Also here
 
 - `GET /api/links/preview?url=…`: the title and site name of a link in a note (`{ url, title, site }`, the last two nullable), for the link cards. People only. https only, no IP addresses, `localhost`, one-word, `.local` or `.internal` hosts, credentials or ports; the name is resolved through Cloudflare's DNS-over-HTTPS first and refused if it points anywhere private; 3 seconds, 256 KB, `text/html`, three redirects at most with each hop checked the same way; only `og:title`, `<title>` and `og:site_name` are read. Cached in `link_previews` for 30 days, failures for one day.
@@ -155,7 +160,7 @@ When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos
 
 ## Reading a spool's label from a photo (people only)
 
-"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0028](decisions/0028-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
+"Read the label" has Claude read the label in a spool's photo and fill in the spool ([decision 0029](decisions/0029-claude-reads-a-spool-label-from-its-photo.md)). Same key as above; without it everything answers `404`.
 
 - `POST /api/spools/:id/label-read` (optional body `{ placeholders: ["material", "netGrams"] }`) reads the label in the spool's current photo (`400` without one). It answers at once with the spool, `labelRead: { status: "reading" }`; the call runs after the response and the spool changes through the change feed (a `spool` update). A photo is read once; a read that found nothing or failed is tried again by asking again. `placeholders` names the starting values the label may replace; every other field with a value is left alone.
 - Spools carry `diameterMm`, `nozzleTempMin`/`nozzleTempMax`, `bedTempMin`/`bedTempMax`, `dryTempC`, `dryHours` and `productCode` (Bambu's RFID or product code as printed; not `trayUuid`), all settable with `POST` and `PATCH /api/spools`, and **`fromLabel`**: the fields Claude filled in that nobody has edited since (`brand`, `material`, `finish` (the variant), `colorName`, `colorHex`, `netGrams`, and those above). A `PATCH` or `PUT /weight` that sets a field takes it off the list.
