@@ -541,7 +541,11 @@ async function openCommentMenu(page: Page, id: string, button: string | RegExp) 
   const phone = (page.viewportSize()?.width ?? 1440) < 768;
   // Playwright's own scrolling lands a low message under the phone's action bar: centre it and tap it in the page.
   await comment.evaluate((el) => el.scrollIntoView({ block: "center" }));
-  if (phone) await comment.locator("> div").first().evaluate((el) => (el as HTMLElement).click());
+  if (phone)
+    await comment
+      .locator("> div")
+      .first()
+      .evaluate((el) => (el as HTMLElement).click());
   else {
     await comment.hover();
     await comment.getByRole("button", { name: button }).click();
