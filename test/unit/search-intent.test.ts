@@ -59,6 +59,16 @@ describe("whenRange", () => {
     expect(new Date(whenRange("yesterday", NOW).from).toISOString()).toBe("2026-11-09T23:00:00.000Z");
     expect(whenRange("today", NOW).weekMonday).toBeNull();
   });
+
+  it("changes day at midnight in Stockholm, not in UTC", () => {
+    // 21:30 UTC on 11 November is 22:30 there: still the 11th, which began at 23:00 UTC on the 10th.
+    const before = Date.parse("2026-11-11T21:30:00Z");
+    expect(new Date(whenRange("today", before).from).toISOString()).toBe("2026-11-10T23:00:00.000Z");
+    // 23:30 UTC is 00:30 on the 12th there: a new day that began half an hour ago.
+    const after = Date.parse("2026-11-11T23:30:00Z");
+    expect(new Date(whenRange("today", after).from).toISOString()).toBe("2026-11-11T23:00:00.000Z");
+    expect(new Date(whenRange("yesterday", after).from).toISOString()).toBe("2026-11-10T23:00:00.000Z");
+  });
 });
 
 describe("splitNames", () => {
