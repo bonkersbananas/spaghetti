@@ -10,6 +10,8 @@
  *     waiting to be resized, which the server marks no-cache and are never kept).
  *   - Leaves everything else under /api alone: it goes to the network, every
  *     time, and is never cached, so nobody sees another person's stale edits.
+ *   - Asks the network what "/" is (the app, or the landing page for someone
+ *     signed out), and leaves the landing page's own files to the network.
  *   - Shows the "how did it go?" notifications (web push) and answers them: a button records the outcome
  *     without opening the app, through the same /finish route the app uses; with no connection the answer
  *     is queued in the app's outbox (IndexedDB), which sends it on the next visit.
@@ -22,6 +24,15 @@ const { version, precache } = self.__BUILD__;
 const SHELL_CACHE = `sg-shell-${version}`;
 const PHOTO_CACHE = "sg-photos";
 const SHELL_URL = "/";
+// The app shell is index.html, kept under "/". It is fetched from "/?shell", which the Worker answers with the app
+// whether or not anyone is signed in (src/worker/home.ts): "/" alone is the landing page for someone signed out, and
+// an app route such as /today gets index.html on Cloudflare only as a navigation (the assets' single-page fallback),
+// which a fetch from here is not; it would reach the Worker's 404.
+const SHELL_SOURCE = "/?shell";
+// The landing page and what it loads are for visitors: the network's, never the app shell.
+const LANDING = /^\/(?:landing$|assets\/landing\/)/;
+// How long "/" waits for the network to say which page it is before the app opens from the cache.
+const HOME_TIMEOUT_MS = 3000;
 const MAX_PHOTOS = 400;
 const SHARE_PATH = "/api/share";
 const SHARE_CACHE = "sg-share";
@@ -33,7 +44,7 @@ self.addEventListener("install", (event) => {
       const cache = await caches.open(SHELL_CACHE);
       // index.html answers every client route. A copy, because a redirected
       // response can't be used to answer a navigation.
-      const shell = await fetch(SHELL_URL, { cache: "reload" });
+      const shell = await fetch(SHELL_SOURCE, { cache: "reload" });
       if (!shell.ok) throw new Error(`The app shell answered ${shell.status}`);
       await cache.put(SHELL_URL, new Response(await shell.blob(), { headers: shell.headers }));
       await cache.addAll(precache.map((url) => new Request(url, { cache: "reload" })));
@@ -223,6 +234,11 @@ self.addEventListener("fetch", (event) => {
   }
   // The OAuth endpoints (docs/mcp.md) are the Worker's, never the app shell.
   if (url.pathname.startsWith("/oauth/") || url.pathname.startsWith("/.well-known/")) return;
+  if (LANDING.test(url.pathname)) return;
+  if (request.mode === "navigate" && url.pathname === "/") {
+    event.respondWith(home(request));
+    return;
+  }
   if (request.mode === "navigate") {
     event.respondWith(shell(request));
     return;
@@ -260,6 +276,24 @@ async function receiveShare(request) {
   } catch {
     return Response.redirect(new URL("/share", self.location.origin).href, 303);
   }
+}
+
+/**
+ * "/" is the app for someone signed in and the landing page for someone who isn't, and only the server can tell (the
+ * session cookie isn't readable here): it asks the network, and opens the app from the cache when there is no answer.
+ * The Home Screen app starts at /today and never waits on this.
+ */
+async function home(request) {
+  try {
+    const response = await Promise.race([
+      fetch(request),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), HOME_TIMEOUT_MS)),
+    ]);
+    if (response.ok) return response;
+  } catch {
+    // Offline, or too slow: the app, which knows who was signed in on this device.
+  }
+  return shell(request);
 }
 
 async function shell(request) {

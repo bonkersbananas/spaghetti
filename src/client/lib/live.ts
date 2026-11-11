@@ -93,6 +93,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "recipe":
         roots.add("recipes").add("search").add("what-worked");
         break;
+      case "shopping":
+        roots.add("shopping");
+        break;
       case "tag":
         roots.add("tags");
         break;

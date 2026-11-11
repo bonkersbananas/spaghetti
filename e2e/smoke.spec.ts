@@ -10,7 +10,9 @@ async function signIn(page: Page, password = SEED_PASSWORD) {
 }
 
 test("signs in, browses the four sections, opens capture and signs out", async ({ page, isMobile }) => {
+  // Signed out, / is the landing page; its Sign in leads here (e2e/landing.spec.ts has the rest).
   await page.goto("/");
+  await page.getByRole("banner").getByRole("link", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/sign-in/);
   await expect(page.getByRole("heading", { name: "Spaghetti" })).toBeVisible();
 

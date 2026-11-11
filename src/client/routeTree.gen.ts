@@ -21,6 +21,7 @@ import { Route as AppJournalRouteImport } from './routes/_app/journal'
 import { Route as AppPrinterRouteImport } from './routes/_app/printer'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppShareRouteImport } from './routes/_app/share'
+import { Route as AppShoppingRouteImport } from './routes/_app/shopping'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppWishlistRouteImport } from './routes/_app/wishlist'
@@ -92,6 +93,11 @@ const AppShareRoute = AppShareRouteImport.update({
   path: '/share',
   getParentRoute: () => AppRoute,
 } as any)
+const AppShoppingRoute = AppShoppingRouteImport.update({
+  id: '/shopping',
+  path: '/shopping',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppStyleguideRoute = AppStyleguideRouteImport.update({
   id: '/styleguide',
   path: '/styleguide',
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/share': typeof AppShareRoute
+  '/shopping': typeof AppShoppingRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
   '/wishlist': typeof AppWishlistRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/printer': typeof AppPrinterRoute
   '/search': typeof AppSearchRoute
   '/share': typeof AppShareRoute
+  '/shopping': typeof AppShoppingRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
   '/wishlist': typeof AppWishlistRoute
@@ -209,6 +217,7 @@ export interface FileRoutesById {
   '/_app/printer': typeof AppPrinterRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/share': typeof AppShareRoute
+  '/_app/shopping': typeof AppShoppingRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/today': typeof AppTodayRoute
   '/_app/wishlist': typeof AppWishlistRoute
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/printer'
     | '/search'
     | '/share'
+    | '/shopping'
     | '/styleguide'
     | '/today'
     | '/wishlist'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/printer'
     | '/search'
     | '/share'
+    | '/shopping'
     | '/styleguide'
     | '/today'
     | '/wishlist'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/_app/printer'
     | '/_app/search'
     | '/_app/share'
+    | '/_app/shopping'
     | '/_app/styleguide'
     | '/_app/today'
     | '/_app/wishlist'
@@ -392,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppShareRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/shopping': {
+      id: '/_app/shopping'
+      path: '/shopping'
+      fullPath: '/shopping'
+      preLoaderRoute: typeof AppShoppingRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/styleguide': {
       id: '/_app/styleguide'
       path: '/styleguide'
@@ -479,6 +498,7 @@ interface AppRouteChildren {
   AppPrinterRoute: typeof AppPrinterRoute
   AppSearchRoute: typeof AppSearchRoute
   AppShareRoute: typeof AppShareRoute
+  AppShoppingRoute: typeof AppShoppingRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppTodayRoute: typeof AppTodayRoute
   AppWishlistRoute: typeof AppWishlistRoute
@@ -500,6 +520,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPrinterRoute: AppPrinterRoute,
   AppSearchRoute: AppSearchRoute,
   AppShareRoute: AppShareRoute,
+  AppShoppingRoute: AppShoppingRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppTodayRoute: AppTodayRoute,
   AppWishlistRoute: AppWishlistRoute,

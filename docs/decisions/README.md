@@ -29,6 +29,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0023](0023-claude-reads-a-print-from-its-photo.md) | Claude suggests how a print went from its photo, and only suggests | Accepted |
 | [0029](0029-oauth-small-and-on-d1.md) | OAuth for the MCP server is a small implementation on D1, and a connected app is an agent | Accepted |
 | [0027](0027-failure-coach-suggests-what-to-try-next.md) | A failure coach suggests what to try next, and only suggests | Accepted |
+| [0034](0034-shopping-list-links-not-prices.md) | The shopping list keeps links (shop, Prisjakt), not prices, in an order people set | Accepted |
 | [0024](0024-comments-read-state-and-push-batching.md) | Comments between the two of you: read state per person, one push for a burst | Accepted |
 | [0025](0025-webhooks-signed-from-the-cron.md) | Webhooks are queued in D1, sent by the existing cron, signed with HMAC-SHA256 under a secret kept encrypted | Accepted |
 | [0026](0026-passkeys-sign-in-links-and-invites.md) | Passkeys, single-use sign-in links and invites, all in the app; password stays as the fallback | Accepted |
@@ -37,6 +38,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0031](0031-claude-reads-a-spool-label-from-its-photo.md) | Claude reads a spool's label from its photo, and only fills what is empty | Accepted |
 | [0032](0032-search-reads-questions.md) | Search reads questions: filler, outcome, time, names, Swedish twins and typos, in the Worker, with no new index | Accepted |
 | [0033](0033-mac-bridge-paired-by-code.md) | The bridge runs on a Mac as one program, paired with a short code | Accepted |
+| [0034](0034-a-landing-page-at-the-root-for-visitors.md) | A landing page at the root for visitors, the app for the two people | Accepted |
 
 ## Format
 

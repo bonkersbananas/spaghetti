@@ -5,6 +5,7 @@ import { AvatarSection } from "./-styleguide/avatars";
 import { BuildsSection } from "./-styleguide/builds";
 import { ButtonSection } from "./-styleguide/buttons";
 import { CardSection } from "./-styleguide/cards";
+import { ChecklistSection } from "./-styleguide/checklist";
 import { ChipSection } from "./-styleguide/chips";
 import { ColorSection } from "./-styleguide/color";
 import { CommandBlockSection } from "./-styleguide/command-block";
@@ -54,6 +55,7 @@ const toc = [
   ["fields", "Fields"],
   ["controls", "Controls"],
   ["chips", "Chips"],
+  ["checklist", "Checklist"],
   ["avatars", "Avatars"],
   ["conversation", "Conversation"],
   ["cards", "Cards"],
@@ -106,6 +108,7 @@ function Styleguide() {
           <FieldSection />
           <ControlSection />
           <ChipSection />
+          <ChecklistSection />
           <AvatarSection />
           <ConversationSection />
           <CardSection />

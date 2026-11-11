@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "./tokens.css";
 
+/* The landing page (landing.html, src/landing) has its own plain stylesheet: nothing in it is the app's to scan. */
+@source not "../../landing";
+@source not "../../../landing.html";
+
 /*
  * Fraunces, made smaller. The package's "full" file for Latin carries every axis (121 kB), but headings only use
  * weight and optical size, with SOFT pinned to 100 and WONK to 0 (see the headings below), so the Latin file is

@@ -4,10 +4,8 @@
  * rendered to JPEG in the browser and uploaded through the real API, so the
  * screenshots exercise the same path a phone does.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { APIRequestContext, Browser } from "@playwright/test";
-import { root } from "../lib/wrangler.ts";
+import { seedPhotoSvg } from "./stand-ins.ts";
 
 interface SeedIdea {
   id: string;
@@ -215,7 +213,7 @@ export async function seedIdeas(
     for (const [position, photo] of idea.photos.entries()) {
       let images = rendered.get(photo.file);
       if (!images) {
-        const svg = readFileSync(join(root, "scripts/seed/photos", photo.file), "utf8");
+        const svg = seedPhotoSvg(photo.file);
         const large = await render(browser, svg, 1600);
         const thumb = await render(browser, svg, 600);
         images = { large: large.jpeg, thumb: thumb.jpeg, width: large.width, height: large.height };

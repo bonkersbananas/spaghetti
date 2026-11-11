@@ -433,6 +433,32 @@ test("is installable: manifests for both themes, maskable icons, and a worker th
   expect(worker).toMatch(/\.woff2/);
 });
 
+test("with the worker installed, / is the landing page signed out, the app signed in, and the app offline", async ({
+  page,
+  context,
+}) => {
+  // A visitor who once opened Sign in has the worker, which must not answer / with the app shell.
+  await page.goto("/sign-in");
+  await waitForServiceWorker(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Spaghetti" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+  // Its pictures and code are the network's, not part of the app's precache.
+  const worker = await (await page.request.get("/sw.js")).text();
+  expect(worker).not.toContain("/assets/landing/");
+
+  await signIn(page);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+
+  // No connection: / opens the app from the cache, as the person still signed in here.
+  await context.setOffline(true);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+});
+
 test("shows the pantry as last seen with no connection, read-only", async ({ page, context }) => {
   await signIn(page);
   await waitForServiceWorker(page);

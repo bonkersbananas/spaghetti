@@ -207,10 +207,14 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, "/printer", /X2D|Printer/);
     await expectAccessible(page, "Printer");
 
+    await screen(page, "/shopping", "Shopping list");
+    await expectAccessible(page, "Shopping list");
+
     // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
     await screen(page, "/styleguide", "Styleguide");
     await expectAccessible(page, "Styleguide: builds and attempts", "#builds");
     await expectAccessible(page, "Styleguide: pantry and printer", "#pantry");
+    await expectAccessible(page, "Styleguide: checklist", "#checklist");
 
     // Sheets: capture, an attempt, and the account (phone) or account menu (desktop).
     await screen(page, "/ideas", "Ideas");
@@ -287,6 +291,7 @@ const CHECKED_ROUTES = [
   "pantry.index",
   "pantry.$spoolId",
   "printer",
+  "shopping",
   "agents",
   "year",
   "week.$monday",
