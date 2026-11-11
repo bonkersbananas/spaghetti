@@ -56,7 +56,7 @@ export function Sidebar() {
 
       <nav aria-label="Sections" className="mt-5 flex flex-col gap-0.5">
         {sections.map(({ to, label, icon: Icon, shortcut }) => (
-          <Link key={to} to={to} preload="viewport" className={itemClass}>
+          <Link key={to} to={to} className={itemClass}>
             {({ isActive }) => (
               <>
                 <Icon
@@ -79,7 +79,7 @@ export function Sidebar() {
       <nav aria-label="Workshop" className="mt-6 flex flex-col gap-0.5">
         <Overline className="mb-1 px-3">Workshop</Overline>
         {workshop.map(({ to, label, icon: Icon, shortcut }) => (
-          <Link key={to} to={to} preload="viewport" className={itemClass}>
+          <Link key={to} to={to} className={itemClass}>
             {({ isActive }) => (
               <>
                 <Icon
