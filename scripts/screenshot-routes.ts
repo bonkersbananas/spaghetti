@@ -855,7 +855,9 @@ export const shots: Shot[] = [
       await page.getByRole("button", { name: "Draft from this page" }).click();
       await page.getByText("Drafted by Claude from MakerWorld").waitFor();
       await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
-      await page.waitForTimeout(800);
+      // The undo toast would cover the thread: wait it out.
+      await page.getByText("Drafted from MakerWorld", { exact: true }).waitFor({ state: "hidden", timeout: 20_000 });
+      await page.waitForTimeout(500);
     },
   },
   {
