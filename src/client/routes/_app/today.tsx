@@ -123,7 +123,7 @@ function Today() {
   const bedSection =
     onBed.length > 0 ? (
       <Section id="today-bed" title="On the bed" size="overline" count={onBed.length > 1 ? onBed.length : undefined}>
-        {/* A print that gets its answer leaves (a fade and a slight shrink) while the others move up; on phones the
+        {/* A print that gets its answer fades and collapses while the others move up; on phones the
             next one grows into the big card. With reduced motion everything is at its end state at once. */}
         <div className="flex flex-col">
           <AnimatePresence initial={false}>
@@ -137,7 +137,10 @@ function Today() {
                   height: 0,
                   paddingBottom: 0,
                   overflow: "hidden",
-                  transition: { duration: reduce ? 0 : duration.base, ease: ease.inOut },
+                  // Faded before the collapse shows a clipped slice of it.
+                  transition: reduce
+                    ? { duration: 0 }
+                    : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
                 }}
               >
                 <AutoHeight>

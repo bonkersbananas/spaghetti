@@ -97,7 +97,13 @@ export function PickUpAgain({ builds }: { builds: ItemView[] }) {
               layout={reduce ? false : "position"}
               transition={spring.gentle}
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: reduce ? 0 : duration.base, ease: ease.out } }}
+              // After the card on the bed has gone, so the build seems to move here rather than show twice.
+              animate={{
+                opacity: 1,
+                transition: reduce
+                  ? { duration: 0 }
+                  : { duration: duration.base, ease: ease.out, delay: duration.base },
+              }}
               exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.fast } }}
             >
               <Row item={item} />
