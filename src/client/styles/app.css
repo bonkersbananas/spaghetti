@@ -169,8 +169,13 @@
 
 /* Toasts (sonner), restyled with tokens. The toaster ancestor outranks sonner's own injected styles. */
 [data-sonner-toaster] {
+  /* Above sheets and dialogs (z-50), and pressable while a modal sheet has made the rest of the page inert. */
+  z-index: 100;
   --width: 22rem;
   font-family: var(--font-sans);
+}
+[data-sonner-toaster] [data-sonner-toast] {
+  pointer-events: auto;
 }
 [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
   background: var(--sg-toast);

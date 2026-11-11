@@ -69,6 +69,8 @@ export function OutcomeStrip({ attempts, onPick, className }: OutcomeStripProps)
               title={name}
               aria-label={name}
               onClick={() => onPick(attempt.id)}
+              // Narrower than 44 px on purpose (the accessibility test knows): every attempt is also in the list below.
+              data-small-target
               // A 44 px tall target a dot-and-gap wide: the dots sit 16 px apart, so wider targets would overlap and
               // the last one would take every tap.
               className={cn(dot, "focus-ring after:absolute after:-inset-x-0.75 after:-inset-y-4.5 after:content-['']")}

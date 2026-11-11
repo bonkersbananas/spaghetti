@@ -96,6 +96,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "agent":
         roots.add("agents");
         break;
+      case "person":
+        roots.add("people").add("session");
+        break;
     }
     if (change.itemId && change.entity !== "spool") details.add(change.itemId);
   }
@@ -106,9 +109,8 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
 
 /** Everything the feed could have changed, when it can't say what did. */
 function refreshAll(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({
-    predicate: (query) => query.queryKey[0] !== sessionQuery.queryKey[0] && query.queryKey[0] !== "people",
-  });
+  // People and the session too: a profile picture is a change in the feed.
+  void queryClient.invalidateQueries();
 }
 
 // --- the quiet word -------------------------------------------------------------------------------

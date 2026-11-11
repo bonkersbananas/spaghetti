@@ -238,7 +238,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           aside={
             <Link
               to="/pantry"
-              className="focus-ring text-small text-ink-soft hover:text-ink inline-flex items-center gap-1.5 rounded-sm font-semibold"
+              className="focus-ring touch-target text-small text-ink-soft hover:text-ink relative inline-flex items-center gap-1.5 rounded-sm font-semibold"
             >
               <PantryIcon size={16} aria-hidden />
               Pantry

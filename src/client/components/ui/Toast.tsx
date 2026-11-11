@@ -1,17 +1,37 @@
+import { useEffect, useState } from "react";
 import { Toaster as SonnerToaster, toast as sonnerToast } from "sonner";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { CheckCircleIcon, SparkleIcon, WarningIcon } from "./icons";
 
-/** Mount once, at the root. Phones: above the tab bar. Desktop: bottom right. */
+/** True while a sheet or dialog is in the page. */
+function useDialogOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const check = () => setOpen(!!document.querySelector("[role=dialog]"));
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true });
+    check();
+    return () => observer.disconnect();
+  }, []);
+  return open;
+}
+
+/**
+ * Mount once, at the root. Phones: above the tab bar, but at the top while a sheet is open (a bottom sheet would
+ * cover them, or they would cover its buttons). Desktop: bottom right. Toasts sit above sheets (app.css) and take
+ * presses without closing the sheet (Sheet.tsx ignores presses on them).
+ */
 export function Toaster() {
   const isDesktop = useIsDesktop();
+  const overSheet = useDialogOpen() && !isDesktop;
   return (
     <SonnerToaster
-      position={isDesktop ? "bottom-right" : "bottom-center"}
+      position={isDesktop ? "bottom-right" : overSheet ? "top-center" : "bottom-center"}
       offset={isDesktop ? 24 : undefined}
       // --sg-actionbar-offset is set while a screen shows its ActionBar, so toasts never cover it.
       mobileOffset={{
         bottom: "calc(var(--sg-tabbar-height) + var(--sg-actionbar-offset, 0rem) + 0.75rem)",
+        top: "calc(var(--sg-safe-top, 0px) + 0.75rem)",
       }}
       gap={8}
       icons={{

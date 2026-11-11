@@ -54,6 +54,13 @@ A spool can count itself down (decision [0009](decisions/0009-filament-tracked-i
 - `GET /spools/:id/usage` lists what used the spool (attempt, build, grams, whether the amount is a guess, whether it still counts) and its weighings.
 - Usage is read off finished attempts, never stored: `settings.filaments[].grams` (from the slicer file) of each filament whose `spoolId` is the spool. Editing an attempt, or deleting and restoring it, changes the answer.
 
+## People and profile pictures
+
+`GET /people` lists the two people; each `person` (here and in `GET /session`) has `photoUrl`: `/api/people/<id>/photo?v=<version>` or `null` (initials). The address changes with every new picture, and the bytes are served `private, max-age=31536000, immutable`; `GET /people/:id/photo` needs `read` like any read. Agents and MCP see `photoUrl` and can fetch the picture, but never change it.
+
+- `PUT /people/me/photo`: your own picture, people only (`403 person_only` for a token). Multipart with one `photo` file, WebP or JPEG (`415 unsupported` otherwise), at most 512 KB (`413 too_large`); the browser sends a 256 px square it cropped itself. Replaces the old one (its bytes are deleted) and answers `{ user }`. A `person` change in the feed lets the other person's screen refresh.
+- `DELETE /people/me/photo`: back to initials, people only. Always `200 { user }`, also when there was none.
+
 ## Recipes
 
 A recipe is the named settings of an attempt that worked (decision [0017](decisions/0017-recipes-are-frozen-attempts.md)). `GET /recipes` lists them newest first (`?material=PLA&finish=silk` narrows to what fits a spool: same material, and the same finish where both have one); `GET /search` also returns `recipes`, `GET /what-worked?item=&material=` returns the material's `recipes`.

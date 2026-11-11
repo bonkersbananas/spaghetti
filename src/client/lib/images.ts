@@ -72,7 +72,7 @@ async function readCaptureTime(file: Blob): Promise<number | null> {
   }
 }
 
-function drawScaled(source: ImageBitmap | HTMLCanvasElement, longEdge: number): HTMLCanvasElement {
+export function drawScaled(source: ImageBitmap | HTMLCanvasElement, longEdge: number): HTMLCanvasElement {
   const scale = Math.min(1, longEdge / Math.max(source.width, source.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(source.width * scale));
@@ -92,12 +92,12 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promi
 let webpSupport: Promise<boolean> | null = null;
 
 /** WebP where the browser can encode it (Safari can't, and hands back PNG), else JPEG. */
-function pickType(canvas: HTMLCanvasElement): Promise<string> {
+export function pickType(canvas: HTMLCanvasElement): Promise<string> {
   webpSupport ??= toBlob(canvas, "image/webp", 0.5).then((blob) => blob?.type === "image/webp");
   return webpSupport.then((ok) => (ok ? "image/webp" : "image/jpeg"));
 }
 
-async function encode(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+export async function encode(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
   const blob = await toBlob(canvas, type, quality);
   if (!blob) throw new Error("Encoding the photo failed");
   return blob;

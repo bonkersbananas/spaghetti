@@ -124,7 +124,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripP
                   type="button"
                   onClick={() => removePhoto(queryClient, photo)}
                   aria-label="Remove this photo"
-                  className="pressable focus-ring bg-veil-strong text-on-veil shadow-raised absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full"
+                  className="pressable focus-ring touch-target bg-veil-strong text-on-veil shadow-raised absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full"
                 >
                   <PlusIcon size={14} weight="bold" className="rotate-45" aria-hidden />
                 </button>

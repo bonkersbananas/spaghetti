@@ -25,7 +25,7 @@ const SHELL_URL = "/";
 const MAX_PHOTOS = 400;
 const SHARE_PATH = "/api/share";
 const SHARE_CACHE = "sg-share";
-const PHOTO_PATH = /^\/api\/photos\/[^/]+\/(thumb|large)$/;
+const PHOTO_PATH = /^\/api\/(photos\/[^/]+\/(thumb|large)|people\/[^/]+\/photo)$/;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
