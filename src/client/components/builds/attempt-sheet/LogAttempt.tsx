@@ -1,7 +1,7 @@
 import { carryOver, type Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePicker";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
@@ -20,6 +20,9 @@ import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
 import { DraftFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
 import { WhenField } from "./WhenField";
+
+// Claude's ideas from the attempt before: only there when it went wrong.
+const CoachSuggestions = lazy(() => import("../Coach").then((m) => ({ default: m.CoachSuggestions })));
 
 export function LogAttempt({
   item,
@@ -182,28 +185,45 @@ export function LogAttempt({
           previous={previous}
           baseline={recipe ? { label: `recipe “${recipe.recipe.name}”`, settings: recipe.settings } : undefined}
           suggestion={
-            // A slicer file says what this attempt is: no other settings to offer.
-            slicer.state ? null : (
-              <>
-                <WhatWorkedSuggestion
-                  itemId={item.id}
-                  settings={draft.settings}
-                  onUse={(settings) => change({ settings })}
-                />
-                <RecipePicker
-                  settings={draft.settings}
-                  applied={recipe}
-                  onApply={(applied) => {
-                    setRecipe(applied);
-                    change({ settings: applied.settings });
-                  }}
-                  onUndo={(applied) => {
-                    setRecipe(null);
-                    change({ settings: applied.before });
-                  }}
-                />
-              </>
-            )
+            <>
+              {previous?.coach && (
+                <Suspense fallback={null}>
+                  <CoachSuggestions
+                    coach={previous.coach}
+                    itemId={item.id}
+                    attemptId={previous.id}
+                    attemptNumber={previous.number}
+                    settings={draft.settings}
+                    note={draft.note}
+                    onUse={({ settings, note }) =>
+                      change({ ...(settings ? { settings } : {}), ...(note !== undefined ? { note } : {}) })
+                    }
+                  />
+                </Suspense>
+              )}
+              {/* A slicer file says what this attempt is: no other settings to offer. */}
+              {slicer.state ? null : (
+                <>
+                  <WhatWorkedSuggestion
+                    itemId={item.id}
+                    settings={draft.settings}
+                    onUse={(settings) => change({ settings })}
+                  />
+                  <RecipePicker
+                    settings={draft.settings}
+                    applied={recipe}
+                    onApply={(applied) => {
+                      setRecipe(applied);
+                      change({ settings: applied.settings });
+                    }}
+                    onUndo={(applied) => {
+                      setRecipe(null);
+                      change({ settings: applied.before });
+                    }}
+                  />
+                </>
+              )}
+            </>
           }
           when={
             <WhenField

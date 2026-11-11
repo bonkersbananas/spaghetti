@@ -418,10 +418,21 @@ export function useItem(id: string) {
     // for the feed's slower beat, so the suggestion shows as soon as it is there.
     // It stops with the read, or after 40 seconds of it (a read that long was lost: the cron settles it).
     refetchInterval: (current) => {
-      const reading = current.state.data?.attempts.find((attempt) => attempt.photoRead?.status === "reading");
-      if (!reading?.photoRead) return false;
-      const since = (readingSince.get(reading.photoRead.photoId) ?? Date.now()) || Date.now();
-      readingSince.set(reading.photoRead.photoId, since);
+      const attempts = current.state.data?.attempts ?? [];
+      const reading = attempts.find((attempt) => attempt.photoRead?.status === "reading");
+      // Claude is thinking about the next try (decision 0026), or an attempt was only just answered Partly or
+      // Spaghetti and its coach isn't in yet (the Worker makes the job with the answer).
+      const coaching = attempts.find(
+        (attempt) =>
+          attempt.coach?.status === "thinking" ||
+          (!attempt.coach &&
+            (attempt.outcome === "partial" || attempt.outcome === "failed") &&
+            Date.now() - (attempt.finishedAt ?? 0) < 20_000),
+      );
+      const watching = reading?.photoRead?.photoId ?? (coaching ? `coach-${coaching.id}` : null);
+      if (!watching) return false;
+      const since = (readingSince.get(watching) ?? Date.now()) || Date.now();
+      readingSince.set(watching, since);
       return Date.now() - since < 40_000 ? 3000 : false;
     },
     // Opened from a list: show what the list already has, at once, as old as the list is

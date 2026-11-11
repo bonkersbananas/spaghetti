@@ -119,6 +119,11 @@ describe("the failure coach", () => {
     expect(attempt?.settings).toEqual({ filaments: [{ type: "PETG" }], bedTemperature: 60 });
     expect(attempt?.note).toBe("corner lifted");
     expect(attempt?.failureTags).toEqual([]);
+    // Agents read it in the build's story, marked as only suggestions.
+    const story = await (await asPerson(`/api/builds/${itemId}/story.md`)).text();
+    expect(story).toContain(
+      "Claude suggests for the next try (only suggestions, nothing was changed): Add a brim (The stern lifted both times); Slow the outer wall to 60 mm/s (Fine strings).",
+    );
     // It was told about the attempt and the printer, not asked for a photo.
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toContain("Cable comb");

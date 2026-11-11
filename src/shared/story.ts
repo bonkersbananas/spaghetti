@@ -7,6 +7,7 @@ import {
   type TagDefinition,
   tagLabel,
 } from "./attempts.ts";
+import { liveCoachItems } from "./coach.ts";
 import type { Comment } from "./comments.ts";
 import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
 
@@ -127,6 +128,12 @@ export function buildStory(item: Item, context: StoryContext): string {
     if (attempt.successNotes.length)
       lines.push(
         `Went well: ${attempt.successNotes.map((slug) => tagLabel("success", slug, context.customSuccessNotes)).join(", ")}.`,
+        "",
+      );
+    const ideas = liveCoachItems(attempt.coach);
+    if (ideas.length)
+      lines.push(
+        `Claude suggests for the next try (only suggestions, nothing was changed): ${ideas.map((idea) => `${idea.title} (${idea.why.replace(/[.\s]+$/, "")})`).join("; ")}.`,
         "",
       );
     const attemptPhotos = item.photos.filter((photo) => photo.attemptId === attempt.id).length;
