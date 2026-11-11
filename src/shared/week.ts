@@ -1,5 +1,5 @@
 /**
- * The week in Spaghetti (decision 0029): Monday to Sunday in the workspace's time zone, the shapes the page and
+ * The week in Spaghetti (decision 0030): Monday to Sunday in the workspace's time zone, the shapes the page and
  * the API share, and the few pure rules both sides need (which week a moment is in, where it starts and ends,
  * and the words for the push). Pure and Intl-only, so the browser, the Worker and the unit tests agree.
  */

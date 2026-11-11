@@ -51,6 +51,15 @@ export function ItemLink({ id, stage, children }: { id: string; stage: WeekStage
 
 export { sentenceLink };
 
+/** A long note stands in for a title: its first words. */
+const short = (text: string) => {
+  const clean = text.trim().replace(/[.!\s]+$/, "");
+  if (clean.length <= 28) return clean;
+  const cut = clean.slice(0, 28);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 12)).trimEnd()}…`;
+};
+const firstName = (full: string) => full.split(" ")[0] ?? full;
+
 const name = (title: string | null, fallback = "Untitled") => title?.trim() || fallback;
 
 interface WeekLinesProps {
@@ -80,7 +89,7 @@ export function WeekLines({ week, people }: WeekLinesProps) {
 
   const ideasBy = new Map<string, number>();
   for (const idea of week.ideas) ideasBy.set(idea.by, (ideasBy.get(idea.by) ?? 0) + 1);
-  const who = [...ideasBy].map(([id, count]) => ({ name: people.get(id)?.name ?? "Someone", count }));
+  const who = [...ideasBy].map(([id, count]) => ({ name: firstName(people.get(id)?.name ?? "Someone"), count }));
 
   const talkers = Object.keys(week.comments.byPerson);
   const topThread = week.comments.threads[0];
@@ -130,15 +139,15 @@ export function WeekLines({ week, people }: WeekLinesProps) {
               </>
             ) : (
               <>
-                <Listed items={who.map((entry) => `${entry.name} ${entry.count}`)} /> ideas captured
+                {who[0]?.name} captured {plural(who[0]?.count ?? 0, "idea")} and {who[1]?.name} {who[1]?.count}
               </>
             )}
             :{" "}
             <Listed
               total={week.ideas.length}
-              items={week.ideas.slice(0, 3).map((idea) => (
+              items={week.ideas.slice(0, 2).map((idea) => (
                 <ItemLink key={idea.id} id={idea.id} stage={idea.stage}>
-                  {name(idea.title, idea.note || "Untitled")}
+                  {short(name(idea.title, idea.note || "Untitled"))}
                 </ItemLink>
               ))}
             />

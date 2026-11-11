@@ -76,7 +76,7 @@ pnpm exec wrangler secret put VAPID_PRIVATE_KEY < /tmp/vapid.key && rm /tmp/vapi
 
 The script never prints the private key and refuses to overwrite a file. The deploy token can set secrets. For local development, `pnpm vapid:generate --dev-vars` appends a fresh pair (both lines) to `.dev.vars`, which is never committed; the dev server has no service worker, so a real subscription needs `pnpm build && pnpm start`, and a browser that can reach its push service (Chrome uses Google's).
 
-The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
+The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. "Your week" ([0030](decisions/0030-the-week-is-computed-with-one-paragraph-by-claude.md)) goes out from the same cron: on Sunday between 19:00 and 22:00 Stockholm time, once per person and week, to devices with its switch on (the default); no extra trigger is needed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
 
 ## Webhooks
 

@@ -384,6 +384,8 @@ describe("Claude's paragraph", () => {
     expect((await week(MONDAY)).note).toBeNull();
     // A quiet week: nothing to read, so Claude isn't asked.
     expect(await writeWeekNote(env, "2026-03-02", { now: at("2026-03-10T10:00:00+01:00") })).toBe("nothing");
+    // Nothing is kept for an empty week: a print added to it later can still get its paragraph.
+    expect(await env.DB.prepare("SELECT monday FROM weeks").all()).toMatchObject({ results: [] });
     expect(bodies).toHaveLength(0);
   });
 

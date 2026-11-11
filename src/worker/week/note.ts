@@ -121,7 +121,11 @@ export async function runWeekNote(
   };
   try {
     const week = await loadWeek(env, monday, now, db);
-    if (week.empty) return await settle("nothing", { runOutcome: "empty" });
+    if (week.empty) {
+      // Nothing to read, and nothing kept: a print added to the week later (backdated) can still get its paragraph.
+      await db.delete(weeks).where(eq(weeks.monday, monday));
+      return "nothing";
+    }
     // A stand-in server (the e2e tests, screenshots) isn't counted: the cap is for the bill.
     const standIn = !!env.ANTHROPIC_BASE_URL?.trim();
     const since = new Date(now - (now % DAY_MS));

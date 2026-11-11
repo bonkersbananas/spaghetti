@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { mondayOf } from "../src/shared/week.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
@@ -172,6 +173,14 @@ for (const scheme of ["light", "dark"] as const) {
     await screen(page, "/journal", "Journal");
     await expect(page.getByText("Corners lifted").first()).toBeVisible();
     await expectAccessible(page, "Journal");
+
+    // The week: this week holds the seeded prints, and a week long ago is empty.
+    await screen(page, `/week/${mondayOf(Date.now())}`, "This week");
+    await expect(page.getByRole("heading", { level: 2, name: /^The week in a few lines/ })).toBeVisible();
+    await expectAccessible(page, "The week");
+    await screen(page, "/week/2024-01-01", /2024/);
+    await expect(page.getByRole("heading", { level: 2, name: "Not a strand this week" })).toBeVisible();
+    await expectAccessible(page, "An empty week");
 
     await page.goto("/year");
     await expect(page.getByRole("heading", { level: 2, name: "Prints by month" })).toBeVisible();

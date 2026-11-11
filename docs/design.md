@@ -363,6 +363,18 @@ One screen (`/year`, linked quietly from the journal's first month line, "See th
 
 "What went wrong, and what helped" is sentences: each failure tag in the display face with its count and "Fixed twice by a brim and once by a warmer bed." (`fixSentence`; the changes come from `diffSettings` between a failed attempt and the next one that worked, `src/shared/insights.ts`). Nothing is interactive beyond links into the journal or search filtered to that slice. "Took the most tries" are photo rows: thumbnail, name, `OutcomeStrip` and the attempt count. Phones stack the sections in one column with the two figures side by side. Desktop (from 1024 px) gives the figures and the month bars the full width, then two columns: material, plate and what helped on the left, the mosaic and the photo rows on the right. The styleguide's "Year so far" shows both components.
 
+## The week
+
+`/week/2026-11-09` (decision [0030](decisions/0030-the-week-is-computed-with-one-paragraph-by-claude.md)): a page turned in the notebook, Monday to Sunday, never a report. It is named by its week ("This week", "Last week", else the dates as the title) with the dates under it, and the page header is followed by one row, **Previous** and **Next** buttons (← and →, hints on desktop) "Next" rests on the current week. Order, on a phone in one column and from `lg` in two (photos left, the lines in a `24rem` column on the right):
+
+- **Claude's paragraph**, only when there is one: a `ClaudeLine` ("Claude on the week", or the pulsing "Looking back at the week…") over a few sentences in the display face, `text-title` on `ink`. It says what the numbers don't and never asks for anything. Absent without the key, for an empty week and when Claude has nothing to add.
+- **The prints**: the final photo of each print that has one, worked first. The first is a large `Card` (landscape) and the rest sit in a 2 (phone) or 3 column grid of portrait cards, nine at most ("and 4 more with pictures"); each is a `Card` with its outcome chip over the photo, the build's name, "Attempt 3" and the person's avatar, and opens that attempt in its build.
+- **The week in a few lines** (`WeekLines`): an `Overline` and a few `Line`s of `text-body` `ink-soft`, each a 20 px icon and one sentence with the names as `ink` links underlined quietly: "4 prints: 2 worked, 1 partly, 1 spaghetti", "Worked on Tugboat and Cable comb", "Finished …", "Alex captured 2 ideas and Sam 1: …", "You two exchanged 7 comments on Tugboat", "About 312 g of filament went through the printer". A line with nothing to say is not drawn.
+- **Waiting** (this week only): the queue, a build whose last print was spaghetti ("is waiting for another go"), a spool running low, upkeep due, as lines in the same voice. Nothing is waiting, nothing is drawn.
+- **An empty week** is the `EmptyPot` and one warm line: "Not a strand this week" ("Nothing simmering yet" while the week is young), a plain sentence, one secondary button ("Capture an idea" this week, else "Back to this week").
+
+The way in is the push (Sunday 19:00), a quiet "The week" link at the end of each week's group in the Journal, and "This week" and "Last week" in the command palette. `ClaudeLine` (`ui/ClaudeLine.tsx`) is the one mark for Claude speaking unasked: a small sparkle then `text-small` words in `ink-faint`.
+
 ## Accessibility
 
 - `e2e/accessibility.spec.ts` runs axe (WCAG 2.1 A and AA, best practices) on the main screens, the sheets, the palette and the empty states, at both widths and in both themes. A new screen gets a line there.

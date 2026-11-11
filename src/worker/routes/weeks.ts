@@ -9,7 +9,7 @@ import { claimWeekNote, runWeekNote } from "../week/note.ts";
 const params = z.object({ monday: z.string().refine(isMonday, "A Monday, as YYYY-MM-DD.") });
 
 /**
- * One week of the notebook, worked out from what is in it (decision 0029): Monday to Sunday in the workspace's time
+ * One week of the notebook, worked out from what is in it (decision 0030): Monday to Sunday in the workspace's time
  * zone. Anyone who can read can read it. Asking for a week that is over (last week, or this one on Sunday evening)
  * that has no paragraph by Claude yet makes it, after the response; the page then says it is being written.
  */

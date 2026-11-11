@@ -702,7 +702,7 @@ export const pushSubscriptions = sqliteTable(
     alsoOthers: integer("also_others", { mode: "boolean" }).notNull().default(false),
     /** Also tell this device when printer upkeep is due (at most one nudge a day, shared/upkeep.ts). */
     upkeepNudges: integer("upkeep_nudges", { mode: "boolean" }).notNull().default(false),
-    /** Also send "Your week" on Sunday evening (decision 0029): on unless switched off. */
+    /** Also send "Your week" on Sunday evening (decision 0030): on unless switched off. */
     weekNudges: integer("week_nudges", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
@@ -711,7 +711,7 @@ export const pushSubscriptions = sqliteTable(
 
 /** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */
 /**
- * The week's one paragraph by Claude, written once per week and kept (decision 0029). `monday` is the week's Monday
+ * The week's one paragraph by Claude, written once per week and kept (decision 0030). `monday` is the week's Monday
  * as YYYY-MM-DD in the workspace's time zone.
  */
 export const weeks = sqliteTable("weeks", {

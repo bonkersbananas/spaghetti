@@ -1,4 +1,4 @@
-import { addWeeks, mondayOf, weekRangeLabel } from "@shared/week";
+import { addWeeks, mondayOf } from "@shared/week";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/Button";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
@@ -28,18 +28,14 @@ export function WeekNav({ monday }: WeekNavProps) {
       >
         Previous
       </Button>
-      <p className="text-small text-ink-faint tabular text-center" aria-live="polite">
-        {weekRangeLabel(monday)}
-      </p>
-      <Button
-        variant="secondary"
-        disabled={!hasNext}
-        shortcut={hasNext ? shortcutCaps("weekNext") : undefined}
-        onClick={() => go(addWeeks(monday, 1))}
-      >
-        Next
-        <NextIcon size={20} weight="bold" aria-hidden />
-      </Button>
+      {hasNext ? (
+        <Button variant="secondary" shortcut={shortcutCaps("weekNext")} onClick={() => go(addWeeks(monday, 1))}>
+          Next
+          <NextIcon size={20} weight="bold" aria-hidden />
+        </Button>
+      ) : (
+        <span />
+      )}
     </nav>
   );
 }

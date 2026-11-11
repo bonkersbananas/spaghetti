@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { PRINTER_FACTS } from "../coach/claude.ts";
 
-/** The model that looks back over the week (decision 0029), the same as the drafts, photo reads and coach. */
+/** The model that looks back over the week (decision 0030), the same as the drafts, photo reads and coach. */
 export const WEEK_MODEL = "claude-opus-5-5";
 /** A paragraph, not an essay. */
 export const WEEK_NOTE_MAX = 600;

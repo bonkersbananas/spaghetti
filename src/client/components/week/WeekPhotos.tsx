@@ -25,13 +25,13 @@ export function WeekPhotos({ prints, people }: WeekPhotosProps) {
   const [lead, ...rest] = shown;
   const more = pictured.length - shown.length;
   return (
-    <Section id="week-prints" title="Off the bed" size="overline" count={pictured.length}>
+    <Section id="week-prints" title="The prints" size="overline">
       <div className="flex flex-col gap-3 md:gap-4">
         {lead?.photo && <PrintCard print={lead} lead people={people} />}
         {rest.length > 0 && (
-          <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0 md:grid-cols-3 md:gap-4">
+          <ul className="m-0 grid list-none grid-cols-2 items-stretch gap-3 p-0 md:grid-cols-3 md:gap-4">
             {rest.map((print) => (
-              <li key={print.attemptId} className="min-w-0">
+              <li key={print.attemptId} className="flex min-w-0 *:h-full">
                 <PrintCard print={print} people={people} />
               </li>
             ))}
