@@ -129,16 +129,15 @@ export function commentPushText(author: string, itemTitle: string, bodies: strin
 export function unreadLine(
   threads: UnreadCommentsResponse["threads"],
   nameOf: (authorId: string) => string,
-): { lead: string; quote: string; thread: UnreadCommentsResponse["threads"][number] } | null {
+): { lead: string; quote: string; total: number; thread: UnreadCommentsResponse["threads"][number] } | null {
   const [latest] = threads;
   if (!latest?.latestId || !latest.latestAuthorId) return null;
   const total = threads.reduce((sum, thread) => sum + thread.count, 0);
   const what = squash(latest.title ?? "") || (latest.stage === "idea" ? "an idea" : "a build");
   const lead = `${nameOf(latest.latestAuthorId)} on ${what}`;
   const quote = clip(squash(latest.latestBody ?? ""), 90);
-  return total === 1
-    ? { lead, quote, thread: latest }
-    : { lead: `${total} new comments · latest from ${lead}`, quote, thread: latest };
+  // The count goes in the line's label on Today ("New comments 3"), so the lead names only the latest.
+  return { lead, quote, total, thread: latest };
 }
 
 /** Where a comment's push opens: the thread on the idea's or build's page. */
