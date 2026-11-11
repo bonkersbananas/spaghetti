@@ -25,11 +25,24 @@ const selectedStyles: Record<Outcome, string> = {
   failed: "bg-tomato-soft text-tomato-ink ring-tomato",
 };
 
-/** A gentle hint on the button of the outcome Claude suggests from the photo: tinted, not picked. */
+/**
+ * Claude's suggestion from the photo, on the outcome's button: its own look, not the picked one. No fill and a dashed
+ * ring in the outcome's color, the icon in that color; tapping it turns it into the normal picked style.
+ */
 const suggestedStyles: Record<Outcome, string> = {
-  success: "bg-basil-soft/60 text-basil-ink ring-1 ring-inset ring-basil/40",
-  partial: "bg-semolina-soft/60 text-semolina-ink ring-1 ring-inset ring-semolina/40",
-  failed: "bg-tomato-soft/60 text-tomato-ink ring-1 ring-inset ring-tomato/40",
+  success: "text-ink-soft border-2 border-dashed border-basil/70",
+  partial: "text-ink-soft border-2 border-dashed border-semolina",
+  failed: "text-ink-soft border-2 border-dashed border-tomato/70",
+};
+const suggestedIcons: Record<Outcome, string> = {
+  success: "text-basil",
+  partial: "text-semolina",
+  failed: "text-tomato",
+};
+const suggestedCaptions: Record<Outcome, string> = {
+  success: "text-basil-ink",
+  partial: "text-semolina-ink",
+  failed: "text-tomato-ink",
 };
 
 /** The dot on the timeline: the outcome's color, or semolina while printing. */
@@ -87,7 +100,7 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               selected
                 ? cn(selectedStyles[outcome], "ring-2 ring-inset")
                 : hinted
-                  ? cn(suggestedStyles[outcome], "shadow-soft hover:shadow-raised")
+                  ? cn(suggestedStyles[outcome], "hover:bg-ink/4")
                   : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
             )}
           >
@@ -98,14 +111,17 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               initial={selected && picked ? { scale: 0.8 } : false}
               animate={{ scale: 1 }}
               transition={spring.snappy}
-              className="flex"
+              className={cn("flex", hinted && suggestedIcons[outcome])}
             >
               <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
             {suggested && !value && (
               // Every button keeps the caption's line, so the icons and words line up across the row.
-              <span aria-hidden={!hinted} className={cn("text-micro -mt-1 font-normal", !hinted && "invisible")}>
+              <span
+                aria-hidden={!hinted}
+                className={cn("text-micro -mt-1 font-normal", hinted ? suggestedCaptions[outcome] : "invisible")}
+              >
                 suggested
               </span>
             )}

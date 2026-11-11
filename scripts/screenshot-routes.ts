@@ -1052,10 +1052,7 @@ export const shots: Shot[] = [
     path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
     prepare: async (page) => {
       await page.getByRole("radio", { name: "Spaghetti" }).first().click();
-      await page
-        .getByRole("dialog")
-        .getByRole("radio", { name: /suggested/ })
-        .waitFor();
+      await page.getByRole("dialog").getByText("suggested").first().waitFor();
     },
     // The sheet autosaves the outcome it opened with: put the attempt back off the bed for the shots after it.
     cleanup: async (page) => {

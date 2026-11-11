@@ -1,4 +1,5 @@
 import { type PhotoRead, suggestedTagWords } from "@shared/photo-read";
+import { Chip } from "@/components/ui/Chip";
 import { SparkleIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
@@ -24,12 +25,23 @@ export function PhotoReadNote({ read, className }: PhotoReadNoteProps) {
   }
   const tags = suggestedTagWords(read);
   return (
-    <p className={cn("text-small text-ink-faint flex items-start gap-2 px-0.5", className)}>
+    <div className={cn("text-small text-ink-faint flex items-start gap-2 px-0.5", className)}>
       <SparkleIcon size={14} weight="fill" aria-hidden className="mt-1 shrink-0" />
-      <span className="min-w-0">
-        {read.reason}
-        {tags.length > 0 && <span className="block">{tags.join(" · ")}</span>}
-      </span>
-    </p>
+      <div className="flex min-w-0 flex-col gap-2">
+        <p>{read.reason}</p>
+        {tags.length > 0 && (
+          // The tags that come along if the suggestion is taken, outlined like the suggested button.
+          <ul className="flex flex-wrap gap-1.5" aria-label="Suggested tags">
+            {tags.map((tag) => (
+              <li key={`${tag.kind}-${tag.label}`}>
+                <Chip suggested tone={tag.kind === "failure" ? "tomato" : "basil"}>
+                  {tag.label}
+                </Chip>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }

@@ -28,8 +28,8 @@ export interface FieldsProps {
   suggestedFailureTag?: string | readonly string[];
   /** Success notes Claude suggested, marked the same way. */
   suggestedSuccessNotes?: readonly string[];
-  /** Who the suggested tags come from. */
-  suggestedBy?: "printer" | "claude";
+  /** Who suggested the failure tags (success notes are only ever Claude's). */
+  suggestedFailureBy?: "printer" | "claude";
   /** The outcome Claude suggests from the photo: hinted on its button, not picked. */
   suggestedOutcome?: Outcome | null;
   /** Under the outcome buttons: "Looking at the photo…", or what Claude made of it. */
@@ -169,7 +169,7 @@ export function AttemptFields(props: FieldsProps) {
             value={props.failureTags}
             onChange={props.onFailureTags}
             suggested={props.suggestedFailureTag}
-            suggestedBy={props.suggestedBy}
+            suggestedBy={props.suggestedFailureBy}
           />
         )}
         {(outcome === "success" || outcome === "partial") && (
@@ -179,7 +179,7 @@ export function AttemptFields(props: FieldsProps) {
             value={props.successNotes}
             onChange={props.onSuccessNotes}
             suggested={props.suggestedSuccessNotes}
-            suggestedBy={props.suggestedBy}
+            suggestedBy="claude"
           />
         )}
       </fieldset>

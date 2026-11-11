@@ -24,10 +24,16 @@ export const FAILURE_SLUGS = FAILURE_TAGS.map((tag) => tag.slug);
 export const SUCCESS_SLUGS = SUCCESS_NOTES.map((tag) => tag.slug);
 export { OUTCOMES };
 
-/** The suggestion's tags as words, "Spaghetti, Bed adhesion", for the quiet line under the picker. */
-export function suggestedTagWords(read: Pick<PhotoRead, "outcome" | "failureTags" | "successNotes">): string[] {
+/** The suggestion's tags as words, for the chips under the picker: failure tags unless it worked, success notes unless it failed. */
+export function suggestedTagWords(
+  read: Pick<PhotoRead, "outcome" | "failureTags" | "successNotes">,
+): Array<{ kind: "failure" | "success"; label: string }> {
   return [
-    ...(read.outcome !== "success" ? read.failureTags.map((slug) => tagLabel("failure", slug)) : []),
-    ...(read.outcome !== "failed" ? read.successNotes.map((slug) => tagLabel("success", slug)) : []),
+    ...(read.outcome !== "success"
+      ? read.failureTags.map((slug) => ({ kind: "failure" as const, label: tagLabel("failure", slug) }))
+      : []),
+    ...(read.outcome !== "failed"
+      ? read.successNotes.map((slug) => ({ kind: "success" as const, label: tagLabel("success", slug) }))
+      : []),
   ];
 }

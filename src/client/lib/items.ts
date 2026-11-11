@@ -403,6 +403,9 @@ export function useBuilds() {
 }
 
 /** One item, from the outbox if the server doesn't have it yet. */
+/** When this device first saw Claude reading each photo, so asking again stops after a while. */
+const readingSince = new Map<string, number>();
+
 export function useItem(id: string) {
   const queryClient = useQueryClient();
   const state = useOutbox();
@@ -412,8 +415,14 @@ export function useItem(id: string) {
     enabled: !pendingEntry,
     // Claude is looking at a photo of one of its attempts (decision 0023): ask again now and then instead of waiting
     // for the feed's slower beat, so the suggestion shows as soon as it is there.
-    refetchInterval: (current) =>
-      current.state.data?.attempts.some((attempt) => attempt.photoRead?.status === "reading") ? 3000 : false,
+    // It stops with the read, or after 40 seconds of it (a read that long was lost: the cron settles it).
+    refetchInterval: (current) => {
+      const reading = current.state.data?.attempts.find((attempt) => attempt.photoRead?.status === "reading");
+      if (!reading?.photoRead) return false;
+      const since = (readingSince.get(reading.photoRead.photoId) ?? Date.now()) || Date.now();
+      readingSince.set(reading.photoRead.photoId, since);
+      return Date.now() - since < 40_000 ? 3000 : false;
+    },
     // Opened from a list: show what the list already has, at once, as old as the list is
     // (so a list restored from the device is asked about again rather than trusted as fresh).
     initialData: () => {

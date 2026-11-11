@@ -209,7 +209,7 @@ export function EditAttempt({
         failureTags={value.failureTags}
         suggestedFailureTag={claudeTags.length ? claudeTags : (attempt.suggestedFailureTag ?? undefined)}
         suggestedSuccessNotes={attempt.photoRead?.successNotes}
-        suggestedBy={claudeTags.length || attempt.photoRead?.successNotes.length ? "claude" : "printer"}
+        suggestedFailureBy={claudeTags.length ? "claude" : "printer"}
         suggestedOutcome={read?.outcome}
         outcomeHint={reading ? <PhotoReadNote read={reading} /> : null}
         onFailureTags={(failureTags) => change({ failureTags })}

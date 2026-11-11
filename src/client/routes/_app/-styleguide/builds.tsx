@@ -177,8 +177,13 @@ export function BuildsSection() {
         <Panel className="flex min-w-0 flex-col gap-5">
           <Label>Outcome picker</Label>
           <OutcomePicker value={outcome} onChange={setOutcome} />
-          <Label>Outcome picker with Claude's suggestion from the photo: hinted, never picked</Label>
+          <Label>Outcome picker with Claude's suggestion from the photo: dashed ring, no fill, never picked</Label>
           <OutcomePicker value={null} onChange={(picked) => toast.message(`Picked ${picked}`)} suggested="failed" />
+          <Label>The same, with the suggestion taken: the normal picked style</Label>
+          <OutcomePicker value="failed" onChange={() => undefined} suggested="failed" />
+          <Label>A suggested worked, and a suggested partly</Label>
+          <OutcomePicker value={null} onChange={() => undefined} suggested="success" />
+          <OutcomePicker value={null} onChange={() => undefined} suggested="partial" />
           <PhotoReadNote read={sampleRead} />
           <PhotoReadNote read={{ ...sampleRead, status: "reading", outcome: null, reason: null, failureTags: [] }} />
           <Label>Outcome chips</Label>
