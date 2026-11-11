@@ -13,7 +13,6 @@ import { chromium } from "@playwright/test";
 import sharp, { type Sharp } from "sharp";
 import { launchOptions } from "../lib/browser.ts";
 import { root } from "../lib/wrangler.ts";
-import { PEOPLE } from "./demo.ts";
 
 const PHOTOS = join(root, "scripts/landing/photos");
 export const IMAGES = join(root, "src/landing/images");
@@ -66,15 +65,6 @@ export const PICTURES: Picture[] = [
   ),
   ...["laptop-build", "laptop-today", "laptop-journal"].map(
     (name): Picture => ({ name, widths: [960, 1440, 2160], kind: "screen", make: async (shots) => shot(shots, name) }),
-  ),
-  // The two people's pictures, for the avatars the page draws itself (person-co, person-m).
-  ...PEOPLE.map(
-    (person): Picture => ({
-      name: `person-${person.picture.replace(/\.\w+$/, "")}`,
-      widths: [96, 192],
-      kind: "photo",
-      make: async () => sharp(join(root, "scripts/landing/people", person.picture)).resize(192, 192, { fit: "cover" }),
-    }),
   ),
   // Photos of prints.
   { name: "octopus", widths: [640, 1024, 1420], kind: "photo", make: async () => warm(photo("octopus"), 0.3) },

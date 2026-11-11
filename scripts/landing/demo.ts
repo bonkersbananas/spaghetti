@@ -3,17 +3,16 @@
  * landing:shots seeds the app with the screenshot seed (scripts/seed: ideas, the pantry, builds with histories), then
  * makes it look like the real thing with what is listed here:
  *
- *   - PEOPLE: the two people's names, colours and pictures, in place of the seed's Alex and Sam.
  *   - STAND_INS: real photos of prints in place of some of the seed's drawings, cut to each drawing's frame.
  *   - ADDITIONS, ATTEMPT_PHOTOS and RENAMES: ideas and photos added and things renamed, so the photos and the words
  *     agree.
  *   - SHOTS: which screens are taken, on a phone and on a laptop.
  *
- * Photos live in scripts/landing/photos, pictures of people in scripts/landing/people. Nothing here is real data:
- * the app runs on a throwaway database, and the photos are the mock-ups made for the landing page.
+ * The people in the shots are the seed's own, Alex and Sam (scripts/lib/local-app.ts): the page is public, so it never
+ * shows the two real people, their names, initials or pictures. Photos live in scripts/landing/photos. Nothing here is
+ * real data: the app runs on a throwaway database, and the photos are the mock-ups made for the landing page.
  */
 import type { Page } from "@playwright/test";
-import type { PersonColor } from "../../src/shared/people.ts";
 import type { SEED_USERS } from "../lib/local-app.ts";
 import { root } from "../lib/wrangler.ts";
 import { shots as appShots } from "../screenshot-routes.ts";
@@ -22,21 +21,11 @@ import { SEED_IDS } from "../seed/ideas.ts";
 
 export const LANDING_DIR = `${root}/scripts/landing`;
 
-export interface DemoPerson {
-  /** Which of the seed's two people this is (SEED_USERS: alex, sam). The shots are taken signed in as the first. */
-  seedUsername: (typeof SEED_USERS)[number]["username"];
-  /** The name the app shows: on avatars, "Say something to …", "…'s wishlist". */
-  name: string;
-  color: PersonColor;
-  /** A square picture in scripts/landing/people (any size; it is cut square and made 512 px). */
-  picture: string;
-}
+/** One of the seed's two people (SEED_USERS: alex, sam). */
+export type SeedPerson = (typeof SEED_USERS)[number]["username"];
 
-/** The two people, as the app and the landing page show them. The first is the one signed in for the shots. */
-export const PEOPLE: [DemoPerson, DemoPerson] = [
-  { seedUsername: "alex", name: "CO", color: "plum", picture: "co.png" },
-  { seedUsername: "sam", name: "M", color: "tomato", picture: "m.png" },
-];
+/** Who the shots are taken as. */
+export const SIGNED_IN: SeedPerson = "alex";
 
 export interface StandIn {
   /** A photo in scripts/landing/photos. */
@@ -60,8 +49,8 @@ export const STAND_INS: Record<string, StandIn> = {
 };
 
 export interface Addition {
-  /** Who captured it: an index into PEOPLE. */
-  by: 0 | 1;
+  /** Who captured it. */
+  by: SeedPerson;
   title?: string;
   note?: string;
   /** How long before the seed's "now" it was captured, in minutes. */
@@ -72,7 +61,7 @@ export interface Addition {
 /** Ideas added to the seed. */
 export const ADDITIONS: Addition[] = [
   {
-    by: 1,
+    by: "sam",
     title: "Octopus for the desk",
     note: "Pink silk PLA. The curls on the legs need a slower outer wall.",
     minutesAgo: 40,
@@ -84,8 +73,8 @@ export interface AttemptPhoto {
   /** The build and its attempt, by id (SEED_BUILD_IDS in scripts/seed/builds.ts). */
   itemId: string;
   attemptId: string;
-  /** Who took it: an index into PEOPLE. */
-  by: 0 | 1;
+  /** Who took it. */
+  by: SeedPerson;
   photo: Addition["photo"];
   /** Settings changed on the attempt so its words agree with the photo (the filament, say). */
   settings?: Record<string, unknown>;
@@ -97,7 +86,7 @@ export const ATTEMPT_PHOTOS: AttemptPhoto[] = [
   {
     itemId: SEED_BUILD_IDS.towelHook,
     attemptId: SEED_BUILD_IDS.towelHookAttempt,
-    by: 1,
+    by: "sam",
     photo: { file: "organizer-printing.jpg", crop: { left: 0, top: 0, width: 1024, height: 768 }, color: "#4f4a45" },
     settings: { filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#ee7b2c", colorName: "Orange" }] },
   },

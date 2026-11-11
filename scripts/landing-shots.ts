@@ -1,7 +1,7 @@
 /**
  * pnpm landing:shots — the pictures on the landing page (landing.html, src/landing), made from the app itself and
  * from the photos in scripts/landing. Run it when the app's screens change, or after changing what the demo shows
- * (scripts/landing/demo.ts: the two people, the photos in place of the seed's drawings, the screens). It rewrites
+ * (scripts/landing/demo.ts: the photos in place of the seed's drawings, what is added, the screens). It rewrites
  * src/landing/images, which is committed. docs/landing.md has the details.
  *
  *   pnpm landing:shots            # screenshots of the app, then every picture
@@ -10,7 +10,7 @@
  * 1. Screenshots: the app on the screenshot seed (the same fake data as pnpm screenshots, on a throwaway database),
  *    dressed up by scripts/landing/demo.ts, light theme, into screenshots/landing (gitignored).
  * 2. Pictures (scripts/landing/pictures.ts): photos cropped and warmed to the page, app screens set into photos of a
- *    laptop, the people's pictures, the share image; AVIF at a few widths plus one WebP each, into src/landing/images.
+ *    laptop, the share image; AVIF at a few widths plus one WebP each, into src/landing/images.
  *
  * Needs the Playwright browser (pnpm exec playwright install chromium-headless-shell); sharp (a dev dependency) does
  * the cropping and encoding.
@@ -25,17 +25,18 @@ import {
   ATTEMPT_PHOTOS,
   LANDING_DIR,
   type LandingShot,
-  PEOPLE,
   RENAMES,
+  type SeedPerson,
   SHOTS,
+  SIGNED_IN,
   STAND_INS,
 } from "./landing/demo.ts";
 import { makePictures } from "./landing/pictures.ts";
 import { launchOptions } from "./lib/browser.ts";
 import { simulateIphone } from "./lib/iphone.ts";
-import { SEED_PASSWORD } from "./lib/local-app.ts";
+import { SEED_PASSWORD, SEED_USERS } from "./lib/local-app.ts";
 import { startSeededApp } from "./lib/seeded-app.ts";
-import { executeSql, root } from "./lib/wrangler.ts";
+import { root } from "./lib/wrangler.ts";
 import { SEED_LOCALE, SEED_NOW } from "./seed/index.ts";
 import { replaceSeedPhotos } from "./seed/stand-ins.ts";
 
@@ -101,27 +102,14 @@ async function uploadPhoto(as: APIRequestContext, itemId: string, photo: Additio
   if (!uploaded.ok()) throw new Error(`Adding ${photo.file} failed: ${uploaded.status()}`);
 }
 
-/** The demo's people, additions and renames, on top of the seed (scripts/landing/demo.ts). */
-async function dressUp(origin: string, stateDir: string) {
-  const people = await Promise.all(PEOPLE.map((person) => signedIn(origin, person.seedUsername)));
+/** The demo's additions and renames, on top of the seed (scripts/landing/demo.ts), by the seed's own people. */
+async function dressUp(origin: string) {
+  const people = Object.fromEntries(
+    await Promise.all(SEED_USERS.map(async ({ username }) => [username, await signedIn(origin, username)] as const)),
+  ) as Record<SeedPerson, APIRequestContext>;
   try {
-    for (const [index, person] of PEOPLE.entries()) {
-      executeSql(
-        `UPDATE users SET name = '${person.name.replaceAll("'", "''")}', color = '${person.color}' WHERE username = '${person.seedUsername}';`,
-        { persistTo: stateDir },
-      );
-      const picture = await sharp(join(LANDING_DIR, "people", person.picture))
-        .resize(512, 512, { fit: "cover" })
-        .jpeg({ quality: 88 })
-        .toBuffer();
-      const uploaded = await people[index]?.put("/api/people/me/photo", {
-        multipart: { photo: { name: "picture.jpg", mimeType: "image/jpeg", buffer: picture } },
-      });
-      if (!uploaded?.ok()) throw new Error(`The picture of ${person.name} failed: ${uploaded?.status()}`);
-    }
     for (const addition of ADDITIONS) {
       const as = people[addition.by];
-      if (!as) throw new Error("ADDITIONS: `by` is 0 or 1");
       const id = crypto.randomUUID();
       const created = await as.post("/api/items", {
         data: {
@@ -136,7 +124,6 @@ async function dressUp(origin: string, stateDir: string) {
     }
     for (const added of ATTEMPT_PHOTOS) {
       const as = people[added.by];
-      if (!as) throw new Error("ATTEMPT_PHOTOS: `by` is 0 or 1");
       await uploadPhoto(as, added.itemId, added.photo, added.attemptId);
       if (added.settings) {
         const changed = await as.patch(`/api/attempts/${added.attemptId}`, {
@@ -146,12 +133,11 @@ async function dressUp(origin: string, stateDir: string) {
       }
     }
     for (const [id, data] of Object.entries(RENAMES)) {
-      const renamed = await people[0]?.patch(`/api/items/${id}`, { data });
-      if (!renamed) throw new Error("No one to rename with");
+      const renamed = await people[SIGNED_IN].patch(`/api/items/${id}`, { data });
       if (!renamed.ok()) throw new Error(`Renaming ${id} failed: ${renamed.status()}`);
     }
   } finally {
-    await Promise.all(people.map((context) => context.dispose()));
+    await Promise.all(Object.values(people).map((context) => context.dispose()));
   }
 }
 
@@ -164,7 +150,7 @@ async function takeShots() {
   const failures: string[] = [];
   try {
     console.log("  dressing up the seed (scripts/landing/demo.ts)…");
-    await dressUp(app.url, app.stateDir);
+    await dressUp(app.url);
     for (const device of ["phone", "laptop"] as const) {
       const context = await browser.newContext({
         ...DEVICES[device],
@@ -177,7 +163,7 @@ async function takeShots() {
       if (device === "phone") await simulateIphone(context);
       await context.clock.setFixedTime(SEED_NOW);
       const response = await context.request.post("/api/session", {
-        data: { username: PEOPLE[0].seedUsername, password: SEED_PASSWORD },
+        data: { username: SIGNED_IN, password: SEED_PASSWORD },
         headers: { Origin: app.url },
       });
       if (!response.ok()) throw new Error(`Signing in failed: ${response.status()}`);

@@ -28,6 +28,11 @@ describe("the landing page's pictures", () => {
     }
   });
 
+  it("shows no one's picture: the page is public, so the two people stay off it", () => {
+    expect(html).not.toMatch(/person-|lp-avatar/);
+    expect(existsSync(join(root, "scripts/landing/people"))).toBe(false);
+  });
+
   it("gives each picture the shape of its file", async () => {
     const images = [...html.matchAll(/<img\b[^>]*>/g)].map((match) => match[0]);
     const pictures = images.filter((img) => img.includes(`src="${IMAGES}`));

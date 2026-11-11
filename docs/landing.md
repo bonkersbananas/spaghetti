@@ -33,14 +33,13 @@ pnpm landing:shots --pictures  # only the pictures, from the screenshots already
 
 It needs the Playwright browser (`pnpm exec playwright install chromium-headless-shell`); `sharp`, a dev dependency, crops and encodes.
 
-1. **Screenshots** (`scripts/landing-shots.ts`): it starts the app on a throwaway database with the screenshot seed (`scripts/seed`, the same fake data as `pnpm screenshots`), dresses it up as `scripts/landing/demo.ts` says, and takes each screen in the light theme on a phone (390 × 844 at 3x, as the Home Screen app on an iPhone, safe areas and all) and a laptop (1440 × 900 at 2x), into `screenshots/landing` (gitignored).
-2. **Pictures** (`scripts/landing/pictures.ts`): photos cropped and warmed a little toward the paper, app screens set in perspective onto the laptop in the two desk photos (by the browser, with a CSS `matrix3d`), the people's pictures, and the share image (`public/og.jpg`, 1200 × 630, drawn by the browser). Each is saved as AVIF at a few widths and one WebP fallback, named `<name>-<width>.avif` and `<name>.webp`.
+1. **Screenshots** (`scripts/landing-shots.ts`): it starts the app on a throwaway database with the screenshot seed (`scripts/seed`, the same fake data as `pnpm screenshots`, with its own people, Alex and Sam), adds what `scripts/landing/demo.ts` says, and takes each screen in the light theme on a phone (390 × 844 at 3x, as the Home Screen app on an iPhone, safe areas and all) and a laptop (1440 × 900 at 2x), into `screenshots/landing` (gitignored).
+2. **Pictures** (`scripts/landing/pictures.ts`): photos cropped and warmed a little toward the paper, app screens set in perspective onto the laptop in the two desk photos (by the browser, with a CSS `matrix3d`), and the share image (`public/og.jpg`, 1200 × 630, drawn by the browser). Each is saved as AVIF at a few widths and one WebP fallback, named `<name>-<width>.avif` and `<name>.webp`.
 
 ### What to change where
 
 | You want to… | Change |
 | --- | --- |
-| Rename the two people, change their colours or pictures | `PEOPLE` in `scripts/landing/demo.ts`; pictures go in `scripts/landing/people` (square, any size). The page's own avatars (`person-co`, `person-m`) and the names in its copy (the toasts, "CO and M, one printer") are in `landing.html`. |
 | Show a different screen, or a screen in another state | `SHOTS` in `scripts/landing/demo.ts`: a path and a `prepare` step (open a sheet, type a search), or `reuse()` a shot of `pnpm screenshots` by name. Then add it to `PICTURES` in `scripts/landing/pictures.ts` and to `landing.html`. |
 | Put a real photo where the seed has a drawing | `STAND_INS` in `scripts/landing/demo.ts` (the photo and the crop that has the drawing's shape); `RENAMES` there keeps the words in step with the photo. |
 | Add an idea to the demo | `ADDITIONS` in `scripts/landing/demo.ts`. |
@@ -48,11 +47,11 @@ It needs the Playwright browser (`pnpm exec playwright install chromium-headless
 | Put another screen on a laptop in a photo | `SCREENS` in `scripts/landing/pictures.ts` has the four corners of each laptop's screen, measured on the photo; a picture made with `onTheLaptop(photo, screenshot)`. |
 | Change the share image | `shareImage()` in `scripts/landing/pictures.ts`. |
 
-The photos in `scripts/landing/photos` are mock-ups made for this page; none of it is real data, and the shots never touch production.
+The photos in `scripts/landing/photos` are mock-ups made for this page; none of it is real data, and the shots never touch production. The page is public, so the two real people never appear on it: no names, initials or pictures, in its own words or in the app's screenshots, where the seed's Alex and Sam stand in. Its toasts and notes say what happened, not who did it.
 
 ### Weight
 
-At 390 px the whole page, scrolled to the end, is about 0.6 MB (measured on the production build), most of it pictures that load as they come near; the first screen is about 250 kB: the HTML, the stylesheet, two fonts the app shares and one phone screenshot (`fetchpriority="high"`). The largest paint is the printed word, under a second on a phone with slow 4G and a 4× slower CPU. Keep pictures in AVIF with widths that match how they show, and lazy below the fold.
+At 390 px the whole page, scrolled to the end, is about 0.6 MB (measured on the production build), most of it pictures that load as they come near; the first screen is about 280 kB: the HTML, the stylesheet, two fonts the app shares and one phone screenshot (`fetchpriority="high"`). The largest paint is the printed word, under a second on a phone with slow 4G and a 4× slower CPU. Keep pictures in AVIF with widths that match how they show, and lazy below the fold.
 
 ## Tests
 
