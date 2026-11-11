@@ -616,6 +616,24 @@ export const bridge = sqliteTable("bridge", {
   id: text("id").primaryKey(),
   lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
   status: text("status", { mode: "json" }).$type<BridgeStatusData>().notNull(),
+  /** The agent whose token sent the last message: what "Disconnect" revokes. */
+  agentId: text("agent_id"),
+});
+
+/**
+ * A short-lived, single-use pairing code for the printer bridge's installer (decision 0033). Only the code's hash is
+ * kept. Exchanged once for an agent token; `agentId` is the agent that was made (or reused) for it.
+ */
+export const bridgePairings = sqliteTable("bridge_pairings", {
+  id: text("id").primaryKey(),
+  codeHash: text("code_hash").notNull().unique(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  usedAt: integer("used_at", { mode: "timestamp_ms" }),
+  agentId: text("agent_id"),
 });
 
 /**

@@ -715,9 +715,31 @@ export const operations: Record<string, Operation> = {
     response: any("The printer."),
   },
   "PUT /printer/bridge": {
-    summary: "The printer bridge's heartbeat: progress, AMS levels and unknown trays.",
+    summary: "The printer bridge's heartbeat: progress, unknown trays, its version and what is wrong.",
     body: bridgeSchema,
     response: any("The printer."),
+  },
+  "DELETE /printer/bridge": {
+    summary: "Disconnects the printer bridge: its tokens end and its status is forgotten.",
+    response: any("The printer."),
+  },
+  "POST /bridge/pairing": {
+    summary: "Makes a short-lived, single-use code (about ten minutes) for the bridge's installer on a Mac.",
+    response: z.object({ code: z.string(), expiresAt: z.number().int() }),
+    status: 201,
+    errors: { 429: "rate_limited." },
+  },
+  "POST /bridge/pair": {
+    summary: "The installer's exchange of a pairing code for the bridge's token (scopes read, attempts, printer).",
+    body: z.object({ code: z.string() }),
+    response: z.object({
+      token: z.string(),
+      agentId: z.string(),
+      appUrl: z.string(),
+      scopes: z.array(z.string()),
+    }),
+    errors: { 410: "code_gone: used or expired.", 429: "rate_limited." },
+    public: true,
   },
   "PUT /printer/slots/:slot": {
     summary: "Loads a spool into an AMS slot, or empties it.",
