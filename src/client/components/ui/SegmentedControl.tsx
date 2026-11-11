@@ -17,8 +17,6 @@ interface SegmentedControlProps<T extends string> {
   /** null: nothing picked yet. */
   value: T | null;
   onChange: (value: T) => void;
-  /** "sm" for dense groups such as print settings. */
-  size?: "sm" | "md";
   className?: string;
 }
 
@@ -34,7 +32,6 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
-  size = "md",
   className,
 }: SegmentedControlProps<T>) {
   const name = useId();
@@ -50,7 +47,7 @@ export function SegmentedControl<T extends string>({
               className={cn(
                 "pressable has-focus-visible:shadow-ring relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-sm font-semibold whitespace-nowrap",
                 // 44 px on phones (a touch-target overlay would sit over the radio and take its clicks); compact on desktop.
-                size === "md" ? "text-small h-11 md:h-8" : "text-small h-11 md:h-8",
+                "text-small h-11 md:h-8",
                 selected ? "bg-lifted text-ink shadow-soft" : "text-ink-faint hover:text-ink",
               )}
             >
