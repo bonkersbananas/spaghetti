@@ -265,9 +265,12 @@ export const shots: Shot[] = [
     // shots: opening a thread marks it read.
     name: "today-guess",
     path: "/today",
-    fullPage: true,
+    selector: "article:has-text('Drawer divider')",
     prepare: async (page) => {
-      await page.getByRole("radio", { name: /suggested/ }).first().waitFor({ timeout: 20_000 });
+      await page
+        .getByRole("radio", { name: /suggested/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
     },
   },
   {

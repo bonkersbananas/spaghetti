@@ -32,9 +32,9 @@ export default function CommentsLine() {
   return (
     <Link
       {...link}
-      className="focus-ring text-small text-ink-soft hover:text-ink duration-fast hover:bg-ink/4 -mx-2 flex min-h-11 items-start gap-2 rounded-md px-2 py-2.5 transition-colors"
+      className="focus-ring pressable text-small text-ink-soft hover:text-ink duration-fast hover:bg-ink/4 -mx-2 flex min-h-11 items-start gap-2 rounded-md px-2 py-2.5 transition-colors"
     >
-      <CommentIcon size={16} className="text-tomato mt-0.5 shrink-0" aria-hidden />
+      <CommentIcon size={16} className="text-tomato-ink mt-0.5 shrink-0" aria-hidden />
       <span className="min-w-0 md:truncate">
         <span className="text-ink font-semibold">{line.lead}</span>
         {line.quote && <span>: {line.quote}</span>}

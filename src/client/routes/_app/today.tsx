@@ -205,7 +205,7 @@ function Today() {
         // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
           <div className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
-            <div className="order-1 flex flex-col gap-6 empty:hidden">
+            <div className="order-1 flex flex-col gap-3 empty:hidden">
               {loading ? (
                 <div className="flex flex-col gap-4" aria-hidden>
                   <CardSkeleton />
