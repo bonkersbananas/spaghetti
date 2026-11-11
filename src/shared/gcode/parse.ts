@@ -523,7 +523,7 @@ export class GcodeReader {
         const ey = y - this.py1;
         const len = Math.hypot(dx, dy);
         const cross = Math.abs(dx * ey - dy * ex);
-        if (len < this.minSegment || cross <= 0.01 * len * Math.hypot(ex, ey)) {
+        if (len < this.minSegment || (cross <= 0.01 * len * Math.hypot(ex, ey) && dx * ex + dy * ey >= 0)) {
           this.px1 = x;
           this.py1 = y;
           return;

@@ -150,6 +150,13 @@ describe("small files", () => {
     expect(paths.layers[0]?.count).toBe(2);
   });
 
+  it("keeps a stroke that doubles back", () => {
+    const paths = parseGcode(
+      [";LAYER_CHANGE", ";Z:0.2", ";HEIGHT:0.2", "G1 X0 Y0", "G1 X10 Y0 E1", "G1 X2 Y0 E1"].join("\n"),
+    );
+    expect(paths.layers[0]?.count).toBe(2);
+  });
+
   it("says so when there are no layers", () => {
     expect(parseGcode("G28\nG1 X1 Y1 E1\n").warnings[0]).toMatch(/no layer markers/);
   });
@@ -251,6 +258,16 @@ describe("readToolpaths", () => {
     expect(paths.filaments.map((f) => f.color)).toEqual(["#112233", "#445566"]);
     const bare = await readToolpaths(new Blob([zipSync(parts) as BlobPart]));
     expect(bare.filaments.map((f) => f.color)).toEqual([null, null]);
+  });
+
+  it("reads a file whose entries are stored, not deflated", async () => {
+    const { zipSync, strToU8 } = await import("fflate");
+    const stored = zipSync({
+      "Metadata/plate_1.gcode": [strToU8(tugboatGcode({ layerHeight: 1 })), { level: 0 }],
+      "Metadata/plate_1.png": [new Uint8Array([1, 2, 3]), { level: 0 }],
+    });
+    const paths = await readToolpaths(new Blob([stored as BlobPart]));
+    expect(paths.layers.length).toBeGreaterThan(30);
   });
 
   it("says so for a file with no G-code", async () => {

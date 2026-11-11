@@ -1,4 +1,4 @@
-import { Unzip, UnzipInflate } from "fflate";
+import { Unzip, UnzipInflate, UnzipPassThrough } from "fflate";
 import { GcodeReader, type ParseOptions } from "./parse.ts";
 import type { ToolpathFilament, Toolpaths } from "./types.ts";
 
@@ -28,6 +28,7 @@ export class ToolpathError extends Error {}
 export async function readToolpaths(file: Blob, options: ReadToolpathsOptions = {}): Promise<Toolpaths> {
   const unzip = new Unzip();
   unzip.register(UnzipInflate);
+  unzip.register(UnzipPassThrough); // stored entries, as re-zipped files have
   const small = new Map<string, Uint8Array[]>();
   const decoder = new TextDecoder();
   let reader: GcodeReader | null = null;
