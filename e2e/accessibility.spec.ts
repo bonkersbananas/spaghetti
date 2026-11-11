@@ -503,6 +503,10 @@ test("keyboard focus is visible in the sheets and menus", async ({ page, isMobil
     .first()
     .click();
   await expect(page.getByRole("dialog", { name: "Attempt 3" })).toBeVisible();
+  // A desktop sheet starts at its first control, not the header's Close.
+  await expect(
+    page.getByRole("dialog", { name: "Attempt 3" }).getByRole("button", { name: "Close" }),
+  ).not.toBeFocused();
   await tabThrough("The attempt sheet", 10);
 });
 

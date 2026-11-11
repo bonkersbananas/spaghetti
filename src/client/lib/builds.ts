@@ -26,6 +26,7 @@ import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
 import type { DraftPhoto } from "./capture";
+import { dismissItemToasts } from "./item-toasts";
 import {
   type AttemptView,
   cachedItem,
@@ -100,11 +101,11 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
   const wasUpNext = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;
   void changeStage(queryClient, item.id, "building");
+  // The idea's own toasts (a draft's undo) are done with: one toast for the step just taken.
+  dismissItemToasts(item.id);
   toast.undo("Started building", {
     description:
-      wasUpNext !== null
-        ? "Off the Up next list. It stays in Ideas under Started."
-        : "It stays in Ideas under Started. Log the first attempt when it prints.",
+      wasUpNext !== null ? "Off Up next. It stays in Ideas under Started." : "It stays in Ideas under Started.",
     onUndo: () => void changeStage(queryClient, item.id, "idea", wasUpNext !== null ? { upNext: wasUpNext } : {}),
   });
 }

@@ -13,7 +13,7 @@ import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
-import type { AttemptView, ItemView } from "@/lib/items";
+import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
 import { duration } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
@@ -179,6 +179,11 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               endedAt={attempt.endedAt}
               onPick={(outcome) => finish(outcome)}
               photoRead={attempt.photoRead}
+              onPhotos={
+                item.photos.some((photo) => photo.attemptId === attempt.id)
+                  ? undefined
+                  : (files) => addPhotosToItem(item.id, files, attempt.id)
+              }
               className="pointer-events-auto md:mt-auto"
             />
           ) : (

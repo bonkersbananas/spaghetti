@@ -4,6 +4,7 @@ import { firstModelLink, lonelyModelLink } from "@shared/model-links";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
+import { rememberItemToast } from "./item-toasts";
 import { cachedItem, itemKeys, patchCachedItem } from "./items";
 
 /** What the Worker can do beyond the basics; today only whether Claude can draft ideas (it has its key). */
@@ -78,7 +79,8 @@ export function announceDraft(queryClient: QueryClient, item: Pick<Item, "id" | 
   const draft = item.draft;
   if (draft?.status !== "drafted" || !draft.applied.length || announced.has(item.id)) return;
   announced.add(item.id);
-  toast.undo(`Drafted from ${siteName(draft)}`, { onUndo: () => void undoDraft(queryClient, item.id) });
+  const id = toast.undo(`Drafted from ${siteName(draft)}`, { onUndo: () => void undoDraft(queryClient, item.id) });
+  rememberItemToast(item.id, id);
 }
 
 /** Takes a draft back (the Worker only removes what is still exactly what it wrote). */

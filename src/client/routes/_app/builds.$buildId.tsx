@@ -63,6 +63,7 @@ import { useCaptureHere } from "@/lib/capture";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
   type AttemptView,
+  addPhotosToItem,
   deleteItem,
   discardIfUntouched,
   type ItemView,
@@ -618,6 +619,7 @@ function Build({ item }: { item: ItemView }) {
                         attempt={attempt}
                         partsLabel={attemptPartsLabel(attempt, item.parts)}
                         photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
+                        onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
                         person={byId.get(attempt.createdBy)}
                         via={via(attempt.createdVia)}
                         selected={attempt.id === selected}

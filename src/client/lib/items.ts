@@ -51,7 +51,28 @@ export const ideasQuery = queryOptions({
 export const buildsQuery = queryOptions({
   queryKey: itemKeys.list("builds"),
   queryFn: async () => (await api<ItemsResponse>("/items?stage=building,done,shelved")).items,
+  // Today's print card shows Claude's suggestion too: ask again while it is looking, as the build page does.
+  refetchInterval: (current) => whileReading(current.state.data ?? []),
 });
+
+/** When this device first saw Claude reading each photo, so asking again stops after a while. */
+const readingSince = new Map<string, number>();
+
+/**
+ * Claude is looking at a photo of an attempt (decision 0023): ask again every 3 seconds instead of waiting for the
+ * feed's slower beat, so the suggestion shows as soon as it is there. It stops with the read, or after 40 seconds
+ * of it (a read that long was lost: the cron settles it).
+ */
+function whileReading(items: Pick<Item, "attempts">[]): number | false {
+  for (const item of items) {
+    const reading = item.attempts.find((attempt) => attempt.photoRead?.status === "reading");
+    if (!reading?.photoRead) continue;
+    const since = readingSince.get(reading.photoRead.photoId) ?? Date.now();
+    readingSince.set(reading.photoRead.photoId, since);
+    if (Date.now() - since < 40_000) return 3000;
+  }
+  return false;
+}
 
 export function itemQuery(id: string) {
   return queryOptions({
@@ -243,7 +264,11 @@ export function connectOutbox(queryClient: QueryClient) {
         photos: sortPhotos([...item.photos.filter((p) => p.id !== photo.id), photo]),
       }));
       // A photo of an attempt may start Claude looking at it (decision 0023): ask for the attempt's state now.
-      if (photo.attemptId) void queryClient.invalidateQueries({ queryKey: itemKeys.detail(photo.itemId) });
+      // Today and the builds list show the suggestion too, so they ask as well.
+      if (photo.attemptId) {
+        void queryClient.invalidateQueries({ queryKey: itemKeys.detail(photo.itemId) });
+        void queryClient.invalidateQueries({ queryKey: itemKeys.list("builds") });
+      }
     },
     fileSaved: (attempt) =>
       patchCachedItem(queryClient, attempt.itemId, (item) => ({
@@ -403,9 +428,6 @@ export function useBuilds() {
 }
 
 /** One item, from the outbox if the server doesn't have it yet. */
-/** When this device first saw Claude reading each photo, so asking again stops after a while. */
-const readingSince = new Map<string, number>();
-
 export function useItem(id: string) {
   const queryClient = useQueryClient();
   const state = useOutbox();
@@ -413,16 +435,7 @@ export function useItem(id: string) {
   const query = useQuery({
     ...itemQuery(id),
     enabled: !pendingEntry,
-    // Claude is looking at a photo of one of its attempts (decision 0023): ask again now and then instead of waiting
-    // for the feed's slower beat, so the suggestion shows as soon as it is there.
-    // It stops with the read, or after 40 seconds of it (a read that long was lost: the cron settles it).
-    refetchInterval: (current) => {
-      const reading = current.state.data?.attempts.find((attempt) => attempt.photoRead?.status === "reading");
-      if (!reading?.photoRead) return false;
-      const since = (readingSince.get(reading.photoRead.photoId) ?? Date.now()) || Date.now();
-      readingSince.set(reading.photoRead.photoId, since);
-      return Date.now() - since < 40_000 ? 3000 : false;
-    },
+    refetchInterval: (current) => whileReading(current.state.data ? [current.state.data] : []),
     // Opened from a list: show what the list already has, at once, as old as the list is
     // (so a list restored from the device is asked about again rather than trusted as fresh).
     initialData: () => {

@@ -135,3 +135,18 @@ for (const theme of ["light", "dark"] as const) {
     expect(results.violations).toEqual([]);
   });
 }
+
+test("at the printer, a photo from Today's card brings the suggestion there, in one tap", async ({ page }) => {
+  await offTheBed(page, "Spaghetti clip");
+  await page.goto("/today");
+  await expect(page.getByText(/Off the bed at/).first()).toBeVisible();
+  // The card's Photo button opens the camera on a phone; here the file goes straight to its input.
+  await page.getByRole("button", { name: "Photo" }).first().waitFor();
+  await page
+    .getByTestId("camera-input")
+    .first()
+    .setInputFiles({ name: "print.jpg", mimeType: "image/jpeg", buffer: photo });
+  // Claude's guess lands on Today's own buttons, without opening the build (the list asks again while it looks).
+  await expect(page.getByRole("radio", { name: /Spaghetti suggested/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Photo" })).toHaveCount(0);
+});
