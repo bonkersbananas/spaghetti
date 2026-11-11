@@ -5,6 +5,7 @@ import type { PersistedClient, Persister } from "@tanstack/react-query-persist-c
 import { useCallback, useSyncExternalStore } from "react";
 import { openStore } from "./idb";
 import { rememberedUser } from "./queries";
+import { subscribeToSeen } from "./seen-store";
 
 /**
  * What Spaghetti last saw, kept on the device so it can still be read with no
@@ -157,13 +158,14 @@ export function refetchRestored(queryClient: QueryClient) {
 export function useLastSeen(): number | null {
   const queryClient = useQueryClient();
   const cache = queryClient.getQueryCache();
+  // Only the events that can move it, and never in the middle of another component's commit (subscribeToSeen, #60).
   const subscribe = useCallback(
     (listener: () => void) => {
-      listeners.add(listener);
-      const unsubscribe = cache.subscribe(listener);
+      const seen = subscribeToSeen(cache, SEEN_ROOTS, listener);
+      listeners.add(seen.notify);
       return () => {
-        listeners.delete(listener);
-        unsubscribe();
+        listeners.delete(seen.notify);
+        seen.unsubscribe();
       };
     },
     [cache],
