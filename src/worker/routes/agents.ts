@@ -158,3 +158,6 @@ async function shown(db: Db, viewerId: string, agentId: string, issued: Issued):
   if (!agent) throw new Error("The agent went missing.");
   return { agent, tokenId: issued.row.id as string, token: issued.token };
 }
+
+/** For the OpenAPI document (worker/openapi). */
+export { createAgent, createToken };

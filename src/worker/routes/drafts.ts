@@ -53,3 +53,6 @@ export const draftRoutes = new Hono<AppEnv>()
     if (!done) return apiError(c, 404, "not_found", "There's no draft to take back.");
     return c.json<DraftResponse>({ draft: null });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { body as draftBody };

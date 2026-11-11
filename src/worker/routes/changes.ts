@@ -48,3 +48,6 @@ export const changeRoutes = new Hono<AppEnv>().get("/", async (c) => {
     reset: false,
   });
 });
+
+/** For the OpenAPI document (worker/openapi). */
+export { query as changesQuery };

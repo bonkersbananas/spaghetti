@@ -144,7 +144,7 @@ export const webhookRoutes = new Hono<AppEnv>()
     const row = await mine(c, c.req.param("id"));
     if (!row) return apiError(c, 404, "not_found", notFound);
     await c.var.db.update(webhooks).set({ deletedAt: new Date() }).where(eq(webhooks.id, row.id));
-    return c.json({ ok: true });
+    return c.body(null, 204);
   })
 
   .post("/:id/restore", async (c) => {

@@ -221,3 +221,6 @@ export const commentRoutes = new Hono<AppEnv>()
     ]);
     return c.json<{ comment: Comment }>({ comment: toApiComment(restored ?? found.row) });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createComment, updateComment };

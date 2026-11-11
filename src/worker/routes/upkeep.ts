@@ -337,3 +337,6 @@ export const upkeepRoutes = new Hono<AppEnv>()
     if (!row) return apiError(c, 404, "not_found", "That entry isn't in the log any more.");
     return c.body(null, 204);
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createTask, logBody, photoFields as upkeepPhotoFields, updateTask };

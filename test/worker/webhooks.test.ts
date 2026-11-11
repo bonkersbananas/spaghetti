@@ -180,7 +180,7 @@ describe("making webhooks", () => {
   it("deletes with an undo", async () => {
     const { made } = await make();
     const id = made?.webhook.id;
-    expect((await request(`/api/webhooks/${id}`, { method: "DELETE", cookie })).status).toBe(200);
+    expect((await request(`/api/webhooks/${id}`, { method: "DELETE", cookie })).status).toBe(204);
     expect((await (await request("/api/webhooks", { cookie })).json<WebhooksResponse>()).webhooks).toEqual([]);
     expect((await request(`/api/webhooks/${id}/restore`, { method: "POST", cookie })).status).toBe(200);
     expect((await (await request("/api/webhooks", { cookie })).json<WebhooksResponse>()).webhooks).toHaveLength(1);
@@ -191,7 +191,7 @@ describe("delivering changes", () => {
   it("turns the changes it asked for into signed POSTs, in the change feed's shape", async () => {
     const { made } = await make(["item"]);
     await createItem(); // an item change
-    await request("/api/tags", { method: "POST", json: { kind: "failure", name: "Warping" }, cookie }); // a tag change: not wanted
+    await request("/api/tags", { method: "POST", json: { kind: "failure", label: "Warping" }, cookie }); // a tag change: not wanted
     const sent = stubWeb();
     const result = await runWebhooks(env);
     expect(result).toMatchObject({ made: 1, sent: 1, failed: 0 });

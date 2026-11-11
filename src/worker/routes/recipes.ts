@@ -20,6 +20,10 @@ const name = z.string().trim().min(1).max(RECIPE_NAME_MAX);
 const note = z.string().trim().max(RECIPE_NOTE_MAX);
 
 const createRecipe = z.object({ id: z.uuid(), name, note: note.optional(), sourceAttemptId: z.uuid() });
+const recipeQuery = z.object({
+  material: z.string().trim().max(40).optional(),
+  finish: z.string().trim().max(40).optional(),
+});
 const updateRecipe = z.object({ name: name.optional(), note: note.optional() });
 
 const notFound = "That recipe isn't here any more.";
@@ -87,9 +91,7 @@ async function loadRecipe(db: Db, id: string): Promise<Recipe | null> {
 /** /api/recipes: named settings of attempts that worked. */
 export const recipeRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
-    const parsed = z
-      .object({ material: z.string().trim().max(40).optional(), finish: z.string().trim().max(40).optional() })
-      .safeParse(c.req.query());
+    const parsed = recipeQuery.safeParse(c.req.query());
     if (!parsed.success) return apiError(c, 400, "invalid", "That question couldn't be read.");
     const all = await liveRecipes(c.var.db);
     const { material, finish } = parsed.data;
@@ -200,3 +202,6 @@ export const recipeRoutes = new Hono<AppEnv>()
     if (!recipe) return apiError(c, 404, "not_found", "That recipe is gone for good.");
     return c.json<RecipeResponse>({ recipe });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createRecipe, recipeQuery, updateRecipe };

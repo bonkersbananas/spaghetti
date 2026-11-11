@@ -205,3 +205,6 @@ export const printerRoutes = new Hono<AppEnv>()
     ]);
     return c.json<PrinterResponse>(await loadPrinter(db));
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { bridgeSchema, setSlot, setupSchema };

@@ -64,7 +64,8 @@ export interface NewWebhookResponse {
 }
 
 /** pending: waiting for its turn or a retry. delivered: the receiver answered 2xx. failed: gave up after a day. */
-export type DeliveryStatus = "pending" | "delivered" | "failed";
+export const DELIVERY_STATUSES = ["pending", "delivered", "failed"] as const;
+export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 
 export interface DeliveryInfo {
   id: string;

@@ -10,6 +10,7 @@ import { actorOf } from "./changes.ts";
 import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
+import { buildOpenApi } from "./openapi/document.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
@@ -95,6 +96,8 @@ export const app = new Hono<AppEnv>()
   .route("/session", sessionRoutes)
   .use(requireAuth)
   .use(requireScope)
+  // What this caller may do, as OpenAPI 3.1 (made from the code: worker/openapi).
+  .get("/openapi.json", (c) => c.json(buildOpenApi(c.var.scopes, new URL(c.req.url).origin)))
   .route("/account", accountRoutes)
   .route("/push", pushRoutes)
   .route("/people", peopleRoutes)
