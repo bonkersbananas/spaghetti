@@ -27,7 +27,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
 - [x] Push notifications: "Tugboat is off the bed. How did it go?", with Worked / Partly / Spaghetti buttons where the platform has them ([0016](decisions/0016-web-push-nudges.md); setup in [deploy.md](deploy.md))
 - [x] Insights and recipes: recipes are done (a what-worked attempt saved under a name, on the spool's page, in the Pantry, in search and in the attempt sheet; [0017](decisions/0017-recipes-are-frozen-attempts.md)); insights are done too: the Year so far at `/year` (success rate by material and plate, which change fixed which failure, a mosaic of what got made, the builds that took the most tries; `GET /api/insights`)
-- [x] Richer ideas: an "Up next" queue (the inbox section, Today's row) and who it's for, and a short thread of comments between you two on every idea and build ([0023](decisions/0023-comments-read-state-and-push-batching.md); not searchable yet)
+- [x] Richer ideas: an "Up next" queue (the inbox section, Today's row) and who it's for, and a short thread of comments between you two on every idea and build ([0024](decisions/0024-comments-read-state-and-push-batching.md); not searchable yet)
 - [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [x] Parts and quantities ("print the hull in two halves"): optional parts with a quantity on a build, attempts say which parts they printed and how many came out well, parts from a slicer file, "all printed" offers to finish ([0022](decisions/0022-parts-are-optional-counts-live-on-attempts.md), [docs/api.md](api.md))
 - [x] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
@@ -43,9 +43,10 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
   - Anthropic's server-side web fetch tool (`web_fetch_20260209`, `allowed_domains` limited to the model sites) reads the page, so the Worker never fetches arbitrary URLs for it. The draft comes back structured through `output_config.format` (a JSON schema); handle `stop_reason: "refusal"`.
   - Pictures come from an allowlist of the sites' image CDNs and are stored with `needsResize`, so the next browser makes the thumbnails ([0004](decisions/0004-photos-resized-in-the-browser.md)).
   - Agents may get an `import_idea` MCP tool later.
-- [ ] **Read a print from its photo:** when an attempt gets a photo (taken by hand, or the bridge's camera frame), Claude looks at it and *suggests* how it went (Worked, Partly or Spaghetti) and which failure tags fit, from the built-in list. Spaghetti, warping, layer shift, stringing and the rest each come with a short reason.
+- [x] **Read a print from its photo** (see [0023](decisions/0023-claude-reads-a-print-from-its-photo.md)): when an attempt gets a photo (taken by hand, or the bridge's camera frame), Claude looks at it and *suggests* how it went (Worked, Partly or Spaghetti) and which failure tags fit, from the built-in list. Spaghetti, warping, layer shift, stringing and the rest each come with a short reason.
   - It only ever suggests. Like the bridge's suggested tag (#24), the suggestion is pre-selected and clearly marked "suggested" in the attempt sheet, and the person confirms or changes it. It never sets an outcome on its own.
   - It reads the attempt's large photo variant from R2 (already resized in the browser) and returns a structured output whose tags are an enum of the built-in tag slugs.
+  - Left for later: the suggestion on Today's print card and in the "how did it go?" push notification (Today was being changed by another session), and a way to ask again for a photo that wasn't read.
 
 ## Next: agents using the service
 

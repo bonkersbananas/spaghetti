@@ -264,7 +264,7 @@ The front door (`/today`, where signing in and `/` lead): a calm answer to "what
 
 ## Talking it over (comments)
 
-A short thread at the foot of every idea and build ("Talk it over", `components/comments/`, lazy-loaded; decision [0023](decisions/0023-comments-read-state-and-push-batching.md)). It is a small conversation in a kitchen notebook, not a comment widget: no borders, no table, no empty box.
+A short thread at the foot of every idea and build ("Talk it over", `components/comments/`, lazy-loaded; decision [0024](decisions/0024-comments-read-state-and-push-batching.md)). It is a small conversation in a kitchen notebook, not a comment widget: no borders, no table, no empty box.
 
 - **Messages** (`MessageGroup`, `Bubble`, `NewDivider` in `ui/Message.tsx`): one person's consecutive messages (within five minutes, `groupThread` in `shared/comments.ts`) sit together under one avatar, name and relative time; the other person's at the start on `cream`, yours at the end on `tomato-soft`, so who spoke reads before any name does. An edit shows a quiet "(edited)"; an agent's comment adds "via Claude for Alex" and the agent mark on the avatar. Links in the text are links, and the first few get the usual link cards underneath.
 - **Empty is one line.** With nothing written the section is a single quiet field ("Say something to Marie", the other person's name) and an invisible heading: it takes almost no room. Once there are messages the heading and the conversation appear above the same field.

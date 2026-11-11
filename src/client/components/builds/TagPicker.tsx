@@ -11,8 +11,10 @@ interface TagPickerProps {
   value: string[];
   onChange: (slugs: string[]) => void;
   label: string;
-  /** A tag the printer suggested: marked while it is picked, and always the person's to take off. */
-  suggested?: string;
+  /** Tags the printer or Claude suggested: marked while they are picked, and always the person's to take off. */
+  suggested?: string | readonly string[];
+  /** Who suggested them, for the line that says so. */
+  suggestedBy?: "printer" | "claude";
   /** How many to show before "more". Picked ones always show. */
   visible?: number;
   className?: string;
@@ -23,12 +25,23 @@ interface TagPickerProps {
  * the rest one tap away. People add their own on the fly; it's offered next
  * time too.
  */
-export function TagPicker({ kind, value, onChange, label, suggested, visible = 8, className }: TagPickerProps) {
+export function TagPicker({
+  kind,
+  value,
+  onChange,
+  label,
+  suggested,
+  suggestedBy = "printer",
+  visible = 8,
+  className,
+}: TagPickerProps) {
   const queryClient = useQueryClient();
   const options = useTagOptions(kind);
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
+  const suggestions = typeof suggested === "string" ? [suggested] : (suggested ?? []);
+  const showing = suggestions.filter((slug) => value.includes(slug));
   const tone = kind === "failure" ? "tomato" : "basil";
 
   // Picked tags someone else added, before the list of tags has them.
@@ -51,9 +64,11 @@ export function TagPicker({ kind, value, onChange, label, suggested, visible = 8
   return (
     <fieldset className={cn("flex flex-col gap-2.5", className)}>
       <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">{label}</legend>
-      {suggested && value.includes(suggested) && (
+      {showing.length > 0 && (
         <p className="text-small text-ink-faint -mt-1 px-0.5">
-          The printer suggested the marked one. Tap it to take it off.
+          {suggestedBy === "claude"
+            ? "Claude's guess from the photo. Tap to take any off."
+            : "The printer suggested the marked one. Tap it to take it off."}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -62,7 +77,7 @@ export function TagPicker({ kind, value, onChange, label, suggested, visible = 8
           return (
             <ToggleChip key={slug} selected={selected} tone={tone} onClick={() => toggle(slug)}>
               {tagLabel(kind, slug, options)}
-              {slug === suggested && selected && <span className="font-normal"> · suggested</span>}
+              {suggestions.includes(slug) && selected && <span className="font-normal"> · suggested</span>}
             </ToggleChip>
           );
         })}

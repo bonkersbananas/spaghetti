@@ -1,7 +1,7 @@
 /**
  * The short thread under an idea or build: the types the API speaks, how messages group, where the
  * "new" divider goes and what a push for a burst of comments says. Pure, so the client, the Worker and
- * the unit tests read the same rules (decision 0023).
+ * the unit tests read the same rules (decision 0024).
  */
 
 import { findLinks } from "./links.ts";

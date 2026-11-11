@@ -184,7 +184,7 @@ async function apply({ api, log }: JobContext, action: AmsAction) {
     case "createSpool": {
       const { spool } = action;
       await api.createSpool(spool);
-      log(`Added a spool for the Bambu ${spool.material} ${spool.colorName ?? ""}`.trim() + ".");
+      log(`${`Added a spool for the Bambu ${spool.material} ${spool.colorName ?? ""}`.trim()}.`);
       return;
     }
     case "load":

@@ -780,6 +780,12 @@ const OLDER_BUILDS: SeedBuild[] = [
         outcome: null,
         endedAfter: 62 * MIN,
         suggestedTag: "spaghetti",
+        // The photo the bridge's camera took as the print ended; Claude read it and suggested Spaghetti (the stand-in
+        // in scripts/lib/fake-claude.ts answers from a word in the note).
+        note: "Came off the bed in a tangle.",
+        photos: [
+          { file: "spaghetti-fail.svg", color: "#6a645d", crop: [420, 260, 640, 480], filter: "grayscale(0.4)" },
+        ],
         settings: {
           filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
           bedType: "Textured PEI Plate",
