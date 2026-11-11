@@ -2,27 +2,15 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import {
-  AgentIcon,
-  BellIcon,
-  DevicesIcon,
-  InviteIcon,
-  KeyIcon,
-  PaletteIcon,
-  PasskeyIcon,
-  QrIcon,
-  SignOutIcon,
-  TrashIcon,
-} from "@/components/ui/icons";
+import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
-import { biometric, hasPasskeyHere } from "@/lib/passkeys";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInSheets } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInRows, SigningInSheets } from "./lazy-account";
 import type { SigningInSheet } from "./SigningInSheets";
 import { workshop } from "./sections";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -113,9 +101,6 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           >
             Notifications
           </MenuItem>
-          <MenuItem icon={InviteIcon} onClick={() => openSigningIn("invite")}>
-            Invite someone
-          </MenuItem>
           <MenuItem to="/deleted" icon={TrashIcon} onClick={() => onOpenChange(false)}>
             Recently deleted
           </MenuItem>
@@ -123,29 +108,18 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             Styleguide
           </MenuItem>
         </MenuGroup>
-        <Overline as="h3" className="mt-6 mb-2 block">
-          Signing in
-        </Overline>
-        <MenuGroup>
-          <MenuItem icon={PasskeyIcon} onClick={() => openSigningIn("passkeys")}>
-            {hasPasskeyHere() ? "Passkeys" : `Sign in with ${biometric()} next time`}
-          </MenuItem>
-          <MenuItem icon={QrIcon} onClick={() => openSigningIn("link")}>
-            Sign in on another device
-          </MenuItem>
-          <MenuItem icon={DevicesIcon} onClick={() => openSigningIn("devices")}>
-            Signed-in devices
-          </MenuItem>
-          <MenuItem
-            icon={KeyIcon}
-            onClick={() => {
-              onOpenChange(false);
-              setChangingPassword(true);
-            }}
-          >
-            Change password
-          </MenuItem>
-        </MenuGroup>
+        <div className="mt-6">
+          <Suspense fallback={<div className="h-72" />}>
+            <SigningInRows
+              size="md"
+              onPick={openSigningIn}
+              onChangePassword={() => {
+                onOpenChange(false);
+                setChangingPassword(true);
+              }}
+            />
+          </Suspense>
+        </div>
         <ThemeSwitch className="mt-6" />
       </Sheet>
       {/* Mounted once asked for: their code loads then (lazy-account.ts), and a closed sheet that mounts while another is open looped in the production build. */}

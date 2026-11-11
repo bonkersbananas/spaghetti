@@ -1,25 +1,12 @@
 import type { Person } from "@shared/api";
 import { Suspense, useState } from "react";
-import {
-  AgentIcon,
-  BellIcon,
-  DevicesIcon,
-  InviteIcon,
-  KeyIcon,
-  PaletteIcon,
-  PasskeyIcon,
-  QrIcon,
-  SignOutIcon,
-  TrashIcon,
-} from "@/components/ui/icons";
+import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
-import { Overline } from "@/components/ui/Overline";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
-import { biometric, hasPasskeyHere } from "@/lib/passkeys";
 import { useSignOut } from "@/lib/use-sign-out";
 import { AccountButton } from "./AccountButton";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInSheets } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInRows, SigningInSheets } from "./lazy-account";
 import type { SigningInSheet } from "./SigningInSheets";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -61,40 +48,16 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
                 Notifications
               </MenuItem>
             </PopoverClose>
-            <PopoverClose asChild>
-              <MenuItem icon={InviteIcon} onClick={() => setSigningIn("invite")}>
-                Invite someone
-              </MenuItem>
-            </PopoverClose>
           </MenuGroup>
           <div className="bg-hairline h-px" />
-          <div className="flex flex-col gap-1">
-            <Overline as="h3" className="px-0 pt-0.5">
-              Signing in
-            </Overline>
-            <MenuGroup size="sm">
-              <PopoverClose asChild>
-                <MenuItem icon={PasskeyIcon} onClick={() => setSigningIn("passkeys")}>
-                  {hasPasskeyHere() ? "Passkeys" : `Sign in with ${biometric()} next time`}
-                </MenuItem>
-              </PopoverClose>
-              <PopoverClose asChild>
-                <MenuItem icon={QrIcon} onClick={() => setSigningIn("link")}>
-                  Sign in on another device
-                </MenuItem>
-              </PopoverClose>
-              <PopoverClose asChild>
-                <MenuItem icon={DevicesIcon} onClick={() => setSigningIn("devices")}>
-                  Signed-in devices
-                </MenuItem>
-              </PopoverClose>
-              <PopoverClose asChild>
-                <MenuItem icon={KeyIcon} onClick={() => setChangingPassword(true)}>
-                  Change password
-                </MenuItem>
-              </PopoverClose>
-            </MenuGroup>
-          </div>
+          <Suspense fallback={<div className="h-44" />}>
+            <SigningInRows
+              size="sm"
+              wrap={(row) => <PopoverClose asChild>{row}</PopoverClose>}
+              onPick={setSigningIn}
+              onChangePassword={() => setChangingPassword(true)}
+            />
+          </Suspense>
           <div className="bg-hairline h-px" />
           <MenuGroup size="sm">
             <PopoverClose asChild>

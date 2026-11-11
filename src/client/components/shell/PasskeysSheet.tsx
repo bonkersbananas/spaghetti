@@ -8,7 +8,8 @@ import { PasskeyIcon, PhoneIcon, RenameIcon, TrashIcon } from "@/components/ui/i
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
-import { addPasskeyHere, biometric, isCancelled, passkeysQuery, removePasskey, renamePasskey } from "@/lib/passkeys";
+import { passkeysQuery, removePasskey, renamePasskey } from "@/lib/passkey-lists";
+import { addPasskeyHere, biometric, isCancelled } from "@/lib/passkeys";
 
 /** Your passkeys: one per device, with when it was added and last used; add this device's, rename, remove (with Undo). */
 export function PasskeysSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {

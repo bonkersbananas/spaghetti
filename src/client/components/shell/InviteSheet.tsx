@@ -7,7 +7,7 @@ import { CheckIcon, CopyIcon, InviteIcon, ShareIcon, TrashIcon } from "@/compone
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
-import { invitesQuery } from "@/lib/passkeys";
+import { invitesQuery } from "@/lib/passkey-lists";
 import { peopleQuery } from "@/lib/queries";
 
 const daysLeft = (time: number) => {

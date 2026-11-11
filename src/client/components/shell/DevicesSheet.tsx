@@ -8,7 +8,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
-import { devicesQuery } from "@/lib/passkeys";
+import { devicesQuery } from "@/lib/passkey-lists";
 
 const isPhone = (device: string) => /iPhone|iPad|Android/.test(device);
 
