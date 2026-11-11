@@ -21,8 +21,8 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 
 /**
- * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-11 (gzip kB):
- *   /sign-in 193.8   /today 298.6   /ideas 287.9   /builds 286.7   /journal 286.8   /search 292.5   /pantry 297.0   /printer 297.0
+ * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-11, after #114 (gzip kB):
+ *   /sign-in 193.8   /today 298.9   /ideas 287.7   /builds 286.5   /journal 286.8   /search 292.5   /pantry 296.9   /printer 297.0
  */
 const CEILING_KB = {
   "/sign-in": 199,
