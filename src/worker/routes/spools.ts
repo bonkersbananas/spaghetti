@@ -481,7 +481,7 @@ export const spoolRoutes = new Hono<AppEnv>()
   })
 
   /**
-   * Reads the label in the spool's photo (decision 0030). People only: nothing here is in auth/scopes.ts. Answers at
+   * Reads the label in the spool's photo (decision 0031). People only: nothing here is in auth/scopes.ts. Answers at
    * once with the spool showing "Reading the label…"; Claude's call runs after the response, and the spool fills in
    * through the change feed. A photo is read once; a read that found nothing or failed is tried again on request.
    */

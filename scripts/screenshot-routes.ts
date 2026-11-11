@@ -70,6 +70,39 @@ async function openAccountRow(page: Page, width: 390 | 1440, row: string | RegEx
   await page.getByRole("dialog").getByRole("button", { name: row }).click();
 }
 
+/**
+ * Answers the week page with what only the Worker's own clock can give: the shots' browser is set to the seed's
+ * date, the Worker is not. Reloads so the page asks again with the route in place.
+ */
+const weekApi = /\/api\/weeks\/\d{4}-\d{2}-\d{2}$/;
+async function withWeekMock(page: Page, mock: { waiting?: boolean; note?: boolean }) {
+  await page.route(weekApi, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.week.current = true;
+    if (mock.waiting) {
+      body.week.waiting = {
+        upNext: [
+          { id: SEED_IDS.desiccantHook, title: "Desiccant hook" },
+          { id: SEED_IDS.lithophane, title: "Lithophane" },
+        ],
+        failedLast: [{ id: SEED_BUILD_IDS.cableChain, title: "Cable chain" }],
+        low: [{ id: SEED_SPOOL_IDS.sunflower, name: "Sunflower yellow", gramsLeft: 40 }],
+        upkeep: [],
+      };
+    }
+    if (mock.note) {
+      body.week.note = {
+        status: "done",
+        text: "PETG warped twice this week, and both times the bed was 70 °C. The print that worked had a brim: worth keeping for the next one.",
+      };
+    }
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload();
+  await page.getByRole("heading", { level: 1 }).waitFor();
+}
+
 const wide = (page: Page): 390 | 1440 => (page.viewportSize()?.width === 390 ? 390 : 1440);
 
 /** What the passkeys and devices lists say, in a shot: a real passkey needs a real site (localhost), a shot opens 127.0.0.1. */
@@ -1095,6 +1128,33 @@ export const shots: Shot[] = [
   { name: "journal", path: "/journal" },
   // The year so far: figures, months, success by material and plate, what fixed each failure.
   { name: "year", path: "/year?year=2026", fullPage: true },
+  // The week in Spaghetti. The shots' browser clock is the seed's date but the Worker's is the real one, so the
+  // current week (Mon 19 Oct) is "past" to the Worker: its answer is given what only the live week has (what is
+  // waiting) and, as the Sunday evening look back would, Claude's paragraph.
+  {
+    name: "week",
+    path: "/week/2026-10-19",
+    fullPage: true,
+    prepare: async (page) => {
+      await withWeekMock(page, { waiting: true, note: true });
+    },
+    cleanup: async (page) => {
+      await page.unroute(weekApi);
+    },
+  },
+  { name: "week-last", path: "/week/2026-10-12", fullPage: true },
+  {
+    name: "week-empty",
+    path: "/week/2026-01-05",
+    fullPage: true,
+    // The empty state fades in: finish it by hand.
+    beforeShot: async (page) => {
+      await page.getByRole("heading", { level: 2, name: "Not a strand this week" }).waitFor();
+      await page.evaluate(() => {
+        for (const a of document.getAnimations()) a.finish();
+      });
+    },
+  },
   {
     // Further back: a month that sums itself up, grouped by week.
     name: "journal-months",
@@ -1806,7 +1866,7 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
-  // Read the label (decision 0030): the way in, in Add a spool ...
+  // Read the label (decision 0031): the way in, in Add a spool ...
   {
     name: "spool-add-label",
     path: "/pantry",

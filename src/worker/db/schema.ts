@@ -437,7 +437,7 @@ export const photoReads = sqliteTable(
 export type PhotoReadRow = typeof photoReads.$inferSelect;
 
 /**
- * Claude reading a spool's label photo (decision 0030): the job, what it found when there are several spools, and the
+ * Claude reading a spool's label photo (decision 0031): the job, what it found when there are several spools, and the
  * record of the run, one row per photo. Also what the label cap counts (rows with `ranAt`). A retry reuses the row.
  */
 export const labelReads = sqliteTable(
@@ -540,7 +540,7 @@ export const spools = sqliteTable(
     photoColor: text("photo_color"),
     /** The RFID tray UUID of a Bambu spool, as the AMS reports it, so the printer bridge finds it again. */
     trayUuid: text("tray_uuid"),
-    /** What the label says (decision 0030), or what people typed: all optional. */
+    /** What the label says (decision 0031), or what people typed: all optional. */
     diameterMm: real("diameter_mm"),
     nozzleTempMin: integer("nozzle_temp_min"),
     nozzleTempMax: integer("nozzle_temp_max"),
@@ -795,9 +795,46 @@ export const pushSubscriptions = sqliteTable(
     alsoOthers: integer("also_others", { mode: "boolean" }).notNull().default(false),
     /** Also tell this device when printer upkeep is due (at most one nudge a day, shared/upkeep.ts). */
     upkeepNudges: integer("upkeep_nudges", { mode: "boolean" }).notNull().default(false),
+    /** Also send "Your week" on Sunday evening (decision 0030): on unless switched off. */
+    weekNudges: integer("week_nudges", { mode: "boolean" }).notNull().default(true),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("push_subscriptions_user_idx").on(table.userId)],
+);
+
+/**
+ * The week's one paragraph by Claude, written once per week and kept (decision 0030). `monday` is the week's Monday
+ * as YYYY-MM-DD in the workspace's time zone.
+ */
+export const weeks = sqliteTable("weeks", {
+  monday: text("monday").primaryKey(),
+  /** thinking: claimed, being written; done: `text` is the paragraph; nothing: Claude had nothing to add; failed: the call didn't work. */
+  status: text("status").$type<"thinking" | "done" | "nothing" | "failed">().notNull(),
+  text: text("text"),
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  tries: integer("tries").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When the call to Claude was made (what the cap counts). */
+  ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+  /** "done", or why not: nothing, refusal, api_error, timeout, cap… */
+  runOutcome: text("run_outcome"),
+  /** Model, stop reason, HTTP status, error type, how long it took; never the prompt. */
+  detail: text("detail"),
+});
+
+export type WeekRow = typeof weeks.$inferSelect;
+
+/** "Your week" went to this person for this week: the once-a-week guard, claimed before sending. */
+export const weekPushes = sqliteTable(
+  "week_pushes",
+  {
+    monday: text("monday").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.monday, table.userId] })],
 );
 
 /** A "how did it go?" nudge that went out (or was claimed) for an attempt and a person: at most one each, ever. */
