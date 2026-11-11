@@ -282,14 +282,6 @@ function Build({ item }: { item: ItemView }) {
     if (canEdit(item.pending)) setWriteAsk((n) => n + 1);
   };
   useScreenActions("This build", [
-    {
-      id: "comment",
-      label: "Say something about this build",
-      icon: CommentIcon,
-      shortcut: "buildComment",
-      keywords: "comment message talk write reply chat",
-      run: comment,
-    },
     ...(compareFound?.attempt
       ? [
           {
@@ -336,6 +328,14 @@ function Build({ item }: { item: ItemView }) {
             run: () => canEdit(item.pending) && reopenBuild(queryClient, item),
           },
         ]),
+    {
+      id: "comment",
+      label: "Say something about this build",
+      icon: CommentIcon,
+      shortcut: "buildComment",
+      keywords: "comment message talk write reply chat",
+      run: comment,
+    },
   ]);
   useRememberItem({
     id: item.id,

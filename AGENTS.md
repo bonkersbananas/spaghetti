@@ -33,6 +33,7 @@ src/
       builds/             BuildCard, AttemptEntry, AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
       recipes/            RecipeCard, RecipeSheet (edit name and note, delete), SaveRecipe (the form and its sheet), SaveAsRecipe (inline in the attempt sheet), RecipePicker ("Start from a recipe"), RecipeShelf ("Recipes for silk PLA")
       today/              the blocks of /today: InThePrinter, PickUpAgain, Lately, BackBurner (the print on the bed is builds/PrintingCard)
+      comments/           CommentThread (lazy) and Thread, EditableBubble: the thread under an idea or build
       journal/            JournalEntry, Filters (the chips shared by the journal and search)
       search/             Results (attempt and item results)
     lib/                  api client, queries, hotkeys, motion tokens, hooks

@@ -55,6 +55,16 @@ async function send(page: Page, isMobile: boolean) {
   else await page.getByRole("textbox", { name: /Say something to/ }).press("Enter");
 }
 
+/** Sending scrolls the new message into view, smoothly: let the page stop moving before pressing something that sits in it. */
+const settle = (page: Page) =>
+  page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const y = window.scrollY;
+        setTimeout(() => resolve(window.scrollY === y), 300);
+      }),
+  );
+
 const thread = (page: Page) => page.getByRole("list", { name: "Comments" });
 
 test.beforeEach(async ({ page }) => {
@@ -90,6 +100,7 @@ test("writes a comment, edits it (shown as edited) and deletes it with an undo",
   await expect(thread(page).getByText("Could you print this one in the blue PETG?")).toBeVisible();
 
   // Edit in place.
+  await settle(page);
   await page.getByRole("button", { name: "Options for your comment" }).click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("textbox", { name: "Edit your comment" });
@@ -226,6 +237,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByRole("list", { name: "Links in the comment" })).toBeVisible();
       // So does the "New" line over it: the page has stopped moving.
       await expect(thread(page).getByText("New", { exact: true })).toBeVisible();
+      await settle(page);
       await page.getByRole("button", { name: "Options for your comment" }).click();
       await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
       const { violations } = await new AxeBuilder({ page })

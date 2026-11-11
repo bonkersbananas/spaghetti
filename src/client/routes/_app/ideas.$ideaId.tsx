@@ -137,20 +137,20 @@ function Idea({ item }: { item: ItemView }) {
 
   useScreenActions("This idea", [
     {
-      id: "comment",
-      label: "Say something about this idea",
-      icon: CommentIcon,
-      shortcut: "ideaComment",
-      keywords: "comment message talk write reply chat",
-      run: comment,
-    },
-    {
       id: "build",
       label: "Start building",
       icon: BuildsIcon,
       shortcut: "ideaBuild",
       keywords: "build begin print move to builds",
       run: build,
+    },
+    {
+      id: "comment",
+      label: "Say something about this idea",
+      icon: CommentIcon,
+      shortcut: "ideaComment",
+      keywords: "comment message talk write reply chat",
+      run: comment,
     },
   ]);
   useRememberItem({
