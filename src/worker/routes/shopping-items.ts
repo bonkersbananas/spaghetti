@@ -124,7 +124,7 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     return c.json<ShoppingItemResponse>({ shoppingItem }, 201);
   })
 
-  /** The order of what's still to buy: the named things trade places among themselves in this order; the rest stay put. */
+  /** The order of what's still to buy: the named things trade slots among themselves in this order; the rest stay put. */
   .put("/order", async (c) => {
     const parsed = shoppingOrder.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That order couldn't be read.");
@@ -133,13 +133,19 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
       .select({ id: shoppingItems.id, position: shoppingItems.position })
       .from(shoppingItems)
       .where(and(isNull(shoppingItems.deletedAt), isNull(shoppingItems.boughtAt)));
-    const places = new Map(listed.map((row) => [row.id, row.position]));
-    // The named things trade the places they hold among themselves; anything not named (added by someone else since
-    // the list was read, say) keeps its own place.
-    const named = [...new Set(parsed.data.ids.filter((itemId) => places.has(itemId)))];
-    const slots = named.map((itemId) => places.get(itemId) as number).sort((x, y) => x - y);
-    const moves = named.flatMap((itemId, index) =>
-      places.get(itemId) === slots[index] ? [] : [{ itemId, position: slots[index] as number }],
+    // The list as people see it (shared/shopping.ts splitShopping: by place, ties by id).
+    const current = listed.sort((x, y) => x.position - y.position || (x.id > y.id ? 1 : -1));
+    const known = new Set(current.map((row) => row.id));
+    // The named things fill the slots they occupy, in the order asked; anything not named (added by someone else since
+    // the list was read, say) keeps its own slot. Then every row gets its slot's number, which also untangles ties
+    // (a restored thing keeps its old place and can share it).
+    const named = [...new Set(parsed.data.ids.filter((itemId) => known.has(itemId)))];
+    const isNamed = new Set(named);
+    let next = 0;
+    const order = current.map((row) => (isNamed.has(row.id) ? (named[next++] as string) : row.id));
+    const was = new Map(current.map((row) => [row.id, row.position]));
+    const moves = order.flatMap((itemId, index) =>
+      was.get(itemId) === index + 1 ? [] : [{ itemId, position: index + 1 }],
     );
     if (moves.length) {
       const now = new Date();

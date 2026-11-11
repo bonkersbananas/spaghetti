@@ -130,6 +130,22 @@ describe("/api/shopping-items", () => {
     expect((await list()).map((item) => item.id)).toEqual([e.id, a.id, b.id]);
   });
 
+  it("sorts things that share a place (one restored after a delete)", async () => {
+    const a = await add({ name: "A" });
+    await request(`/api/shopping-items/${a.id}`, { method: "DELETE", cookie });
+    const b = await add({ name: "B" });
+    await request(`/api/shopping-items/${a.id}/restore`, { method: "POST", cookie });
+    expect((await list()).map((item) => item.position)).toEqual([a.position, a.position]);
+    for (const ids of [
+      [b.id, a.id],
+      [a.id, b.id],
+    ]) {
+      const response = await request("/api/shopping-items/order", { method: "PUT", cookie, json: { ids } });
+      expect((await response.json<ShoppingItemsResponse>()).shoppingItems.map((item) => item.id)).toEqual(ids);
+      expect((await list()).map((item) => item.id)).toEqual(ids);
+    }
+  });
+
   it("deletes with an undo that puts it back where it was", async () => {
     const a = await add({ name: "A" });
     const b = await add({ name: "B" });
