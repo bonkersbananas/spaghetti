@@ -1,6 +1,7 @@
 import type { Person } from "@shared/api";
-import { type Outcome, showsSettings } from "@shared/attempts";
+import type { Outcome } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
+import { showsSettings } from "@shared/story-settings";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef, lazy, Suspense } from "react";

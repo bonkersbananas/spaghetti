@@ -7,11 +7,11 @@ import {
   diffSettings,
   outcomeWords,
   plateName,
-  showsSettings,
   slugify,
   summarizeBuild,
   tagLabel,
 } from "../../src/shared/attempts.ts";
+import { showsSettings } from "../../src/shared/story-settings.ts";
 
 const texts = (before: AttemptSettings, after: AttemptSettings) =>
   describeChanges(before, after).map((change) => change.text);
