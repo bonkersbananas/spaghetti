@@ -104,8 +104,8 @@ pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright at phone and desktop width (with axe, e2e/accessibility.spec.ts), on the production build: it builds once and starts one server and database per worker (E2E_WORKERS, default 2; not --workers), so a test must not depend on another test's data; CI runs it in shards of spec files balanced by measured time (`pnpm test:e2e $(node scripts/e2e-shard.ts 1 3)`; refresh e2e/timings.json with `node scripts/e2e-timings.ts <CI shard logs>`)
-pnpm exec playwright test --project=performance   # first-load JavaScript per screen, tap latency and the resumed app on a phone profile, and a throttled 100-photo inbox
+pnpm test:e2e       # Playwright on the production build: every spec at desktop width, the core loop and the tests tagged @phone at phone width (PHONE_SPECS in playwright.config.ts); it builds once and starts one server and database per worker (E2E_WORKERS, default 2; not --workers), so a test must not depend on another test's data; CI runs it in two shards of spec files balanced by measured time (`pnpm test:e2e $(node scripts/e2e-shard.ts 1 2)`; refresh e2e/timings.json with `node scripts/e2e-timings.ts <CI shard logs>`)
+E2E_SPEED=1 E2E_WORKERS=1 pnpm exec playwright test --project=performance   # tap latency and the resumed app on a phone profile, and a throttled 100-photo inbox (CI: main only); first-load JavaScript per screen is e2e/first-load.spec.ts, in the normal run
 pnpm build && pnpm perf [--runs 5]   # the whole speed table: cold start of Today and Ideas (first visit, service worker only, installed app) and the common taps, at 390 px, 4× CPU, slow 4G
 pnpm build:report   # what the first load holds: the entry's chunks with their biggest modules, and the on-demand chunks
 pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark, --both, --scale 1, --out DIR; see Screenshots)
@@ -132,8 +132,8 @@ SPAGHETTI_BROWSER=/usr/bin/chromium pnpm screenshots
 
 `pnpm new route <name>`, `pnpm new component <Name>` and `pnpm new endpoint <plural-name>` create the files below with their wiring (add `--dry-run` to preview; run `pnpm new` without arguments for the options). Then fill them in, `pnpm format`, and run the checks.
 
-- `route`: the route file, `e2e/<name>.spec.ts` (opens, axe), a screen in `scripts/screenshot-routes.ts` and the regenerated `routeTree.gen.ts`; with `--section` or `--workshop` also the entry in `sections.ts` and its shortcut in `shared/shortcuts.ts`.
-- `component`: `components/<--in ui>/<Name>.tsx`, its styleguide section (`routes/_app/-styleguide/<name>.tsx`, the one place for sections, listed in `styleguide.tsx`'s table of contents and page) and `e2e/styleguide-<name>.spec.ts` (the specimen passes axe in both themes). The templates are in `scripts/lib/scaffold.ts`.
+- `route`: the route file, `e2e/<name>.spec.ts` (it opens), a screen in `scripts/screenshot-routes.ts` and the regenerated `routeTree.gen.ts`; with `--section` or `--workshop` also the entry in `sections.ts` and its shortcut in `shared/shortcuts.ts`.
+- `component`: `components/<--in ui>/<Name>.tsx` and its styleguide section (`routes/_app/-styleguide/<name>.tsx`, the one place for sections, listed in `styleguide.tsx`'s table of contents and page). The templates are in `scripts/lib/scaffold.ts`.
 - `endpoint`: `worker/routes/<name>.ts` with a zod schema, mounted in `app.ts`, the types in `shared/api.ts`, a `queryOptions` in `lib/queries.ts` and `test/worker/<name>.test.ts`. Storage (a table and migration) is yours to add.
 
 If a wiring step can't find its place (a file moved), the command says what to add by hand.
@@ -306,7 +306,7 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 
 ## Measuring speed
 
-`pnpm perf` (scripts/perf.ts, helpers in scripts/lib/perf.ts) seeds a throwaway app, serves the production build and prints medians at 390 px with touch, 4× CPU and slow 4G: cold start (first visit, service worker without saved data, installed app resumed) and input-to-next-paint (Event Timing) plus tap-to-result for the common taps. CDP network throttling doesn't reach the service worker's own `/api` fetches, so resumed numbers leave out network time. `pnpm build:report` prints the bundle breakdown. The budgets that fail CI are in `e2e/performance.spec.ts`. Lessons: a `lazy()` component needs its own `<Suspense>`, or the whole screen waits for its chunk (the idea card's menu cost every first visit to Ideas 300 ms); the shell opens from the remembered session and checks it in the background; the Latin Fraunces file is pinned and subset (see app.css) and both Latin faces are preloaded in index.html.
+`pnpm perf` (scripts/perf.ts, helpers in scripts/lib/perf.ts) seeds a throwaway app, serves the production build and prints medians at 390 px with touch, 4× CPU and slow 4G: cold start (first visit, service worker without saved data, installed app resumed) and input-to-next-paint (Event Timing) plus tap-to-result for the common taps. CDP network throttling doesn't reach the service worker's own `/api` fetches, so resumed numbers leave out network time. `pnpm build:report` prints the bundle breakdown. The first-load ceilings that fail a pull request are in `e2e/first-load.spec.ts` (a screen is held to its ceiling only where the change made it heavier than main); the timing budgets are in `e2e/performance.spec.ts`, which CI runs on main only. Lessons: a `lazy()` component needs its own `<Suspense>`, or the whole screen waits for its chunk (the idea card's menu cost every first visit to Ideas 300 ms); the shell opens from the remembered session and checks it in the background; the Latin Fraunces file is pinned and subset (see app.css) and both Latin faces are preloaded in index.html.
 
 ## Design rules
 
@@ -315,7 +315,7 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 - Every screen works one-handed on a phone (tab bar, sheets, 44 px targets) and with a keyboard on desktop (sidebar, shortcuts, columns).
 - No full-page spinners (skeletons), no save buttons (autosave with `SaveStatus`), no confirm dialogs for deletes (`toast.undo`).
 - The pasta jokes stay small: empty-state titles, a toast, the mark.
-- Accessible by default: name controls by their visible text (no `aria-label` on cards or rows with text), 44 px touch targets (`touch-target` for smaller controls), fields at 16 px on phones, `m.*` not `motion.*`, and `scrollBehavior()` for JS scrolling. Add new screens to `e2e/accessibility.spec.ts`.
+- Accessible by default: name controls by their visible text (no `aria-label` on cards or rows with text), 44 px touch targets (`touch-target` for smaller controls), fields at 16 px on phones, `m.*` not `motion.*`, and `scrollBehavior()` for JS scrolling. Add new screens to `e2e/screens.spec.ts` (it fails until a new route is there).
 
 ## Screenshots
 

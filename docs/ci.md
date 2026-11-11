@@ -2,7 +2,7 @@
 
 Two workflows check every pull request and every push to main, and one publishes the bridge:
 
-- **CI** (`.github/workflows/ci.yml`): lint, typecheck, unit and Worker tests, the build and the bridge program in one job; the Playwright suite in shards of spec files balanced by measured time (`scripts/e2e-shard.ts`, `e2e/timings.json`), each on its own runner in Playwright's container image. The ship deploys the newest commit on main whose CI run passed.
+- **CI** (`.github/workflows/ci.yml`): lint, typecheck, unit and Worker tests, the build and the bridge program in one job; the Playwright suite in two shards of spec files balanced by measured time (`scripts/e2e-shard.ts`, `e2e/timings.json`), each on its own runner in Playwright's container image; and on pushes to main only, **Speed** (the timing tests). The ship deploys the newest commit on main whose CI run passed.
 - **Images** (`.github/workflows/images.yml`): the container and the bridge's image build and start, both in one job. On every push to main, and on pull requests that touch what goes into them (the Dockerfiles, `bridge/`, `src/shared/`, dependencies, the build config, migrations, `scripts/start.ts` and the scripts it uses): its `paths` list says which.
 - **Bridge release** (`.github/workflows/bridge-release.yml`): only for `bridge-v*` tags and by hand.
 
@@ -22,6 +22,13 @@ Every Playwright worker has its own server and database: `scripts/e2e-server.ts`
 - Service workers are blocked except in the projects that test them (offline, push, share, performance): the dev server never had one, and its caches would outlive a test's data.
 - The tests used to run on the Vite dev server; the production build answers about twice as fast, and is what ships.
 - The shards are balanced by `e2e/timings.json`: when specs are added or change speed, `node scripts/e2e-timings.ts` on the logs of one full run's shards rewrites it.
+
+## What runs where
+
+- **Every spec at desktop width.** At phone width (390 px, touch) only the core loop runs whole (`PHONE_SPECS` in `playwright.config.ts`: smoke, ideas, builds, today and screens), plus the tests tagged `{ tag: "@phone" }` in other specs: the places where a phone does something else (a sheet for a popover, touch, what happens at the printer). Most specs ran the same steps at both widths for twice the time. Tag a new test `@phone` when its phone path differs.
+- **No axe.** Accessibility checks of their own aren't needed for the two people who use the app (Carl Oscar, Nov 11; decision [0037](decisions/0037-e2e-tests-what-matters-quickly.md)). `e2e/screens.spec.ts` keeps opening every screen and sheet at both widths, and the phone and keyboard details: 44 px targets, 16 px fields, a sheet's button above the keyboard, visible focus and focus return.
+- **First loads** (`e2e/first-load.spec.ts`, every run): each screen's JavaScript before it shows, held to a ceiling only where the change made it heavier than main. The `e2e` job restores main's latest sizes from the Actions cache (`.first-load/main.json`, key `first-load-<sha>`), and every push to main saves its own, so a screen that only main made heavier never fails another pull request. The ceilings are main's size plus 5 kB, in one table in the spec.
+- **Speed** (`e2e/performance.spec.ts`: the common taps, the installed app opening, a hundred photos scrolling at 4× CPU): main only, one worker on a runner of its own, since timing on a busy runner failed runs that had nothing to do with speed. A red Speed job holds the ship back like any failure on main; whoever runs the ship (the autopilot) owns it. Run it by hand with `E2E_SPEED=1 E2E_WORKERS=1 pnpm exec playwright test --project=performance` (the sandbox's numbers are noisy).
 
 ## Measuring
 
