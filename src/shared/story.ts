@@ -7,6 +7,7 @@ import {
   type TagDefinition,
   tagLabel,
 } from "./attempts.ts";
+import type { Comment } from "./comments.ts";
 import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
 
 /** What the story needs to name people and agents. */
@@ -16,6 +17,8 @@ export interface StoryContext {
   agents: ReadonlyMap<string, string>;
   customFailureTags?: readonly TagDefinition[];
   customSuccessNotes?: readonly TagDefinition[];
+  /** The thread between the two people, oldest first. */
+  comments?: readonly Comment[];
 }
 
 const date = (time: number) => new Date(time).toISOString().slice(0, 16).replace("T", " ");
@@ -145,6 +148,16 @@ export function buildStory(item: Item, context: StoryContext): string {
     );
   } else {
     lines.push("_Nothing has worked yet._");
+  }
+  if (context.comments?.length) {
+    lines.push("", "## Comments", "");
+    for (const comment of context.comments) {
+      const edited = comment.editedAt ? ", edited" : "";
+      lines.push(
+        `**${who(comment.authorId, comment.via)}** (${date(comment.createdAt)}${edited}): ${comment.body.trim()}`,
+        "",
+      );
+    }
   }
   return `${lines
     .join("\n")

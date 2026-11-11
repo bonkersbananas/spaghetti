@@ -15,6 +15,7 @@ import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
+import { useUnreadCount } from "@/lib/unread-comments";
 import { OutcomeChip } from "./Outcome";
 
 /** When anything last happened on a build: its newest attempt, or when it started. */
@@ -76,6 +77,7 @@ export function BuildCard({
 }) {
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
+  const unread = useUnreadCount(item.id);
   return (
     <m.li
       layout="position"
@@ -94,6 +96,7 @@ export function BuildCard({
         }
         title={item.title}
         note={item.note || undefined}
+        unread={unread}
         chips={
           last ? (
             <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} className="shadow-soft" />

@@ -114,6 +114,7 @@ describe("the MCP endpoint", () => {
       "what_worked",
       "get_build",
       "capture_idea",
+      "add_comment",
       "set_parts",
       "start_attempt",
       "log_attempt",
@@ -323,6 +324,21 @@ describe("tools, scopes and attribution", () => {
     const bad = await callTool(owner.token, "log_attempt", { build_id: "nope", outcome: "great" });
     expect(bad.isError).toBe(true);
     expect(bad.text).toMatch(/build_id/);
+  });
+
+  it("add_comment writes to the thread for the owner, via the agent, and get_build shows it", async () => {
+    const owner = await makeAgent(["read", "capture"]);
+    const idea =
+      (await callTool(owner.token, "capture_idea", { title: "Hook" })).text.match(/[0-9a-f-]{36}/)?.[0] ?? "";
+    const added = await callTool(owner.token, "add_comment", { build_id: idea, text: "Should it be blue?" });
+    expect(added.isError).toBeFalsy();
+    const story = await callTool(owner.token, "get_build", { build_id: idea });
+    expect(story.text).toMatch(/## Comments[\s\S]*Should it be blue\?/);
+    expect(story.text).toMatch(/via /);
+    const printerOnly = await makeAgent(["read", "printer"], "printer only");
+    const refused = await callTool(printerOnly.token, "add_comment", { build_id: idea, text: "Hi" });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain('"capture"');
   });
 
   it("search, what_worked and get_build read with read, and refuse without it", async () => {
