@@ -23,9 +23,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # The Mac installer is a shell script: shellcheck is on GitHub's runners.
+      - run: shellcheck -s sh public/bridge/install.sh
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # The bridge bundles into one program and that program works (the release workflow does the same for macOS).
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: The bridge program builds and passes its smoke test
+        run: |
+          node scripts/build-bridge.ts --version 0.0.0-ci --targets linux-x64
+          node scripts/bridge-smoke.ts dist/bridge/spaghetti-bridge-linux-x64 0.0.0-ci
 
   # The Playwright suite runs in shards, each on its own runner with its own servers. scripts/e2e-shard.ts splits
   # the spec files by measured time (e2e/timings.json: refresh with scripts/e2e-timings.ts); projects and tests are unchanged.

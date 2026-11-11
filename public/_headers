@@ -2,3 +2,9 @@
 /authorize
   X-Frame-Options: DENY
   Content-Security-Policy: frame-ancestors 'none'
+
+# The installer is read with curl and, by careful people, in a browser: plain text, never cached stale.
+/bridge/install.sh
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
