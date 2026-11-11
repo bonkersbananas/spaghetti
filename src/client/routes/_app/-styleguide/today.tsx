@@ -1,11 +1,14 @@
 import type { Item, Spool } from "@shared/api";
 import { DEFAULT_PRINTER } from "@shared/spools";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
 import { NowPrintingCard } from "@/components/shell/NowPrinting";
 import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { PickUpAgain } from "@/components/today/PickUpAgain";
+import { ClockIcon, CommentIcon } from "@/components/ui/icons";
+import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { ItemView } from "@/lib/items";
 import { attempt, item, photo, planFile, useSamplePictures } from "./journal";
@@ -168,6 +171,21 @@ export function TodaySection() {
               ) : (
                 <BackBurner idea={oldPhotoIdea} person={sam} />
               )}
+            </Panel>
+            <Label>Quiet rows: what the printer needs, what someone wrote</Label>
+            <Panel className="flex flex-col gap-1">
+              <Link to="/printer" className={quietRowClass}>
+                <QuietRowContent icon={ClockIcon}>
+                  <span className="text-ink font-semibold">Clean the build plate: it's been 19 days</span>
+                  <span className="text-ink-faint">. 1 more due</span>
+                </QuietRowContent>
+              </Link>
+              <Link to="/today" className={quietRowClass}>
+                <QuietRowContent icon={CommentIcon} iconClassName="text-tomato-ink">
+                  <span className="text-ink font-semibold">Sam on Desk tidy-up</span>
+                  <span>: Yes, 42 mm. Blue PETG if there's still some left?</span>
+                </QuietRowContent>
+              </Link>
             </Panel>
           </div>
         </div>
