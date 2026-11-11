@@ -312,10 +312,15 @@ describe("signing in with a passkey", () => {
   });
 
   it("is rate limited", async () => {
-    let last = 200;
-    for (let i = 0; i < 25; i++) last = (await request("/api/session/passkey/options", { method: "POST" })).status;
-    expect(last).toBe(200);
-    for (let i = 0; i < 25; i++) last = (await request("/api/session/passkey/options", { method: "POST" })).status;
+    let last = 0;
+    for (let i = 0; i < 41; i++) {
+      last = (
+        await request("/api/session/passkey", { method: "POST", json: { ceremonyId: "x", response: { id: "y" } } })
+      ).status;
+    }
+    expect(last).toBe(429);
+    await env.DB.prepare("DELETE FROM auth_hits").run();
+    for (let i = 0; i < 301; i++) last = (await request("/api/session/passkey/options", { method: "POST" })).status;
     expect(last).toBe(429);
   });
 });
@@ -401,7 +406,7 @@ describe("signing in on another device", () => {
 
   it("is rate limited, and wrong codes anywhere share an allowance", async () => {
     let last = 0;
-    for (let i = 0; i < 11; i++) last = (await redeem({ token: `spl_${i}` })).status;
+    for (let i = 0; i < 31; i++) last = (await redeem({ token: `spl_${i}` })).status;
     expect(last).toBe(429);
     await env.DB.prepare("DELETE FROM auth_hits").run();
     for (let i = 0; i < 25; i++) {

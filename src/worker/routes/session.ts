@@ -57,7 +57,8 @@ export const sessionRoutes = new Hono<AppEnv>()
   })
   // --- a passkey: the browser asks for options, the person uses Face ID, the browser answers ---
   .post("/passkey/options", async (c) => {
-    if (!(await takeHit(c, `passkey:${clientKey(c)}`, 40))) return tooMany(c);
+    // Cheap and secret-free (the sign-in screen asks for one on every visit), so the allowance is wide.
+    if (!(await takeHit(c, `passkey-options:${clientKey(c)}`, 300))) return tooMany(c);
     const options = await generateAuthenticationOptions({
       rpID: relyingParty(c).rpID,
       userVerification: "required",
@@ -126,7 +127,7 @@ export const sessionRoutes = new Hono<AppEnv>()
     if (!token && !code) {
       return apiError(c, typeof body?.code === "string" ? 400 : 410, "invalid", "That code isn't the right shape.");
     }
-    if (!(await takeHit(c, `link:${clientKey(c)}`, 10))) return tooMany(c);
+    if (!(await takeHit(c, `link:${clientKey(c)}`, 30))) return tooMany(c);
     // A code is short enough to guess at, so every wrong one anywhere counts against a shared allowance.
     if (!token && !(await takeHit(c, "link-code", 20, 10 * 60 * 1000))) return tooMany(c);
     const hash = await hashSecret(token || (code ?? ""));

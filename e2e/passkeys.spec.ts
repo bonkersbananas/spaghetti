@@ -12,6 +12,10 @@ test.use({ baseURL: BASE });
 const origin = () => BASE;
 const headers = () => ({ Origin: origin() });
 
+/** This device was already asked about a passkey: no quiet offer to get in the way. */
+const noOffer = (context: BrowserContext) =>
+  context.addInitScript(() => localStorage.setItem("sg-passkey-offer", "done"));
+
 async function addAuthenticator(context: BrowserContext, page: Page) {
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
@@ -72,6 +76,7 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   context,
   isMobile,
 }) => {
+  await noOffer(context);
   await addAuthenticator(context, page);
   await signIn(page);
   await clearPasskeys(page);
@@ -96,8 +101,16 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   await page.keyboard.press("Escape");
   await signOut(page, isMobile);
   await expect(page.getByRole("button", { name: /^Sign in with / })).toBeVisible();
+  // The screen we left (Today's empty state) is still fading out for a moment.
+  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
   await expectAccessible(page, "The sign-in screen with its passkey button");
-  await page.getByRole("button", { name: /^Sign in with / }).click();
+  // With a virtual authenticator the username field's own passkey offer (conditional UI) can sign in before the
+  // button is pressed; either way no name or password is typed.
+  await page
+    .getByRole("button", { name: /^Sign in with / })
+    .click({ timeout: 3000 })
+    .catch(() => undefined);
   await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
 
   // It remembers being used. Removing it is undone with the toast, then done.
@@ -179,6 +192,8 @@ test("a sign-in link and a code sign in a second browser, once, and the first de
 
 test("an invite adds one person, who is signed in, and can't be used twice", async ({ page, browser, isMobile }) => {
   await signIn(page);
+  const { invites } = await (await page.request.get("/api/account/invites")).json();
+  for (const invite of invites) await page.request.delete(`/api/account/invites/${invite.id}`, { headers: headers() });
   await openRow(page, isMobile, "Invite someone");
   const sheet = page.getByRole("dialog", { name: "Invite someone" });
   await sheet.getByRole("button", { name: "Make an invite link" }).click();
@@ -201,8 +216,8 @@ test("an invite adds one person, who is signed in, and can't be used twice", asy
   await tab.getByLabel("Your name").fill("Mina Park");
   await tab.getByLabel("Username").fill(username);
   await tab.getByRole("radio", { name: "plum" }).click();
-  await tab.getByText("Password", { exact: true }).click();
-  await tab.getByLabel("Password", { exact: true }).fill("a-long-enough-password");
+  await tab.getByRole("radio", { name: "Password" }).click();
+  await tab.locator("input[name=new-password]").fill("a-long-enough-password");
   await tab.getByRole("button", { name: "Join", exact: true }).click();
   await expect(tab.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
   const me = await (await tab.request.get("/api/session")).json();
@@ -230,7 +245,10 @@ test("an invite can be accepted with a passkey and no password", async ({ page, 
   // They can sign in with it from scratch.
   await guest.clearCookies();
   await tab.goto("/sign-in");
-  await tab.getByRole("button", { name: /^Sign in with / }).click();
+  await tab
+    .getByRole("button", { name: /^Sign in with / })
+    .click({ timeout: 3000 })
+    .catch(() => undefined);
   await expect(tab.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
   await guest.close();
 });
