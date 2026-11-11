@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AGENT_SCOPES } from "../../shared/agents.ts";
 import { OUTCOMES } from "../../shared/attempts.ts";
 import { CHANGE_ACTIONS, CHANGE_ACTOR_KINDS, CHANGE_ENTITIES } from "../../shared/changes.ts";
+import { LABEL_FIELDS } from "../../shared/label-read.ts";
 import { DELIVERY_STATUSES, WEBHOOK_KINDS } from "../../shared/webhooks.ts";
 import { settings } from "../routes/attempts.ts";
 
@@ -186,6 +187,25 @@ export const Spool = z
     photo: z.object({ id, width: z.number(), height: z.number(), color: z.string() }).nullable(),
     slot: z.string().nullable().describe('"A1" to "D4", "Ext", or null.'),
     trayUuid: z.string().nullable(),
+    diameterMm: z.number().nullable(),
+    nozzleTempMin: z.number().int().nullable(),
+    nozzleTempMax: z.number().int().nullable(),
+    bedTempMin: z.number().int().nullable(),
+    bedTempMax: z.number().int().nullable(),
+    dryTempC: z.number().int().nullable(),
+    dryHours: z.number().int().nullable(),
+    productCode: z.string().nullable().describe("Bambu's RFID or product code, when a label printed one."),
+    fromLabel: z
+      .array(z.enum(LABEL_FIELDS))
+      .describe("The fields Claude filled in from a label photo that nobody has edited since."),
+    labelRead: z
+      .object({
+        status: z.enum(["reading", "multiple", "unreadable", "failed", "cap"]),
+        photoId: id,
+        spools: z.array(z.record(z.string(), z.unknown())).describe("The spools found, for status `multiple`."),
+      })
+      .nullable()
+      .describe("A label read going on, waiting for a tap, or that found nothing; null otherwise."),
     createdBy: id,
     createdAt: epoch,
     updatedAt: epoch,

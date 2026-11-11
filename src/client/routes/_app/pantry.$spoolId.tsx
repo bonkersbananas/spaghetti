@@ -1,5 +1,7 @@
 import type { Spool } from "@shared/api";
 import { OUTCOME_LABELS, OUTCOMES } from "@shared/attempts";
+import type { LabelField } from "@shared/label-read";
+import { gramsText } from "@shared/ledger";
 import { recipesFor } from "@shared/recipes";
 import {
   FINISHES,
@@ -14,10 +16,12 @@ import {
 import { inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { DryIt } from "@/components/pantry/DryIt";
+import { LabelFacts } from "@/components/pantry/LabelFacts";
+import { LabelReadNote } from "@/components/pantry/LabelReadNote";
 import { GramsHero, UsedBy } from "@/components/pantry/SpoolGrams";
 import { SetWeightSheet, WeighSheet } from "@/components/pantry/WeightSheets";
 import { LazyRecipeShelf } from "@/components/recipes/LazyRecipeSheet";
@@ -27,7 +31,8 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { collapseChips, MoreChip, ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { CameraIcon, DriedIcon, ImageIcon, TrashIcon } from "@/components/ui/icons";
+import { FromLabel } from "@/components/ui/FromLabel";
+import { CameraIcon, DriedIcon, ImageIcon, SparkleIcon, TrashIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
@@ -40,6 +45,7 @@ import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { SwatchPicker } from "@/components/ui/Swatch";
 import { useHotkeys } from "@/lib/hotkeys";
+import { pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto } from "@/lib/pantry";
 import { spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
@@ -95,8 +101,25 @@ function SpoolDetail() {
 
 type Editable = Pick<
   Spool,
-  "material" | "brand" | "colorName" | "colorHex" | "finish" | "remaining" | "note" | "driedAt"
+  | "material"
+  | "brand"
+  | "colorName"
+  | "colorHex"
+  | "finish"
+  | "remaining"
+  | "note"
+  | "driedAt"
+  | "diameterMm"
+  | "nozzleTempMin"
+  | "nozzleTempMax"
+  | "bedTempMin"
+  | "bedTempMax"
+  | "dryTempC"
+  | "dryHours"
+  | "productCode"
 >;
+
+const same = (a: unknown, b: unknown) => a === b;
 
 function SpoolPage({ spool }: { spool: Spool }) {
   const queryClient = useQueryClient();
@@ -116,6 +139,14 @@ function SpoolPage({ spool }: { spool: Spool }) {
       remaining: spool.remaining,
       note: spool.note,
       driedAt: spool.driedAt,
+      diameterMm: spool.diameterMm,
+      nozzleTempMin: spool.nozzleTempMin,
+      nozzleTempMax: spool.nozzleTempMax,
+      bedTempMin: spool.bedTempMin,
+      bedTempMax: spool.bedTempMax,
+      dryTempC: spool.dryTempC,
+      dryHours: spool.dryHours,
+      productCode: spool.productCode,
     }),
     [spool],
   );
@@ -125,16 +156,37 @@ function SpoolPage({ spool }: { spool: Spool }) {
       ...(changes.material !== undefined && { material: changes.material.trim() || spool.material }),
       ...(changes.brand !== undefined && { brand: changes.brand?.trim() || null }),
       ...(changes.colorName !== undefined && { colorName: changes.colorName?.trim() || null }),
+      ...(changes.productCode !== undefined && { productCode: changes.productCode?.trim() || null }),
     }),
   );
   const [placing, setPlacing] = useState(false);
   const [weighing, setWeighing] = useState(false);
   const [settingWeight, setSettingWeight] = useState(false);
-  const camera = useFilePicker({
-    camera: true,
-    onFiles: ([file]) => file && setSpoolPhoto(queryClient, spool.id, file),
-  });
-  const library = useFilePicker({ onFiles: ([file]) => file && setSpoolPhoto(queryClient, spool.id, file) });
+  const labelReads = useLabelReadsEnabled();
+  // With Claude's key, a photo taken here is the label: it is saved, then read.
+  const takePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    const saved = await setSpoolPhoto(queryClient, spool.id, file);
+    if (saved && labelReads) void requestLabelRead(queryClient, spool.id);
+  };
+  const camera = useFilePicker({ camera: true, onFiles: ([file]) => void takePhoto(file) });
+  const library = useFilePicker({ onFiles: ([file]) => void takePhoto(file) });
+  // Waiting on Claude with nothing to show for it yet: the title stands in for what is coming.
+  // A read that began elsewhere, or before a reload, still fills the page in.
+  const isReading = spool.labelRead?.status === "reading";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the query client is stable.
+  useEffect(() => {
+    if (isReading) pollWhileReading(queryClient);
+  }, [isReading]);
+  const waiting = spool.labelRead?.status === "reading" && !value.colorName && !spool.fromLabel.length;
+  // The marks stay until the field is edited, here or anywhere (the server's copy drops them as it saves).
+  const fromLabel = (...fields: LabelField[]) =>
+    fields.some(
+      (field) =>
+        spool.fromLabel.includes(field) && same(value[field as keyof Editable], server[field as keyof Editable]),
+    ) ? (
+      <FromLabel />
+    ) : null;
   const name = spoolName({ ...spool, ...value });
   // Offline, the spool is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
@@ -190,16 +242,49 @@ function SpoolPage({ spool }: { spool: Spool }) {
               </div>
             )}
           </div>
-          <div className="flex gap-2">
-            {!isDesktop && (
-              <Button variant="secondary" size="sm" icon={CameraIcon} disabled={readOnly} onClick={camera.open}>
-                {spool.photo ? "Retake" : "Snap the label"}
-              </Button>
+          <div className="flex flex-wrap gap-2">
+            {labelReads ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={isDesktop ? SparkleIcon : CameraIcon}
+                  disabled={readOnly}
+                  onClick={isDesktop ? library.open : camera.open}
+                >
+                  Read the label
+                </Button>
+                {!isDesktop && (
+                  <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
+                    Library
+                  </Button>
+                )}
+                {spool.photo && !spool.labelRead && spool.fromLabel.length === 0 && (
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    icon={SparkleIcon}
+                    disabled={readOnly}
+                    onClick={() => void requestLabelRead(queryClient, spool.id)}
+                  >
+                    Read this photo
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                {!isDesktop && (
+                  <Button variant="secondary" size="sm" icon={CameraIcon} disabled={readOnly} onClick={camera.open}>
+                    {spool.photo ? "Retake" : "Snap the label"}
+                  </Button>
+                )}
+                <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
+                  {spool.photo ? "Another photo" : "Add a photo"}
+                </Button>
+              </>
             )}
-            <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
-              {spool.photo ? "Another photo" : "Add a photo"}
-            </Button>
           </div>
+          <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
         </div>
 
         <div className="flex min-w-0 flex-col gap-7 md:flex-3">
@@ -207,7 +292,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
             <TextArea
               appearance="title"
               aria-label="Color name"
-              placeholder={value.material}
+              placeholder={waiting ? "Reading the label…" : value.material}
+              className={waiting ? "sg-pulse" : undefined}
               minRows={1}
               maxLength={60}
               readOnly={readOnly}
@@ -221,7 +307,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
               }}
             />
             <MetaList className="text-body text-ink-soft">
-              {[name.detail || value.material, ...(spool.slot ? [slotPlace(spool.slot)] : [])].map((piece) => (
+              {[
+                // While Claude reads an unnamed spool the title says so, and the material isn't said twice.
+                ...(waiting ? [] : [name.detail || value.material]),
+                ...(spool.slot ? [slotPlace(spool.slot)] : []),
+              ].map((piece) => (
                 <span key={piece}>{piece}</span>
               ))}
             </MetaList>
@@ -252,6 +342,12 @@ function SpoolPage({ spool }: { spool: Spool }) {
                   className="w-full md:max-w-md"
                 />
               </div>
+            )}
+
+            {spool.netGrams !== null && fromLabel("netGrams") && (
+              <p className="text-small text-ink-soft flex flex-wrap items-baseline gap-x-2 px-0.5">
+                Net weight {gramsText(spool.netGrams)} {fromLabel("netGrams")}
+              </p>
             )}
 
             {/* A label with its actions beside it, and what it says below at full width, so it never wraps under them. */}
@@ -301,7 +397,10 @@ function SpoolPage({ spool }: { spool: Spool }) {
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <span className="text-small text-ink-soft px-0.5 font-semibold">Material</span>
+              <span className="flex items-baseline gap-2 px-0.5">
+                <span className="text-small text-ink-soft font-semibold">Material</span>
+                {fromLabel("material")}
+              </span>
               {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
               <div className="flex flex-wrap gap-2" role="group" aria-label="Material">
                 {materialChips.shown.map((material) => (
@@ -321,7 +420,10 @@ function SpoolPage({ spool }: { spool: Spool }) {
 
             <div className="flex items-end gap-3">
               <div className="flex flex-col gap-1.5">
-                <span className="text-small text-ink-soft px-0.5 font-semibold">Color</span>
+                <span className="flex items-baseline gap-2 px-0.5">
+                  <span className="text-small text-ink-soft font-semibold">Color</span>
+                  {fromLabel("colorName", "colorHex")}
+                </span>
                 <SwatchPicker
                   value={value.colorHex ?? undefined}
                   onChange={(colorHex) => change({ colorHex })}
@@ -331,16 +433,20 @@ function SpoolPage({ spool }: { spool: Spool }) {
               <TextField
                 size="sm"
                 label="Brand"
-                placeholder="Bambu, Polymaker…"
+                mark={fromLabel("brand")}
+                placeholder={waiting ? "" : "Bambu, Polymaker…"}
                 maxLength={60}
                 value={value.brand ?? ""}
                 onChange={(event) => change({ brand: event.target.value || null })}
-                className="flex-1"
+                className={waiting ? "sg-pulse flex-1" : "flex-1"}
               />
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <span className="text-small text-ink-soft px-0.5 font-semibold">Finish</span>
+              <span className="flex items-baseline gap-2 px-0.5">
+                <span className="text-small text-ink-soft font-semibold">Finish</span>
+                {fromLabel("finish")}
+              </span>
               {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
               <div className="flex flex-wrap gap-2" role="group" aria-label="Finish">
                 {finishChips.shown.map((finish) => (
@@ -356,6 +462,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
                   <MoreChip hidden={finishChips.hidden} onClick={() => setAllFinishes(true)} />
                 )}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <span className="text-small text-ink-soft px-0.5 font-semibold">Printing and drying</span>
+              <LabelFacts value={value} onChange={change} mark={fromLabel} />
             </div>
           </fieldset>
           <NoteField
