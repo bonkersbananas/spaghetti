@@ -12,7 +12,7 @@ import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTi
 import { Sheet } from "@/components/ui/Sheet";
 import { SwatchPicker } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
-import { useLabelReadsEnabled } from "@/lib/drafts";
+import { useLabelReadsEnabled } from "@/lib/label-read";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";

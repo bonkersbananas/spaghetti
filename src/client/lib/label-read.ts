@@ -1,10 +1,26 @@
 import type { LabelReadResponse, Spool } from "@shared/api";
-import type { QueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
+import { featuresQuery } from "./drafts";
 import { patchSpool, spoolsQuery } from "./pantry";
 
+/** Whether anything about reading spool labels shows at all: without the Worker's key nothing does. */
+export const useLabelReadsEnabled = () => useQuery(featuresQuery).data?.labelReads === true;
+
 /** Reads the label in the spool's photo (already uploaded). The spool shows "Reading the label…" at once. */
+/** While Claude reads a label the fields fill in: ask again every few seconds, on this device, until none is being read. */
+function pollWhileReading(queryClient: QueryClient) {
+  let left = 40;
+  const timer = setInterval(() => {
+    const reading = queryClient
+      .getQueryData<Spool[]>(spoolsQuery.queryKey)
+      ?.some((s) => s.labelRead?.status === "reading");
+    if (!reading || --left <= 0) return clearInterval(timer);
+    void queryClient.invalidateQueries({ queryKey: spoolsQuery.queryKey });
+  }, 2500);
+}
+
 export async function requestLabelRead(
   queryClient: QueryClient,
   spoolId: string,
@@ -14,6 +30,7 @@ export async function requestLabelRead(
     ...spool,
     labelRead: { status: "reading", photoId: spool.photo?.id ?? "", spools: [] },
   }));
+  pollWhileReading(queryClient);
   try {
     const { spool } = await api<LabelReadResponse>(`/spools/${spoolId}/label-read`, {
       method: "POST",
@@ -64,6 +81,12 @@ export async function readUploaded(
   uploaded: Promise<boolean>,
   placeholders: Array<"material" | "netGrams">,
 ) {
+  // The spool says so while its photo is still on the way.
+  patchSpool(queryClient, spoolId, (spool) => ({
+    ...spool,
+    labelRead: { status: "reading", photoId: "", spools: [] },
+  }));
+  pollWhileReading(queryClient);
   if (await uploaded) await requestLabelRead(queryClient, spoolId, placeholders);
   else clearLabelRead(queryClient, spoolId);
 }

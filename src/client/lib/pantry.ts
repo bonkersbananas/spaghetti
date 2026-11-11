@@ -9,7 +9,6 @@ import type {
   UpdateSpoolRequest,
 } from "@shared/api";
 import { gramsFromScale, levelOf } from "@shared/ledger";
-import { NO_LABEL } from "@shared/no-label";
 import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
@@ -22,8 +21,6 @@ export const spoolsQuery = queryOptions({
   queryKey: ["spools"] as const,
   queryFn: async () => (await api<SpoolsResponse>("/spools")).spools,
   staleTime: 60_000,
-  // While Claude reads a label the fields fill in, so ask again every few seconds until it is done.
-  refetchInterval: (query) => (query.state.data?.some((spool) => spool.labelRead?.status === "reading") ? 2500 : false),
 });
 
 /** How the printer is set up, and what is loaded where. */
@@ -89,7 +86,7 @@ export function addSpool(
   afterPhoto?: (uploaded: Promise<boolean>, spoolId: string) => void,
 ): { spool: Spool; saved: Promise<boolean> } {
   const now = Date.now();
-  const spool: Spool = {
+  const spool = {
     id: crypto.randomUUID(),
     material: draft.material.trim() || "PLA",
     brand: draft.brand?.trim() || null,
@@ -107,12 +104,13 @@ export function addSpool(
     photo: null,
     slot: null,
     trayUuid: null,
-    ...NO_LABEL,
-    labelRead: photo && afterPhoto ? { status: "reading", photoId: "", spools: [] } : null,
+    // The label fields start out missing (as null would); the server's copy fills them in a moment later.
+    fromLabel: [],
+    labelRead: null,
     createdBy,
     createdAt: now,
     updatedAt: now,
-  };
+  } as Partial<Spool> as Spool;
   patchSpools(queryClient, (spools) => [spool, ...spools]);
   if (!queryClient.getQueryData(spoolsQuery.queryKey)) queryClient.setQueryData(spoolsQuery.queryKey, [spool]);
   const saved = (async () => {
