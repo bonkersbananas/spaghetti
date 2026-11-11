@@ -119,7 +119,9 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             <div className="-mb-1 flex flex-col gap-1.5">
               <div className="flex items-center gap-2.5">
                 <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-                <h3 className="text-body text-ink min-w-0 font-sans font-semibold">Attempt {attempt.number}</h3>
+                <h3 className="text-body text-ink font-sans font-semibold whitespace-nowrap">
+                  Attempt {attempt.number}
+                </h3>
                 <span className="text-small text-ink-faint ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap">
                   <ViaText name={via} className="hidden md:inline" />
                   <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>

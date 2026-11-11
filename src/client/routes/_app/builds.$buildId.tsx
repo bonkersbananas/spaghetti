@@ -592,7 +592,7 @@ function Build({ item }: { item: ItemView }) {
               ) : (
                 <ol aria-label="Attempts, newest first" className="flex flex-col">
                   <AnimatePresence initial={false}>
-                    {story.map((attempt, index) => (
+                    {shownStory.map((attempt, index) => (
                       <AttemptEntry
                         key={attempt.id}
                         ref={(el) => {
