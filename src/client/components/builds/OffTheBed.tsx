@@ -42,14 +42,8 @@ export function OffTheBed({ endedAt, onPick, photoRead, onPhotos, className }: O
         </p>
         {onPhotos && !photoRead && (
           <>
-            <Button
-              variant="quiet"
-              size="sm"
-              icon={CameraIcon}
-              onClick={camera.open}
-              className="-my-1.5 -ml-2 shrink-0"
-            >
-              Photo
+            <Button variant="secondary" size="sm" icon={CameraIcon} onClick={camera.open} className="shrink-0">
+              Take photo
             </Button>
             {camera.input}
           </>
