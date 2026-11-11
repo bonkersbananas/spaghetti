@@ -1,5 +1,6 @@
 import type { Part } from "@shared/api";
-import type { Outcome } from "@shared/attempts";
+import type { AttemptSettings, Outcome } from "@shared/attempts";
+import type { Coach } from "@shared/coach";
 import { type AttemptPart, partProgress } from "@shared/parts";
 import type { PhotoRead } from "@shared/photo-read";
 import { livePrintProgress } from "@shared/print-progress";
@@ -7,6 +8,7 @@ import { useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { PlateParts } from "@/components/builds/attempt-sheet/PlateParts";
 import { BuildSummary } from "@/components/builds/BuildSummary";
+import { CoachNote, CoachSuggestions } from "@/components/builds/Coach";
 import { CompareTable } from "@/components/builds/CompareTable";
 import { OffTheBed } from "@/components/builds/OffTheBed";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
@@ -23,6 +25,56 @@ import type { AttemptView } from "@/lib/items";
 import { Label, Panel, people, SAMPLE_COLOR, Section } from "./shared";
 
 const MINUTE = 60 * 1000;
+
+const sampleCoach: Coach = {
+  status: "ready",
+  items: [
+    {
+      id: "s1",
+      title: "Add a brim",
+      why: "The stern lifted both times.",
+      settings: { brim: true },
+      note: null,
+      dismissed: false,
+    },
+    {
+      id: "s2",
+      title: "Warm the bed a little",
+      why: "The corners curled as they cooled; 5 °C more keeps them down.",
+      settings: { bedTemperature: 65 },
+      note: null,
+      dismissed: false,
+    },
+    {
+      id: "s3",
+      title: "Slow the outer wall to 60 mm/s",
+      why: "Fine strings on the walls point at speed.",
+      settings: null,
+      note: "Outer wall 60 mm/s",
+      dismissed: false,
+    },
+  ],
+};
+
+/** The sheet's block with its own little state, so the chips can be tapped here. */
+function CoachSuggestionsSpecimen() {
+  const [settings, setSettings] = useState<AttemptSettings>({ bedTemperature: 60 });
+  const [note, setNote] = useState("");
+  return (
+    <CoachSuggestions
+      coach={sampleCoach}
+      itemId="sample"
+      attemptId="sample"
+      attemptNumber={2}
+      settings={settings}
+      note={note}
+      onUse={(next) => {
+        if (next.settings) setSettings(next.settings);
+        if (next.note !== undefined) setNote(next.note);
+      }}
+    />
+  );
+}
 
 const sampleRead = {
   status: "read",
@@ -187,6 +239,15 @@ export function BuildsSection() {
           <OutcomePicker value={null} onChange={() => undefined} suggested="partial" />
           <PhotoReadNote read={sampleRead} />
           <PhotoReadNote read={{ ...sampleRead, status: "reading", outcome: null, reason: null, failureTags: [] }} />
+          <Label>
+            Claude's ideas for the next try: thinking, then under the failed attempt (dismiss is one tap, with Undo)
+          </Label>
+          <div className="flex flex-col gap-3">
+            <CoachNote coach={{ status: "thinking", items: [] }} itemId="sample" attemptId="sample" />
+            <CoachNote coach={sampleCoach} itemId="sample" attemptId="sample" />
+          </div>
+          <Label>The same in the Log attempt sheet: "Use this" fills the attempt's changes, nothing sets itself</Label>
+          <CoachSuggestionsSpecimen />
           <Label>Outcome chips</Label>
           <div className="flex flex-wrap gap-2">
             <OutcomeChip outcome={null} />

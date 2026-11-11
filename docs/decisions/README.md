@@ -27,6 +27,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0021](0021-profile-pictures.md) | Profile pictures are small squares cropped in the browser, stored in R2 under a versioned address | Accepted |
 | [0022](0022-parts-are-optional-counts-live-on-attempts.md) | Parts are optional, and good-piece counts live on attempts | Accepted |
 | [0023](0023-claude-reads-a-print-from-its-photo.md) | Claude suggests how a print went from its photo, and only suggests | Accepted |
+| [0027](0027-failure-coach-suggests-what-to-try-next.md) | A failure coach suggests what to try next, and only suggests | Accepted |
 | [0024](0024-comments-read-state-and-push-batching.md) | Comments between the two of you: read state per person, one push for a burst | Accepted |
 | [0025](0025-webhooks-signed-from-the-cron.md) | Webhooks are queued in D1, sent by the existing cron, signed with HMAC-SHA256 under a secret kept encrypted | Accepted |
 

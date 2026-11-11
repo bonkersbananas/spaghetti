@@ -98,7 +98,7 @@ export interface Attempt {
    */
   photoRead: PhotoRead | null;
   /**
-   * What Claude suggests trying next, after a Partly or Spaghetti answer (decision 0026): "thinking" while it works,
+   * What Claude suggests trying next, after a Partly or Spaghetti answer (decision 0027): "thinking" while it works,
    * then two or three short suggestions. Only suggestions: nothing in the attempt is set by them. Null when there is
    * nothing to show (it worked, nothing useful to say, no key).
    */
@@ -198,7 +198,7 @@ export interface FeaturesResponse {
   drafts: boolean;
   /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
-  /** Claude can suggest what to try after a failed attempt (decision 0026); the same key. */
+  /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
   coach: boolean;
   /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
   webhooks: boolean;

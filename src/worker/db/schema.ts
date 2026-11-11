@@ -339,7 +339,7 @@ export const photoReads = sqliteTable(
 export type PhotoReadRow = typeof photoReads.$inferSelect;
 
 /**
- * The failure coach for one attempt (decision 0026): the job, what Claude suggested for the next try and the record of
+ * The failure coach for one attempt (decision 0027): the job, what Claude suggested for the next try and the record of
  * the run, one row per attempt (an attempt is coached once). Also what the day's cap counts (rows with `ranAt`).
  */
 export const coachRuns = sqliteTable("coach_runs", {

@@ -5,7 +5,7 @@
  * `slow` takes a few seconds (the "reading the page" state stays long enough to look at), `broken` can't be read,
  * `refused` is refused, anything else is a good draft.
  *
- * A request that asks what to try on the next attempt is the failure coach (decision 0026): see answerCoach.
+ * A request that asks what to try on the next attempt is the failure coach (decision 0027): see answerCoach.
  *
  * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
  * note decides the answer: `slow` takes ten seconds ("Looking at the photo…" stays long enough to look at), `refused`
@@ -105,7 +105,7 @@ const noChange = {
   nozzleDiameter: null,
 };
 
-/** What the coach suggests (decision 0026): a brim, a warmer bed and drying as settings, a speed as a note. */
+/** What the coach suggests (decision 0027): a brim, a warmer bed and drying as settings, a speed as a note. */
 const coachAnswer = {
   suggestions: [
     {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { BED_TYPES, LAYER_HEIGHTS, NOZZLE_DIAMETERS } from "../../shared/attempts.ts";
 import { COACH_MAX_ITEMS, COACH_SETTING_KEYS } from "../../shared/coach.ts";
 
-/** The model that coaches (decision 0026), the same as the drafts (0019) and the photo reads (0023). */
+/** The model that coaches (decision 0027), the same as the drafts (0019) and the photo reads (0023). */
 export const COACH_MODEL = "claude-opus-5-5";
 
 const nullable = z.number().nullable();

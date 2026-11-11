@@ -420,7 +420,7 @@ export function useItem(id: string) {
     refetchInterval: (current) => {
       const attempts = current.state.data?.attempts ?? [];
       const reading = attempts.find((attempt) => attempt.photoRead?.status === "reading");
-      // Claude is thinking about the next try (decision 0026), or an attempt was only just answered Partly or
+      // Claude is thinking about the next try (decision 0027), or an attempt was only just answered Partly or
       // Spaghetti and its coach isn't in yet (the Worker makes the job with the answer).
       const coaching = attempts.find(
         (attempt) =>

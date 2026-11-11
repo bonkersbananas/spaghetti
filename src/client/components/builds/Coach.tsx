@@ -50,17 +50,14 @@ export function CoachNote({ coach, itemId, attemptId, className }: CoachNoteProp
   const items = liveCoachItems(coach);
   if (!items.length) return null;
   return (
-    <section
-      aria-label="Claude's ideas for the next try"
-      className={cn("border-ink/15 flex flex-col gap-2 border-t border-dashed pt-3", className)}
-    >
+    <section aria-label="Claude's ideas for the next try" className={cn("flex flex-col gap-2 pt-1", className)}>
       <Heading>Claude's ideas for the next try</Heading>
       <ul className="flex flex-col gap-2.5">
         {items.map((item) => (
           <li key={item.id} className="flex items-start gap-2">
             <div className="flex min-w-0 flex-1 flex-col">
               <p className="text-body text-ink font-semibold">{item.title}</p>
-              <p className="text-small text-ink-faint">{item.why}</p>
+              <p className="text-small text-ink-soft">{item.why}</p>
             </div>
             {!readOnly && (
               <IconButton
@@ -138,21 +135,18 @@ export function CoachSuggestions({
   };
 
   return (
-    <section
-      aria-label="Claude's ideas for the next try"
-      className="border-ink/20 flex flex-col gap-1 rounded-lg border border-dashed p-3"
-    >
+    <section aria-label="Claude's ideas for the next try" className="flex flex-col gap-1 px-0.5">
       <Heading>{`Claude's ideas · after attempt ${attemptNumber}`}</Heading>
-      <ul className="divide-ink/10 flex flex-col divide-y">
+      <ul className="flex flex-col gap-1">
         {items.map((item) => {
           const applied = !coachApplies(item, settings, note);
           const words = coachChangeWords(item, settings);
           return (
-            <li key={item.id} className="flex items-start gap-2 py-3 last:pb-1">
+            <li key={item.id} className="flex items-start gap-2 py-2">
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <div className="flex flex-col">
                   <p className="text-body text-ink font-semibold">{item.title}</p>
-                  <p className="text-small text-ink-faint">{item.why}</p>
+                  <p className="text-small text-ink-soft">{item.why}</p>
                 </div>
                 {applied ? (
                   <p className="text-small text-basil-ink flex items-center gap-1.5 font-semibold">
@@ -183,13 +177,15 @@ export function CoachSuggestions({
                     Use this
                   </Button>
                 )}
-                <IconButton
-                  icon={CloseIcon}
-                  label={`Dismiss: ${item.title}`}
-                  size="sm"
-                  className="touch-target"
-                  onClick={() => void setCoachDismissed(queryClient, itemId, attemptId, item.id, true)}
-                />
+                {!applied && (
+                  <IconButton
+                    icon={CloseIcon}
+                    label={`Dismiss: ${item.title}`}
+                    size="sm"
+                    className="touch-target"
+                    onClick={() => void setCoachDismissed(queryClient, itemId, attemptId, item.id, true)}
+                  />
+                )}
               </div>
             </li>
           );

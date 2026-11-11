@@ -1518,7 +1518,7 @@ export const shots: Shot[] = [
       await removePhotoReadBuilds(page);
     },
   },
-  // The failure coach (decision 0026): Claude thinks about the next try (the stand-in holds its answer back) ...
+  // The failure coach (decision 0027): Claude thinks about the next try (the stand-in holds its answer back) ...
   {
     name: "build-coach-thinking",
     path: "/builds",
@@ -1530,7 +1530,7 @@ export const shots: Shot[] = [
     // The floating Log attempt button and tab bar would sit over the card's foot, where the line is.
     beforeShot: async (page) => {
       await page.evaluate(() => {
-        for (const el of document.querySelectorAll<HTMLElement>("body *"))
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *")))
           if (getComputedStyle(el).position === "fixed") el.style.visibility = "hidden";
       });
     },

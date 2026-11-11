@@ -1,5 +1,5 @@
 /**
- * The failure coach (docs/decisions/0026): after an attempt comes out Partly or Spaghetti, Claude suggests two or
+ * The failure coach (docs/decisions/0027): after an attempt comes out Partly or Spaghetti, Claude suggests two or
  * three things to change for the next try. It only ever suggests: nothing is set until a person taps "Use this".
  */
 import { type AttemptSettings, BED_TYPES, describeChanges, LAYER_HEIGHTS, NOZZLE_DIAMETERS } from "./attempts.ts";
