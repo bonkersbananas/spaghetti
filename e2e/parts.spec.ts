@@ -109,7 +109,7 @@ test("logs what's on the plate, counts good pieces, and offers to finish when al
   expect((await new AxeBuilder({ page }).include("[data-testid=plate-parts]").analyze()).violations).toEqual([]);
   await sheet.getByRole("radio", { name: "Partly" }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
-  await expect(page.getByRole("heading", { name: /Attempt 1 · Hull half ×2/ })).toBeVisible();
+  await expect(page.getByTestId("attempt-parts").filter({ hasText: "Hull half ×2" })).toBeVisible();
   await expect(page.getByText("done", { exact: true })).toBeVisible();
   await expect(page.getByTestId("all-printed")).toHaveCount(0);
 
@@ -119,7 +119,7 @@ test("logs what's on the plate, counts good pieces, and offers to finish when al
   await sheet.getByRole("button", { name: "Deck" }).click();
   await sheet.getByRole("radio", { name: "Spaghetti" }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
-  await expect(page.getByRole("heading", { name: /Attempt 2 · Deck/ })).toBeVisible();
+  await expect(page.getByTestId("attempt-parts").filter({ hasText: /^Deck$/ })).toBeVisible();
   await expect(page.getByText("0 of 1")).toBeVisible();
   const [, second] = (await getItem(page, id)).attempts;
   expect(second.parts).toEqual([{ partId: expect.any(String), count: 0 }]);

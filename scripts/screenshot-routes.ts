@@ -1183,7 +1183,7 @@ export const shots: Shot[] = [
     name: "journal-parts",
     path: "/journal",
     prepare: async (page) => {
-      const row = page.getByText(/attempt 2 · Hull half/).first();
+      const row = page.getByText(/^Hull half/).first();
       await row.waitFor();
       await row.evaluate((element) => element.scrollIntoView({ block: "center" }));
     },

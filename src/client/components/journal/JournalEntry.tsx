@@ -170,14 +170,12 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           <h3 className="text-body text-ink min-w-0 flex-1 font-sans">
             <MetaList>
               <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
-              <span className="text-small text-ink-faint font-medium whitespace-nowrap">
-                attempt {index + 1}
-                {partsLabel ? ` · ${partsLabel}` : ""}
-              </span>
+              <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
             </MetaList>
           </h3>
           {picture && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
         </div>
+        {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
         {attempt.outcome === null && !offBed && (
           <PrintProgress
             startedAt={attempt.printedAt}
