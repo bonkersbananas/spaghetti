@@ -1113,7 +1113,9 @@ export const shots: Shot[] = [
     // The empty state fades in: finish it by hand.
     beforeShot: async (page) => {
       await page.getByRole("heading", { level: 2, name: "Not a strand this week" }).waitFor();
-      await page.evaluate(() => document.getAnimations().forEach((a) => a.finish()));
+      await page.evaluate(() => {
+        for (const a of document.getAnimations()) a.finish();
+      });
     },
   },
   {
