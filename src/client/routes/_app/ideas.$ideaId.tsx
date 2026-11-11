@@ -17,7 +17,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForField } from "@/components/ui/ForField";
+import { ForChip, ForField } from "@/components/ui/ForField";
 import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -103,6 +103,7 @@ function Idea({ item }: { item: ItemView }) {
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const [askFor, setAskFor] = useState(false);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
   const draftStatus = useRef(item.draft?.status);
@@ -259,6 +260,9 @@ function Idea({ item }: { item: ItemView }) {
             value={forWhom}
             onChange={(event) => setForWhom(event.target.value)}
             readOnly={readOnly || item.pending}
+            asking={askFor}
+            onOpen={() => setAskFor(true)}
+            onDone={() => setAskFor(false)}
           />
           <div className="flex flex-wrap gap-2">
             <ToggleChip
@@ -277,6 +281,7 @@ function Idea({ item }: { item: ItemView }) {
             >
               My wishlist
             </ToggleChip>
+            {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
           </div>
           <NoteField
             value={note}

@@ -41,7 +41,8 @@ export function Chip({ tone = "neutral", icon: IconComponent, suggested, childre
 }
 
 interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
-  selected: boolean;
+  /** Whether it is on. Leave out for a chip that only does something (no pressed state to announce). */
+  selected?: boolean;
   icon?: Icon;
   /** How it looks when picked: ink (filters), or a tone for tags (a failure in tomato, a success in basil). */
   tone?: ChipTone;
