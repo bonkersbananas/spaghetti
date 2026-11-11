@@ -5,10 +5,10 @@
  * decision 0025).
  */
 import type { Change, ChangeAction, ChangeEntity } from "./changes.ts";
-import { CHANGE_ENTITIES } from "./changes.ts";
+import { isPrivateChange, PUBLIC_CHANGE_ENTITIES } from "./changes.ts";
 
 /** What a webhook can ask for: one or more kinds of change (the feed's `entity`), or everything. */
-export const WEBHOOK_KINDS = ["all", ...CHANGE_ENTITIES] as const;
+export const WEBHOOK_KINDS = ["all", ...PUBLIC_CHANGE_ENTITIES] as const;
 export type WebhookKind = (typeof WEBHOOK_KINDS)[number];
 
 /** In the words the app shows. */
@@ -30,7 +30,7 @@ export const WEBHOOK_KIND_LABELS: Record<WebhookKind, string> = {
 
 /** Whether a webhook that asked for `kinds` wants a change of this entity. */
 export const wantsChange = (kinds: readonly WebhookKind[], entity: ChangeEntity) =>
-  kinds.includes("all") || kinds.includes(entity);
+  !isPrivateChange(entity) && (kinds.includes("all") || (kinds as readonly string[]).includes(entity));
 
 /** active: deliveries are arriving. failing: one gave up after a day of retries; the next success makes it active again. */
 export type WebhookState = "active" | "failing";

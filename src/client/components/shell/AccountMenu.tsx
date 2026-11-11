@@ -1,12 +1,13 @@
 import type { Person } from "@shared/api";
 import { Suspense, useState } from "react";
-import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { useSignOut } from "@/lib/use-sign-out";
 import { AccountButton } from "./AccountButton";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow } from "./lazy-account";
+import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInRows, SigningInSheets } from "./lazy-account";
+import type { SigningInSheet } from "./SigningInSheets";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** The sidebar's account menu (desktop), loaded on demand by the Sidebar. */
@@ -23,7 +24,9 @@ export default function AccountMenu({
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
-  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false });
+  const [signingIn, setSigningIn] = useState<SigningInSheet | null>(null);
+  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false, signingIn: false });
+  if (signingIn && !asked.signingIn) setAsked({ ...asked, signingIn: true });
   if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
   if (cropping && !asked.photo) setAsked({ ...asked, photo: true });
   if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
@@ -54,12 +57,11 @@ export default function AccountMenu({
                 Notifications
               </MenuItem>
             </PopoverClose>
-            <PopoverClose asChild>
-              <MenuItem icon={KeyIcon} onClick={() => setChangingPassword(true)}>
-                Change password
-              </MenuItem>
-            </PopoverClose>
           </MenuGroup>
+          <div className="bg-hairline h-px" />
+          <Suspense fallback={<div className="h-28" />}>
+            <SigningInRows size="sm" wrap={(row) => <PopoverClose asChild>{row}</PopoverClose>} onPick={setSigningIn} />
+          </Suspense>
           <div className="bg-hairline h-px" />
           <MenuGroup size="sm">
             <PopoverClose asChild>
@@ -83,6 +85,18 @@ export default function AccountMenu({
       {asked.photo && (
         <Suspense fallback={null}>
           <ProfilePhotoCrop file={cropping} onFile={setCropping} onClose={() => setCropping(null)} />
+        </Suspense>
+      )}
+      {asked.signingIn && (
+        <Suspense fallback={null}>
+          <SigningInSheets
+            which={signingIn}
+            onClose={() => setSigningIn(null)}
+            onChangePassword={() => {
+              setSigningIn(null);
+              setChangingPassword(true);
+            }}
+          />
         </Suspense>
       )}
       {asked.password && (

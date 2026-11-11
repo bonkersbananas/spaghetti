@@ -13,7 +13,11 @@ import { serviceWorker } from "./scripts/vite-service-worker.ts";
 const stateDir = process.env.SPAGHETTI_STATE_DIR;
 const fakeClaude = process.env.SPAGHETTI_FAKE_CLAUDE;
 
-export default defineConfig({
+// The dev server's passkeys belong to localhost on any port; the deployed relying party (spaghetti.day) is in
+// wrangler.jsonc and must never reach a build, so this only applies to `vite` (serve), never `vite build`.
+const localPasskeys = { WEBAUTHN_RP_ID: "localhost", WEBAUTHN_ORIGINS: "http://localhost:*" };
+
+export default defineConfig(({ command }) => ({
   plugins: [
     tanstackRouter({
       target: "react",
@@ -28,23 +32,29 @@ export default defineConfig({
     cloudflare({
       persistState: stateDir ? { path: stateDir } : true,
       // The e2e tests and screenshots point drafting at a stand-in for the Anthropic API (scripts/lib/fake-claude.ts).
-      config: fakeClaude
-        ? {
-            vars: {
-              ANTHROPIC_API_KEY: "sk-ant-fake",
-              ANTHROPIC_BASE_URL: fakeClaude,
-              // The same stand-in receives webhooks (scripts/lib/fake-claude.ts), which may go to 127.0.0.1 only here.
-              WEBHOOKS_ALLOW_LOCAL: "1",
-              WEBHOOK_SECRET_KEY: "throwaway-test-key",
-            },
-          }
-        : undefined,
+      config: () => ({
+        vars: {
+          ...(command === "serve" ? localPasskeys : {}),
+          ...(fakeClaude
+            ? {
+                ANTHROPIC_API_KEY: "sk-ant-fake",
+                ANTHROPIC_BASE_URL: fakeClaude,
+                // The same stand-in receives webhooks (scripts/lib/fake-claude.ts), which may go to 127.0.0.1 only here.
+                WEBHOOKS_ALLOW_LOCAL: "1",
+                WEBHOOK_SECRET_KEY: "throwaway-test-key",
+              }
+            : {}),
+        },
+      }),
     }),
   ],
+  // Loaded on demand, so the dev server would only find them mid-session, re-bundle and reload the page under the
+  // person (and under the e2e tests): list them up front.
+  optimizeDeps: { include: ["@simplewebauthn/browser", "qrcode-generator"] },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src/client", import.meta.url)),
       "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
     },
   },
-});
+}));
