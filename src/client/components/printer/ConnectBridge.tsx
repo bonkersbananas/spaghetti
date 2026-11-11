@@ -1,4 +1,4 @@
-import { BRIDGE_CONNECTED_MS, type BridgePrinterState, isFresh } from "@shared/bridge";
+import { BRIDGE_CONNECTED_MS, type BridgePrinterState, isFresh, PAIRING_MINUTES } from "@shared/bridge";
 import { spoolName } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -29,8 +29,6 @@ const STATE_WORDS: Record<BridgePrinterState, string> = {
 export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const makeCode = useMakeCode();
   const asked = useRef(false);
-  // The bridge only counts once it has checked in after the code was made: an older one doesn't fake "connected".
-  const [since, setSince] = useState(0);
   const now = useNow(1_000);
   const printer = useQuery({ ...printerQuery, refetchInterval: open ? 3_000 : false });
   const spools = useQuery({ ...spoolsQuery, enabled: open });
@@ -38,11 +36,13 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
   useEffect(() => {
     if (!open || asked.current) return;
     asked.current = true;
-    setSince(Date.now());
     makeCode.mutate();
   }, [open, makeCode]);
 
   const code = makeCode.data;
+  // The bridge only counts once it has checked in after the code was made (by the server's clock, which the code's
+  // expiry carries): an older bridge doesn't fake "connected".
+  const since = code ? code.expiresAt - PAIRING_MINUTES * 60_000 : Number.POSITIVE_INFINITY;
   const left = code ? code.expiresAt - now : 0;
   const expired = Boolean(code) && left <= 0;
   const bridge = printer.data?.bridge ?? null;
@@ -58,7 +58,6 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
 
   const fresh = () => {
     asked.current = true;
-    setSince(Date.now());
     makeCode.mutate();
   };
 
@@ -90,7 +89,8 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
             <>
               <CommandBlock label="Terminal command" command={installCommand(code.code, window.location.origin)} />
               <p className="text-small text-ink-faint">
-                The code {code.code} works once and for about {Math.max(1, Math.ceil(left / 60_000))} more min.
+                The code {code.code} works once and for about{" "}
+                {Math.min(PAIRING_MINUTES, Math.max(1, Math.ceil(left / 60_000)))} more min.
               </p>
             </>
           ) : makeCode.isError ? (
