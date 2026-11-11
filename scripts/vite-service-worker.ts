@@ -13,6 +13,10 @@ import type { Plugin } from "vite";
 import { LANDING_ASSETS } from "./vite-landing.ts";
 
 const precached = /\.(?:js|css|woff2?|svg|png|webp|webmanifest|ico)$/;
+/** The 3D viewer (three.js and its worker) is opened rarely and needs the network for the file anyway: it isn't downloaded at install. */
+const onDemandOnly = /(?:^|\/)(?:PrintViewer|toolpath-worker|scene)-[\w-]+\.js$/;
+const viewerModules =
+  /[\\/](?:components[\\/]viewer|node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?three)[\\/]/;
 
 export function serviceWorker(): Plugin {
   let publicDir = "";
@@ -27,7 +31,15 @@ export function serviceWorker(): Plugin {
     generateBundle(_options, bundle) {
       if (this.environment.name !== "client") return;
       // The landing page (landing.html and assets/landing/) is for visitors, not part of the app.
-      const built = Object.keys(bundle).filter((name) => precached.test(name) && !name.startsWith(LANDING_ASSETS));
+      const built = Object.keys(bundle).filter((name) => {
+        if (!precached.test(name) || onDemandOnly.test(name) || name.startsWith(LANDING_ASSETS)) return false;
+        const file = bundle[name];
+        return !(
+          file?.type === "chunk" &&
+          file.moduleIds.length > 0 &&
+          file.moduleIds.every((id) => viewerModules.test(id))
+        );
+      });
       const fromPublic = publicDir ? readdirSync(publicDir).filter((name) => precached.test(name)) : [];
       const precache = [...new Set([...built, ...fromPublic])].sort().map((name) => `/${name}`);
       const source = readFileSync(join(import.meta.dirname, "../src/sw/sw.js"), "utf8");
