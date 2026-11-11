@@ -20,19 +20,21 @@ const origin = (page: Page) => new URL(page.url()).origin;
  * Radix), toasts and motion, which every screen needs at once.
  */
 // Recipes added about 1 kB of shared code to every screen (cache roots, change feed, an icon); its sheet and shelves load on demand, and search draws recipe results (about 4 kB).
+// Profile pictures (the photo layer in Avatar, toasts above sheets) added about 2 kB gzip to the shell, so the
+// budgets of the screens near their limit went up by 2 kB; the crop and upload code loads on demand.
 const BUDGET_KB = {
   "/sign-in": 214,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 318,
+  "/today": 320,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 309,
+  "/ideas": 311,
   "/builds": 310,
   "/journal": 311,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 315,
-  "/pantry": 319,
-  "/printer": 319,
+  "/search": 317,
+  "/pantry": 321,
+  "/printer": 321,
 } as const;
 
 /**
