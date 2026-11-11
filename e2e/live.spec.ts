@@ -1,18 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { signIn as signInThroughApi } from "./helpers";
 
 const [alex, sam] = SEED_USERS;
 
-async function signInAs(page: Page, user: { username: string }) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Name").fill(user.username);
-  await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  // Signing in lands on Today; these tests start from the inbox.
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-  await page.goto("/ideas");
-  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
-}
+const signInAs = (page: Page, user: { username: string }) => signInThroughApi(page, user);
 
 /** The app's origin (the pages may not have loaded anything yet). */
 const origin = (_page?: Page) => new URL(test.info().project.use.baseURL ?? "").origin;
