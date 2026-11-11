@@ -303,6 +303,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
                 ? `It goes straight into ${adding === "Ext" ? "the external holder" : `slot ${adding}`}.`
                 : undefined
             }
+            stayPut
             onAdded={(spool, saved) => {
               if (adding) void loadSlot(queryClient, adding, spool.id, saved);
             }}

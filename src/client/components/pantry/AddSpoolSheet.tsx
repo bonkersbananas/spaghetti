@@ -28,6 +28,8 @@ interface AddSpoolSheetProps {
   onAdded?: (spool: Spool, saved: Promise<boolean>) => void;
   /** Says where the spool will go: "It goes into slot A2." */
   description?: string;
+  /** Where the sheet is part of a flow (a spool going into a slot): after a label photo stay where you are instead of opening the spool's page. */
+  stayPut?: boolean;
 }
 
 const blank = (initial?: SpoolDraft): SpoolDraft => ({
@@ -44,7 +46,7 @@ const blank = (initial?: SpoolDraft): SpoolDraft => ({
  * A new spool in seconds, standing at the shelf: snap the label, pick a
  * material and a color, done. Brand and finish are a tap more.
  */
-export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, description }: AddSpoolSheetProps) {
+export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, description, stayPut }: AddSpoolSheetProps) {
   const queryClient = useQueryClient();
   const { data: user } = useSuspenseQuery(sessionQuery);
   const isDesktop = useIsDesktop();
@@ -105,8 +107,8 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
     setPhoto(null);
     onOpenChange(false);
     onAdded?.(spool, saved);
-    // On its own page the fields fill in; where the sheet is part of a flow (loading a slot) it stays out of the way.
-    if (label && !onAdded) void navigate({ to: "/pantry/$spoolId", params: { spoolId: spool.id } });
+    // On its own page the fields fill in, like the label jumping into the form.
+    if (label && !stayPut) void navigate({ to: "/pantry/$spoolId", params: { spoolId: spool.id } });
   }
 
   return (

@@ -227,6 +227,7 @@ function Pantry() {
             ? `It goes straight into ${adding.slot === "Ext" ? "the external holder" : `slot ${adding.slot}`}.`
             : undefined
         }
+        stayPut={!!adding.slot}
         onAdded={(spool, saved) => {
           if (adding.slot) void loadSlot(queryClient, adding.slot, spool.id, saved);
         }}
