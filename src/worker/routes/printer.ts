@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { PrinterResponse } from "../../shared/api.ts";
@@ -6,7 +6,7 @@ import { BRIDGE_PROBLEM_CODES, type BridgeStatusData } from "../../shared/bridge
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { amsSlots, attempts, bridge, printer, spools } from "../db/schema.ts";
+import { amsSlots, attempts, bridge, bridgePairings, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { disconnectBridge } from "./bridge.ts";
@@ -72,7 +72,7 @@ const bridgeSchema = z.object({
 });
 
 async function loadPrinter(db: Db): Promise<PrinterResponse> {
-  const [row, slots, bridgeRow] = await Promise.all([
+  const [row, slots, bridgeRow, paired] = await Promise.all([
     db.select().from(printer).where(eq(printer.id, PRINTER_ID)).get(),
     // A deleted spool's slot reads as empty (and fills again with undo).
     db
@@ -81,11 +81,20 @@ async function loadPrinter(db: Db): Promise<PrinterResponse> {
       .innerJoin(spools, eq(spools.id, amsSlots.spoolId))
       .where(isNull(spools.deletedAt)),
     db.select().from(bridge).where(eq(bridge.id, BRIDGE_ID)).get(),
+    db
+      .select({ usedAt: bridgePairings.usedAt })
+      .from(bridgePairings)
+      .where(isNotNull(bridgePairings.usedAt))
+      .orderBy(desc(bridgePairings.usedAt))
+      .limit(1)
+      .get(),
   ]);
   return {
     setup: row?.setup ?? DEFAULT_PRINTER,
     slots: Object.fromEntries(slots.map((slot) => [slot.slot, slot.spoolId])),
-    bridge: bridgeRow ? { ...bridgeRow.status, lastSeenAt: bridgeRow.lastSeenAt.getTime() } : null,
+    bridge: bridgeRow
+      ? { ...bridgeRow.status, lastSeenAt: bridgeRow.lastSeenAt.getTime(), pairedAt: paired?.usedAt?.getTime() ?? null }
+      : null,
   };
 }
 

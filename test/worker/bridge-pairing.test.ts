@@ -121,6 +121,9 @@ describe("pairing the printer bridge", () => {
     });
     const before = await (await request("/api/printer", { cookie })).json<PrinterResponse>();
     expect(before.bridge?.version).toBe("1.0.0");
+    // The page can tell when it paired, so a bridge already running isn't taken for the new one.
+    expect(before.bridge?.pairedAt).toBeGreaterThan(Date.now() - 60_000);
+    expect(before.bridge?.lastSeenAt).toBeGreaterThanOrEqual(before.bridge?.pairedAt ?? Infinity);
     const gone = await request("/api/printer/bridge", { method: "DELETE", cookie });
     expect(gone.status).toBe(200);
     expect((await gone.json<PrinterResponse>()).bridge).toBeNull();

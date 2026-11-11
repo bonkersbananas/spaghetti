@@ -9,7 +9,7 @@ import type { ToolpathFilament, Toolpaths } from "./types.ts";
  * (the matched spools'), one per filament in the slicer's order.
  */
 
-export interface ReadToolpathsOptions extends Pick<ParseOptions, "maxSegments" | "onLayer"> {
+export interface ReadToolpathsOptions extends Pick<ParseOptions, "maxSegments" | "onLayer" | "keepLayers"> {
   /** The plate, counting from 1. Default: the first one with G-code. */
   plate?: number;
   /** Colours of the matched spools, by filament index, for filaments the file doesn't colour. */
@@ -25,7 +25,10 @@ const GCODE = /^Metadata\/plate_(\d+)\.gcode$/;
 
 export class ToolpathError extends Error {}
 
-export async function readToolpaths(file: Blob, options: ReadToolpathsOptions = {}): Promise<Toolpaths> {
+/** A file as a blob, or as a stream with its length (a fetch's body, so nothing is held whole). */
+export type ToolpathSource = Blob | { stream: ReadableStream<Uint8Array>; size: number };
+
+export async function readToolpaths(file: ToolpathSource, options: ReadToolpathsOptions = {}): Promise<Toolpaths> {
   const unzip = new Unzip();
   unzip.register(UnzipInflate);
   unzip.register(UnzipPassThrough); // stored entries, as re-zipped files have
@@ -63,6 +66,7 @@ export async function readToolpaths(file: Blob, options: ReadToolpathsOptions = 
       sourceBytes: entry.originalSize || (entry.size || 0) * 4 || undefined,
       maxSegments: options.maxSegments,
       onLayer: options.onLayer,
+      keepLayers: options.keepLayers,
     });
     const r = reader;
     entry.ondata = (err, chunk, final) => {
@@ -77,7 +81,7 @@ export async function readToolpaths(file: Blob, options: ReadToolpathsOptions = 
 
   const total = file.size;
   let done = 0;
-  const source = file.stream().getReader();
+  const source = (file instanceof Blob ? file.stream() : file.stream).getReader();
   try {
     for (;;) {
       if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
