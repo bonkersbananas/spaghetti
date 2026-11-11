@@ -237,8 +237,7 @@ export async function shareImage(shots: string) {
     .resize(520)
     .jpeg({ quality: 90 })
     .toBuffer();
-  const spool = (color: string) =>
-    `<span class="spool" style="background-color:${color}"></span>`;
+  const spool = (color: string) => `<span class="spool" style="background-color:${color}"></span>`;
   const browser = await chromium.launch(launchOptions());
   try {
     const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });

@@ -388,6 +388,9 @@
             <p class="lp-lead lp-rise">Prints are things you hold, so every one gets its photo, large: the ones that worked and the nests.</p>
           </div>
         </div>
+        <!-- A sideways scroller must take focus, so keyboards can scroll it (axe: scrollable-region-focusable). -->
+        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region is focusable so keyboards can scroll it -->
+        <!-- biome-ignore lint/a11y/useSemanticElements: the region is the scroller, inside the section that names it -->
         <div class="lp-gallery__scroller" role="region" aria-label="Prints, fresh off the bed" tabindex="0">
           <ul class="lp-gallery__track">
               <li class="lp-snap lp-gallery__item" style="--turn: -3deg; --focus: 52% 60%">
