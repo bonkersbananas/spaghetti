@@ -8,6 +8,7 @@ import type {
   UpdatePrinterRequest,
   UpdateSpoolRequest,
 } from "@shared/api";
+import { NO_LABEL } from "@shared/label-read";
 import { gramsFromScale, levelOf } from "@shared/ledger";
 import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
@@ -102,6 +103,7 @@ export function addSpool(
     photo: null,
     slot: null,
     trayUuid: null,
+    ...NO_LABEL,
     createdBy,
     createdAt: now,
     updatedAt: now,

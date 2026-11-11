@@ -176,6 +176,13 @@
       "when": 1794380275942,
       "tag": "0024_passkeys-links-invites",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794382069666,
+      "tag": "0025_spool_labels",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { app } from "./app.ts";
 import { resumeDrafts } from "./draft/run.ts";
+import { resumeLabelReads } from "./label-read/run.ts";
 import { mcpRoutes } from "./mcp/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
@@ -50,6 +51,7 @@ export default {
       // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
       ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));
       ctx.waitUntil(resumeReads(env).catch((error) => console.error("photo read resume failed", error)));
+      ctx.waitUntil(resumeLabelReads(env).catch((error) => console.error("label read resume failed", error)));
       ctx.waitUntil(sendUpkeepNudge(env).then((result) => result.sent && console.log("upkeep nudged", result)));
     }
   },

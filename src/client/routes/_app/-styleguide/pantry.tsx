@@ -1,4 +1,5 @@
 import type { Spool } from "@shared/api";
+import { NO_LABEL } from "@shared/label-read";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
@@ -40,6 +41,7 @@ const sampleSpool: Spool = {
   photo: null,
   slot: "A2",
   trayUuid: null,
+  ...NO_LABEL,
   createdBy: "a",
   createdAt: Date.now(),
   updatedAt: Date.now(),
