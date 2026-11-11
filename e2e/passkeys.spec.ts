@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
-import { signIn } from "./helpers";
+import { signInWithForm as signIn } from "./helpers";
 
 // Passkeys belong to "localhost", not to 127.0.0.1 (an IP address can't be a relying party), so these tests
 // open the same dev server by its name. Each one uses its own virtual authenticator (Chromium's CDP WebAuthn).
