@@ -34,6 +34,9 @@ export interface FakeClaude {
   claudeUrl?: string;
 }
 
+/** The built app's passkeys belong to localhost, not spaghetti.day (wrangler.jsonc): the same override the dev server gets. */
+export const localPasskeyVars = ["--var", "WEBAUTHN_RP_ID:localhost", "--var", "WEBAUTHN_ORIGINS:http://localhost:*"];
+
 export async function startBuiltServer({
   port,
   stateDir,
@@ -53,7 +56,20 @@ export async function startBuiltServer({
         stateDir,
         "--show-interactive-dev-session=false",
         "--live-reload=false",
-        ...(claudeUrl ? ["--var", "ANTHROPIC_API_KEY:sk-ant-fake", "--var", `ANTHROPIC_BASE_URL:${claudeUrl}`] : []),
+        ...localPasskeyVars,
+        ...(claudeUrl
+          ? [
+              "--var",
+              "ANTHROPIC_API_KEY:sk-ant-fake",
+              "--var",
+              `ANTHROPIC_BASE_URL:${claudeUrl}`,
+              // The same stand-in also receives webhooks (scripts/lib/fake-claude.ts), which may go to 127.0.0.1 only here.
+              "--var",
+              "WEBHOOKS_ALLOW_LOCAL:1",
+              "--var",
+              "WEBHOOK_SECRET_KEY:throwaway-test-key",
+            ]
+          : []),
       ],
       {
         cwd: root,

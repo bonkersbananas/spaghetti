@@ -63,6 +63,8 @@ src/
     auth/agent.ts, scopes.ts  agent bearer tokens, and which scope each route needs
     mcp/                  the MCP server at /mcp: protocol (index.ts), tools, photo reading (image.ts)
     changes.ts            recordChange / actorOf: the change feed's writer (see "Change feed" below)
+    openapi/              the OpenAPI 3.1 document at GET /api/openapi.json: operations.ts (one row per route), schemas.ts (answers), document.ts (builds it)
+    webhooks/             secrets.ts (AES-GCM at rest, HMAC signing), deliver.ts (fan-out from the change feed, sending, retries; run by the 5-minute cron)
     db/schema.ts          Drizzle schema: users, sessions, items, photos, attempts, tags, spools, ams_slots, printer, attempt_files
     push/                 web push: webpush.ts (VAPID + aes128gcm on WebCrypto), nudges.ts (the cron's "how did it go?" rules)
     photos.ts             R2 keys (photos and slicer files) and the daily purge (scheduled handler in index.ts)
@@ -198,6 +200,12 @@ Never edit a migration that has been merged; add a new one.
 - Photos, attempts and files carry the `itemId` they belong to; the pantry and the printer have none. The actor is `{ kind: "person", id }` from `actorOf(c.var.user)`; agents will use `kind: "agent"` with their name, so don't assume a user id.
 - The client (`lib/live.ts`, started in `_app.tsx`) polls every 10 s while the tab is visible and online, and at once on focus, on coming back to the tab and when the connection returns; the first answer only learns the feed's end. `refresh` maps changes to query keys: a new query root that other people's writes can change needs a case there. At most one quiet toast for the open screen; a deleted item closes its screen.
 - Autosaved fields must follow the server only when untouched (`useFollowServer`) and must send only what this screen changed (`useItemFields`; `useLiveFields` for a form of several fields, as on the spool page and the printer setup), or they undo the other person's edit.
+
+### OpenAPI and webhooks
+
+- **OpenAPI** ([docs/api.md](docs/api.md#the-openapi-document)): `GET /api/openapi.json` is built per caller from `worker/openapi/operations.ts` (one row per route: summary, the zod schema the route validates with, the answer's schema, its other refusals), `schemas.ts` and the scope table in `auth/scopes.ts` (scopes are never repeated by hand). **A new route needs a row there**: `test/openapi/document.test.ts` fails for a route without one (and for a row without a route) and validates the result as OpenAPI 3.1. Export the route's zod schemas (`export { createThing }` at the end of the file) and import them in `operations.ts`. That test lives in `test/openapi` (run by the Node `unit` project, typechecked with the worker's types) because the validator compiles code, which workerd forbids.
+- **Webhooks** ([0025](docs/decisions/0025-webhooks-signed-from-the-cron.md), payload and signature in docs/api.md): `webhooks` and `webhook_deliveries` tables, `routes/webhooks.ts` (people only), `webhooks/deliver.ts`. `runWebhooks` (the cron, and after every write that went through, in `waitUntil`; `WEBHOOKS_ON_WRITE=off` in the Worker tests) fans the change feed out into deliveries (one per change per webhook, idempotent) and sends what is due with a lease, retries on 1 m, 5 m, 30 m, 2 h, 6 h, 12 h, then marks the webhook failing. Secrets are AES-GCM encrypted under a key from `WEBHOOK_SECRET_KEY` only (no key: 503 and the page says so) and never logged, and neither are signatures or bodies. Targets pass `checkWebhookUrl` (the link-preview rules, plus DNS over HTTPS on each delivery); `WEBHOOKS_ALLOW_LOCAL=1`, set only for e2e and screenshots, lets them go to the stand-in receiver in `scripts/lib/fake-claude.ts` (`/hooks/ok`, `/hooks/broken`, `GET /hooks`). Worker tests stub `fetch` (see `test/worker/webhooks.test.ts`) and walk the cron's clock by passing `now`.
+- The client side is lazy: `routes/_app/agents.tsx` loads `components/agents/Webhooks.tsx` (the section, `WebhookCard`, `WebhookSheet`, `lib/webhooks.ts`) after the page, so the Agents route's first load stays small. The styleguide's Webhooks section shows the cards and the sheet.
 
 ### Comments
 

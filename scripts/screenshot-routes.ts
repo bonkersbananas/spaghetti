@@ -64,6 +64,198 @@ async function subscribedDevice(page: Page) {
   }, endpoint);
 }
 
+/** One row of the account menu (phone: account sheet; desktop: the sidebar's popover), by its text. */
+async function openAccountRow(page: Page, width: 390 | 1440, row: string | RegExp) {
+  await openAccount(page, width);
+  await page.getByRole("dialog").getByRole("button", { name: row }).click();
+}
+
+const wide = (page: Page): 390 | 1440 => (page.viewportSize()?.width === 390 ? 390 : 1440);
+
+/** What the passkeys and devices lists say, in a shot: a real passkey needs a real site (localhost), a shot opens 127.0.0.1. */
+async function mockSigningIn(page: Page) {
+  const ago = (ms: number) => SEED_NOW - ms;
+  await page.route(/\/api\/account\/passkeys$/, (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          json: {
+            passkeys: [
+              {
+                id: "pk1",
+                name: "iPhone",
+                createdAt: ago(40 * 86_400_000),
+                lastUsedAt: ago(3_600_000),
+                backedUp: true,
+              },
+              { id: "pk2", name: "Mac", createdAt: ago(9 * 86_400_000), lastUsedAt: null, backedUp: true },
+            ],
+          },
+        })
+      : route.fallback(),
+  );
+  await page.route(/\/api\/account\/devices$/, (route) =>
+    route.fulfill({
+      json: {
+        devices: [
+          {
+            id: "d1",
+            device: "Mac · Chrome",
+            createdAt: ago(5 * 86_400_000),
+            lastSeenAt: SEED_NOW,
+            current: true,
+          },
+          {
+            id: "d2",
+            device: "iPhone",
+            createdAt: ago(30 * 86_400_000),
+            lastSeenAt: ago(2 * 3_600_000),
+            current: false,
+          },
+          {
+            id: "d3",
+            device: "iPad",
+            createdAt: ago(80 * 86_400_000),
+            lastSeenAt: ago(12 * 86_400_000),
+            current: false,
+          },
+        ],
+      },
+    }),
+  );
+}
+
+/** A phone's share sheet exists: the sheets offer it first (a headless browser has none). */
+const withShare = (page: Page) =>
+  page.evaluate(() => Object.defineProperty(navigator, "share", { value: async () => undefined, configurable: true }));
+
+/** Makes an invite as Alex, then leaves the page signed out: what a guest opening the link sees. */
+async function guestInvite(page: Page) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  const made = await (await page.request.post("/api/account/invites", { headers: { Origin: origin } })).json();
+  await page.context().clearCookies();
+  return String(made.url).split("#")[1] ?? "";
+}
+
+/** Lets the entrance animation of a signed-out page finish: a shot taken mid-fade is blank. */
+const settle = async (page: Page) => {
+  await page.locator("h1").first().waitFor();
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+  await page.waitForTimeout(500);
+};
+
+/** Webhooks as the Agents page sees them, with times counted back from the shots' clock (SEED_NOW); the page is reloaded to show them. */
+const minutesAgo = (n: number) => SEED_NOW - n * 60_000;
+const webhookBase = {
+  id: "11111111-1111-4111-8111-111111111111",
+  url: "https://hooks.example.org/spaghetti",
+  kinds: ["item", "attempt", "comment"],
+  agentId: null as string | null,
+  secretPrefix: "whsec_Ab3x9",
+  state: "active",
+  lastError: null as string | null,
+  lastErrorAt: null as number | null,
+  lastDeliveredAt: minutesAgo(12) as number | null,
+  createdAt: minutesAgo(60 * 24 * 3),
+};
+const deliveryBase = {
+  webhookId: webhookBase.id,
+  seq: 41,
+  test: false,
+  entity: "attempt",
+  action: "updated",
+  status: "delivered",
+  attempts: 1,
+  httpStatus: 200,
+  error: null as string | null,
+  nextAt: null as number | null,
+  createdAt: minutesAgo(12),
+  lastAttemptAt: minutesAgo(12),
+};
+const workingDeliveries = [
+  { ...deliveryBase, id: "d1", seq: 42, entity: "comment", action: "created" },
+  { ...deliveryBase, id: "d2", seq: 41, createdAt: minutesAgo(47), lastAttemptAt: minutesAgo(47) },
+  {
+    ...deliveryBase,
+    id: "d3",
+    seq: null,
+    test: true,
+    entity: "item",
+    createdAt: minutesAgo(60 * 22),
+    lastAttemptAt: minutesAgo(60 * 22),
+  },
+];
+const failingDeliveries = [
+  {
+    ...deliveryBase,
+    id: "d4",
+    seq: 44,
+    status: "pending",
+    attempts: 3,
+    httpStatus: 502,
+    error: "It answered 502.",
+    nextAt: SEED_NOW + 90 * 60_000,
+    lastAttemptAt: minutesAgo(20),
+    createdAt: minutesAgo(60),
+  },
+  {
+    ...deliveryBase,
+    id: "d5",
+    seq: 40,
+    status: "failed",
+    attempts: 7,
+    httpStatus: 502,
+    error: "It answered 502.",
+    createdAt: minutesAgo(60 * 25),
+    lastAttemptAt: minutesAgo(95),
+  },
+];
+
+async function mockWebhooks(
+  page: Page,
+  webhooks: object[],
+  deliveries: object[] = [],
+  // The page shows an agent (the seed has none), so a shot isn't of the empty state's entrance animation.
+  agent: { id: string; name: string } = { id: "claude-for-alex", name: "Claude for Alex" },
+) {
+  await page.route(/\/api\/webhooks(\/[^/]+\/deliveries)?$/, (route) => {
+    const request = route.request();
+    if (request.method() === "POST") {
+      return route.fulfill({
+        status: 201,
+        json: { webhook: webhookBase, secret: "whsec_k3P9mQ2xT7vLw0aBn5RyUe8CdHs4JzFgI1oXtVq6MA" },
+      });
+    }
+    return route.fulfill({ json: request.url().endsWith("/deliveries") ? { deliveries } : { webhooks } });
+  });
+  await page.route(/\/api\/agents$/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as { agents: object[] };
+    const me = (await (await page.request.get("/api/session")).json()) as { user: { id: string } };
+    await route.fulfill({
+      response,
+      json: {
+        agents: [...json.agents, { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [] }],
+      },
+    });
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  // The empty state's entrance would still be at opacity 0 in a full-page shot.
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+}
+
+const openDeliveries = async (page: Page) => {
+  await page.getByRole("button", { name: "Recent deliveries" }).click();
+  await page.getByRole("list", { name: "Recent deliveries" }).waitFor();
+};
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -131,6 +323,66 @@ async function printWithPhoto(page: Page, title: string) {
   await page.goto(`/builds/${itemId}`);
   await page.getByRole("button", { name: "Attempt 1: off the bed. Open" }).waitFor();
   return { itemId, attemptId };
+}
+
+/**
+ * A build with everything at once, for looking at the page as a whole: three parts, eight attempts (seven
+ * finished, the newest off the bed with a camera photo that Claude reads as spaghetti), a thread of three comments.
+ */
+async function everythingBuild(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const itemId = crypto.randomUUID();
+  photoReadBuilds.push(itemId);
+  const DAY = 24 * 60 * 60_000;
+  await page.request.post("/api/items", {
+    headers,
+    data: {
+      id: itemId,
+      title: "Paddle wheel spaghetti test",
+      note: "Hull in two halves, a deck and the wheel. Model: https://makerworld.com/en/models/1-cable-comb",
+      createdAt: Date.now() - 12 * DAY,
+    },
+  });
+  const parts = ["Hull, left", "Hull, right", "Deck"].map((name, position) => ({
+    id: crypto.randomUUID(),
+    name,
+    quantity: 1,
+    position,
+  }));
+  await page.request.put(`/api/items/${itemId}/parts`, { headers, data: { parts } });
+  const outcomes = ["failed", "failed", "partial", "failed", "success", "partial", "success"] as const;
+  for (const [index, outcome] of outcomes.entries()) {
+    await page.request.post(`/api/items/${itemId}/attempts`, {
+      headers,
+      data: {
+        id: crypto.randomUUID(),
+        outcome,
+        printedAt: Date.now() - (10 - index) * DAY,
+        note: outcome === "failed" ? "Let go of the plate at the stern." : undefined,
+        failureTags: outcome === "failed" ? ["warping"] : undefined,
+        parts: [{ partId: parts[index % 3]?.id, count: outcome === "success" ? 1 : 0 }],
+        settings: { estimatedMinutes: 140, layerHeight: 0.2, bedTemperature: 60 + index },
+      },
+    });
+  }
+  const attemptId = crypto.randomUUID();
+  await page.request.post(`/api/items/${itemId}/attempts`, {
+    headers,
+    data: { id: attemptId, printedAt: Date.now() - 150 * 60_000, settings: { estimatedMinutes: 140 } },
+  });
+  await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 8 * 60_000 } });
+  const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
+  await page.request.put(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, {
+    headers,
+    multipart: { width: "1280", height: "960", color: "#8d7a66", attemptId, large: file, thumb: file },
+  });
+  for (const body of [
+    "The stern keeps lifting. Brim next time?",
+    "Tried a brim on 6, it held. The wheel is the slow part now.",
+    "Looks like it let go again on 8, sorry.",
+  ])
+    await page.request.post(`/api/items/${itemId}/comments`, { headers, data: { id: crypto.randomUUID(), body } });
+  return itemId;
 }
 
 /** Opens the attempt's sheet from its card (the card's open button is under its content: click its corner). */
@@ -246,6 +498,124 @@ async function unmockToday(page: Page) {
  */
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
+  { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },
+  {
+    // An invite link opened by someone who isn't signed in: the form, filled in a little.
+    name: "join",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    beforeShot: settle,
+    prepare: async (page) => {
+      const token = await guestInvite(page);
+      await page.goto(`/join#${token}`);
+      await page.getByLabel("Your name").fill("Mina Park");
+      await page.getByRole("radio", { name: "plum" }).click();
+    },
+  },
+  {
+    // A link that has done its job: one calm sentence.
+    name: "link-used",
+    path: "/link#spl_used",
+    signedOut: true,
+    beforeShot: settle,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await page.getByText("That link has done its job.").waitFor();
+    },
+  },
+  {
+    // After a password sign-in on a device with no passkey: one quiet offer.
+    name: "passkey-offer",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.evaluate(() => {
+        sessionStorage.setItem("sg-passkey-ask", "1");
+        sessionStorage.setItem("sg-force-offer", "1");
+        localStorage.removeItem("sg-passkey-offer");
+        localStorage.removeItem("sg-passkey-here");
+      });
+      await page.reload();
+      await page.getByText(/^Next time, just /).waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The account menu's "Signing in" rows.
+    name: "account-signing-in",
+    path: "/ideas",
+    prepare: async (page) => {
+      await openAccount(page, wide(page));
+      await page.getByRole("dialog").getByRole("button", { name: "Passkeys and password" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: "passkeys",
+    path: "/ideas",
+    prepare: async (page) => {
+      await mockSigningIn(page);
+      await openAccountRow(page, wide(page), "Passkeys and password");
+      await page.getByRole("dialog", { name: "Passkeys and password" }).getByText("iPhone").first().waitFor();
+    },
+  },
+  {
+    name: "sign-in-on-another-device",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withShare(page);
+      await openAccountRow(page, wide(page), "Sign in on another device");
+      await page.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).waitFor();
+      if (wide(page) === 1440) await page.getByRole("img", { name: /QR code/ }).waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: "invite",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withShare(page);
+      // The server counts a week from its own clock; the shot's browser clock is fixed to the seed date.
+      const alex = (await (await page.request.get("/api/people")).json()).people[0].id;
+      await page.route(/\/api\/account\/invites$/, (route) =>
+        route.request().method() === "GET"
+          ? route.fulfill({
+              json: {
+                invites: [
+                  { id: "i1", createdBy: alex, createdAt: SEED_NOW - 86_400_000, expiresAt: SEED_NOW + 6 * 86_400_000 },
+                ],
+              },
+            })
+          : route.fallback(),
+      );
+      await openAccountRow(page, wide(page), "Invite someone");
+      const sheet = page.getByRole("dialog", { name: "Invite someone" });
+      await sheet.getByRole("button", { name: /^Make (an invite link|another invite)$/ }).click();
+      await sheet.getByText(/\/join#spi_/).waitFor();
+      await sheet.getByText("Waiting").waitFor();
+    },
+  },
+  {
+    // The same sheet, scrolled to the devices at its bottom.
+    name: "passkeys-devices",
+    path: "/ideas",
+    prepare: async (page) => {
+      await mockSigningIn(page);
+      await openAccountRow(page, wide(page), "Passkeys and password");
+      const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
+      await sheet.getByText("iPad").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: "styleguide-signing-in",
+    path: "/styleguide",
+    selector: "#signing-in",
+    // The styleguide's avatar specimen has a deliberately missing picture: let it fall back before the images are checked.
+    prepare: async (page) => {
+      await page.waitForTimeout(1200);
+    },
+  },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
   { name: "today", path: "/today", fullPage: true },
   {
@@ -425,7 +795,8 @@ export const shots: Shot[] = [
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     width: 390,
     beforeShot: async (page) => {
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      // The thread loads after the page: wait for it, then go to the very end (the closing actions above the bar).
+      await showThread(page);
     },
   },
   {
@@ -806,6 +1177,46 @@ export const shots: Shot[] = [
       await page.unrouteAll({ behavior: "ignoreErrors" });
     },
   },
+  // Each page as a whole, with everything on it at once (the coherence pass): a build with parts, eight attempts,
+  // Claude's guess on the newest and a thread ...
+  {
+    name: "build-everything",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      const id = await everythingBuild(page);
+      await page.goto(`/builds/${id}`);
+      await page.locator("h1").first().waitFor({ state: "attached" });
+      await page
+        .getByRole("radio", { name: /suggested/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // ... and an idea Claude drafted from its model page, with a thread under it.
+  {
+    name: "idea-everything",
+    path: "/ideas",
+    fullPage: true,
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const body of ["This would tidy the cable mess under the desk.", "Print it in the jade white?"])
+        await page.request.post(`/api/items/${id}/comments`, { headers, data: { id: crypto.randomUUID(), body } });
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Drafted by Claude from MakerWorld").waitFor();
+      await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
+      // The undo toast would cover the thread: wait it out.
+      await page.getByText("Drafted from MakerWorld", { exact: true }).waitFor({ state: "hidden", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
   {
     // The drafted idea with its undo toast, from the real flow (the Worker asks the stand-in for Anthropic).
     name: "draft-drafted",
@@ -843,6 +1254,83 @@ export const shots: Shot[] = [
     },
   },
   { name: "agents", path: "/agents" },
+  // Webhooks, a small section under the agents: nothing yet, one that works (with its deliveries), one that is failing,
+  // and the sheet that adds one, then its secret (shown once).
+  {
+    name: "agents-webhooks-empty",
+    path: "/agents",
+    fullPage: true,
+    prepare: (page) => mockWebhooks(page, []),
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  {
+    name: "agents-webhooks",
+    path: "/agents",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockWebhooks(page, [{ ...webhookBase, agentId: "claude-for-alex" }], workingDeliveries);
+      await openDeliveries(page);
+    },
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  {
+    name: "agents-webhooks-failing",
+    path: "/agents",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockWebhooks(
+        page,
+        [
+          {
+            ...webhookBase,
+            url: "https://printer-notes.example.net/api/spaghetti/events",
+            kinds: ["all"],
+            state: "failing",
+            lastError: "It answered 502.",
+            lastErrorAt: minutesAgo(95),
+            lastDeliveredAt: minutesAgo(60 * 30),
+          },
+        ],
+        failingDeliveries,
+      );
+      await openDeliveries(page);
+    },
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  {
+    name: "agents-webhook-new",
+    path: "/agents",
+    prepare: async (page) => {
+      await mockWebhooks(page, [], []);
+      await page.getByRole("button", { name: "New webhook" }).click();
+      const sheet = page.getByRole("dialog", { name: "New webhook" });
+      await sheet.getByLabel("Address").fill("https://hooks.example.org/spaghetti");
+      await sheet.getByRole("button", { name: "Attempts" }).click();
+      await sheet.getByRole("button", { name: "Comments" }).click();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    name: "agents-webhook-secret",
+    path: "/agents",
+    prepare: async (page) => {
+      await mockWebhooks(page, []);
+      await page.getByRole("button", { name: "New webhook" }).click();
+      const sheet = page.getByRole("dialog", { name: "New webhook" });
+      await sheet.getByLabel("Address").fill("https://hooks.example.org/spaghetti");
+      await sheet.getByRole("button", { name: "Add webhook" }).click();
+      await page.getByRole("dialog", { name: "Copy the secret" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
   {
     // The iPhone Shortcut's steps, with the key already in them (a stand-in here: the real one is random).
     name: "agents-share-setup",

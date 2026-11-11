@@ -800,3 +800,6 @@ export const itemRoutes = new Hono<AppEnv>()
     }
     return c.json<PhotoResponse>({ photo: toApiPhoto(photo) }, 201);
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createItem, listQuery, photoFields as itemPhotoFields, putParts, reorder, unscrap, updateItem, upNextOrder };

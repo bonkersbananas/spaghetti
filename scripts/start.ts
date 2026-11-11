@@ -34,6 +34,8 @@ const args = [
   port,
   "--show-interactive-dev-session=false",
   "--live-reload=false",
+  // Passkeys here belong to localhost, not spaghetti.day (wrangler.jsonc).
+  ...["--var", "WEBAUTHN_RP_ID:localhost", "--var", "WEBAUTHN_ORIGINS:http://localhost:*"],
 ];
 if (stateDir) args.push("--persist-to", stateDir);
 

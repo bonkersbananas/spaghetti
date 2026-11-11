@@ -38,6 +38,8 @@ export function MenuGroup({ size = "md", label, className, children }: MenuGroup
 interface MenuItemBase {
   icon: Icon;
   children: ReactNode;
+  /** A quiet second line under the label. */
+  hint?: ReactNode;
   className?: string;
 }
 
@@ -52,13 +54,16 @@ type MenuItemProps = MenuItemBase &
  * when given `to`, otherwise a button (it opens a sheet or signs out). Pass
  * props through so PopoverClose (asChild) can wrap it.
  */
-export function MenuItem({ icon: IconComponent, children, className, ...rest }: MenuItemProps) {
+export function MenuItem({ icon: IconComponent, children, hint, className, ...rest }: MenuItemProps) {
   const size = use(SizeContext);
   const classes = cn(
     "pressable focus-ring group flex w-full items-center text-left",
     size === "md"
       ? "text-body text-ink hover:bg-ink/4 not-first:before:bg-hairline relative min-h-14 gap-3.5 px-4 font-semibold not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-13 not-first:before:h-px first:rounded-t-lg last:rounded-b-lg"
-      : "text-body text-ink-soft hover:bg-ink/5 hover:text-ink h-9 gap-2.5 rounded-sm px-2 font-medium",
+      : cn(
+          "text-body text-ink-soft hover:bg-ink/5 hover:text-ink gap-2.5 rounded-sm px-2 font-medium",
+          hint ? "min-h-9 py-1.5" : "h-9",
+        ),
     className,
   );
   const content = (
@@ -68,7 +73,10 @@ export function MenuItem({ icon: IconComponent, children, className, ...rest }: 
         className={size === "md" ? "text-ink-soft shrink-0" : "text-ink-faint group-hover:text-ink-soft shrink-0"}
         aria-hidden
       />
-      <span className="min-w-0 flex-1">{children}</span>
+      <span className="min-w-0 flex-1">
+        {children}
+        {hint && <span className="text-small text-ink-faint block font-normal">{hint}</span>}
+      </span>
       {size === "md" && rest.to !== undefined && (
         <ArrowRightIcon size={18} className="text-ink-ghost shrink-0" aria-hidden />
       )}

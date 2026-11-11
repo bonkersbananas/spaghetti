@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
 import type { BridgeStatusData } from "../../shared/bridge.ts";
@@ -9,6 +9,7 @@ import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
+import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
 
 /** The two people who share the workspace. Made with `pnpm user:add`. */
 export const users = sqliteTable("users", {
@@ -59,6 +60,99 @@ export const passwordFailures = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+
+/**
+ * A passkey (WebAuthn credential) that signs one person in on one device. `id` is the credential id
+ * (base64url), `publicKey` the COSE key (base64url): nothing in here can sign in without the device.
+ * `counter` and `backedUp` are checked and kept up to date at every sign-in (docs/decisions/0026).
+ */
+export const passkeys = sqliteTable(
+  "passkeys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    publicKey: text("public_key").notNull(),
+    counter: integer("counter").notNull().default(0),
+    transports: text("transports", { mode: "json" }).$type<string[]>(),
+    deviceType: text("device_type").notNull(),
+    backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
+    /** What the person calls it ("iPhone"); they can rename it. */
+    name: text("name").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("passkeys_user_idx").on(table.userId)],
+);
+
+/**
+ * The random challenge of one WebAuthn ceremony. Single use (taken with DELETE ... RETURNING), short-lived,
+ * and bound to what it was made for: `purpose`, plus the person (adding a passkey) or the invite (accepting
+ * one). A sign-in's challenge belongs to no one yet.
+ */
+export const webauthnChallenges = sqliteTable("webauthn_challenges", {
+  id: text("id").primaryKey(),
+  challenge: text("challenge").notNull(),
+  purpose: text("purpose").$type<"register" | "authenticate" | "invite">().notNull(),
+  userId: text("user_id"),
+  inviteId: text("invite_id"),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/**
+ * "Sign in on another device": a single-use link (and a short code) a signed-in person makes. Only hashes
+ * are stored. `usedAt` is set by the one redeeming it, with the device they redeemed it on.
+ */
+export const signInLinks = sqliteTable(
+  "sign_in_links",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    codeHash: text("code_hash").notNull().unique(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+    /** The device that used it, from its user agent ("iPhone"). */
+    usedOn: text("used_on"),
+  },
+  (table) => [index("sign_in_links_user_idx").on(table.userId)],
+);
+
+/**
+ * A single-use link that adds one new person. Any signed-in person can make or withdraw one (everyone is
+ * equal); `usedBy` is the person it made.
+ */
+export const invites = sqliteTable("invites", {
+  id: text("id").primaryKey(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  usedAt: integer("used_at", { mode: "timestamp_ms" }),
+  usedBy: text("used_by"),
+  withdrawnAt: integer("withdrawn_at", { mode: "timestamp_ms" }),
+});
+
+/** One try at something an anonymous caller could guess at (a code, a passkey sign-in), for rate limits. */
+export const authHits = sqliteTable(
+  "auth_hits",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bucket: text("bucket").notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("auth_hits_bucket_idx").on(table.bucket, table.at)],
+);
+
+export type Passkey = typeof passkeys.$inferSelect;
+export type SignInLink = typeof signInLinks.$inferSelect;
+export type Invite = typeof invites.$inferSelect;
 
 /**
  * Where an item is in its life. A build is the same record as the idea it
@@ -691,3 +785,68 @@ export const commentReads = sqliteTable(
 );
 
 export type CommentRow = typeof comments.$inferSelect;
+
+/**
+ * A webhook: the change feed POSTed to `url`, signed with a secret (decision 0025). The secret is stored
+ * encrypted (`secretEnc`: AES-GCM under a key derived from a Worker secret), because the HMAC key has to
+ * be recoverable to sign; a copy of the database alone can't sign anything. `cursor` is the last change
+ * (`changes.seq`) already turned into a delivery.
+ */
+export const webhooks = sqliteTable(
+  "webhooks",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    kinds: text("kinds", { mode: "json" }).$type<WebhookKind[]>().notNull(),
+    agentId: text("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    secretEnc: text("secret_enc").notNull(),
+    secretPrefix: text("secret_prefix").notNull(),
+    state: text("state").$type<WebhookState>().notNull().default("active"),
+    lastError: text("last_error"),
+    lastErrorAt: integer("last_error_at", { mode: "timestamp_ms" }),
+    lastDeliveredAt: integer("last_delivered_at", { mode: "timestamp_ms" }),
+    cursor: integer("cursor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("webhooks_owner_idx").on(table.ownerId)],
+);
+
+/**
+ * One change (or a test event) on its way to one webhook. `payload` is the JSON that is sent, kept so a retry
+ * sends the same bytes (the change feed only holds ids, nothing personal). `nextAt` is when it is due while
+ * pending; a lease on it keeps two runs from sending it twice.
+ */
+export const webhookDeliveries = sqliteTable(
+  "webhook_deliveries",
+  {
+    id: text("id").primaryKey(),
+    webhookId: text("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    /** The change's `seq`; null for a test event. */
+    seq: integer("seq"),
+    payload: text("payload").notNull(),
+    status: text("status").$type<DeliveryStatus>().notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    httpStatus: integer("http_status"),
+    error: text("error"),
+    nextAt: integer("next_at", { mode: "timestamp_ms" }),
+    lastAttemptAt: integer("last_attempt_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** Retrying stops at this time (a day after `createdAt`; a manual retry starts a new window). */
+    giveUpAt: integer("give_up_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("webhook_deliveries_due_idx").on(table.status, table.nextAt),
+    index("webhook_deliveries_webhook_idx").on(table.webhookId, table.createdAt),
+    // A change becomes a delivery once per webhook, however often the fan-out runs.
+    uniqueIndex("webhook_deliveries_seq_idx").on(table.webhookId, table.seq),
+  ],
+);
+
+export type Webhook = typeof webhooks.$inferSelect;
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;

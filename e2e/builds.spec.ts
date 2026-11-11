@@ -7,7 +7,7 @@ async function signIn(page: Page) {
   await page.goto("/sign-in");
   await page.getByLabel("Name").fill(user.username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   // Signing in lands on Today; these tests start from the inbox.
   await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
   await page.goto("/ideas");
@@ -198,4 +198,28 @@ test("a print on the bed shows its progress only when there is an estimate", asy
   await page.goto(`/builds/${untimed}`);
   await expect(page.getByText("On the bed now")).toBeVisible();
   await expect(page.getByRole("progressbar")).toHaveCount(0);
+});
+
+test("a long build folds its earlier attempts, and picking one unfolds them and brings it into view", async ({
+  page,
+}) => {
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Long story", note: "" } });
+  for (const [index, outcome] of (
+    ["failed", "partial", "failed", "partial", "failed", "success", "partial"] as const
+  ).entries())
+    await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome, printedAt: Date.now() - (8 - index) * 3_600_000 },
+    });
+  await page.goto(`/builds/${id}`);
+  const story = page.getByRole("list", { name: "Attempts, newest first" });
+  await expect(story.getByRole("listitem")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "4 earlier attempts" })).toBeVisible();
+
+  // The summary's dot for the first attempt unfolds the story and scrolls to it.
+  await page.getByRole("button", { name: "Attempt 1: spaghetti" }).click();
+  await expect(story.getByRole("listitem")).toHaveCount(7);
+  await expect(story.getByRole("listitem").last()).toBeInViewport();
 });

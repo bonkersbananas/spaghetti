@@ -293,3 +293,6 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
     201,
   );
 });
+
+/** For the OpenAPI document (worker/openapi). */
+export { fields as captureFields };

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { AgentScope } from "../../shared/agents.ts";
+import { AGENT_SCOPES, type AgentScope } from "../../shared/agents.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 
@@ -52,13 +52,16 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
 ];
 
 /**
- * Reading is `read`, except the session and agent management, which tokens never see, and link
+ * Reading is `read`, except the session, account (passkeys, sign-in links, invites, devices) and agent management, which tokens never see, and link
  * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
  */
-const PERSON_ONLY_READS = /^\/(session|agents|links|push|features|deleted|comments\/unread)(\/|$)/;
+const PERSON_ONLY_READS =
+  /^\/(session|account|join|agents|webhooks|links|push|features|deleted|comments\/unread)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {
+  // The OpenAPI document is for any token: it only lists what that token's scopes allow.
+  if (method === "GET" && path === "/openapi.json") return AGENT_SCOPES;
   if (method === "GET" || method === "HEAD") return PERSON_ONLY_READS.test(path) ? "person" : ["read"];
   const normalized = path.length > 1 ? path.replace(/\/$/, "") : path;
   return rules.find(([m, pattern]) => m === method && pattern.test(normalized))?.[2] ?? "person";

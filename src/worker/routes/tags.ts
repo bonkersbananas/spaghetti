@@ -59,3 +59,6 @@ export const tagRoutes = new Hono<AppEnv>()
     if (!existing) return apiError(c, 500, "server_error", "The tag wasn't saved.");
     return c.json<TagResponse>({ tag: toTag(existing) });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createTag };

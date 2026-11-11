@@ -62,3 +62,6 @@ export const insightRoutes = new Hono<AppEnv>().get("/", async (c) => {
   );
   return c.json<InsightsResponse>({ insights });
 });
+
+/** For the OpenAPI document (worker/openapi). */
+export { query as insightsQuery };

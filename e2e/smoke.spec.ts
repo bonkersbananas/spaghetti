@@ -6,7 +6,7 @@ const user = SEED_USERS[0];
 async function signIn(page: Page, password = SEED_PASSWORD) {
   await page.getByLabel("Name").fill(user.username);
   await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
 test("signs in, browses the four sections, opens capture and signs out", async ({ page, isMobile }) => {

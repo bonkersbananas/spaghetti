@@ -1,6 +1,6 @@
 # The API, for agents
 
-Everything the app does goes through `/api` (JSON, plus multipart for photos and slicer files). A browser uses its session cookie; anything else (an MCP server, the printer bridge) uses a **token** that acts as a named **agent**. Types live in `src/shared/api.ts`, `src/shared/agents.ts` and `src/shared/changes.ts`.
+Everything the app does goes through `/api` (JSON, plus multipart for photos and slicer files). A browser uses its session cookie; anything else (an MCP server, the printer bridge) uses a **token** that acts as a named **agent**. Types live in `src/shared/api.ts`, `src/shared/agents.ts`, `src/shared/changes.ts` and `src/shared/webhooks.ts`. The whole API is also described as OpenAPI 3.1: see [The OpenAPI document](#the-openapi-document).
 
 ## Auth
 
@@ -18,7 +18,7 @@ Authorization: Bearer spg_…
 - With an `Authorization` header only the token counts: an unknown, malformed or revoked one is `401 invalid_token`, never retried as a cookie. Revoking takes effect on the next request.
 - A token never needs CSRF headers (cookies do; a bearer header can't be sent cross-site by a browser).
 - Signed-out or no credentials: `401 signed_out`.
-- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), change a password (`PUT /api/account/password`), or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
+- A token can **never** sign in, read the session, list or change agents and tokens, use `GET /api/links/preview` (the Worker would fetch any public page for whoever asks), change a password (`PUT /api/account/password`), manage passkeys, sign-in links, invites or devices, or manage people. Those are for a signed-in person only (`403 person_only`). The same goes for deleting and restoring anything: agents create and change, people delete.
 - `last_used` on a token moves at most every 5 minutes.
 
 ## Scopes
@@ -111,6 +111,23 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 
 `PUT /api/account/password` with `{ currentPassword, newPassword }` (person-only). The new password needs at least 10 characters and no other rule, and must differ from the current one. It signs out the person's **other** sessions and keeps the one making the request; the answer is `{ signedOut }`, how many devices that was. Errors: `400 too_short`, `400 same_password`, `403 wrong_password`, and `429 rate_limited` after five wrong current passwords in 15 minutes (counted per person in `password_failures`, cleared on success).
 
+## Passkeys, sign-in links, invites and devices (people only)
+
+Everything here is person-only: a token gets `403 person_only` on every route below, including the reads, and can never add a passkey, make a link or an invite, or see any of them ([0026](decisions/0026-passkeys-sign-in-links-and-invites.md)). Types are in `src/shared/signing-in.ts`. Their changes (`signin`, `invite`, `passkey` in the change feed) are the people's alone: `GET /api/changes` leaves them out for a token, and a webhook never sends them, even for "everything". Secrets are single-use, only their SHA-256 is stored, and they are shown once, in the response that makes them. Ceremonies use `@simplewebauthn`'s JSON: `{ ceremonyId, options }` to start, and `{ ceremonyId, response }` to answer; a ceremony is good for five minutes and one answer.
+
+Signed in (cookie):
+
+- `GET /api/account/passkeys` → `{ passkeys: [{ id, name, createdAt, lastUsedAt, backedUp }] }`; `POST /api/account/passkeys/options` starts adding one (user verification required, discoverable) and `POST /api/account/passkeys` finishes it (`201`; `400 not_verified` for a wrong challenge, origin or relying party, `400 expired`, `409 exists`, `409 too_many` above 12). `PATCH /api/account/passkeys/:id { name }` renames, `DELETE` removes (your own only).
+- `POST /api/account/sign-in-links` → `201 { id, url, code, createdAt, expiresAt, usedOn, usedAt }`: a link (`/link#spl_…`, the secret is in the fragment) and a code (`ABCD-EFGH`), valid ten minutes, once; it replaces the person's earlier unused link. `GET /api/account/sign-in-links/:id` says whether and where it was used (`usedOn`: "iPhone"), `DELETE` withdraws it. Using one records a `signin` change.
+- `GET /api/account/invites` lists pending invites (anyone signed in sees all of them); `POST` makes one (`201 { id, url, … }`, `url` is `/join#spi_…`, valid seven days, at most 10 waiting); `DELETE /api/account/invites/:id` withdraws it.
+- `GET /api/account/devices` lists your signed-in sessions (device from the user agent, `lastSeenAt`, `current`); `DELETE /api/account/devices/:id` signs one out (`400 current` for this one); `POST /api/account/devices/sign-out-others` → `{ signedOut }`.
+
+Not signed in (rate limited; `429 rate_limited`):
+
+- `POST /api/session/passkey/options`, then `POST /api/session/passkey { ceremonyId, response }`: signs in with a passkey (`401 wrong_credentials` for anything wrong, replayed, expired, from another origin or with a counter that went backwards).
+- `POST /api/session/link { token }` or `{ code }`: signs in as the person who made the link (`410 link_gone` when used or expired).
+- `POST /api/join/peek { token }` → `{ invitedBy, expiresAt }` (`410 invite_gone`); `POST /api/join/options { token, name, username, color }` starts a passkey for the new person; `POST /api/join { token, name, username, color, password | passkey: { ceremonyId, response } }` creates that one person, claims the invite and signs them in (`201`; `409 username_taken` leaves the invite usable, `400 too_short` for a password under 10 characters).
+
 ## Drafting an idea from a model page (people only)
 
 Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
@@ -156,3 +173,66 @@ The devices that get "how did it go?" push notifications. A token is refused the
 - `POST /api/push/test { endpoint }` sends a test notification to that device (`404` unknown, `410` the push service dropped it, `502` it didn't take it, `503` no private key).
 
 A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with the person's session cookie.
+
+## The OpenAPI document
+
+`GET /api/openapi.json` is the API as OpenAPI 3.1. It is made from the code each time it is asked for, never written by hand: request bodies and queries are the zod schemas the routes validate with, the scopes come from the table in `src/worker/auth/scopes.ts`, and every route has a one-line summary, its scopes and its error shapes (`{ "error": { "code", "message" } }`) in `src/worker/openapi/operations.ts`. A test fails when a route exists that the document doesn't describe, and the document is checked against the OpenAPI 3.1 schema.
+
+- Any token or session may read it, whatever its scopes (`x-scopes` on each operation says what it needs). A token is only told about what its scopes allow; a signed-in person sees everything, with the person-only operations marked.
+- Answers are described by schemas written to match the types in `src/shared`; a worker test checks real answers against them. The inside of a few long answers (an attempt's `photoRead`, the printer's `bridge`, the journal's entries) is described loosely: see the types.
+- The Agents page links it as "API reference". Anything that reads OpenAPI (a client generator, an agent framework) can use it directly: `curl -H "Authorization: Bearer spg_…" https://spaghetti.day/api/openapi.json`.
+- The webhook request (below) is in the document's `webhooks` section.
+
+## Webhooks (people only)
+
+A webhook sends the change feed to an address instead of making an agent poll `GET /api/changes`. A person adds one on the Agents page (Webhooks): an `https` address, the kinds of change it wants, and optionally which agent it is for (a label; it doesn't limit what is sent). Managing webhooks is for signed-in people only (`403 person_only` for a token): `GET /api/webhooks`, `POST /api/webhooks` `{ url, kinds, agentId? }`, `DELETE /api/webhooks/:id` and `POST /api/webhooks/:id/restore` (the Undo), `GET /api/webhooks/:id/deliveries`, `POST /api/webhooks/:id/test` ("Send a test event", sent at once) and `POST /api/webhooks/:id/deliveries/:deliveryId/retry`.
+
+**Kinds** are the change feed's `entity`: `item` (ideas and builds), `attempt`, `photo`, `file`, `comment`, `spool`, `recipe`, `slot`, `printer`, `tag`, `agent`, `person`; or `all`. A webhook starts at the feed's end when it is made: what already happened isn't sent.
+
+**The secret** (`whsec_…`) is shown once, when the webhook is made, and only its first characters can be read afterwards. It is kept encrypted so Spaghetti can sign with it ([decision 0025](decisions/0025-webhooks-signed-from-the-cron.md)); lost it? Add a new webhook and remove the old one.
+
+**The request** is a `POST` with `Content-Type: application/json`, one change at a time, in the shape `GET /api/changes` returns plus who it is for:
+
+```json
+{
+  "deliveryId": "6f0c…",
+  "webhookId": "b1d2…",
+  "test": false,
+  "changes": [
+    { "seq": 1042, "entity": "attempt", "id": "9a7e…", "itemId": "5c3b…", "action": "updated",
+      "actor": { "kind": "agent", "id": "e3f1…" }, "at": 1793000000000 }
+  ],
+  "cursor": 1042,
+  "more": false,
+  "reset": false
+}
+```
+
+The change only says what changed and where, never its content (no titles, notes or photos): fetch the thing with your token (`GET /api/items/:id`, …). `cursor` is the change's `seq`, so a receiver that missed some can catch up with `GET /api/changes?after=<its last cursor>`. A test event has `"test": true` and a made-up change (`seq` and `cursor` 0). Three headers come with it:
+
+| Header | Value |
+| --- | --- |
+| `Spaghetti-Timestamp` | Seconds since the epoch when this try was sent |
+| `Spaghetti-Signature` | `v1=` and the lowercase hex HMAC-SHA256, keyed with the secret, of `<timestamp>.<body>` (the exact bytes received) |
+| `Spaghetti-Delivery` | The `deliveryId`: the same across retries |
+
+**Checking the signature** (any language with HMAC-SHA256; this is TypeScript on Web Crypto, which Node 20+, Deno, Bun and Workers all have). Verify against the raw body before parsing it, compare in constant time and refuse old timestamps:
+
+```ts
+export async function verify(secret: string, headers: Headers, body: string, toleranceSeconds = 300) {
+  const timestamp = headers.get("Spaghetti-Timestamp") ?? "";
+  const signature = headers.get("Spaghetti-Signature") ?? "";
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > toleranceSeconds) return false;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const expected = signature.startsWith("v1=") ? signature.slice(3).match(/../g) : null;
+  if (!expected || expected.length !== 32) return false;
+  const bytes = Uint8Array.from(expected, (pair) => Number.parseInt(pair, 16));
+  return crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(`${timestamp}.${body}`));
+}
+```
+
+**Answering and retrying.** Answer with any `2xx` within 10 seconds; the body is ignored. Anything else (another status, a timeout, no connection) is retried: after 1 minute, then 5 minutes, 30 minutes, 2 hours, 6 hours and 12 hours, so seven tries in about 20 hours, and then it gives up on that delivery. The webhook is then marked **failing** on the Agents page, with the last error; it keeps sending new changes, and the next `2xx` makes it working again. Retries send the same body with a new timestamp and signature, so dedupe on `deliveryId`. Redirects are not followed (a `3xx` is a failure), and a delivery is not guaranteed to arrive in order: use `seq`. "Retry" on a delivery on the Agents page tries it again now, with a fresh day of retries.
+
+**Where it may go.** Addresses must be `https` on the default port, with a public name: no IP addresses, `localhost`, single-word or `.local`-style names, and a name that resolves to a private, loopback or link-local address is refused when the webhook is made and again on every delivery (the same checks as link previews: `shared/link-safety.ts`, DNS over HTTPS). A refused address fails the delivery at once, without retries.
+
+**When it is sent.** A write that records a change starts a delivery pass right after the response (seconds, not guaranteed), the Worker's 5-minute cron is the fallback and sends the retries, and "Send a test event" and "Retry" send at once. Finished deliveries are kept a week, and the Agents page shows the latest twenty of each webhook. Webhooks need a key to keep secrets under on the server: `WEBHOOK_SECRET_KEY` (docs/deploy.md); without it every `/api/webhooks` endpoint answers `503 webhooks_unavailable`.

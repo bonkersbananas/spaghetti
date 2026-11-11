@@ -20,10 +20,21 @@ test("changes your own password, keeps this device and signs out the other", asy
   try {
     if (isMobile) {
       await page.getByRole("button", { name: "Account" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Change password" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Passkeys and password" }).click();
+      await page
+        .getByRole("dialog", { name: "Passkeys and password" })
+        .getByRole("button", { name: "Change password" })
+        .click();
     } else {
       await page.getByRole("button", { name: "Account menu" }).click();
-      await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Change password" }).click();
+      await page
+        .getByRole("dialog", { name: "Account" })
+        .getByRole("button", { name: "Passkeys and password" })
+        .click();
+      await page
+        .getByRole("dialog", { name: "Passkeys and password" })
+        .getByRole("button", { name: "Change password" })
+        .click();
     }
     const sheet = page.getByRole("dialog", { name: "Change password" });
     await expect(sheet).toBeVisible();

@@ -31,7 +31,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [x] Parts and quantities ("print the hull in two halves"): optional parts with a quantity on a build, attempts say which parts they printed and how many came out well, parts from a slicer file, "all printed" offers to finish ([0022](decisions/0022-parts-are-optional-counts-live-on-attempts.md), [docs/api.md](api.md))
 - [x] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
-- [ ] Passkeys, and adding people in the app instead of the command line (changing your own password is in the app: the account menu → Change password)
+- [x] Passkeys, signing in on a new device with a link or code, and adding people in the app by invite link; the signed-in devices list ([0026](decisions/0026-passkeys-sign-in-links-and-invites.md), [docs/api.md](api.md); changing your own password is in the app too: account menu → Change password)
 - [x] Filament accounting: grams from slicer files update what's left, "not enough for this print", a shopping list (decided: [grams, automatically](decisions/0009-filament-tracked-in-grams.md); a spool starts at 1 kg, each attempt's slicer grams come off it, failed prints in proportion to how far they got, levels follow and stay correctable)
 - [x] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (#22: the program, its routes and [docs/bridge.md](bridge.md); #24: the app side, "off the bed · how did it go?", the printer's live progress and the bridge line and unknown-tray prompt on the Printer page) (decided: [optional and read-only](decisions/0010-optional-read-only-printer-bridge.md); a small program on a home computer using LAN mode, local MQTT, FTP and the camera, never Bambu's cloud and never a command to the printer)
 
@@ -53,8 +53,8 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] Agent identities and scoped tokens ("via Claude for Alex" in the journal): named agents with bearer tokens in four scopes, shown quietly as "via"; see [docs/api.md](api.md)
 - [x] MCP server on the Worker: search, what worked, a build's story, capture idea, start, log and finish attempt, spools and slots; see [docs/mcp.md](mcp.md) and [the decision](decisions/0014-mcp-hand-written-stateless.md)
 - [ ] OAuth for the MCP server, so clients that insist on it can connect (tokens work today)
-- [ ] OpenAPI from the zod schemas (a build's whole story as markdown is done: `GET /api/builds/:id/story.md`)
-- [ ] Events: a cursor and webhooks (the cursor is done: the change feed, `GET /api/changes`; webhooks are left)
+- [x] OpenAPI from the zod schemas: `GET /api/openapi.json`, per caller's scopes, with a test that every route is described (a build's whole story as markdown: `GET /api/builds/:id/story.md`)
+- [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
 - [ ] Resident agents, suggest-only: failure coach, idea scout, label photo to spool fields, weekly digest
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 

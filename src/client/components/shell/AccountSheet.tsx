@@ -2,7 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, BellIcon, KeyIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
@@ -11,7 +11,16 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
 import { useWhenIdle } from "@/lib/when-idle";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, loadThemeSwitch, ProfilePhotoCrop, ProfilePhotoRow, ThemeSwitch } from "./lazy-account";
+import {
+  ChangePasswordSheet,
+  loadThemeSwitch,
+  ProfilePhotoCrop,
+  ProfilePhotoRow,
+  SigningInRows,
+  SigningInSheets,
+  ThemeSwitch,
+} from "./lazy-account";
+import type { SigningInSheet } from "./SigningInSheets";
 import { workshop } from "./sections";
 
 /** Phone-only: who is signed in, the two people, the styleguide, sign out. */
@@ -23,7 +32,13 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
-  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false });
+  const [signingIn, setSigningIn] = useState<SigningInSheet | null>(null);
+  const [asked, setAsked] = useState({ notifying: false, password: false, photo: false, signingIn: false });
+  if (signingIn && !asked.signingIn) setAsked({ ...asked, signingIn: true });
+  const openSigningIn = (which: SigningInSheet) => {
+    onOpenChange(false);
+    setSigningIn(which);
+  };
   if (notifying && !asked.notifying) setAsked({ ...asked, notifying: true });
   if (cropping && !asked.photo) setAsked({ ...asked, photo: true });
   if (changingPassword && !asked.password) setAsked({ ...asked, password: true });
@@ -95,15 +110,6 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           >
             Notifications
           </MenuItem>
-          <MenuItem
-            icon={KeyIcon}
-            onClick={() => {
-              onOpenChange(false);
-              setChangingPassword(true);
-            }}
-          >
-            Change password
-          </MenuItem>
           <MenuItem to="/deleted" icon={TrashIcon} onClick={() => onOpenChange(false)}>
             Recently deleted
           </MenuItem>
@@ -111,6 +117,11 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             Styleguide
           </MenuItem>
         </MenuGroup>
+        <div className="mt-6">
+          <Suspense fallback={<div className="h-40" />}>
+            <SigningInRows size="md" onPick={openSigningIn} />
+          </Suspense>
+        </div>
         {/* Loaded while the browser is idle (rarely changed, and not part of any screen's first load). */}
         <Suspense fallback={<Skeleton className="mt-6 h-20 w-full rounded-md" />}>
           <ThemeSwitch className="mt-6" />
@@ -121,6 +132,18 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
       {asked.photo && (
         <Suspense fallback={null}>
           <ProfilePhotoCrop file={cropping} onFile={setCropping} onClose={() => setCropping(null)} />
+        </Suspense>
+      )}
+      {asked.signingIn && (
+        <Suspense fallback={null}>
+          <SigningInSheets
+            which={signingIn}
+            onClose={() => setSigningIn(null)}
+            onChangePassword={() => {
+              setSigningIn(null);
+              setChangingPassword(true);
+            }}
+          />
         </Suspense>
       )}
       {asked.password && (

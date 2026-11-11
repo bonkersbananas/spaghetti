@@ -30,18 +30,19 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // features and sonner loaded once idle (about 20 kB), section code preloaded when idle rather than with the first render.
 // Budgets are the measured sizes plus about 2 kB.
 const BUDGET_KB = {
-  "/sign-in": 190,
+  // Passkeys (the sign-in button, the quiet offer in the shell) add about 1.5 kB everywhere; the WebAuthn browser code, the QR renderer and the sheets load on demand.
+  "/sign-in": 194,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 294,
+  "/today": 296,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 284,
-  "/builds": 283,
-  "/journal": 283,
+  "/ideas": 286,
+  "/builds": 286,
+  "/journal": 285,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 289,
-  "/pantry": 293,
-  "/printer": 291,
+  "/search": 291,
+  "/pantry": 296,
+  "/printer": 294,
 } as const;
 
 /**

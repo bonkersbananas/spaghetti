@@ -5,8 +5,8 @@
  * client, and later agents and webhooks, read the feed with a cursor.
  */
 
-/** What kind of thing changed. */
-export const CHANGE_ENTITIES = [
+/** The kinds of change a person's own feed, an agent's token and a webhook can all see. */
+export const PUBLIC_CHANGE_ENTITIES = [
   "item",
   "attempt",
   "photo",
@@ -20,7 +20,16 @@ export const CHANGE_ENTITIES = [
   "agent",
   "person",
 ] as const;
+/**
+ * Changes about how people sign in (a sign-in link used, an invite made, a passkey added). They show in the app's
+ * own feed, but never to an agent's token and never in a webhook: those are the people's alone (decision 0026).
+ */
+export const PRIVATE_CHANGE_ENTITIES = ["signin", "invite", "passkey"] as const;
+/** What kind of thing changed. */
+export const CHANGE_ENTITIES = [...PUBLIC_CHANGE_ENTITIES, ...PRIVATE_CHANGE_ENTITIES] as const;
 export type ChangeEntity = (typeof CHANGE_ENTITIES)[number];
+export const isPrivateChange = (entity: ChangeEntity) =>
+  (PRIVATE_CHANGE_ENTITIES as readonly string[]).includes(entity);
 
 /** `updated` covers every edit (a stage move, a note, a photo order); `deleted` and `restored` are the soft delete and its undo. */
 export const CHANGE_ACTIONS = ["created", "updated", "deleted", "restored"] as const;
