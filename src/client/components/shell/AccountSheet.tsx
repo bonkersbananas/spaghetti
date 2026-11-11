@@ -6,20 +6,29 @@ import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/comp
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
-import { RowSkeleton } from "@/components/ui/Skeleton";
+import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSignOut } from "@/lib/use-sign-out";
+import { useWhenIdle } from "@/lib/when-idle";
 import { LazyNotificationsSheet } from "./LazyNotificationsSheet";
-import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow, SigningInRows, SigningInSheets } from "./lazy-account";
+import {
+  ChangePasswordSheet,
+  loadThemeSwitch,
+  ProfilePhotoCrop,
+  ProfilePhotoRow,
+  SigningInRows,
+  SigningInSheets,
+  ThemeSwitch,
+} from "./lazy-account";
 import type { SigningInSheet } from "./SigningInSheets";
 import { workshop } from "./sections";
-import { ThemeSwitch } from "./ThemeSwitch";
 
 /** Phone-only: who is signed in, the two people, the styleguide, sign out. */
 export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { data: user } = useSuspenseQuery(sessionQuery);
   const people = useQuery({ ...peopleQuery, enabled: open });
   const signOut = useSignOut();
+  useWhenIdle(() => void loadThemeSwitch());
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
@@ -113,7 +122,10 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             <SigningInRows size="md" onPick={openSigningIn} />
           </Suspense>
         </div>
-        <ThemeSwitch className="mt-6" />
+        {/* Loaded while the browser is idle (rarely changed, and not part of any screen's first load). */}
+        <Suspense fallback={<Skeleton className="mt-6 h-20 w-full rounded-md" />}>
+          <ThemeSwitch className="mt-6" />
+        </Suspense>
       </Sheet>
       {/* Mounted once asked for: their code loads then (lazy-account.ts), and a closed sheet that mounts while another is open looped in the production build. */}
       {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}

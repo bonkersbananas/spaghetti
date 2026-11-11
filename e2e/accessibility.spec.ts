@@ -52,7 +52,12 @@ async function seed(page: Page): Promise<Seeded> {
       thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: photo },
     },
   });
-  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Cable chain", note: "" } });
+  // Captured a minute ago, so the attempt below starts it later and Ideas shows it under Started
+  // (on a fast machine both could otherwise land in the same millisecond).
+  await page.request.post("/api/items", {
+    headers,
+    data: { id: buildId, title: "Cable chain", note: "", createdAt: Date.now() - 60_000 },
+  });
   const filaments = [{ type: "PETG", brand: "Bambu", colorName: "Teal", colorHex: "#2a8a85", spoolId }];
   await post(page, `/api/items/${buildId}/attempts`, {
     headers,
