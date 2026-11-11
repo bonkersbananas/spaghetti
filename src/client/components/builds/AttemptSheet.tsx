@@ -25,6 +25,8 @@ interface AttemptSheetProps {
   onStep?: (attemptId: string) => void;
 }
 
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 /**
  * Logging an attempt, standing next to the printer: the outcome is one tap,
  * the time is now, and everything else (photos, a line, tags, settings) is
@@ -35,8 +37,6 @@ interface AttemptSheetProps {
  * (an existing one, autosaved, and finishing a print), `AttemptFields` (the fields
  * both share), `WhenField`, and `SheetSlicerFile` (reading a .3mf into the sheet).
  */
-const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
-
 export function AttemptSheet({
   item,
   attemptId,

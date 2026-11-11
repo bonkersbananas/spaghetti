@@ -64,7 +64,7 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
     return (
       <div className="mt-1 flex flex-col gap-3">
         {untouched && (
-          <p className="text-small text-ink-faint flex flex-wrap items-center gap-x-2">
+          <div className="flex flex-wrap items-center gap-x-2">
             <ClaudeLine>Drafted by Claude from {siteName(draft)}</ClaudeLine>
             <Button
               variant="quiet"
@@ -75,7 +75,7 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
             >
               Undo
             </Button>
-          </p>
+          </div>
         )}
         {!item.photos.some((photo) => !photo.attemptId) && (
           <Button
