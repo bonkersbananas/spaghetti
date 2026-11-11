@@ -54,6 +54,8 @@ export interface FieldsProps {
    * "finish" (a print still printing) lets the outcome, note and tags be filled in, to be sent later.
    */
   readOnly?: "all" | "finish";
+  /** Claude's ideas for the next try, right under the outcome: for a new attempt. */
+  coach?: ReactNode;
   /** Shown above the settings: "what worked last time", for a new attempt. */
   suggestion?: ReactNode;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
@@ -124,6 +126,7 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
+      {props.coach}
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts

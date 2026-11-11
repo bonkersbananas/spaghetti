@@ -1527,6 +1527,13 @@ export const shots: Shot[] = [
       await page.getByText("Thinking about the next try…").waitFor({ timeout: 8_000 });
     },
     selector: "[data-attempt-id]",
+    // The floating Log attempt button and tab bar would sit over the card's foot, where the line is.
+    beforeShot: async (page) => {
+      await page.evaluate(() => {
+        for (const el of document.querySelectorAll<HTMLElement>("body *"))
+          if (getComputedStyle(el).position === "fixed") el.style.visibility = "hidden";
+      });
+    },
     cleanup: removePhotoReadBuilds,
   },
   // ... its ideas under the seeded tugboat's partly attempt (the stern corners curled) ...
@@ -1536,7 +1543,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByRole("region", { name: "Claude's ideas for the next try" }).waitFor({ timeout: 15_000 });
     },
-    selector: "[data-attempt-id='5eed0000-0000-4000-8000-0000000a0002']",
+    fullPage: true,
   },
   // ... and in the Log attempt sheet as "Use this" chips, before a tap ...
   {
@@ -1546,10 +1553,7 @@ export const shots: Shot[] = [
       await failedBuild(page, "Coach stern test");
       await page.getByRole("region", { name: "Claude's ideas for the next try" }).waitFor({ timeout: 15_000 });
       await page.getByRole("button", { name: "Log attempt" }).first().click();
-      await page
-        .getByRole("dialog")
-        .getByRole("region", { name: "Claude's ideas for the next try" })
-        .waitFor();
+      await page.getByRole("dialog").getByRole("region", { name: "Claude's ideas for the next try" }).waitFor();
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");

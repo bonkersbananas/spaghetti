@@ -184,23 +184,25 @@ export function LogAttempt({
           onSettings={(settings) => change({ settings })}
           previous={previous}
           baseline={recipe ? { label: `recipe “${recipe.recipe.name}”`, settings: recipe.settings } : undefined}
+          coach={
+            previous?.coach && (
+              <Suspense fallback={null}>
+                <CoachSuggestions
+                  coach={previous.coach}
+                  itemId={item.id}
+                  attemptId={previous.id}
+                  attemptNumber={previous.number}
+                  settings={draft.settings}
+                  note={draft.note}
+                  onUse={({ settings, note }) =>
+                    change({ ...(settings ? { settings } : {}), ...(note !== undefined ? { note } : {}) })
+                  }
+                />
+              </Suspense>
+            )
+          }
           suggestion={
             <>
-              {previous?.coach && (
-                <Suspense fallback={null}>
-                  <CoachSuggestions
-                    coach={previous.coach}
-                    itemId={item.id}
-                    attemptId={previous.id}
-                    attemptNumber={previous.number}
-                    settings={draft.settings}
-                    note={draft.note}
-                    onUse={({ settings, note }) =>
-                      change({ ...(settings ? { settings } : {}), ...(note !== undefined ? { note } : {}) })
-                    }
-                  />
-                </Suspense>
-              )}
               {/* A slicer file says what this attempt is: no other settings to offer. */}
               {slicer.state ? null : (
                 <>

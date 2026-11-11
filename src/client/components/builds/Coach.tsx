@@ -148,45 +148,49 @@ export function CoachSuggestions({
           const applied = !coachApplies(item, settings, note);
           const words = coachChangeWords(item, settings);
           return (
-            <li key={item.id} className="flex flex-col gap-2.5 py-3 last:pb-1">
-              <div className="flex items-start gap-2">
-                <div className="flex min-w-0 flex-1 flex-col">
+            <li key={item.id} className="flex items-start gap-2 py-3 last:pb-1">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex flex-col">
                   <p className="text-body text-ink font-semibold">{item.title}</p>
                   <p className="text-small text-ink-faint">{item.why}</p>
                 </div>
+                {applied ? (
+                  <p className="text-small text-basil-ink flex items-center gap-1.5 font-semibold">
+                    <CheckIcon size={16} weight="bold" aria-hidden />
+                    In this attempt
+                  </p>
+                ) : (
+                  <ul className="flex flex-wrap gap-1.5" aria-label="Fills in">
+                    {words.slice(0, 3).map((word) => (
+                      <li key={word} className="max-w-full">
+                        <Chip suggested tone="semolina" className="max-w-full">
+                          {word}
+                        </Chip>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {applied ? (
+                  used[item.id] && (
+                    <Button variant="quiet" size="sm" icon={UndoIcon} onClick={() => undo(item)}>
+                      Undo
+                    </Button>
+                  )
+                ) : (
+                  <Button variant="secondary" size={isDesktop ? "sm" : "md"} onClick={() => use(item)}>
+                    Use this
+                  </Button>
+                )}
                 <IconButton
                   icon={CloseIcon}
                   label={`Dismiss: ${item.title}`}
                   size="sm"
-                  className="touch-target -mt-1 -mr-1"
+                  className="touch-target"
                   onClick={() => void setCoachDismissed(queryClient, itemId, attemptId, item.id, true)}
                 />
               </div>
-              {applied ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-small text-basil-ink flex flex-1 items-center gap-1.5 font-semibold">
-                    <CheckIcon size={16} weight="bold" aria-hidden />
-                    In this attempt
-                  </span>
-                  {used[item.id] && (
-                    <Button variant="quiet" size="sm" icon={UndoIcon} onClick={() => undo(item)}>
-                      Undo
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="secondary" size={isDesktop ? "sm" : "md"} onClick={() => use(item)}>
-                    Use this
-                  </Button>
-                  {words.slice(0, 3).map((word) => (
-                    <Chip key={word} suggested tone="semolina" className="max-w-full">
-                      <span className="sr-only">Fills in: </span>
-                      {word}
-                    </Chip>
-                  ))}
-                </div>
-              )}
             </li>
           );
         })}
