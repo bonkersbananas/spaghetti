@@ -74,6 +74,24 @@ test("shopping: add a name and links, tick it off and back, edit it, delete with
   await expect(back.getByRole("link", { name: /bambulab\.com/ })).toHaveCount(0);
 });
 
+test("shopping: unticking within the pause keeps it on the list", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/shopping");
+  const name = `Spare nozzle ${tag()}`;
+  await add(page, name);
+  const box = toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` });
+  await box.click();
+  await expect(box).toBeChecked();
+  await box.click();
+  await expect(box).not.toBeChecked();
+  // Well past the pause: nothing was sent, and a reload agrees.
+  await page.waitForTimeout(1000);
+  await expect(toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` })).not.toBeChecked();
+  await page.reload();
+  await expect(toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` })).toBeVisible();
+  await expect(bought(page).getByText(name)).toHaveCount(0);
+});
+
 test("shopping: the arrow keys on a handle sort the list, and the order is kept", async ({ page }) => {
   await signIn(page);
   await page.goto("/shopping");

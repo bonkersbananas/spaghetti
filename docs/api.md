@@ -215,7 +215,7 @@ A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with
 
 A webhook sends the change feed to an address instead of making an agent poll `GET /api/changes`. A person adds one on the Agents page (Webhooks): an `https` address, the kinds of change it wants, and optionally which agent it is for (a label; it doesn't limit what is sent). Managing webhooks is for signed-in people only (`403 person_only` for a token): `GET /api/webhooks`, `POST /api/webhooks` `{ url, kinds, agentId? }`, `DELETE /api/webhooks/:id` and `POST /api/webhooks/:id/restore` (the Undo), `GET /api/webhooks/:id/deliveries`, `POST /api/webhooks/:id/test` ("Send a test event", sent at once) and `POST /api/webhooks/:id/deliveries/:deliveryId/retry`.
 
-**Kinds** are the change feed's `entity`: `item` (ideas and builds), `attempt`, `photo`, `file`, `comment`, `spool`, `recipe`, `slot`, `printer`, `tag`, `agent`, `person`; or `all`. A webhook starts at the feed's end when it is made: what already happened isn't sent.
+**Kinds** are the change feed's `entity`: `item` (ideas and builds), `attempt`, `photo`, `file`, `comment`, `spool`, `recipe`, `shopping` (the shopping list), `slot`, `printer`, `tag`, `agent`, `person`, `wishlist`; or `all`. A webhook starts at the feed's end when it is made: what already happened isn't sent.
 
 **The secret** (`whsec_…`) is shown once, when the webhook is made, and only its first characters can be read afterwards. It is kept encrypted so Spaghetti can sign with it ([decision 0025](decisions/0025-webhooks-signed-from-the-cron.md)); lost it? Add a new webhook and remove the old one.
 

@@ -2,7 +2,7 @@ import type { Person, ShoppingItem } from "@shared/api";
 import { priceSearchUrl, shoppingName, tidyPageTitle } from "@shared/shopping";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { PriceIcon } from "@/components/ui/icons";
@@ -53,6 +53,37 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   const bought = item.boughtAt !== null;
   // A tick shows at once and the row stays a beat, so the check is seen landing before it moves to Bought.
   const [ticking, setTicking] = useState(false);
+  const pause = useRef<number | null>(null);
+  const tickRef = useRef(onTick);
+  tickRef.current = onTick;
+  function send() {
+    pause.current = null;
+    tickRef.current(true);
+    // Once sent, the box shows the item's own state: if the tick failed or wasn't allowed, it's open again.
+    setTicking(false);
+  }
+  function tick(next: boolean) {
+    if (pause.current !== null) {
+      // Unticked within the pause: nothing is sent.
+      window.clearTimeout(pause.current);
+      pause.current = null;
+      setTicking(false);
+      return;
+    }
+    if (!next || bought) return onTick(next);
+    setTicking(true);
+    pause.current = window.setTimeout(send, TICK_PAUSE);
+  }
+  // Leaving the screen mid-pause still buys it: the tick was made.
+  useEffect(
+    () => () => {
+      if (pause.current === null) return;
+      window.clearTimeout(pause.current);
+      pause.current = null;
+      tickRef.current(true);
+    },
+    [],
+  );
   const links = (
     <>
       {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
@@ -68,18 +99,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       done={bought}
       lifted={lifted}
       last={last}
-      tick={
-        <TickBox
-          checked={bought || ticking}
-          onChange={(next) => {
-            if (!next || bought) return onTick(next);
-            setTicking(true);
-            window.setTimeout(() => onTick(true), TICK_PAUSE);
-          }}
-          disabled={readOnly}
-          label={`Bought: ${name}`}
-        />
-      }
+      tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}
       meta={
         bought ? (
           // Right under the name: a line of words, not a row of chips.
