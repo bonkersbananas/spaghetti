@@ -1,7 +1,10 @@
 import { app } from "./app.ts";
 import { resumeCoaches } from "./coach/run.ts";
+import { getDb } from "./db/index.ts";
 import { resumeDrafts } from "./draft/run.ts";
 import { mcpRoutes } from "./mcp/index.ts";
+import { pruneOauth } from "./oauth/grants.ts";
+import { oauthEndpoints } from "./oauth/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
@@ -29,6 +32,9 @@ export default {
   fetch: (request, env, ctx) => {
     const { pathname } = new URL(request.url);
     if (pathname === "/mcp") return mcpRoutes.fetch(request, env, ctx);
+    if (pathname.startsWith("/.well-known/oauth-") || pathname.startsWith("/oauth/")) {
+      return oauthEndpoints.fetch(request, env, ctx);
+    }
     if (pathname === "/api/share" && request.method === "POST") return shareFallback(request);
     return app.fetch(request, env, ctx);
   },
@@ -39,6 +45,7 @@ export default {
   async scheduled(controller, env, ctx) {
     if (controller.cron === DAILY) {
       ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
+      ctx.waitUntil(pruneOauth(getDb(env.DB)).catch((error) => console.error("oauth tidy failed", error)));
       ctx.waitUntil(pruneDeliveries(env).catch((error) => console.error("webhook tidy failed", error)));
     } else {
       // Webhooks: new changes become deliveries, and what is due (first tries and retries) is sent.

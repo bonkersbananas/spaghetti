@@ -289,6 +289,13 @@ export const operations: Record<string, Operation> = {
     errors: { 404: notFound("agent") },
   },
 
+  "DELETE /agents/:id/connection": {
+    summary: "Disconnects an app connected by OAuth: its access and refresh tokens all end at once.",
+    response: "empty",
+    status: 204,
+    errors: { 404: notFound("agent") },
+  },
+
   // Webhooks.
   "GET /webhooks": { summary: "Your webhooks, without their secrets.", response: list("webhooks", Webhook) },
   "POST /webhooks": {

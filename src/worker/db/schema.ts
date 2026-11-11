@@ -651,6 +651,8 @@ export const agents = sqliteTable(
       .notNull()
       .references(() => users.id),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** Set for an agent that is an app connected by OAuth ("Claude"): its tokens are short-lived and renewed. */
+    oauthClientId: text("oauth_client_id"),
   },
   (table) => [index("agents_owner_idx").on(table.ownerId)],
 );
@@ -674,10 +676,54 @@ export const agentTokens = sqliteTable(
     /** Updated at most every few minutes, not on every request. */
     lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    /** Access tokens made by the OAuth flow last an hour; null (typed-in tokens) never expire. */
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
   },
   (table) => [index("agent_tokens_agent_idx").on(table.agentId)],
 );
 
+/**
+ * An app registered through OAuth dynamic client registration (RFC 7591), such as Claude's connector. Public,
+ * unauthenticated registration, so the table is capped and tidied (oauth/clients.ts). `secretHash` only for a
+ * client that asked for a client secret.
+ */
+export const oauthClients = sqliteTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris", { mode: "json" }).$type<string[]>().notNull(),
+  secretHash: text("secret_hash"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/** An authorization code, kept by its SHA-256, good for one exchange within minutes. Bound to the PKCE challenge. */
+export const oauthCodes = sqliteTable("oauth_codes", {
+  hash: text("hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  scopes: text("scopes", { mode: "json" }).$type<AgentScope[]>().notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/** A connected app's refresh token (SHA-256 only). Used once: each refresh makes the next one. */
+export const oauthRefreshTokens = sqliteTable(
+  "oauth_refresh_tokens",
+  {
+    hash: text("hash").primaryKey(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    scopes: text("scopes", { mode: "json" }).$type<AgentScope[]>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("oauth_refresh_agent_idx").on(table.agentId)],
+);
+
+export type OauthClient = typeof oauthClients.$inferSelect;
 export type Agent = typeof agents.$inferSelect;
 export type AgentToken = typeof agentTokens.$inferSelect;
 

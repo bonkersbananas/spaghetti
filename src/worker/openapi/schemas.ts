@@ -194,7 +194,23 @@ const AgentToken = z
   .meta({ id: "AgentToken" });
 
 export const Agent = z
-  .object({ id, name: z.string(), ownerId: id, createdAt: epoch, tokens: z.array(AgentToken) })
+  .object({
+    id,
+    name: z.string(),
+    ownerId: id,
+    createdAt: epoch,
+    tokens: z.array(AgentToken),
+    connection: z
+      .object({
+        app: z.string(),
+        scopes: z.array(z.enum(AGENT_SCOPES)),
+        connected: z.boolean(),
+        connectedAt: epoch,
+        lastUsedAt: epoch.nullable(),
+      })
+      .nullable()
+      .describe("Set for an app connected by OAuth (its short-lived tokens are not listed)."),
+  })
   .meta({ id: "Agent", description: "Tokens are listed only for their owner." });
 
 export const NewToken = z
