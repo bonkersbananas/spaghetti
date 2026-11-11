@@ -105,7 +105,10 @@ test("shows who asks and what it can do, and Allow hands the app a code that bec
 
   // It is an agent of this person now, on the Agents page, and Disconnect ends it with an undo first.
   await page.goto("/agents");
-  const card = page.getByRole("list", { name: "Your agents" }).getByRole("listitem").filter({ hasText: "Claude for" });
+  const card = page
+    .getByRole("list", { name: "Your agents" })
+    .getByRole("listitem")
+    .filter({ hasText: "Signed in with Claude" });
   await expect(card.getByRole("heading", { name: /^Claude for / })).toBeVisible();
   await expect(card.getByText(/Signed in with Claude/)).toBeVisible();
   await expect(card.getByText("Read", { exact: true })).toBeVisible();
