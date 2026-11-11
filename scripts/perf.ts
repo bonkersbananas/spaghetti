@@ -12,11 +12,11 @@
  *   pnpm perf [--runs 5] [--json]
  */
 import { chromium, type Page } from "@playwright/test";
-import { SEED_NOW } from "./seed/index.ts";
 import { launchOptions } from "./lib/browser.ts";
 import { SEED_PASSWORD, SEED_USERS } from "./lib/local-app.ts";
 import { installProbe, median, onScreen, PHONE, tapLatency, throttle } from "./lib/perf.ts";
 import { startSeededApp } from "./lib/seeded-app.ts";
+import { SEED_NOW } from "./seed/index.ts";
 
 const argv = process.argv.slice(2);
 const runs = Number(argv[argv.indexOf("--runs") + 1]) || 5;
@@ -29,7 +29,9 @@ const READY = {
 
 const results: Record<string, Record<string, number>> = {};
 const record = (group: string, name: string, values: number[]) => {
-  (results[group] ??= {})[name] = Math.round(median(values));
+  const group_ = results[group] ?? {};
+  results[group] = group_;
+  group_[name] = Math.round(median(values));
 };
 
 const port = 5400 + Math.floor(Math.random() * 100);
@@ -50,7 +52,11 @@ try {
     const firstScreen: number[] = [];
     const useful: number[] = [];
     const fcp: number[] = [];
-    const scenario = async (name: string, prepare: (page: Page) => Promise<void>, serviceWorkers: "allow" | "block") => {
+    const scenario = async (
+      name: string,
+      prepare: (page: Page) => Promise<void>,
+      serviceWorkers: "allow" | "block",
+    ) => {
       firstScreen.length = useful.length = fcp.length = 0;
       const context = await browser.newContext({ ...PHONE, baseURL: app.url, serviceWorkers });
       await signedIn(context);
@@ -121,7 +127,8 @@ try {
 
   const taps: Record<string, { inp: number[]; shown: number[] }> = {};
   const add = (name: string, tap: { inp: number; shown: number }) => {
-    const entry = (taps[name] ??= { inp: [], shown: [] });
+    const entry = taps[name] ?? { inp: [], shown: [] };
+    taps[name] = entry;
     entry.inp.push(tap.inp);
     entry.shown.push(tap.shown);
   };
@@ -183,7 +190,10 @@ try {
     const log = page.getByRole("button", { name: "Log attempt" });
     if (await log.count()) {
       await settle();
-      add("log attempt → sheet", await tapLatency(page, () => log.first().tap(), onScreen("[role=dialog] [role=radio]")));
+      add(
+        "log attempt → sheet",
+        await tapLatency(page, () => log.first().tap(), onScreen("[role=dialog] [role=radio]")),
+      );
       await settle();
       add(
         "pick an outcome",
@@ -201,7 +211,9 @@ try {
 
   // A stepper: the build made of parts.
   await tabs.getByRole("link", { name: "Builds" }).tap();
-  const links = await page.locator('main a[href^="/builds/"]').evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+  const links = await page
+    .locator('main a[href^="/builds/"]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
   for (const href of links) {
     await page.goto(href ?? "/builds");
     await page.waitForTimeout(800);
@@ -224,7 +236,11 @@ try {
 
   // Typing in search.
   await page.goto("/search");
-  await page.getByRole("searchbox").or(page.getByRole("textbox", { name: "Search" })).first().waitFor();
+  await page
+    .getByRole("searchbox")
+    .or(page.getByRole("textbox", { name: "Search" }))
+    .first()
+    .waitFor();
   const box = page.getByRole("textbox", { name: "Search" }).or(page.getByRole("searchbox")).first();
   await box.tap();
   for (let run = 0; run < runs; run++) {
@@ -235,11 +251,18 @@ try {
       type += key;
       add(
         "search: type a letter",
-        await tapLatency(page, () => page.keyboard.press(key), `document.getElementById('search-box')?.value === ${JSON.stringify(type)}`),
+        await tapLatency(
+          page,
+          () => page.keyboard.press(key),
+          `document.getElementById('search-box')?.value === ${JSON.stringify(type)}`,
+        ),
       );
     }
   }
-  add("search: results", await tapLatency(page, () => page.keyboard.press("b"), `!!document.querySelector('main mark')`));
+  add(
+    "search: results",
+    await tapLatency(page, () => page.keyboard.press("b"), `!!document.querySelector('main mark')`),
+  );
   for (const [name, { inp, shown }] of Object.entries(taps)) {
     record(`tap ${name}`, "input to next paint (ms)", inp);
     record(`tap ${name}`, "tap to result (ms)", shown);
@@ -247,7 +270,11 @@ try {
   await context.close();
 
   // ---- Command palette on desktop ----
-  const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 }, baseURL: app.url, serviceWorkers: "allow" });
+  const desktop = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    baseURL: app.url,
+    serviceWorkers: "allow",
+  });
   await signedIn(desktop);
   await installProbe(desktop);
   const dpage = await desktop.newPage();
@@ -259,7 +286,11 @@ try {
   const opens: { inp: number[]; shown: number[] } = { inp: [], shown: [] };
   for (let run = 0; run < runs; run++) {
     await dpage.waitForTimeout(400);
-    const tap = await tapLatency(dpage, () => dpage.keyboard.press("Control+k"), onScreen("[role=dialog] [role=combobox]"));
+    const tap = await tapLatency(
+      dpage,
+      () => dpage.keyboard.press("Control+k"),
+      onScreen("[role=dialog] [role=combobox]"),
+    );
     opens.inp.push(tap.inp);
     opens.shown.push(tap.shown);
     await dpage.keyboard.press("Escape");
@@ -273,7 +304,8 @@ try {
   else {
     for (const [group, values] of Object.entries(results)) {
       console.log(group);
-      for (const [name, value] of Object.entries(values)) console.log(`  ${name.padEnd(40)} ${String(value).padStart(6)}`);
+      for (const [name, value] of Object.entries(values))
+        console.log(`  ${name.padEnd(40)} ${String(value).padStart(6)}`);
     }
   }
 } finally {

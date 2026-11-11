@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
@@ -19,6 +19,7 @@ import { useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useWhenIdle } from "@/lib/when-idle";
 
 // Desktop-only overlays, loaded once the app is idle rather than with the first screen.
 const loadPalette = () => import("@/components/shell/CommandPalette");
@@ -84,6 +85,13 @@ function Shell() {
   );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.
   useEffect(() => followUnresizedPhotos(queryClient), [queryClient]);
+  // The two pages every list opens: their code is fetched once the app is idle (the tab bar already warms the lists),
+  // so the first tap on an idea or a build doesn't wait for it. The routes have no loaders, so nothing else loads.
+  const router = useRouter();
+  useWhenIdle(() => {
+    void router.preloadRoute({ to: "/builds/$buildId", params: { buildId: "-" } });
+    void router.preloadRoute({ to: "/ideas/$ideaId", params: { ideaId: "-" } });
+  });
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();
   useHotkeys({

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { cn } from "@/lib/cn";
 import { Panel, Section } from "./shared";
 
@@ -48,6 +49,78 @@ export function MotionSection() {
           </button>
         </div>
       </Panel>
+      <PressedPanel />
     </Section>
+  );
+}
+
+/**
+ * The pressed state, resting and held side by side (`data-pressed` holds the state for the picture; a real finger
+ * does it with :active). Every tap shows within one frame, and `touch-action: manipulation` (in app.css) means no
+ * double-tap-to-zoom wait.
+ */
+function PressedPanel() {
+  const rows = [
+    [
+      "Button",
+      (held?: boolean) => (
+        <Button variant="primary" data-pressed={held || undefined}>
+          Log attempt
+        </Button>
+      ),
+    ],
+    [
+      "Chip",
+      (held?: boolean) => (
+        <ToggleChip selected={false} data-pressed={held || undefined}>
+          Silk PLA
+        </ToggleChip>
+      ),
+    ],
+    [
+      "Row or card",
+      (held?: boolean) => (
+        <button
+          type="button"
+          data-pressed={held || undefined}
+          className="pressable focus-ring bg-cream shadow-soft text-body rounded-lg px-4 py-3 text-left font-semibold"
+        >
+          Tugboat hull
+          <span className="text-small text-ink-faint block font-normal">3 attempts</span>
+        </button>
+      ),
+    ],
+    [
+      "Link without .pressable",
+      (held?: boolean) => (
+        <a
+          href="#motion"
+          data-pressed={held || undefined}
+          className="text-small text-ink-soft focus-ring rounded-xs underline"
+        >
+          See all in Builds
+        </a>
+      ),
+    ],
+  ] as const;
+  return (
+    <Panel className="flex min-w-0 flex-col gap-4">
+      <p className="text-small text-ink-soft max-w-prose">
+        Held: <code>pressable</code> shrinks to 97% in 90 ms; tappable things without it (inline links, plain rows) dim
+        to 60%. Both start on the touch itself, never after it.
+      </p>
+      <div className="grid grid-cols-[8rem_1fr_1fr] items-center gap-x-4 gap-y-3 md:grid-cols-[12rem_1fr_1fr]">
+        <span />
+        <span className="text-caption text-ink-faint">Resting</span>
+        <span className="text-caption text-ink-faint">Held</span>
+        {rows.map(([name, specimen]) => (
+          <div key={name} className="contents">
+            <span className="text-small text-ink-faint">{name}</span>
+            <div className="flex">{specimen()}</div>
+            <div className="flex">{specimen(true)}</div>
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }

@@ -31,21 +31,24 @@ export function bundleReport(): Plugin {
       const lines: string[] = [];
       const total = [...seen].reduce((sum, name) => sum + gzip(name), 0);
       lines.push(`Static imports of the entry (every screen): ${seen.size} chunks, ${kb(total)} kB gzip`);
-      const describe = (name: string) => {
+      const listChunk = (name: string) => {
         const chunk = byName.get(name);
         if (!chunk) return;
         lines.push(`${kb(gzip(name))} kB gzip  ${name}`);
         const modules = Object.entries(chunk.modules)
-          .map(([id, info]) => [id.replace(/^.*node_modules\//, "").replace(/^.*\/src\//, "src/"), info.renderedLength] as const)
+          .map(
+            ([id, info]) =>
+              [id.replace(/^.*node_modules\//, "").replace(/^.*\/src\//, "src/"), info.renderedLength] as const,
+          )
           .sort((a, b) => b[1] - a[1])
           .slice(0, 6);
         for (const [id, size] of modules) lines.push(`          ${kb(size)} kB raw  ${id}`);
       };
-      for (const name of [...seen].sort((a, b) => gzip(b) - gzip(a))) describe(name);
+      for (const name of [...seen].sort((a, b) => gzip(b) - gzip(a))) listChunk(name);
       const lazy = chunks.filter((chunk) => !seen.has(chunk.fileName));
       lines.push(`\nOn demand: ${lazy.length} chunks`);
       const biggest = lazy.sort((a, b) => gzip(b.fileName) - gzip(a.fileName));
-      for (const chunk of biggest.slice(0, 8)) describe(chunk.fileName);
+      for (const chunk of biggest.slice(0, 8)) listChunk(chunk.fileName);
       for (const chunk of biggest.slice(8, 30)) lines.push(`${kb(gzip(chunk.fileName))} kB gzip  ${chunk.fileName}`);
       console.log(`\n${lines.join("\n")}\n`);
     },
