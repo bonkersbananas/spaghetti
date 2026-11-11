@@ -1,20 +1,31 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { PlusIcon } from "@/components/ui/icons";
 import { useCapture } from "@/lib/capture";
+import { isSelected, usePendingNav } from "@/lib/pending-nav";
 import { type Section, tabs } from "./sections";
 
-function Tab({ to, label, icon: Icon }: Section) {
+function Tab({
+  to,
+  label,
+  icon: Icon,
+  pendingTo,
+  press,
+}: Section & { pendingTo: string | null; press: (to: string) => void }) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const selected = isSelected(to, pathname, pendingTo);
   return (
     <Link
       to={to}
+      onClick={() => press(to)}
+      data-selected={selected || undefined}
       // Each section's code is fetched once the app is idle (routes/_app.tsx), and on the touch itself.
-      className="pressable press-none group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
+      className="pressable press-none group text-ink-faint data-[selected]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
     >
-      {({ isActive }) => (
+      {() => (
         <>
           {/* The held highlight: a soft round behind the icon. */}
           <span className="group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-8 w-12 items-center justify-center">
-            <Icon size={26} weight={isActive ? "fill" : "regular"} aria-hidden />
+            <Icon size={26} weight={selected ? "fill" : "regular"} aria-hidden />
           </span>
           <span className="text-caption font-semibold">{label}</span>
         </>
@@ -31,14 +42,15 @@ function Tab({ to, label, icon: Icon }: Section) {
 export function TabBar() {
   const { setOpen } = useCapture();
   const [today, ideas, builds, journal] = tabs;
+  const nav = usePendingNav();
   return (
     <nav
       aria-label="Sections"
       className="bg-cream/92 pb-safe shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
     >
       <div className="h-tabbar-row mx-auto flex max-w-lg items-stretch px-2">
-        <Tab {...today} />
-        <Tab {...ideas} />
+        <Tab {...today} {...nav} />
+        <Tab {...ideas} {...nav} />
         <div className="flex flex-1 items-center justify-center">
           <button
             type="button"
@@ -49,8 +61,8 @@ export function TabBar() {
             <PlusIcon size={28} weight="bold" aria-hidden />
           </button>
         </div>
-        <Tab {...builds} />
-        <Tab {...journal} />
+        <Tab {...builds} {...nav} />
+        <Tab {...journal} {...nav} />
       </div>
     </nav>
   );
