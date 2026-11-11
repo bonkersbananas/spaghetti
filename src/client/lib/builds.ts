@@ -100,11 +100,12 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
   const wasUpNext = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;
   void changeStage(queryClient, item.id, "building");
+  // The idea's draft undo is done with (its id is set in drafts.ts): one toast for this step, above the Log attempt bar.
+  // Other toasts (another item's undo, a waiting update) stay.
+  toast.dismiss(`draft-${item.id}`);
   toast.undo("Started building", {
     description:
-      wasUpNext !== null
-        ? "Off the Up next list. It stays in Ideas under Started."
-        : "It stays in Ideas under Started. Log the first attempt when it prints.",
+      wasUpNext !== null ? "Off Up next. It stays in Ideas under Started." : "It stays in Ideas under Started.",
     onUndo: () => void changeStage(queryClient, item.id, "idea", wasUpNext !== null ? { upNext: wasUpNext } : {}),
   });
 }

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "eb057231-fe83-4156-b259-82689ff7432e",
+  "id": "cbeb06f8-4986-45ff-86a3-f256e26e0a8e",
   "prevId": "fcef502a-d66e-462b-acf5-1bf5b3f73b7f",
   "tables": {
     "agent_tokens": {
@@ -1190,6 +1190,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "shared_title": {
+          "name": "shared_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "result": {
           "name": "result",
@@ -3046,14 +3053,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "wishlist_private": {
-          "name": "wishlist_private",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -3404,79 +3403,6 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "wishlist_entries": {
-      "name": "wishlist_entries",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "item_id": {
-          "name": "item_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "added_at": {
-          "name": "added_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "wishlist_entries_user_id_users_id_fk": {
-          "name": "wishlist_entries_user_id_users_id_fk",
-          "tableFrom": "wishlist_entries",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "wishlist_entries_item_id_items_id_fk": {
-          "name": "wishlist_entries_item_id_items_id_fk",
-          "tableFrom": "wishlist_entries",
-          "tableTo": "items",
-          "columnsFrom": [
-            "item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "wishlist_entries_user_id_item_id_pk": {
-          "columns": [
-            "user_id",
-            "item_id"
-          ],
-          "name": "wishlist_entries_user_id_item_id_pk"
-        }
-      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     }

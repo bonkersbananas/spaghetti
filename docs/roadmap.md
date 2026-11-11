@@ -47,7 +47,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] **Read a print from its photo** (see [0023](decisions/0023-claude-reads-a-print-from-its-photo.md)): when an attempt gets a photo (taken by hand, or the bridge's camera frame), Claude looks at it and *suggests* how it went (Worked, Partly or Spaghetti) and which failure tags fit, from the built-in list. Spaghetti, warping, layer shift, stringing and the rest each come with a short reason.
   - It only ever suggests. Like the bridge's suggested tag (#24), the suggestion is pre-selected and clearly marked "suggested" in the attempt sheet, and the person confirms or changes it. It never sets an outcome on its own.
   - It reads the attempt's large photo variant from R2 (already resized in the browser) and returns a structured output whose tags are an enum of the built-in tag slugs.
-  - Left for later: the suggestion on Today's print card and in the "how did it go?" push notification (Today was being changed by another session), and a way to ask again for a photo that wasn't read.
+  - On Today's print card and in the "how did it go?" nudge too (#58); on Today the off-the-bed question takes the photo itself and the suggestion arrives within a second (#66). Left for later: a way to ask again for a photo that wasn't read.
 
 ## Next: agents using the service
 

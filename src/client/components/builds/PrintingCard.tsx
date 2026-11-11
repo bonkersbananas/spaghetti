@@ -7,16 +7,17 @@ import { m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { NoteFace } from "@/components/ui/NoteFace";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
-import type { AttemptView, ItemView } from "@/lib/items";
+import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
 import { duration } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
+import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { itemName } from "../journal/JournalEntry";
 import { OffTheBed } from "./OffTheBed";
@@ -68,6 +69,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   }
   const reduce = useReducedMotion();
   const navigate = useNavigate();
+  const readOnly = useReadOnly(item.pending);
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
@@ -109,7 +111,9 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         <div
           className={cn(
             "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
-            layout.picture,
+            // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
+            // print's state down.
+            !hero && !plate && !compact ? "aspect-5/2" : layout.picture,
           )}
         >
           {hero ? (
@@ -122,7 +126,10 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               className={cn("size-full", compact ? "p-1 md:p-3" : "p-3")}
             />
           ) : (
-            <NoteFace note={name.text} />
+            // No picture yet: a plain tile, not the name a second time (it is right under it).
+            <div className="bg-well text-ink-ghost flex size-full items-center justify-center" aria-hidden>
+              <BuildsIcon size={compact ? 28 : 36} />
+            </div>
           )}
           {/* On a compact card the words under it say the same, and a chip would cover the small picture. */}
           <OutcomeChip
@@ -179,6 +186,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               endedAt={attempt.endedAt}
               onPick={(outcome) => finish(outcome)}
               photoRead={attempt.photoRead}
+              // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
+              onPhotos={
+                readOnly || item.photos.some((photo) => photo.attemptId === attempt.id)
+                  ? undefined
+                  : (files) => addPhotosToItem(item.id, files, attempt.id)
+              }
               className="pointer-events-auto md:mt-auto"
             />
           ) : (

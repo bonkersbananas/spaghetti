@@ -45,6 +45,8 @@ interface UndoOptions {
   description?: string;
   /** How long Undo stays available. Long enough to notice a slip. */
   duration?: number;
+  /** Lets the next step put this one away (`toast.dismiss(id)`), such as a draft's undo once its idea is built. */
+  id?: string;
 }
 
 /**
@@ -118,12 +120,15 @@ export const toast = {
         action: { label: "Refresh", onClick: onRefresh },
       }),
     ),
-  undo: (message: string, { onUndo, description, duration = 6000 }: UndoOptions) =>
+  undo: (message: string, { onUndo, description, duration = 6000, id }: UndoOptions) =>
     show((t) =>
       t(message, {
+        id,
         description,
         duration,
         action: { label: "Undo", onClick: onUndo },
       }),
     ),
+  /** Puts one toast away. Before sonner has loaded there is nothing to put away, so this never loads it. */
+  dismiss: (id: string) => void sonner?.then((module) => module.toast.dismiss(id)),
 };

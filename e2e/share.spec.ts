@@ -60,7 +60,7 @@ test("the share target saves a shared link and photo as an idea, and the Capture
 
   await shareInto(
     page,
-    { title: "Cable clip remix", text: "Check this out", url: "https://makerworld.com/en/models/1" },
+    { title: "Cable clip remix", text: "Check this out", url: "https://example.com/clips/1" },
     { name: "clip.jpg", type: "image/jpeg", base64: readFileSync("e2e/fixtures/tugboat.jpg").toString("base64") },
   );
 
@@ -69,7 +69,7 @@ test("the share target saves a shared link and photo as an idea, and the Capture
   await expect(page).toHaveURL(/\/ideas$/);
   // Prefilled: the words and the link are in the note, the photo is shown.
   const note = sheet.getByRole("textbox", { name: "Add a word" });
-  await expect(note).toHaveValue("Check this out\nhttps://makerworld.com/en/models/1");
+  await expect(note).toHaveValue("Check this out\nhttps://example.com/clips/1");
   await expect(sheet.getByRole("img", { name: "Shared photo 1" })).toBeVisible();
 
   // Saved already, before anything is typed.
@@ -80,7 +80,7 @@ test("the share target saves a shared link and photo as an idea, and the Capture
 
   await page.waitForTimeout(500);
   expect((await new AxeBuilder({ page }).include("[role=dialog]").analyze()).violations.map((v) => v.id)).toEqual([]);
-  await note.fill("Check this out\nhttps://makerworld.com/en/models/1\nfor Mila's desk");
+  await note.fill("Check this out\nhttps://example.com/clips/1\nfor Mila's desk");
   await expect.poll(async () => (await serverIdeas(page))[0].note).toContain("for Mila's desk");
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(sheet).toBeHidden();

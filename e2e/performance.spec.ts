@@ -85,7 +85,7 @@ async function scriptsLoadedBy(page: Page, path: string, ready: () => Promise<vo
     console.log(`${path}:\n${sizes.sort().reverse().join("\n")}`);
   }
   return {
-    files: [...bodies.keys()],
+    files: first.map(([file]) => file),
     zod: first.some(([, body]) => body.includes("ZodError")),
     raw: kb(first.reduce((sum, [, body]) => sum + body.length, 0)),
     gzip: kb(first.reduce((sum, [, body]) => sum + gzipSync(body).length, 0)),
@@ -266,6 +266,8 @@ test("an inbox of a hundred photo ideas scrolls smoothly on a mid-range phone", 
  * busy CI runner holds them and a real regression (a lazy chunk that blocks a screen, a network wait before a
  * tap shows) doesn't.
  */
+/** The first ⌘K after a load, in ms, on the slow profile (set after measuring; see the test). */
+const MAX_FIRST_PALETTE_MS = 1000;
 const TAP_BUDGET_MS = { inp: 200, shown: 300 };
 
 test("the taps people make most answer quickly on a mid-range phone", async ({ browser, baseURL }) => {
@@ -406,5 +408,46 @@ test("the installed app opens from its caches, on a slow phone", async ({ browse
   console.log(`Installed app resumed, Today useful: ${resumed.toFixed(0)} ms (4× CPU, slow 4G)`);
   // About 500 ms on a quiet machine; a first visit with nothing cached takes over 3 s on the same profile.
   expect(resumed, "Today on a resumed app").toBeLessThan(1500);
+  await context.close();
+});
+
+test("the first ⌘K right after a page load opens the palette at once", async ({ browser, baseURL }) => {
+  test.setTimeout(120_000);
+  // No service worker and no idle moment: the palette's code comes over the slow network after the press (the head start is the
+  // key press itself), and its frame must not wait for the commands.
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 1440, height: 900 },
+    serviceWorkers: "block",
+  });
+  const user = SEED_USERS[0];
+  const signedIn = await context.request.post("/api/session", {
+    data: { username: user.username, password: SEED_PASSWORD },
+    headers: { Origin: new URL(baseURL ?? "").origin },
+  });
+  expect(signedIn.ok()).toBe(true);
+  await installProbe(context);
+  const times: number[] = [];
+  for (let run = 0; run < 4; run++) {
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      window.requestIdleCallback = () => 0;
+    });
+    await throttle(page);
+    await page.goto("/today");
+    await expect(page.locator("h1").first()).toBeVisible();
+    // The shell's key handlers bind just after the first screen; a person's first press is never that close.
+    await page.waitForTimeout(300);
+    const tap = await tapLatency(page, () => page.keyboard.press("Control+k"), onScreen("[role=dialog] input"));
+    times.push(tap.shown);
+    if (process.env.PERF_FILES) console.log("palette: search box shown after", tap.shown.toFixed(0), "ms");
+    await page.close();
+  }
+  const opened = median(times);
+  console.log(
+    `First ⌘K after a load, 4× CPU, slow 4G, nothing cached: the palette's search box shows after ${opened.toFixed(0)} ms`,
+  );
+  expect(opened, "first ⌘K").toBeGreaterThan(0);
+  expect(opened, "first ⌘K").toBeLessThan(MAX_FIRST_PALETTE_MS);
   await context.close();
 });

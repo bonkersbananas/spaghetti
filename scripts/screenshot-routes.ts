@@ -1339,6 +1339,29 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A drafted idea whose pictures didn't come: the one action to try again (the answer is held back with a route).
+    name: "draft-no-pictures",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, GOOD_LINK);
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Drafted by Claude from MakerWorld").waitFor();
+      await page.route(`**/api/items/${id}`, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        json.item.photos = [];
+        await route.fulfill({ response, json });
+      });
+      await page.reload();
+      await page.getByRole("button", { name: "Get the pictures" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
     // A page that couldn't be read: the idea is as captured, with one line and a retry.
     name: "draft-failed",
     path: "/ideas",

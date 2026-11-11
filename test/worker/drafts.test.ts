@@ -6,6 +6,7 @@ import { DRAFTS_PER_DAY } from "../../src/shared/draft.ts";
 import { app } from "../../src/worker/app.ts";
 import { resumeDrafts, STALE_MS } from "../../src/worker/draft/run.ts";
 import makerworldPage from "../fixtures/pages/makerworld.html?raw";
+import golfPage from "../fixtures/pages/makerworld-golf.html?raw";
 import printablesChallenge from "../fixtures/pages/printables-challenge.html?raw";
 import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 
@@ -17,6 +18,15 @@ const jpeg = () =>
   new Uint8Array([
     0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x04, 0xb0, 0x06, 0x40, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1,
   ]);
+
+/** A WebP header (VP8X) saying 1600 × 1200. */
+const webp = () =>
+  new Uint8Array([
+    ...[0x52, 0x49, 0x46, 0x46, 0x1a, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 10, 0, 0, 0],
+    ...[0, 0, 0, 0, 0x3f, 0x06, 0, 0xaf, 0x04, 0],
+  ]);
+/** The start of a PNG. */
+const png = () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]);
 
 const goodDraft = {
   readable: true,
@@ -34,7 +44,11 @@ type Answer = { json?: unknown; stopReason?: string; status?: number };
 type Page = { status?: number; body?: string; location?: string };
 
 /** Stubs the Anthropic API and the image host; Responses are made inside the stub (a Response can't cross requests). */
-function stubWeb(answer: Answer | (() => Answer) = { json: goodDraft }, pages: Record<string, Page> = {}) {
+function stubWeb(
+  answer: Answer | (() => Answer) = { json: goodDraft },
+  pages: Record<string, Page> = {},
+  pngOnly = false,
+) {
   const asked: string[] = [];
   const bodies: Array<Record<string, unknown>> = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -51,8 +65,12 @@ function stubWeb(answer: Answer | (() => Answer) = { json: goodDraft }, pages: R
         headers: { "Content-Type": "text/html", ...(page.location ? { Location: page.location } : {}) },
       });
     }
-    if (url.hostname === "makerworld.bblmw.com")
-      return new Response(jpeg(), { headers: { "Content-Type": "image/jpeg" } });
+    if (url.hostname === "makerworld.bblmw.com") {
+      // MakerWorld's pictures are PNGs; its image host converts to WebP when asked (x-oss-process).
+      return url.search.includes("x-oss-process") && !pngOnly
+        ? new Response(webp(), { headers: { "Content-Type": "image/webp" } })
+        : new Response(png(), { headers: { "Content-Type": "image/png" } });
+    }
     if (url.hostname === "api.anthropic.com") {
       bodies.push(JSON.parse(String(init?.body)));
       const next = typeof answer === "function" ? answer() : answer;
@@ -399,5 +417,119 @@ describe("drafting an idea from a model page", () => {
     const other = await addIdea({ note: PAGE });
     await draftIt(other);
     expect(away.asked.some((url) => url.includes("evil.example"))).toBe(false);
+  });
+
+  it("stores MakerWorld's PNG pictures as WebP through its image host, and says what happened to them", async () => {
+    stubWeb(
+      { json: { readable: true, note: "A mini golf set.", material: null, plate: null, settings: null } },
+      { [PAGE]: { body: golfPage } },
+    );
+    const id = await addIdea({ note: PAGE });
+    const { draft } = await (await draftIt(id)).json<DraftResponse>();
+    expect(draft?.applied).toContain("photos");
+    const item = await getItem(id);
+    expect(item.photos).toHaveLength(4);
+    const run = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
+    expect(JSON.parse(run?.detail ?? "{}").pictures).toMatchObject({ found: 7, stored: 4, refused: [] });
+  });
+
+  it("records why no picture was stored, and 'Get the pictures' tries again without using the day's cap", async () => {
+    stubWeb(
+      { json: { readable: true, note: "A mini golf set.", material: null, plate: null, settings: null } },
+      { [PAGE]: { body: golfPage } },
+      true,
+    );
+    const id = await addIdea({ note: PAGE });
+    await draftIt(id);
+    expect((await getItem(id)).photos).toHaveLength(0);
+    const run = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
+    const pictures = JSON.parse(run?.detail ?? "{}").pictures;
+    expect(pictures).toMatchObject({ found: 7, stored: 0 });
+    expect(pictures.refused[0]).toMatch(/^makerworld\.bblmw\.com: not a JPEG or WebP \(12 bytes\)/);
+
+    vi.restoreAllMocks();
+    stubWeb();
+    const got = await asPerson(`/api/items/${id}/draft/pictures`, { method: "POST" });
+    expect((await got.json<DraftResponse>()).stored).toBe(4);
+    const item = await getItem(id);
+    expect(item.photos).toHaveLength(4);
+    expect(item.draft?.applied).toContain("photos");
+    // Nothing to do when it has pictures; and a people-only action.
+    expect((await asPerson(`/api/items/${id}/draft/pictures`, { method: "POST" })).status).toBe(404);
+    const used = await env.DB.prepare("SELECT count(*) AS n FROM draft_runs WHERE outcome IS NOT 'pictures'").first<{
+      n: number;
+    }>();
+    expect(used?.n).toBe(1);
+    // Undo takes the fetched pictures off again.
+    await asPerson(`/api/items/${id}/draft`, { method: "DELETE" });
+    expect((await getItem(id)).photos).toHaveLength(0);
+  });
+
+  it("a title that came with a shared link doesn't stop the draft, and the draft's replaces it (the Shortcut, the bookmarklet)", async () => {
+    stubWeb();
+    const sharing = await (
+      await asPerson("/api/agents", { method: "POST", json: { name: "Share from iPhone", scopes: ["capture"] } })
+    ).json<NewTokenResponse>();
+    const viaShortcut = await request("/api/capture", {
+      method: "POST",
+      json: { url: PAGE, title: "Cable comb by Mila | MakerWorld" },
+      headers: { Authorization: `Bearer ${sharing.token}` },
+    });
+    const { id } = await viaShortcut.json<{ id: string }>();
+    expect((await getItem(id)).title).toBe("Cable comb by Mila | MakerWorld");
+    await draftIt(id);
+    const item = await getItem(id);
+    expect(item.draft).toMatchObject({ status: "drafted", applied: expect.arrayContaining(["title", "note"]) });
+    expect(item.title).toBe("Cable comb");
+    // Undo gives the shared title back.
+    await asPerson(`/api/items/${id}/draft`, { method: "DELETE" });
+    expect((await getItem(id)).title).toBe("Cable comb by Mila | MakerWorld");
+
+    // The same from a signed-in person's capture (a script, the bookmarklet's server path).
+    const viaSession = await asPerson("/api/capture", { method: "POST", json: { url: PAGE, title: "Shared title" } });
+    const other = (await viaSession.json<{ id: string }>()).id;
+    expect((await getItem(other)).draft).not.toBeNull();
+    await draftIt(other);
+    expect((await getItem(other)).title).toBe("Cable comb");
+  });
+
+  it("from the app's share route: the shared title is replaced, a title a person typed never is", async () => {
+    stubWeb();
+    // The share route saves the idea with the page's title and then asks, saying that title was shared.
+    const shared = await addIdea({ title: "Page title from the share", note: PAGE });
+    const { draft } = await (await draftIt(shared, { sharedTitle: "Page title from the share" })).json<DraftResponse>();
+    expect(draft?.applied).toContain("title");
+    expect((await getItem(shared)).title).toBe("Cable comb");
+
+    // A person typed it: asking with no shared title (or after editing) leaves it alone.
+    const typed = await addIdea({ title: "Mila's comb", note: PAGE });
+    const typedDraft = await (await draftIt(typed, { sharedTitle: "Page title from the share" })).json<DraftResponse>();
+    expect(typedDraft.draft?.applied).not.toContain("title");
+    expect((await getItem(typed)).title).toBe("Mila's comb");
+
+    // Edited after the draft was asked for: the person's edit wins.
+    const edited = await addIdea({ title: "Page title from the share", note: PAGE });
+    await asPerson("/api/items/" + edited, { method: "PATCH", json: { title: "My title" } });
+    const editedDraft = await (
+      await draftIt(edited, { sharedTitle: "Page title from the share" })
+    ).json<DraftResponse>();
+    expect(editedDraft.draft?.applied).not.toContain("title");
+    expect((await getItem(edited)).title).toBe("My title");
+  });
+
+  it("an agent that can do more than share still can't start a draft, with a title or without", async () => {
+    stubWeb();
+    const agent = await (
+      await asPerson("/api/agents", {
+        method: "POST",
+        json: { name: "Claude", scopes: ["read", "capture", "attempts"] },
+      })
+    ).json<NewTokenResponse>();
+    const response = await request("/api/capture", {
+      method: "POST",
+      json: { url: PAGE, title: "A title" },
+      headers: { Authorization: `Bearer ${agent.token}` },
+    });
+    expect((await getItem((await response.json<{ id: string }>()).id)).draft).toBeNull();
   });
 });

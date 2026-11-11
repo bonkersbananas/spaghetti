@@ -62,6 +62,10 @@ const keepOpenForToast = (event: { target: EventTarget | null; preventDefault: (
   if (event.target instanceof Element && event.target.closest("[data-sonner-toaster]")) event.preventDefault();
 };
 
+/** What can take focus first in a sheet's body (disabled and hidden controls left out). */
+const FOCUSABLE =
+  "input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])";
+
 export function Sheet(props: SheetProps) {
   const isDesktop = useIsDesktop();
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
@@ -133,11 +137,26 @@ function DesktopSheet({
 }: SheetProps) {
   const isPanel = desktop === "panel";
   const returnFocus = useReturnFocus(open);
+  const body = useRef<HTMLDivElement>(null);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
         <Dialog.Content
+          // Keyboard use starts where the task does: the first control in the body (the note to write, the outcome
+          // to pick), not the header's arrows or Close. Something in the body that took focus itself keeps it.
+          onOpenAutoFocus={(event) => {
+            const content = body.current;
+            if (!content) return;
+            if (content.contains(document.activeElement)) return event.preventDefault();
+            // The first one that is drawn: hidden file inputs and collapsed controls can't take focus.
+            const first = [...content.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
+              (element) => element.getClientRects().length > 0,
+            );
+            if (!first) return;
+            event.preventDefault();
+            first.focus({ preventScroll: true });
+          }}
           onCloseAutoFocus={returnFocus}
           onInteractOutside={keepOpenForToast}
           className={cn(
@@ -168,7 +187,9 @@ function DesktopSheet({
               </Dialog.Close>
             </div>
           </div>
-          <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">{children}</div>
+          <div ref={body} className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">
+            {children}
+          </div>
           {footer && (
             <div className="bg-paper/60 flex shrink-0 items-center gap-3 rounded-b-xl px-6 py-3.5">{footer}</div>
           )}
