@@ -227,8 +227,8 @@ export const plateName = (bed: string) => {
   const short = bed.trim().replace(/\s+plate$/i, "");
   return /\bPEI$/i.test(short) ? short : bed.trim();
 };
-/** "0.20mm Standard @BBL X2D" → "0.20mm Standard". */
-export const shortPreset = (preset: string) => preset.replace(/\s*@.*$/, "");
+/** A slicer profile's name without its machine ("0.20mm Standard @BBL X2D" is "0.20 mm Standard"): units get their space. */
+export const shortPreset = (preset: string) => preset.replace(/\s*@.*$/, "").replace(/^(\d+(?:\.\d+)?)mm\b/, "$1 mm");
 
 function numberChange(
   key: string,

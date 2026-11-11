@@ -1,5 +1,6 @@
 import { type PhotoRead, suggestedTagWords } from "@shared/photo-read";
 import { Chip } from "@/components/ui/Chip";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { SparkleIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
@@ -17,10 +18,9 @@ interface PhotoReadNoteProps {
 export function PhotoReadNote({ read, className }: PhotoReadNoteProps) {
   if (read.status === "reading") {
     return (
-      <p className={cn("text-small text-ink-faint flex items-center gap-2 px-0.5", className)} role="status">
-        <SparkleIcon size={14} weight="fill" aria-hidden className="sg-pulse shrink-0" />
+      <ClaudeLine working className={cn("px-0.5", className)}>
         Looking at the photo…
-      </p>
+      </ClaudeLine>
     );
   }
   const tags = suggestedTagWords(read);
