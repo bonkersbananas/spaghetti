@@ -172,23 +172,31 @@ export function EditableBubble({
     </Popover>
   ) : (
     <>
-      {menuButton}
+      {/* On a phone the other person's message has no button beside it: it would stick out past a full-width bubble
+          and widen the page. A tap on the bubble opens the sheet; a message that is only a link has its smiley under it. */}
+      {mine && menuButton}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen} title={mine ? "Your comment" : `React to ${label}`}>
         {rows(() => setMenuOpen(false))}
       </Sheet>
     </>
   );
 
-  const pills = summarizeReactions(comment.reactions, me).length ? (
-    <ReactionPills
-      reactions={comment.reactions}
-      me={me}
-      nameOf={nameOf}
-      onToggle={react}
-      disabled={readOnly || !me}
-      align={mine ? "end" : "start"}
-    />
-  ) : null;
+  const smileyBelow = !mine && !isDesktop && cardOnly;
+  const pills =
+    summarizeReactions(comment.reactions, me).length || smileyBelow ? (
+      <ReactionPills
+        reactions={comment.reactions}
+        me={me}
+        nameOf={nameOf}
+        onToggle={react}
+        disabled={readOnly || !me}
+        align={mine ? "end" : "start"}
+      >
+        {smileyBelow && (
+          <AddReactionButton label={`React to ${label}`} disabled={readOnly || !me} onClick={() => setMenuOpen(true)} />
+        )}
+      </ReactionPills>
+    ) : null;
 
   // A message that ends with a link shows it as a card instead of the raw address; mid-sentence links stay in the text.
   return (
