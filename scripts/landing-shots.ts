@@ -19,7 +19,17 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { type APIRequestContext, type BrowserContext, chromium, request } from "@playwright/test";
 import sharp from "sharp";
-import { ADDITIONS, LANDING_DIR, type LandingShot, PEOPLE, RENAMES, SHOTS, STAND_INS } from "./landing/demo.ts";
+import {
+  ADDITIONS,
+  type Addition,
+  ATTEMPT_PHOTOS,
+  LANDING_DIR,
+  type LandingShot,
+  PEOPLE,
+  RENAMES,
+  SHOTS,
+  STAND_INS,
+} from "./landing/demo.ts";
 import { makePictures } from "./landing/pictures.ts";
 import { launchOptions } from "./lib/browser.ts";
 import { simulateIphone } from "./lib/iphone.ts";
@@ -71,6 +81,26 @@ async function signedIn(origin: string, username: string): Promise<APIRequestCon
   return context;
 }
 
+/** A photo of an idea or build (or of one of its attempts), cut and resized as the browser would. */
+async function uploadPhoto(as: APIRequestContext, itemId: string, photo: Addition["photo"], attemptId?: string) {
+  const image = sharp(join(LANDING_DIR, "photos", photo.file)).extract(photo.crop);
+  const large = await image.clone().resize(1600).jpeg({ quality: 86 }).toBuffer();
+  const thumb = await image.clone().resize(600).jpeg({ quality: 82 }).toBuffer();
+  const { width = 1600, height = 1200 } = await sharp(large).metadata();
+  const uploaded = await as.put(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, {
+    multipart: {
+      width: String(width),
+      height: String(height),
+      color: photo.color,
+      position: "0",
+      ...(attemptId ? { attemptId } : {}),
+      large: { name: "large.jpg", mimeType: "image/jpeg", buffer: large },
+      thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: thumb },
+    },
+  });
+  if (!uploaded.ok()) throw new Error(`Adding ${photo.file} failed: ${uploaded.status()}`);
+}
+
 /** The demo's people, additions and renames, on top of the seed (scripts/landing/demo.ts). */
 async function dressUp(origin: string, stateDir: string) {
   const people = await Promise.all(PEOPLE.map((person) => signedIn(origin, person.seedUsername)));
@@ -102,21 +132,18 @@ async function dressUp(origin: string, stateDir: string) {
         },
       });
       if (!created.ok()) throw new Error(`Adding ${addition.title ?? addition.note} failed: ${created.status()}`);
-      const image = sharp(join(LANDING_DIR, "photos", addition.photo.file)).extract(addition.photo.crop);
-      const large = await image.clone().resize(1600).jpeg({ quality: 86 }).toBuffer();
-      const thumb = await image.clone().resize(600).jpeg({ quality: 82 }).toBuffer();
-      const { width = 1600, height = 1200 } = await sharp(large).metadata();
-      const uploaded = await as.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
-        multipart: {
-          width: String(width),
-          height: String(height),
-          color: addition.photo.color,
-          position: "0",
-          large: { name: "large.jpg", mimeType: "image/jpeg", buffer: large },
-          thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: thumb },
-        },
-      });
-      if (!uploaded.ok()) throw new Error(`Adding the photo of ${addition.title} failed: ${uploaded.status()}`);
+      await uploadPhoto(as, id, addition.photo);
+    }
+    for (const added of ATTEMPT_PHOTOS) {
+      const as = people[added.by];
+      if (!as) throw new Error("ATTEMPT_PHOTOS: `by` is 0 or 1");
+      await uploadPhoto(as, added.itemId, added.photo, added.attemptId);
+      if (added.settings) {
+        const changed = await as.patch(`/api/attempts/${added.attemptId}`, {
+          data: { settingsMerge: { set: added.settings } },
+        });
+        if (!changed.ok()) throw new Error(`Changing attempt ${added.attemptId} failed: ${changed.status()}`);
+      }
     }
     for (const [id, data] of Object.entries(RENAMES)) {
       const renamed = await people[0]?.patch(`/api/items/${id}`, { data });

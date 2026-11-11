@@ -64,7 +64,7 @@ export const PICTURES: Picture[] = [
   ...["phone-today", "phone-capture", "phone-attempt", "phone-journal"].map(
     (name): Picture => ({ name, widths: [480, 800, 1170], kind: "screen", make: async (shots) => shot(shots, name) }),
   ),
-  ...["laptop-build", "laptop-today"].map(
+  ...["laptop-build", "laptop-today", "laptop-journal"].map(
     (name): Picture => ({ name, widths: [960, 1440, 2160], kind: "screen", make: async (shots) => shot(shots, name) }),
   ),
   // The two people's pictures, for the avatars the page draws itself (person-co, person-m).
@@ -85,8 +85,20 @@ export const PICTURES: Picture[] = [
     kind: "photo",
     make: async () => warm(photo("tugboat-printing"), 1),
   },
-  // Two angles on the same nest, and the nest alone.
-  { name: "spaghetti", widths: [512, 1024], kind: "photo", make: async () => warm(photo("spaghetti"), 0.6) },
+  // The photo has two angles on the same nest, side by side: each is a snapshot of its own.
+  {
+    name: "spaghetti-bed",
+    widths: [512],
+    kind: "photo",
+    make: async () => warm(photo("spaghetti").extract({ left: 0, top: 0, width: 512, height: 559 }), 0.6),
+  },
+  // Just the strands under the nozzle, for a thumbnail that could be any print's nest.
+  {
+    name: "spaghetti-strands",
+    widths: [160],
+    kind: "photo",
+    make: async () => warm(photo("spaghetti").extract({ left: 560, top: 140, width: 160, height: 160 }), 0.6),
+  },
   {
     name: "spaghetti-nest",
     widths: [512],

@@ -5,7 +5,8 @@
  *
  *   - PEOPLE: the two people's names, colours and pictures, in place of the seed's Alex and Sam.
  *   - STAND_INS: real photos of prints in place of some of the seed's drawings, cut to each drawing's frame.
- *   - ADDITIONS and RENAMES: ideas added and things renamed, so the photos and the words agree.
+ *   - ADDITIONS, ATTEMPT_PHOTOS and RENAMES: ideas and photos added and things renamed, so the photos and the words
+ *     agree.
  *   - SHOTS: which screens are taken, on a phone and on a laptop.
  *
  * Photos live in scripts/landing/photos, pictures of people in scripts/landing/people. Nothing here is real data:
@@ -16,6 +17,7 @@ import type { PersonColor } from "../../src/shared/people.ts";
 import type { SEED_USERS } from "../lib/local-app.ts";
 import { root } from "../lib/wrangler.ts";
 import { shots as appShots } from "../screenshot-routes.ts";
+import { SEED_BUILD_IDS } from "../seed/builds.ts";
 import { SEED_IDS } from "../seed/ideas.ts";
 
 export const LANDING_DIR = `${root}/scripts/landing`;
@@ -78,12 +80,36 @@ export const ADDITIONS: Addition[] = [
   },
 ];
 
-/** Seed items renamed to match their stand-in photo, by id. */
+export interface AttemptPhoto {
+  /** The build and its attempt, by id (SEED_BUILD_IDS in scripts/seed/builds.ts). */
+  itemId: string;
+  attemptId: string;
+  /** Who took it: an index into PEOPLE. */
+  by: 0 | 1;
+  photo: Addition["photo"];
+  /** Settings changed on the attempt so its words agree with the photo (the filament, say). */
+  settings?: Record<string, unknown>;
+}
+
+/** Photos added to the seed's attempts. */
+export const ATTEMPT_PHOTOS: AttemptPhoto[] = [
+  // The print on the bed (Today, the journal, the sidebar), which the seed shows with its slicer preview.
+  {
+    itemId: SEED_BUILD_IDS.towelHook,
+    attemptId: SEED_BUILD_IDS.towelHookAttempt,
+    by: 1,
+    photo: { file: "organizer-printing.jpg", crop: { left: 0, top: 0, width: 1024, height: 768 }, color: "#4f4a45" },
+    settings: { filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#ee7b2c", colorName: "Orange" }] },
+  },
+];
+
+/** Seed items renamed to match their stand-in or added photo, by id. */
 export const RENAMES: Record<string, { title: string; note?: string }> = {
   [SEED_IDS.headphoneStand]: {
     title: "Laptop stand",
     note: "Charcoal matte PLA, with holes so it stays light. Rubber feet underneath.",
   },
+  [SEED_BUILD_IDS.towelHook]: { title: "Drawer front", note: "The orange fronts for the drawer box." },
 };
 
 export type Device = "phone" | "laptop";

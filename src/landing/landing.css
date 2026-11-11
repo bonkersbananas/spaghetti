@@ -260,6 +260,7 @@ a {
   gap: 0.375rem;
   padding: 0.3125rem 0.75rem;
   border-radius: 999px;
+  font-family: var(--lp-sans);
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25rem;
@@ -336,6 +337,10 @@ a {
   font-weight: 650;
   line-height: 0.96;
   letter-spacing: -0.035em;
+}
+
+.lp-keep {
+  display: inline-block;
 }
 
 .lp-lead {
@@ -588,6 +593,10 @@ a {
   box-shadow: var(--sg-shadow-float);
 }
 
+.lp-toast span {
+  text-wrap: balance;
+}
+
 .lp-toast strong {
   font-weight: 650;
 }
@@ -667,6 +676,33 @@ a {
   backdrop-filter: blur(14px) saturate(1.4);
 }
 
+.lp-bar .lp-btn {
+  background: var(--sg-cream);
+  color: var(--sg-ink);
+  box-shadow: var(--sg-shadow-soft);
+  transition:
+    background-color var(--sg-duration-base) var(--sg-ease-out),
+    color var(--sg-duration-base) var(--sg-ease-out),
+    box-shadow var(--sg-duration-base) var(--sg-ease-out),
+    transform var(--sg-duration-instant) var(--sg-ease-out);
+}
+
+.lp-bar .lp-btn:hover {
+  background: var(--sg-paper);
+}
+
+.lp-bar[data-cta] .lp-btn {
+  background: var(--sg-tomato);
+  color: var(--sg-on-accent);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.18) inset,
+    0 10px 24px -8px color-mix(in srgb, var(--sg-tomato) 70%, transparent);
+}
+
+.lp-bar[data-cta] .lp-btn:hover {
+  background: var(--sg-tomato-strong);
+}
+
 .lp-bar__inner {
   display: flex;
   align-items: center;
@@ -709,7 +745,18 @@ a {
 /* Four spools, each feeding a strand; the strands braid into one and run down into the nozzle. */
 .lp-hero__feed {
   --feed: clamp(12.5rem, 24vw, 19rem);
+  position: relative;
+  z-index: 2;
   width: var(--feed);
+}
+
+/* Where the strands meet, the print head waits, parked over the word it printed. */
+.lp-hero__parked {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: max(1.625rem, calc(var(--feed) * 0.13));
+  translate: -50% -12%;
 }
 
 .lp-ams {
@@ -754,9 +801,9 @@ a {
 
 .lp-word > span:not(.lp-head):not(.lp-word__verdict) {
   grid-area: 1 / 1;
-  /* The p and the g hang below the line: the ink's box reaches down to them. */
-  padding-bottom: 0.24em;
-  margin-bottom: -0.24em;
+  /* The p and the g hang below the line, and the S and the i's serifs past its ends: the ink's box reaches them. */
+  padding: 0 0.08em 0.24em;
+  margin: 0 -0.08em -0.24em;
 }
 
 .lp-word__ghost {
@@ -874,7 +921,7 @@ a {
 
 .lp-stage__snap {
   left: -0.25rem;
-  top: 46%;
+  top: 2%;
   width: min(36vw, 15rem);
   --turn: -8deg;
   --ratio: 4 / 5;
@@ -884,7 +931,7 @@ a {
 
 .lp-stage__note {
   right: -0.25rem;
-  top: 16%;
+  bottom: 22%;
   width: min(36vw, 13rem);
   --turn: 6deg;
   z-index: 3;
@@ -916,7 +963,8 @@ a {
 
 /*
  * The page is a stack of sheets of coloured card, each laid over the one before with rounded top corners: sunflower,
- * pink, paper, teal, tomato. On a coloured sheet everything is in ink (ink-soft doesn't reach AA on pink or teal).
+ * pink, paper, teal, tomato. On sunflower, pink and teal everything is in ink (ink-soft doesn't reach AA there); on
+ * tomato it is cream, as on the app's tomato buttons.
  */
 .lp-sheet {
   position: relative;
@@ -1036,7 +1084,7 @@ a {
   overflow: hidden;
   padding: 0.75rem 0;
   background: var(--sg-ink);
-  color: var(--lp-sun);
+  color: color-mix(in oklab, var(--sg-basil-soft) 72%, var(--sg-basil));
   rotate: -2deg;
   box-shadow: 0 12px 28px -14px rgb(0 0 0 / 0.5);
 }
@@ -1059,11 +1107,11 @@ a {
 }
 
 .lp-tape__run span:nth-child(3n + 2) {
-  color: var(--lp-pink);
+  color: var(--sg-semolina);
 }
 
 .lp-tape__run span:nth-child(3n) {
-  color: var(--sg-paper);
+  color: color-mix(in oklab, var(--sg-tomato-soft) 50%, var(--sg-tomato));
 }
 
 .lp-tape :where(.lp-i) {
@@ -1208,6 +1256,11 @@ a {
   font-weight: 650;
 }
 
+.lp-key--tomato :where(.lp-i) {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
 .lp-key--tomato {
   border-radius: 999px;
   background: var(--sg-tomato);
@@ -1276,9 +1329,9 @@ a {
 
 .lp-attempt__top {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.625rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
 }
 
 .lp-attempt h3 {
@@ -1322,13 +1375,9 @@ a {
   align-items: center;
 }
 
-.lp-fail .lp-h2 {
-  max-width: 9ch;
-}
-
 .lp-fail__visual {
   position: relative;
-  padding: 1.5rem 0.5rem 4rem;
+  padding-top: 2.5rem;
 }
 
 .lp-fail__nest {
@@ -1351,21 +1400,34 @@ a {
 .lp-fail__photo {
   position: relative;
   z-index: 1;
-  --turn: -3deg;
-  --ratio: 16 / 10;
-  --focus: 70% 50%;
+  width: 74%;
+  --turn: -4deg;
+  --ratio: 512 / 559;
   box-shadow: 0 30px 60px -20px rgb(50 10 0 / 0.55);
 }
 
+.lp-fail__photo--back {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56%;
+  --turn: 7deg;
+  box-shadow: 0 20px 40px -20px rgb(50 10 0 / 0.5);
+}
+
 .lp-fail__photo figcaption {
+  flex-wrap: wrap;
   color: var(--sg-ink);
 }
 
+.lp-fail__photo figcaption span {
+  font-size: 0.875em;
+}
+
 .lp-fail__tags {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  left: 0;
-  bottom: 0.75rem;
+  margin-top: 1.25rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -1446,7 +1508,15 @@ a {
   max-width: 30rem;
 }
 
+.lp-toy__set {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .lp-toy__ask {
+  padding: 0;
   font-family: var(--lp-display);
   font-size: 1.375rem;
   font-weight: 600;
@@ -1687,6 +1757,12 @@ a {
 
 /* Pantry and printer */
 
+.lp-printing__note {
+  max-width: 30rem;
+  margin-top: 1.25rem;
+  font-size: 0.9375rem;
+}
+
 .lp-pantry {
   display: grid;
   gap: 3rem;
@@ -1784,7 +1860,7 @@ a {
   background: var(--sg-semolina);
 }
 
-.lp-printing {
+.lp-printing__frame {
   position: relative;
 }
 
@@ -1797,10 +1873,9 @@ a {
 }
 
 .lp-progress {
-  position: absolute;
-  left: 4%;
-  right: 4%;
-  bottom: 4%;
+  /* Over the photo's lower edge, leaving the print itself in view. */
+  position: relative;
+  margin: -2.75rem 4% 0;
   padding: 0.875rem 1rem 1rem;
   border-radius: 1.25rem;
   background: color-mix(in srgb, var(--sg-cream) 94%, transparent);
@@ -1866,11 +1941,15 @@ a {
 .lp-helper {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
+  gap: 0.625rem;
+  padding: 0.625rem 0.625rem 1.5rem;
   border-radius: 1.5rem;
   background: var(--sg-cream);
   box-shadow: var(--sg-shadow-raised);
+}
+
+.lp-helper:not(.lp-helper--week) > :is(h3, p) {
+  padding-inline: 0.75rem;
 }
 
 .lp-helper h3 {
@@ -1885,11 +1964,13 @@ a {
 }
 
 .lp-helper__demo {
-  margin-top: auto;
   display: grid;
+  align-content: center;
   gap: 0.625rem;
-  padding: 0.875rem;
-  border-radius: 1rem;
+  min-height: 9.5rem;
+  margin-bottom: 0.625rem;
+  padding: 1.125rem;
+  border-radius: 1.125rem;
   background: var(--sg-paper);
 }
 
@@ -1954,13 +2035,21 @@ a {
 }
 
 .lp-helper--week {
+  padding: 1.5rem;
   background: var(--sg-ink);
   color: var(--sg-paper);
 }
 
-.lp-helper--week > p,
-.lp-helper--week .lp-claude {
+.lp-helper--week p {
   color: color-mix(in srgb, var(--sg-paper) 72%, transparent);
+}
+
+.lp-helper--week h3 + p {
+  margin-top: 0.5rem;
+}
+
+.lp-helper--week blockquote {
+  margin-top: 0.5rem;
 }
 
 .lp-helper--week blockquote {
@@ -2013,21 +2102,87 @@ a {
   gap: 0.25rem 1rem;
 }
 
-.lp-perk__icon {
+.lp-perk__thing {
+  position: relative;
   grid-row: span 2;
   display: grid;
   place-items: center;
   width: 2.75rem;
   height: 2.75rem;
-  border-radius: 0.875rem;
-  background: var(--sg-cream);
-  box-shadow: var(--sg-shadow-soft);
-  color: var(--sg-tomato);
 }
 
-.lp-perk__icon svg {
-  width: 1.375rem;
-  height: 1.375rem;
+/* Live: the other one's picture, with the dot of something new. */
+.lp-perk__thing--live .lp-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  box-shadow: 0 0 0 3px var(--sg-cream);
+}
+
+.lp-perk__thing--live::after {
+  content: "";
+  position: absolute;
+  top: -0.125rem;
+  right: -0.125rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: var(--sg-tomato);
+  box-shadow: 0 0 0 2.5px var(--lp-pink);
+}
+
+/* Talk it over: a question and an answer on its way, in the thread's two colours. */
+.lp-perk__thing--chat {
+  place-items: stretch;
+  align-content: center;
+  gap: 0.1875rem;
+  width: 3.25rem;
+}
+
+.lp-perk__thing--chat > span {
+  justify-self: start;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 0.625rem 0.625rem 0.625rem 0.1875rem;
+  background: var(--sg-cream);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1.1rem;
+}
+
+.lp-perk__thing--chat > span + span {
+  justify-self: end;
+  display: flex;
+  gap: 0.1875rem;
+  padding-block: 0.4375rem;
+  border-radius: 0.625rem 0.625rem 0.1875rem;
+  background: var(--sg-tomato-soft);
+}
+
+.lp-perk__thing--chat i {
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--sg-tomato-ink);
+}
+
+/* A wishlist each: the top idea's medal. */
+.lp-perk__thing--medal {
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #fbe3a6, var(--sg-semolina) 70%);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--sg-semolina-ink) 30%, transparent),
+    0 6px 14px -6px rgb(80 50 20 / 0.45);
+  color: var(--sg-semolina-ink);
+  font-family: var(--lp-display);
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+/* On your Home Screen: the app's icon. */
+.lp-perk__thing--app svg {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 16px -8px rgb(80 20 10 / 0.55);
 }
 
 .lp-perk h3 {
@@ -2069,8 +2224,9 @@ a {
 /* Fresh off the bed: a strip of snapshots, sideways. It drifts as the page scrolls where the browser can tie the two;
    elsewhere it simply scrolls sideways. */
 .lp-gallery__scroller {
-  margin-top: clamp(1.5rem, 3vw, 2.5rem);
-  padding: 2rem 0 2.5rem;
+  /* Room for the snapshots' shadows, which the scroller would otherwise cut off in a straight line. */
+  margin: clamp(1.5rem, 3vw, 2.5rem) 0 -2.5rem;
+  padding: 2rem 0 5rem;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
@@ -2118,10 +2274,6 @@ a {
   line-height: 1.25;
 }
 
-.lp-gallery__cap .lp-chip {
-  font-family: var(--lp-sans);
-}
-
 /* The end */
 
 .lp-end {
@@ -2161,9 +2313,6 @@ a {
 }
 
 .lp-end__own a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3125rem;
   border-radius: 0.375rem;
   font-weight: 650;
   text-decoration: underline;
@@ -2172,8 +2321,10 @@ a {
 }
 
 .lp-end__own svg {
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.125em;
+  height: 1.125em;
+  margin-right: 0.25em;
+  vertical-align: -0.2em;
   fill: currentColor;
 }
 
@@ -2194,8 +2345,6 @@ a {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.75rem 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--sg-hairline);
 }
 
 /* ---- Wider screens ---- */
@@ -2224,16 +2373,19 @@ a {
 
   .lp-stage__snap {
     left: -1%;
-    top: 14%;
     width: clamp(10rem, 20vw, 16rem);
     z-index: 3;
   }
 
+  .lp-stage__snap {
+    top: 14%;
+  }
+
   .lp-stage__note {
-    left: 3%;
+    left: 7%;
     right: auto;
     top: auto;
-    bottom: -2.5rem;
+    bottom: -5.5rem;
     width: clamp(10rem, 18vw, 14rem);
     --turn: -3deg;
   }
@@ -2247,11 +2399,11 @@ a {
   }
 
   .lp-helpers {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .lp-helper--week {
-    grid-column: span 2;
+    grid-column: 1 / -1;
   }
 
   .lp-perks {
@@ -2271,6 +2423,27 @@ a {
 }
 
 @media (min-width: 64rem) {
+  :is(.lp-capture, .lp-builds, .lp-fail, .lp-search, .lp-pantry, .lp-together) .lp-h2 {
+    font-size: min(var(--lp-h2), 5.5rem);
+  }
+
+  .lp-hero__tagline {
+    max-width: none;
+  }
+
+  .lp-stage {
+    margin-top: 2.5rem;
+  }
+
+  .lp-doodle--flip {
+    left: 44%;
+    width: 64%;
+  }
+
+  .lp-section__head--wide {
+    max-width: none;
+  }
+
   .lp-capture {
     grid-template-columns: 1fr 1fr;
     gap: 4rem;
@@ -2306,12 +2479,16 @@ a {
 
   .lp-builds {
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-    align-items: center;
-    gap: 4rem;
+    align-items: start;
+    gap: 3.5rem 4rem;
   }
 
-  .lp-builds .lp-section__head {
-    grid-column: 1 / -1;
+  .lp-builds__devices {
+    position: sticky;
+    top: 7rem;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-top: 4rem;
   }
 
   .lp-builds__phone {
@@ -2321,7 +2498,13 @@ a {
 
   .lp-fail {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
     gap: 5rem;
+  }
+
+  .lp-fail__visual {
+    position: sticky;
+    top: 6rem;
   }
 
   .lp-search {
@@ -2330,7 +2513,7 @@ a {
   }
 
   .lp-finder {
-    left: -10%;
+    left: -4%;
     bottom: -3rem;
   }
 
@@ -2341,17 +2524,14 @@ a {
   }
 
   .lp-pantry .lp-printing {
+    position: sticky;
+    top: 7rem;
     grid-column: 2;
     grid-row: 1 / span 2;
-    align-self: center;
-  }
-
-  .lp-helpers {
-    grid-template-columns: repeat(4, 1fr);
+    align-self: start;
   }
 
   .lp-helper--week {
-    grid-column: span 4;
     display: grid;
     grid-template-columns: 0.8fr 1.2fr;
     align-items: center;
@@ -2360,7 +2540,7 @@ a {
   }
 
   .lp-together {
-    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     align-items: center;
     gap: 4rem;
   }
@@ -2391,6 +2571,11 @@ a {
 
   .lp-word__verdict {
     animation: lp-pop 0.6s var(--sg-ease-bounce) 2.95s both;
+  }
+
+  /* Once the head has lifted off the last layer it parks where the strands meet. */
+  .lp-hero__parked {
+    animation: lp-park 0.5s var(--sg-ease-out) 2.95s both;
   }
 
   .lp-hero__feed,
@@ -2613,6 +2798,13 @@ a {
   }
   to {
     clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes lp-park {
+  from {
+    opacity: 0;
+    transform: translateY(-0.75rem);
   }
 }
 

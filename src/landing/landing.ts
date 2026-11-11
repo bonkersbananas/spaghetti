@@ -15,6 +15,16 @@ function followScroll() {
   const update = () => bar.toggleAttribute("data-scrolled", window.scrollY > 8);
   update();
   window.addEventListener("scroll", update, { passive: true });
+
+  // One tomato Sign in at a time: the bar's takes the colour once the hero's has gone off screen.
+  const hero = document.querySelector<HTMLElement>(".lp-hero__actions .lp-btn");
+  if (!hero || !("IntersectionObserver" in window)) {
+    bar.setAttribute("data-cta", "");
+    return;
+  }
+  new IntersectionObserver(([entry]) => {
+    if (entry) bar.toggleAttribute("data-cta", !entry.isIntersecting && entry.boundingClientRect.top < 0);
+  }).observe(hero);
 }
 
 /**
