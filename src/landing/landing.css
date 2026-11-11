@@ -375,6 +375,7 @@ a {
 }
 
 /* ---- Devices: a phone and a laptop drawn around the app's screenshots ---- */
+/* (The share image draws its phone with these same rules, up to .lp-laptop: scripts/landing/pictures.ts.) */
 
 /*
  * An iPhone drawn around a 390 × 844 screenshot taken at 3x (the Home Screen app, safe areas and all): a titanium
@@ -400,8 +401,8 @@ a {
   margin: 4.3cqi;
   border-radius: 12.8cqi;
   background: var(--sg-paper);
-  /* The black glass between the screen and the rim. */
-  box-shadow: 0 0 0 3.2cqi #0b0a0a;
+  /* The black glass between the screen and the rim; the 1.8cqi left of the 4.3 is the titanium band. */
+  box-shadow: 0 0 0 2.5cqi #0b0a0a;
 }
 
 .lp-phone__screen picture,
@@ -497,17 +498,17 @@ a {
   object-fit: cover;
 }
 
-/* The camera notch, as on a MacBook: the bezel's own black dipping into the top of the screen, small and narrow,
-   with a camera dot in it. Shares of the screen: 6.6% wide, 3.4% tall. */
+/* The camera notch, as on a MacBook: the bezel's own black dipping into the top of the screen, wide and shallow,
+   with a camera dot in it. Shares of the screen, as on a 14-inch MacBook Pro (188 × 32 of 1512 × 982 points). */
 .lp-laptop__screen::after {
   content: "";
   position: absolute;
   top: 0;
   left: 50%;
-  width: 6.6%;
-  height: 3.4%;
+  width: 12.4%;
+  height: 3.3%;
   translate: -50% 0;
-  border-radius: 0 0 22% 22% / 0 0 34% 34%;
+  border-radius: 0 0 5.4% 5.4% / 0 0 32% 32%;
   background:
     radial-gradient(circle closest-side at 50% 46%, #26303a 0 30%, #161a1f 42%, transparent 50%), var(--bezel);
 }

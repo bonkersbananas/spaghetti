@@ -109,8 +109,9 @@ export const ATTEMPT_PHOTOS: AttemptPhoto[] = [
   },
 ];
 
-/** Seed items renamed to match their stand-in or added photo, by id. */
+/** Seed items renamed for the landing page, by id: to match a stand-in or added photo, or just for the page. */
 export const RENAMES: Record<string, { title: string; note?: string }> = {
+  [SEED_IDS.tugboat]: { title: "Bath tugboat for Clara" },
   [SEED_IDS.headphoneStand]: {
     title: "Laptop stand",
     note: "Charcoal matte PLA, with holes so it stays light. Rubber feet underneath.",
