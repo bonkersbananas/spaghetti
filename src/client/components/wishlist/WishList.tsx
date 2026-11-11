@@ -125,6 +125,7 @@ export function EditableWishList({ me, ideas, label }: { me: string; ideas: Item
         axis="y"
         values={order}
         onReorder={setOrder}
+        data-picks
         className="flex flex-col gap-2"
         aria-label={label}
       >
