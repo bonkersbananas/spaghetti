@@ -12,6 +12,8 @@ import { setCoachDismissed } from "@/lib/coach";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 
+const IDEAS = "Claude's ideas for the next try";
+
 /** Where the suggestions will go, while Claude thinks: a pulse, not a spinner. */
 function Thinking({ className }: { className?: string }) {
   return (
@@ -36,6 +38,8 @@ interface CoachNoteProps {
   itemId: string;
   attemptId: string;
   className?: string;
+  /** The region's name, when a page shows several (the styleguide). */
+  label?: string;
 }
 
 /**
@@ -43,14 +47,14 @@ interface CoachNoteProps {
  * (dashed, like every suggestion), at most three short lines each with its one-line why, and one tap to dismiss.
  * It never asks for anything. Taking one is in the Log attempt sheet (`CoachSuggestions`).
  */
-export function CoachNote({ coach, itemId, attemptId, className }: CoachNoteProps) {
+export function CoachNote({ coach, itemId, attemptId, className, label = IDEAS }: CoachNoteProps) {
   const queryClient = useQueryClient();
   const readOnly = useReadOnly();
   if (coach.status === "thinking") return <Thinking className={className} />;
   const items = liveCoachItems(coach);
   if (!items.length) return null;
   return (
-    <section aria-label="Claude's ideas for the next try" className={cn("flex flex-col gap-2 pt-1", className)}>
+    <section aria-label={label} className={cn("flex flex-col gap-2 pt-1", className)}>
       <Heading>Claude's ideas for the next try</Heading>
       <ul className="flex flex-col gap-2.5">
         {items.map((item) => (
@@ -83,6 +87,7 @@ interface CoachSuggestionsProps {
   attemptNumber: number;
   settings: AttemptSettings;
   note: string;
+  label?: string;
   /** Sets the sheet's settings and note: only ever called by a tap. */
   onUse: (next: { settings?: AttemptSettings; note?: string }) => void;
 }
@@ -99,6 +104,7 @@ export function CoachSuggestions({
   attemptNumber,
   settings,
   note,
+  label = IDEAS,
   onUse,
 }: CoachSuggestionsProps) {
   const queryClient = useQueryClient();
@@ -135,7 +141,7 @@ export function CoachSuggestions({
   };
 
   return (
-    <section aria-label="Claude's ideas for the next try" className="flex flex-col gap-1 px-0.5">
+    <section aria-label={label} className="flex flex-col gap-1 px-0.5">
       <Heading>{`Claude's ideas · after attempt ${attemptNumber}`}</Heading>
       <ul className="flex flex-col gap-1">
         {items.map((item) => {

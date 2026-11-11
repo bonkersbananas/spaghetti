@@ -66,6 +66,7 @@ function CoachSuggestionsSpecimen() {
       itemId="sample"
       attemptId="sample"
       attemptNumber={2}
+      label="Claude's ideas, in the sheet"
       settings={settings}
       note={note}
       onUse={(next) => {
@@ -244,7 +245,12 @@ export function BuildsSection() {
           </Label>
           <div className="flex flex-col gap-3">
             <CoachNote coach={{ status: "thinking", items: [] }} itemId="sample" attemptId="sample" />
-            <CoachNote coach={sampleCoach} itemId="sample" attemptId="sample" />
+            <CoachNote
+              coach={sampleCoach}
+              itemId="sample"
+              attemptId="sample"
+              label="Claude's ideas, under the attempt"
+            />
           </div>
           <Label>The same in the Log attempt sheet: "Use this" fills the attempt's changes, nothing sets itself</Label>
           <CoachSuggestionsSpecimen />
