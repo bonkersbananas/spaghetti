@@ -34,17 +34,10 @@ export function comboOf(event: KeyboardEvent): string | null {
  * typing in a field or while a dialog is open; ⌘/Ctrl combos work inside
  * fields too (⌘K from the note you are writing), but not over a dialog.
  */
-// The first key of a two-key shortcut ("g" of "g i"), shared by every useHotkeys on the page: a screen's own
-// handler for "j" must not swallow the "j" of "g j" that the shell is waiting for.
+// The first key of a two-key shortcut ("g" of "g i"), shared by every useHotkeys on the page: a screen's own handler
+// for "j" must not swallow the "j" of "g j" that the shell is waiting for. It lapses by itself.
 let pending: string | null = null;
-let pendingEvent: KeyboardEvent | null = null;
-let pendingTimer: ReturnType<typeof setTimeout> | undefined;
-function setPending(key: string | null, event: KeyboardEvent | null = null) {
-  pending = key;
-  pendingEvent = event;
-  clearTimeout(pendingTimer);
-  if (key) pendingTimer = setTimeout(() => setPending(null), 1200);
-}
+let timer: ReturnType<typeof setTimeout> | undefined;
 
 export function useHotkeys(handlers: HotkeyHandlers) {
   const handlersRef = useRef(handlers);
@@ -83,14 +76,15 @@ export function useHotkeys(handlers: HotkeyHandlers) {
       const handler = map.get(combo);
       if (handler) {
         event.preventDefault();
-        setPending(null);
+        pending = null;
         handler();
         return;
       }
-      const startsSequence = [...map.keys()].some((k) => k.startsWith(`${key} `));
-      if (!pending && startsSequence) setPending(key, event);
-      // A second key nobody on the page took ends the sequence, but only after every listener has seen this event.
-      else if (pending && pendingEvent !== event) setTimeout(() => pending && setPending(null), 0);
+      if (!pending && [...map.keys()].some((k) => k.startsWith(`${key} `))) {
+        pending = key;
+        clearTimeout(timer);
+        timer = setTimeout(() => (pending = null), 1200);
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);
