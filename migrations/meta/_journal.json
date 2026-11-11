@@ -229,8 +229,15 @@
     {
       "idx": 32,
       "version": "6",
-      "when": 1794418585557,
-      "tag": "0032_shopping-items",
+      "when": 1794418739699,
+      "tag": "0032_bridge_pairing",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794422109611,
+      "tag": "0033_shopping-items",
       "breakpoints": true
     }
   ]

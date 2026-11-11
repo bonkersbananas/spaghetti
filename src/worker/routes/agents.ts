@@ -195,7 +195,7 @@ interface Issued {
   row: typeof agentTokens.$inferInsert;
 }
 
-async function issue(agentId: string, tokenScopes: AgentToken["scopes"]): Promise<Issued> {
+export async function issue(agentId: string, tokenScopes: AgentToken["scopes"]): Promise<Issued> {
   const token = generateToken();
   return {
     token,

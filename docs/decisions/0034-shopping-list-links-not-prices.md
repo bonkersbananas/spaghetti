@@ -1,4 +1,4 @@
-# 0033. The shopping list keeps links, not prices
+# 0034. The shopping list keeps links, not prices
 
 Status: Accepted
 

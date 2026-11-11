@@ -14,6 +14,7 @@ import { buildOpenApi } from "./openapi/document.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
+import { bridgePairRoutes, bridgeRoutes } from "./routes/bridge.ts";
 import { captureRoutes } from "./routes/capture.ts";
 import { changeRoutes } from "./routes/changes.ts";
 import { commentRoutes, itemCommentRoutes } from "./routes/comments.ts";
@@ -115,6 +116,8 @@ export const app = new Hono<AppEnv>()
   .get("/health", (c) => c.json({ ok: true }))
   .route("/session", sessionRoutes)
   .route("/join", joinRoutes)
+  // The bridge installer's exchange of a pairing code: no session yet, the code is the way in.
+  .route("/bridge", bridgePairRoutes)
   .use(requireAuth)
   .use(requireScope)
   // What this caller may do, as OpenAPI 3.1 (made from the code: worker/openapi).
@@ -125,6 +128,7 @@ export const app = new Hono<AppEnv>()
   .route("/people", peopleRoutes)
   .route("/wishlists", wishlistRoutes)
   .route("/agents", agentRoutes)
+  .route("/bridge", bridgeRoutes)
   .route("/oauth", oauthRoutes)
   .route("/changes", changeRoutes)
   .route("/webhooks", webhookRoutes)

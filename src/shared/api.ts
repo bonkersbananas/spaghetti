@@ -715,6 +715,9 @@ export interface UpdateBridgeRequest {
     totalLayers?: number | null;
   } | null;
   unknownTrays?: BridgeStatus["unknownTrays"];
+  version?: BridgeStatus["version"];
+  platform?: BridgeStatus["platform"];
+  problems?: BridgeStatus["problems"];
 }
 
 /** PUT /api/printer/slots/:slot. Loading a spool takes it out of the slot it was in. */
