@@ -9,11 +9,14 @@ function Tab({ to, label, icon: Icon }: Section) {
       to={to}
       // Phones have no hover: fetch each section's code once the tab bar shows, so the first tap is instant.
       preload="viewport"
-      className="pressable group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
+      className="pressable press-none group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
     >
       {({ isActive }) => (
         <>
-          <Icon size={26} weight={isActive ? "fill" : "regular"} aria-hidden />
+          {/* The held highlight: a soft round behind the icon. */}
+          <span className="group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-8 w-12 items-center justify-center">
+            <Icon size={26} weight={isActive ? "fill" : "regular"} aria-hidden />
+          </span>
           <span className="text-caption font-semibold">{label}</span>
         </>
       )}
@@ -42,7 +45,7 @@ export function TabBar() {
             type="button"
             onClick={() => setOpen(true)}
             aria-label="New idea"
-            className="pressable focus-ring bg-tomato text-on-accent shadow-raised flex size-14 items-center justify-center rounded-lg"
+            className="pressable press-tomato focus-ring bg-tomato text-on-accent shadow-raised flex size-14 items-center justify-center rounded-lg"
           >
             <PlusIcon size={28} weight="bold" aria-hidden />
           </button>
