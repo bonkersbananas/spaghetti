@@ -97,6 +97,8 @@ export async function seedComments(
     const response = await people[reaction.by].put(`${reaction.path}/reactions/${reaction.kind}`, {
       headers: { Origin: origin },
     });
+    // screenshots:compare seeds an older base with this seed: one without reactions answers 404, and goes without.
+    if (response.status() === 404) break;
     if (!response.ok()) throw new Error(`Seeding a reaction failed: ${response.status()}`);
   }
   const unread = SEED_COMMENTS.find((comment) => comment.n === 4);
