@@ -89,6 +89,24 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
 
+  // The quiet extras of an entry are one row at its foot, above the open button so they work. On a print that is
+  // still on the bed or off it, awaiting its answer, the foot is below the progress and the question.
+  const footerRow =
+    onCompare || onSaveRecipe ? (
+      <div className="pointer-events-auto relative z-10 -ml-3 flex flex-wrap items-center gap-x-1">
+        {onCompare && (
+          <Button variant="quiet" size="sm" icon={CompareIcon} onClick={onCompare}>
+            {attempt.changes.length > 0 ? "Compare" : `Compare with attempt ${attempt.number - 1}`}
+          </Button>
+        )}
+        {onSaveRecipe && (
+          <Button variant="quiet" size="sm" icon={RecipeIcon} onClick={onSaveRecipe}>
+            Save as recipe
+          </Button>
+        )}
+      </div>
+    ) : null;
+
   return (
     <m.li
       ref={ref}
@@ -218,21 +236,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               />
             )}
 
-            {(onCompare || onSaveRecipe) && (
-              // The quiet extras of an entry are one row at its foot, above the open button so they work.
-              <div className="pointer-events-auto relative z-10 -ml-3 flex flex-wrap items-center gap-x-1">
-                {onCompare && (
-                  <Button variant="quiet" size="sm" icon={CompareIcon} onClick={onCompare}>
-                    {attempt.changes.length > 0 ? "Compare" : `Compare with attempt ${attempt.number - 1}`}
-                  </Button>
-                )}
-                {onSaveRecipe && (
-                  <Button variant="quiet" size="sm" icon={RecipeIcon} onClick={onSaveRecipe}>
-                    Save as recipe
-                  </Button>
-                )}
-              </div>
-            )}
+            {!printing && !offBed && footerRow}
 
             {attempt.coach && (
               // Above the open button, so its dismiss buttons work.
@@ -271,6 +275,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </Button>
               </div>
             )}
+
+            {(printing || offBed) && footerRow}
           </div>
         </div>
       </div>
