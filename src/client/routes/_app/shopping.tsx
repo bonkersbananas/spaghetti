@@ -57,7 +57,7 @@ function Shopping() {
   const shownBought = allBought ? bought : bought.slice(0, BOUGHT_SHOWN);
   return (
     <>
-      <PageHeader title="Shopping list" subtitle="What the printer needs next. Tick things off as you buy them." />
+      <PageHeader title="Shopping list" subtitle="What the printer needs next." />
       <div className="max-w-content flex flex-col gap-12 md:gap-16">
         <div className="flex flex-col gap-4 md:gap-5">
           <AddToList fieldRef={field} disabled={readOnly || !me} userId={me?.id} />
