@@ -185,7 +185,7 @@ function DesktopSheet({
               : cn(
                   "sg-dialog left-1/2 w-full -translate-x-1/2 rounded-xl",
                   fill
-                    ? "top-[5vh] h-[90vh] max-w-6xl overflow-hidden"
+                    ? "top-[3vh] h-[94vh] max-w-7xl overflow-hidden"
                     : wide
                       ? "top-[8vh] max-h-[84vh] max-w-4xl"
                       : "top-[14vh] max-h-[72vh] max-w-xl",
