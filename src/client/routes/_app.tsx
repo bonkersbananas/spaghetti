@@ -186,9 +186,12 @@ function DesktopOverlays() {
         // The frame and search box draw as soon as ⌘K is pressed; the commands fill in when their code arrives.
         <Suspense
           fallback={
-            <Suspense fallback={null}>
-              <PaletteShell onOpenChange={setPaletteOpen} />
-            </Suspense>
+            // Only while it is asked for: Escape, a click outside or a second ⌘K close the frame (paletteOpen goes false).
+            paletteOpen ? (
+              <Suspense fallback={null}>
+                <PaletteShell onOpenChange={setPaletteOpen} />
+              </Suspense>
+            ) : null
           }
         >
           <CommandPalette />

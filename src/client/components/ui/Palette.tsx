@@ -286,6 +286,14 @@ export const takeEarlyQuery = () => {
  */
 export function PaletteShell({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const [query, setQuery] = useState("");
+  // Whatever was typed is for the palette that replaces this frame (it has read it by the time this unmounts); a frame
+  // that closes unanswered takes its text with it, so a later ⌘K never opens with an old query.
+  useEffect(
+    () => () => {
+      earlyQuery = "";
+    },
+    [],
+  );
   return (
     <PaletteDialog open onOpenChange={onOpenChange}>
       <PaletteSurface
