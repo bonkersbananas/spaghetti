@@ -10,13 +10,13 @@ function Tab({
   icon: Icon,
   pendingTo,
   press,
-}: Section & { pendingTo: string | null; press: (to: string) => void }) {
+}: Section & { pendingTo: string | null; press: (to: string, event?: React.MouseEvent) => void }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const selected = isSelected(to, pathname, pendingTo);
   return (
     <Link
       to={to}
-      onClick={() => press(to)}
+      onClick={(event) => press(to, event)}
       data-selected={selected || undefined}
       // Each section's code is fetched once the app is idle (routes/_app.tsx), and on the touch itself.
       className="pressable press-none group text-ink-faint data-[selected]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
