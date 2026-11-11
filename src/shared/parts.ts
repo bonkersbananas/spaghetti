@@ -176,10 +176,10 @@ export const allPartsPrinted = (progress: readonly PartProgress[]) =>
  */
 export function attemptPartsLabel(
   attempt: { parts?: readonly AttemptPart[] },
-  parts: readonly Pick<Part, "id" | "name" | "position">[],
+  parts: readonly Pick<Part, "id" | "name" | "position">[] | undefined,
 ): string | null {
   const names = (attempt.parts ?? [])
-    .map((p) => ({ p, part: parts.find((part) => part.id === p.partId) }))
+    .map((p) => ({ p, part: (parts ?? []).find((part) => part.id === p.partId) }))
     .filter((found): found is { p: AttemptPart; part: Pick<Part, "id" | "name" | "position"> } => !!found.part)
     .sort((a, b) => a.part.position - b.part.position)
     .map(({ p, part }) => (p.count > 1 ? `${part.name} ×${p.count}` : part.name));

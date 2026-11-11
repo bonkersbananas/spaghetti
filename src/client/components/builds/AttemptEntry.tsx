@@ -122,7 +122,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 Attempt {attempt.number}
                 {partsLabel && <span className="text-ink-soft font-medium"> · {partsLabel}</span>}
               </h3>
-              <span className="text-small text-ink-faint ml-auto flex items-center gap-2">
+              <span className="text-small text-ink-faint ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap">
                 <ViaText name={via} className="hidden md:inline" />
                 <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
                   {relativeTime(attempt.printedAt)}

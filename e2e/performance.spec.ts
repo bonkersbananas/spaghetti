@@ -23,15 +23,16 @@ const origin = (page: Page) => new URL(page.url()).origin;
 const BUDGET_KB = {
   "/sign-in": 214,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 318,
+  "/today": 319,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 309,
+  // Parts (#197) added about 1 kB: the part names that go with an attempt ("attempt 3 · Hull half") and the counting rules are shared. The editor loads on demand.
+  "/ideas": 310,
   "/builds": 310,
   "/journal": 311,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 315,
-  "/pantry": 319,
+  "/search": 316,
+  "/pantry": 320,
   "/printer": 319,
 } as const;
 

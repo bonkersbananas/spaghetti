@@ -1088,6 +1088,51 @@ export const shots: Shot[] = [
     path: "/builds/5eed0000-0000-4000-8000-000000000101",
     fullPage: true,
   },
+  // Parts and quantities: a build made of parts, with progress ...
+  { name: "build-parts", path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`, fullPage: true },
+  {
+    // ... the attempt sheet's "What's on the plate" row (a plate from the slicer file preselects its parts) ...
+    name: "build-parts-sheet",
+    path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Attempt 2: partial\. Open$/ }).click();
+      await page.getByRole("group", { name: "Hull half, pieces" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.reload();
+    },
+  },
+  {
+    // ... the same build before it has parts: its slicer file offers them in one tap ...
+    name: "build-parts-from-file",
+    path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`,
+    prepare: async (page) => {
+      await page.route(new RegExp(`/api/items/${SEED_BUILD_IDS.paddleSteamer}$`), async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as { item: { parts: unknown[] } };
+        body.item.parts = [];
+        await route.fulfill({ response, json: body });
+      });
+      await page.reload();
+      const offer = page.getByRole("button", { name: /^Parts from the file/ });
+      await offer.waitFor();
+      await offer.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+    cleanup: async (page) => {
+      await page.unroute(new RegExp(`/api/items/${SEED_BUILD_IDS.paddleSteamer}$`));
+    },
+  },
+  {
+    // ... and the journal row says which part an attempt printed.
+    name: "journal-parts",
+    path: "/journal",
+    prepare: async (page) => {
+      const row = page.getByText(/attempt 2 · Hull half/).first();
+      await row.waitFor();
+      await row.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
   { name: "styleguide", path: "/styleguide", fullPage: true },
   {
     // The moment before permission is asked for: the browser says nothing until the switch is turned on.

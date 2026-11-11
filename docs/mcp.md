@@ -45,9 +45,10 @@ Any client that takes a JSON config:
 | `list_recipes` | The saved recipes (named settings of attempts that worked), optionally for a `material` and `finish` | `read` |
 | `get_build` | One build as a markdown story: the idea, notes, every attempt with settings, changes and notes, what worked (the same as `GET /api/builds/:id/story.md`) | `read` |
 | `capture_idea` | A title and/or note, optionally a photo by https URL or base64 (JPEG or WebP) | `capture` |
+| `set_parts` | Add or change a build's parts (name and quantity; give `part_id` to change one). Removing is for people | `attempts` |
 | `start_attempt` | A print has started: an attempt with no outcome yet | `attempts` |
-| `log_attempt` | A print that is already done, with outcome, tags, note and settings | `attempts` |
-| `finish_attempt` | Give a printing attempt its outcome | `attempts` |
+| `log_attempt` | A print that is already done, with outcome, tags, note, settings and, for a build with parts, `parts` (`part_id` and good pieces) | `attempts` |
+| `finish_attempt` | Give a printing attempt its outcome (and `parts` counts); a spaghetti counts no pieces unless a number is given | `attempts` |
 | `list_spools` | The pantry, with each spool's slot, level and (where it has gram data) grams left | `read` |
 | `weigh_spool` | A weighing: a fresh baseline for the grams left on a spool (`on_scale` minus its empty weight, or `grams_left`) | `printer` |
 | `list_upkeep` | The printer's maintenance tasks, most due first, with how long since each was done and the print-hour total | `read` |

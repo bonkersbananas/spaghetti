@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
+import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
@@ -58,6 +59,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   const hero = heroPhoto(item);
   const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
   const name = itemName(item);
+  const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
 
   const finish = (outcome?: Outcome) =>
@@ -83,6 +85,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
       >
         <span className="sr-only">
           {name.text}, attempt {attempt.number}
+          {partsLabel ? `, ${partsLabel}` : ""}
         </span>
       </Link>
       <div
@@ -135,6 +138,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         </div>
         <MetaList className="text-small text-ink-faint">
           <span className="whitespace-nowrap">attempt {attempt.number}</span>
+          {partsLabel && <span>{partsLabel}</span>}
           {filaments.length > 0 && (
             <SettingsLine
               filaments={filaments}

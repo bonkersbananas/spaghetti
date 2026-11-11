@@ -1,16 +1,21 @@
+import type { Part } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
+import { type AttemptPart, partProgress } from "@shared/parts";
 import { livePrintProgress } from "@shared/print-progress";
 import { useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { PlateParts } from "@/components/builds/attempt-sheet/PlateParts";
 import { BuildSummary } from "@/components/builds/BuildSummary";
 import { CompareTable } from "@/components/builds/CompareTable";
 import { OffTheBed } from "@/components/builds/OffTheBed";
 import { OutcomeChip, OutcomePicker } from "@/components/builds/Outcome";
 import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
+import { PartLine } from "@/components/builds/parts/PartsSection";
 import { TagPicker } from "@/components/builds/TagPicker";
 import * as Icons from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { PrintProgress, PrintProgressView } from "@/components/ui/PrintProgress";
+import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
 import type { AttemptView } from "@/lib/items";
 import { Label, Panel, people, SAMPLE_COLOR, Section } from "./shared";
@@ -117,9 +122,27 @@ const sampleAfter: AttemptView = {
 };
 const sampleAttempts = [sampleBefore, sampleAttempt, sampleAfter];
 
+const sampleParts: Part[] = [
+  { id: "hull", name: "Hull half", quantity: 2, position: 0 },
+  { id: "deck", name: "Deck", quantity: 1, position: 1 },
+  { id: "wheel", name: "Paddle wheel", quantity: 1, position: 2 },
+].map((part) => ({ ...part, itemId: "sample-build", photoId: null, createdAt: 1, updatedAt: 1 }));
+const sampleProgress = partProgress(sampleParts, [
+  {
+    outcome: "partial",
+    parts: [
+      { partId: "hull", count: 1 },
+      { partId: "deck", count: 1 },
+    ],
+  },
+  { outcome: null, parts: [{ partId: "wheel", count: 1 }] },
+]);
+
 export function BuildsSection() {
   const [outcome, setOutcome] = useState<Outcome | null>("failed");
   const [failureTags, setFailureTags] = useState(["spaghetti"]);
+  const [plate, setPlate] = useState<AttemptPart[]>([{ partId: "hull", count: 1 }]);
+  const [quantity, setQuantity] = useState(2);
   return (
     <Section
       id="builds"
@@ -127,6 +150,16 @@ export function BuildsSection() {
       note="Logging an attempt next to the printer: the outcome is one big tap, tags and settings one more. A failed print is spaghetti, recorded with the same care as a success: soft tomato, never an error."
     >
       <div className="grid gap-4 md:grid-cols-2">
+        <Panel className="flex min-w-0 flex-col gap-5">
+          <Label>Parts and quantities (a build's progress, the plate's chips, the stepper)</Label>
+          <ul className="flex flex-col gap-2.5">
+            {sampleProgress.map((progress) => (
+              <PartLine key={progress.part.id} progress={progress} />
+            ))}
+          </ul>
+          <PlateParts parts={sampleParts} value={plate} onChange={setPlate} outcome="success" />
+          <Stepper label="Quantity" value={quantity} min={1} onChange={setQuantity} />
+        </Panel>
         <Panel className="flex min-w-0 flex-col gap-5">
           <Label>Outcome picker</Label>
           <OutcomePicker value={outcome} onChange={setOutcome} />

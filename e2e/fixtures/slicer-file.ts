@@ -98,3 +98,72 @@ export function slicerFile(): Uint8Array {
     "Metadata/plate_1.gcode": strToU8("; HEADER_BLOCK_START\n; total estimated time: 1h 12m\nG28\n"),
   });
 }
+
+/**
+ * A one-plate file whose plate holds the three kinds of object of a paddle steamer: two hull halves (the same
+ * object twice, as the slicer numbers copies), and the deck. Plate two has the paddle wheel. For parts from a file.
+ */
+export const PARTS_FILE_NAME = "paddle-steamer.gcode.3mf";
+
+const partsModelSettings = `${xml}<config>
+  <object id="2"><metadata key="name" value="hull_half"/><metadata key="extruder" value="1"/></object>
+  <object id="3"><metadata key="name" value="hull_half_2"/><metadata key="extruder" value="1"/></object>
+  <object id="4"><metadata key="name" value="deck"/><metadata key="extruder" value="1"/></object>
+  <object id="5"><metadata key="name" value="paddle_wheel"/><metadata key="extruder" value="1"/></object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <metadata key="plater_name" value="Hull and deck"/>
+    <metadata key="bed_type" value="Textured PEI Plate"/>
+    <metadata key="thumbnail_file" value="Metadata/plate_1.png"/>
+    <model_instance><metadata key="object_id" value="2"/><metadata key="identify_id" value="101"/></model_instance>
+    <model_instance><metadata key="object_id" value="3"/><metadata key="identify_id" value="102"/></model_instance>
+    <model_instance><metadata key="object_id" value="4"/><metadata key="identify_id" value="103"/></model_instance>
+  </plate>
+  <plate>
+    <metadata key="plater_id" value="2"/>
+    <metadata key="plater_name" value="Paddle wheel"/>
+    <metadata key="bed_type" value="Textured PEI Plate"/>
+    <metadata key="thumbnail_file" value="Metadata/plate_2.png"/>
+    <model_instance><metadata key="object_id" value="5"/><metadata key="identify_id" value="201"/></model_instance>
+  </plate>
+</config>`;
+
+const partsSliceInfo = `${xml}<config>
+  <header>
+    <header_item key="X-BBL-Client-Type" value="slicer"/>
+    <header_item key="X-BBL-Client-Version" value="02.01.00.00"/>
+  </header>
+  <plate>
+    <metadata key="index" value="1"/>
+    <metadata key="nozzle_diameters" value="0.4"/>
+    <metadata key="prediction" value="9000"/>
+    <metadata key="weight" value="64.2"/>
+    <metadata key="support_used" value="false"/>
+    <object identify_id="101" name="hull_half" skipped="false" />
+    <object identify_id="102" name="hull_half_2" skipped="false" />
+    <object identify_id="103" name="deck" skipped="false" />
+    <filament id="1" tray_info_idx="GFA00" type="PLA" color="#F4F1EAFF" used_m="21.0" used_g="64.20" />
+  </plate>
+  <plate>
+    <metadata key="index" value="2"/>
+    <metadata key="nozzle_diameters" value="0.4"/>
+    <metadata key="prediction" value="2400"/>
+    <metadata key="weight" value="9.8"/>
+    <metadata key="support_used" value="false"/>
+    <object identify_id="201" name="paddle_wheel" skipped="false" />
+    <filament id="1" tray_info_idx="GFA00" type="PLA" color="#F4F1EAFF" used_m="3.2" used_g="9.80" />
+  </plate>
+</config>`;
+
+export function partsSlicerFile(): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": strToU8(`${xml}<Types/>`),
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(partsModelSettings),
+    "Metadata/slice_info.config": strToU8(partsSliceInfo),
+    "Metadata/project_settings.config": strToU8(projectSettings),
+    "Metadata/plate_1.png": new Uint8Array(readFileSync(join(here, "plate-clips.png"))),
+    "Metadata/plate_2.png": new Uint8Array(readFileSync(join(here, "plate-hook.png"))),
+    "Metadata/plate_1.gcode": strToU8("; HEADER_BLOCK_START\n; total estimated time: 2h 30m\nG28\n"),
+  });
+}
