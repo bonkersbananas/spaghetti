@@ -12,8 +12,9 @@ interface PopoverProps {
   className?: string;
   /** Accessible name for the popover. */
   label: string;
-  /** Open on mount: a menu whose code arrived because its trigger was pressed. */
-  defaultOpen?: boolean;
+  /** Controlled: whether it is open, and the change to make (a menu whose code may arrive after its trigger was pressed). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Closes the popover from inside it: wrap the item that was chosen (asChild). */
@@ -27,10 +28,11 @@ export function Popover({
   align = "start",
   className,
   label,
-  defaultOpen,
+  open,
+  onOpenChange,
 }: PopoverProps) {
   return (
-    <RadixPopover.Root defaultOpen={defaultOpen}>
+    <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
       <RadixPopover.Trigger asChild>{trigger}</RadixPopover.Trigger>
       <RadixPopover.Portal>
         <RadixPopover.Content

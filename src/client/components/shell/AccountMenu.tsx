@@ -10,7 +10,15 @@ import { ChangePasswordSheet, ProfilePhotoCrop, ProfilePhotoRow } from "./lazy-a
 import { ThemeSwitch } from "./ThemeSwitch";
 
 /** The sidebar's account menu (desktop), loaded on demand by the Sidebar. */
-export default function AccountMenu({ user, defaultOpen }: { user: Person; defaultOpen: boolean }) {
+export default function AccountMenu({
+  user,
+  open,
+  onOpenChange,
+}: {
+  user: Person;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const signOut = useSignOut();
   const [changingPassword, setChangingPassword] = useState(false);
   const [notifying, setNotifying] = useState(false);
@@ -25,7 +33,8 @@ export default function AccountMenu({ user, defaultOpen }: { user: Person; defau
         label="Account"
         side="top"
         align="start"
-        defaultOpen={defaultOpen}
+        open={open}
+        onOpenChange={onOpenChange}
         trigger={<AccountButton user={user} />}
       >
         <div className="flex flex-col gap-3">

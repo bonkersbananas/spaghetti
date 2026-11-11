@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { cn } from "@/lib/cn";
-import { Panel, Section } from "./shared";
+import { Label, Panel, Section } from "./shared";
 
 export function MotionSection() {
+  const [tall, setTall] = useState(false);
   const [on, setOn] = useState(false);
   const durations = [
     ["instant", "duration-instant", "90 ms · press"],
@@ -52,6 +54,17 @@ export function MotionSection() {
       <div id="pressed">
         <PressedPanel />
       </div>
+      <Label>AutoHeight: a box that grows to fit what it holds (Today's next print becoming the big card)</Label>
+      <Panel className="flex flex-col items-start gap-4">
+        <Button variant="secondary" size="sm" onClick={() => setTall((current) => !current)}>
+          {tall ? "Make it short" : "Make it tall"}
+        </Button>
+        <AutoHeight trigger={tall} className="w-full max-w-sm">
+          <div className={cn("bg-paper rounded-lg p-4", tall ? "h-48" : "h-16")}>
+            <p className="text-small text-ink-soft">{tall ? "Grown, by its real height." : "Short."}</p>
+          </div>
+        </AutoHeight>
+      </Panel>
     </Section>
   );
 }
