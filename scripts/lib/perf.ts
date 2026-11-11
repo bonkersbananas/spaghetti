@@ -39,6 +39,7 @@ declare global {
   interface Window {
     __perf: Probe;
     __readyCheck?: string;
+    __watching?: Promise<number>;
   }
 }
 
@@ -97,12 +98,14 @@ export async function tapLatency(page: Page, act: () => Promise<unknown>, done: 
   await page.evaluate(() => {
     window.__perf.events = [];
   });
-  const shown = page.evaluate(
-    (expression) => window.__perf.watch(new Function(`return (${expression})`) as () => boolean),
-    done,
-  );
+  // The watch must be running before the tap or key press: its `mark` is taken when the page runs this, and a key
+  // event stamped earlier (the page's main thread is slowed, so it can run this a moment after the press has been
+  // delivered) would never count and the result would be -1. So start it, and only then act.
+  await page.evaluate((expression) => {
+    window.__watching = window.__perf.watch(new Function(`return (${expression})`) as () => boolean);
+  }, done);
   await act();
-  const time = await shown;
+  const time = await page.evaluate(() => window.__watching as Promise<number>);
   // Event Timing entries arrive a little after the paint.
   await page.waitForTimeout(250);
   const events = await page.evaluate(() => window.__perf.events);
