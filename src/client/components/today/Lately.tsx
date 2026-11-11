@@ -35,7 +35,7 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
           </Overline>
           <Link
             to="/year"
-            className="text-small text-ink-faint hover:text-ink focus-ring -my-2 rounded-sm py-2 whitespace-nowrap"
+            className="text-small text-ink-faint hover:text-ink focus-ring touch-target relative -my-2 rounded-sm py-2 whitespace-nowrap"
           >
             See the year
           </Link>

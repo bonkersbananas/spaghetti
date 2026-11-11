@@ -125,7 +125,9 @@ for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
 
     await screen(page, "/ideas", "Ideas");
-    await expectAccessible(page, "Ideas");
+    // The seeded build began as an idea, so Ideas ends with its Started section.
+    await expect(page.getByRole("heading", { name: /^Started/ })).toBeVisible();
+    await expectAccessible(page, "Ideas, with the Started section");
 
     await screen(page, `/ideas/${data.ideaId}`, "Bath tugboat");
     await expectAccessible(page, "An idea");
@@ -237,11 +239,33 @@ const CHECKED_ROUTES = [
   "pantry.$spoolId",
   "printer",
   "agents",
+  "year",
+  "deleted",
   "styleguide",
   // Redirects and hand-offs with no screen of their own.
   "index",
   "share",
 ];
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`an idea while Claude reads its page, and once drafted, passes axe in ${scheme}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({ colorScheme: scheme });
+    const headers = { Origin: origin(page) };
+    const id = crypto.randomUUID();
+    // The e2e Worker drafts with a stand-in for Claude (scripts/lib/fake-claude.ts); "slow" in the address takes a while.
+    await post(page, "/api/items", { headers, data: { id, note: "https://makerworld.com/en/models/2-slow-comb" } });
+    // Not awaited: the request answers once the draft is done, and the page should be seen while it is read.
+    const drafting = page.request.post(`/api/items/${id}/draft`, { headers, data: {} });
+    await page.goto(`/ideas/${id}`);
+    await expect(page.getByText(/Reading the MakerWorld page/)).toBeVisible();
+    await expectAccessible(page, "An idea while its page is read");
+    await drafting;
+    await page.reload();
+    await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible({ timeout: 20_000 });
+    await expectAccessible(page, "A drafted idea");
+  });
+}
 
 test("every screen is checked", () => {
   const routes = readdirSync("src/client/routes/_app")
@@ -257,6 +281,12 @@ for (const scheme of ["light", "dark"] as const) {
 
     await screen(page, "/agents", "Agents");
     await expectAccessible(page, "Agents");
+
+    await screen(page, "/year", /\d{4}/);
+    await expectAccessible(page, "The year so far");
+
+    await screen(page, "/deleted", "Recently deleted");
+    await expectAccessible(page, "Recently deleted");
 
     // Every specimen in the design system, not just a few sections.
     await screen(page, "/styleguide", "Styleguide");
@@ -367,6 +397,8 @@ test("every control on a phone has a 44 px target", async ({ page, isMobile }) =
     [`/pantry/${data.spoolId}`, /Teal|PETG/],
     ["/printer", /X2D|Printer/],
     ["/agents", "Agents"],
+    ["/year", /\d{4}/],
+    ["/deleted", "Recently deleted"],
   ];
   for (const [path, heading] of screens) {
     await screen(page, path, heading);
