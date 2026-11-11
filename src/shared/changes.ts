@@ -18,6 +18,9 @@ export const CHANGE_ENTITIES = [
   "tag",
   "agent",
   "person",
+  "signin",
+  "invite",
+  "passkey",
 ] as const;
 export type ChangeEntity = (typeof CHANGE_ENTITIES)[number];
 

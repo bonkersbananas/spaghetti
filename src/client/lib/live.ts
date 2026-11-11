@@ -99,6 +99,15 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "person":
         roots.add("people").add("session");
         break;
+      case "signin":
+        roots.add("sign-in-links").add("devices");
+        break;
+      case "invite":
+        roots.add("invites");
+        break;
+      case "passkey":
+        roots.add("passkeys");
+        break;
     }
     if (change.itemId && change.entity !== "spool") details.add(change.itemId);
   }
