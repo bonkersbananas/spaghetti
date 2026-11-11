@@ -63,6 +63,7 @@ export function useHotkeys(handlers: HotkeyHandlers) {
       const handler = map.get(pending && !modified ? `${pending} ${key}` : key);
       if (handler) {
         event.preventDefault();
+        clearTimeout(timer);
         pending = null;
         handler();
         return;
