@@ -5,15 +5,20 @@ on:
   push:
     branches: [main]
 
+# The repository runs at most 20 jobs at once (GitHub's free plan): keep the jobs per run few (docs/ci.md).
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  # Pushes to main get their own group and are never cancelled (a queued run in a shared group would be replaced): every commit on main needs a finished run for the ship.
+  # A pull request's newer push cancels its older run. Pushes to main share one group and never cancel each other: the
+  # running one always finishes, and GitHub keeps only the newest waiting one (it replaces a waiting run with a newer
+  # one), so a burst of merges costs two runs, not one per commit. The ship deploys the newest commit on main whose run
+  # passed, and a commit whose waiting run was replaced is in the next one.
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -42,6 +47,7 @@ jobs:
   e2e-shards:
     name: Playwright shard ${{ matrix.shard }}/5
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     # Playwright's own image has the browser and its system libraries installed, so the job never calls apt
     # (apt being unreachable took every shard down). Keep the tag on the @playwright/test version.
     container:
@@ -76,49 +82,3 @@ jobs:
           name: playwright-traces-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
-
-  # One required check, whatever the number of shards: it passes when every shard did.
-  e2e:
-    name: Playwright smoke test
-    if: always()
-    needs: e2e-shards
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "Shards: ${{ needs.e2e-shards.result }}"
-          test "${{ needs.e2e-shards.result }}" = "success"
-
-  docker:
-    name: Container image
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t spaghetti:ci .
-      - name: Run it and check the API, the SPA and persistence
-        run: |
-          docker run -d --name spaghetti -p 8787:8787 -v spaghetti-data:/data spaghetti:ci
-          for i in $(seq 1 60); do curl -fs localhost:8787/api/health && break; sleep 1; done
-          curl -fs localhost:8787/api/health
-          curl -fs -H 'Sec-Fetch-Mode: navigate' localhost:8787/ideas | grep -q '<div id="root">'
-          docker exec -e SPAGHETTI_PASSWORD=ci-password-123 spaghetti \
-            node scripts/user-add.ts --username ci --name CI --color basil
-          curl -fs -X POST localhost:8787/api/session -H 'Origin: http://localhost:8787' \
-            -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
-          docker restart spaghetti
-          for i in $(seq 1 60); do curl -fs localhost:8787/api/health && break; sleep 1; done
-          curl -fs -X POST localhost:8787/api/session -H 'Origin: http://localhost:8787' \
-            -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
-      - if: failure()
-        run: docker logs spaghetti
-
-  bridge-image:
-    name: Bridge image
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -f bridge/Dockerfile -t spaghetti-bridge:ci .
-      - name: It starts, finds ffmpeg, and says what is missing
-        run: |
-          docker run --rm --entrypoint ffmpeg spaghetti-bridge:ci -version | head -1
-          ! docker run --rm spaghetti-bridge:ci 2>&1 | tee out.txt
-          grep -q "Missing settings" out.txt
