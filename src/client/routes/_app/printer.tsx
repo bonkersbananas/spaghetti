@@ -23,7 +23,8 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { loadSlot, printerQuery, savePrinterSetup } from "@/lib/pantry";
+import { loadSlot, savePrinterSetup } from "@/lib/pantry";
+import { printerQuery } from "@/lib/pantry-queries";
 import { useReadOnly } from "@/lib/read-only";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIdle } from "@/lib/use-idle";
@@ -303,6 +304,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
                 ? `It goes straight into ${adding === "Ext" ? "the external holder" : `slot ${adding}`}.`
                 : undefined
             }
+            stayPut
             onAdded={(spool, saved) => {
               if (adding) void loadSlot(queryClient, adding, spool.id, saved);
             }}

@@ -27,7 +27,7 @@ import { useBuilds, useIdeas } from "@/lib/items";
 import { journalQuery, summaryQuery } from "@/lib/journal";
 import { duration, ease } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
-import { printerQuery, spoolsQuery } from "@/lib/pantry";
+import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { peopleQuery } from "@/lib/queries";
 import { useDueUpkeep } from "@/lib/upkeep";
 import { useIsDesktop } from "@/lib/use-media-query";

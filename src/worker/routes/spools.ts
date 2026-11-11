@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import {
   type Spool as ApiSpool,
+  type LabelReadResponse,
   MAX_PHOTO_BYTES,
   PHOTO_CONTENT_TYPES,
   type SpoolAttemptsResponse,
@@ -14,9 +15,20 @@ import { gramsFromScale, levelOf, MAX_SPOOL_GRAMS, type SpoolGrams } from "../..
 import { REMAINING } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { amsSlots, type Spool, spools, spoolWeighings } from "../db/schema.ts";
+import { amsSlots, type LabelReadRow, type Spool, spools, spoolWeighings } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import {
+  acceptLabelRead,
+  dismissLabelRead,
+  labelReadsEnabled,
+  readsBySpool,
+  runLabelRead,
+  startLabelRead,
+  toApiLabelRead,
+  touchedLabelFields,
+  touchFields,
+} from "../label-read/run.ts";
 import { gramsFor, loadUsage, loadWeighings } from "../ledger.ts";
 import { photoKey } from "../photos.ts";
 import { attemptHits } from "./search.ts";
@@ -45,6 +57,14 @@ const fields = {
   note: z.string().max(20_000).optional(),
   driedAt: z.number().int().positive().nullable().optional(),
   trayUuid: words(80).optional(),
+  diameterMm: z.number().min(1).max(4).nullable().optional(),
+  nozzleTempMin: z.number().int().min(0).max(500).nullable().optional(),
+  nozzleTempMax: z.number().int().min(0).max(500).nullable().optional(),
+  bedTempMin: z.number().int().min(0).max(300).nullable().optional(),
+  bedTempMax: z.number().int().min(0).max(300).nullable().optional(),
+  dryTempC: z.number().int().min(0).max(300).nullable().optional(),
+  dryHours: z.number().int().min(0).max(240).nullable().optional(),
+  productCode: words(80).optional(),
 };
 
 const grams = z.number().int().min(1).max(MAX_SPOOL_GRAMS);
@@ -81,9 +101,16 @@ const photoFields = z.object({
     .transform((value) => value.toLowerCase()),
 });
 
+const readLabelBody = z.object({
+  placeholders: z
+    .array(z.enum(["material", "netGrams"]))
+    .max(2)
+    .optional(),
+});
+
 const notFound = "That spool isn't on the shelf any more.";
 
-export function toApiSpool(spool: Spool, slot: string | null, ledger?: SpoolGrams): ApiSpool {
+export function toApiSpool(spool: Spool, slot: string | null, ledger?: SpoolGrams, read?: LabelReadRow): ApiSpool {
   const gramsLeft = ledger?.gramsLeft ?? null;
   return {
     id: spool.id,
@@ -106,6 +133,16 @@ export function toApiSpool(spool: Spool, slot: string | null, ledger?: SpoolGram
         : null,
     slot,
     trayUuid: spool.trayUuid,
+    diameterMm: spool.diameterMm,
+    nozzleTempMin: spool.nozzleTempMin,
+    nozzleTempMax: spool.nozzleTempMax,
+    bedTempMin: spool.bedTempMin,
+    bedTempMax: spool.bedTempMax,
+    dryTempC: spool.dryTempC,
+    dryHours: spool.dryHours,
+    productCode: spool.productCode,
+    fromLabel: spool.labelFields,
+    labelRead: toApiLabelRead(read),
     createdBy: spool.createdBy,
     createdAt: spool.createdAt.getTime(),
     updatedAt: spool.updatedAt.getTime(),
@@ -121,7 +158,8 @@ async function loadSpool(db: Db, d1: D1Database, spoolId: string) {
     .get();
   if (!row) return null;
   const ledger = (await gramsFor(db, d1, [row.spool])).get(row.spool.id);
-  return toApiSpool(row.spool, row.slot, ledger);
+  const read = (await readsBySpool(db, [row.spool])).get(row.spool.id);
+  return toApiSpool(row.spool, row.slot, ledger, read);
 }
 
 /** /api/spools: the filament library. */
@@ -137,8 +175,12 @@ export const spoolRoutes = new Hono<AppEnv>()
       c.env.DB,
       rows.map((row) => row.spool),
     );
+    const reads = await readsBySpool(
+      c.var.db,
+      rows.map((row) => row.spool),
+    );
     const list = rows
-      .map((row) => toApiSpool(row.spool, row.slot, ledger.get(row.spool.id)))
+      .map((row) => toApiSpool(row.spool, row.slot, ledger.get(row.spool.id), reads.get(row.spool.id)))
       .sort((a, b) => a.material.localeCompare(b.material) || b.createdAt - a.createdAt);
     return c.json<SpoolsResponse>({ spools: list });
   })
@@ -189,11 +231,19 @@ export const spoolRoutes = new Hono<AppEnv>()
         if (!Object.keys(values).length && driedAt === undefined) return c.json<SpoolResponse>({ spool: known });
       }
     }
+    // What a person edits is theirs from now on: no longer "from the label", and not for a read still going to replace.
+    const touched = touchedLabelFields(Object.keys(values));
+    const marked = touched.length
+      ? (await c.var.db.select({ fields: spools.labelFields }).from(spools).where(eq(spools.id, spoolId)).get())?.fields
+      : undefined;
     const [[row]] = await c.var.db.batch([
       c.var.db
         .update(spools)
         .set({
           ...values,
+          ...(marked?.some((field) => touched.includes(field))
+            ? { labelFields: marked.filter((field) => !touched.includes(field)) }
+            : {}),
           ...(driedAt !== undefined ? { driedAt: driedAt ? new Date(Math.min(driedAt, now.getTime())) : null } : {}),
           updatedAt: now,
         })
@@ -202,6 +252,7 @@ export const spoolRoutes = new Hono<AppEnv>()
       recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
     ]);
     if (!row) return apiError(c, 404, "not_found", notFound);
+    await touchFields(c.var.db, spoolId, touched);
     const spool = await loadSpool(c.var.db, c.env.DB, row.id);
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
@@ -241,9 +292,18 @@ export const spoolRoutes = new Hono<AppEnv>()
     const parsed = weightBody.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That weight couldn't be read.");
     const spoolId = c.req.param("id");
+    const marked =
+      parsed.data.netGrams !== undefined
+        ? (await c.var.db.select({ fields: spools.labelFields }).from(spools).where(eq(spools.id, spoolId)).get())
+            ?.fields
+        : undefined;
     const update = c.var.db
       .update(spools)
-      .set({ ...parsed.data, updatedAt: new Date() })
+      .set({
+        ...parsed.data,
+        ...(marked?.includes("netGrams") ? { labelFields: marked.filter((field) => field !== "netGrams") } : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
       .returning({ id: spools.id });
     const change = recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor });
@@ -268,6 +328,7 @@ export const spoolRoutes = new Hono<AppEnv>()
           ])
         : await c.var.db.batch([update, change]);
     if (!row) return apiError(c, 404, "not_found", notFound);
+    if (parsed.data.netGrams !== undefined) await touchFields(c.var.db, spoolId, ["netGrams"]);
     const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
     if (!spool) return apiError(c, 404, "not_found", notFound);
     return c.json<SpoolResponse>({ spool });
@@ -419,6 +480,62 @@ export const spoolRoutes = new Hono<AppEnv>()
     return c.json<SpoolResponse>({ spool });
   })
 
+  /**
+   * Reads the label in the spool's photo (decision 0031). People only: nothing here is in auth/scopes.ts. Answers at
+   * once with the spool showing "Reading the label…"; Claude's call runs after the response, and the spool fills in
+   * through the change feed. A photo is read once; a read that found nothing or failed is tried again on request.
+   */
+  .post("/:id/label-read", async (c) => {
+    if (!labelReadsEnabled(c.env)) return apiError(c, 404, "not_found", "Reading labels isn't set up.");
+    const spoolId = c.req.param("id");
+    const parsed = readLabelBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That request couldn't be read.");
+    const current = await c.var.db
+      .select()
+      .from(spools)
+      .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+      .get();
+    if (!current) return apiError(c, 404, "not_found", notFound);
+    if (!current.photoId) return apiError(c, 400, "invalid", "There's no photo of the label yet.");
+    const started = await startLabelRead(
+      c.var.db,
+      { id: spoolId, photoId: current.photoId },
+      parsed.data.placeholders ?? [],
+      c.var.user,
+    );
+    if (started) {
+      const photoId = current.photoId;
+      c.executionCtx.waitUntil(
+        runLabelRead(c.env, photoId, c.var.db).catch((error) => console.error("label read failed", error)),
+      );
+    }
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    return c.json<LabelReadResponse>({ spool });
+  })
+
+  /** One tap on "Add 3 spools": the first label fills this spool, each other becomes a spool of its own. */
+  .post("/:id/label-read/accept", async (c) => {
+    const spoolId = c.req.param("id");
+    const made = await acceptLabelRead(c.env, c.var.db, spoolId, c.var.user);
+    if (!made) return apiError(c, 404, "not_found", "There's nothing from the label waiting.");
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    const created = (await Promise.all(made.ids.map((created) => loadSpool(c.var.db, c.env.DB, created)))).filter(
+      (item): item is ApiSpool => item !== null,
+    );
+    return c.json<LabelReadResponse>({ spool, created }, 201);
+  })
+
+  /** "Not these", or putting away the line that says the label couldn't be read. */
+  .delete("/:id/label-read", async (c) => {
+    const spoolId = c.req.param("id");
+    await dismissLabelRead(c.var.db, spoolId, c.var.user);
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    return c.json<LabelReadResponse>({ spool });
+  })
+
   /** The attempts printed with this spool, newest first: "how does this silk PLA behave". */
   .get("/:id/attempts", async (c) => {
     const spoolId = c.req.param("id");
@@ -439,4 +556,4 @@ export const spoolRoutes = new Hono<AppEnv>()
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { createSpool, photoFields as spoolPhotoFields, updateSpool, weighBody, weightBody };
+export { createSpool, photoFields as spoolPhotoFields, readLabelBody, updateSpool, weighBody, weightBody };

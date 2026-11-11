@@ -1,6 +1,7 @@
 import type { Person } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
+import { showsSettings } from "@shared/story-settings";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef, lazy, Suspense } from "react";
@@ -80,10 +81,30 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const offBed = isOffTheBed(attempt);
   // Still on the bed: printing, as far as anyone knows. Off it, and waiting for a verdict, is a state of its own.
   const printing = attempt.outcome === null && !offBed;
-  const settings = summarizeSettings(attempt.settings);
+  // The settings repeat from one attempt to the next: see `showsSettings` for where the story lists them.
+  const showSettings = showsSettings(attempt);
+  const settings = showSettings ? summarizeSettings(attempt.settings) : [];
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
+
+  // The quiet extras of an entry are one row at its foot, above the open button so they work. On a print that is
+  // still on the bed or off it, awaiting its answer, the foot is below the progress and the question.
+  const footerRow =
+    onCompare || onSaveRecipe ? (
+      <div className="pointer-events-auto relative z-10 -ml-3 flex flex-wrap items-center gap-x-1">
+        {onCompare && (
+          <Button variant="quiet" size="sm" icon={CompareIcon} onClick={onCompare}>
+            {attempt.changes.length > 0 ? "Compare" : `Compare with attempt ${attempt.number - 1}`}
+          </Button>
+        )}
+        {onSaveRecipe && (
+          <Button variant="quiet" size="sm" icon={RecipeIcon} onClick={onSaveRecipe}>
+            Save as recipe
+          </Button>
+        )}
+      </div>
+    ) : null;
 
   return (
     <m.li
@@ -148,40 +169,12 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               )}
             </div>
 
-            {attempt.changes.length > 0 &&
-              (onCompare ? (
-                // The line is a button: the same chips, then a quiet "Compare". Above the open button, like the file card.
-                <button
-                  type="button"
-                  onClick={onCompare}
-                  className="text-small text-ink-soft focus-ring pressable hover:bg-ink/4 pointer-events-auto relative z-10 -mx-1.5 flex flex-wrap items-start gap-x-1.5 gap-y-1 rounded-md px-1.5 py-0.5 text-left md:flex-nowrap"
-                >
-                  <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
-                  <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
-                  <ChangeChips attempt={attempt} className="min-w-0 flex-1" />
-                  {/* On phones "Compare" takes its own line under the chips, so they keep their width; on desktop it ends the line. */}
-                  <span className="text-ink-faint inline-flex basis-full items-center gap-1 pl-5.5 font-semibold md:mt-0.5 md:shrink-0 md:basis-auto md:pl-0">
-                    <CompareIcon size={16} aria-hidden />
-                    Compare
-                  </span>
-                </button>
-              ) : (
-                <p className="text-small text-ink-soft flex items-start gap-1.5">
-                  <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
-                  <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
-                  <ChangeChips attempt={attempt} className="flex-1" />
-                </p>
-              ))}
-            {attempt.changes.length === 0 && onCompare && (
-              <Button
-                variant="quiet"
-                size="sm"
-                icon={CompareIcon}
-                onClick={onCompare}
-                className="pointer-events-auto relative z-10 -ml-2 self-start"
-              >
-                Compare with attempt {attempt.number - 1}
-              </Button>
+            {attempt.changes.length > 0 && (
+              <p className="text-small text-ink-soft flex items-start gap-1.5">
+                <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
+                <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
+                <ChangeChips attempt={attempt} className="flex-1" />
+              </p>
             )}
 
             {attempt.note && <p className="text-body text-ink break-words">{attempt.note}</p>}
@@ -242,17 +235,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               />
             )}
 
-            {onSaveRecipe && (
-              <Button
-                variant="quiet"
-                size="sm"
-                icon={RecipeIcon}
-                onClick={onSaveRecipe}
-                className="pointer-events-auto relative z-10 -ml-2 self-start"
-              >
-                Save as recipe
-              </Button>
-            )}
+            {!printing && !offBed && footerRow}
 
             {attempt.coach && (
               // Above the open button, so its dismiss buttons work.
@@ -291,6 +274,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </Button>
               </div>
             )}
+
+            {(printing || offBed) && footerRow}
           </div>
         </div>
       </div>

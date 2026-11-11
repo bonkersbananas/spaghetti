@@ -28,7 +28,7 @@ import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
+import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -93,6 +93,8 @@ function Idea({ item }: { item: ItemView }) {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
+  // Saved photos can't be removed without a connection; one still uploading can.
+  const offline = useReadOnly();
   const { data: people } = useQuery(peopleQuery);
   const { data: user } = useQuery(sessionQuery);
   const wished = useWishlistIds(user?.id).includes(item.id);
@@ -214,6 +216,9 @@ function Idea({ item }: { item: ItemView }) {
               index={selectedIndex}
               onIndexChange={select}
               alt={alt}
+              onRemove={
+                offline && !photos[selectedIndex]?.upload ? undefined : (photo) => removePhoto(queryClient, photo)
+              }
               className="-mx-5 md:mx-0"
             />
             <PhotoStrip

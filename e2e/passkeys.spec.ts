@@ -49,8 +49,15 @@ async function openRow(page: Page, isMobile: boolean, row: string | RegExp) {
   }
 }
 
-/** Signs out the way a person does (the app keeps a copy of who was signed in, so clearing cookies isn't a sign-out). */
+/**
+ * Signs out the way a person does (the app keeps a copy of who was signed in, so clearing cookies isn't a
+ * sign-out). Waits for the server to end the session, not for a button: with a virtual authenticator the
+ * sign-in screen's own passkey offer (conditional UI) can sign straight back in, and then no Sign in button shows.
+ */
 async function signOut(page: Page, isMobile: boolean) {
+  const ended = page.waitForResponse(
+    (response) => response.url().endsWith("/api/session") && response.request().method() === "DELETE",
+  );
   if (isMobile) {
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
@@ -58,7 +65,9 @@ async function signOut(page: Page, isMobile: boolean) {
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
   }
-  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  expect((await ended).ok()).toBe(true);
+  // The app has left the screen it was on (its heading may still be fading out, and would pass for Today).
+  await page.waitForURL(/\/sign-in/);
 }
 
 async function expectAccessible(page: Page, name: string, include?: string) {
@@ -100,18 +109,20 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   // Sign out (the session only), then sign in with the passkey: no name, no password.
   await page.keyboard.press("Escape");
   await signOut(page, isMobile);
-  await expect(page.getByRole("button", { name: /^Sign in with / })).toBeVisible();
-  // The screen we left (Today's empty state) is still fading out for a moment.
-  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
-  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
-  await expectAccessible(page, "The sign-in screen with its passkey button");
-  // With a virtual authenticator the username field's own passkey offer (conditional UI) can sign in before the
-  // button is pressed; either way no name or password is typed.
-  await page
-    .getByRole("button", { name: /^Sign in with / })
-    .click({ timeout: 3000 })
-    .catch(() => undefined);
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  // With a virtual authenticator the username field's own passkey offer (conditional UI) can sign in by itself,
+  // before anything is pressed; otherwise the sign-in screen offers the passkey button. Either way no name or
+  // password is typed.
+  const today = page.getByRole("heading", { level: 1, name: "Today" });
+  const passkeyButton = page.getByRole("button", { name: /^Sign in with / });
+  await expect(today.or(passkeyButton)).toBeVisible();
+  if (await passkeyButton.isVisible()) {
+    // The screen we left (Today's empty state) is still fading out for a moment.
+    await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
+    await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
+    await expectAccessible(page, "The sign-in screen with its passkey button");
+    await passkeyButton.click({ timeout: 3000 }).catch(() => undefined);
+  }
+  await expect(today).toBeVisible();
 
   // It remembers being used. Removing it is undone with the toast, then done.
   await openRow(page, isMobile, "Passkeys and password");

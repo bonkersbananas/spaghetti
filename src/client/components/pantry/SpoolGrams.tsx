@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { MetaList } from "@/components/ui/MetaList";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Section } from "@/components/ui/Section";
-import { spoolUsageQuery } from "@/lib/pantry";
+import { spoolUsageQuery } from "@/lib/pantry-queries";
 
 /**
  * Grams left as the page's one big figure, with the two things to do about it: weigh the spool, or

@@ -25,7 +25,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { SwatchPicker } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
-import { spoolsQuery, usePrinterSetup } from "@/lib/pantry";
+import { spoolsQuery, usePrinterSetup } from "@/lib/pantry-queries";
 
 interface SettingsEditorProps {
   value: AttemptSettings;

@@ -49,7 +49,8 @@ src/
       capture.tsx         capture state, paste and drop
       journal.ts          journal pages, month summaries, facets, filters in the URL
       search.ts           search and "what worked" queries, recent searches
-      pantry.ts           spools, AMS slots and the printer's setup: queries and optimistic mutations
+      pantry.ts           spools, AMS slots and the printer's setup: optimistic mutations (re-exports the queries)
+      pantry-queries.ts   the spools and printer queries and usePrinterSetup, kept apart from pantry.ts because the shell and Today read them on every first load
       slicer-files.ts     reading a dropped .3mf, linking its filaments to spools, queueing the file, drop targets
     styles/tokens.css     every design token (light and dark)
     lib/theme.ts          light / dark / system, applied to <html data-theme>
@@ -99,7 +100,7 @@ pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 4 shards (`pnpm test:e2e --shard=1/4`), so a test must not depend on another test's data
+pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 5 shards of spec files balanced by measured time (`pnpm test:e2e $(node scripts/e2e-shard.ts 1 5)`; refresh e2e/timings.json with `node scripts/e2e-timings.ts <CI shard logs>`), so a test must not depend on another test's data
 pnpm exec playwright test --project=performance   # first-load JavaScript per screen, tap latency and the resumed app on a phone profile, and a throttled 100-photo inbox
 pnpm build && pnpm perf [--runs 5]   # the whole speed table: cold start of Today and Ideas (first visit, service worker only, installed app) and the common taps, at 390 px, 4× CPU, slow 4G
 pnpm build:report   # what the first load holds: the entry's chunks with their biggest modules, and the on-demand chunks
@@ -171,7 +172,7 @@ Never edit a migration that has been merged; add a new one.
 
 ### Pantry, printer and slicer files
 
-- Spools (`spools`) are the filament library; `ams_slots` says which spool is in which slot ("A1" to "D4", "Ext"), one slot per spool; `printer` is one row (`x2d`) with the setup as JSON (`PrinterSetup` in `shared/spools.ts`). A spool's label photo is stored like other photos (`photos/<id>/…`, served by `/api/photos`), but its fields live on the spool row.
+- Spools (`spools`) are the filament library; `ams_slots` says which spool is in which slot ("A1" to "D4", "Ext"), one slot per spool; `printer` is one row (`x2d`) with the setup as JSON (`PrinterSetup` in `shared/spools.ts`). A spool's label photo is stored like other photos (`photos/<id>/…`, served by `/api/photos`), but its fields live on the spool row. Claude can read the label from that photo ([0031](docs/decisions/0031-claude-reads-a-spool-label-from-its-photo.md)): `worker/label-read/` (`claude.ts` the call and the cleaning of what it says, `run.ts` the job rows in `label_reads`, filling only empty fields, the confirmation of several spools); the spool's `fromLabel` lists what it filled and a person's edit takes a field off. The stand-in Claude (`scripts/lib/fake-claude.ts`) picks its answer by a word in the spool's brand, colour or note (`slow`, `broken`, `refused`, `unreadable`, `partly`, `two`).
 - Filament in grams ([0009](docs/decisions/0009-filament-tracked-in-grams.md)): grams left are never stored, they are worked out from the net weight, the latest weighing (`spool_weighings`) and the finished attempts' `filaments[].grams` (`shared/ledger.ts` pure rules, `worker/ledger.ts` loading). Spools without gram data keep their hand-set level; with it, `remaining` is derived and a PATCHed one is ignored. Anything that changes an attempt's outcome, filaments or existence must refresh the `spools` queries (outbox handlers, `saveAttemptChanges`, `deleteAttempt`).
 - An attempt's filaments keep their plain values (type, brand, color) and add `spoolId` when picked from the pantry, so attempts read the same if the spool goes. `GET /api/spools/:id/attempts` finds them with `json_each` over the settings.
 - Slicer files (`attempt_files`, one live per attempt) are read in the browser (`shared/threemf`); the client sends what it read (`prefill`), the plate's PNG and, under `MAX_SLICER_FILE_BYTES`, the bytes, through the outbox behind the attempt (`files` in an outbox entry). R2 keys are `files/<id>/file` and `/thumb`, served at `/api/files/:id` and `/api/files/:id/thumb` only while the file, its attempt and its build are live. The purge removes them with their attempt.

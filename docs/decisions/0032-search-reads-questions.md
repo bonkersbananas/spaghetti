@@ -1,4 +1,4 @@
-# 0031. Search reads questions, in the Worker, on the index it has
+# 0032. Search reads questions, in the Worker, on the index it has
 
 Status: Accepted
 

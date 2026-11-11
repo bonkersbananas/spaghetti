@@ -2,7 +2,7 @@ import { type BridgeStatus, bridgeLine } from "@shared/bridge";
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/cn";
-import { printerQuery } from "@/lib/pantry";
+import { printerQuery } from "@/lib/pantry-queries";
 import { useNow } from "@/lib/use-now";
 
 export const BRIDGE_DOCS = "https://github.com/bonkersbananas/spaghetti/blob/main/docs/bridge.md";

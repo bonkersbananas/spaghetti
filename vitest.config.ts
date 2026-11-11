@@ -15,6 +15,8 @@ export default defineConfig(async () => {
               miniflare: {
                 bindings: {
                   TEST_MIGRATIONS: migrations,
+                  // Opt-in clock shift to find tests that depend on when they run (test/support/shift-clock.ts).
+                  ...(process.env.FAKE_NOW ? { FAKE_NOW: process.env.FAKE_NOW } : {}),
                   // A throwaway pair made only for the tests; the real one is never in the repository.
                   VAPID_PUBLIC_KEY:
                     "BBxnnFAUPlUsGEZ8Pa-IDPsQuQ8VmvkEfM-gNO8wCBupZWGUkdkkQGzwC1tHzQs7cQG8YM4S5epLdcSOutLISbo",
@@ -48,6 +50,7 @@ export default defineConfig(async () => {
           test: {
             name: "unit",
             include: ["test/unit/**/*.test.ts", "test/bridge/**/*.test.ts", "test/openapi/**/*.test.ts"],
+            setupFiles: ["./test/support/unit-setup.ts"],
             environment: "node",
           },
         },
