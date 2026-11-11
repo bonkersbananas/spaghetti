@@ -119,8 +119,10 @@ test("adds from the idea's page with an undo, and shows the list to the other pe
   try {
     await other.page.goto("/wishlist");
     await expect(other.page.getByRole("heading", { level: 1, name: "Wishlists" })).toBeVisible();
-    const radio = other.page.getByRole("radio", { name: /^Alex/ });
-    if (await radio.count()) await radio.check({ force: true });
+    // Narrower than lg, one list shows at a time under the Yours / Alex's switch.
+    if ((other.page.viewportSize()?.width ?? 0) < 1024) {
+      await other.page.getByRole("radio", { name: /^Alex/ }).check({ force: true });
+    }
     await expect(other.page.getByRole("list", { name: /^Alex.* wishlist$/ }).getByText("Hose clip")).toBeVisible();
     // Alex keeps it private: Sam's screen follows the change feed.
     await page.goto("/wishlist");
