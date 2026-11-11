@@ -31,6 +31,11 @@ jobs:
   e2e-shards:
     name: Playwright shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    # Playwright's own image has the browser and its system libraries installed, so the job never calls apt
+    # (apt being unreachable took every shard down). Keep the tag on the @playwright/test version.
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +48,6 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium-headless-shell
       - run: pnpm test:e2e --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
