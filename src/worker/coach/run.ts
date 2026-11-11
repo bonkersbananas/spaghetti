@@ -131,7 +131,9 @@ export async function runCoach(
   }
   // The day's cap is shared by both people (UTC days: it only has to be about right).
   const since = new Date(now - (now % DAY_MS));
-  if ((await db.$count(coachRuns, gte(coachRuns.ranAt, since))) >= COACH_PER_DAY) {
+  // A stand-in server (the e2e tests, screenshots and the seed answer for nothing) isn't counted: the cap is for the bill.
+  const standIn = !!env.ANTHROPIC_BASE_URL?.trim();
+  if (!standIn && (await db.$count(coachRuns, gte(coachRuns.ranAt, since))) >= COACH_PER_DAY) {
     return settle(db, row, { status: "failed", runOutcome: "cap" });
   }
   await db

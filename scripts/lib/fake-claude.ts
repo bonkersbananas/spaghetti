@@ -90,45 +90,40 @@ async function answerPhoto(body: string, response: import("node:http").ServerRes
   );
 }
 
-/** What the coach suggests (decision 0026): a brim and a hotter bed as settings, and a speed as a note. */
+const noChange = {
+  bedTemperature: null,
+  nozzleTemperature: null,
+  chamberTemperature: null,
+  brim: null,
+  supportEnabled: null,
+  supportType: null,
+  layerHeight: null,
+  infillDensity: null,
+  wallLoops: null,
+  filamentDried: null,
+  bedType: null,
+  nozzleDiameter: null,
+};
+
+/** What the coach suggests (decision 0026): a brim, a warmer bed and drying as settings, a speed as a note. */
 const coachAnswer = {
   suggestions: [
     {
       title: "Add a brim",
       why: "The corners lifted first; a brim holds them down.",
-      change: {
-        bedTemperature: null,
-        nozzleTemperature: null,
-        chamberTemperature: null,
-        brim: true,
-        supportEnabled: null,
-        supportType: null,
-        layerHeight: null,
-        infillDensity: null,
-        wallLoops: null,
-        filamentDried: null,
-        bedType: null,
-        nozzleDiameter: null,
-      },
+      change: { ...noChange, brim: true },
       note: null,
     },
     {
-      title: "Dry the PETG first",
-      why: "It last dried 6 weeks ago, and PETG stays dry about 3.",
-      change: {
-        bedTemperature: 70,
-        nozzleTemperature: null,
-        chamberTemperature: null,
-        brim: null,
-        supportEnabled: null,
-        supportType: null,
-        layerHeight: null,
-        infillDensity: null,
-        wallLoops: null,
-        filamentDried: true,
-        bedType: null,
-        nozzleDiameter: null,
-      },
+      title: "Warm the bed a little",
+      why: "The stern corners curled as they cooled; 5 °C more keeps them down.",
+      change: { ...noChange, bedTemperature: 65 },
+      note: null,
+    },
+    {
+      title: "Dry the filament first",
+      why: "A spool that sat open for weeks picks up moisture, and wet filament warps.",
+      change: { ...noChange, filamentDried: true },
       note: null,
     },
     {
@@ -140,7 +135,11 @@ const coachAnswer = {
   ],
 };
 
-/** A request that asks what to try next is the failure coach. A word in the build's title or the attempt's note picks the answer: `slow`, `broken`, `refused`, `nothing` (no suggestions); anything else is a good answer. */
+/**
+ * A request that asks what to try next is the failure coach. A word in the build's title or the attempt's note picks
+ * the answer: `slow`, `broken`, `refused`; `coach` (or the seed's "curled" stern) gets the good suggestions; anything
+ * else has nothing useful to say, so the many failed attempts of other tests and the seed stay quiet.
+ */
 async function answerCoach(body: string, response: import("node:http").ServerResponse) {
   const words = [/The build: ([^"\\]*)/, /Their note: ([^"\\]*)/]
     .map((pattern) => pattern.exec(body)?.[1] ?? "")
@@ -154,7 +153,7 @@ async function answerCoach(body: string, response: import("node:http").ServerRes
     return;
   }
   const refused = words.includes("refused");
-  const answer = words.includes("nothing") ? { suggestions: [] } : coachAnswer;
+  const answer = words.includes("coach") || words.includes("curled") ? coachAnswer : { suggestions: [] };
   response.end(
     JSON.stringify({
       id: "msg_fake",
