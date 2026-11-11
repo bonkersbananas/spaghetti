@@ -16,7 +16,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] §5 Pantry (rims, AMS remaining, fill discs, desktop list view; #17) and §6 Journal (one icon per row, plate pictures, printing progress, compact rows; #19), side by side
 - [x] §3 Build page: summary under the notes, aligned attempt photos, compare two attempts (#23)
 - [x] §2 Today screen and §7 Navigation (Today tab, header search, now-printing card, styleguide out of the sidebar) (#29)
-- [ ] §4 Idea page (proportions, link cards and a preview endpoint) and §8 Motion (photo transitions, outcome tap, reflow, stepping between attempts): all done in #25 except the reflow when a print finishes, which is on Today's printing card and waits for the Today screen
+- [x] §4 Idea page (proportions, link cards and a preview endpoint) and §8 Motion (photo transitions, outcome tap, reflow, stepping between attempts): done in #25, and the reflow when a print gets its answer on Today in #55
 
 ## Now: agents in the repo
 
