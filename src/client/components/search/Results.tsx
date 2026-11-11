@@ -1,23 +1,31 @@
 import type { AttemptHit, ItemHit, Photo as PhotoData } from "@shared/api";
 import { type TagKind, tagLabel } from "@shared/attempts";
+import { displayName } from "@shared/people";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { displayName } from "@shared/people";
 import { forwardRef, type ReactNode } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
 import { Chip } from "@/components/ui/Chip";
 import { Highlight } from "@/components/ui/Highlight";
-import { BuildsIcon, CheckIcon, CommentIcon, FinishIcon, type Icon, IdeasIcon, ShelveIcon } from "@/components/ui/icons";
+import {
+  BuildsIcon,
+  CheckIcon,
+  CommentIcon,
+  FinishIcon,
+  type Icon,
+  IdeasIcon,
+  ShelveIcon,
+} from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { useTagOptions } from "@/lib/builds";
-import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { photoSrc } from "@/lib/previews";
+import { peopleQuery, sessionQuery } from "@/lib/queries";
 
 /** Where a result leads. */
 export function attemptLink(hit: AttemptHit): LinkProps {

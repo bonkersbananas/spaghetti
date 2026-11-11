@@ -316,7 +316,7 @@ describe("search finds what was said in a thread", () => {
     return id;
   };
   const find = async (q: string) =>
-    (await (await request(`/api/search?q=${encodeURIComponent(q)}`, { cookie })).json<SearchResponse>());
+    await (await request(`/api/search?q=${encodeURIComponent(q)}`, { cookie })).json<SearchResponse>();
 
   it("shows the idea or build with the comment as its snippet", async () => {
     const idea = await createItem({ title: "Tugboat", stage: "idea" });
@@ -343,7 +343,11 @@ describe("search finds what was said in a thread", () => {
   it("follows edits and drops deleted comments, and brings back an undone delete", async () => {
     const idea = await createItem({ title: "Tugboat", stage: "idea" });
     const id = await say(idea.id, "Try blue");
-    const edit = await request(`/api/comments/${id}`, { method: "PATCH", cookie, json: { body: "Try orange instead" } });
+    const edit = await request(`/api/comments/${id}`, {
+      method: "PATCH",
+      cookie,
+      json: { body: "Try orange instead" },
+    });
     expect(edit.status).toBe(200);
     expect((await find("blue")).ideas).toHaveLength(0);
     expect((await find("orange")).ideas).toHaveLength(1);

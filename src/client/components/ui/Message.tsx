@@ -66,7 +66,16 @@ interface BubbleProps {
 }
 
 /** One message. Text wraps and keeps its line breaks; yours sit on a tomato tint, the other person's on cream. */
-export function Bubble({ mine = false, edited = false, highlighted = false, aside, onTap, below, children, id }: BubbleProps) {
+export function Bubble({
+  mine = false,
+  edited = false,
+  highlighted = false,
+  aside,
+  onTap,
+  below,
+  children,
+  id,
+}: BubbleProps) {
   return (
     <div
       id={id}
@@ -88,7 +97,7 @@ export function Bubble({ mine = false, edited = false, highlighted = false, asid
           }
           className={cn(
             "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 break-words whitespace-pre-wrap transition-shadow duration-700",
-            highlighted && "ring-semolina ring-2 ring-offset-2 ring-offset-paper",
+            highlighted && "ring-semolina ring-offset-paper ring-2 ring-offset-2",
             mine ? "bg-tomato-soft rounded-ee-xs" : "bg-cream shadow-soft rounded-es-xs",
           )}
         >

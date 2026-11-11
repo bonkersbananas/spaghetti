@@ -181,7 +181,10 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
 }
 
 /** Items (by id, in this order) with their photo and how their last attempt went. */
-async function itemHits(db: Db, found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }>): Promise<ItemHit[]> {
+async function itemHits(
+  db: Db,
+  found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }>,
+): Promise<ItemHit[]> {
   if (!found.length) return [];
   const ids = found.map((row) => row.id);
   const [rows, itemAttempts] = await Promise.all([
@@ -296,17 +299,21 @@ export const searchRoutes = new Hono<AppEnv>()
       // What the two of you said in a thread (migrations/0022_comment-search.sql): found as the item it belongs to.
       narrowsAttempts
         ? Promise.resolve([])
-        : all<{ id: string; item_id: string; author_id: string; via: string | null; created_at: number; snippet: string }>(
-            c.env,
-            {
-              sql: `SELECT c.id, c.item_id, c.author_id, c.via, c.created_at, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
+        : all<{
+            id: string;
+            item_id: string;
+            author_id: string;
+            via: string | null;
+            created_at: number;
+            snippet: string;
+          }>(c.env, {
+            sql: `SELECT c.id, c.item_id, c.author_id, c.via, c.created_at, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
               JOIN comments AS c ON c.id = search.ref_id
               JOIN items AS i ON i.id = c.item_id
               WHERE search MATCH ? AND search.kind = 'comment' AND c.deleted_at IS NULL AND i.deleted_at IS NULL${f.person ? " AND i.created_by = ?" : ""}
               ORDER BY ${RANK}, c.created_at DESC LIMIT ${LIMIT.items * 2}`,
-              params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
-            },
-          ),
+            params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : [])],
+          }),
     ]);
     // An item that matched on its own words keeps its note's snippet; one found only by a comment shows the best comment.
     const found: Array<Pick<ItemHit, "snippet" | "comment"> & { id: string }> = itemRows.map((row) => ({
