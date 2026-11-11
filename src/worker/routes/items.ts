@@ -14,6 +14,7 @@ import { cleanPartName, MAX_PART_QUANTITY, MAX_PARTS } from "../../shared/parts.
 import type { PhotoRead } from "../../shared/photo-read.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
 import { afterChange, recordChange } from "../changes.ts";
+import { coachesByAttempt } from "../coach/run.ts";
 import type { Db } from "../db/index.ts";
 import {
   type Attempt,
@@ -183,6 +184,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       ),
     )
   ).flat();
+  const coaches = await coachesByAttempt(db, [...liveAttempts]);
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
     const read = toApiPhotoRead(rows);
@@ -206,6 +208,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       draftsByItem.get(row.id),
       partsByItem.get(row.id) ?? [],
       reads,
+      coaches,
     );
   });
 }

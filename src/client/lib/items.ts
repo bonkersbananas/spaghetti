@@ -285,6 +285,7 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     endedAt: null,
     suggestedFailureTag: null,
     photoRead: null,
+    coach: null,
     finishedBy: attempt.outcome ? attempt.createdBy : null,
     createdVia: null,
     finishedVia: null,
@@ -418,9 +419,12 @@ export function useItem(id: string) {
     // It stops with the read, or after 40 seconds of it (a read that long was lost: the cron settles it).
     refetchInterval: (current) => {
       const reading = current.state.data?.attempts.find((attempt) => attempt.photoRead?.status === "reading");
-      if (!reading?.photoRead) return false;
-      const since = (readingSince.get(reading.photoRead.photoId) ?? Date.now()) || Date.now();
-      readingSince.set(reading.photoRead.photoId, since);
+      // (Claude's ideas for the next try arrive with the change feed: polling for them ran ahead of the feed's own
+      // "Sam logged an attempt" word.)
+      const watching = reading?.photoRead?.photoId;
+      if (!watching) return false;
+      const since = (readingSince.get(watching) ?? Date.now()) || Date.now();
+      readingSince.set(watching, since);
       return Date.now() - since < 40_000 ? 3000 : false;
     },
     // Opened from a list: show what the list already has, at once, as old as the list is
