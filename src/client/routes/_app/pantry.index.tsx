@@ -17,6 +17,7 @@ import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
+import { useListPicker } from "@/lib/list-picker";
 import { loadSlot } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { type PantryView, usePantryView } from "@/lib/pantry-view";
@@ -72,6 +73,7 @@ const byRemaining = (a: Spool, b: Spool) =>
   LIST_ORDER[a.remaining] - LIST_ORDER[b.remaining] || (a.colorName ?? "").localeCompare(b.colorName ?? "");
 
 function Pantry() {
+  useListPicker();
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const { data: spools, isPending } = useQuery(spoolsQuery);
@@ -108,13 +110,17 @@ function Pantry() {
           size={view === "list" ? "overline" : "title"}
         >
           {view === "list" ? (
-            <ul className="bg-cream shadow-soft overflow-hidden rounded-lg" aria-label={`${group.material} spools`}>
+            <ul
+              data-picks
+              className="bg-cream shadow-soft overflow-hidden rounded-lg"
+              aria-label={`${group.material} spools`}
+            >
               {[...group.spools].sort(byRemaining).map((spool) => (
                 <SpoolRow key={spool.id} spool={spool} draggable={!readOnly} />
               ))}
             </ul>
           ) : (
-            <ul className={grid} aria-label={`${group.material} spools`}>
+            <ul data-picks className={grid} aria-label={`${group.material} spools`}>
               {group.spools.map((spool) => (
                 <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
               ))}
