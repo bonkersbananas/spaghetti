@@ -20,7 +20,7 @@ export interface StoredState {
   /** The AMS as last synced, to send it again only when it changes. */
   amsHash: string | null;
   /** The printer's certificates by service (SHA-256 fingerprints), pinned on first use; see pin.ts. */
-  certs: Partial<Record<"mqtt" | "ftps" | "camera", string>>;
+  certs: Partial<Record<"mqtt" | "ftps" | "camera" | "chamber", string>>;
 }
 
 const KEEP_ATTEMPTS = 30;

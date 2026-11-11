@@ -13,7 +13,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0007](0007-inbox-is-a-uniform-grid.md) | The inbox is a uniform 4:5 grid, not masonry | Accepted |
 | [0008](0008-spools-are-the-pantry.md) | Spools are called the Pantry | Accepted |
 | [0009](0009-filament-tracked-in-grams.md) | Filament is tracked in grams, automatically (not built yet) | Accepted |
-| [0010](0010-optional-read-only-printer-bridge.md) | An optional, read-only printer bridge (not built yet) | Accepted |
+| [0010](0010-optional-read-only-printer-bridge.md) | An optional, read-only printer bridge | Accepted |
 | [0011](0011-no-ci-deploys.md) | No CI deploys | Accepted |
 | [0012](0012-one-printer-the-x2d.md) | One printer, the X2D | Accepted |
 | [0013](0013-bambu-studio-and-orca-files-only.md) | Only Bambu Studio and Orca files are read | Accepted |
@@ -36,7 +36,8 @@ One short record per settled decision, including the things we decided **not** t
 | [0030](0030-the-week-is-computed-with-one-paragraph-by-claude.md) | The week is computed, with one paragraph by Claude and one push on Sunday evening | Accepted |
 | [0031](0031-claude-reads-a-spool-label-from-its-photo.md) | Claude reads a spool's label from its photo, and only fills what is empty | Accepted |
 | [0032](0032-search-reads-questions.md) | Search reads questions: filler, outcome, time, names, Swedish twins and typos, in the Worker, with no new index | Accepted |
-| [0033](0033-the-3d-view-reads-the-slicer-file-in-the-browser.md) | The 3D view reads the slicer file in the browser and loads only when asked for | Accepted |
+| [0033](0033-mac-bridge-paired-by-code.md) | The bridge runs on a Mac as one program, paired with a short code | Accepted |
+| [0034](0034-the-3d-view-reads-the-slicer-file-in-the-browser.md) | The 3D view reads the slicer file in the browser and loads only when asked for | Accepted |
 
 ## Format
 

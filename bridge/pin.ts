@@ -10,7 +10,7 @@
  */
 import tls from "node:tls";
 
-export type PinnedService = "mqtt" | "ftps" | "camera";
+export type PinnedService = "mqtt" | "ftps" | "camera" | "chamber";
 
 export interface PinStorage {
   /** Fingerprints by service. */

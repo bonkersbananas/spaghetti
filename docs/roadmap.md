@@ -35,7 +35,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date
 - [x] Passkeys, signing in on a new device with a link or code, and adding people in the app by invite link; the signed-in devices list ([0026](decisions/0026-passkeys-sign-in-links-and-invites.md), [docs/api.md](api.md); changing your own password is in the app too: account menu → Change password)
 - [x] Filament accounting: grams from slicer files update what's left, "not enough for this print", a shopping list (decided: [grams, automatically](decisions/0009-filament-tracked-in-grams.md); a spool starts at 1 kg, each attempt's slicer grams come off it, failed prints in proportion to how far they got, levels follow and stay correctable)
-- [x] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (#22: the program, its routes and [docs/bridge.md](bridge.md); #24: the app side, "off the bed · how did it go?", the printer's live progress and the bridge line and unknown-tray prompt on the Printer page) (decided: [optional and read-only](decisions/0010-optional-read-only-printer-bridge.md); a small program on a home computer using LAN mode, local MQTT, FTP and the camera, never Bambu's cloud and never a command to the printer)
+- [x] Read-only printer bridge on the home network: starts and finishes attempts, syncs AMS slots, grabs a camera frame; the app works without it (#22: the program, its routes and [docs/bridge.md](bridge.md); #24: the app side, "off the bed · how did it go?", the printer's live progress and the bridge line and unknown-tray prompt on the Printer page) (on a Mac: one program, an installer with a pairing code, a Printer-page guide; see [0033](decisions/0033-mac-bridge-paired-by-code.md)) (decided: [optional and read-only](decisions/0010-optional-read-only-printer-bridge.md); a small program on a home computer using LAN mode, local MQTT, FTP and the camera, never Bambu's cloud and never a command to the printer)
 
 ## Later: Claude in the app
 
@@ -59,7 +59,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
 - [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), ~~weekly digest~~ (done: the week page, its Claude paragraph and the Sunday push, decision 0030), idea scout
   - [x] Label photo to spool fields: "Read the label" in Add a spool and on the spool page ([0031](decisions/0031-claude-reads-a-spool-label-from-its-photo.md))
-- [ ] 3D view of a sliced print (#404): ~~G-code reader~~ (done: `src/shared/gcode`), ~~viewer with a layer slider~~ (done, decision 0033), live progress
+- [ ] 3D view of a sliced print (#404): ~~G-code reader~~ (done: `src/shared/gcode`), ~~viewer with a layer slider~~ (done, decision 0034), live progress
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
 ## Deploy
