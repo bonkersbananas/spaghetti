@@ -36,6 +36,16 @@ export const Person = z
   })
   .meta({ id: "Person" });
 
+export const Wishlist = z
+  .object({
+    personId: id,
+    private: z.boolean().describe("Kept to themselves; someone else's private list comes with no entries."),
+    entries: z
+      .array(z.object({ itemId: id, position: z.number().int().describe("1 is the top."), addedAt: z.number() }))
+      .describe("Top first; ideas only."),
+  })
+  .meta({ id: "Wishlist" });
+
 export const Photo = z
   .object({
     id,
