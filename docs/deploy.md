@@ -49,7 +49,9 @@ This exports every table and the search index's own SQL (see `scripts/db-export.
 
 ## Adding or resetting a person
 
-Passwords come from an environment variable, never from the command line. Running the command again for an existing username changes their name, color and password and signs them out everywhere, which is how a forgotten password is reset. People change their own in the app (account menu → Change password).
+**In the app (the usual way):** account menu → Invite someone makes a single-use link, good for a week; the new person opens it, picks a name, a username, a color and a passkey or a password, and is signed in ([0026](decisions/0026-passkeys-sign-in-links-and-invites.md)). Pending invites are listed there and can be withdrawn. Someone who can't sign in but still has a signed-in device makes "Sign in on another device" there (a QR code or a code, good for ten minutes).
+
+**From a session (resets, or when nobody can sign in):** `pnpm user:add` keeps working. Passwords come from an environment variable, never from the command line. Running the command again for an existing username changes their name, color and password and signs them out everywhere, which is how a forgotten password is reset. People change their own in the app (account menu → Change password). A reset leaves their passkeys alone; remove those in the app (account menu → Passkeys) if a device is lost.
 
 ```sh
 SPAGHETTI_PASSWORD="$SPAGHETTI_PASSWORD_KALASPUFF" pnpm user:add --remote --username kalaspuff --name "Carl Oscar" --color tomato
@@ -57,6 +59,10 @@ SPAGHETTI_PASSWORD="$SPAGHETTI_PASSWORD_XIXA" pnpm user:add --remote --username 
 ```
 
 `pnpm user:add --check --remote` writes nothing and only proves the token can reach the database.
+
+## Passkeys
+
+Passkeys are tied to the site they were made on: `vars.WEBAUTHN_RP_ID` (`spaghetti.day`) and `vars.WEBAUTHN_ORIGINS` in `wrangler.jsonc`. Don't change them after people have passkeys: every passkey stops working (passwords keep working, and new ones can be made). Locally (`pnpm dev`, `pnpm start`, the e2e tests) the relying party is `localhost`, so open the app as `http://localhost:…`, not `127.0.0.1`. No secrets are involved.
 
 ## Push notifications
 

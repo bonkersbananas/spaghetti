@@ -24,6 +24,9 @@ export default defineConfig(async () => {
                   WEBHOOKS_ON_WRITE: "off",
                   // Drafting is on in the tests; the Anthropic API itself is stubbed (test/worker/drafts.test.ts).
                   ANTHROPIC_API_KEY: "sk-ant-test-key",
+                  // The tests' own relying party: requests come from http://spaghetti.test (test/worker/helpers.ts).
+                  WEBAUTHN_RP_ID: "spaghetti.test",
+                  WEBAUTHN_ORIGINS: "http://spaghetti.test",
                 },
               },
             }),
