@@ -75,7 +75,7 @@ const toc = [
 function Styleguide() {
   return (
     <>
-      <PageHeader title="Styleguide" subtitle="The kitchen's tools: every token and component, live." />
+      <PageHeader title="Styleguide" subtitle="Every token and component, live." />
       <div className="flex gap-12">
         <nav aria-label="Styleguide sections" className="sticky top-8 hidden h-fit w-40 shrink-0 flex-col lg:flex">
           {toc.map(([id, label]) => (

@@ -920,7 +920,7 @@ export const shots: Shot[] = [
         await page.request.delete(`/api/items/${id}`, { headers });
       }
       await page.reload();
-      await page.getByRole("heading", { level: 1, name: "Recently deleted" }).waitFor();
+      await page.getByRole("heading", { level: 1, name: "Deleted" }).waitFor();
       await page
         .getByRole("button", { name: /^Restore/ })
         .first()
@@ -1644,6 +1644,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  // An idea with someone named: the quiet "for the kitchen" line, no chip.
+  { name: "idea-for", path: "/ideas/5eed0000-0000-4000-8000-000000000003" },
   // The same idea in full: its note's link as a card under it.
   {
     name: "idea-links",

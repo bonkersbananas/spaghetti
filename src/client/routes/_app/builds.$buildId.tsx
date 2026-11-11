@@ -33,7 +33,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForField } from "@/components/ui/ForField";
+import { ForChip, ForField } from "@/components/ui/ForField";
 import {
   ArrowRightIcon,
   BuildsIcon,
@@ -157,6 +157,7 @@ function Build({ item }: { item: ItemView }) {
   useCaptureHere(item);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const [askFor, setAskFor] = useState(false);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
@@ -519,6 +520,9 @@ function Build({ item }: { item: ItemView }) {
               value={forWhom}
               onChange={(event) => setForWhom(event.target.value)}
               readOnly={readOnly || item.pending}
+              asking={askFor}
+              onOpen={() => setAskFor(true)}
+              onDone={() => setAskFor(false)}
             />
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
               <StageChip
@@ -541,6 +545,7 @@ function Build({ item }: { item: ItemView }) {
                   `Started ${inlineTime(started)}`
                 )}
               </div>
+              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
               {!active && !isDesktop && (
                 <Button
                   variant="quiet"
