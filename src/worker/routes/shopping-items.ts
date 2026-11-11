@@ -28,7 +28,7 @@ const linkChange = z.union([link, z.literal(""), z.null()]).transform((value) =>
 /** What POST /api/shopping-items accepts. The client picks the id, so a retried request is safe. */
 const createShoppingItem = z
   .object({ id: z.uuid(), name: name.optional(), link: link.optional(), priceLink: link.optional() })
-  .refine((body) => !!body.name || !!body.link, "A name or a link.");
+  .refine((body) => !!body.name || !!body.link || !!body.priceLink, "A name or a link.");
 const updateShoppingItem = z.object({
   name: name.optional(),
   link: linkChange.optional(),

@@ -2,11 +2,11 @@ import {
   BuildsIcon,
   type Icon,
   IdeasIcon,
-  InfoIcon,
   JournalIcon,
   PantryIcon,
   PrinterIcon,
   SearchIcon,
+  ShoppingIcon,
   TodayIcon,
 } from "@/components/ui/icons";
 
@@ -34,11 +34,11 @@ export const sections: Section[] = [today, ideas, builds, journal, search];
 export const tabs = [today, ideas, builds, journal] as const;
 
 /**
- * The workshop: the spools on hand and the printer. In the sidebar below the
+ * The workshop: the spools on hand, the printer and what to buy for it. In the sidebar below the
  * sections on desktop, in the account sheet on phones (the tab bar keeps four).
  */
 export const workshop: Section[] = [
   { to: "/pantry", label: "Pantry", icon: PantryIcon, shortcut: "goPantry" },
   { to: "/printer", label: "Printer", icon: PrinterIcon, shortcut: "goPrinter" },
-  { to: "/shopping", label: "Shopping", icon: InfoIcon, shortcut: "goShopping" }, // TODO: a Phosphor icon in components/ui/icons.tsx
+  { to: "/shopping", label: "Shopping list", icon: ShoppingIcon, shortcut: "goShopping" },
 ];

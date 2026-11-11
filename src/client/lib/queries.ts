@@ -1,4 +1,4 @@
-import type { LinkPreviewResponse, PeopleResponse, Person, SessionResponse, ShoppingItemsResponse } from "@shared/api";
+import type { LinkPreviewResponse, PeopleResponse, Person, SessionResponse } from "@shared/api";
 import { queryOptions } from "@tanstack/react-query";
 import { ApiError, api } from "./api";
 
@@ -67,9 +67,3 @@ export function rememberUser(user: Person | null) {
     // Private mode: the app just needs a connection to open.
   }
 }
-
-/** Shopping items, from /api/shopping-items. Mutations update this cache optimistically (see lib/items.ts). */
-export const shoppingItemsQuery = queryOptions({
-  queryKey: ["shopping-items"],
-  queryFn: async () => (await api<ShoppingItemsResponse>("/shopping-items")).shoppingItems,
-});

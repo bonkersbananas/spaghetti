@@ -2,7 +2,7 @@
  * The shopping list's pure rules: what's still to buy and what was bought, links to a shop and to Prisjakt.
  * The Worker validates with these limits and the client shows the same order.
  */
-import { shortUrl } from "./links.ts";
+import { findLinks, shortUrl } from "./links.ts";
 
 export const SHOPPING_NAME_MAX = 120;
 export const SHOPPING_LINK_MAX = 2000;
@@ -81,4 +81,24 @@ export function shoppingName(item: { name: string; link: string | null }, pageTi
   if (item.name.trim()) return item.name.trim();
   if (pageTitle?.trim()) return pageTitle.trim();
   return item.link ? shortUrl(item.link) : "Something to buy";
+}
+
+/**
+ * What one line typed or pasted into "Add something" means: the words are the name, a Prisjakt link is the price
+ * link and any other link is the shop. "Liquid glue https://eu.store.bambulab.com/…" is a name and a shop.
+ */
+export function parseEntry(text: string): { name: string; link: string | null; priceLink: string | null } {
+  let link: string | null = null;
+  let priceLink: string | null = null;
+  let name = text;
+  for (const found of findLinks(text)) {
+    if (isPriceLink(found.url)) priceLink ??= found.url;
+    else link ??= found.url;
+    name = name.replace(found.url, " ");
+  }
+  name = name
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–—:,|]+|[\s\-–—:,|]+$/g, "")
+    .slice(0, SHOPPING_NAME_MAX);
+  return { name, link, priceLink };
 }
