@@ -122,7 +122,7 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(again.getByText("Kitchen laptop")).toBeVisible();
   await again.getByRole("button", { name: "Remove Kitchen laptop" }).click();
-  await expect(page.getByText("Passkey removed")).toBeVisible();
+  await expect(page.getByText("Passkey removed").first()).toBeVisible();
   await expect
     .poll(async () => (await (await page.request.get("/api/account/passkeys")).json()).passkeys.length, {
       timeout: 15_000,
@@ -289,7 +289,7 @@ test("the signed-in devices list signs out another device", async ({ page, brows
   expect(login.ok()).toBe(true);
   await openRow(page, isMobile, "Passkeys and password");
   const sheet = page.getByRole("dialog", { name: "Passkeys and password" });
-  await expect(sheet.getByText("This device")).toBeVisible();
+  await expect(sheet.getByText("This device", { exact: true })).toBeVisible();
   await expectAccessible(page, "The passkeys and password sheet", "[role=dialog]");
   await sheet.getByRole("button", { name: "Sign out everywhere else" }).click();
   await expect.poll(async () => (await other.request.get("/api/session")).status()).toBe(401);
