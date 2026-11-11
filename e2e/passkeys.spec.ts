@@ -66,6 +66,8 @@ async function signOut(page: Page, isMobile: boolean) {
     await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
   }
   expect((await ended).ok()).toBe(true);
+  // The app has left the screen it was on (its heading may still be fading out, and would pass for Today).
+  await page.waitForURL(/\/sign-in/);
 }
 
 async function expectAccessible(page: Page, name: string, include?: string) {
