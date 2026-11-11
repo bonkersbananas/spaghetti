@@ -18,6 +18,8 @@ export function focusSearch() {
 export function searchQuery(q: string, params: URLSearchParams) {
   const all = new URLSearchParams(params);
   if (q) all.set("q", q);
+  // So "last week" starts on this person's Monday.
+  all.set("tz", String(-new Date().getTimezoneOffset()));
   return queryOptions({
     queryKey: ["search", all.toString()] as const,
     queryFn: async ({ signal }) => ({ ...(await api<SearchResponse>(`/search?${all}`, { signal })), q }),

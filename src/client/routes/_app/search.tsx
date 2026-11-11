@@ -1,20 +1,21 @@
-import type { AttemptHit, ItemHit, Recipe } from "@shared/api";
+import type { AttemptHit, ItemHit, Recipe, SearchResponse, Spool } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, type LinkProps, useNavigate } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot, NoodleSearch } from "@/components/illustrations";
 import { Filters } from "@/components/journal/Filters";
 import { LazyRecipeSheet } from "@/components/recipes/LazyRecipeSheet";
 import { AttemptResult, attemptLink, ItemResult, itemLink } from "@/components/search/Results";
+import { StartAgain } from "@/components/search/StartAgain";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
 import { ChipRow } from "@/components/ui/FilterChips";
-import { RecentIcon, SearchIcon, TagIcon } from "@/components/ui/icons";
+import { CalendarIcon, RecentIcon, SearchIcon, SparkleIcon, TagIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { RowSkeleton } from "@/components/ui/Skeleton";
@@ -27,6 +28,9 @@ import { forgetSearches, recentSearches, rememberSearch, SEARCH_BOX_ID, searchQu
 
 /** Recipe results are drawn only when the search found one. */
 const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then((m) => ({ default: m.RecipeResult })));
+
+/** Spools found are drawn only when the search found one. */
+const SpoolResult = lazy(() => import("@/components/search/SpoolResult").then((m) => ({ default: m.SpoolResult })));
 
 type SearchParams = FilterValues & { q?: string };
 
@@ -44,7 +48,8 @@ const DEBOUNCE_MS = 140;
 type Result =
   | { kind: "item"; hit: ItemHit; link: LinkProps }
   | { kind: "attempt"; hit: AttemptHit; link: LinkProps }
-  | { kind: "recipe"; hit: Recipe };
+  | { kind: "recipe"; hit: Recipe }
+  | { kind: "spool"; hit: Spool; link: LinkProps };
 
 function Search() {
   const { q = "", ...filters } = Route.useSearch();
@@ -81,15 +86,24 @@ function Search() {
     enabled: searching && (!filters.person || !!people),
   });
   const shown = searching ? results.data : undefined;
-  const shownTerms = useMemo(() => searchTerms(shown?.q ?? ""), [shown?.q]);
+  // What the server made of the question (filler dropped, typos mended, synonyms added) is what gets marked.
+  const shownTerms = useMemo(() => shown?.terms ?? searchTerms(shown?.q ?? ""), [shown?.terms, shown?.q]);
 
   const list = useMemo<Result[]>(() => {
     if (!shown) return [];
+    // In the order they are drawn, so the arrow keys follow the page: what worked leads the attempts.
+    const attempts = shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) }));
     return [
       ...shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })),
+      ...attempts.filter((r) => r.hit.attempt.outcome === "success"),
       ...shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
-      ...shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) })),
+      ...attempts.filter((r) => r.hit.attempt.outcome !== "success"),
       ...shown.ideas.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
+      ...(shown.spools ?? []).map((hit) => ({
+        kind: "spool" as const,
+        hit,
+        link: { to: "/pantry/$spoolId", params: { spoolId: hit.id } } as LinkProps,
+      })),
     ];
   }, [shown]);
 
@@ -151,14 +165,33 @@ function Search() {
         key={
           result.kind === "attempt"
             ? result.hit.attempt.id
-            : result.kind === "recipe"
+            : result.kind === "recipe" || result.kind === "spool"
               ? result.hit.id
               : result.hit.item.id
         }
         className="list-none"
       >
         {result.kind === "attempt" ? (
-          <AttemptResult hit={result.hit} {...common} />
+          <>
+            <AttemptResult hit={result.hit} {...common} />
+            {result.hit.attempt.outcome === "success" && (
+              // Beside the link, not in it: a button can't live inside a link. Lined up with the text column.
+              <div className="pb-1 pl-[6.375rem] md:pl-[7.5rem]">
+                <StartAgain hit={result.hit} onStart={common.onOpen} />
+              </div>
+            )}
+          </>
+        ) : result.kind === "spool" ? (
+          <Suspense fallback={<RowSkeleton />}>
+            <SpoolResult
+              ref={common.ref as never}
+              spool={result.hit}
+              terms={common.terms}
+              selected={common.selected}
+              onHover={common.onHover}
+              onOpen={common.onOpen}
+            />
+          </Suspense>
         ) : result.kind === "recipe" ? (
           <Suspense fallback={<RowSkeleton />}>
             <RecipeResult
@@ -182,9 +215,11 @@ function Search() {
   const groups: Array<[string, Result[]]> = shown
     ? [
         ["Recipes", list.filter((r) => r.kind === "recipe")],
+        ["What worked", list.filter((r) => r.kind === "attempt" && r.hit.attempt.outcome === "success")],
         ["Builds", list.filter((r) => r.kind === "item" && r.hit.item.stage !== "idea")],
-        ["Attempts", list.filter((r) => r.kind === "attempt")],
+        ["Attempts", list.filter((r) => r.kind === "attempt" && r.hit.attempt.outcome !== "success")],
         ["Ideas", list.filter((r) => r.kind === "item" && r.hit.item.stage === "idea")],
+        ["Spools", list.filter((r) => r.kind === "spool")],
       ]
     : [];
 
@@ -212,7 +247,7 @@ function Search() {
             type="search"
             icon={SearchIcon}
             aria-label="Search"
-            placeholder="PETG warping, tugboat, tree supports…"
+            placeholder="PETG bed temp, what worked for the tugboat…"
             enterKeyHint="search"
             autoComplete="off"
             value={text}
@@ -243,6 +278,7 @@ function Search() {
               <p className="sr-only" aria-live="polite">
                 {shown ? `${total} ${total === 1 ? "result" : "results"}` : ""}
               </p>
+              {shown && <Understood shown={shown} />}
               {!shown ? (
                 <div aria-hidden>
                   <RowSkeleton />
@@ -266,7 +302,12 @@ function Search() {
                     ([label, rows]) =>
                       rows.length > 0 && (
                         <section key={label} aria-label={label}>
-                          <Overline as="h2" count={rows.length} className="mb-2 block">
+                          <Overline
+                            as="h2"
+                            count={rows.length}
+                            tone={label === "What worked" ? "basil" : "faint"}
+                            className="mb-2 block"
+                          >
                             {label}
                           </Overline>
                           <ol className="-mx-2 flex flex-col gap-1">{rows.map(row)}</ol>
@@ -296,6 +337,40 @@ function Search() {
       </div>
       <LazyRecipeSheet recipeId={openRecipe} onOpenChange={(next) => !next && setOpenRecipe(null)} />
     </>
+  );
+}
+
+/** What the search made of the question, when it did more than read the words: a mended typo, a time. */
+function Understood({ shown }: { shown: SearchResponse }) {
+  if (!shown.corrected && !shown.when) return null;
+  return (
+    <div className="text-small text-ink-soft flex flex-wrap items-center gap-x-4 gap-y-1">
+      {shown.corrected && (
+        <p className="flex items-center gap-1.5">
+          <SparkleIcon size={16} aria-hidden className="text-ink-faint" />
+          <span>
+            Showing results for <span className="text-ink font-semibold">{shown.corrected}</span>
+          </span>
+        </p>
+      )}
+      {shown.when && (
+        <p className="flex items-center gap-1.5">
+          <CalendarIcon size={16} aria-hidden className="text-ink-faint" />
+          <span>
+            Printed <span className="text-ink font-semibold">{shown.when.label}</span>
+          </span>
+          {shown.when.weekMonday && (
+            <Link
+              to="/week/$monday"
+              params={{ monday: shown.when.weekMonday }}
+              className="focus-ring text-tomato-ink rounded-xs font-semibold underline-offset-2 hover:underline"
+            >
+              Open that week
+            </Link>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

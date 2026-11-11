@@ -10,6 +10,8 @@ export interface SearchTerm {
   text: string;
   /** Matches words that start with it ("warp" finds "warping"). */
   prefix: boolean;
+  /** Other words that mean the same ("skev" is "warping" in Swedish): any of them matches too, as a word start. */
+  also?: string[];
 }
 
 /** At most this many words of a query are used. */
@@ -28,8 +30,12 @@ export function fold(text: string): string {
 
 /** The words of a text, as the index splits them. */
 export function words(text: string): string[] {
-  return fold(text).match(/[\p{L}\p{N}]+/gu) ?? [];
+  return (fold(text).match(NUMBER_OR_WORD) ?? []).map((word) => word.replace(",", "."));
 }
+
+/** A decimal number ("0.4", "0,4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
+const NUMBER_OR_WORD = /\p{N}+(?:[.,]\p{N}+)?(?![\p{L}])|[\p{L}\p{N}]+/gu;
+const DECIMAL = /^\d+\.\d+$/;
 
 /** "PETG warp" → petg (prefix), warp (prefix). Empty when there is nothing to look for. */
 export function searchTerms(query: string): SearchTerm[] {
@@ -38,7 +44,7 @@ export function searchTerms(query: string): SearchTerm[] {
   for (const word of words(query)) {
     if (seen.has(word)) continue;
     seen.add(word);
-    terms.push({ text: word, prefix: !EXACT_WORDS.has(word) });
+    terms.push({ text: word, prefix: !EXACT_WORDS.has(word) && !DECIMAL.test(word) });
     if (terms.length === MAX_TERMS) break;
   }
   return terms;
@@ -46,8 +52,12 @@ export function searchTerms(query: string): SearchTerm[] {
 
 /** Whether a word of the text matches one of the terms. */
 export function matchesTerm(word: string, terms: readonly SearchTerm[]): boolean {
-  const folded = fold(word);
-  return terms.some((term) => (term.prefix ? folded.startsWith(term.text) : folded === term.text));
+  const folded = fold(word).replace(",", ".");
+  return terms.some(
+    (term) =>
+      (term.prefix ? folded.startsWith(term.text) : folded === term.text) ||
+      term.also?.some((other) => folded.startsWith(other)),
+  );
 }
 
 /**
@@ -67,7 +77,8 @@ export function ftsQuery(
   ];
   return terms
     .map((term) => {
-      const token = `"${term.text}"${term.prefix ? "*" : ""}`;
+      const token = ftsToken(term.text, term.prefix);
+      const others = (term.also ?? []).map((other) => ftsToken(other, true));
       const viaLabel = tags
         .filter(
           (tag) =>
@@ -75,9 +86,16 @@ export function ftsQuery(
             !words(tag.slug).some((word) => word.startsWith(term.text)),
         )
         .map((tag) => `tags : "${words(tag.slug).join(" ")}"`);
-      return viaLabel.length ? `(${[token, ...viaLabel].join(" OR ")})` : token;
+      const options = [token, ...others, ...viaLabel];
+      return options.length > 1 ? `(${options.join(" OR ")})` : token;
     })
     .join(" AND ");
+}
+
+/** One word as an FTS5 string; "0.4" is the phrase "0 4", which is how the index splits it. */
+function ftsToken(text: string, prefix: boolean) {
+  const pieces = text.match(/[\p{L}\p{N}]+/gu) ?? [text];
+  return `"${pieces.join(" ")}"${prefix ? "*" : ""}`;
 }
 
 /** A piece of text, marked when it matched. */
@@ -91,7 +109,7 @@ export function highlight(text: string, terms: readonly SearchTerm[]): Segment[]
   if (!terms.length || !text) return text ? [{ text, match: false }] : [];
   const segments: Segment[] = [];
   let last = 0;
-  for (const found of text.matchAll(/[\p{L}\p{N}]+/gu)) {
+  for (const found of text.matchAll(NUMBER_OR_WORD)) {
     const start = found.index ?? 0;
     if (!matchesTerm(found[0], terms)) continue;
     if (start > last) segments.push({ text: text.slice(last, start), match: false });

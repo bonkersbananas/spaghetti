@@ -1,5 +1,5 @@
-import type { AttemptHit, ItemHit } from "@shared/api";
-import { searchTerms, words } from "@shared/search";
+import type { AttemptHit, ItemHit, Spool } from "@shared/api";
+import { highlight, searchTerms, words } from "@shared/search";
 import { isShortcut, keycaps, type ShortcutId, shortcutKeys } from "@shared/shortcuts";
 import { inlineTime, relativeTime } from "@shared/time";
 import { addWeeks, mondayOf } from "@shared/week";
@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
+import { summarizeSettings } from "@/components/builds/settings";
 import { attemptLink, itemLink } from "@/components/search/Results";
 import { Highlight } from "@/components/ui/Highlight";
 import {
@@ -18,6 +19,7 @@ import {
   KeyboardIcon,
   MoonIcon,
   PaletteIcon,
+  PantryIcon,
   PlusIcon,
   SignOutIcon,
   SunIcon,
@@ -112,7 +114,7 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
   const answered = terms.length > 0 && results.data?.q === query.trim();
   const waiting = terms.length > 0 && !answered && !results.isError;
   const found = terms.length > 0 ? results.data : undefined;
-  const foundTerms = useMemo(() => searchTerms(found?.q ?? ""), [found?.q]);
+  const foundTerms = useMemo(() => found?.terms ?? searchTerms(found?.q ?? ""), [found?.terms, found?.q]);
 
   const { setOpen: openCapture } = useCapture();
   const { resolved, preference, setPreference } = useTheme();
@@ -265,9 +267,18 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
 
     const hits = found
       ? [
+          // What worked first: a settings question is asked to copy the answer.
+          ...found.attempts
+            .filter((hit) => hit.attempt.outcome === "success")
+            .slice(0, PER_KIND)
+            .map((hit) => attemptEntry(hit, foundTerms, navigate, "What worked")),
           ...found.builds.slice(0, PER_KIND).map((hit) => itemEntry(hit, "Builds", foundTerms, navigate)),
           ...found.ideas.slice(0, PER_KIND).map((hit) => itemEntry(hit, "Ideas", foundTerms, navigate)),
-          ...found.attempts.slice(0, PER_KIND).map((hit) => attemptEntry(hit, foundTerms, navigate)),
+          ...found.attempts
+            .filter((hit) => hit.attempt.outcome !== "success")
+            .slice(0, PER_KIND)
+            .map((hit) => attemptEntry(hit, foundTerms, navigate, "Attempts")),
+          ...(found.spools ?? []).slice(0, PER_KIND).map((spool) => spoolEntry(spool, foundTerms, navigate)),
         ]
       : [];
     const unreadMatches = unreadEntries.filter((entry) =>
@@ -428,18 +439,44 @@ function itemEntry(hit: ItemHit, group: string, terms: ReturnType<typeof searchT
   };
 }
 
-function attemptEntry(hit: AttemptHit, terms: ReturnType<typeof searchTerms>, navigate: Navigate): Entry {
-  const id = `attempt-${hit.attempt.id}`;
-  const name = itemName(hit.item, "build");
+function spoolEntry(spool: Spool, terms: ReturnType<typeof searchTerms>, navigate: Navigate): Entry {
+  const id = `spool-${spool.id}`;
+  const name = [spool.colorName, spool.brand].filter(Boolean).join(" · ") || spool.material;
   return {
     id,
-    group: "Attempts",
+    group: "Spools",
+    run: () => void navigate({ to: "/pantry/$spoolId", params: { spoolId: spool.id } }),
+    row: {
+      id,
+      label: `${name}, spool`,
+      title: <Highlight text={name} terms={terms} />,
+      subtitle: [spool.finish, spool.material, spool.slot ? `loaded in ${spool.slot}` : null].filter(Boolean).join(" "),
+      photo: spool.photo ? { src: photoSrc(spool.photo.id, "thumb"), color: spool.photo.color || undefined } : null,
+      icon: PantryIcon,
+    },
+  };
+}
+
+function attemptEntry(
+  hit: AttemptHit,
+  terms: ReturnType<typeof searchTerms>,
+  navigate: Navigate,
+  group: string,
+): Entry {
+  const id = `attempt-${hit.attempt.id}`;
+  const name = itemName(hit.item, "build");
+  // The settings the words matched ("bed 70 °C"), so the row shows why it was found.
+  const all = summarizeSettings(hit.attempt.settings);
+  const matched = all.filter((part) => highlight(part, terms).some((piece) => piece.match)).slice(0, 2);
+  return {
+    id,
+    group,
     run: () => void navigate(attemptLink(hit)),
     row: {
       id,
       label: `${name}, attempt ${hit.number}`,
       title: <Highlight text={name} terms={terms} />,
-      subtitle: `Attempt ${hit.number} · ${relativeTime(hit.attempt.printedAt)}`,
+      subtitle: [`Attempt ${hit.number} · ${relativeTime(hit.attempt.printedAt)}`, ...matched].join(" · "),
       photo: hit.photo ? { src: photoSrc(hit.photo.id, "thumb"), color: hit.photo.color || undefined } : null,
       icon: BuildsIcon,
       trailing: <OutcomeChip outcome={hit.attempt.outcome} />,
