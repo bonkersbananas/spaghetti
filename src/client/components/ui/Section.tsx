@@ -16,6 +16,8 @@ interface SectionProps {
   count?: number;
   /** On the heading's right, on its baseline: a hint, a link, a small action or a figure. */
   aside?: ReactNode;
+  /** A line under the heading that belongs to it: the outcomes so far, the month in a sentence. */
+  description?: ReactNode;
   /** The heading level; h2 unless the section sits inside another. */
   as?: "h2" | "h3";
   className?: string;
@@ -26,7 +28,17 @@ interface SectionProps {
  * A section of a page: its heading (with a count and an aside when there are) and what it holds, at one distance
  * under the heading for each size, so sections built on different screens line up the same way.
  */
-export function Section({ id, title, size = "headline", count, aside, as = "h2", className, children }: SectionProps) {
+export function Section({
+  id,
+  title,
+  size = "headline",
+  count,
+  aside,
+  description,
+  as = "h2",
+  className,
+  children,
+}: SectionProps) {
   const heading =
     size === "overline" ? (
       <Overline as={as} id={id} count={count}>
@@ -42,15 +54,31 @@ export function Section({ id, title, size = "headline", count, aside, as = "h2",
       aria-labelledby={id}
       className={cn("flex flex-col", size === "overline" ? "gap-3" : "gap-4 md:gap-5", className)}
     >
-      {aside ? (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          {heading}
-          <div className="flex shrink-0 items-baseline">{aside}</div>
-        </div>
-      ) : (
-        heading
-      )}
+      <Head
+        heading={
+          aside ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              {heading}
+              <div className="flex shrink-0 items-baseline">{aside}</div>
+            </div>
+          ) : (
+            heading
+          )
+        }
+        description={description}
+      />
       {children}
     </section>
+  );
+}
+
+/** The heading row, with its description under it when there is one. */
+function Head({ heading, description }: { heading: ReactNode; description: ReactNode }) {
+  if (!description) return heading;
+  return (
+    <div className="flex flex-col gap-1">
+      {heading}
+      {description}
+    </div>
   );
 }
