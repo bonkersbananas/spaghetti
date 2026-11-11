@@ -23,8 +23,10 @@ import {
   ADDITIONS,
   type Addition,
   ATTEMPT_PHOTOS,
+  type DemoPerson,
   LANDING_DIR,
   type LandingShot,
+  PEOPLE,
   RENAMES,
   type SeedPerson,
   SHOTS,
@@ -36,7 +38,7 @@ import { launchOptions } from "./lib/browser.ts";
 import { simulateIphone } from "./lib/iphone.ts";
 import { SEED_PASSWORD, SEED_USERS } from "./lib/local-app.ts";
 import { startSeededApp } from "./lib/seeded-app.ts";
-import { root } from "./lib/wrangler.ts";
+import { executeSql, root } from "./lib/wrangler.ts";
 import { SEED_LOCALE, SEED_NOW } from "./seed/index.ts";
 import { replaceSeedPhotos } from "./seed/stand-ins.ts";
 
@@ -102,12 +104,29 @@ async function uploadPhoto(as: APIRequestContext, itemId: string, photo: Additio
   if (!uploaded.ok()) throw new Error(`Adding ${photo.file} failed: ${uploaded.status()}`);
 }
 
-/** The demo's additions and renames, on top of the seed (scripts/landing/demo.ts), by the seed's own people. */
-async function dressUp(origin: string) {
+/** The demo's people, additions and renames, on top of the seed (scripts/landing/demo.ts). */
+async function dressUp(origin: string, stateDir: string) {
   const people = Object.fromEntries(
     await Promise.all(SEED_USERS.map(async ({ username }) => [username, await signedIn(origin, username)] as const)),
   ) as Record<SeedPerson, APIRequestContext>;
   try {
+    // The seed's Alex and Sam become the two people: their names and colours (there is no route to rename someone),
+    // and their pictures, uploaded as the app's own Account sheet does.
+    for (const [username, person] of Object.entries(PEOPLE) as [SeedPerson, DemoPerson][]) {
+      const quoted = (value: string) => `'${value.replaceAll("'", "''")}'`;
+      executeSql(
+        `UPDATE users SET name = ${quoted(person.name)}, color = ${quoted(person.color)} WHERE username = ${quoted(username)};`,
+        { persistTo: stateDir },
+      );
+      const picture = await sharp(join(LANDING_DIR, "people", person.picture))
+        .resize(512, 512, { fit: "cover" })
+        .jpeg({ quality: 88 })
+        .toBuffer();
+      const uploaded = await people[username].put("/api/people/me/photo", {
+        multipart: { photo: { name: "picture.jpg", mimeType: "image/jpeg", buffer: picture } },
+      });
+      if (!uploaded.ok()) throw new Error(`The picture of ${person.name} failed: ${uploaded.status()}`);
+    }
     for (const addition of ADDITIONS) {
       const as = people[addition.by];
       const id = crypto.randomUUID();
@@ -150,7 +169,7 @@ async function takeShots() {
   const failures: string[] = [];
   try {
     console.log("  dressing up the seed (scripts/landing/demo.ts)…");
-    await dressUp(app.url);
+    await dressUp(app.url, app.stateDir);
     for (const device of ["phone", "laptop"] as const) {
       const context = await browser.newContext({
         ...DEVICES[device],

@@ -80,7 +80,7 @@ Things to buy for the printer, shared by both people. A thing is `{ id, name, li
 - `GET /shopping-items` (`read`): `{ shoppingItems }`, what's still to buy in its order (`position`, smallest first), then what was bought, the latest first.
 - `POST /shopping-items` `{ id, name?, link?, priceLink? }` (`printer`): needs a name or a link; links must be http(s). It goes on top of the list. Idempotent on `id`; `409 deleted` for an id taken off the list, `422 too_many` past 300 things.
 - `PATCH /shopping-items/:id` `{ name?, link?, priceLink?, bought? }` (`printer`): an empty string or `null` clears a link. `bought: true` ticks it off (now, by whoever asks; ticking again keeps the first), `bought: false` puts it back on top of the list.
-- `PUT /shopping-items/order` `{ ids }` (`printer`): what's still to buy in this order; anything not mentioned keeps its turn after them, bought things are left out. Answers the whole list.
+- `PUT /shopping-items/order` `{ ids }` (`printer`): the named things that are still to buy trade the places they hold so they come in this order; anything not named (added since the list was read, say) keeps its own place, and unknown or bought ids are ignored. Answers the whole list.
 - `DELETE /shopping-items/:id` and `POST /shopping-items/:id/restore`: soft delete and its undo, people only; purged 30 days after.
 - Every write records a `shopping` change (no `itemId`).
 

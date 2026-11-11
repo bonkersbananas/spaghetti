@@ -36,8 +36,6 @@
   --lp-strand: linear-gradient(90deg, var(--lp-pink), var(--lp-sun) 35%, var(--lp-teal) 68%, var(--lp-orange));
   /* The printed word: tomato, with a darker line under every layer. */
   --lp-layer: color-mix(in srgb, var(--sg-tomato) 78%, var(--sg-ink));
-  --lp-device: #1f1b18;
-  --lp-device-edge: #3a3430;
   --lp-aluminium: #d9d4cd;
 
   --lp-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
@@ -377,68 +375,92 @@ a {
 }
 
 /* ---- Devices: a phone and a laptop drawn around the app's screenshots ---- */
+/* (The share image draws its phone with these same rules, up to .lp-laptop: scripts/landing/pictures.ts.) */
 
+/*
+ * An iPhone drawn around a 390 × 844 screenshot taken at 3x (the Home Screen app, safe areas and all): a titanium
+ * rim, a thin and even black bezel, the screen's own round corners, and on the screen the Dynamic Island, the status
+ * bar (over the app's 59-point top inset) and the home indicator (over the tab bar's 34-point bottom inset). Every
+ * size is a share of the phone's width (cqi), so each phone on the page is the same phone, larger or smaller.
+ * Proportions from an iPhone 15 Pro: a 393-point screen with 55-point corners, a 126 × 37 island 11 points down.
+ */
 .lp-phone {
-  --r: 15.5%;
+  container-type: inline-size;
   position: relative;
   width: 100%;
-  aspect-ratio: 390 / 844;
-  padding: 3.4%;
-  border-radius: var(--r) / 7.2%;
-  background: linear-gradient(145deg, #4a423c, var(--lp-device) 22%, var(--lp-device) 78%, #3d3631);
-  box-shadow:
-    inset 0 0 0 1.5px var(--lp-device-edge),
-    inset 0 0 0 3px #0e0c0b,
-    var(--lp-shadow-device);
+  /* The screen's 12.8cqi corners plus the 4.3cqi rim and bezel, as shares of the phone's width and height. */
+  border-radius: 17.1% / 8.3%;
+  background: linear-gradient(135deg, #8a847e, #4a4541 18%, #2e2a28 50%, #4a4541 82%, #77716b);
+  box-shadow: var(--lp-shadow-device);
 }
 
 .lp-phone__screen {
   position: relative;
-  height: 100%;
   overflow: hidden;
-  border-radius: 12.5% / 5.8%;
+  aspect-ratio: 390 / 844;
+  margin: 4.3cqi;
+  border-radius: 12.8cqi;
   background: var(--sg-paper);
+  /* The black glass between the screen and the rim; the 1.8cqi left of the 4.3 is the titanium band. */
+  box-shadow: 0 0 0 2.5cqi #0b0a0a;
+}
+
+.lp-phone__screen picture,
+.lp-phone__screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .lp-phone__screen img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
 }
 
-/* The status bar over the screenshot's top inset (59 of 844 points), with the Dynamic Island in it. */
+/* The status bar: the time and the icons in the two ears either side of the island, centred on it. */
 .lp-phone__status {
   position: absolute;
   inset: 0 0 auto;
-  height: 7%;
-  display: flex;
+  height: 13.7cqi;
+  display: grid;
+  grid-template-columns: 1fr 29.3cqi 1fr;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 8% 0 11%;
+  justify-items: center;
   color: var(--sg-ink);
-  font-size: clamp(0.5rem, 3.6cqi, 0.9375rem);
+  font-size: 3.95cqi;
   font-weight: 650;
   letter-spacing: 0.01em;
 }
 
-.lp-phone__status svg {
-  width: 26%;
-  height: auto;
+.lp-phone__status span {
+  grid-column: 1;
 }
 
-.lp-phone {
-  container-type: inline-size;
+.lp-phone__status svg {
+  grid-column: 3;
+  width: 15.5cqi;
+  height: auto;
 }
 
 .lp-phone__island {
   position: absolute;
-  top: 1.45%;
+  top: 2.56cqi;
   left: 50%;
-  width: 31%;
-  height: 4.1%;
+  width: 29.3cqi;
+  height: 8.6cqi;
   translate: -50% 0;
   border-radius: 999px;
   background: #050505;
+}
+
+.lp-phone__home {
+  position: absolute;
+  bottom: 1.85cqi;
+  left: 50%;
+  width: 31.2cqi;
+  height: 1.2cqi;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sg-ink) 88%, transparent);
 }
 
 .lp-laptop {
@@ -447,40 +469,48 @@ a {
 }
 
 .lp-laptop__lid {
+  --bezel: #0f0d0c;
   position: relative;
   padding: 2.1% 2.1% 3.2%;
   border-radius: 3.2% 3.2% 0.6% 0.6% / 5% 5% 1% 1%;
-  background: linear-gradient(180deg, #2a2522, #151210);
+  background: var(--bezel);
   box-shadow:
     inset 0 0 0 1.5px #4b443e,
-    inset 0 0 0 3px #0d0b0a;
-}
-
-.lp-laptop__lid::before {
-  /* The camera notch. */
-  content: "";
-  position: absolute;
-  top: 2.1%;
-  left: 50%;
-  width: 12%;
-  height: 3%;
-  translate: -50% 0;
-  border-radius: 0 0 0.5rem 0.5rem;
-  background: #151210;
-  z-index: 1;
+    inset 0 0 0 3px #0a0908;
 }
 
 .lp-laptop__screen {
+  position: relative;
   overflow: hidden;
   border-radius: 0.4% / 0.65%;
   aspect-ratio: 1440 / 900;
   background: var(--sg-paper);
 }
 
+.lp-laptop__screen picture,
 .lp-laptop__screen img {
+  display: block;
   width: 100%;
   height: 100%;
+}
+
+.lp-laptop__screen img {
   object-fit: cover;
+}
+
+/* The camera notch, as on a MacBook: the bezel's own black dipping into the top of the screen, wide and shallow,
+   with a camera dot in it. Shares of the screen, as on a 14-inch MacBook Pro (188 × 32 of 1512 × 982 points). */
+.lp-laptop__screen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 12.4%;
+  height: 3.3%;
+  translate: -50% 0;
+  border-radius: 0 0 5.4% 5.4% / 0 0 32% 32%;
+  background:
+    radial-gradient(circle closest-side at 50% 46%, #26303a 0 30%, #161a1f 42%, transparent 50%), var(--bezel);
 }
 
 .lp-laptop__base {
