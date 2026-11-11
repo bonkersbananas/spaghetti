@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
+import { IdeasIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { Label, Panel, Section } from "./shared";
 
@@ -77,7 +78,7 @@ export function MotionSection() {
 function PressedPanel() {
   const rows = [
     [
-      "Button · shrinks",
+      "Primary button · shrinks, deeper tomato",
       (held?: boolean) => (
         <Button variant="primary" data-pressed={held || undefined}>
           Log attempt
@@ -85,7 +86,7 @@ function PressedPanel() {
       ),
     ],
     [
-      "Chip · shrinks",
+      "Chip · shrinks, pressed surface",
       (held?: boolean) => (
         <ToggleChip selected={false} data-pressed={held || undefined}>
           Silk PLA
@@ -93,7 +94,7 @@ function PressedPanel() {
       ),
     ],
     [
-      "Card or row, pressable · shrinks",
+      "Card or row · shrinks, pressed surface",
       (held?: boolean) => (
         <button
           type="button"
@@ -102,6 +103,21 @@ function PressedPanel() {
         >
           Tugboat hull
           <span className="text-small text-ink-faint block font-normal">3 attempts</span>
+        </button>
+      ),
+    ],
+    [
+      "Tab bar item · round highlight",
+      (held?: boolean) => (
+        <button
+          type="button"
+          data-pressed={held || undefined}
+          className="pressable press-none focus-ring group text-ink-faint flex w-16 flex-col items-center gap-0.5 rounded-md"
+        >
+          <span className="group-data-[pressed]:bg-pressed rounded-pill flex h-8 w-12 items-center justify-center">
+            <IdeasIcon size={26} aria-hidden />
+          </span>
+          <span className="text-caption font-semibold">Ideas</span>
         </button>
       ),
     ],
@@ -121,8 +137,9 @@ function PressedPanel() {
   return (
     <Panel className="flex min-w-0 flex-col gap-4">
       <p className="text-small text-ink-soft max-w-prose">
-        Held: <code>pressable</code> shrinks to 97% in 90 ms; tappable things without it (inline links, plain rows) dim
-        to 60%. Both start on the touch itself, never after it.
+        Held: <code>pressable</code> shrinks to 97% and takes a tint in 90 ms (a primary button deepens to the pressed
+        tomato, chips and cards to the pressed surface, a tab bar item gets a round highlight); tappable things without
+        it (inline links, plain rows) dim to 60%. Both start on the touch itself, never after it.
       </p>
       <div className="bg-paper grid max-w-lg grid-cols-2 items-center gap-x-4 gap-y-2 rounded-md p-4">
         <span className="text-caption text-ink font-semibold">Resting</span>

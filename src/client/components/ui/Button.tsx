@@ -7,10 +7,11 @@ export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-tomato text-on-accent shadow-soft hover:bg-tomato-strong disabled:bg-ink-ghost disabled:shadow-none",
+  primary:
+    "press-tomato bg-tomato text-on-accent shadow-soft hover:bg-tomato-strong disabled:bg-ink-ghost disabled:shadow-none",
   secondary: "bg-cream text-ink shadow-soft hover:shadow-raised disabled:text-ink-ghost",
   quiet: "bg-transparent text-ink-soft hover:bg-ink/5 hover:text-ink disabled:text-ink-ghost",
-  danger: "bg-tomato-soft text-tomato-ink hover:bg-tomato hover:text-on-accent",
+  danger: "press-tomato bg-tomato-soft text-tomato-ink hover:bg-tomato hover:text-on-accent",
 };
 
 const sizes: Record<ButtonSize, string> = {

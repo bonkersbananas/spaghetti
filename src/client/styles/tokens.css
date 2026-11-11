@@ -18,6 +18,8 @@
   /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
   --sg-lifted: #fffcf7;
   --sg-well: #ebe3d5;
+  /* What a held chip, card or row turns: a soft warm tint, darker than cream and paper. */
+  --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
   --sg-note: #f6f1e8;
 
@@ -44,6 +46,8 @@
   /* Accents: used with restraint. Tomato acts; basil confirms; semolina highlights. */
   --sg-tomato: #c8462a;
   --sg-tomato-strong: #b03b20;
+  /* Held: a shade deeper than hover, so a thumb on the primary button feels it. */
+  --sg-tomato-pressed: #8f2f18;
   --sg-tomato-soft: #f9e1d6;
   --sg-tomato-ink: #a8381c;
   --sg-basil: #3f6e3b;
@@ -159,6 +163,7 @@
   --sg-cream: #25201c;
   --sg-lifted: #2e2823;
   --sg-well: #120f0d;
+  --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-ink: #ece4d9;
   --sg-ink-soft: #c6bab0;
@@ -173,6 +178,7 @@
   --sg-shade: rgb(0 0 0 / 0.3);
   /* Tomato stays the deep tomato of the daytime fills (cream text on it is AA); only text on dark surfaces gets lighter. */
   --sg-tomato-soft: #3b2219;
+  --sg-tomato-pressed: #8f2f18;
   --sg-tomato-ink: #f59a7c;
   --sg-basil: #6f9f69;
   --sg-basil-soft: #232f20;
@@ -215,6 +221,8 @@
   --color-shade: var(--sg-shade);
   --color-tomato: var(--sg-tomato);
   --color-tomato-strong: var(--sg-tomato-strong);
+  --color-tomato-pressed: var(--sg-tomato-pressed);
+  --color-pressed: var(--sg-pressed);
   --color-tomato-soft: var(--sg-tomato-soft);
   --color-tomato-ink: var(--sg-tomato-ink);
   --color-basil: var(--sg-basil);
@@ -339,7 +347,21 @@
   &:active:not(:disabled),
   &[data-pressed] {
     transform: scale(var(--sg-press-scale));
+    /* The tint: the surface under the finger turns --press-bg (a soft pressed surface unless the control sets its own). */
+    background-color: var(--press-bg, var(--sg-pressed));
     transition-duration: var(--sg-duration-instant);
+  }
+}
+/* A filled tomato control (primary button, capture button) deepens instead of going pale. */
+@utility press-tomato {
+  --press-bg: var(--sg-tomato-pressed);
+}
+/* The held highlight is drawn by something else (the tab bar's round highlight behind its icon). */
+@utility press-none {
+  &:active:not(:disabled),
+  &[data-pressed] {
+    transform: none;
+    background-color: transparent;
   }
 }
 
