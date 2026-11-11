@@ -24,9 +24,11 @@ const { version, precache } = self.__BUILD__;
 const SHELL_CACHE = `sg-shell-${version}`;
 const PHOTO_CACHE = "sg-photos";
 const SHELL_URL = "/";
-// The app shell is index.html, kept under "/". It is fetched from /today, because "/" itself is the landing page
-// for someone signed out (src/worker/home.ts), which is what this browser may be while it installs the worker.
-const SHELL_SOURCE = "/today";
+// The app shell is index.html, kept under "/". It is fetched from "/?shell", which the Worker answers with the app
+// whether or not anyone is signed in (src/worker/home.ts): "/" alone is the landing page for someone signed out, and
+// an app route such as /today gets index.html on Cloudflare only as a navigation (the assets' single-page fallback),
+// which a fetch from here is not; it would reach the Worker's 404.
+const SHELL_SOURCE = "/?shell";
 // The landing page and what it loads are for visitors: the network's, never the app shell.
 const LANDING = /^\/(?:landing$|assets\/landing\/)/;
 // How long "/" waits for the network to say which page it is before the app opens from the cache.

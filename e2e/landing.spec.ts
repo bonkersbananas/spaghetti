@@ -61,6 +61,16 @@ test("signed in, / opens the app and never shows the landing page", async ({ pag
   expect(sawLanding).toBe(false);
 });
 
+test("the service worker's shell, /?shell, is the app for anyone", async ({ request }) => {
+  // A fetch, not a navigation: on Cloudflare only navigations get the assets' single-page fallback, so an app route
+  // like /today would reach the Worker's 404 (wrangler serves index.html either way, so this can't be shown here).
+  const response = await request.get("/?shell", { headers: { "Sec-Fetch-Mode": "cors" } });
+  expect(response.ok()).toBe(true);
+  const html = await response.text();
+  expect(html).toContain('<div id="root">');
+  expect(html).not.toContain("lp-word");
+});
+
 test("a deep link still goes to sign-in and back, not to the landing page", async ({ page }) => {
   await page.goto("/journal?outcome=failures");
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
