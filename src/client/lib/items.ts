@@ -610,6 +610,8 @@ export function scrapBuild(queryClient: QueryClient, item: ItemView) {
   }));
   const scrapped = api<ItemResponse>(`/items/${item.id}/scrap`, { method: "POST" }).then(({ item: saved }) => {
     insertCachedItem(queryClient, saved);
+    // An Ideas list that was asked for while the scrap was on its way answers without the idea: ask again.
+    void queryClient.invalidateQueries({ queryKey: itemKeys.all });
   });
   scrapped.catch(() => {
     toast.error("Couldn't scrap that build", "It's back where it was.");

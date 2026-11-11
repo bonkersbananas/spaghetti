@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { clearIdeas } from "./helpers";
 
 const user = SEED_USERS[0];
 
@@ -20,14 +21,15 @@ async function getItem(page: Page, id: string) {
   return (await (await page.request.get(`/api/items/${id}`)).json()).item;
 }
 
+// Start from nothing, and leave nothing behind (the smoke test expects empty sections): clearing first too
+// means a run that died before its cleanup can't leave a build for the next test or retry to trip over.
 test.beforeEach(async ({ page }) => {
   await signIn(page);
+  await clearIdeas(page);
 });
 
-// Leave nothing behind: the smoke test expects empty sections.
 test.afterEach(async ({ page }) => {
-  const { items } = await (await page.request.get("/api/items")).json();
-  for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: origin(page) } });
+  await clearIdeas(page);
 });
 
 test("grows an idea into a build, logs a failure and a success, and finishes it", async ({ page, isMobile }) => {

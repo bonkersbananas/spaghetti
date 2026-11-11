@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import "./scripts/lib/api-retries.ts";
 import { launchOptions } from "./scripts/lib/browser.ts";
 
 const port = 5174;
