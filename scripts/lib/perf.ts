@@ -69,7 +69,7 @@ export async function installProbe(context: BrowserContext, ready?: string) {
       for (const entry of list.getEntries()) {
         probe.events.push({ name: entry.name, start: entry.startTime, duration: entry.duration });
       }
-    }).observe({ type: "event", durationThreshold: 16, buffered: true });
+    }).observe({ type: "event", durationThreshold: 16, buffered: true } as PerformanceObserverInit);
     if (readyExpression) {
       const check = new Function(`return (${readyExpression})`) as () => boolean;
       const tick = () => {
