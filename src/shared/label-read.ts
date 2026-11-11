@@ -9,6 +9,8 @@ export const LABEL_READS_PER_DAY = 20;
 /** More spools than this on one photo and the rest are left for another photo. */
 export const MAX_LABEL_SPOOLS = 4;
 
+import { finishLabel } from "./spools.ts";
+
 /** The spool fields a label can fill, by their names in the spool's API object. */
 export const LABEL_FIELDS = [
   "brand",
@@ -101,7 +103,7 @@ export function tempRange(min: number | null, max: number | null): string | null
 
 /** A short line for a found spool in the confirmation: "Bambu PLA Basic, Jade white, 1 kg". */
 export function labelSpoolLine(spool: LabelSpool): { title: string; detail: string } {
-  const kind = [spool.brand, spool.material, spool.finish].filter(Boolean).join(" ");
+  const kind = [spool.brand, spool.material, spool.finish ? finishLabel(spool.finish) : null].filter(Boolean).join(" ");
   const grams = spool.netGrams
     ? spool.netGrams % 1000 === 0
       ? `${spool.netGrams / 1000} kg`

@@ -30,38 +30,44 @@ const whole = (text: string) => {
 
 function Temp({
   label,
-  min,
-  max,
+  unit = "°C",
+  mark,
+  first,
+  second,
 }: {
   label: string;
-  min: { value: number | null; onChange: (value: number | null) => void };
-  max: { value: number | null; onChange: (value: number | null) => void };
+  unit?: string;
+  mark?: ReactNode;
+  first: { name: string; placeholder: string; value: number | null; onChange: (value: number | null) => void };
+  second: { name: string; placeholder: string; value: number | null; onChange: (value: number | null) => void };
 }) {
   return (
-    <div className="flex items-end gap-2">
-      <TextField
-        size="sm"
-        label={label}
-        aria-label={`${label}, from`}
-        inputMode="numeric"
-        placeholder="from"
-        value={min.value ?? ""}
-        onChange={(event) => min.onChange(whole(event.target.value))}
-        className="w-24"
-      />
-      <span className="text-ink-faint pb-2" aria-hidden>
-        –
+    <div className="flex flex-col gap-1.5">
+      <span className="flex items-baseline gap-2 px-0.5">
+        <span className="text-small text-ink-soft font-semibold">{label}</span>
+        {mark}
       </span>
-      <TextField
-        size="sm"
-        aria-label={`${label}, to`}
-        inputMode="numeric"
-        placeholder="to"
-        value={max.value ?? ""}
-        onChange={(event) => max.onChange(whole(event.target.value))}
-        className="w-24"
-      />
-      <span className="text-small text-ink-faint pb-2">°C</span>
+      <div className="flex items-center gap-2">
+        {[first, second].map((field, index) => (
+          <span key={field.name} className="contents">
+            {index === 1 && (
+              <span className="text-ink-faint" aria-hidden>
+                {unit === "°C" ? "–" : "·"}
+              </span>
+            )}
+            <TextField
+              size="sm"
+              aria-label={field.name}
+              inputMode="numeric"
+              placeholder={field.placeholder}
+              value={field.value ?? ""}
+              onChange={(event) => field.onChange(whole(event.target.value))}
+              className="w-24"
+            />
+          </span>
+        ))}
+        <span className="text-small text-ink-faint">{unit}</span>
+      </div>
     </div>
   );
 }
@@ -92,39 +98,53 @@ export function LabelFacts({ value, onChange, mark }: LabelFactsProps) {
       </div>
       <Temp
         label="Nozzle"
-        min={{ value: value.nozzleTempMin, onChange: (nozzleTempMin) => onChange({ nozzleTempMin }) }}
-        max={{ value: value.nozzleTempMax, onChange: (nozzleTempMax) => onChange({ nozzleTempMax }) }}
+        mark={mark("nozzleTempMin", "nozzleTempMax")}
+        first={{
+          name: "Nozzle, from",
+          placeholder: "from",
+          value: value.nozzleTempMin,
+          onChange: (nozzleTempMin) => onChange({ nozzleTempMin }),
+        }}
+        second={{
+          name: "Nozzle, to",
+          placeholder: "to",
+          value: value.nozzleTempMax,
+          onChange: (nozzleTempMax) => onChange({ nozzleTempMax }),
+        }}
       />
-      {mark("nozzleTempMin", "nozzleTempMax")}
       <Temp
         label="Bed"
-        min={{ value: value.bedTempMin, onChange: (bedTempMin) => onChange({ bedTempMin }) }}
-        max={{ value: value.bedTempMax, onChange: (bedTempMax) => onChange({ bedTempMax }) }}
+        mark={mark("bedTempMin", "bedTempMax")}
+        first={{
+          name: "Bed, from",
+          placeholder: "from",
+          value: value.bedTempMin,
+          onChange: (bedTempMin) => onChange({ bedTempMin }),
+        }}
+        second={{
+          name: "Bed, to",
+          placeholder: "to",
+          value: value.bedTempMax,
+          onChange: (bedTempMax) => onChange({ bedTempMax }),
+        }}
       />
-      {mark("bedTempMin", "bedTempMax")}
-      <div className="flex items-end gap-3">
-        <TextField
-          size="sm"
-          label="Drying"
-          aria-label="Drying temperature"
-          inputMode="numeric"
-          placeholder="°C"
-          value={value.dryTempC ?? ""}
-          onChange={(event) => onChange({ dryTempC: whole(event.target.value) })}
-          className="w-24"
-        />
-        <TextField
-          size="sm"
-          aria-label="Drying hours"
-          inputMode="numeric"
-          placeholder="hours"
-          value={value.dryHours ?? ""}
-          onChange={(event) => onChange({ dryHours: whole(event.target.value) })}
-          className="w-24"
-        />
-        <span className="text-small text-ink-faint pb-2">°C · hours</span>
-      </div>
-      {mark("dryTempC", "dryHours")}
+      <Temp
+        label="Drying"
+        unit="°C · hours"
+        mark={mark("dryTempC", "dryHours")}
+        first={{
+          name: "Drying temperature",
+          placeholder: "°C",
+          value: value.dryTempC,
+          onChange: (dryTempC) => onChange({ dryTempC }),
+        }}
+        second={{
+          name: "Drying hours",
+          placeholder: "hours",
+          value: value.dryHours,
+          onChange: (dryHours) => onChange({ dryHours }),
+        }}
+      />
       <TextField
         size="sm"
         label="Product code"
