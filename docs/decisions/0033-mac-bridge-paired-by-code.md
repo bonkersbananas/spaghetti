@@ -1,0 +1,9 @@
+# 0033. The bridge runs on a Mac as one program, paired with a short code
+
+Status: Accepted (built: `bridge/mac/`, `public/bridge/install.sh`, `.github/workflows/bridge-release.yml`; see [docs/bridge.md](../bridge.md))
+
+**Decision:** The printer bridge ([0010](0010-optional-read-only-printer-bridge.md)) is set up from the Printer page for "a Mac that's usually on". It is built into a single program (Bun's compiler; no Node, pnpm or Homebrew), published by CI as GitHub release assets with checksums, and installed by one command pasted into Terminal. The app shows a pairing code, valid ten minutes and usable once, which the installer exchanges (`POST /api/bridge/pair`) for an agent token with the bridge's scopes (`read`, `attempts`, `printer`); a long-lived token is never in the command or the shell history. The installer puts a LaunchAgent in place (starts at login, restarts if it stops). The bridge reports its version and problems with each heartbeat; Disconnect on the Printer page revokes its token.
+
+**Why:** Carl Oscar and Marie send prints from Bambu Studio on a Mac; developer tools or hand-written config would mean the bridge is never set up.
+
+**Consequences:** Still optional and read-only (nothing is sent to the printer but `pushall`; the program only lists and downloads over FTPS). The camera needs no ffmpeg *installed by us*: the bridge uses ffmpeg when the person has it, else the printer's own picture stream where it serves one, else no frame; the installer downloads no third-party binary. A LaunchAgent, not a root LaunchDaemon, so nothing asks for a password; the price is that macOS Local Network privacy might block it (see docs/bridge.md, [uncertain]), which the bridge reports in plain words. Pairing codes are rate limited and stored hashed; pairing again replaces the bridge's token.

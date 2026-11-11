@@ -158,6 +158,9 @@ describe("authenticating with a token", () => {
     await refused(asAgent(made.token, "/api/deleted"));
     await refused(asAgent(made.token, `/api/items/${crypto.randomUUID()}/scrap`, { method: "POST" }));
     await refused(asAgent(made.token, "/api/agents", { method: "POST", json: { name: "Sneaky", scopes: ["read"] } }));
+    // A bridge can't make pairing codes (so a leaked token can't mint more) or disconnect itself.
+    await refused(asAgent(made.token, "/api/bridge/pairing", { method: "POST" }));
+    await refused(asAgent(made.token, "/api/printer/bridge", { method: "DELETE" }));
     await refused(
       asAgent(made.token, `/api/agents/${made.agent.id}/tokens`, { method: "POST", json: { scopes: ["read"] } }),
     );
