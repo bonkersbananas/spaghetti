@@ -292,7 +292,8 @@ for (const theme of ["light", "dark"] as const) {
     const other = await newIdea(page, "Lamp base", "building");
     await page.goto("/today");
     const line = page.getByRole("link", { name: /on Bath tugboat/ });
-    await expect(page.getByRole("link", { name: /new comments?/ })).toHaveCount(0);
+    // No block at all: its label is the heading "New comment(s)".
+    await expect(page.getByRole("heading", { name: /^New comments?/ })).toHaveCount(0);
     const sams = await samSession(page);
     await sams.say(id, "Started it tonight, the first layer looked great.");
     await page.reload();
