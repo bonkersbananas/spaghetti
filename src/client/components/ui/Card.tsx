@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { Avatar } from "./Avatar";
-import { ImageIcon, SlicerFileIcon } from "./icons";
+import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
@@ -23,6 +23,8 @@ export interface CardProps {
   chips?: ReactNode;
   /** Top right of the photo, such as how many photos there are. */
   badge?: ReactNode;
+  /** Comments from the other person you haven't read: a small mark at the top left of the photo. */
+  unread?: number;
   /** Small line under the title: "2 attempts · 3 days ago". */
   meta?: ReactNode;
   person?: Pick<Person, "name" | "color">;
@@ -58,6 +60,7 @@ export function Card({
   note,
   chips,
   badge,
+  unread,
   meta,
   person,
   via,
@@ -97,6 +100,11 @@ export function Card({
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
+        {!!unread && (
+          <div className="absolute top-2 left-2">
+            <UnreadBadge count={unread} />
+          </div>
+        )}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
       <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
@@ -161,6 +169,17 @@ export function SlicerPreviewBadge() {
     <span className="rounded-pill bg-veil text-caption text-on-veil inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
       <SlicerFileIcon size={13} weight="fill" aria-hidden />
       Slicer preview
+    </span>
+  );
+}
+
+/** "1 new" with a speech bubble: the other person said something here that you haven't read. Tomato, so it is seen across a grid. */
+export function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span className="rounded-pill bg-tomato text-caption text-on-accent shadow-soft inline-flex h-6 items-center gap-1 px-2 font-semibold">
+      <CommentIcon size={13} weight="fill" aria-hidden />
+      {count > 9 ? "9+" : count}
+      <span className="sr-only">new {count === 1 ? "comment" : "comments"}</span>
     </span>
   );
 }

@@ -12,12 +12,12 @@ const MAX_CARDS = 3;
  * stopped changing: typing an address would otherwise ask for a preview of
  * every half-typed prefix of it.
  */
-export function NoteLinks({ note: typing }: { note: string }) {
+export function NoteLinks({ note: typing, label = "Links in the note" }: { note: string; label?: string }) {
   const note = useSettled(typing);
   const urls = [...new Set(findLinks(note).map((link) => link.url))].slice(0, MAX_CARDS);
   if (urls.length === 0) return null;
   return (
-    <ul className="mt-1 flex flex-col gap-2" aria-label="Links in the note">
+    <ul className="mt-1 flex flex-col gap-2" aria-label={label}>
       {urls.map((url) => (
         <li key={url}>
           <LinkCard url={url} />

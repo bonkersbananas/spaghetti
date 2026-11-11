@@ -11,6 +11,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
+import { useUnreadCount } from "@/lib/comments";
 import type { ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
@@ -76,6 +77,7 @@ export function BuildCard({
 }) {
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
+  const unread = useUnreadCount(item.id);
   return (
     <m.li
       layout="position"
@@ -94,6 +96,7 @@ export function BuildCard({
         }
         title={item.title}
         note={item.note || undefined}
+        unread={unread}
         chips={
           last ? (
             <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} className="shadow-soft" />

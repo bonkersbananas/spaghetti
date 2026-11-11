@@ -3,6 +3,7 @@ import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { DraftNote } from "@/components/ideas/DraftNote";
 import { photoAlt } from "@/components/ideas/IdeaCard";
@@ -17,7 +18,7 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForField } from "@/components/ui/ForField";
-import { BuildsIcon, TrashIcon, UpNextIcon } from "@/components/ui/icons";
+import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { SaveStatus } from "@/components/ui/SaveStatus";
@@ -128,7 +129,21 @@ function Idea({ item }: { item: ItemView }) {
     void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
   }
 
+  // Counts up each time something asks to write a comment: the M key, the palette.
+  const [writeAsk, setWriteAsk] = useState(0);
+  const comment = () => {
+    if (canEdit(item.pending)) setWriteAsk((n) => n + 1);
+  };
+
   useScreenActions("This idea", [
+    {
+      id: "comment",
+      label: "Say something about this idea",
+      icon: CommentIcon,
+      shortcut: "ideaComment",
+      keywords: "comment message talk write reply chat",
+      run: comment,
+    },
     {
       id: "build",
       label: "Start building",
@@ -151,6 +166,7 @@ function Idea({ item }: { item: ItemView }) {
     ideaPhotoNext: () => select(selectedIndex + 1),
     ideaDelete: remove,
     ideaBuild: build,
+    ideaComment: item.pending ? undefined : comment,
   });
 
   const hasPhotos = photos.length > 0;
@@ -271,6 +287,7 @@ function Idea({ item }: { item: ItemView }) {
           </div>
         </div>
       </div>
+      {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
       {!isDesktop && (
         <ActionBar>
           <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>
