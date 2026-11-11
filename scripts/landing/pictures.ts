@@ -221,6 +221,71 @@ export async function makePictures(shots: string) {
   }
   console.log(`  ${Math.round(total / 1024)} kB in ${IMAGES}`);
   writeFileSync(join(IMAGES, "README.md"), README);
+  await shareImage(shots);
+}
+
+/** The picture a link to spaghetti.day gets when it's shared (og:image): 1200 × 630, public/og.jpg. */
+export const SHARE_IMAGE = join(root, "public/og.jpg");
+
+export async function shareImage(shots: string) {
+  const data = (file: string) => readFileSync(file).toString("base64");
+  const fraunces = data(join(root, "src/client/assets/fonts/fraunces-latin-soft-pinned.woff2"));
+  const figtree = data(join(root, "node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2"));
+  const phone = data(join(shots, "phone-today.png"));
+  const octopus = await sharp(join(PHOTOS, "octopus.jpg"))
+    .extract({ left: 330, top: 60, width: 760, height: 740 })
+    .resize(520)
+    .jpeg({ quality: 90 })
+    .toBuffer();
+  const spool = (color: string) =>
+    `<span class="spool" style="background-color:${color}"></span>`;
+  const browser = await chromium.launch(launchOptions());
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
+    await page.setContent(`<!doctype html><style>
+      @font-face { font-family: F; src: url(data:font/woff2;base64,${fraunces}) format("woff2-variations"); font-weight: 100 900; }
+      @font-face { font-family: G; src: url(data:font/woff2;base64,${figtree}) format("woff2-variations"); font-weight: 300 900; }
+      html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+      body { background: #f6c443; color: #2b2420; font-family: G; position: relative; }
+      .copy { position: absolute; left: 72px; top: 76px; width: 640px; }
+      .spools { display: flex; gap: 14px; margin-bottom: 26px; }
+      .spool { width: 46px; height: 46px; border-radius: 50%; position: relative;
+        background-image: radial-gradient(circle at 32% 26%, rgb(255 255 255 / .34), transparent 46%), repeating-radial-gradient(circle, rgb(0 0 0 / .08) 0 1px, transparent 1px 3px);
+        box-shadow: inset 0 0 0 1px rgb(43 36 32 / .2), 0 6px 14px -6px rgb(80 50 20 / .35); }
+      .spool::after { content: ""; position: absolute; inset: 32%; border-radius: 50%; background: #f6f1e8; box-shadow: inset 0 0 0 1px rgb(43 36 32 / .18); }
+      .word { font-family: F; font-variation-settings: "SOFT" 100; font-weight: 760; font-size: 168px; line-height: 1; letter-spacing: -0.045em;
+        background: repeating-linear-gradient(180deg, #c8462a 0 8.8px, #a43d27 8.8px 10.2px); -webkit-background-clip: text; color: transparent; padding-bottom: 30px; margin-bottom: -30px; }
+      .tag { font-family: F; font-variation-settings: "SOFT" 100; font-weight: 600; font-size: 46px; line-height: 1.05; letter-spacing: -0.03em; margin-top: 14px; }
+      .tag em { font-style: normal; color: #a8381c; }
+      .lead { font-size: 25px; margin-top: 20px; font-weight: 500; }
+      .phone { position: absolute; right: 70px; top: 46px; width: 262px; aspect-ratio: 390 / 844; padding: 9px; border-radius: 42px; background: #1f1b18; rotate: 5deg;
+        box-shadow: inset 0 0 0 1.5px #3a3430, 0 30px 60px -12px rgb(60 35 15 / .45); }
+      .phone img { width: 100%; height: 100%; object-fit: cover; border-radius: 34px; display: block; }
+      .island { position: absolute; top: 18px; left: 50%; width: 80px; height: 22px; translate: -50% 0; border-radius: 99px; background: #050505; }
+      .snap { position: absolute; right: 252px; top: 318px; width: 210px; padding: 9px 9px 36px; background: #fffcf7; border-radius: 8px; rotate: -7deg;
+        box-shadow: 0 2px 4px rgb(80 50 20 / .08), 0 18px 40px -8px rgb(80 50 20 / .35); }
+      .snap img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; display: block; }
+      .snap span { position: absolute; left: 14px; bottom: 9px; font-family: F; font-weight: 600; font-size: 18px; }
+      .chip { position: absolute; right: 10px; bottom: 7px; background: #dfebd6; color: #3e6b3a; font-weight: 650; font-size: 15px; padding: 3px 11px; border-radius: 99px; }
+      </style>
+      <div class="copy">
+        <div class="spools">${["#ec5b93", "#fffcf7", "#2fb3ad", "#ee7b2c"].map(spool).join("")}</div>
+        <div class="word">Spaghetti</div>
+        <div class="tag">Every print. Every <em>spaghetti</em>.<br>Written down.</div>
+        <div class="lead">The 3D printing notebook for two.</div>
+      </div>
+      <div class="phone"><img src="data:image/png;base64,${phone}"><span class="island"></span></div>
+      <div class="snap"><img src="data:image/jpeg;base64,${octopus.toString("base64")}"><span>Octopus</span><b class="chip">Worked</b></div>`);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all(Array.from(document.images, (image) => image.decode()));
+    });
+    const png = await page.screenshot({ type: "png" });
+    await sharp(png).jpeg({ quality: 86, mozjpeg: true }).toFile(SHARE_IMAGE);
+    console.log(`  og.jpg: ${Math.round(readFileSync(SHARE_IMAGE).length / 1024)} kB in public`);
+  } finally {
+    await browser.close();
+  }
 }
 
 const README = `# Landing page pictures

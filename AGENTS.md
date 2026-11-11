@@ -56,6 +56,7 @@ src/
     lib/theme.ts          light / dark / system, applied to <html data-theme>
     lib/offline.ts, connection.ts   service worker registration, "is the server reachable"
     styles/app.css        base styles, keyframes, third-party restyling
+  landing/                the landing page's stylesheet, script and pictures (landing.html is its page; docs/landing.md)
   sw/sw.js                the service worker (precaches the shell; built into /sw.js by scripts/vite-service-worker.ts)
   worker/                 the Worker
     index.ts              entry: exports the Hono app
@@ -82,7 +83,8 @@ docs/                     design.md, api.md (auth, scopes, actors for agents), m
 .claude/agents/           Claude Code subagents: design-reviewer
 test/worker/              API tests in workerd; test/unit/ Node tests
 e2e/                      Playwright tests (fixtures/: a JPEG with EXIF, and slicer-file.ts, a two-plate .gcode.3mf built from plate PNGs)
-public/                   manifest and icons, served as-is
+public/                   manifest and icons, served as-is; og.jpg, the landing page's share image
+landing.html              the landing page: what someone signed out sees at / (docs/landing.md)
 ```
 
 Imports: the client uses `@/…` (src/client) and `@shared/…`; the Worker and scripts use relative paths with `.ts` extensions (scripts run on Node's built-in TypeScript support).
@@ -106,6 +108,7 @@ pnpm build && pnpm perf [--runs 5]   # the whole speed table: cold start of Toda
 pnpm build:report   # what the first load holds: the entry's chunks with their biggest modules, and the on-demand chunks
 pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark, --both, --scale 1, --out DIR; see Screenshots)
 pnpm screenshots:compare   # shots on main and on your branch, a diff image per changed screen, contact sheets (see Screenshots)
+pnpm landing:shots  # the landing page's pictures, from the app on the screenshot seed (docs/landing.md)
 pnpm new route|component|endpoint <name>   # scaffolding with the wiring (see How to…)
 pnpm build && pnpm start   # the built app on workerd, as the container runs it
 ```
@@ -277,6 +280,10 @@ Never edit a migration that has been merged; add a new one.
 - Hotkeys are ignored while typing in a field or with a dialog open (`⌘K` works in fields). Keys inside a field (Enter to save in the capture note) are field behavior, not shortcuts.
 - Screens offer actions to the command palette with `useScreenActions("This build", [{ id, label, icon, shortcut?, keywords?, run }])` (lib/palette.tsx); a detail screen also calls `useRememberItem` so it shows under "Recent". General actions and "Go to" rows live in `components/shell/CommandPalette.tsx`. A new top-level section appears in the palette from `sections.ts`.
 - There is no palette or shortcut list on phones (`useIsDesktop`).
+
+### The landing page
+
+`/` is the app for someone signed in and `landing.html` for everyone else (`src/worker/home.ts` picks by the session cookie; [0032](docs/decisions/0032-a-landing-page-at-the-root-for-visitors.md)). The page is static, light only, and imports nothing of the app's (its own `src/landing/landing.css` on the tokens, one small `landing.ts`); its files go to `assets/landing/`, out of the service worker's precache, and the app's build output stays byte for byte the same (`scripts/vite-landing.ts`). Its pictures are made by `pnpm landing:shots` from the screenshot seed, dressed up by `scripts/landing/demo.ts` (the two people as M and CO, real print photos in place of some drawings, which screens to take): run it after changing the app's screens, and see [docs/landing.md](docs/landing.md) for how to add a picture. It is tested in `e2e/landing.spec.ts`.
 
 ### Add a binding (KV, queue, …)
 

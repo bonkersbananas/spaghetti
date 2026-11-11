@@ -401,6 +401,10 @@ Short, warm, plain. Second person, sentence case, no exclamation marks. A pasta 
 3. Design both layouts: check every screen at 390 px and 1440 px with `pnpm screenshots`, and look at the result before calling it done.
 4. Loading is a skeleton, saving is automatic, deleting is undoable.
 
+## The landing page
+
+What someone signed out sees at `/` ([docs/landing.md](landing.md)): the one place the design language is turned up. Bright and light only, a stack of coloured sheets (sunflower, pink, paper, teal, tomato, the AMS's filament colours) with rounded tops laid over each other, Fraunces at poster size, photos of prints and the app shown in a phone and a laptop drawn around real screenshots. It keeps the app's tokens, faces, chips, outcome colours and voice, so it is clearly the same product, but its pieces are its own (`lp-…` in `src/landing/landing.css`) and never the app's components. On a coloured sheet all text is ink (ink-soft doesn't reach AA on pink or teal). Motion is the point here (the name prints itself, things arrive as they come into view, spools turn with the scroll), always transform and opacity, and with reduced motion every piece is at its end state. It never offers sign-up.
+
 ## Offline
 
 Spaghetti opens and captures without a connection. The build ships a small hand-written service worker (`src/sw/sw.js`, assembled by `scripts/vite-service-worker.ts`; `vite dev` has none):

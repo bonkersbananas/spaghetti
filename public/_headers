@@ -2,3 +2,11 @@
 /authorize
   X-Frame-Options: DENY
   Content-Security-Policy: frame-ancestors 'none'
+
+# The landing page's script, styles and pictures (landing.html, src/landing): their names are hashed, so they never change.
+/assets/landing/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The picture a shared link to spaghetti.day shows (pnpm landing:shots makes it).
+/og.jpg
+  Cache-Control: public, max-age=86400
