@@ -33,7 +33,7 @@ export const MODEL_SITES: readonly ModelSite[] = [
     id: "thingiverse",
     name: "Thingiverse",
     domains: ["thingiverse.com"],
-    imageHosts: ["cdn.thingiverse.com", "thingiverse-production-new.s3.amazonaws.com"],
+    imageHosts: ["cdn.thingiverse.com"],
   },
 ];
 
@@ -50,6 +50,10 @@ export function modelSite(raw: string): { site: ModelSite; url: URL } | null {
   const site = MODEL_SITES.find((candidate) => candidate.domains.some((domain) => hostMatches(host, domain)));
   return site ? { site, url } : null;
 }
+
+/** Whether a host is one of the three sites' own pages (the Worker fetches only these itself). */
+export const isModelHost = (host: string) =>
+  MODEL_SITES.some((site) => site.domains.some((domain) => hostMatches(host.toLowerCase(), domain)));
 
 /** Whether `raw` is an https link to one of the allowed image hosts. */
 export function isModelImageUrl(raw: string): boolean {

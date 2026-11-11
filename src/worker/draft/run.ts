@@ -2,6 +2,7 @@ import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite } from "../../shared/model-links.ts";
+import { extractModelPage } from "../../shared/model-page.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
@@ -9,6 +10,7 @@ import { fromUrl, readImage } from "../mcp/image.ts";
 import { photoKey } from "../photos.ts";
 import { NEUTRAL, photoIdFor } from "../routes/capture.ts";
 import { type AskResult, askClaude, MAX_DRAFT_IMAGES } from "./claude.ts";
+import { fetchModelPage } from "./page.ts";
 
 /** A worker that has had a draft this long is taken to be gone (the browser closed, the Worker was recycled). */
 export const STALE_MS = 4 * 60 * 1000;
@@ -114,7 +116,7 @@ async function storePictures(db: Db, env: Env, itemId: string, urls: string[], o
   const stored: string[] = [];
   const now = new Date();
   for (const image of downloaded) {
-    if (!image) continue;
+    if (!image || stored.length >= MAX_DRAFT_IMAGES) continue;
     const photoId = await photoIdFor(itemId, 100 + stored.length);
     const httpMetadata = { contentType: image.contentType };
     const customMetadata = { provisional: "1" };
@@ -195,11 +197,44 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   await db.insert(draftRuns).values({ id: runId, itemId, at: new Date(now) });
 
   const site = modelSite(row.url);
-  const answer: AskResult = site
-    ? await askClaude(apiKey, row.url, site.site, env.ANTHROPIC_BASE_URL?.trim())
-    : { ok: false, failure: "unreadable", diagnosis: { outcome: "bad_link" } };
+  let answer: AskResult;
+  if (!site) {
+    answer = { ok: false, failure: "unreadable", diagnosis: { outcome: "bad_link" } };
+  } else {
+    // The Worker reads the page itself (MakerWorld turns Anthropic's web fetch away, a Worker gets through);
+    // Claude only writes the note and the suggestions from it. Web fetch is the fallback for a page the
+    // Worker can't get or find anything in.
+    const base = env.ANTHROPIC_BASE_URL?.trim();
+    // With a stand-in Anthropic (e2e, screenshots) the page isn't fetched: the tests must not depend on the real sites.
+    const page = base ? { status: null, html: null } : await fetchModelPage(row.url);
+    let facts: ReturnType<typeof extractModelPage> = null;
+    try {
+      facts = page.html ? extractModelPage(site.site.id, page.html) : null;
+    } catch {
+      // A page that breaks the reader is a page it can't read: web fetch is tried instead.
+    }
+    answer = facts
+      ? await askClaude(apiKey, row.url, site.site, base, facts)
+      : await askClaude(apiKey, row.url, site.site, base);
+    answer.diagnosis = {
+      ...answer.diagnosis,
+      source: facts ? "worker_fetch" : "web_fetch",
+      pageStatus: page.status,
+      ...(page.html && !facts ? { pageUnreadable: true } : {}),
+    };
+    if (answer.ok && facts) {
+      // What the page states plainly is the page's, not Claude's.
+      answer.draft = {
+        ...answer.draft,
+        title: facts.title ?? answer.draft.title,
+        designer: facts.designer ?? answer.draft.designer,
+        license: facts.license ?? answer.draft.license,
+        imageUrls: facts.imageUrls,
+      };
+    }
+  }
   // Why it went the way it did stays on the run (read it with wrangler d1 execute; docs/deploy.md).
-  const { outcome, ...detail } = answer.diagnosis ?? { outcome: "bad_link" };
+  const { outcome, ...detail } = answer.diagnosis;
   await db
     .update(draftRuns)
     .set({ outcome, detail: Object.keys(detail).length ? JSON.stringify(detail) : null })

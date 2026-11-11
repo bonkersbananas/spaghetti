@@ -13,7 +13,7 @@ const DOH = "https://cloudflare-dns.com/dns-query";
  * its answer between this check and the fetch; the host rules and the
  * people-only endpoint carry the rest.
  */
-async function resolvesPublic(host: string, signal: AbortSignal): Promise<boolean> {
+export async function resolvesPublic(host: string, signal: AbortSignal): Promise<boolean> {
   const answers = await Promise.all(
     (["A", "AAAA"] as const).map(async (type) => {
       const response = await fetch(`${DOH}?name=${encodeURIComponent(host)}&type=${type}`, {
@@ -30,7 +30,7 @@ async function resolvesPublic(host: string, signal: AbortSignal): Promise<boolea
 }
 
 /** Reads at most `maxBytes` of a body, then lets go of the rest. */
-async function readCapped(response: Response, maxBytes: number): Promise<string> {
+export async function readCapped(response: Response, maxBytes: number): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) return "";
   const chunks: Uint8Array[] = [];

@@ -1,6 +1,7 @@
 import { and, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { PhotoVariant } from "../shared/api.ts";
 import { CHANGES_KEEP_MS } from "../shared/changes.ts";
+import { PURGE_AFTER_MS } from "../shared/deleted.ts";
 import { getDb } from "./db/index.ts";
 import { attemptFiles, attempts, changes, items, photos, recipes, spools } from "./db/schema.ts";
 
@@ -13,8 +14,7 @@ export function fileKey(fileId: string, part: "file" | "thumb"): string {
   return `files/${fileId}/${part}`;
 }
 
-/** Deleted things stay restorable this long, then the daily purge removes them. */
-export const PURGE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+export { PURGE_AFTER_MS };
 
 /**
  * Removes items, attempts, photos, slicer files and spools deleted more than

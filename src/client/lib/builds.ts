@@ -25,7 +25,15 @@ import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
 import type { DraftPhoto } from "./capture";
-import { type AttemptView, cachedItem, type ItemView, type PhotoView, patchCachedItem, useBuilds } from "./items";
+import {
+  type AttemptView,
+  cachedItem,
+  type ItemView,
+  markFresh,
+  type PhotoView,
+  patchCachedItem,
+  useBuilds,
+} from "./items";
 import { outbox, type PendingAttemptChanges } from "./outbox";
 import { canEdit } from "./read-only";
 
@@ -91,11 +99,11 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
   const wasUpNext = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;
   void changeStage(queryClient, item.id, "building");
-  toast.undo("Moved to Builds", {
+  toast.undo("Started building", {
     description:
       wasUpNext !== null
-        ? "Off the Up next list. Same idea, same photos."
-        : "Same idea, same photos. Log the first attempt when it prints.",
+        ? "Off the Up next list. It stays in Ideas under Started."
+        : "It stays in Ideas under Started. Log the first attempt when it prints.",
     onUndo: () => void changeStage(queryClient, item.id, "idea", wasUpNext !== null ? { upNext: wasUpNext } : {}),
   });
 }
@@ -104,6 +112,7 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
 export function createBuild(createdBy: string): string {
   const itemId = crypto.randomUUID();
   const now = Date.now();
+  markFresh(itemId);
   void outbox.add({
     itemId,
     create: { title: null, note: "", createdAt: now, createdBy, stage: "building" },

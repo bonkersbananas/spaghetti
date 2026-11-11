@@ -259,6 +259,45 @@ export const shots: Shot[] = [
   },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
+  { name: "ideas-started", path: "/ideas", fullPage: true },
+  {
+    // Scrapping a build that began as an idea: it is back in Ideas, with an Undo.
+    name: "build-scrapped",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Scrap build" }).click();
+      await page.getByText("Build scrapped").waitFor();
+      await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.getByRole("button", { name: "Undo" }).click();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    // Recently deleted: an idea, an idea with a photo, and a build, deleted a moment ago (restored after the shot).
+    name: "deleted",
+    path: "/deleted",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of [SEED_IDS.deskTidy, SEED_BUILD_IDS.headphoneStand]) {
+        await page.request.delete(`/api/items/${id}`, { headers });
+      }
+      await page.reload();
+      await page.getByRole("heading", { level: 1, name: "Recently deleted" }).waitFor();
+      await page
+        .getByRole("button", { name: /^Restore/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of [SEED_IDS.deskTidy, SEED_BUILD_IDS.headphoneStand]) {
+        await page.request.post(`/api/items/${id}/restore`, { headers });
+      }
+    },
+  },
   {
     // The card's menu in the Up next queue: a place up or down, or off the queue.
     name: "ideas-up-next-menu",
@@ -451,6 +490,8 @@ export const shots: Shot[] = [
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
+  // The year so far: figures, months, success by material and plate, what fixed each failure.
+  { name: "year", path: "/year?year=2026", fullPage: true },
   {
     // Further back: a month that sums itself up, grouped by week.
     name: "journal-months",
@@ -563,6 +604,50 @@ export const shots: Shot[] = [
       await sheet.getByRole("button", { name: "Remove Photo 1" }).waitFor();
       await page.waitForTimeout(400);
       await sheet.getByRole("textbox", { name: "Note" }).blur();
+    },
+  },
+  {
+    // The capture sheet on an idea's page: it opens on New idea, with This idea one tap away.
+    name: "capture-on-idea",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The capture sheet on a build that is printing: New idea first, This print second.
+    name: "capture-on-printing-build",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The same sheet with This idea picked: the title names the idea.
+    name: "capture-on-idea-here",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This idea" }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // The same sheet with This print picked: the title and line name the print, and the outcome row shows.
+    name: "capture-on-printing-build-here",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This print" }).click();
+      await page.waitForTimeout(400);
     },
   },
   {
@@ -844,6 +929,7 @@ export const shots: Shot[] = [
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
+  { name: "styleguide-year", path: "/styleguide", selector: "#year" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",

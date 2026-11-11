@@ -23,6 +23,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0017](0017-recipes-are-frozen-attempts.md) | A recipe is a named, frozen copy of an attempt that worked | Accepted |
 | [0018](0018-upkeep-and-drying.md) | Upkeep is a list with intervals, due-ness is a fact, and it nudges at most once a day | Accepted |
 | [0019](0019-claude-drafts-ideas-from-model-pages.md) | Claude drafts an idea from a model page, in the background, only into empty fields | Accepted |
+| [0020](0020-started-ideas-stay-and-scrap-returns.md) | Started ideas stay in Ideas, scrapping a build returns it, and deletes can be found | Accepted |
 
 ## Format
 

@@ -29,7 +29,8 @@ const BUDGET_KB = {
   "/ideas": 309,
   "/builds": 310,
   "/journal": 311,
-  "/search": 314,
+  // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
+  "/search": 315,
   "/pantry": 319,
   "/printer": 319,
 } as const;

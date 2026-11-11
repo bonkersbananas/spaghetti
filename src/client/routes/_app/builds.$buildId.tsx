@@ -1,5 +1,6 @@
 import type { Recipe } from "@shared/api";
 import { type Outcome, tagLabel } from "@shared/attempts";
+import { beganAsIdea } from "@shared/deleted";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
@@ -55,7 +56,15 @@ import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { type AttemptView, deleteItem, type ItemView, useItem, useItemFields } from "@/lib/items";
+import {
+  type AttemptView,
+  deleteItem,
+  discardIfUntouched,
+  type ItemView,
+  scrapBuild,
+  useItem,
+  useItemFields,
+} from "@/lib/items";
 import { scrollBehavior, spring } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery } from "@/lib/queries";
@@ -229,8 +238,30 @@ function Build({ item }: { item: ItemView }) {
   );
 
   const active = item.stage === "building";
+  // A new build left empty removes itself when you leave it. Deferred a tick: React's dev double mount runs this cleanup too,
+  // and the page is still the build's own then.
+  // What is typed counts too, not only what is saved: autosave lags a keystroke by 600 ms.
+  const latest = useRef(item);
+  latest.current = { ...item, title: title || null, note: note || "" };
+  const buildId = item.id;
+  useEffect(
+    () => () => {
+      setTimeout(() => {
+        if (window.location.pathname.includes(buildId)) return;
+        discardIfUntouched(queryClient, latest.current);
+      }, 0);
+    },
+    [buildId, queryClient],
+  );
+  // A build that began as an idea goes back to Ideas when it is removed; any other is deleted.
+  const scrapsToIdea = !item.pending && beganAsIdea(item);
   function remove() {
     if (!canEdit(item.pending)) return;
+    if (scrapsToIdea) {
+      scrapBuild(queryClient, item);
+      void navigate({ to: "/ideas" });
+      return;
+    }
     deleteItem(queryClient, item);
     void navigate({ to: "/builds" });
   }
@@ -370,7 +401,12 @@ function Build({ item }: { item: ItemView }) {
             />
           )
         )}
-        <IconButton icon={TrashIcon} label="Delete build" disabled={readOnly} onClick={remove} />
+        <IconButton
+          icon={TrashIcon}
+          label={scrapsToIdea ? "Scrap build" : "Delete build"}
+          disabled={readOnly}
+          onClick={remove}
+        />
       </DetailBar>
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">

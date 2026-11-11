@@ -31,6 +31,14 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
       id="today-lately"
       title={label}
       size="overline"
+      aside={
+        <Link
+          to="/year"
+          className="text-small text-ink-faint hover:text-ink focus-ring touch-target relative -my-2 rounded-sm py-2 whitespace-nowrap"
+        >
+          See the year
+        </Link>
+      }
       description={
         summary === null ? (
           <Skeleton className="h-6 w-64 max-w-full" />
