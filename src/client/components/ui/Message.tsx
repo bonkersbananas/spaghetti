@@ -26,8 +26,8 @@ interface MessageGroupProps {
  */
 export function MessageGroup({ person, name, via, mine = false, time, children, className }: MessageGroupProps) {
   return (
-    <li className={cn("flex list-none items-end gap-2.5", mine && "flex-row-reverse", className)}>
-      <Avatar person={person} size="sm" via={via} className="mb-0.5" />
+    <li className={cn("flex list-none items-start gap-2.5", mine && "flex-row-reverse", className)}>
+      <Avatar person={person} size="sm" via={via} className="mt-5" />
       <div className={cn("flex max-w-[min(100%,34rem)] min-w-0 flex-col gap-1", mine ? "items-end" : "items-start")}>
         <p className="text-caption text-ink-faint px-1 font-medium">
           <span className="text-ink-soft font-semibold">{name}</span>

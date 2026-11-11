@@ -27,7 +27,7 @@ The spec is `docs/specs/ui-improvements.md`. Its sections, in the suggested orde
 - [x] Live updates between the two of you (a change feed with a cursor, which events and webhooks reuse later) (#13)
 - [x] Push notifications: "Tugboat is off the bed. How did it go?", with Worked / Partly / Spaghetti buttons where the platform has them ([0016](decisions/0016-web-push-nudges.md); setup in [deploy.md](deploy.md))
 - [x] Insights and recipes: recipes are done (a what-worked attempt saved under a name, on the spool's page, in the Pantry, in search and in the attempt sheet; [0017](decisions/0017-recipes-are-frozen-attempts.md)); insights are done too: the Year so far at `/year` (success rate by material and plate, which change fixed which failure, a mosaic of what got made, the builds that took the most tries; `GET /api/insights`)
-- [x] Richer ideas: an "Up next" queue (the inbox section, Today's row) and who it's for (comments between you two are still to do)
+- [x] Richer ideas: an "Up next" queue (the inbox section, Today's row) and who it's for, and a short thread of comments between you two on every idea and build ([0022](decisions/0022-comments-read-state-and-push-batching.md); not searchable yet)
 - [x] Share to Spaghetti: a Web Share Target for the installed app, `POST /api/capture` with two iOS Shortcuts and a card on the Agents page, and a desktop bookmarklet; see [docs/share.md](share.md) and [the decision](decisions/0015-share-targets-by-device.md)
 - [ ] Parts and quantities ("print the hull in two halves")
 - [x] Maintenance and drying: a log with print-hour counters, reminders from each spool's dried date

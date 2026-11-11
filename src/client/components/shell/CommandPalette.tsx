@@ -11,6 +11,7 @@ import { Highlight } from "@/components/ui/Highlight";
 import {
   BuildsIcon,
   CalendarIcon,
+  CommentIcon,
   type Icon,
   IdeasIcon,
   KeyboardIcon,
@@ -24,7 +25,9 @@ import {
 } from "@/components/ui/icons";
 import { PaletteDialog, type PaletteGroup, type PaletteRow, PaletteSurface } from "@/components/ui/Palette";
 import { useCapture } from "@/lib/capture";
+import { unreadQuery } from "@/lib/comments";
 import { comboOf, isMac } from "@/lib/hotkeys";
+import { type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { type ScreenAction, screenActions, usePalette } from "@/lib/palette";
 import { photoSrc } from "@/lib/previews";
 import { itemName, type RecentItem, recentItems } from "@/lib/recent";
@@ -110,6 +113,18 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
   // Read once, when the palette opens: the screen's actions and the recent list.
   const [context] = useState(screenActions);
   const [recent] = useState(recentItems);
+  // Threads where the other person said something you haven't read: one row each, newest first, above everything else.
+  const unread = useQuery(unreadQuery).data?.threads;
+  const ideasList = useIdeas().items;
+  const buildsList = useBuilds().items;
+  const unreadRows = useMemo(
+    () =>
+      (unread ?? []).flatMap((thread) => {
+        const found = [...ideasList, ...buildsList].find((item) => item.id === thread.itemId);
+        return found ? [{ item: found, count: thread.count }] : [];
+      }),
+    [unread, ideasList, buildsList],
+  );
 
   const entries = useMemo<Entry[]>(() => {
     const action = (
@@ -217,9 +232,10 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
     const matching = <T extends { words: string[] }>(list: T[]) =>
       list.filter((entry) => terms.every((term) => entry.words.some((word) => word.startsWith(term.text))));
 
+    const unreadEntries = unreadRows.map(({ item, count }) => unreadEntry(item, count, navigate));
     if (!terms.length) {
       const items = recent.slice(context.length ? 1 : 0).map((item) => recentEntry(item, navigate));
-      return [...here, ...items, ...general, ...goTo];
+      return [...here, ...unreadEntries, ...items, ...general, ...goTo];
     }
 
     const hits = found
@@ -229,10 +245,14 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
           ...found.attempts.slice(0, PER_KIND).map((hit) => attemptEntry(hit, foundTerms, navigate)),
         ]
       : [];
-    return [...matching(here), ...hits, ...matching([...general, ...goTo])];
+    const unreadMatches = unreadEntries.filter((entry) =>
+      terms.every((term) => `${entry.row.label} new comment unread`.toLowerCase().includes(term.text)),
+    );
+    return [...matching(here), ...unreadMatches, ...hits, ...matching([...general, ...goTo])];
   }, [
     context,
     recent,
+    unreadRows,
     terms,
     found,
     foundTerms,
@@ -310,6 +330,31 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
 }
 
 type Navigate = ReturnType<typeof useNavigate>;
+
+function unreadEntry(item: ItemView, count: number, navigate: Navigate): Entry {
+  const id = `unread-${item.id}`;
+  const isIdea = item.stage === "idea";
+  const name = itemName(item, isIdea ? "idea" : "build");
+  const cover = item.photos[0];
+  return {
+    id,
+    group: "New comments",
+    run: () =>
+      void navigate(
+        isIdea
+          ? { to: "/ideas/$ideaId", params: { ideaId: item.id }, search: { thread: 1 } as never }
+          : { to: "/builds/$buildId", params: { buildId: item.id }, search: { thread: 1 } as never },
+      ),
+    row: {
+      id,
+      label: name,
+      title: name,
+      subtitle: `${count === 1 ? "1 new comment" : `${count} new comments`} · ${isIdea ? "Idea" : "Build"}`,
+      photo: cover ? { src: photoSrc(cover.id, "thumb"), color: cover.color || undefined } : null,
+      icon: CommentIcon,
+    },
+  };
+}
 
 function recentEntry(item: RecentItem, navigate: Navigate): Entry {
   const id = `recent-${item.id}`;

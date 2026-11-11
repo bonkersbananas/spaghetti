@@ -28,8 +28,8 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | Scope | Allows |
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
-| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
-| `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`. |
+| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`, `POST /items/:id/comments` and `PATCH /comments/:id` (your agent's own comments; see Comments). |
+| `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `POST /tags`, `POST /items/:id/comments` and `PATCH /comments/:id` (as with `capture`). |
 | `printer` | `POST /printer/upkeep`, `PATCH /printer/upkeep/:id`, `POST /printer/upkeep/:id/done`, `PUT /printer/upkeep/logs/:logId/photo/:photoId`, `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
 The rules are one table, `src/worker/auth/scopes.ts`: any route not listed there is person-only, so a new endpoint is closed to tokens until it is given a scope. Routes that need to look at the body (a photo's `attemptId`, the fields of a `PATCH`) narrow it with `canUse` / `missingScope`. `test/worker/agents.test.ts` has a case per row.
@@ -69,6 +69,18 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 - `PATCH /recipes/:id` `{ name?, note? }`: the only things that change. `attempts` scope.
 - `DELETE /recipes/:id` and `POST /recipes/:id/restore`: soft delete and its undo, people only.
 - A recipe carries `source` (`attemptId`, `itemId`, `title`, `number`, `photo`) while that attempt and its build exist, else `null`.
+
+## Comments
+
+The short thread under an idea or build (decision [0022](decisions/0022-comments-read-state-and-push-batching.md)). A comment is `{ id, itemId, authorId, via, body, createdAt, editedAt }`: `authorId` is the person it counts as (an agent's comment is its owner's, with `via` the agent's id, shown as "via Claude for Alex"), `editedAt` is null until the text changes.
+
+- `GET /items/:id/comments` (`read`): `{ comments, readAt }`, oldest first, deleted ones left out. `readAt` is how far the signed-in person has read (epoch ms, null if never); the other person's comments after it are the unread ones.
+- `POST /items/:id/comments` `{ id, body }` (`capture` or `attempts`): `body` is trimmed, 1 to 2000 characters. Idempotent on `id` (a repeat returns the same comment). A person writing also counts as having read the thread; an agent doesn't. Records a `comment` change (`created`) for the item.
+- `PATCH /comments/:id` `{ body }` (`capture` or `attempts`): only your own comment (`403 not_yours`), and for a token only one that agent wrote. An unchanged text isn't an edit.
+- `DELETE /comments/:id` and `POST /comments/:id/restore`: soft delete and its undo, people only, your own comments only; purged 30 days after.
+- `POST /items/:id/comments/read` and `GET /comments/unread` (`{ threads: [{ itemId, count, latestAt }] }`): the signed-in person's read state; people only.
+
+A new comment also sends one web push to the other person, with a short wait so a burst is one push. Comments are not in search yet. `GET /builds/:id/story.md` ends with a "Comments" section.
 
 ## Insights
 

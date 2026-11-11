@@ -102,6 +102,22 @@ async function openIdea(page: Page, id: string) {
   await page.getByRole("button", { name: "Start building" }).first().waitFor();
 }
 
+/** Scrolls an idea's or build's thread to the foot of the screen, once its comments (or the empty line) are there. */
+async function showThread(page: Page, withComments = true) {
+  await page.locator("h1").first().waitFor({ state: "attached" });
+  const thread = page.locator("section[aria-labelledby^='thread-']");
+  await thread.waitFor();
+  if (withComments) await thread.getByRole("list", { name: "Comments" }).waitFor();
+  else
+    await page
+      .getByRole("textbox", { name: /Say something to/ })
+      .or(page.getByRole("button", { name: /Say something to/ }))
+      .first()
+      .waitFor();
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+}
+
 const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
 
 type Slice = "all" | "none" | "young";
@@ -768,6 +784,29 @@ export const shots: Shot[] = [
       const links = page.getByRole("list", { name: "Links in the note" });
       await links.getByText("Drawer bins, 42 mm grid").waitFor();
       await links.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
+  // The thread under an idea and a build (one comment unread on the idea), the empty one, the composer in use, and the card's unread mark.
+  // First: opening a thread marks it read.
+  {
+    name: "comments-unread-card",
+    path: "/ideas",
+    selector: "li:has(a:has-text('Desk tidy-up'))",
+  },
+  { name: "comments-idea", path: `/ideas/${SEED_IDS.deskTidy}`, prepare: (page) => showThread(page) },
+  { name: "comments-build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, prepare: (page) => showThread(page) },
+  { name: "comments-empty", path: `/ideas/${SEED_IDS.desiccantHook}`, prepare: (page) => showThread(page, false) },
+  {
+    name: "comments-composing",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await showThread(page);
+      const phone = (page.viewportSize()?.width ?? 1440) < 768;
+      if (phone) await page.getByRole("button", { name: /Say something to/ }).click();
+      const field = page.getByRole("textbox", { name: /Say something to/ });
+      await field.click();
+      await field.fill("Perfect, I'll print the bins tonight. Is the blue PETG in slot B2 or still on the shelf?");
+      await page.waitForTimeout(400);
     },
   },
   {
