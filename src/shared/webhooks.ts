@@ -4,7 +4,7 @@
  * with HMAC-SHA256 over the timestamp and the body (docs/api.md, "Webhooks";
  * decision 0025).
  */
-import type { Change, ChangeEntity } from "./changes.ts";
+import type { Change, ChangeAction, ChangeEntity } from "./changes.ts";
 import { CHANGE_ENTITIES } from "./changes.ts";
 
 /** What a webhook can ask for: one or more kinds of change (the feed's `entity`), or everything. */
@@ -73,6 +73,9 @@ export interface DeliveryInfo {
   /** The change's cursor; null for a test event. */
   seq: number | null;
   test: boolean;
+  /** What the change was about, from its payload: an item, an attempt… `item` for a test event. */
+  entity: ChangeEntity;
+  action: ChangeAction;
   status: DeliveryStatus;
   /** How many times it has been tried. */
   attempts: number;

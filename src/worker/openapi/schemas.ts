@@ -218,6 +218,8 @@ export const Delivery = z
     webhookId: id,
     seq: z.number().int().nullable().describe("The change's cursor; null for a test event."),
     test: z.boolean(),
+    entity: z.enum(CHANGE_ENTITIES),
+    action: z.enum(CHANGE_ACTIONS),
     status: z.enum(DELIVERY_STATUSES),
     attempts: z.number().int(),
     httpStatus: z.number().int().nullable(),

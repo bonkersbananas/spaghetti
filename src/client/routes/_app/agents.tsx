@@ -5,7 +5,7 @@ import { displayName } from "@shared/people";
 import { relativeTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AgentSheet } from "@/components/agents/AgentSheet";
 import { ShareCard } from "@/components/agents/ShareCard";
 import { EmptyPot } from "@/components/illustrations";
@@ -21,6 +21,9 @@ import { agentsQuery, revokeToken, usePendingRevokes } from "@/lib/agents";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
+
+// Webhooks and their sheet load on their own, after the page: the Agents screen's first load stays as it was.
+const Webhooks = lazy(() => import("@/components/agents/Webhooks"));
 
 export const Route = createFileRoute("/_app/agents")({
   component: Agents,
@@ -83,6 +86,24 @@ function Agents() {
           </Button>
         </ActionBar>
       )}
+      <div className="mt-12 md:mt-16">
+        <Suspense fallback={<div aria-hidden className="h-24" />}>
+          <Webhooks agents={mine} />
+        </Suspense>
+      </div>
+      <p className="text-small text-ink-faint max-w-content mt-12 md:mt-16">
+        Building something against Spaghetti?{" "}
+        <a
+          href="/api/openapi.json"
+          target="_blank"
+          rel="noreferrer"
+          className="focus-ring text-ink-soft decoration-ink/30 font-semibold underline underline-offset-2"
+        >
+          API reference
+        </a>{" "}
+        is an OpenAPI document of what a token can do. Open it signed in, or fetch it with a token to see only what that
+        token may.
+      </p>
       <AgentSheet
         open={making.open}
         agent={making.agent}

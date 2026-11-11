@@ -88,6 +88,7 @@ export {
   Timer as PrintingIcon,
   Trash as TrashIcon,
   WarningCircle as WarningIcon,
+  WebhooksLogo as WebhookIcon,
   WifiSlash as OfflineIcon,
   X as CloseIcon,
 } from "@phosphor-icons/react";

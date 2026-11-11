@@ -52,7 +52,19 @@ export const toWebhook = (row: Webhook): WebhookInfo => ({
   createdAt: row.createdAt.getTime(),
 });
 
+/** What a delivery was about, read from the payload that was (or will be) sent. */
+function changeOf(row: WebhookDelivery): Pick<Change, "entity" | "action"> {
+  try {
+    const change = (JSON.parse(row.payload) as WebhookPayload).changes[0];
+    if (change) return { entity: change.entity, action: change.action };
+  } catch {
+    // Falls through to the plain answer.
+  }
+  return { entity: "item", action: "updated" };
+}
+
 export const toDelivery = (row: WebhookDelivery): DeliveryInfo => ({
+  ...changeOf(row),
   id: row.id,
   webhookId: row.webhookId,
   seq: row.seq,
