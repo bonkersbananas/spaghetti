@@ -5,7 +5,7 @@ import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -26,6 +26,7 @@ import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 /** Where a result leads. */
 export function attemptLink(hit: AttemptHit): LinkProps {
@@ -107,7 +108,11 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
   const { attempt, item } = hit;
   const title = item.title?.trim() || "Untitled build";
   const filaments = attempt.settings.filaments ?? [];
-  const settings = summarizeSettings(attempt.settings).slice(0, 4);
+  // The settings the words matched come first ("bed 70 °C" for "bed temp"), then the usual ones.
+  const matches = (part: string) => highlight(part, terms).some((piece) => piece.match);
+  const settings = summarizeSettings(attempt.settings)
+    .sort((x, y) => Number(matches(y)) - Number(matches(x)))
+    .slice(0, 4);
   return (
     <ResultRow
       ref={ref}
@@ -122,24 +127,33 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
         <OutcomeChip outcome={attempt.outcome} />
         <span className="text-small text-ink-faint ml-auto shrink-0">{relativeTime(attempt.printedAt)}</span>
       </span>
-      <span className="text-body text-ink min-w-0 truncate font-semibold">
+      <span className="text-body text-ink line-clamp-2 min-w-0 font-semibold">
         <Highlight text={title} terms={terms} />
         <span className="text-small text-ink-faint font-medium">
           {" "}
-          · attempt {hit.number}
+          <span className="whitespace-nowrap">· attempt {hit.number}</span>
           {hit.partsLabel ? ` · ${hit.partsLabel}` : ""}
         </span>
       </span>
       {attempt.note && <Highlight text={attempt.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />}
+      {hit.coachIdea && (
+        <span className="text-small text-ink-soft flex items-center gap-1.5">
+          <IdeasIcon size={14} aria-hidden className="text-ink-faint shrink-0" />
+          <span className="min-w-0 truncate">
+            <span className="text-ink-faint">Claude suggested </span>
+            <Highlight text={hit.coachIdea} terms={terms} />
+          </span>
+        </span>
+      )}
       {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
-        <span className="flex flex-wrap gap-1.5">
+        <TagRow>
           {attempt.failureTags.map((slug) => (
             <TagChip key={`f-${slug}`} kind="failure" label={tagLabel("failure", slug, failureOptions)} terms={terms} />
           ))}
           {attempt.successNotes.map((slug) => (
             <TagChip key={`s-${slug}`} kind="success" label={tagLabel("success", slug, successOptions)} terms={terms} />
           ))}
-        </span>
+        </TagRow>
       )}
       {(filaments.length > 0 || settings.length > 0) && (
         <SettingsLine
@@ -156,6 +170,52 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
     </ResultRow>
   );
 });
+
+/**
+ * Tags on a phone stay on one row, as many as fit and then "+2", so a result keeps its height; on a laptop they wrap.
+ * All chips are drawn in a row that doesn't wrap; the ones past the edge are hidden once measured.
+ */
+function TagRow({ children }: { children: ReactNode[] }) {
+  const desktop = useIsDesktop();
+  const outer = useRef<HTMLSpanElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+  const list = children.flat().filter(Boolean);
+  const [fit, setFit] = useState(list.length);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measured again when the number of tags changes.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const kids = Array.from(inner.current?.children ?? []) as HTMLElement[];
+      const room = outer.current?.clientWidth ?? 0;
+      const right = (i: number) => (kids[i]?.offsetLeft ?? 0) + (kids[i]?.offsetWidth ?? 0);
+      let n = kids.length;
+      // Everything fits, or leave room for the "+N" (about 2.5rem).
+      if (right(n - 1) > room) for (n = kids.length; n > 1 && right(n - 1) > room - 40; n--);
+      setFit(n);
+    };
+    measure();
+    // Again when the row's width changes (turning the phone) or a chip's does (a font arriving).
+    const watch = new ResizeObserver(measure);
+    if (outer.current) watch.observe(outer.current);
+    for (const kid of Array.from(inner.current?.children ?? [])) watch.observe(kid);
+    return () => watch.disconnect();
+  }, [list.length]);
+  const hidden = desktop ? 0 : list.length - fit;
+  return (
+    <span ref={outer} className="flex items-center gap-1.5">
+      <span ref={inner} className="flex min-w-0 gap-1.5 overflow-hidden md:flex-wrap">
+        {list.map((chip, i) => (
+          <span
+            key={(chip as { key?: string }).key ?? i}
+            className={cn("shrink-0", !desktop && i >= fit && "invisible")}
+          >
+            {chip}
+          </span>
+        ))}
+      </span>
+      {hidden > 0 && <span className="text-small text-ink-faint shrink-0 font-medium">+{hidden}</span>}
+    </span>
+  );
+}
 
 /** A tag on a result; one the search matched is ringed, the way a picked tag is. */
 function TagChip({ kind, label, terms }: { kind: TagKind; label: string; terms: readonly SearchTerm[] }) {
@@ -217,7 +277,7 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
       onPointerEnter={onHover}
       onOpen={onOpen}
     >
-      <span className="flex items-center gap-2">
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Chip tone={look.tone} icon={look.icon}>
           {look.label}
         </Chip>

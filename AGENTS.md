@@ -233,7 +233,7 @@ Never edit a migration that has been merged; add a new one.
 ### Up next and "for"
 
 - `items.up_next` is an idea's place in the queue (null when not queued), `items.for_whom` who it is for (`forWhom` in the API; also in the search index, in the item row's `tags` column). The client's queue logic is `lib/up-next.ts` (`splitQueue`, `setUpNext` with its undo toast, `reorderUpNext`, `moveUpNext`, `dropUpNext`), all optimistic. The inbox shows the queue as a section on top (drag on desktop with native drag and drop, "Move up" / "Move down" in the card's menu for everyone), Today shows the first three (`components/today/UpNext.tsx`). Starting a build clears `upNext` (server and `changeStage`); its undo sends the old place back.
-- `ForField` is the quiet "for …" line under a title; `useItemFields` autosaves it with the title and note.
+- `ForField` is the quiet "for …" line under a title (nobody named: it draws nothing, and the page offers a quiet "For someone" `ForChip` among its chips that opens it); `useItemFields` autosaves it with the title and note.
 
 ### Wishlists
 
@@ -283,7 +283,7 @@ Never edit a migration that has been merged; add a new one.
 
 ### The landing page
 
-`/` is the app for someone signed in and `landing.html` for everyone else (`src/worker/home.ts` picks by the session cookie; [0032](docs/decisions/0032-a-landing-page-at-the-root-for-visitors.md)). The page is static, light only, and imports nothing of the app's (its own `src/landing/landing.css` on the tokens, one small `landing.ts`); its files go to `assets/landing/`, out of the service worker's precache, and the app's build output stays byte for byte the same (`scripts/vite-landing.ts`). Its pictures are made by `pnpm landing:shots` from the screenshot seed, dressed up by `scripts/landing/demo.ts` (the two people as M and CO, real print photos in place of some drawings, which screens to take): run it after changing the app's screens, and see [docs/landing.md](docs/landing.md) for how to add a picture. It is tested in `e2e/landing.spec.ts`.
+`/` is the app for someone signed in and `landing.html` for everyone else (`src/worker/home.ts` picks by the session cookie; [0033](docs/decisions/0033-a-landing-page-at-the-root-for-visitors.md)). The page is static, light only, and imports nothing of the app's (its own `src/landing/landing.css` on the tokens, one small `landing.ts`); its files go to `assets/landing/`, out of the service worker's precache, and the app's build output stays byte for byte the same (`scripts/vite-landing.ts`). Its pictures are made by `pnpm landing:shots` from the screenshot seed, dressed up by `scripts/landing/demo.ts` (the two people as M and CO, real print photos in place of some drawings, which screens to take): run it after changing the app's screens, and see [docs/landing.md](docs/landing.md) for how to add a picture. It is tested in `e2e/landing.spec.ts`.
 
 ### Add a binding (KV, queue, …)
 

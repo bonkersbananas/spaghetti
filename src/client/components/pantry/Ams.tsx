@@ -139,7 +139,9 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
                 </span>
               </MetaList>
             )}
-            {shape === "bay" && <DryIt spool={spool} className="text-caption justify-center lg:justify-start" />}
+            {shape === "bay" && (
+              <DryIt spool={spool} compact className="text-caption justify-center lg:justify-start" />
+            )}
             {shape === "bay" && (
               <RemainingMeter
                 remaining={spool.remaining}

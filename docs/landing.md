@@ -1,6 +1,6 @@
 # The landing page
 
-What someone signed out sees at https://spaghetti.day/: one bright page that shows Spaghetti off and has Sign in on it, twice. Signed in, the same address is the app, as before. Why it is built this way: [decision 0032](decisions/0032-a-landing-page-at-the-root-for-visitors.md).
+What someone signed out sees at https://spaghetti.day/: one bright page that shows Spaghetti off and has Sign in on it, twice. Signed in, the same address is the app, as before. Why it is built this way: [decision 0033](decisions/0033-a-landing-page-at-the-root-for-visitors.md).
 
 ## How it is served
 

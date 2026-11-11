@@ -44,10 +44,7 @@ function Printer() {
   const { data, isPending } = useQuery(printerQuery);
   return (
     <>
-      <PageHeader
-        title="Printer"
-        subtitle="The X2D as it's set up here. Spaghetti never controls it; this is what you've told it."
-      />
+      <PageHeader title="Printer" subtitle="Set up here. Spaghetti never controls it." />
       {isPending || !data ? (
         <div className="flex flex-col gap-6" aria-hidden>
           <Skeleton className="h-36 w-full rounded-xl md:max-w-3xl" />

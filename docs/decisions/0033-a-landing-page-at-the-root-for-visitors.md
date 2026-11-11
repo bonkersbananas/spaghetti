@@ -1,4 +1,4 @@
-# 0032. A landing page at the root for visitors, the app for the two people
+# 0033. A landing page at the root for visitors, the app for the two people
 
 Status: Accepted
 

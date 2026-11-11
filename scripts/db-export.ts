@@ -11,7 +11,7 @@
  * table, then appends the search index's own SQL, which creates the index,
  * its triggers, and fills it from the restored rows.
  */
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { root, wrangler } from "./lib/wrangler.ts";
 
@@ -52,4 +52,11 @@ appendFileSync(
     // The comments' triggers, and the rows for the comments restored above.
     `--> statement-breakpoint\n${readFileSync(join(root, "migrations/0022_comment-search.sql"), "utf8")}`,
 );
+// Later migrations that changed the index, in order (found by name: their numbers move when branches merge).
+const searchMigrations = readdirSync(join(root, "migrations")).filter((name) =>
+  name.endsWith("_search_settings_coach.sql"),
+);
+for (const name of searchMigrations) {
+  appendFileSync(output, `\n--> statement-breakpoint\n${readFileSync(join(root, "migrations", name), "utf8")}`);
+}
 console.log(`✓ Exported ${tables.length} tables and the search index to ${output}`);
