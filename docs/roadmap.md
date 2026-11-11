@@ -55,7 +55,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [ ] OAuth for the MCP server, so clients that insist on it can connect (tokens work today)
 - [x] OpenAPI from the zod schemas: `GET /api/openapi.json`, per caller's scopes, with a test that every route is described (a build's whole story as markdown: `GET /api/builds/:id/story.md`)
 - [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
-- [ ] Resident agents, suggest-only: failure coach, idea scout, label photo to spool fields, weekly digest
+- [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), idea scout, label photo to spool fields, weekly digest
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
 ## Deploy

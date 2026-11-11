@@ -94,6 +94,10 @@ export const Attempt = z
       .looseObject({})
       .nullable()
       .describe("What Claude made of the attempt's photo; only ever a suggestion."),
+    coach: z
+      .looseObject({})
+      .nullable()
+      .describe("What Claude suggests trying next after a Partly or Spaghetti answer; only ever suggestions."),
     note: z.string(),
     failureTags: z.array(z.string()),
     successNotes: z.array(z.string()),

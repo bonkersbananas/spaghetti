@@ -23,7 +23,6 @@ import type { AttemptPart } from "@shared/parts";
 import { isOffTheBed, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { toast as sonnerToast } from "sonner";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
 import type { DraftPhoto } from "./capture";
@@ -103,7 +102,7 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   void changeStage(queryClient, item.id, "building");
   // The idea's draft undo is done with (its id is set in drafts.ts): one toast for this step, above the Log attempt bar.
   // Other toasts (another item's undo, a waiting update) stay.
-  sonnerToast.dismiss(`draft-${item.id}`);
+  toast.dismiss(`draft-${item.id}`);
   toast.undo("Started building", {
     description:
       wasUpNext !== null ? "Off Up next. It stays in Ideas under Started." : "It stays in Ideas under Started.",
@@ -302,7 +301,9 @@ export async function saveAttemptChanges(
   patchCachedItem(queryClient, itemId, (item) => ({
     ...item,
     attempts: item.attempts.map((attempt) =>
-      attempt.id === attemptId ? { ...attempt, finishedAt: saved.finishedAt, updatedAt: saved.updatedAt } : attempt,
+      attempt.id === attemptId
+        ? { ...attempt, finishedAt: saved.finishedAt, updatedAt: saved.updatedAt, coach: saved.coach }
+        : attempt,
     ),
   }));
 }

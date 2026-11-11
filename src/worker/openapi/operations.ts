@@ -357,7 +357,7 @@ export const operations: Record<string, Operation> = {
   },
   "GET /features": {
     summary: "What this server can do beyond the basics (Claude drafts and photo reads, webhooks).",
-    response: z.object({ drafts: z.boolean(), photoReads: z.boolean(), webhooks: z.boolean() }),
+    response: z.object({ drafts: z.boolean(), photoReads: z.boolean(), coach: z.boolean(), webhooks: z.boolean() }),
   },
 
   // Items.
@@ -492,6 +492,11 @@ export const operations: Record<string, Operation> = {
     body: finishAttempt,
     response: z.object({ attempt: Attempt, finished: z.boolean() }),
     errors: { 404: notFound("attempt") },
+  },
+  "PUT /attempts/:id/coach/:suggestionId": {
+    summary: "Dismisses one of Claude's suggestions for the next try, or takes the dismissal back. People only.",
+    body: z.object({ dismissed: z.boolean() }),
+    response: one("attempt", Attempt),
   },
   "DELETE /attempts/:id": { summary: "Deletes an attempt (it can be restored).", response: "empty", status: 204 },
   "POST /attempts/:id/restore": { summary: "Restores a deleted attempt.", response: one("attempt", Attempt) },

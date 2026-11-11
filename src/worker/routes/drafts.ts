@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { DraftResponse, FeaturesResponse } from "../../shared/api.ts";
 import { firstModelLink } from "../../shared/model-links.ts";
+import { coachEnabled } from "../coach/run.ts";
 import { itemDrafts, items } from "../db/schema.ts";
 import { draftsEnabled, runDraft, startDraft, toApiDraft, undoDraft } from "../draft/run.ts";
 import type { AppEnv } from "../env.ts";
@@ -22,6 +23,7 @@ export const draftRoutes = new Hono<AppEnv>()
     c.json<FeaturesResponse>({
       drafts: draftsEnabled(c.env),
       photoReads: photoReadsEnabled(c.env),
+      coach: coachEnabled(c.env),
       webhooks: Boolean(secretKeySource(c.env)),
     }),
   )

@@ -4,6 +4,7 @@ import type { AgentScope } from "../../shared/agents.ts";
 import type { AttemptSettings, Outcome, TagKind } from "../../shared/attempts.ts";
 import type { BridgeStatusData } from "../../shared/bridge.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
+import type { CoachItem } from "../../shared/coach.ts";
 import type { DraftFailure, DraftFindings, ItemDraft } from "../../shared/draft.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
@@ -429,6 +430,37 @@ export const photoReads = sqliteTable(
 );
 
 export type PhotoReadRow = typeof photoReads.$inferSelect;
+
+/**
+ * The failure coach for one attempt (decision 0027): the job, what Claude suggested for the next try and the record of
+ * the run, one row per attempt (an attempt is coached once). Also what the day's cap counts (rows with `ranAt`).
+ */
+export const coachRuns = sqliteTable("coach_runs", {
+  attemptId: text("attempt_id")
+    .primaryKey()
+    .references(() => attempts.id, { onDelete: "cascade" }),
+  itemId: text("item_id").notNull(),
+  /** thinking: waiting or running; done: suggestions; nothing: Claude had nothing useful to say; failed: the call didn't work; skipped: the attempt wasn't Partly or Spaghetti by then. */
+  status: text("status").$type<"thinking" | "done" | "nothing" | "failed" | "skipped">().notNull(),
+  /** `[{ id, title, why, settings, note }]` (shared/coach.ts CoachItem without `dismissed`). */
+  suggestions: text("suggestions", { mode: "json" })
+    .$type<Array<Omit<CoachItem, "dismissed">>>()
+    .notNull()
+    .default(sql`'[]'`),
+  /** Ids of suggestions someone dismissed. */
+  dismissed: text("dismissed", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  tries: integer("tries").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When the call to Claude was made (what the cap counts). */
+  ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+  /** "done", or why not: nothing, refusal, api_error, timeout, cap… (worker/coach/claude.ts). */
+  runOutcome: text("run_outcome"),
+  /** Model, stop reason, HTTP status, error type, how long it took; never the prompt. */
+  detail: text("detail"),
+});
+
+export type CoachRunRow = typeof coachRuns.$inferSelect;
 export type ItemDraftRow = typeof itemDrafts.$inferSelect;
 
 export type Item = typeof items.$inferSelect;

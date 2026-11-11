@@ -26,20 +26,23 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // Comments added about 1 kB to the lists (the unread marker on cards: its query, a badge and an icon); the thread and its
 // composer are a lazy chunk of the idea and build pages, and the palette's "New comments" row loads with the palette.
 // Merging main (photo reads, spare parts) and comments together took the lists about 1 kB past their old limits: budgets +1 to +2 kB.
+// Cutting the first load (#225): Phosphor's thin and duotone weights left out of the build (about 15 kB), motion's layout and drag
+// features and sonner loaded once idle (about 20 kB), section code preloaded when idle rather than with the first render.
+// Budgets are the measured sizes plus about 2 kB.
 const BUDGET_KB = {
   // Passkeys (the sign-in button, the quiet offer in the shell) add about 1.5 kB everywhere; the WebAuthn browser code, the QR renderer and the sheets load on demand.
-  "/sign-in": 216,
+  "/sign-in": 194,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
-  "/today": 324,
+  "/today": 296,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
   // search with zod (route checks load with the app): together about 35 kB gzip off every screen. Printer upkeep (#39) added about 3 kB to Today, Pantry and Printer.
-  "/ideas": 313,
-  "/builds": 313,
-  "/journal": 313,
+  "/ideas": 286,
+  "/builds": 286,
+  "/journal": 285,
   // Recently deleted adds a palette row and a menu item to the shell (its page loads on demand): about 0.5 kB.
-  "/search": 318,
-  "/pantry": 323,
-  "/printer": 322,
+  "/search": 291,
+  "/pantry": 296,
+  "/printer": 294,
 } as const;
 
 /**

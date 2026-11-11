@@ -16,8 +16,9 @@ import {
 } from "../../shared/attempts.ts";
 import { type AttemptPart, MAX_PART_QUANTITY, MAX_PARTS, zeroCounts } from "../../shared/parts.ts";
 import { afterChange, itemOfAttempt, recordChange } from "../changes.ts";
+import { coachAfterAnswer, coachesByAttempt } from "../coach/run.ts";
 import type { Db } from "../db/index.ts";
-import { type Attempt, attemptFiles, attempts, items } from "../db/schema.ts";
+import { type Attempt, attemptFiles, attempts, coachRuns, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
@@ -154,6 +155,7 @@ export async function loadAttempt(db: Db, attempt: Attempt) {
     [...siblings, attempt],
     new Map(file ? [[attempt.id, file]] : []),
     new Map(read ? [[attempt.id, read]] : []),
+    await coachesByAttempt(db, [attempt.id]),
   );
   const found = all.find((row) => row.id === attempt.id);
   if (!found) throw new Error("The attempt went missing.");
@@ -249,6 +251,8 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
   if (!attempt || attempt.itemId !== itemId) {
     return apiError(c, 409, "conflict", "That attempt belongs to something else.");
   }
+  // Logged already as Partly or Spaghetti: Claude thinks about the next try.
+  await coachAfterAnswer(c, attempt);
   return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) }, 201);
 });
 
@@ -324,6 +328,8 @@ export const attemptRoutes = new Hono<AppEnv>()
         .where(and(eq(items.id, current.itemId), afterChange)),
     ]);
     if (!attempt) return apiError(c, 404, "not_found", notFound);
+    // A new answer of Partly or Spaghetti (not an edit of an old one): Claude thinks about the next try.
+    if (nextOutcome && nextOutcome !== current.outcome) await coachAfterAnswer(c, attempt);
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
   })
 
@@ -414,6 +420,7 @@ export const attemptRoutes = new Hono<AppEnv>()
       }
       const [attempt] = (await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]))[0] as Attempt[];
       if (attempt) {
+        if (finishing) await coachAfterAnswer(c, attempt);
         return c.json<FinishAttemptResponse>({ attempt: await loadAttempt(db, attempt), finished });
       }
       const again = await findLive(db, current.id);
@@ -421,6 +428,38 @@ export const attemptRoutes = new Hono<AppEnv>()
       current = again.attempt;
     }
     return apiError(c, 409, "conflict", "That attempt keeps changing. Try again in a moment.");
+  })
+
+  /**
+   * Dismisses one of Claude's suggestions for the next try, or takes it back (the undo): stays dismissed for both
+   * people. People only: no scope lists this route.
+   */
+  .put("/:id/coach/:suggestionId", async (c) => {
+    const parsed = z.object({ dismissed: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    const db = c.var.db;
+    const found = await findLive(db, c.req.param("id"));
+    if (!found) return apiError(c, 404, "not_found", notFound);
+    const run = (await coachesByAttempt(db, [found.attempt.id])).get(found.attempt.id);
+    const suggestionId = c.req.param("suggestionId");
+    if (!run || !run.suggestions.some((item) => item.id === suggestionId)) {
+      return apiError(c, 404, "not_found", "That suggestion isn't here any more.");
+    }
+    const without = run.dismissed.filter((id) => id !== suggestionId);
+    const next = parsed.data.dismissed ? [...without, suggestionId] : without;
+    if (next.length !== run.dismissed.length) {
+      await db.batch([
+        db.update(coachRuns).set({ dismissed: next }).where(eq(coachRuns.attemptId, run.attemptId)),
+        recordChange(db, {
+          entity: "attempt",
+          id: run.attemptId,
+          itemId: run.itemId,
+          action: "updated",
+          actor: c.var.actor,
+        }),
+      ]);
+    }
+    return c.json<AttemptResponse>({ attempt: await loadAttempt(db, found.attempt) });
   })
 
   /** Hides the attempt and its photos at once; restore is the undo. */

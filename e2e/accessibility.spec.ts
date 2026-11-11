@@ -92,6 +92,12 @@ async function clearSpools(page: Page) {
 async function expectAccessible(page: Page, what: string, include?: string) {
   // Let entrance animations finish: axe measures contrast mid-fade otherwise.
   await page.waitForTimeout(400);
+  // A toast made just before (the toaster loads when the app is idle) may still be sliding in: axe would measure it half faded.
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll("[data-sonner-toast]")).every((toast) =>
+      toast.getAnimations({ subtree: true }).every((animation) => animation.playState !== "running"),
+    ),
+  );
   let builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]);
   if (include) builder = builder.include(include);
   // A held (pressed) specimen in the styleguide is a transient state shown at rest: a pressed link dims on purpose.
