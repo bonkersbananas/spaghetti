@@ -7,6 +7,7 @@ import {
   diffSettings,
   outcomeWords,
   plateName,
+  showsSettings,
   slugify,
   summarizeBuild,
   tagLabel,
@@ -358,5 +359,19 @@ describe("summarizeBuild: time and grams of a print off the bed", () => {
       { outcome: null, endedAt: null, settings: ran },
     ]);
     expect(printing.minutes).toEqual({ value: 101, approximate: false });
+  });
+});
+
+describe("where the build's story lists settings", () => {
+  const changed = [{ key: "bedTemperature" }];
+  it("lists them on the first attempt, on one that worked, and when nothing changed", () => {
+    expect(showsSettings({ number: 1, outcome: "failed", changes: changed })).toBe(true);
+    expect(showsSettings({ number: 3, outcome: "success", changes: changed })).toBe(true);
+    expect(showsSettings({ number: 2, outcome: "partial", changes: [] })).toBe(true);
+  });
+  it("leaves them to the change chips on the others", () => {
+    expect(showsSettings({ number: 2, outcome: "partial", changes: changed })).toBe(false);
+    expect(showsSettings({ number: 3, outcome: "failed", changes: changed })).toBe(false);
+    expect(showsSettings({ number: 3, outcome: null, changes: changed })).toBe(false);
   });
 });
