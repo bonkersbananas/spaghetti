@@ -137,7 +137,7 @@ Not signed in (rate limited; `429 rate_limited`):
 
 Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
 
-- `GET /api/features`: `{ drafts: boolean, photoReads: boolean }`, whether the key is set (both follow the one secret).
+- `GET /api/features`: `{ drafts: boolean, photoReads: boolean, coach: boolean, webhooks: boolean }`, whether the key is set (the first three follow the one secret).
 - `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
 - `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
 - Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
@@ -156,6 +156,16 @@ When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos
 - The bridge's frame is stored as the original in both variants (`needsResize`); it is read as it is when it is a JPEG or WebP of at most 4.8 MB and 8000 px a side (the API's limits), and not read otherwise.
 - Every read is a row in `photo_reads` with its status, `run_outcome` (`read`, `unsure`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, …) and a `detail` (model, stop reason, status, how long it took); how to read them is in [deploy.md](deploy.md).
 - Capped at 30 reads a day for the whole workspace (UTC days, rows with `ran_at`); past it the read is marked `cap` and nothing is suggested.
+
+## What to try next (the failure coach, automatic)
+
+When an attempt is answered Partly or Spaghetti (`PATCH /api/attempts/:id`, `POST /api/attempts/:id/finish`, or logged with that outcome), Claude *suggests* what to change for the next try ([decision 0027](decisions/0027-failure-coach-suggests-what-to-try-next.md)). It needs `ANTHROPIC_API_KEY`; without it nothing happens and `features.coach` is `false`.
+
+- Attempts carry `coach`: `null`, or `{ status: "thinking", items: [] }` while Claude works, or `{ status: "ready", items }` where each item is `{ id, title, why, settings, note, dismissed }`: a short title ("Add a brim"), one line of why, the settings it would change (a partial `settings` object using only fields the attempt sheet has, within what the X2D can do, or `null`), a line for the next attempt's note for what settings can't say (or `null`), and whether someone dismissed it. At most three. It is only ever a suggestion: the attempt's own `settings`, `note` and tags are never written by it. Nothing useful to say, a refusal and a failed call leave `coach` `null`; it is also `null` once the attempt is not Partly or Spaghetti any more. A change to it is an `attempt` update in the change feed.
+- `PUT /api/attempts/:id/coach/:suggestionId` with `{ dismissed: boolean }` dismisses an item or takes the dismissal back (people only: a token gets `403 person_only`); answers `{ attempt }`.
+- Who starts it: a signed-in person, or a token with both the `attempts` and `printer` scopes (the bridge). Any other agent's answer is not coached. An attempt is coached once.
+- The suggestions are in a build's `story.md` (`Claude suggests for the next try (only suggestions, nothing was changed): …`).
+- Every run is a row in `coach_runs` with `status`, `run_outcome` (`done`, `nothing`, `refusal`, `api_error`, `timeout`, `cap`, …) and a `detail`. Capped at 20 a day for the whole workspace (UTC days, rows with `ran_at`); past it the run is marked `cap`.
 
 ## Upkeep and drying
 

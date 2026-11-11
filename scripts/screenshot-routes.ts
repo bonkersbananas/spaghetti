@@ -391,6 +391,39 @@ async function everythingBuild(page: Page) {
   return itemId;
 }
 
+/**
+ * A build whose only attempt was answered Spaghetti (a stern that lifted, no brim, bed at 60 °C), so the failure coach
+ * thinks about the next try: the stand-in answers from the title (a word "coach" gets suggestions, "slow" holds them
+ * back ten seconds, scripts/lib/fake-claude.ts). Opens the build's page.
+ */
+async function failedBuild(page: Page, title: string) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const itemId = crypto.randomUUID();
+  photoReadBuilds.push(itemId);
+  await page.request.post("/api/items", { headers, data: { id: itemId, title, stage: "building" } });
+  await page.request.post(`/api/items/${itemId}/attempts`, {
+    headers,
+    data: {
+      id: crypto.randomUUID(),
+      outcome: "failed",
+      printedAt: Date.now() - 5 * 60 * 60_000,
+      note: "The stern lifted off the plate halfway up.",
+      failureTags: ["bed-adhesion"],
+      settings: {
+        filaments: [{ type: "PETG", brand: "Bambu", colorName: "Teal" }],
+        bedType: "Textured PEI Plate",
+        bedTemperature: 60,
+        nozzleTemperature: 250,
+        estimatedMinutes: 150,
+        failedAtPercent: 52,
+      },
+    },
+  });
+  await page.goto(`/builds/${itemId}`);
+  await page.locator("h1").first().waitFor({ state: "attached" });
+  return itemId;
+}
+
 /** Opens the attempt's sheet from its card (the card's open button is under its content: click its corner). */
 async function openOffBedSheet(page: Page) {
   await page.getByRole("button", { name: /off the bed\. Open/ }).click({ position: { x: 24, y: 24 } });
@@ -1757,6 +1790,66 @@ export const shots: Shot[] = [
       await printWithPhoto(page, "Slow lid spaghetti");
       await openOffBedSheet(page);
       await page.getByRole("dialog").getByText("Looking at the photo…").waitFor({ timeout: 8_000 });
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // The failure coach (decision 0027): Claude thinks about the next try (the stand-in holds its answer back) ...
+  {
+    name: "build-coach-thinking",
+    path: "/builds",
+    prepare: async (page) => {
+      await failedBuild(page, "Coach slow stern test");
+      await page.getByText("Thinking about the next try…").waitFor({ timeout: 8_000 });
+    },
+    selector: "[data-attempt-id]",
+    // The floating Log attempt button and tab bar would sit over the card's foot, where the line is.
+    beforeShot: async (page) => {
+      await page.evaluate(() => {
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *")))
+          if (getComputedStyle(el).position === "fixed") el.style.visibility = "hidden";
+      });
+    },
+    cleanup: removePhotoReadBuilds,
+  },
+  // ... its ideas under the seeded tugboat's partly attempt (the stern corners curled) ...
+  {
+    name: "build-coach",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Claude's ideas for the next try" }).waitFor({ timeout: 15_000 });
+    },
+    fullPage: true,
+  },
+  // ... and in the Log attempt sheet as "Use this" chips, before a tap ...
+  {
+    name: "attempt-coach-chips",
+    path: "/builds",
+    prepare: async (page) => {
+      await failedBuild(page, "Coach stern test");
+      await page.getByRole("region", { name: "Claude's ideas for the next try" }).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      await page.getByRole("dialog").getByRole("region", { name: "Claude's ideas for the next try" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // ... and after tapping two of them: the sheet's changes now say what was filled in.
+  {
+    name: "attempt-coach-used",
+    path: "/builds",
+    prepare: async (page) => {
+      await failedBuild(page, "Coach stern test");
+      await page.getByRole("region", { name: "Claude's ideas for the next try" }).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Use this" }).first().click();
+      await dialog.getByRole("button", { name: "Use this" }).first().click();
+      await dialog.getByText("In this attempt").first().waitFor();
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");

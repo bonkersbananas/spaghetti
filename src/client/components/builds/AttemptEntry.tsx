@@ -3,7 +3,7 @@ import type { Outcome } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
-import { forwardRef } from "react";
+import { forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { CompareIcon, RecipeIcon, SameAgainIcon } from "@/components/ui/icons";
@@ -47,6 +47,9 @@ interface AttemptEntryProps {
   /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
   reserveExtras?: boolean;
 }
+
+// Claude's ideas for the next try load after the build page: they only exist for a failed attempt.
+const CoachNote = lazy(() => import("./Coach").then((m) => ({ default: m.CoachNote })));
 
 /**
  * One attempt in a build's story: how it went, what was tried differently
@@ -246,6 +249,18 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               >
                 Save as recipe
               </Button>
+            )}
+
+            {attempt.coach && (
+              // Above the open button, so its dismiss buttons work.
+              <Suspense fallback={null}>
+                <CoachNote
+                  coach={attempt.coach}
+                  itemId={attempt.itemId}
+                  attemptId={attempt.id}
+                  className="pointer-events-auto relative z-10"
+                />
+              </Suspense>
             )}
 
             {printing && <NotEnoughNote settings={attempt.settings} what="this print" />}

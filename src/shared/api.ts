@@ -1,5 +1,6 @@
 import type { AttemptSettings, Outcome, SettingChange, TagKind } from "./attempts.ts";
 import type { BridgeStatus } from "./bridge.ts";
+import type { Coach } from "./coach.ts";
 import type { ItemDraft } from "./draft.ts";
 import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
@@ -96,6 +97,12 @@ export interface Attempt {
    * suggested outcome with tags and a reason. Never an outcome of its own; null when there is nothing to show.
    */
   photoRead: PhotoRead | null;
+  /**
+   * What Claude suggests trying next, after a Partly or Spaghetti answer (decision 0027): "thinking" while it works,
+   * then two or three short suggestions. Only suggestions: nothing in the attempt is set by them. Null when there is
+   * nothing to show (it worked, nothing useful to say, no key).
+   */
+  coach: Coach | null;
   /** The one-line note. */
   note: string;
   /** Slugs of failure tags (built in or people's own). */
@@ -191,6 +198,8 @@ export interface FeaturesResponse {
   drafts: boolean;
   /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
+  /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
+  coach: boolean;
   /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
   webhooks: boolean;
 }
@@ -406,7 +415,7 @@ export interface FacetsResponse {
 }
 
 /** An attempt without "what changed" or its file (search results and suggestions show it on its own). */
-export type AttemptSummary = Omit<Attempt, "changes" | "file" | "photoRead">;
+export type AttemptSummary = Omit<Attempt, "changes" | "file" | "photoRead" | "coach">;
 
 /** An attempt found by search or offered as "what worked last time". */
 export interface AttemptHit {
