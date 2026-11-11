@@ -11,6 +11,7 @@ export const CHANGE_ENTITIES = [
   "attempt",
   "photo",
   "file",
+  "comment",
   "spool",
   "recipe",
   "slot",

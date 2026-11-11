@@ -49,7 +49,7 @@ This exports every table and the search index's own SQL (see `scripts/db-export.
 
 ## Adding or resetting a person
 
-**In the app (the usual way):** account menu → Invite someone makes a single-use link, good for a week; the new person opens it, picks a name, a username, a color and a passkey or a password, and is signed in ([0023](decisions/0023-passkeys-sign-in-links-and-invites.md)). Pending invites are listed there and can be withdrawn. Someone who can't sign in but still has a signed-in device makes "Sign in on another device" there (a QR code or a code, good for ten minutes).
+**In the app (the usual way):** account menu → Invite someone makes a single-use link, good for a week; the new person opens it, picks a name, a username, a color and a passkey or a password, and is signed in ([0025](decisions/0025-passkeys-sign-in-links-and-invites.md)). Pending invites are listed there and can be withdrawn. Someone who can't sign in but still has a signed-in device makes "Sign in on another device" there (a QR code or a code, good for ten minutes).
 
 **From a session (resets, or when nobody can sign in):** `pnpm user:add` keeps working. Passwords come from an environment variable, never from the command line. Running the command again for an existing username changes their name, color and password and signs them out everywhere, which is how a forgotten password is reset. People change their own in the app (account menu → Change password). A reset leaves their passkeys alone; remove those in the app (account menu → Passkeys) if a device is lost.
 
@@ -81,6 +81,8 @@ The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily pur
 ## Claude drafting ideas
 
 Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)) uses the `ANTHROPIC_API_KEY` secret, already set on the live Worker (`pnpm exec wrangler secret put ANTHROPIC_API_KEY`; it is kept across `pnpm ship`). Without it the feature is hidden. Locally, put `ANTHROPIC_API_KEY=sk-ant-…` in `.dev.vars` (never committed). The e2e tests and screenshots don't need a key: they point `ANTHROPIC_BASE_URL` at a stand-in server (`scripts/lib/fake-claude.ts`). The 5-minute cron also finishes drafts whose request was lost.
+
+The same key lets Claude suggest how a print went from its photo ([0023](decisions/0023-claude-reads-a-print-from-its-photo.md)). Every read is a row in `photo_reads`: `pnpm exec wrangler d1 execute spaghetti --remote --command "SELECT status, run_outcome, detail, created_at FROM photo_reads ORDER BY created_at DESC LIMIT 10"` says why a photo got no suggestion (`unsure`, `refusal`, `api_error` with its HTTP status in `detail`, `timeout`, `cap`, `too_large`).
 
 If a real link doesn't draft, read why from the runs (never the page's content or the key, only statuses and codes):
 

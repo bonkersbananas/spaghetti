@@ -17,6 +17,7 @@ import { OutcomeChip } from "@/components/builds/Outcome";
 import { PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
@@ -37,6 +38,7 @@ import {
   ArrowRightIcon,
   BuildsIcon,
   CheckIcon,
+  CommentIcon,
   CompareIcon,
   FinishIcon,
   IdeasIcon,
@@ -276,6 +278,11 @@ function Build({ item }: { item: ItemView }) {
       setSelected(null);
     } else remove();
   };
+  // Counts up each time something asks to write a comment: the M key, the palette.
+  const [writeAsk, setWriteAsk] = useState(0);
+  const comment = () => {
+    if (canEdit(item.pending)) setWriteAsk((n) => n + 1);
+  };
   useScreenActions("This build", [
     ...(compareFound?.attempt
       ? [
@@ -323,6 +330,14 @@ function Build({ item }: { item: ItemView }) {
             run: () => canEdit(item.pending) && reopenBuild(queryClient, item),
           },
         ]),
+    {
+      id: "comment",
+      label: "Say something about this build",
+      icon: CommentIcon,
+      shortcut: "buildComment",
+      keywords: "comment message talk write reply chat",
+      run: comment,
+    },
   ]);
   useRememberItem({
     id: item.id,
@@ -342,6 +357,7 @@ function Build({ item }: { item: ItemView }) {
     buildPhotoPrevious: gallery.length > 1 ? () => selectPhoto(photoIndex - 1) : undefined,
     buildPhotoNext: gallery.length > 1 ? () => selectPhoto(photoIndex + 1) : undefined,
     buildDelete: deleteSelectedOrBuild,
+    buildComment: item.pending ? undefined : comment,
   });
 
   // The moment a build that took some failing gets marked done.
@@ -600,10 +616,16 @@ function Build({ item }: { item: ItemView }) {
               </p>
             </div>
 
+            {/* On a phone the thread comes before the closing actions, which stay the last thing on the page. */}
+            {!isDesktop && !item.pending && (
+              <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-12" />
+            )}
             {!isDesktop && active && <div className="mt-8 flex items-center justify-center gap-3">{stageActions}</div>}
           </div>
         </Section>
       </div>
+
+      {isDesktop && !item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
 
       {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
       {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (

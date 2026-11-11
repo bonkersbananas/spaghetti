@@ -7,6 +7,7 @@ import { itemDrafts, items } from "../db/schema.ts";
 import { draftsEnabled, runDraft, startDraft, toApiDraft, undoDraft } from "../draft/run.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { photoReadsEnabled } from "../photo-read/run.ts";
 
 const body = z.object({ url: z.string().max(2000).optional() });
 
@@ -16,7 +17,9 @@ const body = z.object({ url: z.string().max(2000).optional() });
  * app never offers them.
  */
 export const draftRoutes = new Hono<AppEnv>()
-  .get("/features", (c) => c.json<FeaturesResponse>({ drafts: draftsEnabled(c.env) }))
+  .get("/features", (c) =>
+    c.json<FeaturesResponse>({ drafts: draftsEnabled(c.env), photoReads: photoReadsEnabled(c.env) }),
+  )
   /**
    * Asks for the draft and, because the browser keeps this request open, does it here: an Opus call that reads a
    * page can outlast what waitUntil allows. If the browser goes away first, the cron picks the job up.

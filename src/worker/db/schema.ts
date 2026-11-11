@@ -63,7 +63,7 @@ export type Session = typeof sessions.$inferSelect;
 /**
  * A passkey (WebAuthn credential) that signs one person in on one device. `id` is the credential id
  * (base64url), `publicKey` the COSE key (base64url): nothing in here can sign in without the device.
- * `counter` and `backedUp` are checked and kept up to date at every sign-in (docs/decisions/0023).
+ * `counter` and `backedUp` are checked and kept up to date at every sign-in (docs/decisions/0025).
  */
 export const passkeys = sqliteTable(
   "passkeys",
@@ -393,6 +393,41 @@ export const draftRuns = sqliteTable("draft_runs", {
   detail: text("detail"),
 });
 
+/**
+ * Claude looking at one attempt photo (decision 0023): the job, its answer and the record of the run, in one row per
+ * photo (a photo is never read twice). Also what the day's cap counts (rows with `ranAt`).
+ */
+export const photoReads = sqliteTable(
+  "photo_reads",
+  {
+    photoId: text("photo_id")
+      .primaryKey()
+      .references(() => photos.id, { onDelete: "cascade" }),
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull(),
+    /** reading: waiting or running; read: a suggestion; unsure: Claude couldn't tell; failed: the call didn't work; skipped: the attempt had its outcome first. */
+    status: text("status").$type<"reading" | "read" | "unsure" | "failed" | "skipped">().notNull(),
+    outcome: text("outcome").$type<Outcome>(),
+    failureTags: text("failure_tags", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    successNotes: text("success_notes", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    reason: text("reason"),
+    /** When a worker took the job; a claim older than a few minutes is abandoned (the cron picks it up). */
+    claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+    tries: integer("tries").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** When the call to Claude was made (what the cap counts); null when it never got that far. */
+    ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+    /** How it ended: "read", or why not (see worker/photo-read/claude.ts). */
+    runOutcome: text("run_outcome"),
+    /** The rest of the diagnosis as JSON: model, stop reason, HTTP status, error type, the SDK's message, how long it took. */
+    detail: text("detail"),
+  },
+  (table) => [index("photo_reads_attempt_idx").on(table.attemptId, table.createdAt)],
+);
+
+export type PhotoReadRow = typeof photoReads.$inferSelect;
 export type ItemDraftRow = typeof itemDrafts.$inferSelect;
 
 export type Item = typeof items.$inferSelect;
@@ -702,3 +737,50 @@ export interface DraftResult {
   /** The photos it stored on the idea, so undo can take them off again. */
   photoIds: string[];
 }
+
+/**
+ * A comment in the short thread under an idea or build. The client picks the id (so sending is idempotent and
+ * optimistic), `authorId` is the person it counts as (an agent's comment is its owner's, with `via` naming the
+ * agent), `editedAt` is set once the body changed. Deleting is soft with an undo; the daily purge removes it
+ * after 30 days (decision 0006). `notifiedAt` is when a push for it was claimed (null: not yet), so a burst of
+ * comments is told in one push.
+ */
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    via: text("via"),
+    body: text("body").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    editedAt: integer("edited_at", { mode: "timestamp_ms" }),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+    notifiedAt: integer("notified_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("comments_item_idx").on(table.itemId, table.createdAt)],
+);
+
+/**
+ * How far one person has read one thread: the comments of the other person created after `readAt` are unread
+ * for them. Per person, never shared (decision 0024).
+ */
+export const commentReads = sqliteTable(
+  "comment_reads",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    readAt: integer("read_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
+);
+
+export type CommentRow = typeof comments.$inferSelect;

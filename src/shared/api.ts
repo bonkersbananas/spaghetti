@@ -5,6 +5,7 @@ import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
+import type { PhotoRead } from "./photo-read.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 
 /** A person as the client sees them: never includes credentials. */
@@ -90,6 +91,11 @@ export interface Attempt {
   endedAt: number | null;
   /** A failure tag the printer suggests (a failed or cancelled print, spaghetti seen). A suggestion, not a verdict. */
   suggestedFailureTag: string | null;
+  /**
+   * What Claude made of the attempt's photo (decision 0023): "Looking at the photo…" while it reads, then a
+   * suggested outcome with tags and a reason. Never an outcome of its own; null when there is nothing to show.
+   */
+  photoRead: PhotoRead | null;
   /** The one-line note. */
   note: string;
   /** Slugs of failure tags (built in or people's own). */
@@ -183,6 +189,8 @@ export interface Item {
 export interface FeaturesResponse {
   /** Claude can draft an idea from a model page (the Worker has an ANTHROPIC_API_KEY). */
   drafts: boolean;
+  /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
+  photoReads: boolean;
 }
 
 /** POST and DELETE /api/items/:id/draft. */
@@ -396,7 +404,7 @@ export interface FacetsResponse {
 }
 
 /** An attempt without "what changed" or its file (search results and suggestions show it on its own). */
-export type AttemptSummary = Omit<Attempt, "changes" | "file">;
+export type AttemptSummary = Omit<Attempt, "changes" | "file" | "photoRead">;
 
 /** An attempt found by search or offered as "what worked last time". */
 export interface AttemptHit {

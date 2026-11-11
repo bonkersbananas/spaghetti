@@ -3,7 +3,7 @@ import type { PhotoVariant } from "../shared/api.ts";
 import { CHANGES_KEEP_MS } from "../shared/changes.ts";
 import { PURGE_AFTER_MS } from "../shared/deleted.ts";
 import { getDb } from "./db/index.ts";
-import { attemptFiles, attempts, changes, items, photos, recipes, spools } from "./db/schema.ts";
+import { attemptFiles, attempts, changes, comments, items, photos, recipes, spools } from "./db/schema.ts";
 
 export function photoKey(photoId: string, variant: PhotoVariant): string {
   return `photos/${photoId}/${variant}`;
@@ -95,6 +95,7 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     .where(and(isNotNull(items.deletedAt), lt(items.deletedAt, cutoff)))
     .returning({ id: items.id });
   await db.delete(recipes).where(and(isNotNull(recipes.deletedAt), lt(recipes.deletedAt, cutoff)));
+  await db.delete(comments).where(and(isNotNull(comments.deletedAt), lt(comments.deletedAt, cutoff)));
   // The change feed keeps a month: anyone who was away longer is told to reload everything.
   // The newest row stays however old, so the cursor never goes back to a smaller number.
   await db

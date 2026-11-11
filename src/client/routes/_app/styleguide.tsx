@@ -8,6 +8,7 @@ import { CardSection } from "./-styleguide/cards";
 import { ChipSection } from "./-styleguide/chips";
 import { ColorSection } from "./-styleguide/color";
 import { ControlSection } from "./-styleguide/controls";
+import { ConversationSection } from "./-styleguide/conversation";
 import { ElevationSection } from "./-styleguide/elevation";
 import { EmptySection } from "./-styleguide/empty";
 import { FieldSection } from "./-styleguide/fields";
@@ -49,6 +50,7 @@ const toc = [
   ["controls", "Controls"],
   ["chips", "Chips"],
   ["avatars", "Avatars"],
+  ["conversation", "Conversation"],
   ["cards", "Cards"],
   ["photos", "Photos"],
   ["builds", "Builds & attempts"],
@@ -95,6 +97,7 @@ function Styleguide() {
           <ControlSection />
           <ChipSection />
           <AvatarSection />
+          <ConversationSection />
           <CardSection />
           <PhotoSection />
           <BuildsSection />

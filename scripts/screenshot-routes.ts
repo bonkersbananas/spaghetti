@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -181,6 +182,62 @@ async function openIdea(page: Page, id: string) {
   await page.goto(`/ideas/${id}`);
   await page.locator("h1").first().waitFor({ state: "attached" });
   await page.getByRole("button", { name: "Start building" }).first().waitFor();
+}
+
+/** The builds the photo-read shots make (removed again by their cleanup). */
+const photoReadBuilds: string[] = [];
+
+/**
+ * A build whose print is off the bed, with a camera photo on it, so Claude reads it (the stand-in answers from a word in
+ * the title, scripts/lib/fake-claude.ts); opens the build's page. The photo goes in the bridge's way.
+ */
+async function printWithPhoto(page: Page, title: string) {
+  const origin = new URL(page.url()).origin;
+  const headers = { Origin: origin };
+  const itemId = crypto.randomUUID();
+  const attemptId = crypto.randomUUID();
+  photoReadBuilds.push(itemId);
+  await page.request.post("/api/items", { headers, data: { id: itemId, title, stage: "building" } });
+  await page.request.post(`/api/items/${itemId}/attempts`, {
+    headers,
+    data: { id: attemptId, printedAt: Date.now() - 95 * 60_000, settings: { estimatedMinutes: 90 } },
+  });
+  await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 12 * 60_000 } });
+  const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
+  await page.request.put(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, {
+    headers,
+    multipart: { width: "1280", height: "960", color: "#8d7a66", attemptId, large: file, thumb: file },
+  });
+  await page.goto(`/builds/${itemId}`);
+  await page.getByRole("button", { name: "Attempt 1: off the bed. Open" }).waitFor();
+  return { itemId, attemptId };
+}
+
+/** Opens the attempt's sheet from its card (the card's open button is under its content: click its corner). */
+async function openOffBedSheet(page: Page) {
+  await page.getByRole("button", { name: /off the bed\. Open/ }).click({ position: { x: 24, y: 24 } });
+  await page.getByRole("dialog").waitFor();
+}
+
+async function removePhotoReadBuilds(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of photoReadBuilds.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+}
+
+/** Scrolls an idea's or build's thread to the foot of the screen, once its comments (or the empty line) are there. */
+async function showThread(page: Page, withComments = true) {
+  await page.locator("h1").first().waitFor({ state: "attached" });
+  const thread = page.locator("section[aria-labelledby^='thread-']");
+  await thread.waitFor();
+  if (withComments) await thread.getByRole("list", { name: "Comments" }).waitFor();
+  else
+    await page
+      .getByRole("textbox", { name: /Say something to/ })
+      .or(page.getByRole("button", { name: /Say something to/ }))
+      .first()
+      .waitFor();
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 }
 
 const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
@@ -951,6 +1008,29 @@ export const shots: Shot[] = [
       await links.evaluate((element) => element.scrollIntoView({ block: "center" }));
     },
   },
+  // The thread under an idea and a build (one comment unread on the idea), the empty one, the composer in use, and the card's unread mark.
+  // First: opening a thread marks it read.
+  {
+    name: "comments-unread-card",
+    path: "/ideas",
+    selector: "li:has(a:has-text('Desk tidy-up'))",
+  },
+  { name: "comments-idea", path: `/ideas/${SEED_IDS.deskTidy}`, prepare: (page) => showThread(page) },
+  { name: "comments-build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, prepare: (page) => showThread(page) },
+  { name: "comments-empty", path: `/ideas/${SEED_IDS.desiccantHook}`, prepare: (page) => showThread(page, false) },
+  {
+    name: "comments-composing",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await showThread(page);
+      const phone = (page.viewportSize()?.width ?? 1440) < 768;
+      if (phone) await page.getByRole("button", { name: /Say something to/ }).click();
+      const field = page.getByRole("textbox", { name: /Say something to/ });
+      await field.click();
+      await field.fill("Perfect, I'll print the bins tonight. Is the blue PETG in slot B2 or still on the shelf?");
+      await page.waitForTimeout(400);
+    },
+  },
   {
     name: "undo",
     path: "/ideas",
@@ -1201,6 +1281,50 @@ export const shots: Shot[] = [
         headers: { Origin: new URL(page.url()).origin },
         data: { outcome: null, failureTags: [] },
       });
+    },
+  },
+  // Claude read the bridge's photo of the drawer divider: the sheet hints Spaghetti, not picked, with why ...
+  {
+    name: "attempt-photo-read-spaghetti",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      await openOffBedSheet(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("radio", { name: /suggested/ })
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  // ... one it reads as a good print ...
+  {
+    name: "attempt-photo-read-worked",
+    path: "/builds",
+    prepare: async (page) => {
+      await printWithPhoto(page, "Spice jar lid");
+      const dialog = page.getByRole("dialog");
+      await openOffBedSheet(page);
+      await dialog.getByRole("radio", { name: /Worked suggested/ }).waitFor({ timeout: 30_000 });
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // ... and while it is still looking (the stand-in takes ten seconds for a "slow" one).
+  {
+    name: "attempt-photo-read-looking",
+    path: "/builds",
+    prepare: async (page) => {
+      await printWithPhoto(page, "Slow lid spaghetti");
+      await openOffBedSheet(page);
+      await page.getByRole("dialog").getByText("Looking at the photo…").waitFor({ timeout: 8_000 });
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
     },
   },
   {

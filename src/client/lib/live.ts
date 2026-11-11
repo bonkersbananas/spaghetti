@@ -87,6 +87,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "printer":
         roots.add("spools").add("printer").add("upkeep");
         break;
+      case "comment":
+        roots.add("comments");
+        break;
       case "recipe":
         roots.add("recipes").add("search").add("what-worked");
         break;
@@ -109,7 +112,8 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
         roots.add("passkeys");
         break;
     }
-    if (change.itemId && change.entity !== "spool") details.add(change.itemId);
+    // A comment shows in its thread and on cards, not in the item itself.
+    if (change.itemId && change.entity !== "spool" && change.entity !== "comment") details.add(change.itemId);
   }
   if (lists) void queryClient.invalidateQueries({ queryKey: [itemKeys.all[0], "list"] });
   for (const id of details) void queryClient.invalidateQueries({ queryKey: itemKeys.detail(id) });

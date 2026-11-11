@@ -25,6 +25,26 @@ const selectedStyles: Record<Outcome, string> = {
   failed: "bg-tomato-soft text-tomato-ink ring-tomato",
 };
 
+/**
+ * Claude's suggestion from the photo, on the outcome's button: its own look, not the picked one. No fill and a dashed
+ * ring in the outcome's color, the icon in that color; tapping it turns it into the normal picked style.
+ */
+const suggestedStyles: Record<Outcome, string> = {
+  success: "text-ink-soft border-2 border-dashed border-basil/70",
+  partial: "text-ink-soft border-2 border-dashed border-semolina",
+  failed: "text-ink-soft border-2 border-dashed border-tomato/70",
+};
+const suggestedIcons: Record<Outcome, string> = {
+  success: "text-basil",
+  partial: "text-semolina",
+  failed: "text-tomato",
+};
+const suggestedCaptions: Record<Outcome, string> = {
+  success: "text-basil-ink",
+  partial: "text-semolina-ink",
+  failed: "text-tomato-ink",
+};
+
 /** The dot on the timeline: the outcome's color, or semolina while printing. */
 export const outcomeDots: Record<Outcome | "printing" | "offBed", string> = {
   success: "bg-basil",
@@ -40,6 +60,11 @@ interface OutcomePickerProps {
   onChange: (outcome: Outcome) => void;
   /** "lg" in the attempt sheet (one tap, thumb-sized); "md" where it is a secondary choice. */
   size?: "md" | "lg";
+  /**
+   * The outcome Claude suggests from the photo (decision 0023): hinted on its button, never picked. Tapping it picks it
+   * like any other; nothing is saved until then.
+   */
+  suggested?: Outcome | null;
   className?: string;
 }
 
@@ -48,7 +73,7 @@ interface OutcomePickerProps {
  * picked one in its color. A failure is recorded with the same care as a
  * success, so spaghetti is never styled as an error.
  */
-export function OutcomePicker({ value, onChange, size = "lg", className }: OutcomePickerProps) {
+export function OutcomePicker({ value, onChange, size = "lg", suggested = null, className }: OutcomePickerProps) {
   // The picked icon springs in, but only for a pick made here: opening an attempt that already has an outcome doesn't.
   const [picked, setPicked] = useState(false);
   return (
@@ -56,6 +81,7 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
       {OUTCOMES.map((outcome) => {
         const OutcomeIcon = outcomeIcons[outcome];
         const selected = value === outcome;
+        const hinted = !value && suggested === outcome;
         return (
           // biome-ignore lint/a11y/useSemanticElements: big tactile buttons; a radio input can't be styled like this.
           <button
@@ -70,10 +96,12 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
             }}
             className={cn(
               "pressable focus-ring flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
-              size === "lg" ? "text-body h-22 md:h-20" : "text-small h-16 gap-1",
+              size === "lg" ? "text-body h-22 md:h-20" : cn("text-small gap-1", suggested && !value ? "h-19" : "h-16"),
               selected
                 ? cn(selectedStyles[outcome], "ring-2 ring-inset")
-                : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
+                : hinted
+                  ? cn(suggestedStyles[outcome], "hover:bg-ink/4")
+                  : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
             )}
           >
             {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
@@ -83,11 +111,20 @@ export function OutcomePicker({ value, onChange, size = "lg", className }: Outco
               initial={selected && picked ? { scale: 0.8 } : false}
               animate={{ scale: 1 }}
               transition={spring.snappy}
-              className="flex"
+              className={cn("flex", hinted && suggestedIcons[outcome])}
             >
               <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
+            {suggested && !value && (
+              // Every button keeps the caption's line, so the icons and words line up across the row.
+              <span
+                aria-hidden={!hinted}
+                className={cn("text-micro -mt-1 font-normal", hinted ? suggestedCaptions[outcome] : "invisible")}
+              >
+                suggested
+              </span>
+            )}
           </button>
         );
       })}

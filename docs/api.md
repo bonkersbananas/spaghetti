@@ -28,8 +28,8 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | Scope | Allows |
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
-| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`. |
-| `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `PUT /items/:id/parts`, `POST /tags`. |
+| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`, `POST /items/:id/comments` and `PATCH /comments/:id` (your agent's own comments; see Comments). |
+| `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `PUT /items/:id/parts`, `POST /tags`, `POST /items/:id/comments` and `PATCH /comments/:id` (as with `capture`). |
 | `printer` | `POST /printer/upkeep`, `PATCH /printer/upkeep/:id`, `POST /printer/upkeep/:id/done`, `PUT /printer/upkeep/logs/:logId/photo/:photoId`, `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat, progress and unknown trays), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
 The rules are one table, `src/worker/auth/scopes.ts`: any route not listed there is person-only, so a new endpoint is closed to tokens until it is given a scope. Routes that need to look at the body (a photo's `attemptId`, the fields of a `PATCH`) narrow it with `canUse` / `missingScope`. `test/worker/agents.test.ts` has a case per row.
@@ -70,6 +70,18 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 - `DELETE /recipes/:id` and `POST /recipes/:id/restore`: soft delete and its undo, people only.
 - A recipe carries `source` (`attemptId`, `itemId`, `title`, `number`, `photo`) while that attempt and its build exist, else `null`.
 
+## Comments
+
+The short thread under an idea or build (decision [0024](decisions/0024-comments-read-state-and-push-batching.md)). A comment is `{ id, itemId, authorId, via, body, createdAt, editedAt }`: `authorId` is the person it counts as (an agent's comment is its owner's, with `via` the agent's id, shown as "via Claude for Alex"), `editedAt` is null until the text changes.
+
+- `GET /items/:id/comments` (`read`): `{ comments, readAt }`, oldest first, deleted ones left out. `readAt` is how far the signed-in person has read (epoch ms, null if never); the other person's comments after it are the unread ones.
+- `POST /items/:id/comments` `{ id, body }` (`capture` or `attempts`): `body` is trimmed, 1 to 2000 characters. Idempotent on `id` (a repeat returns the same comment). A person writing also counts as having read the thread; an agent doesn't. Records a `comment` change (`created`) for the item.
+- `PATCH /comments/:id` `{ body }` (`capture` or `attempts`): only your own comment (`403 not_yours`), and for a token only one that agent wrote. An unchanged text isn't an edit.
+- `DELETE /comments/:id` and `POST /comments/:id/restore`: soft delete and its undo, people only, your own comments only; purged 30 days after.
+- `POST /items/:id/comments/read` and `GET /comments/unread` (`{ threads: [{ itemId, count, latestAt }] }`): the signed-in person's read state; people only.
+
+A new comment also sends one web push to the other person, with a short wait so a burst is one push. Comments are not in search yet. `GET /builds/:id/story.md` ends with a "Comments" section.
+
 ## Parts and quantities
 
 A build may be made of parts ("Hull half" ×2, "Deck" ×1); most builds have none. Parts come with the item (`item.parts`, in order: `{ id, itemId, name, quantity, position, photoId }`), and an attempt says what it printed with `attempt.parts`: `[{ partId, count }]`, the good pieces that came out (while the print is still printing, how many are on the plate; they count once it has an outcome). Worked and partly worked prints count their pieces; a spaghetti counts none unless counts are sent. A part's progress is the sum of its counts over the build's finished attempts (`shared/parts.ts`).
@@ -101,7 +113,7 @@ An idea can be queued as **Up next**: `upNext` on an item is its place in the qu
 
 ## Passkeys, sign-in links, invites and devices (people only)
 
-Everything here is person-only: a token gets `403 person_only` on every route below, including the reads, and can never add a passkey, make a link or an invite, or see any of them ([0023](decisions/0023-passkeys-sign-in-links-and-invites.md)). Types are in `src/shared/signing-in.ts`. Secrets are single-use, only their SHA-256 is stored, and they are shown once, in the response that makes them. Ceremonies use `@simplewebauthn`'s JSON: `{ ceremonyId, options }` to start, and `{ ceremonyId, response }` to answer; a ceremony is good for five minutes and one answer.
+Everything here is person-only: a token gets `403 person_only` on every route below, including the reads, and can never add a passkey, make a link or an invite, or see any of them ([0025](decisions/0025-passkeys-sign-in-links-and-invites.md)). Types are in `src/shared/signing-in.ts`. Secrets are single-use, only their SHA-256 is stored, and they are shown once, in the response that makes them. Ceremonies use `@simplewebauthn`'s JSON: `{ ceremonyId, options }` to start, and `{ ceremonyId, response }` to answer; a ceremony is good for five minutes and one answer.
 
 Signed in (cookie):
 
@@ -120,7 +132,7 @@ Not signed in (rate limited; `429 rate_limited`):
 
 Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea from it ([decision 0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)). It needs the Worker's `ANTHROPIC_API_KEY` secret (locally in `.dev.vars`); without it everything below answers `404` and the app shows nothing about it.
 
-- `GET /api/features`: `{ drafts: boolean }`, whether the key is set.
+- `GET /api/features`: `{ drafts: boolean, photoReads: boolean }`, whether the key is set (both follow the one secret).
 - `POST /api/items/:id/draft` (optional body `{ url }`; else the first model link in the idea's note): makes the idea's draft job (`status: "reading"`) and, because the caller keeps the request open, does it before answering with `{ draft }`. `400` when there is no link on one of the three sites. Asking again after a failure retries; a draft that is reading or done is left as it is.
 - `DELETE /api/items/:id/draft`: undo. Takes back the title and note it wrote (only while they still say exactly that), its pictures, and the draft itself; `404` when there is none.
 - Items carry `draft` (`null`, or `status` reading, drafted or failed, `failure` unreadable, refused, timeout or cap, `applied` which of title, note and photos it filled, its `title` and `note`, and `findings`: designer, license, material, plate, settings). A change to it is an `item` update in the change feed.
@@ -129,6 +141,16 @@ Claude can read a MakerWorld, Printables or Thingiverse page and draft the idea 
 - People only: no scope lists these routes, so a token gets `403 person_only`. `POST /api/capture` starts a draft by itself when the capture is just a model link, for a person's session or a token whose only scope is `capture` (the sharing Shortcut), never for an agent that can do more.
 - Every call is a row in `draft_runs` with its `outcome` and a `detail` (statuses and codes, no page content); how to read them is in [deploy.md](deploy.md). The page's title also goes into the link preview cache, so the note's link card shows it.
 - Capped at 30 Claude calls a day for the whole workspace (UTC days, `draft_runs`); past it a draft fails with `failure: "cap"`.
+
+## Reading a print from its photo (automatic)
+
+When an attempt that has no outcome yet gets a photo (`PUT /api/items/:id/photos/:photoId` with an `attemptId`), Claude looks at the photo's large variant and *suggests* how it went ([decision 0023](decisions/0023-claude-reads-a-print-from-its-photo.md)). Nothing is called to start it: the upload does, after its response (`waitUntil`), and the 5-minute cron picks up a read that was lost. It needs `ANTHROPIC_API_KEY`; without it nothing happens and nothing shows.
+
+- Attempts carry `photoRead`: `null`, or `{ status: "reading", photoId, … }` while Claude looks, or `{ status: "read", photoId, outcome, failureTags, successNotes, reason }` with the built-in tag slugs and one short sentence. It is only ever a suggestion: the attempt's own `outcome`, `failureTags`, `successNotes` and `note` are never written by it. A photo Claude can't tell from, a refusal and a failed call all leave `photoRead` `null` (or the suggestion of an earlier photo). A newer photo replaces the suggestion; the same photo is never read twice. A change to it is an `attempt` update in the change feed.
+- Who starts it: a signed-in person, or a token with both the `attempts` and `printer` scopes (the printer bridge's camera frame). Any other agent's photo is not read.
+- The bridge's frame is stored as the original in both variants (`needsResize`); it is read as it is when it is a JPEG or WebP of at most 4.8 MB and 8000 px a side (the API's limits), and not read otherwise.
+- Every read is a row in `photo_reads` with its status, `run_outcome` (`read`, `unsure`, `refusal`, `api_error`, `timeout`, `cap`, `too_large`, …) and a `detail` (model, stop reason, status, how long it took); how to read them is in [deploy.md](deploy.md).
+- Capped at 30 reads a day for the whole workspace (UTC days, rows with `ran_at`); past it the read is marked `cap` and nothing is suggested.
 
 ## Upkeep and drying
 

@@ -1,6 +1,6 @@
 /**
  * Signing in beyond a password: passkeys, "sign in on another device" links and invites
- * (docs/decisions/0023-passkeys-sign-in-links-and-invites.md). Types, limits and the words
+ * (docs/decisions/0025-passkeys-sign-in-links-and-invites.md). Types, limits and the words
  * the app uses, shared by the Worker and the browser.
  */
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";

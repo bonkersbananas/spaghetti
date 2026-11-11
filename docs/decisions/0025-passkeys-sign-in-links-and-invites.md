@@ -1,4 +1,4 @@
-# 0023. Passkeys, sign-in links and invites, all single-use and all in the app
+# 0025. Passkeys, sign-in links and invites, all single-use and all in the app
 
 Status: Accepted
 
