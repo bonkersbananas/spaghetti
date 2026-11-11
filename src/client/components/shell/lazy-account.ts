@@ -12,3 +12,5 @@ export const ChangePasswordSheet = lazy(() =>
 /** "Add a photo" and the crop sheet: their code loads when the account menu opens. */
 export const ProfilePhotoRow = lazy(() => import("./ProfilePhoto").then((module) => ({ default: module.PhotoRow })));
 export const ProfilePhotoCrop = lazy(() => import("./ProfilePhoto").then((module) => ({ default: module.PhotoCrop })));
+export const loadThemeSwitch = () => import("./ThemeSwitch");
+export const ThemeSwitch = lazy(() => loadThemeSwitch().then((module) => ({ default: module.ThemeSwitch })));

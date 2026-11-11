@@ -113,15 +113,26 @@ export function Sidebar() {
  * after the first screen, or when the button is pressed first; until then a look-alike button stands in.
  */
 function SidebarAccount({ user }: { user: Person }) {
-  const [wanted, setWanted] = useState<"warm" | "open" | null>(null);
+  // Whether the menu's code is wanted (idle time or the first press), and whether the menu is open. The open state
+  // lives here, so a press opens it even when it lands on the stand-in just as the real menu mounts.
+  const [wanted, setWanted] = useState(false);
+  const [open, setOpen] = useState(false);
   useWhenIdle(() => {
-    void loadAccountMenu().then(() => setWanted((current) => current ?? "warm"));
+    void loadAccountMenu().then(() => setWanted(true));
   });
-  const stand = <AccountButton user={user} onClick={() => setWanted("open")} />;
+  const stand = (
+    <AccountButton
+      user={user}
+      onClick={() => {
+        setWanted(true);
+        setOpen(true);
+      }}
+    />
+  );
   if (!wanted) return stand;
   return (
     <Suspense fallback={stand}>
-      <AccountMenu user={user} defaultOpen={wanted === "open"} />
+      <AccountMenu user={user} open={open} onOpenChange={setOpen} />
     </Suspense>
   );
 }

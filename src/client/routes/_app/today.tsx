@@ -3,6 +3,7 @@ import { monthLabel, summaryLine } from "@shared/journal";
 import { backBurnerIdea } from "@shared/today";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { lazy, Suspense, useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
@@ -13,6 +14,7 @@ import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
+import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
@@ -23,10 +25,12 @@ import { printingAttempts } from "@/lib/builds";
 import { useCapture } from "@/lib/capture";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { journalQuery, summaryQuery } from "@/lib/journal";
+import { duration, ease } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { printerQuery, spoolsQuery } from "@/lib/pantry";
 import { peopleQuery } from "@/lib/queries";
 import { useDueUpkeep } from "@/lib/upkeep";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
@@ -53,6 +57,8 @@ function thisMonth(now: number) {
  */
 function Today() {
   const navigate = useNavigate();
+  const reduce = useReducedMotion();
+  const isDesktop = useIsDesktop();
   const { setOpen } = useCapture();
   const now = useNow(60_000);
   const builds = useBuilds();
@@ -119,17 +125,38 @@ function Today() {
   const bedSection =
     onBed.length > 0 ? (
       <Section id="today-bed" title="On the bed" size="overline" count={onBed.length > 1 ? onBed.length : undefined}>
-        <div className="flex flex-col gap-4">
-          {onBed.map(({ item, attempt }, index) => (
-            <PrintingCard
-              compact={index > 0}
-              key={attempt.id}
-              item={item}
-              attempt={attempt}
-              person={byId.get(attempt.createdBy)}
-              via={via(attempt.createdVia)}
-            />
-          ))}
+        {/* A print that gets its answer fades and collapses while the others move up; on phones the
+            next one grows into the big card. With reduced motion everything is at its end state at once. */}
+        <div className="flex flex-col">
+          <AnimatePresence initial={false}>
+            {onBed.map(({ item, attempt }, index) => (
+              <m.div
+                key={attempt.id}
+                // The space under a card is its own padding, so a card that leaves takes its gap with it.
+                className="pb-4 last:pb-0"
+                exit={{
+                  opacity: 0,
+                  height: 0,
+                  paddingBottom: 0,
+                  overflow: "hidden",
+                  // Faded before the collapse shows a clipped slice of it.
+                  transition: reduce
+                    ? { duration: 0 }
+                    : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
+                }}
+              >
+                <AutoHeight trigger={isDesktop ? "row" : index > 0}>
+                  <PrintingCard
+                    compact={index > 0}
+                    item={item}
+                    attempt={attempt}
+                    person={byId.get(attempt.createdBy)}
+                    via={via(attempt.createdVia)}
+                  />
+                </AutoHeight>
+              </m.div>
+            ))}
+          </AnimatePresence>
         </div>
       </Section>
     ) : null;
@@ -186,7 +213,21 @@ function Today() {
                   <RowSkeleton />
                 </div>
               ) : (
-                bedSection
+                // The last print leaves the same way as the others, and the section with it.
+                <AnimatePresence initial={false}>
+                  {bedSection && (
+                    <m.div
+                      key="bed"
+                      exit={{
+                        opacity: 0,
+                        scale: 0.98,
+                        transition: { duration: reduce ? 0 : duration.base, ease: ease.inOut },
+                      }}
+                    >
+                      {bedSection}
+                    </m.div>
+                  )}
+                </AnimatePresence>
               )}
             </div>
             <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
