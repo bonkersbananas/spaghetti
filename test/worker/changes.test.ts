@@ -337,9 +337,13 @@ describe("what writes record", () => {
     expect(shape(await recorded(() => patch(`/api/shopping-items/${id}`, { bought: false })))).toEqual([
       ["shopping", "updated", id, null],
     ]);
-    expect(shape(await recorded(() => put("/api/shopping-items/order", { ids: [id] })))).toEqual([
+    const other = crypto.randomUUID();
+    await post("/api/shopping-items", { id: other, name: "Brush" });
+    // The list is Brush, Liquid glue: putting the glue first is a change; asking for the order it has is not.
+    expect(shape(await recorded(() => put("/api/shopping-items/order", { ids: [id, other] })))).toEqual([
       ["shopping", "updated", id, null],
     ]);
+    expect(await recorded(() => put("/api/shopping-items/order", { ids: [id, other] }))).toEqual([]);
     expect(shape(await recorded(() => del(`/api/shopping-items/${id}`)))).toEqual([["shopping", "deleted", id, null]]);
     expect(await recorded(() => del(`/api/shopping-items/${id}`), 404)).toEqual([]);
     expect(shape(await recorded(() => post(`/api/shopping-items/${id}/restore`)))).toEqual([
