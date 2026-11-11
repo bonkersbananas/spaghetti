@@ -278,7 +278,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               </>
             )}
           </div>
-          <LabelReadNote spool={spool} readOnly={readOnly} className="px-0.5" />
+          <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
         </div>
 
         <div className="flex min-w-0 flex-col gap-7 md:flex-3">
@@ -428,11 +428,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
                 size="sm"
                 label="Brand"
                 mark={fromLabel("brand")}
-                placeholder={waiting ? "Reading the label…" : "Bambu, Polymaker…"}
+                placeholder={waiting ? "" : "Bambu, Polymaker…"}
                 maxLength={60}
                 value={value.brand ?? ""}
                 onChange={(event) => change({ brand: event.target.value || null })}
-                className="flex-1"
+                className={waiting ? "sg-pulse flex-1" : "flex-1"}
               />
             </div>
 

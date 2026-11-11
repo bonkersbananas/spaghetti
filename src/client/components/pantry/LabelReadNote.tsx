@@ -13,6 +13,8 @@ const LabelSpoolsSheet = lazy(() => import("./LabelSpoolsSheet").then((m) => ({ 
 interface LabelReadNoteProps {
   spool: Spool;
   readOnly: boolean;
+  /** The title already says "Reading the label…": the line is only for screen readers. */
+  titled?: boolean;
   className?: string;
 }
 
@@ -21,7 +23,7 @@ interface LabelReadNoteProps {
  * couldn't be read, and, when the photo shows several spools, the way to look at the list before they are added.
  * Nothing when the read went fine (the fields say it themselves, marked "from the label").
  */
-export function LabelReadNote({ spool, readOnly, className }: LabelReadNoteProps) {
+export function LabelReadNote({ spool, readOnly, titled, className }: LabelReadNoteProps) {
   const queryClient = useQueryClient();
   const read = spool.labelRead;
   const [listing, setListing] = useState(false);
@@ -33,7 +35,7 @@ export function LabelReadNote({ spool, readOnly, className }: LabelReadNoteProps
   }, [read?.status]);
 
   if (!read) return null;
-  if (read.status === "reading") return <ReadingLine className={className} />;
+  if (read.status === "reading") return <ReadingLine className={titled ? "sr-only" : className} />;
 
   if (read.status === "multiple") {
     return (
