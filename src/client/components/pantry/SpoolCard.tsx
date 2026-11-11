@@ -8,6 +8,7 @@ import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
 import { photoSrc } from "@/lib/previews";
 import { spoolDragProps } from "./Ams";
+import { ReadingLine } from "./LabelReadNote";
 
 /**
  * A spool in the pantry grid: its label photo, or the spool itself in its
@@ -60,7 +61,11 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
           <span className={cn("text-small text-ink-faint truncate", !name.detail && "sr-only")}>
             {name.detail || spool.material}
           </span>
-          <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel className="mt-1.5" />
+          {spool.labelRead?.status === "reading" ? (
+            <ReadingLine className="text-caption mt-1.5" />
+          ) : (
+            <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel className="mt-1.5" />
+          )}
         </div>
       </Link>
     </li>

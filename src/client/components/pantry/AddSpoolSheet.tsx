@@ -2,15 +2,17 @@ import type { Spool } from "@shared/api";
 import { DEFAULT_NET_GRAMS } from "@shared/ledger";
 import { BRANDS, FINISHES, finishLabel, nearestColorName, QUICK_COLORS, SPOOL_MATERIALS } from "@shared/spools";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { TextField } from "@/components/ui/Field";
-import { CameraIcon, CheckIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
+import { CameraIcon, CheckIcon, ImageIcon, PlusIcon, SparkleIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
 import { SwatchPicker } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
+import { useLabelReadsEnabled } from "@/lib/label-read";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -46,6 +48,8 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
   const queryClient = useQueryClient();
   const { data: user } = useSuspenseQuery(sessionQuery);
   const isDesktop = useIsDesktop();
+  const navigate = useNavigate();
+  const labelReads = useLabelReadsEnabled();
   const id = useId();
   const [draft, setDraft] = useState<SpoolDraft>(() => blank(initial));
   // A color name typed by hand is kept; one we guessed follows the color.
@@ -53,32 +57,56 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
   const [photo, setPhoto] = useState<File | null>(null);
   const photoUrl = useObjectUrl(photo);
   const [otherMaterial, setOtherMaterial] = useState(false);
+  // What the person has set themselves: a label read may fill the rest, and the starting material and weight.
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when it opens.
   useEffect(() => {
     if (!open) return;
     setDraft(blank(initial));
     setNamedByHand(!!initial?.colorName);
+    setTouched(
+      new Set(
+        Object.entries(initial ?? {})
+          .filter(([, value]) => value != null)
+          .map(([key]) => key),
+      ),
+    );
     setOtherMaterial(!!initial?.material && !(SPOOL_MATERIALS as readonly string[]).includes(initial.material));
   }, [open]);
 
   const pickPhoto = (files: File[]) => {
     const file = files[0];
-    if (file) setPhoto(file);
+    if (!file) return;
+    // With Claude's key, a photo here is the label to read: the spool is saved with it at once.
+    if (labelReads) save(file);
+    else setPhoto(file);
   };
   const camera = useFilePicker({ camera: true, onFiles: pickPhoto, testId: "spool-camera-input" });
   const library = useFilePicker({ onFiles: pickPhoto, testId: "spool-photo-input" });
 
-  const change = (next: Partial<SpoolDraft>) => setDraft((current) => ({ ...current, ...next }));
+  const change = (next: Partial<SpoolDraft>) => {
+    setTouched((current) => new Set([...current, ...Object.keys(next)]));
+    setDraft((current) => ({ ...current, ...next }));
+  };
   const setColor = (hex: string, name?: string) =>
     change({ colorHex: hex, ...(namedByHand ? {} : { colorName: name ?? nearestColorName(hex) ?? null }) });
 
-  function save() {
-    if (!user || !draft.material.trim()) return;
-    const { spool, saved } = addSpool(queryClient, draft, user.id, photo ?? undefined);
+  function save(label?: File) {
+    if (!user || (!label && !draft.material.trim())) return;
+    const read = label
+      ? {
+          placeholders: (["material", "netGrams"] as const).filter(
+            (field) => !touched.has(field) || (field === "material" && !draft.material.trim()),
+          ),
+        }
+      : undefined;
+    const { spool, saved } = addSpool(queryClient, draft, user.id, label ?? photo ?? undefined, read);
     setPhoto(null);
     onOpenChange(false);
     onAdded?.(spool, saved);
+    // On its own page the fields fill in; where the sheet is part of a flow (loading a slot) it stays out of the way.
+    if (label && !onAdded) void navigate({ to: "/pantry/$spoolId", params: { spoolId: spool.id } });
   }
 
   return (
@@ -93,7 +121,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
           size={isDesktop ? "md" : "lg"}
           icon={CheckIcon}
           disabled={!draft.material.trim()}
-          onClick={save}
+          onClick={() => save()}
           className="max-md:flex-1"
         >
           Add to pantry
@@ -109,19 +137,34 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
       >
         {camera.input}
         {library.input}
-        <div className="flex gap-2.5">
-          {photo ? (
-            photoUrl && <PhotoThumb src={photoUrl} alt="Spool label" onRemove={() => setPhoto(null)} />
-          ) : (
-            <>
-              {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Snap the label" onClick={camera.open} />}
-              <AddPhotoTile
-                size="md"
-                icon={isDesktop ? PlusIcon : ImageIcon}
-                label={isDesktop ? "Add a photo" : "Library"}
-                onClick={library.open}
-              />
-            </>
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-2.5">
+            {photo ? (
+              photoUrl && <PhotoThumb src={photoUrl} alt="Spool label" onRemove={() => setPhoto(null)} />
+            ) : (
+              <>
+                {!isDesktop && (
+                  <AddPhotoTile
+                    size="md"
+                    icon={CameraIcon}
+                    label={labelReads ? "Read the label" : "Snap the label"}
+                    onClick={camera.open}
+                  />
+                )}
+                <AddPhotoTile
+                  size="md"
+                  icon={isDesktop ? (labelReads ? SparkleIcon : PlusIcon) : ImageIcon}
+                  label={isDesktop ? (labelReads ? "Read the label" : "Add a photo") : "Library"}
+                  onClick={library.open}
+                />
+              </>
+            )}
+          </div>
+          {labelReads && !photo && (
+            <p className="text-small text-ink-faint flex items-start gap-1.5">
+              <SparkleIcon size={14} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
+              Claude fills in what the label says. Anything you've set stays as you set it.
+            </p>
           )}
         </div>
 

@@ -1,4 +1,5 @@
 import type {
+  LabelReadResponse,
   PrinterResponse,
   Spool,
   SpoolAttemptsResponse,
@@ -22,6 +23,8 @@ export const spoolsQuery = queryOptions({
   queryKey: ["spools"] as const,
   queryFn: async () => (await api<SpoolsResponse>("/spools")).spools,
   staleTime: 60_000,
+  // While Claude reads a label the fields fill in, so ask again every few seconds until it is done.
+  refetchInterval: (query) => (query.state.data?.some((spool) => spool.labelRead?.status === "reading") ? 2500 : false),
 });
 
 /** How the printer is set up, and what is loaded where. */
@@ -54,11 +57,11 @@ export function usePrinterSetup(): PrinterSetup {
 /** Spools as matching and hints need them. */
 export const asSpoolLike = (spool: Spool): SpoolLike => spool;
 
-function patchSpools(queryClient: QueryClient, change: (spools: Spool[]) => Spool[]) {
+export function patchSpools(queryClient: QueryClient, change: (spools: Spool[]) => Spool[]) {
   queryClient.setQueryData<Spool[]>(spoolsQuery.queryKey, (spools) => (spools ? change(spools) : spools));
 }
 
-function patchSpool(queryClient: QueryClient, id: string, change: (spool: Spool) => Spool) {
+export function patchSpool(queryClient: QueryClient, id: string, change: (spool: Spool) => Spool) {
   patchSpools(queryClient, (spools) => spools.map((spool) => (spool.id === id ? change(spool) : spool)));
 }
 
@@ -83,6 +86,8 @@ export function addSpool(
   draft: SpoolDraft,
   createdBy: string,
   photo?: File,
+  /** Have Claude read the photo's label once it is saved; these are the fields the person hadn't set. */
+  read?: { placeholders: Array<"material" | "netGrams"> },
 ): { spool: Spool; saved: Promise<boolean> } {
   const now = Date.now();
   const spool: Spool = {
@@ -104,6 +109,7 @@ export function addSpool(
     slot: null,
     trayUuid: null,
     ...NO_LABEL,
+    labelRead: photo && read ? { status: "reading", photoId: "", spools: [] } : null,
     createdBy,
     createdAt: now,
     updatedAt: now,
@@ -127,7 +133,13 @@ export function addSpool(
         },
       });
       patchSpool(queryClient, spool.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
-      if (photo) void setSpoolPhoto(queryClient, spool.id, photo);
+      if (photo) {
+        const uploaded = setSpoolPhoto(queryClient, spool.id, photo);
+        if (read)
+          void uploaded.then((ok) =>
+            ok ? requestLabelRead(queryClient, spool.id, read.placeholders) : clearLabelRead(queryClient, spool.id),
+          );
+      }
       return true;
     } catch {
       patchSpools(queryClient, (spools) => spools.filter((s) => s.id !== spool.id));
@@ -226,8 +238,37 @@ export async function weighSpool(
   });
 }
 
+/** Reads the label in the spool's photo (already uploaded). The spool shows "Reading the label…" at once. */
+export async function requestLabelRead(
+  queryClient: QueryClient,
+  spoolId: string,
+  placeholders: Array<"material" | "netGrams"> = [],
+) {
+  patchSpool(queryClient, spoolId, (spool) => ({
+    ...spool,
+    labelRead: { status: "reading", photoId: spool.photo?.id ?? "", spools: [] },
+  }));
+  try {
+    const { spool } = await api<LabelReadResponse>(`/spools/${spoolId}/label-read`, {
+      method: "POST",
+      json: { placeholders },
+    });
+    patchSpool(queryClient, spoolId, (current) => ({
+      ...spool,
+      photo: current.photo ?? spool.photo,
+      slot: current.slot,
+    }));
+  } catch {
+    clearLabelRead(queryClient, spoolId);
+    toast.error("Couldn't start reading the label", "The spool is saved as it is. Try again from its page.");
+  }
+}
+
+export const clearLabelRead = (queryClient: QueryClient, spoolId: string) =>
+  patchSpool(queryClient, spoolId, (spool) => ({ ...spool, labelRead: null }));
+
 /** A new photo of the label: shown from the device at once, then uploaded. */
-export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, file: File) {
+export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, file: File): Promise<boolean> {
   try {
     const processed = await processPhoto(file);
     const photoId = crypto.randomUUID();
@@ -243,8 +284,10 @@ export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, f
     form.set("large", processed.large, "large");
     form.set("thumb", processed.thumb, "thumb");
     await api<SpoolResponse>(`/spools/${spoolId}/photo/${photoId}`, { method: "PUT", body: form });
+    return true;
   } catch (error) {
     toast.error("Couldn't save the photo", error instanceof Error ? error.message : undefined);
+    return false;
   }
 }
 
