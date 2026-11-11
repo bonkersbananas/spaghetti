@@ -34,3 +34,19 @@ test("J and K walk the cards on Ideas, Enter opens one", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/ideas\/[0-9a-f-]+$/);
 });
+
+test("G J still goes to the journal from a list where J walks the cards", async ({ page }) => {
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title: "Any idea" } });
+  await page.goto("/ideas");
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link")).toHaveCount(1);
+  await page.keyboard.press("g");
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(/\/journal$/);
+  // And on its own, J still walks.
+  await page.goto("/ideas");
+  const card = page.getByRole("list", { name: "Ideas" }).getByRole("link").first();
+  await expect(card).toBeVisible();
+  await page.keyboard.press("j");
+  await expect(card).toBeFocused();
+});
