@@ -9,6 +9,7 @@ import {
   summaryLine,
   weekLabel,
 } from "@shared/journal";
+import { mondayOf, weekRangeLabel } from "@shared/week";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -217,8 +218,16 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
           line && <p className="font-display text-title text-ink-soft">{line}</p>
         )}
       </header>
-      {month.groups.map((group) => (
-        <Group key={group.key} group={group} items={items} people={people} selected={selected} refs={refs} />
+      {month.groups.map((group, index) => (
+        <Group
+          key={group.key}
+          group={group}
+          weekEnds={mondayOf(group.start) !== mondayOf(month.groups[index + 1]?.start ?? 0)}
+          items={items}
+          people={people}
+          selected={selected}
+          refs={refs}
+        />
       ))}
     </section>
   );
@@ -226,11 +235,12 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
 
 function Group({
   group,
+  weekEnds,
   items,
   people,
   selected,
   refs,
-}: Omit<MonthProps, "month" | "first"> & { group: JournalGroup<Entry> }) {
+}: Omit<MonthProps, "month" | "first"> & { group: JournalGroup<Entry>; weekEnds: boolean }) {
   const via = useVia();
   return (
     <section aria-label={group.kind === "day" ? dayLabel(group.start) : weekLabel(group.start, group.end)}>
@@ -266,6 +276,15 @@ function Group({
           );
         })}
       </ol>
+      {weekEnds && (
+        <Link
+          to="/week/$monday"
+          params={{ monday: mondayOf(group.start) }}
+          className="text-small text-ink-faint hover:text-ink focus-ring touch-target relative mt-1 inline-block rounded-sm py-2"
+        >
+          The week<span className="sr-only"> of {weekRangeLabel(mondayOf(group.start))}</span>
+        </Link>
+      )}
     </section>
   );
 }

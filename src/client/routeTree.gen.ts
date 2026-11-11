@@ -30,6 +30,7 @@ import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
 import { Route as AppIdeasIdeaIdRouteImport } from './routes/_app/ideas.$ideaId'
 import { Route as AppPantryIndexRouteImport } from './routes/_app/pantry.index'
 import { Route as AppPantrySpoolIdRouteImport } from './routes/_app/pantry.$spoolId'
+import { Route as AppWeekMondayRouteImport } from './routes/_app/week.$monday'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -135,6 +136,11 @@ const AppPantrySpoolIdRoute = AppPantrySpoolIdRouteImport.update({
   path: '/pantry/$spoolId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWeekMondayRoute = AppWeekMondayRouteImport.update({
+  id: '/week/$monday',
+  path: '/week/$monday',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/week/$monday': typeof AppWeekMondayRoute
   '/builds/': typeof AppBuildsIndexRoute
   '/ideas/': typeof AppIdeasIndexRoute
   '/pantry/': typeof AppPantryIndexRoute
@@ -176,6 +183,7 @@ export interface FileRoutesByTo {
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/week/$monday': typeof AppWeekMondayRoute
   '/builds': typeof AppBuildsIndexRoute
   '/ideas': typeof AppIdeasIndexRoute
   '/pantry': typeof AppPantryIndexRoute
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/_app/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/_app/week/$monday': typeof AppWeekMondayRoute
   '/_app/builds/': typeof AppBuildsIndexRoute
   '/_app/ideas/': typeof AppIdeasIndexRoute
   '/_app/pantry/': typeof AppPantryIndexRoute
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
+    | '/week/$monday'
     | '/builds/'
     | '/ideas/'
     | '/pantry/'
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
+    | '/week/$monday'
     | '/builds'
     | '/ideas'
     | '/pantry'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/_app/builds/$buildId'
     | '/_app/ideas/$ideaId'
     | '/_app/pantry/$spoolId'
+    | '/_app/week/$monday'
     | '/_app/builds/'
     | '/_app/ideas/'
     | '/_app/pantry/'
@@ -430,6 +442,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPantrySpoolIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/week/$monday': {
+      id: '/_app/week/$monday'
+      path: '/week/$monday'
+      fullPath: '/week/$monday'
+      preLoaderRoute: typeof AppWeekMondayRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -448,6 +467,7 @@ interface AppRouteChildren {
   AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
   AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
   AppPantrySpoolIdRoute: typeof AppPantrySpoolIdRoute
+  AppWeekMondayRoute: typeof AppWeekMondayRoute
   AppBuildsIndexRoute: typeof AppBuildsIndexRoute
   AppIdeasIndexRoute: typeof AppIdeasIndexRoute
   AppPantryIndexRoute: typeof AppPantryIndexRoute
@@ -468,6 +488,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,
   AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,
   AppPantrySpoolIdRoute: AppPantrySpoolIdRoute,
+  AppWeekMondayRoute: AppWeekMondayRoute,
   AppBuildsIndexRoute: AppBuildsIndexRoute,
   AppIdeasIndexRoute: AppIdeasIndexRoute,
   AppPantryIndexRoute: AppPantryIndexRoute,

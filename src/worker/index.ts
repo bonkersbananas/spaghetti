@@ -5,6 +5,7 @@ import { mcpRoutes } from "./mcp/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
+import { sendWeekPush } from "./push/week.ts";
 import { pruneDeliveries, runWebhooks } from "./webhooks/deliver.ts";
 
 const DAILY = "0 4 * * *";
@@ -53,6 +54,12 @@ export default {
       ctx.waitUntil(resumeReads(env).catch((error) => console.error("photo read resume failed", error)));
       ctx.waitUntil(resumeCoaches(env).catch((error) => console.error("coach resume failed", error)));
       ctx.waitUntil(sendUpkeepNudge(env).then((result) => result.sent && console.log("upkeep nudged", result)));
+      // "Your week", Sunday 19:00 in the workspace's time zone (does nothing at any other time).
+      ctx.waitUntil(
+        sendWeekPush(env)
+          .then((result) => result.sent && console.log("week pushed", result))
+          .catch((error) => console.error("week push failed", error)),
+      );
     }
   },
 } satisfies ExportedHandler<Env>;

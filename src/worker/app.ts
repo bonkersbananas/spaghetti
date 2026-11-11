@@ -37,6 +37,7 @@ import { spoolRoutes } from "./routes/spools.ts";
 import { storyRoutes } from "./routes/story.ts";
 import { tagRoutes } from "./routes/tags.ts";
 import { webhookRoutes } from "./routes/webhooks.ts";
+import { weekRoutes } from "./routes/weeks.ts";
 import { wishlistRoutes } from "./routes/wishlists.ts";
 import { runWebhooks } from "./webhooks/deliver.ts";
 
@@ -141,6 +142,7 @@ export const app = new Hono<AppEnv>()
   .route("/tags", tagRoutes)
   .route("/journal", journalRoutes)
   .route("/insights", insightRoutes)
+  .route("/weeks", weekRoutes)
   .route("/links", linkRoutes)
   .route("/builds", storyRoutes)
   .route("/", searchRoutes)
