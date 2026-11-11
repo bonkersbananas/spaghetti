@@ -35,7 +35,7 @@ function RecentlyDeleted() {
 
   return (
     <>
-      <PageHeader title="Recently deleted" subtitle="Gone for good after 30 days." />
+      <PageHeader title="Deleted" subtitle="Gone for good after 30 days." />
       {isPending ? (
         <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
           <RowSkeleton />

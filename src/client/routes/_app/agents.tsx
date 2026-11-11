@@ -52,7 +52,7 @@ function Agents() {
     <>
       <PageHeader
         title="Agents"
-        subtitle="Helpers that work for you, marked “via”."
+        subtitle="Claude, the printer bridge and other helpers."
         // The empty state carries its own button.
         actions={!isPending && !mine.length ? undefined : newAgent}
       />
