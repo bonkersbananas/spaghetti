@@ -78,7 +78,11 @@ export function announceDraft(queryClient: QueryClient, item: Pick<Item, "id" | 
   const draft = item.draft;
   if (draft?.status !== "drafted" || !draft.applied.length || announced.has(item.id)) return;
   announced.add(item.id);
-  toast.undo(`Drafted from ${siteName(draft)}`, { onUndo: () => void undoDraft(queryClient, item.id) });
+  // An id of its own, so starting to build this idea can put just this one away (builds.ts).
+  toast.undo(`Drafted from ${siteName(draft)}`, {
+    id: `draft-${item.id}`,
+    onUndo: () => void undoDraft(queryClient, item.id),
+  });
 }
 
 /** Takes a draft back (the Worker only removes what is still exactly what it wrote). */

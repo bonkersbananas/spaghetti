@@ -155,6 +155,9 @@ test("a print from the printer to the journal: attached file, progress, end, pho
     await link.close();
     await bridge.stop();
     await printer.stop();
+    // Its report (the third-party spool in A3, a print's progress) would otherwise outlive the test: the Pantry's
+    // tests expect an AMS with empty slots, and CI shards put them after this one.
+    await new Api(baseURL as string, token).tell({ printerState: null, progress: null, unknownTrays: [] });
     rmSync(dir, { recursive: true, force: true });
     // Leave no working token or build behind.
     for (const spool of (await (await request.get("/api/spools")).json()).spools)

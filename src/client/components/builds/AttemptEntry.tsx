@@ -29,6 +29,8 @@ interface AttemptEntryProps {
   /** What it printed of the build's parts: "Hull half ×2, Deck". */
   partsLabel?: string | null;
   photos: PhotoView[];
+  /** A photo of the print from its "how did it go?" (the camera on phones), while it has none. */
+  onPhotos?: (files: File[]) => void;
   person?: Person;
   /** The agent it was logged through. */
   via?: string;
@@ -61,6 +63,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     attempt,
     partsLabel,
     photos,
+    onPhotos,
     person,
     via,
     selected,
@@ -270,6 +273,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 endedAt={attempt.endedAt}
                 onPick={onFinish}
                 photoRead={attempt.photoRead}
+                onPhotos={photos.length ? undefined : onPhotos}
                 className="pointer-events-auto"
               />
             )}
