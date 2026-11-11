@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChecklistRow, checklistSurface, DragHandle, TickBox } from "@/components/ui/Checklist";
-import { LinkChip } from "@/components/ui/Chip";
 import { PriceIcon } from "@/components/ui/icons";
+import { LinkChip } from "@/components/ui/LinkChip";
 import { Label, Panel, Section } from "./shared";
 
 const rows = [

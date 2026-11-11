@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Reorder, useDragControls } from "motion/react";
 import { type FormEvent, lazy, type RefObject, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { EmptyBasket } from "@/components/illustrations";
+import { EmptyBasket } from "@/components/illustrations/EmptyBasket";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ShoppingRow, useShoppingName } from "@/components/shopping/ShoppingRow";
 import { Button } from "@/components/ui/Button";

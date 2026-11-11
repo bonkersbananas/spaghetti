@@ -1,12 +1,5 @@
-import {
-  EmptyBasket,
-  EmptyPot,
-  Mark,
-  NoodleSearch,
-  OpenNotebook,
-  PantryJar,
-  SpoolStrand,
-} from "@/components/illustrations";
+import { EmptyPot, Mark, NoodleSearch, OpenNotebook, PantryJar, SpoolStrand } from "@/components/illustrations";
+import { EmptyBasket } from "@/components/illustrations/EmptyBasket";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Panel, Section } from "./shared";
 
