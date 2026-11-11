@@ -186,6 +186,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               endedAt={attempt.endedAt}
               onPick={(outcome) => finish(outcome)}
               photoRead={attempt.photoRead}
+              withTags={false}
               // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
               onPhotos={
                 readOnly || item.photos.some((photo) => photo.attemptId === attempt.id)
@@ -233,7 +234,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                     size="md"
                     suggested={attempt.photoRead?.outcome ?? null}
                   />
-                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} />}
+                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} withTags={false} />}
                 </div>
               )}
             </>
