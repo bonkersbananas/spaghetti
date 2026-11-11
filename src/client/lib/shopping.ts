@@ -28,6 +28,9 @@ const patchOne = (queryClient: QueryClient, id: string, change: (item: ShoppingI
 const keepServer = (queryClient: QueryClient, saved: ShoppingItem) =>
   patchList(queryClient, (items) => items.map((item) => (item.id === saved.id ? saved : item)));
 
+/** Adds still on their way to the server: an order waits for them, or it would name a thing the server doesn't have yet. */
+const adding = new Set<Promise<unknown>>();
+
 const topPosition = (items: ShoppingItem[]) =>
   Math.min(1, ...items.filter((item) => item.boughtAt === null).map((item) => item.position)) - 1;
 
@@ -53,17 +56,24 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
     updatedAt: now,
   };
   queryClient.setQueryData<ShoppingItem[]>(shoppingQuery.queryKey, (items) => [optimistic, ...(items ?? [])]);
+  const sending = api<ShoppingItemResponse>("/shopping-items", {
+    method: "POST",
+    json: {
+      id,
+      ...(entry.name && { name: entry.name }),
+      ...(entry.link && { link: entry.link }),
+      ...(entry.priceLink && { priceLink: entry.priceLink }),
+    },
+  });
+  const settled = sending.catch(() => undefined);
+  adding.add(settled);
+  void settled.finally(() => adding.delete(settled));
   try {
-    const { shoppingItem } = await api<ShoppingItemResponse>("/shopping-items", {
-      method: "POST",
-      json: {
-        id,
-        ...(entry.name && { name: entry.name }),
-        ...(entry.link && { link: entry.link }),
-        ...(entry.priceLink && { priceLink: entry.priceLink }),
-      },
-    });
-    keepServer(queryClient, shoppingItem);
+    const { shoppingItem } = await sending;
+    // The server's copy, in the place the row has here: it may have been moved while it was being saved.
+    patchList(queryClient, (items) =>
+      items.map((item) => (item.id === id ? { ...shoppingItem, position: item.position } : item)),
+    );
     if (!entry.name) void nameFromPage(queryClient, shoppingItem);
     return true;
   } catch (error) {
@@ -132,7 +142,13 @@ export async function reorderShopping(queryClient: QueryClient, ids: string[]) {
     items.map((item) => (place.has(item.id) ? { ...item, position: place.get(item.id) as number } : item)),
   );
   try {
-    await api<ShoppingItemsResponse>("/shopping-items/order", { method: "PUT", json: { ids } });
+    await Promise.all(adding);
+    const { shoppingItems } = await api<ShoppingItemsResponse>("/shopping-items/order", {
+      method: "PUT",
+      json: { ids },
+    });
+    // The server's order is the truth (the other person may have added or moved something meanwhile).
+    queryClient.setQueryData<ShoppingItem[]>(shoppingQuery.queryKey, shoppingItems);
   } catch {
     if (before) queryClient.setQueryData(shoppingQuery.queryKey, before);
     toast.error("Couldn't save the new order", "It's back the way it was. Try again in a moment.");

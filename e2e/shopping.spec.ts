@@ -98,6 +98,11 @@ test("shopping: the arrow keys on a handle sort the list, and the order is kept"
   const id = tag();
   const [a, b] = [`Nozzle ${id}`, `Silica gel ${id}`];
   await add(page, a);
+  // The second one is still being saved when it's moved: the move waits for it, and the save doesn't undo the move.
+  await page.route("**/api/shopping-items", async (route) => {
+    if (route.request().method() === "POST") await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.continue();
+  });
   await add(page, b);
   // Newest on top: b, a.
   const names = toBuy(page).getByRole("button", { name: new RegExp(`^(${a}|${b})$`) });
@@ -108,6 +113,10 @@ test("shopping: the arrow keys on a handle sort the list, and the order is kept"
     .press("ArrowDown");
   await expect(names).toHaveText([a, b]);
   await expect(toBuy(page).getByRole("button", { name: new RegExp(`^Move ${b}`) })).toBeFocused();
+  // Past the delayed save and the order it waited for.
+  await page.waitForTimeout(1500);
+  await expect(names).toHaveText([a, b]);
+  await page.unroute("**/api/shopping-items");
   await page.reload();
   await expect(names).toHaveText([a, b]);
 });
