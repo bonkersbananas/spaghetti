@@ -10,6 +10,10 @@ import { rememberUser, sessionQuery } from "./queries";
 let signingOut: Promise<unknown> = Promise.resolve();
 export const signOutSettled = () => signingOut;
 
+/** True from the moment someone taps Sign out until sign-in is showing: the shell must not treat that as an ended session. */
+let leaving = false;
+export const isSigningOut = () => leaving;
+
 /** Signs out at once: the device forgets everything and shows sign-in while the server ends the session. */
 export function useSignOut() {
   const queryClient = useQueryClient();
@@ -17,6 +21,7 @@ export function useSignOut() {
   return useCallback(async () => {
     // keepalive: the request still reaches the server if the page goes away (a reload) first.
     // This device stops getting notifications for the person who leaves it; the server forgets it with the session.
+    leaving = true;
     const pushEndpoint = await thisDeviceEndpoint();
     signingOut = api("/session", {
       method: "DELETE",
@@ -28,5 +33,6 @@ export function useSignOut() {
     queryClient.setQueryData(sessionQuery.queryKey, null);
     queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
     await navigate({ to: "/sign-in" });
+    leaving = false;
   }, [queryClient, navigate]);
 }
