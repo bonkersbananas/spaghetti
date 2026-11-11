@@ -1,8 +1,15 @@
-import { allPartsPrinted, type PartProgress, partProgress, partsFromFiles, progressLabel } from "@shared/parts";
+import {
+  allPartsPrinted,
+  type PartProgress,
+  partProgress,
+  partsFromFiles,
+  progressLabel,
+  showsPips,
+} from "@shared/parts";
 import { useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { CheckCircleIcon, FinishIcon, PlusIcon } from "@/components/ui/icons";
+import { CheckCircleIcon, FinishIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
@@ -26,7 +33,7 @@ export function PartLine({ progress, photo }: { progress: PartProgress; photo?: 
         />
       )}
       <span className="text-body text-ink min-w-0 flex-1 font-semibold">{part.name}</span>
-      {part.quantity <= 8 && (
+      {showsPips(progress) && (
         <span className="flex items-center gap-1" aria-hidden>
           {Array.from({ length: part.quantity }, (_, index) => (
             <span
@@ -104,14 +111,11 @@ export function PartsSection({
       );
     }
     return (
-      <section aria-label="Parts" className="mt-1 -ml-2.5 flex flex-col items-start gap-1">
+      <section aria-label="Parts" className="mt-1 flex flex-col items-start gap-1">
         {(fromFile.length > 1 || (fromFile[0]?.quantity ?? 0) > 1) && (
-          <Button
-            variant="quiet"
-            size="sm"
-            icon={PlusIcon}
+          <button
+            type="button"
             disabled={disabled}
-            className="h-auto min-h-8 py-1 text-left whitespace-normal"
             onClick={() =>
               void saveParts(
                 queryClient,
@@ -119,12 +123,18 @@ export function PartsSection({
                 fromFile.map((part) => ({ id: crypto.randomUUID(), ...part })),
               ).catch(() => undefined)
             }
+            className="bg-ink/4 pressable focus-ring hover:bg-ink/6 flex w-full items-start gap-3 rounded-lg px-3.5 py-3 text-left disabled:opacity-50 md:max-w-sm"
           >
-            Parts from the file:{" "}
-            {fromFile.map((part) => (part.quantity > 1 ? `${part.name} ×${part.quantity}` : part.name)).join(", ")}
-          </Button>
+            <SlicerFileIcon size={20} className="text-ink-soft mt-0.5 shrink-0" aria-hidden />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-body text-ink font-semibold">Parts from the file</span>
+              <span className="text-small text-ink-soft">
+                {fromFile.map((part) => (part.quantity > 1 ? `${part.name} ×${part.quantity}` : part.name)).join(", ")}
+              </span>
+            </span>
+          </button>
         )}
-        <Button variant="quiet" size="sm" icon={PlusIcon} disabled={disabled} onClick={() => setEditing(true)}>
+        <Button variant="quiet" size="sm" disabled={disabled} onClick={() => setEditing(true)} className="-ml-2.5">
           Add parts
         </Button>
       </section>

@@ -126,6 +126,7 @@ const sampleParts: Part[] = [
   { id: "hull", name: "Hull half", quantity: 2, position: 0 },
   { id: "deck", name: "Deck", quantity: 1, position: 1 },
   { id: "wheel", name: "Paddle wheel", quantity: 1, position: 2 },
+  { id: "bins", name: "Drawer bin", quantity: 12, position: 3 },
 ].map((part) => ({ ...part, itemId: "sample-build", photoId: null, createdAt: 1, updatedAt: 1 }));
 const sampleProgress = partProgress(sampleParts, [
   {
@@ -136,6 +137,7 @@ const sampleProgress = partProgress(sampleParts, [
     ],
   },
   { outcome: null, parts: [{ partId: "wheel", count: 1 }] },
+  { outcome: "success", parts: [{ partId: "bins", count: 5 }] },
 ]);
 
 export function BuildsSection() {

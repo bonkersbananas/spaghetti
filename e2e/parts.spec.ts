@@ -161,7 +161,7 @@ test("takes parts from the slicer file, and preselects a plate's parts", async (
     },
   });
   await page.goto(`/builds/${id}`);
-  const offer = page.getByRole("button", { name: "Parts from the file: Hull half ×2, Deck" });
+  const offer = page.getByRole("button", { name: /^Parts from the file Hull half ×2, Deck$/ });
   await expect(offer).toBeVisible();
   await offer.click();
   await expect(page.getByRole("button", { name: /^Parts from the file/ })).toHaveCount(0);

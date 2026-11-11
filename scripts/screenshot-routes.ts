@@ -1119,6 +1119,46 @@ export const shots: Shot[] = [
     },
   },
   {
+    // ... every part printed: the build offers to finish it (the seed's second attempt gets the rest of the counts) ...
+    name: "build-parts-all-printed",
+    path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`,
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const { item } = await (await page.request.get(`/api/items/${SEED_BUILD_IDS.paddleSteamer}`)).json();
+      const id = (name: string) => item.parts.find((part: { name: string }) => part.name === name).id;
+      await page.request.patch(`/api/attempts/${item.attempts[1].id}`, {
+        headers,
+        data: {
+          parts: [
+            { partId: id("Hull half"), count: 2 },
+            { partId: id("Deck"), count: 1 },
+            { partId: id("Paddle wheel"), count: 1 },
+          ],
+        },
+      });
+      await page.reload();
+      const done = page.getByTestId("all-printed");
+      await done.waitFor();
+      await page
+        .getByRole("region", { name: "Parts" })
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+    cleanup: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const { item } = await (await page.request.get(`/api/items/${SEED_BUILD_IDS.paddleSteamer}`)).json();
+      const id = (name: string) => item.parts.find((part: { name: string }) => part.name === name).id;
+      await page.request.patch(`/api/attempts/${item.attempts[1].id}`, {
+        headers,
+        data: {
+          parts: [
+            { partId: id("Hull half"), count: 1 },
+            { partId: id("Deck"), count: 1 },
+          ],
+        },
+      });
+    },
+  },
+  {
     // ... the same build before it has parts: its slicer file offers them in one tap ...
     name: "build-parts-from-file",
     path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`,

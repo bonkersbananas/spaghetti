@@ -11,6 +11,7 @@ import {
   partsOnPlate,
   partsSummary,
   progressLabel,
+  showsPips,
   tidyObjectName,
 } from "../../src/shared/parts.ts";
 
@@ -161,5 +162,13 @@ describe("attemptPartsLabel", () => {
     ).toBe("Hull half ×2, Deck");
     expect(attemptPartsLabel({ parts: [{ partId: "gone", count: 1 }] }, parts)).toBeNull();
     expect(attemptPartsLabel({ parts: [] }, parts)).toBeNull();
+  });
+});
+
+describe("showsPips", () => {
+  it("shows a pip per piece for a handful, and neither pips nor a done part's pips for more", () => {
+    expect(showsPips({ done: false, part: { quantity: 2 } })).toBe(true);
+    expect(showsPips({ done: false, part: { quantity: 12 } })).toBe(false);
+    expect(showsPips({ done: true, part: { quantity: 2 } })).toBe(false);
   });
 });

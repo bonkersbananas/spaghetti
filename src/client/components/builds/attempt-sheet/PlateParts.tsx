@@ -2,8 +2,8 @@ import type { Part } from "@shared/api";
 import type { Outcome } from "@shared/attempts";
 import { type AttemptPart, countsForOutcome } from "@shared/parts";
 import { useRef } from "react";
-import { ToggleChip } from "@/components/ui/Chip";
 import { Stepper } from "@/components/ui/Stepper";
+import { cn } from "@/lib/cn";
 
 interface PlatePartsProps {
   /** The build's parts. Nothing is shown for a build without any. */
@@ -38,15 +38,29 @@ export function PlateParts({ parts, value, onChange, outcome }: PlatePartsProps)
   return (
     <fieldset className="flex flex-col gap-2.5" data-testid="plate-parts">
       <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">What's on the plate</legend>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {/* Each part is one unit: a row on phones (the name toggles it, its stepper sits at the right edge only while it is
+          on the plate, so the steppers line up under the thumb), a capsule on desktop that flows. */}
+      <div className="flex flex-col gap-1.5 md:flex-row md:flex-wrap md:gap-2">
         {parts.map((part) => {
           const count = countOf(part.id);
+          const picked = count !== undefined;
           return (
-            <span key={part.id} className="inline-flex items-center gap-1.5">
-              <ToggleChip selected={count !== undefined} onClick={() => toggle(part)}>
+            <div
+              key={part.id}
+              className={cn(
+                "duration-fast md:rounded-pill flex items-center justify-between gap-2 rounded-md pr-1 transition-colors",
+                picked ? "bg-basil-soft text-basil-ink ring-basil/40 ring-1 ring-inset" : "bg-ink/4 text-ink-soft",
+              )}
+            >
+              <button
+                type="button"
+                aria-pressed={picked}
+                onClick={() => toggle(part)}
+                className="pressable focus-ring text-body md:text-small md:rounded-pill min-h-11 min-w-0 flex-1 rounded-md px-3.5 text-left font-semibold md:min-h-8 md:pr-2"
+              >
                 {part.name}
-              </ToggleChip>
-              {count !== undefined && (
+              </button>
+              {picked && (
                 <Stepper
                   label={`${part.name}, pieces`}
                   value={count}
@@ -54,7 +68,7 @@ export function PlateParts({ parts, value, onChange, outcome }: PlatePartsProps)
                   onChange={(next) => setCount(part, next)}
                 />
               )}
-            </span>
+            </div>
           );
         })}
       </div>

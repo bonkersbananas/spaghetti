@@ -161,6 +161,13 @@ export function partProgress(parts: readonly Part[], attempts: readonly Counting
     });
 }
 
+/** Up to this many pieces a part shows one pip each; beyond a handful (12 drawer bins) only "5 of 12" says it. */
+export const PIP_LIMIT = 6;
+
+/** Whether a part shows pips: not once it is done (the check says so) and not for a big quantity. */
+export const showsPips = (progress: Pick<PartProgress, "done"> & { part: Pick<Part, "quantity"> }) =>
+  !progress.done && progress.part.quantity <= PIP_LIMIT;
+
 /** "1 of 2", or "done" (more than asked for still reads "done"). */
 export const progressLabel = (progress: Pick<PartProgress, "made" | "done"> & { part: Pick<Part, "quantity"> }) =>
   progress.done ? "done" : `${progress.made} of ${progress.part.quantity}`;
