@@ -216,15 +216,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 <SavedFileCard
                   file={attempt.file}
                   filaments={attempt.settings.filaments}
-                  printing={
-                    attempt.outcome === null && attempt.endedAt === null
-                      ? {
-                          id: attempt.id,
-                          startedAt: attempt.printedAt,
-                          estimatedMinutes: attempt.settings.estimatedMinutes,
-                        }
-                      : undefined
-                  }
+                  printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
                 />
               </div>
             )}

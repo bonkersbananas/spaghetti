@@ -64,8 +64,6 @@ export function canView3d(file: AttemptFileView | undefined): file is AttemptFil
 /** The attempt a file belongs to while it prints: what the viewer needs to follow it. */
 export interface PrintingAttempt {
   id: string;
-  startedAt: number;
-  estimatedMinutes?: number;
 }
 
 /** A quiet "3D" pill on the plate picture. Opens the viewer; its code is fetched as a finger or the pointer nears it. */
@@ -125,26 +123,12 @@ export function ViewerSheet({
   fallbackColors?: (string | null | undefined)[];
   printing?: PrintingAttempt;
 }) {
-  // The printer's own layer while the bridge reports it for this attempt and the report is fresh; nothing otherwise.
-  // (Read here, in the viewer's own code, so nothing is added to the shared progress helpers every screen loads.)
-  const now = useNow();
-  const report = useQuery({ ...printerQuery, enabled: !!printing }).data?.bridge?.progress;
-  const live =
-    printing && report?.attemptId === printing.id && now - report.at <= LIVE_FRESH_MS && report.layer
-      ? { layer: report.layer, totalLayers: report.totalLayers }
-      : null;
   return (
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
       title="3D view"
-      description={
-        live
-          ? `Printing now · layer ${live.layer}${live.totalLayers ? ` of ${live.totalLayers}` : ""}`
-          : file.plateCount > 1
-            ? `${file.name}, plate ${file.plate}`
-            : file.name
-      }
+      description={file.plateCount > 1 ? `${file.name}, plate ${file.plate}` : file.name}
       desktop="dialog"
       fill
     >
@@ -153,7 +137,7 @@ export function ViewerSheet({
         fileId={file.id}
         plate={file.plate}
         fallbackColors={fallbackColors}
-        live={live}
+        printing={printing}
       />
     </Sheet>
   );

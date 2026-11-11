@@ -40,7 +40,7 @@ const BUDGET_KB = {
   "/journal": 287,
   "/search": 293,
   "/pantry": 297,
-  "/printer": 297,
+  "/printer": 298, // main itself measured 297.0x kB after the shopping-list merge: headroom restored
 } as const;
 
 /**
