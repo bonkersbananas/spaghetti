@@ -1933,7 +1933,7 @@ export const shots: Shot[] = [
       await page.route("**/routes/_app/styleguide.tsx*", (route) =>
         route.fulfill({
           contentType: "text/javascript",
-          body: 'throw new Error("Cannot read properties of undefined (reading \'title\')");',
+          body: "throw new Error(\"Cannot read properties of undefined (reading 'title')\");",
         }),
       );
       await page.evaluate(() => {
