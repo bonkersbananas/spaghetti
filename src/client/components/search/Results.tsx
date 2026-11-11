@@ -181,15 +181,24 @@ function TagRow({ children }: { children: ReactNode[] }) {
   const inner = useRef<HTMLSpanElement>(null);
   const list = children.flat().filter(Boolean);
   const [fit, setFit] = useState(list.length);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measured again when the number of tags changes.
   useLayoutEffect(() => {
-    const kids = Array.from(inner.current?.children ?? []) as HTMLElement[];
-    const room = outer.current?.clientWidth ?? 0;
-    const right = (i: number) => (kids[i]?.offsetLeft ?? 0) + (kids[i]?.offsetWidth ?? 0);
-    let n = kids.length;
-    // Everything fits, or leave room for the "+N" (about 2.5rem).
-    if (right(n - 1) > room) for (n = kids.length; n > 1 && right(n - 1) > room - 40; n--);
-    setFit(n);
-  });
+    const measure = () => {
+      const kids = Array.from(inner.current?.children ?? []) as HTMLElement[];
+      const room = outer.current?.clientWidth ?? 0;
+      const right = (i: number) => (kids[i]?.offsetLeft ?? 0) + (kids[i]?.offsetWidth ?? 0);
+      let n = kids.length;
+      // Everything fits, or leave room for the "+N" (about 2.5rem).
+      if (right(n - 1) > room) for (n = kids.length; n > 1 && right(n - 1) > room - 40; n--);
+      setFit(n);
+    };
+    measure();
+    // Again when the row's width changes (turning the phone) or a chip's does (a font arriving).
+    const watch = new ResizeObserver(measure);
+    if (outer.current) watch.observe(outer.current);
+    for (const kid of Array.from(inner.current?.children ?? [])) watch.observe(kid);
+    return () => watch.disconnect();
+  }, [list.length]);
   const hidden = desktop ? 0 : list.length - fit;
   return (
     <span ref={outer} className="flex items-center gap-1.5">
