@@ -106,7 +106,8 @@ export function Bubble({
         </div>
       )}
       {below}
-      {aside && <div className="absolute top-1 right-full mr-1">{aside}</div>}
+      {/* Outside the bubble, on the side away from the edge: left of yours, right of theirs. */}
+      {aside && <div className={cn("absolute top-1", mine ? "right-full mr-1" : "left-full ml-1")}>{aside}</div>}
     </div>
   );
 }

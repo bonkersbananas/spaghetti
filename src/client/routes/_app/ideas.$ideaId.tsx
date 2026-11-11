@@ -10,6 +10,7 @@ import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { EmptyPot } from "@/components/illustrations";
+import { ItemReactions } from "@/components/reactions/Reactions";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
@@ -307,6 +308,15 @@ function Idea({ item }: { item: ItemView }) {
               )}
             </p>
           </div>
+          {!item.pending && (
+            <ItemReactions
+              itemId={item.id}
+              reactions={item.reactions}
+              noun="idea"
+              readOnly={readOnly}
+              className="mt-1"
+            />
+          )}
           {/* The conversation follows the words it is about, in the same column (as on a build). */}
           {!item.pending && (
             <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />

@@ -23,6 +23,7 @@ import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { EmptyPot, SpoolStrand } from "@/components/illustrations";
+import { ItemReactions } from "@/components/reactions/Reactions";
 import { recipeKind } from "@/components/recipes/RecipeCard";
 import { RecipeSheet } from "@/components/recipes/RecipeSheet";
 import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
@@ -683,6 +684,15 @@ function Build({ item }: { item: ItemView }) {
                 </p>
               </div>
             </div>
+            {!item.pending && (
+              <ItemReactions
+                itemId={item.id}
+                reactions={item.reactions}
+                noun="build"
+                readOnly={readOnly}
+                className="mt-3 pl-6"
+              />
+            )}
           </Section>
           {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
           {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
