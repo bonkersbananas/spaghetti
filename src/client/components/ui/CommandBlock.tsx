@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "./Button";
 import { CheckIcon, CopyIcon } from "./icons";
@@ -17,10 +17,15 @@ interface CommandBlockProps {
  */
 export function CommandBlock({ command, label, className }: CommandBlockProps) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const line = useRef<HTMLElement>(null);
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <p className="sr-only">{label}</p>
-      <code className="bg-well shadow-well text-small text-ink block rounded-lg p-3 font-mono leading-relaxed select-all">
+      <code
+        ref={line}
+        className="bg-well shadow-well text-small text-ink block rounded-lg p-3 font-mono leading-relaxed select-all"
+      >
         {command.split(" ").map((word, i) => (
           // Break between words, never inside a short one (the pairing code stays whole); only a long address may break.
           // biome-ignore lint/suspicious/noArrayIndexKey: the words never reorder
@@ -36,13 +41,21 @@ export function CommandBlock({ command, label, className }: CommandBlockProps) {
         icon={copied ? CheckIcon : CopyIcon}
         className="self-start max-md:w-full"
         onClick={() => {
-          void navigator.clipboard?.writeText(command).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1800);
-          });
+          setFailed(false);
+          (navigator.clipboard?.writeText(command) ?? Promise.reject(new Error("no clipboard"))).then(
+            () => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1800);
+            },
+            () => {
+              // No permission to copy: select the line so a press of Copy on the keyboard does it.
+              if (line.current) window.getSelection()?.selectAllChildren(line.current);
+              setFailed(true);
+            },
+          );
         }}
       >
-        {copied ? "Copied" : "Copy command"}
+        {copied ? "Copied" : failed ? "Selected: press ⌘C" : "Copy command"}
       </Button>
     </div>
   );

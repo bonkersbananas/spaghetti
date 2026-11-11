@@ -40,6 +40,22 @@ test("connect the bridge: a code, the command, waiting, connected, disconnect", 
   await expect(page.getByText("Printer bridge connected.")).toBeVisible();
   await expect(page.getByText("Version 1.0.0 · darwin-arm64")).toBeVisible();
 
+  // Setting it up again makes a new code, and the bridge that is already running doesn't count as the new one.
+  await page.getByRole("button", { name: "Set it up again" }).click();
+  const again = page.getByRole("dialog", { name: "Connect the bridge" });
+  await expect(again.getByText("Waiting for the bridge…")).toBeVisible();
+  expect(await again.locator("code").innerText()).not.toContain(code);
+  await fetch(`${baseURL}/api/printer/bridge`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${paired.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ printerState: "idle", problems: [] }),
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForTimeout(3500);
+  await expect(again.getByText("Waiting for the bridge…")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(again).toBeHidden();
+
   // A problem is said in plain words.
   await fetch(`${baseURL}/api/printer/bridge`, {
     method: "PUT",

@@ -33,8 +33,14 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
   const printer = useQuery({ ...printerQuery, refetchInterval: open ? 3_000 : false });
   const spools = useQuery({ ...spoolsQuery, enabled: open });
 
+  // A fresh code every time the sheet opens: a spent one is no use, and an old one would show as "installed".
   useEffect(() => {
-    if (!open || asked.current) return;
+    if (!open) {
+      asked.current = false;
+      makeCode.reset();
+      return;
+    }
+    if (asked.current) return;
     asked.current = true;
     makeCode.mutate();
   }, [open, makeCode]);
@@ -46,7 +52,14 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
   const left = code ? code.expiresAt - now : 0;
   const expired = Boolean(code) && left <= 0;
   const bridge = printer.data?.bridge ?? null;
-  const heard = Boolean(bridge && bridge.lastSeenAt >= since && isFresh(bridge.lastSeenAt, now, BRIDGE_CONNECTED_MS));
+  // Heard = it paired with this code (the server says when) and has checked in since: a bridge that was already
+  // running keeps its old token until the new one pairs, so its heartbeats before that don't count.
+  const heard = Boolean(
+    bridge?.pairedAt &&
+      bridge.pairedAt >= since &&
+      bridge.lastSeenAt >= bridge.pairedAt &&
+      isFresh(bridge.lastSeenAt, now, BRIDGE_CONNECTED_MS),
+  );
   const problem = heard ? bridge?.problems?.[0] : undefined;
   const connected = heard && !problem && bridge?.printerState !== "offline";
 
