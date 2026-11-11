@@ -91,6 +91,7 @@ function Shell() {
   useWhenIdle(() => {
     void router.preloadRoute({ to: "/builds/$buildId", params: { buildId: "-" } });
     void router.preloadRoute({ to: "/ideas/$ideaId", params: { ideaId: "-" } });
+    void import("@/components/ideas/CardMenu");
   });
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();
