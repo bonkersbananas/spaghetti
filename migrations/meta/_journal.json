@@ -169,6 +169,13 @@
       "when": 1794376317474,
       "tag": "0023_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1794380376979,
+      "tag": "0024_coach-runs",
+      "breakpoints": true
     }
   ]
 }

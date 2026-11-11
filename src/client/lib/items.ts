@@ -285,6 +285,7 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     endedAt: null,
     suggestedFailureTag: null,
     photoRead: null,
+    coach: null,
     finishedBy: attempt.outcome ? attempt.createdBy : null,
     createdVia: null,
     finishedVia: null,

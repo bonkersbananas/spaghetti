@@ -65,6 +65,7 @@ const sampleAttempt: AttemptView = {
   endedAt: null,
   suggestedFailureTag: null,
   photoRead: null,
+  coach: null,
   note: "Stayed down this time, but the stern corners curled up a little.",
   failureTags: ["warping"],
   successNotes: ["great-first-layer"],
