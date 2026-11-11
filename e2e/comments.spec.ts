@@ -217,8 +217,10 @@ test("a build has its thread too, and the story includes it", async ({ page, isM
   await field.fill("Printing the first one tonight.");
   await send(page, isMobile);
   await expect(thread(page).getByText("Printing the first one tonight.")).toBeVisible();
-  const story = await (await page.request.get(`/api/builds/${id}/story.md`)).text();
-  expect(story).toContain("Printing the first one tonight.");
+  // The thread shows a sent message at once; the story has it once the save lands.
+  await expect
+    .poll(async () => (await page.request.get(`/api/builds/${id}/story.md`)).text())
+    .toContain("Printing the first one tonight.");
 });
 
 test("a message that ends with a link shows a card in place of the address, and a link mid-sentence stays text", async ({

@@ -1,13 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type BrowserContext, expect, type Page, test } from "@playwright/test";
+import { e2eOrigin } from "../scripts/lib/e2e-ports.ts";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { signInWithForm as signIn } from "./helpers";
 
 // Passkeys belong to "localhost", not to 127.0.0.1 (an IP address can't be a relying party), so these tests
-// open the same dev server by its name. Each one uses its own virtual authenticator (Chromium's CDP WebAuthn).
+// open this worker's server by its name. Each one uses its own virtual authenticator (Chromium's CDP WebAuthn).
 test.setTimeout(90_000);
 
-const BASE = "http://localhost:5174";
+const BASE = e2eOrigin("localhost");
 test.use({ baseURL: BASE });
 const origin = () => BASE;
 const headers = () => ({ Origin: origin() });

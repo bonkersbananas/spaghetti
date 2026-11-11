@@ -104,7 +104,7 @@ pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 5 shards of spec files balanced by measured time (`pnpm test:e2e $(node scripts/e2e-shard.ts 1 5)`; refresh e2e/timings.json with `node scripts/e2e-timings.ts <CI shard logs>`), so a test must not depend on another test's data
+pnpm test:e2e       # Playwright at phone and desktop width (with axe, e2e/accessibility.spec.ts), on the production build: it builds once and starts one server and database per worker (E2E_WORKERS, default 2; not --workers), so a test must not depend on another test's data; CI runs it in shards of spec files balanced by measured time (`pnpm test:e2e $(node scripts/e2e-shard.ts 1 3)`; refresh e2e/timings.json with `node scripts/e2e-timings.ts <CI shard logs>`)
 pnpm exec playwright test --project=performance   # first-load JavaScript per screen, tap latency and the resumed app on a phone profile, and a throttled 100-photo inbox
 pnpm build && pnpm perf [--runs 5]   # the whole speed table: cold start of Today and Ideas (first visit, service worker only, installed app) and the common taps, at 390 px, 4× CPU, slow 4G
 pnpm build:report   # what the first load holds: the entry's chunks with their biggest modules, and the on-demand chunks
@@ -235,7 +235,7 @@ Never edit a migration that has been merged; add a new one.
 ### Sharing in
 
 - Four ways in ([docs/share.md](docs/share.md), [0015](docs/decisions/0015-share-targets-by-device.md)): the manifest's `share_target` (`POST /api/share`, taken by the service worker's `receiveShare`, which keeps the form in the `sg-share` cache and redirects to `/share?id=…`; `lib/share.ts` reads it, `routes/_app/share.tsx` saves it with `useCapture().shareIn` and `ShareSheet` shows "Captured"), the bookmarklet (`/share?title&url&text`, `shared/shortcut.ts`), and `POST /api/capture` (`worker/routes/capture.ts`) for the iOS Shortcuts built from the Agents page's card. Notes are composed by `shared/capture.ts` so the browser and the Worker agree.
-- The share target and its service worker only exist in the production build: test them in `e2e/share.spec.ts` (the `offline` and `share-desktop` projects, port 5175).
+- The share target and its service worker only exist in the production build: test them in `e2e/share.spec.ts` (the `offline` and `share-desktop` projects, the only ones besides push and performance where the service worker isn't blocked).
 
 ### Up next and "for"
 
@@ -280,7 +280,7 @@ Never edit a migration that has been merged; add a new one.
 
 - Web Push for the "how did it go?" nudges ([0016](docs/decisions/0016-web-push-nudges.md), setup in [docs/deploy.md](docs/deploy.md)): `worker/push/webpush.ts` is VAPID plus aes128gcm on WebCrypto (unit-tested against RFC 8291's example), `worker/push/nudges.ts` runs from the 5-minute cron (`index.ts` tells the two schedules apart by `controller.cron`) and decides who is nudged when (`shared/push.ts` has the pure rules and the message text). Once per attempt and person is `push_nudges`' primary key, claimed before sending; devices are `push_subscriptions` (`routes/push.ts`, person-only).
 - The service worker (`src/sw/sw.js`) shows the push and answers its buttons through `POST /attempts/:id/finish`; offline it writes a finish into the outbox's IndexedDB itself and tells open pages (`outbox-changed`, handled by `outbox.pickUp()`). Its `answer-nudge` message is what e2e/push.spec.ts uses, since a test can't tap a button. The app side is `lib/push.ts` (`usePushDevice`) and `components/shell/NotificationsSheet.tsx`; permission is asked for only when the switch is turned on.
-- The private key is the `VAPID_PRIVATE_KEY` secret (typed in `worker/secrets.d.ts`); tests use a throwaway pair set in `vitest.config.ts`. The push e2e tests run on the production build (`push-desktop`, `push-phone` projects) because the dev server has no service worker.
+- The private key is the `VAPID_PRIVATE_KEY` secret (typed in `worker/secrets.d.ts`); tests use a throwaway pair set in `vitest.config.ts`. The push e2e tests run in their own projects (`push-desktop`, `push-phone`), where the service worker isn't blocked.
 
 ### Keyboard shortcuts and the command palette
 

@@ -42,12 +42,13 @@ jobs:
           node scripts/build-bridge.ts --version 0.0.0-ci --targets linux-x64
           node scripts/bridge-smoke.ts dist/bridge/spaghetti-bridge-linux-x64 0.0.0-ci
 
-  # The Playwright suite runs in shards, each on its own runner with its own servers. scripts/e2e-shard.ts splits
-  # the spec files by measured time (e2e/timings.json: refresh with scripts/e2e-timings.ts); projects and tests are unchanged.
-  e2e-shards:
-    name: Playwright shard ${{ matrix.shard }}/5
+  # The Playwright suite runs in shards of spec files balanced by measured time (scripts/e2e-shard.ts, e2e/timings.json:
+  # refresh with scripts/e2e-timings.ts), each on its own runner. A shard builds the app once and starts one server per
+  # Playwright worker (scripts/e2e-server.ts), so its workers run side by side, each on its own database.
+  e2e:
+    name: Playwright ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     # Playwright's own image has the browser and its system libraries installed, so the job never calls apt
     # (apt being unreachable took every shard down). Keep the tag on the @playwright/test version.
     container:
@@ -56,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -65,16 +66,11 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The files of this shard, balanced by how long they took (e2e/timings.json); only the shard with the specs
-      # that need the production build builds it.
       - name: Run this shard's specs
         run: |
-          set -e
-          specs="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 5)"
-          needs_built="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 5 --needs-built)"
+          specs="$(node scripts/e2e-shard.ts ${{ matrix.shard }} 3)"
           # No list would mean no file filter, and Playwright would run the whole suite.
           test -n "$specs"
-          if [ "$needs_built" = "0" ]; then export E2E_BUILT_SERVER=off; fi
           pnpm test:e2e $specs
       - uses: actions/upload-artifact@v4
         if: failure()

@@ -14,6 +14,15 @@ The repository gets at most **20 jobs running at once** (GitHub's free plan for 
 - Pushes to main share one group and never cancel each other: the running one finishes, and GitHub keeps only the newest waiting one, so a burst of merges costs two runs, not one each.
 - Neither the fctl app nor an agent can cancel a run (`gh run cancel` answers 403). When GitHub itself stalls, runs created meanwhile can stay "queued" with no jobs for good; a new push to the branch starts a fresh run, and the stuck one stops counting among the PR's checks.
 
+## The Playwright suite
+
+Every Playwright worker has its own server and database: `scripts/e2e-server.ts` builds the app once, seeds one throwaway D1 and copies it for each worker, and starts the production build on workerd (`wrangler dev`) for each, on ports 5174 and up, with the stand-in for Claude 100 ports above each. Playwright evaluates `playwright.config.ts` again in every worker, where `TEST_PARALLEL_INDEX` picks that worker's port (`scripts/lib/e2e-ports.ts`). So the workers of a runner run side by side, and a test only ever sees the data of the tests before it in the same worker, as before.
+
+- `E2E_WORKERS` sets the number of workers and servers (2 by default, locally and in CI: a third made a 4-core runner slower). `--workers` would leave workers without a server.
+- Service workers are blocked except in the projects that test them (offline, push, share, performance): the dev server never had one, and its caches would outlive a test's data.
+- The tests used to run on the Vite dev server; the production build answers about twice as fast, and is what ships.
+- The shards are balanced by `e2e/timings.json`: when specs are added or change speed, `node scripts/e2e-timings.ts` on the logs of one full run's shards rewrites it.
+
 ## Measuring
 
 ```sh
