@@ -16,11 +16,11 @@ import {
 /** Each reaction's glyph and its color: a little sticker, drawn filled. */
 const glyphs: Record<ReactionKind, { icon: Icon; tone: string }> = {
   love: { icon: ReactLoveIcon, tone: "text-tomato" },
-  chef: { icon: ReactChefIcon, tone: "text-semolina-ink" },
+  chef: { icon: ReactChefIcon, tone: "text-ink-soft" },
   want: { icon: ReactWantIcon, tone: "text-ink-soft" },
   hot: { icon: ReactHotIcon, tone: "text-tomato" },
   bravo: { icon: ReactBravoIcon, tone: "text-basil" },
-  melt: { icon: ReactMeltIcon, tone: "text-semolina" },
+  melt: { icon: ReactMeltIcon, tone: "text-semolina-ink" },
 };
 
 /** A reaction's glyph, in its own color. Decorative: what it means is said beside it. */
@@ -87,7 +87,7 @@ export function ReactionPills({
                 "pressable focus-ring touch-target rounded-pill text-small relative inline-flex h-8 items-center gap-1 px-2.5 font-semibold tabular-nums transition-colors disabled:opacity-60",
                 summary.mine
                   ? "bg-tomato-soft text-tomato-ink ring-tomato/30 ring-1 ring-inset"
-                  : "bg-ink/5 text-ink-soft hover:bg-ink/8",
+                  : "bg-cream shadow-soft text-ink-soft",
               )}
             >
               <ReactionGlyph kind={summary.kind} />
@@ -156,7 +156,7 @@ export function ReactionPicker({ given, onPick, compact = false, disabled, class
               "pressable focus-ring flex items-center justify-center transition-colors disabled:opacity-60",
               compact
                 ? "size-9 rounded-md"
-                : "text-caption text-ink-soft min-h-20 flex-col gap-1.5 rounded-lg px-1 py-3 font-semibold",
+                : "text-small text-ink-soft min-h-20 flex-col gap-1.5 rounded-lg px-1 py-3 font-semibold",
               picked ? "bg-tomato-soft ring-tomato/30 ring-1 ring-inset" : "hover:bg-ink/5",
               !compact && !picked && "bg-ink/4",
             )}

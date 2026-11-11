@@ -690,7 +690,7 @@ function Build({ item }: { item: ItemView }) {
                 reactions={item.reactions}
                 noun="build"
                 readOnly={readOnly}
-                className="mt-3 pl-6"
+                className="mt-4"
               />
             )}
           </Section>
