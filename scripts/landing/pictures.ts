@@ -226,6 +226,9 @@ export async function makePictures(shots: string) {
   await shareImage(shots);
 }
 
+/** The status bar's signal, Wi-Fi and battery, as the page draws them (#i-status in landing.html). */
+const STATUS_ICONS = `<svg viewBox="0 0 68 12"><path fill="currentColor" d="M1 8.5h2.6v3H1zM5 6.5h2.6v5H5zM9 4.5h2.6v7H9zM13 2.5h2.6v9H13z" /><path fill="currentColor" d="M28.5 3.2a9.6 9.6 0 0 1 6.8 2.8l1.1-1.1a11.2 11.2 0 0 0-15.8 0l1.1 1.1a9.6 9.6 0 0 1 6.8-2.8Zm0 3.2a6.4 6.4 0 0 1 4.5 1.9l1.1-1.1a8 8 0 0 0-11.2 0l1.1 1.1a6.4 6.4 0 0 1 4.5-1.9Zm0 3.2a3.2 3.2 0 0 1 2.2.9l-2.2 2.2-2.2-2.2a3.2 3.2 0 0 1 2.2-.9Z" /><rect x="42.5" y="1.5" width="21" height="10" rx="3" fill="none" stroke="currentColor" opacity=".45" /><rect x="44" y="3" width="16" height="7" rx="1.8" fill="currentColor" /><path d="M65 5v3.2a1.7 1.7 0 0 0 0-3.2Z" fill="currentColor" opacity=".45" /></svg>`;
+
 /** The picture a link to spaghetti.day gets when it's shared (og:image): 1200 × 630, public/og.jpg. */
 export const SHARE_IMAGE = join(root, "public/og.jpg");
 
@@ -259,10 +262,15 @@ export async function shareImage(shots: string) {
       .tag { font-family: F; font-variation-settings: "SOFT" 100; font-weight: 600; font-size: 46px; line-height: 1.05; letter-spacing: -0.03em; margin-top: 14px; }
       .tag em { font-style: normal; color: #a8381c; }
       .lead { font-size: 25px; margin-top: 20px; font-weight: 500; }
-      .phone { position: absolute; right: 70px; top: 46px; width: 262px; aspect-ratio: 390 / 844; padding: 9px; border-radius: 42px; background: #1f1b18; rotate: 5deg;
-        box-shadow: inset 0 0 0 1.5px #3a3430, 0 30px 60px -12px rgb(60 35 15 / .45); }
-      .phone img { width: 100%; height: 100%; object-fit: cover; border-radius: 34px; display: block; }
-      .island { position: absolute; top: 18px; left: 50%; width: 80px; height: 22px; translate: -50% 0; border-radius: 99px; background: #050505; }
+      /* The same iPhone as the page's (.lp-phone in src/landing/landing.css): every size a share of its width. */
+      .phone { position: absolute; right: 70px; top: 40px; width: 262px; container-type: inline-size; border-radius: 17.1% / 8.3%; rotate: 5deg;
+        background: linear-gradient(135deg, #8a847e, #4a4541 18%, #2e2a28 50%, #4a4541 82%, #77716b); box-shadow: 0 2px 6px rgb(40 25 10 / .12), 0 30px 60px -12px rgb(60 35 15 / .45); }
+      .screen { position: relative; overflow: hidden; aspect-ratio: 390 / 844; margin: 4.3cqi; border-radius: 12.8cqi; background: #f6f1e8; box-shadow: 0 0 0 3.2cqi #0b0a0a; }
+      .screen img { display: block; width: 100%; height: 100%; object-fit: cover; }
+      .status { position: absolute; inset: 0 0 auto; height: 13.7cqi; display: grid; grid-template-columns: 1fr 29.3cqi 1fr; align-items: center; justify-items: center; color: #2b2420; font-size: 3.95cqi; font-weight: 650; }
+      .status span { grid-column: 1; } .status svg { grid-column: 3; width: 15.5cqi; height: auto; }
+      .island { position: absolute; top: 2.56cqi; left: 50%; width: 29.3cqi; height: 8.6cqi; translate: -50% 0; border-radius: 99px; background: #050505; }
+      .home { position: absolute; bottom: 1.85cqi; left: 50%; width: 31.2cqi; height: 1.2cqi; translate: -50% 0; border-radius: 99px; background: rgb(43 36 32 / .88); }
       .snap { position: absolute; right: 252px; top: 318px; width: 210px; padding: 9px 9px 36px; background: #fffcf7; border-radius: 8px; rotate: -7deg;
         box-shadow: 0 2px 4px rgb(80 50 20 / .08), 0 18px 40px -8px rgb(80 50 20 / .35); }
       .snap img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; display: block; }
@@ -275,7 +283,7 @@ export async function shareImage(shots: string) {
         <div class="tag">Every print. Every <em>spaghetti</em>.<br>Written down.</div>
         <div class="lead">The 3D printing notebook for two.</div>
       </div>
-      <div class="phone"><img src="data:image/png;base64,${phone}"><span class="island"></span></div>
+      <div class="phone"><div class="screen"><img src="data:image/png;base64,${phone}"><div class="status"><span>9:41</span>${STATUS_ICONS}</div><span class="island"></span><span class="home"></span></div></div>
       <div class="snap"><img src="data:image/jpeg;base64,${octopus.toString("base64")}"><span>Octopus</span><b class="chip">Worked</b></div>`);
     await page.evaluate(async () => {
       await document.fonts.ready;
