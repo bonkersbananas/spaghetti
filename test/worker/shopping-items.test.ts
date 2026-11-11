@@ -101,12 +101,13 @@ describe("/api/shopping-items", () => {
     expect((await patch(crypto.randomUUID(), { name: "Gone" })).status).toBe(404);
   });
 
-  it("sorts what's still to buy; ids it doesn't know and bought things are left out", async () => {
+  it("sorts what's still to buy: named things trade places, the rest stay put, unknown and bought ids are ignored", async () => {
     const a = await add({ name: "A" });
     const b = await add({ name: "B" });
     const c = await add({ name: "C" });
     const d = await add({ name: "D" });
     await patch(d.id, { bought: true });
+    // C, B, A to buy; D bought.
     const response = await request("/api/shopping-items/order", {
       method: "PUT",
       cookie,
@@ -114,10 +115,19 @@ describe("/api/shopping-items", () => {
     });
     expect(response.status).toBe(200);
     const sorted = (await response.json<ShoppingItemsResponse>()).shoppingItems;
-    // A and C as asked, B (not mentioned) after them, D still bought at the end.
-    expect(sorted.map((item) => item.name)).toEqual(["A", "C", "B", "D"]);
+    // A and C swap the places they held; B (not named) keeps its own; D is still bought, at the end.
+    expect(sorted.map((item) => item.name)).toEqual(["A", "B", "C", "D"]);
     expect(sorted.find((item) => item.id === d.id)?.boughtAt).toEqual(expect.any(Number));
-    expect((await list()).map((item) => item.id)).toEqual([a.id, c.id, b.id, d.id]);
+    expect((await list()).map((item) => item.id)).toEqual([a.id, b.id, c.id, d.id]);
+  });
+
+  it("keeps something added after the list was read where it was added", async () => {
+    const a = await add({ name: "A" });
+    const b = await add({ name: "B" });
+    // Someone reorders the list they saw (B, A) while the other person adds E on top.
+    const e = await add({ name: "E" });
+    await request("/api/shopping-items/order", { method: "PUT", cookie, json: { ids: [a.id, b.id] } });
+    expect((await list()).map((item) => item.id)).toEqual([e.id, a.id, b.id]);
   });
 
   it("deletes with an undo that puts it back where it was", async () => {

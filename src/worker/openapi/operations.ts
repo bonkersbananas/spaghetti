@@ -681,7 +681,7 @@ export const operations: Record<string, Operation> = {
     errors: { 409: "deleted: that id was taken off the list.", 422: "too_many: the list is full." },
   },
   "PUT /shopping-items/order": {
-    summary: "Orders what's still to buy: these ids first; the rest keep their turn after them.",
+    summary: "Orders what's still to buy: the named things trade places in this order; the rest stay put.",
     body: shoppingOrder,
     response: list("shoppingItems", z.looseObject({})),
   },
