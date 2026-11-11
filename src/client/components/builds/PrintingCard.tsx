@@ -17,6 +17,7 @@ import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
 import { duration } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
+import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { itemName } from "../journal/JournalEntry";
 import { OffTheBed } from "./OffTheBed";
@@ -68,6 +69,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   }
   const reduce = useReducedMotion();
   const navigate = useNavigate();
+  const readOnly = useReadOnly(item.pending);
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
@@ -179,8 +181,9 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               endedAt={attempt.endedAt}
               onPick={(outcome) => finish(outcome)}
               photoRead={attempt.photoRead}
+              // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
               onPhotos={
-                item.photos.some((photo) => photo.attemptId === attempt.id)
+                readOnly || item.photos.some((photo) => photo.attemptId === attempt.id)
                   ? undefined
                   : (files) => addPhotosToItem(item.id, files, attempt.id)
               }
