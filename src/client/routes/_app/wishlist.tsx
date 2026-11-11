@@ -4,13 +4,13 @@ import type { Wishlist } from "@shared/wishlist";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
-import { WishingBowl } from "@/components/illustrations";
+import { WishingBowl } from "@/components/illustrations/WishingBowl";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { EyeSlashIcon, PlusIcon } from "@/components/ui/icons";
+import { PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -242,10 +242,7 @@ function TheirList({
       {loading && !ideas.length ? (
         <ListSkeleton />
       ) : list.private ? (
-        <Quiet>
-          <EyeSlashIcon size={18} className="shrink-0" aria-hidden />
-          {name} keeps this list private for now.
-        </Quiet>
+        <Quiet>{name} keeps this list private for now.</Quiet>
       ) : ideas.length ? (
         <WishListView ideas={ideas} label={`${possessive(name)} wishlist`} />
       ) : (

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
 import { EmptyPot } from "@/components/illustrations";
@@ -11,7 +11,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
-import { WishlistLink } from "@/components/wishlist/WishlistLink";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
@@ -20,7 +19,11 @@ import { useArrived } from "@/lib/live";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
+
+// The way to the wishlists on phones: on demand, so desktop (which has the sidebar) never loads it.
+const WishlistLink = lazy(() =>
+  import("@/components/wishlist/WishlistLink").then((m) => ({ default: m.WishlistLink })),
+);
 
 export const Route = createFileRoute("/_app/ideas/")({
   component: Ideas,
@@ -37,7 +40,6 @@ function Ideas() {
   const { data: people } = useQuery(peopleQuery);
   const { data: user } = useQuery(sessionQuery);
   const me = user?.id;
-  const wished = new Set(useWishlistIds(me));
   const { landed } = useCapture();
   const arrived = useArrived();
   const via = useVia();
@@ -52,7 +54,7 @@ function Ideas() {
     onToggle: () => setUpNext(queryClient, item, index < 0),
     onMoveUp: index > 0 ? () => moveUpNext(queryClient, queue, item.id, -1) : undefined,
     onMoveDown: index >= 0 && index < queue.length - 1 ? () => moveUpNext(queryClient, queue, item.id, 1) : undefined,
-    wish: me ? { on: wished.has(item.id), onToggle: () => toggleWishlist(queryClient, me, item) } : undefined,
+    wish: item,
   });
   const card = (item: (typeof items)[number], index: number) => (
     <IdeaCard
@@ -97,7 +99,12 @@ function Ideas() {
         </div>
       ) : items.length || started.length ? (
         <>
-          {!isDesktop && me && <WishlistLink me={me} ideas={items} people={people ?? []} className="mb-8" />}
+          {!isDesktop && me && (
+            // Its own boundary, holding its place, so the grid never waits for it or jumps when it lands.
+            <Suspense fallback={<div className="mb-8 h-16" aria-hidden />}>
+              <WishlistLink me={me} ideas={items} people={people ?? []} className="mb-8" />
+            </Suspense>
+          )}
           {!items.length && (
             <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
           )}

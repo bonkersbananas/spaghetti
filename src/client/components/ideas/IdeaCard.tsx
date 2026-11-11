@@ -42,8 +42,8 @@ export interface UpNextMenu {
   /** Queued cards only; left out where a move isn't possible (the first can't go up). */
   onMoveUp?: () => void;
   onMoveDown?: () => void;
-  /** Your wishlist: whether it is on it, and putting it on or taking it off. */
-  wish?: { on: boolean; onToggle: () => void };
+  /** Offer "Add to your wishlist" for this idea; the menu (loaded on demand) reads and changes your list itself. */
+  wish?: Pick<ItemView, "id" | "pending">;
 }
 
 /** Dragging a queued card to another place (desktop). */

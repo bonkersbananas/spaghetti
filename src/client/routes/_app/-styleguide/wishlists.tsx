@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { WishingBowl } from "@/components/illustrations";
+import { WishingBowl } from "@/components/illustrations/WishingBowl";
 import { IconButton } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
 import { DragHandle, PickTile, RankRow } from "@/components/ui/RankRow";
