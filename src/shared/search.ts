@@ -10,6 +10,8 @@ export interface SearchTerm {
   text: string;
   /** Matches words that start with it ("warp" finds "warping"). */
   prefix: boolean;
+  /** Other words that mean the same ("skev" is "warping" in Swedish): any of them matches too, as a word start. */
+  also?: string[];
 }
 
 /** At most this many words of a query are used. */
@@ -19,7 +21,7 @@ export const MAX_TERMS = 8;
  * Short material names that are whole words, not the start of others: "PLA"
  * shouldn't find every "plate" and "planter", nor "PA" every "part".
  */
-const EXACT_WORDS = new Set(["pla", "pa", "pc", "abs"]);
+export const EXACT_WORDS = new Set(["pla", "pa", "pc", "abs"]);
 
 /** Lowercase, without accents, the way FTS5's unicode61 tokenizer (remove_diacritics 2) reads text. */
 export function fold(text: string): string {
@@ -67,7 +69,8 @@ export function ftsQuery(
   ];
   return terms
     .map((term) => {
-      const token = `"${term.text}"${term.prefix ? "*" : ""}`;
+      const token = ftsToken(term.text, term.prefix);
+      const others = (term.also ?? []).map((other) => ftsToken(other, true));
       const viaLabel = tags
         .filter(
           (tag) =>
@@ -75,9 +78,16 @@ export function ftsQuery(
             !words(tag.slug).some((word) => word.startsWith(term.text)),
         )
         .map((tag) => `tags : "${words(tag.slug).join(" ")}"`);
-      return viaLabel.length ? `(${[token, ...viaLabel].join(" OR ")})` : token;
+      const options = [token, ...others, ...viaLabel];
+      return options.length > 1 ? `(${options.join(" OR ")})` : token;
     })
     .join(" AND ");
+}
+
+/** One word as an FTS5 string; "0.4" is the phrase "0 4", which is how the index splits it. */
+function ftsToken(text: string, prefix: boolean) {
+  const pieces = text.match(/[\p{L}\p{N}]+/gu) ?? [text];
+  return `"${pieces.join(" ")}"${prefix ? "*" : ""}`;
 }
 
 /** A piece of text, marked when it matched. */

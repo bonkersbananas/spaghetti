@@ -432,6 +432,8 @@ export interface AttemptHit {
   partsLabel: string | null;
   /** The attempt's first photo, else its build's. */
   photo: Photo | null;
+  /** In search: the failure coach's suggestion that matched the words (not saved on the attempt). */
+  coachIdea?: string | null;
 }
 
 /** An idea or a build found by search. */
@@ -454,6 +456,16 @@ export interface SearchResponse {
   attempts: AttemptHit[];
   /** Recipes whose name, note or material match; none while an outcome or tag filter is on. */
   recipes: Recipe[];
+  /** Spools on the shelf whose material, brand, colour or finish match (a few); none while a filter is on. */
+  spools: Spool[];
+  /** The words the answer is for, as the server read the question (filler dropped, typos mended, synonyms added): what to mark. */
+  terms?: Array<{ text: string; prefix: boolean }>;
+  /** The question with its mistyped words mended ("petgg" → "petg") when nothing matched as typed. */
+  corrected?: string | null;
+  /** "what worked" or "what failed" in the question: attempts that did are first. */
+  intent?: "worked" | "failed" | null;
+  /** A time phrase in the question ("last week"); `weekMonday` is set for weeks, to link the week's page. */
+  when?: { label: string; weekMonday: string | null } | null;
 }
 
 /** Where a recipe came from: the attempt that worked, while it and its build still exist. */

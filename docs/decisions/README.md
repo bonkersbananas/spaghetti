@@ -35,6 +35,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0028](0028-wishlists-per-person-shared-by-default.md) | Each person keeps a ranked wishlist of ideas, shared by default | Accepted |
 | [0030](0030-the-week-is-computed-with-one-paragraph-by-claude.md) | The week is computed, with one paragraph by Claude and one push on Sunday evening | Accepted |
 | [0031](0031-claude-reads-a-spool-label-from-its-photo.md) | Claude reads a spool's label from its photo, and only fills what is empty | Accepted |
+| [0032](0032-search-reads-questions.md) | Search reads questions: filler, outcome, time, names, Swedish twins and typos, in the Worker, with no new index | Accepted |
 
 ## Format
 
