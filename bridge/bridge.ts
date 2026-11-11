@@ -5,7 +5,7 @@
  * late one is worth nothing.
  */
 import type { UpdateBridgeRequest } from "../src/shared/api.ts";
-import type { BridgePrinterState } from "../src/shared/bridge.ts";
+import type { BridgePrinterState, BridgeProblem } from "../src/shared/bridge.ts";
 import { remainingFrom, traysOf } from "./ams.ts";
 import { type Api, HttpError } from "./api.ts";
 import type { Camera } from "./camera.ts";
@@ -25,6 +25,11 @@ export interface BridgeDeps {
   camera: Camera | null;
   /** Identifies the printer in the ids the bridge makes (its serial number). */
   printerId: string;
+  /** Said to the app with every heartbeat, so the Printer page can show the version and the system. */
+  version?: string;
+  platform?: string;
+  /** What is wrong right now, said with every heartbeat; empty when all is well. */
+  problems?: () => BridgeProblem[];
   log?: (message: string) => void;
   now?: () => number;
   /** How often progress and "still here" go to the app. */
@@ -57,7 +62,8 @@ export class Bridge {
   state: PrinterState = emptyState();
   machine: JobMachine;
   connected = false;
-  private deps: Required<Omit<BridgeDeps, "camera" | "log">> & Pick<BridgeDeps, "camera" | "log">;
+  private deps: Required<Omit<BridgeDeps, "camera" | "log" | "version" | "platform" | "problems">> &
+    Pick<BridgeDeps, "camera" | "log" | "version" | "platform" | "problems">;
   private chain: Promise<void> = Promise.resolve();
   private draining = false;
   private stopped = false;
@@ -214,6 +220,15 @@ export class Bridge {
   }
 
   statusBody(): UpdateBridgeRequest {
+    return {
+      ...this.printerStatus(),
+      ...(this.deps.version ? { version: this.deps.version } : {}),
+      ...(this.deps.platform ? { platform: this.deps.platform } : {}),
+      ...(this.deps.problems ? { problems: this.deps.problems() } : {}),
+    };
+  }
+
+  private printerStatus(): UpdateBridgeRequest {
     const print = this.state.print;
     if (!this.connected || !this.state.complete) return { printerState: "offline", progress: null };
     const printerState = STATE_NAMES[print.gcode_state ?? ""] ?? "idle";

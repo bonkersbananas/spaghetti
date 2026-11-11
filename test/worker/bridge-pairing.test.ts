@@ -161,6 +161,6 @@ describe("the bridge's heartbeat", () => {
     const paired = await (await exchange((await makeCode()).code)).json<PairResponse>();
     const beat = (json: unknown) => asToken(paired.token, "/api/printer/bridge", { method: "PUT", json });
     expect((await beat({ problems: [{ code: "nope", message: "x" }] })).status).toBe(400);
-    expect((await beat({ problems: [{ code: "app", message: "x".repeat(500) }] })).status).toBe(400);
+    expect((await beat({ problems: [{ code: "silent", message: "x".repeat(500) }] })).status).toBe(400);
   });
 });

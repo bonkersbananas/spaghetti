@@ -39,7 +39,6 @@ export const BRIDGE_PROBLEM_CODES = [
   "wrong-access-code",
   "silent",
   "certificate",
-  "app",
 ] as const;
 export type BridgeProblemCode = (typeof BRIDGE_PROBLEM_CODES)[number];
 export interface BridgeProblem {
