@@ -2521,6 +2521,94 @@ shots.push({
   },
 });
 
+// The Connect-the-bridge guide on the Printer page. After the shots that read the seeded bridge's status: the last two
+// pair a stand-in bridge, which replaces it.
+async function openConnectSheet(page: Page) {
+  await page.getByRole("button", { name: /Connect the bridge|Set it up again/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Connect the bridge" });
+  await dialog.locator("code").waitFor();
+  await page.waitForTimeout(500);
+  return dialog;
+}
+/** What the installer and the bridge do, from the sheet's own code: pairs, then sends a heartbeat. */
+async function bridgeChecksIn(page: Page, dialog: ReturnType<Page["getByRole"]>, body: object) {
+  const origin = new URL(page.url()).origin;
+  const command = await dialog.locator("code").innerText();
+  const code = /-- ([A-Z2-9]{4}-[A-Z2-9]{4})/.exec(command)?.[1] ?? "";
+  const paired = (await (
+    await fetch(`${origin}/api/bridge/pair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    })
+  ).json()) as { token: string };
+  await fetch(`${origin}/api/printer/bridge`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${paired.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+shots.push(
+  ...([
+    { name: "printer-bridge-none", path: "/printer", selector: "[data-bridge]" },
+    {
+      name: "bridge-connect-waiting",
+      path: "/printer",
+      prepare: async (page) => {
+        await openConnectSheet(page);
+      },
+      cleanup: async (page) => {
+        await page.keyboard.press("Escape");
+      },
+    },
+    {
+      name: "bridge-connect-connected",
+      path: "/printer",
+      prepare: async (page) => {
+        const dialog = await openConnectSheet(page);
+        await bridgeChecksIn(page, dialog, {
+          printerState: "idle",
+          version: "1.0.0",
+          platform: "darwin-arm64",
+          problems: [],
+        });
+        await dialog.getByText("Connected to the X2D").waitFor({ timeout: 15_000 });
+        await dialog.getByText("Connected to the X2D").scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+      },
+      cleanup: async (page) => {
+        await page.keyboard.press("Escape");
+      },
+    },
+    { name: "printer-bridge-connected", path: "/printer", selector: "[data-bridge]" },
+    {
+      name: "bridge-connect-problem",
+      path: "/printer",
+      prepare: async (page) => {
+        const dialog = await openConnectSheet(page);
+        await bridgeChecksIn(page, dialog, {
+          printerState: "offline",
+          version: "1.0.0",
+          platform: "darwin-arm64",
+          problems: [
+            {
+              code: "local-network",
+              message:
+                "Can't reach the printer at 192.168.1.50. If it is on and on this network, macOS may be blocking Spaghetti Bridge from the local network: open System Settings → Privacy & Security → Local Network and turn on Spaghetti Bridge.",
+            },
+          ],
+        });
+        await dialog.getByText(/macOS may be blocking/).waitFor({ timeout: 15_000 });
+        await dialog.getByText(/macOS may be blocking/).scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+      },
+      cleanup: async (page) => {
+        await page.keyboard.press("Escape");
+      },
+    },
+  ] as Shot[]),
+);
+
 // Last: the queued finish stays offline and unsent, so nothing after it would work.
 shots.push(
   ...([
