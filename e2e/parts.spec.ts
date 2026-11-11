@@ -56,10 +56,10 @@ test("a build without parts stays as it was, and adds parts inline", async ({ pa
   await newPart.press("Enter");
   // The next part takes its place from the list as it stands: let the first one land in it (typed faster than
   // that, both would claim the same place and their order would be left to chance).
-  await expect(page.getByRole("button", { name: /^Hull half, needed/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Hull half, needed: one more$/ })).toBeVisible();
   await newPart.fill("Deck");
   await newPart.press("Enter");
-  await expect(page.getByRole("button", { name: /^Deck, needed/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Deck, needed: one more$/ })).toBeVisible();
   await expect
     .poll(async () => (await getItem(page, id)).parts.map((p: { name: string }) => p.name))
     .toEqual(["Hull half", "Deck"]);
