@@ -1,4 +1,4 @@
-# 0028. OAuth for the MCP server is a small implementation on D1, and a connected app is an agent
+# 0029. OAuth for the MCP server is a small implementation on D1, and a connected app is an agent
 
 Status: Accepted
 
@@ -8,4 +8,4 @@ Status: Accepted
 
 **Choices:** public clients with PKCE are the norm; a client that registers with a client secret gets one (stored as a hash). Registration is open (the protocol needs it) so the table is capped and unused clients are cleared after a day. Redirect addresses must be https, plain http only to localhost, or an app's own scheme, and must match exactly. A request that names no scope (or only ones we don't know) asks for all four, which the consent screen lists in plain words; people approve or decline as a whole rather than picking scopes. Access tokens last an hour and refresh tokens sixty days, each use making a new one; one agent per person and app, so connecting again picks the same "Claude for Alex" up. Typed-in tokens (Agents page, `pnpm agent:add`) are unchanged and never expire.
 
-**Consequences:** no ship step beyond the usual `pnpm ship`, which applies migration 0027 and deploys; `/oauth/*` and `/.well-known/*` are routed to the Worker (`run_worker_first`). The daily cron tidies expired codes and tokens. A client that needs something we don't offer (OpenID Connect discovery, client authentication by signed JWT, the implicit flow) can't connect.
+**Consequences:** no ship step beyond the usual `pnpm ship`, which applies migration 0028 and deploys; `/oauth/*` and `/.well-known/*` are routed to the Worker (`run_worker_first`). The daily cron tidies expired codes and tokens. A client that needs something we don't offer (OpenID Connect discovery, client authentication by signed JWT, the implicit flow) can't connect.

@@ -1,5 +1,5 @@
 /**
- * OAuth for the MCP server (decision 0028): what the consent screen and the Worker agree on. The scopes are the
+ * OAuth for the MCP server (decision 0029): what the consent screen and the Worker agree on. The scopes are the
  * agent scopes (`shared/agents.ts`), so what a connected app may do reads the same as what a typed-in token may.
  */
 import { AGENT_SCOPES, type AgentScope, isScope } from "./agents.ts";

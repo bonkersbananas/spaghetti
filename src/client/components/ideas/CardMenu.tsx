@@ -1,14 +1,20 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
-import { MoreIcon, MoveDownIcon, MoveUpIcon, UpNextIcon } from "@/components/ui/icons";
+import { MoreIcon, MoveDownIcon, MoveUpIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { Sheet } from "@/components/ui/Sheet";
+import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 import type { UpNextMenu } from "./IdeaCard";
 
-/** The card's "…" button: Up next, and where it stands in the queue. A link can't hold a button, so it sits over the card. */
+/** The card's "…" button: Up next, where it stands in the queue, and your wishlist. A link can't hold a button, so it sits over the card. */
 export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const me = useQuery(sessionQuery).data?.id;
+  const wished = useWishlistIds(me).includes(menu.wish?.id ?? "");
   const row =
     "text-body text-ink hover:bg-ink/5 focus-visible:bg-ink/5 flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left outline-none md:min-h-11";
   const actions = (
@@ -29,6 +35,16 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
           Move down
         </MenuRow>
       )}
+      {menu.wish && me && (
+        <MenuRow
+          onSelect={() => menu.wish && toggleWishlist(queryClient, me, menu.wish)}
+          className={row}
+          close={isDesktop ? undefined : () => setOpen(false)}
+        >
+          <WishIcon size={20} weight={wished ? "fill" : "regular"} aria-hidden />
+          {wished ? "Take off your wishlist" : "Add to your wishlist"}
+        </MenuRow>
+      )}
     </div>
   );
   // Over the card's bottom-right corner, at the end of the avatar's row: the photo and a note's words stay clear.
@@ -46,14 +62,19 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
     return (
       <>
         {button}
-        <Sheet open={open} onOpenChange={setOpen} title={name} description="Up next, the queue of what to print soon.">
+        <Sheet
+          open={open}
+          onOpenChange={setOpen}
+          title={name}
+          description="Up next is the queue you share; your wishlist is your own top ideas."
+        >
           {actions}
         </Sheet>
       </>
     );
   }
   return (
-    <Popover label={`Up next options for ${name}`} side="bottom" align="end" className="w-56 p-1.5" trigger={button}>
+    <Popover label={`Options for ${name}`} side="bottom" align="end" className="w-56 p-1.5" trigger={button}>
       {actions}
     </Popover>
   );

@@ -9,7 +9,7 @@ import { appName, findClient, registerClient, registration } from "./clients.ts"
 import { disconnectAgent, issueGrant } from "./grants.ts";
 
 /**
- * OAuth 2.1 for the MCP server, so Claude's apps can connect with a sign-in (decision 0028): the metadata clients
+ * OAuth 2.1 for the MCP server, so Claude's apps can connect with a sign-in (decision 0029): the metadata clients
  * discover it by (RFC 9728 and 8414), dynamic client registration (7591), the token endpoint (authorization code
  * with PKCE S256, and refresh with rotation) and revocation (7009). The consent screen is the app's own page,
  * /authorize, and its calls are in routes/oauth.ts. An approved app becomes an agent whose tokens live in

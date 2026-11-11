@@ -23,6 +23,7 @@ import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppShareRouteImport } from './routes/_app/share'
 import { Route as AppStyleguideRouteImport } from './routes/_app/styleguide'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
+import { Route as AppWishlistRouteImport } from './routes/_app/wishlist'
 import { Route as AppYearRouteImport } from './routes/_app/year'
 import { Route as AppBuildsIndexRouteImport } from './routes/_app/builds.index'
 import { Route as AppBuildsBuildIdRouteImport } from './routes/_app/builds.$buildId'
@@ -100,6 +101,11 @@ const AppTodayRoute = AppTodayRouteImport.update({
   path: '/today',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWishlistRoute = AppWishlistRouteImport.update({
+  id: '/wishlist',
+  path: '/wishlist',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppYearRoute = AppYearRouteImport.update({
   id: '/year',
   path: '/year',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/share': typeof AppShareRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
+  '/wishlist': typeof AppWishlistRoute
   '/year': typeof AppYearRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/share': typeof AppShareRoute
   '/styleguide': typeof AppStyleguideRoute
   '/today': typeof AppTodayRoute
+  '/wishlist': typeof AppWishlistRoute
   '/year': typeof AppYearRoute
   '/': typeof AppIndexRoute
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   '/_app/share': typeof AppShareRoute
   '/_app/styleguide': typeof AppStyleguideRoute
   '/_app/today': typeof AppTodayRoute
+  '/_app/wishlist': typeof AppWishlistRoute
   '/_app/year': typeof AppYearRoute
   '/_app/': typeof AppIndexRoute
   '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
@@ -220,6 +229,7 @@ export interface FileRouteTypes {
     | '/share'
     | '/styleguide'
     | '/today'
+    | '/wishlist'
     | '/year'
     | '/builds/$buildId'
     | '/ideas/$ideaId'
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/share'
     | '/styleguide'
     | '/today'
+    | '/wishlist'
     | '/year'
     | '/'
     | '/builds/$buildId'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/_app/share'
     | '/_app/styleguide'
     | '/_app/today'
+    | '/_app/wishlist'
     | '/_app/year'
     | '/_app/'
     | '/_app/builds/$buildId'
@@ -382,6 +394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTodayRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/wishlist': {
+      id: '/_app/wishlist'
+      path: '/wishlist'
+      fullPath: '/wishlist'
+      preLoaderRoute: typeof AppWishlistRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/year': {
       id: '/_app/year'
       path: '/year'
@@ -443,6 +462,7 @@ interface AppRouteChildren {
   AppShareRoute: typeof AppShareRoute
   AppStyleguideRoute: typeof AppStyleguideRoute
   AppTodayRoute: typeof AppTodayRoute
+  AppWishlistRoute: typeof AppWishlistRoute
   AppYearRoute: typeof AppYearRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
@@ -462,6 +482,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppShareRoute: AppShareRoute,
   AppStyleguideRoute: AppStyleguideRoute,
   AppTodayRoute: AppTodayRoute,
+  AppWishlistRoute: AppWishlistRoute,
   AppYearRoute: AppYearRoute,
   AppIndexRoute: AppIndexRoute,
   AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,

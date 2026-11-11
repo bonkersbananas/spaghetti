@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-**Decision:** `/mcp` is a small hand-written JSON-RPC handler for MCP over Streamable HTTP (`initialize`, `ping`, `tools/list`, `tools/call`), answering every POST with JSON. No sessions, no streams, no Durable Objects, no OAuth at first (agent bearer tokens only; OAuth came later, [0028](0028-oauth-small-and-on-d1.md)). Its tools call Spaghetti's own API with the caller's token instead of reaching into the database.
+**Decision:** `/mcp` is a small hand-written JSON-RPC handler for MCP over Streamable HTTP (`initialize`, `ping`, `tools/list`, `tools/call`), answering every POST with JSON. No sessions, no streams, no Durable Objects, no OAuth at first (agent bearer tokens only; OAuth came later, [0029](0029-oauth-small-and-on-d1.md)). Its tools call Spaghetti's own API with the caller's token instead of reaching into the database.
 
 **Why:** the official SDK drags in a Node-oriented dependency tree and validates tool input with a schema compiler that generates code at runtime, which Workers forbid; the part of the protocol we need is five methods. Going through the API means scopes, validation, the "via" attribution and the change feed are the same for every way in, with nothing to keep in step.
 

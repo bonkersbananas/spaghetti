@@ -19,7 +19,7 @@ Other clients that speak MCP's OAuth (MCP Inspector, Claude Code's `/mcp` sign-i
 | `POST /oauth/token` | `authorization_code` (with `code_verifier`) and `refresh_token` (each refresh token works once and comes back replaced); answers `access_token` (`spg_…`, one hour), `refresh_token` (`spr_…`), `scope` |
 | `POST /oauth/revoke` | RFC 7009: ends the connection from the app's side |
 
-A `401` from `/mcp` carries `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`, which is where a client starts. Redirect addresses are https, `http://localhost…`, or an app's own scheme, and must match what was registered exactly. A refresh can ask for fewer scopes than were approved, never more (`invalid_scope`). The decision is [0028](decisions/0028-oauth-small-and-on-d1.md).
+A `401` from `/mcp` carries `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`, which is where a client starts. Redirect addresses are https, `http://localhost…`, or an app's own scheme, and must match what was registered exactly. A refresh can ask for fewer scopes than were approved, never more (`invalid_scope`). The decision is [0029](decisions/0029-oauth-small-and-on-d1.md).
 
 ## 1. Make a token (Claude Code and config files)
 

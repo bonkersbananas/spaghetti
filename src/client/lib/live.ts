@@ -102,6 +102,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "person":
         roots.add("people").add("session");
         break;
+      case "wishlist":
+        roots.add("wishlists");
+        break;
       case "signin":
         roots.add("sign-in-links").add("devices");
         break;
