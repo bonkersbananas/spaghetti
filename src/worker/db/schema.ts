@@ -581,3 +581,50 @@ export interface DraftResult {
   /** The photos it stored on the idea, so undo can take them off again. */
   photoIds: string[];
 }
+
+/**
+ * A comment in the short thread under an idea or build. The client picks the id (so sending is idempotent and
+ * optimistic), `authorId` is the person it counts as (an agent's comment is its owner's, with `via` naming the
+ * agent), `editedAt` is set once the body changed. Deleting is soft with an undo; the daily purge removes it
+ * after 30 days (decision 0006). `notifiedAt` is when a push for it was claimed (null: not yet), so a burst of
+ * comments is told in one push.
+ */
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    via: text("via"),
+    body: text("body").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    editedAt: integer("edited_at", { mode: "timestamp_ms" }),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+    notifiedAt: integer("notified_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("comments_item_idx").on(table.itemId, table.createdAt)],
+);
+
+/**
+ * How far one person has read one thread: the comments of the other person created after `readAt` are unread
+ * for them. Per person, never shared (decision 0022).
+ */
+export const commentReads = sqliteTable(
+  "comment_reads",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    readAt: integer("read_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
+);
+
+export type CommentRow = typeof comments.$inferSelect;
