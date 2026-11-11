@@ -64,7 +64,7 @@ export function MotionSection() {
 function PressedPanel() {
   const rows = [
     [
-      "Button",
+      "Button · shrinks",
       (held?: boolean) => (
         <Button variant="primary" data-pressed={held || undefined}>
           Log attempt
@@ -72,7 +72,7 @@ function PressedPanel() {
       ),
     ],
     [
-      "Chip",
+      "Chip · shrinks",
       (held?: boolean) => (
         <ToggleChip selected={false} data-pressed={held || undefined}>
           Silk PLA
@@ -80,7 +80,7 @@ function PressedPanel() {
       ),
     ],
     [
-      "Row or card",
+      "Card or row, pressable · shrinks",
       (held?: boolean) => (
         <button
           type="button"
@@ -93,7 +93,7 @@ function PressedPanel() {
       ),
     ],
     [
-      "Link without .pressable",
+      "Link, not pressable · dims",
       (held?: boolean) => (
         <a
           href="#motion"
@@ -111,9 +111,9 @@ function PressedPanel() {
         Held: <code>pressable</code> shrinks to 97% in 90 ms; tappable things without it (inline links, plain rows) dim
         to 60%. Both start on the touch itself, never after it.
       </p>
-      <div className="grid grid-cols-2 items-center gap-x-4 gap-y-2">
-        <span className="text-caption text-ink-faint">Resting</span>
-        <span className="text-caption text-ink-faint">Held</span>
+      <div className="bg-paper grid max-w-lg grid-cols-2 items-center gap-x-4 gap-y-2 rounded-md p-4">
+        <span className="text-caption text-ink font-semibold">Resting</span>
+        <span className="text-caption text-ink font-semibold">Held</span>
         {rows.map(([name, specimen]) => (
           <div key={name} className="contents">
             <span className="text-small text-ink-faint col-span-2 mt-3">{name}</span>
