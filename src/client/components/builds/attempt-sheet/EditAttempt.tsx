@@ -89,6 +89,8 @@ export function EditAttempt({
   const read =
     attempt.outcome === null && !value.outcome && attempt.photoRead?.status === "read" ? attempt.photoRead : null;
   const reading = attempt.outcome === null && !value.outcome ? attempt.photoRead : null;
+  // Claude's failure tags, if it named any; otherwise the printer's tag (if any) is what gets marked.
+  const claudeTags = attempt.photoRead?.status === "read" ? attempt.photoRead.failureTags : [];
   const finish = (outcome: Outcome) => {
     // Finishing a print that was logged as it started: how long it took, if that's believable.
     const actual =
@@ -196,13 +198,9 @@ export function EditAttempt({
         note={value.note}
         onNote={(note) => change({ note })}
         failureTags={value.failureTags}
-        suggestedFailureTag={
-          attempt.photoRead?.status === "read"
-            ? attempt.photoRead.failureTags
-            : (attempt.suggestedFailureTag ?? undefined)
-        }
+        suggestedFailureTag={claudeTags.length ? claudeTags : (attempt.suggestedFailureTag ?? undefined)}
         suggestedSuccessNotes={attempt.photoRead?.successNotes}
-        suggestedBy={attempt.photoRead?.status === "read" ? "claude" : "printer"}
+        suggestedBy={claudeTags.length || attempt.photoRead?.successNotes.length ? "claude" : "printer"}
         suggestedOutcome={read?.outcome}
         outcomeHint={reading ? <PhotoReadNote read={reading} /> : null}
         onFailureTags={(failureTags) => change({ failureTags })}
