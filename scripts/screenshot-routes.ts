@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
+import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
@@ -583,6 +584,23 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByRole("region", { name: "Attempts" }).waitFor();
       await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // A build found by what Sam said in its thread: the comment is the snippet, with who and when.
+    name: "search-comment",
+    path: "/search?q=chunkier",
+    prepare: async (page) => {
+      await page.getByRole("link", { name: /tugboat/i }).first().waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // Opened from that result: the thread in view with the comment lit for a moment.
+    name: "comments-found",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}?thread=1&comment=${commentId(5)}`,
+    prepare: async (page) => {
+      await page.locator(`#comment-${commentId(5)} > div`).first().waitFor();
     },
   },
   {
