@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { NextIcon, PreviousIcon } from "@/components/ui/icons";
+import { CloseIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
@@ -14,6 +14,8 @@ interface PhotoViewerProps {
   index: number;
   onIndexChange: (index: number) => void;
   alt: string;
+  /** Removes the photo being shown (a quiet button on it). Leave out where photos can't be removed. */
+  onRemove?: (photo: PhotoView) => void;
   className?: string;
 }
 
@@ -37,7 +39,7 @@ function ViewerFigure({ photo, label, children }: { photo: PhotoView; label: str
  * or use the arrow buttons and keys on desktop. The whole print shows:
  * nothing is cropped.
  */
-export function PhotoViewer({ photos, index, onIndexChange, alt, className }: PhotoViewerProps) {
+export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, className }: PhotoViewerProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -62,33 +64,48 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
   const many = photos.length > 1;
   return (
     <section aria-roledescription="carousel" aria-label="Photos" className={cn("group/viewer relative", className)}>
-      <div
-        ref={scroller}
-        onScroll={onScroll}
-        // Reachable with Tab when it scrolls (several photos), so arrow keys can move through them without a mouse.
-        tabIndex={many ? 0 : undefined}
-        className="focus-ring bg-paper-deep flex max-h-[72dvh] w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:rounded-xl [&::-webkit-scrollbar]:hidden"
-        style={{ aspectRatio: frameAspect(photos[0]), scrollbarWidth: "none" }}
-      >
-        {photos.map((photo, i) => (
-          <ViewerFigure key={photo.id} photo={photo} label={`${i + 1} of ${photos.length}`}>
-            <Photo
-              src={photoSrc(photo.id, "large")}
-              alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
-              color={photo.color || undefined}
-              fit="contain"
-              eager={Math.abs(i - index) <= 1}
-              className="bg-paper-deep size-full"
-            />
-            {photo.upload && (
-              <UploadBadge
-                state={photo.upload.status === "queued" ? "queued" : photo.upload.status}
-                progress={photo.upload.progress}
-                className="absolute bottom-3 left-3"
+      <div className="relative">
+        <div
+          ref={scroller}
+          onScroll={onScroll}
+          // Reachable with Tab when it scrolls (several photos), so arrow keys can move through them without a mouse.
+          tabIndex={many ? 0 : undefined}
+          className="focus-ring bg-paper-deep flex max-h-[72dvh] w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:rounded-xl [&::-webkit-scrollbar]:hidden"
+          style={{ aspectRatio: frameAspect(photos[0]), scrollbarWidth: "none" }}
+        >
+          {photos.map((photo, i) => (
+            <ViewerFigure key={photo.id} photo={photo} label={`${i + 1} of ${photos.length}`}>
+              <Photo
+                src={photoSrc(photo.id, "large")}
+                alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
+                color={photo.color || undefined}
+                fit="contain"
+                eager={Math.abs(i - index) <= 1}
+                className="bg-paper-deep size-full"
               />
-            )}
-          </ViewerFigure>
-        ))}
+              {photo.upload && (
+                <UploadBadge
+                  state={photo.upload.status === "queued" ? "queued" : photo.upload.status}
+                  progress={photo.upload.progress}
+                  className="absolute bottom-3 left-3"
+                />
+              )}
+            </ViewerFigure>
+          ))}
+        </div>
+        {onRemove && photos[index] && (
+          // On the photo, in the corner a thumb reaches: always there on a phone, on hover or focus on desktop. A plain
+          // cross, not the trash of "delete this idea"; removing has its undo toast, so it is one tap.
+          <button
+            type="button"
+            onClick={() => photos[index] && onRemove(photos[index])}
+            aria-label="Remove this photo"
+            title="Remove this photo"
+            className="pressable focus-ring touch-target bg-veil text-on-veil shadow-raised duration-fast absolute right-3 bottom-3 flex size-8 items-center justify-center rounded-full transition-opacity md:opacity-0 md:group-focus-within/viewer:opacity-100 md:group-hover/viewer:opacity-100"
+          >
+            <CloseIcon size={16} weight="bold" aria-hidden />
+          </button>
+        )}
       </div>
 
       {many && (

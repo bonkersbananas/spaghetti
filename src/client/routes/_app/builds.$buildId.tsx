@@ -67,6 +67,7 @@ import {
   deleteItem,
   discardIfUntouched,
   type ItemView,
+  removePhoto,
   scrapBuild,
   useItem,
   useItemFields,
@@ -149,6 +150,7 @@ function Build({ item }: { item: ItemView }) {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
+  const offline = useReadOnly();
   const { new: isNew, attempt: linkedAttempt, finish: finishParam } = Route.useSearch();
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
@@ -472,6 +474,13 @@ function Build({ item }: { item: ItemView }) {
                 index={photoIndex}
                 onIndexChange={selectPhoto}
                 alt={alt}
+                onRemove={
+                  // Only the build's own photos come off here; an attempt's belong to their attempt.
+                  (offline && !gallery[photoIndex]?.upload) ||
+                  !own.some((photo) => photo.id === gallery[photoIndex]?.id)
+                    ? undefined
+                    : (photo) => removePhoto(queryClient, photo)
+                }
                 className="-mx-5 md:mx-0"
               />
               {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
