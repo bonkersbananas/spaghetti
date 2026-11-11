@@ -310,23 +310,22 @@ export async function acceptLabelRead(
     .where(and(eq(labelReads.spoolId, spoolId), eq(labelReads.status, "multiple")))
     .get();
   if (!row) return null;
-  // Taking it first makes a double tap do nothing the second time.
-  const [taken] = await db
-    .update(labelReads)
-    .set({ status: "done" })
-    .where(and(eq(labelReads.photoId, row.photoId), eq(labelReads.status, "multiple")))
-    .returning();
-  if (!taken) return null;
   const found = parseFound(row);
-  const spool = await db.select().from(spools).where(eq(spools.id, spoolId)).get();
-  if (!spool || !spool.photoId) return { ids: [] };
+  const spool = await db
+    .select()
+    .from(spools)
+    .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
+    .get();
+  if (!spool?.photoId) return null;
   const [first, ...others] = found;
   if (first) await fillSpool(db, spoolId, first, row.placeholders, actor);
   const now = new Date();
   const ids: string[] = [];
   for (const [index, label] of others.entries()) {
-    const id = crypto.randomUUID();
-    const photoId = crypto.randomUUID();
+    // Ids follow from the read and the label's place in it, so a tap that failed halfway and is repeated makes
+    // each spool once: the ones already made are left as they are.
+    const id = await derivedId(`${row.photoId}:${index}:spool`);
+    const photoId = await derivedId(`${row.photoId}:${index}:photo`);
     for (const variant of ["large", "thumb"] as const) {
       const object = await env.PHOTOS.get(photoKey(spool.photoId, variant));
       if (object) {
@@ -338,36 +337,48 @@ export async function acceptLabelRead(
     const filled = LABEL_FIELDS.filter((field) => !isEmpty(label[field]));
     const created = new Date(now.getTime() + index);
     await db.batch([
-      db.insert(spools).values({
-        id,
-        material: label.material ?? "PLA",
-        brand: label.brand,
-        colorName: label.colorName,
-        colorHex: label.colorHex,
-        finish: label.finish,
-        netGrams: label.netGrams ?? DEFAULT_NET_GRAMS,
-        diameterMm: label.diameterMm,
-        nozzleTempMin: label.nozzleTempMin,
-        nozzleTempMax: label.nozzleTempMax,
-        bedTempMin: label.bedTempMin,
-        bedTempMax: label.bedTempMax,
-        dryTempC: label.dryTempC,
-        dryHours: label.dryHours,
-        productCode: label.productCode,
-        labelFields: filled,
-        photoId,
-        photoWidth: spool.photoWidth,
-        photoHeight: spool.photoHeight,
-        photoColor: spool.photoColor,
-        createdBy: actor.id,
-        createdAt: created,
-        updatedAt: created,
-      }),
+      db
+        .insert(spools)
+        .values({
+          id,
+          material: label.material ?? "PLA",
+          brand: label.brand,
+          colorName: label.colorName,
+          colorHex: label.colorHex,
+          finish: label.finish,
+          netGrams: label.netGrams ?? DEFAULT_NET_GRAMS,
+          diameterMm: label.diameterMm,
+          nozzleTempMin: label.nozzleTempMin,
+          nozzleTempMax: label.nozzleTempMax,
+          bedTempMin: label.bedTempMin,
+          bedTempMax: label.bedTempMax,
+          dryTempC: label.dryTempC,
+          dryHours: label.dryHours,
+          productCode: label.productCode,
+          labelFields: filled,
+          photoId,
+          photoWidth: spool.photoWidth,
+          photoHeight: spool.photoHeight,
+          photoColor: spool.photoColor,
+          createdBy: actor.id,
+          createdAt: created,
+          updatedAt: created,
+        })
+        .onConflictDoNothing(),
       recordChange(db, { entity: "spool", id, action: "created", actor: { kind: "person", id: actor.id } }),
     ]);
     ids.push(id);
   }
+  // Only now is the list done: a failure above leaves it waiting for another tap.
+  await db.update(labelReads).set({ status: "done" }).where(eq(labelReads.photoId, row.photoId));
   return { ids };
+}
+
+/** A uuid-shaped id made from a text, the same every time. */
+async function derivedId(text: string): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+  const hex = [...hash.subarray(0, 16)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 /** "Not these" or a dismissed failure line: puts the read away; the spool stays as it is. */
