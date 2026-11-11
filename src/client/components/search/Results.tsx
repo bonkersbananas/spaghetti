@@ -19,7 +19,6 @@ import {
   type Icon,
   IdeasIcon,
   ShelveIcon,
-  SparkleIcon,
 } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { useTagOptions } from "@/lib/builds";
@@ -109,9 +108,10 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
   const title = item.title?.trim() || "Untitled build";
   const filaments = attempt.settings.filaments ?? [];
   // The settings the words matched come first ("bed 70 °C" for "bed temp"), then the usual ones.
-  const allSettings = summarizeSettings(attempt.settings);
-  const matched = allSettings.filter((part) => highlight(part, terms).some((piece) => piece.match));
-  const settings = [...matched, ...allSettings.filter((part) => !matched.includes(part))].slice(0, 4);
+  const matches = (part: string) => highlight(part, terms).some((piece) => piece.match);
+  const settings = summarizeSettings(attempt.settings)
+    .sort((x, y) => Number(matches(y)) - Number(matches(x)))
+    .slice(0, 4);
   return (
     <ResultRow
       ref={ref}
@@ -137,7 +137,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       {attempt.note && <Highlight text={attempt.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />}
       {hit.coachIdea && (
         <span className="text-small text-ink-soft flex items-center gap-1.5">
-          <SparkleIcon size={14} aria-hidden className="text-ink-faint shrink-0" />
+          <IdeasIcon size={14} aria-hidden className="text-ink-faint shrink-0" />
           <span className="min-w-0 truncate">
             <span className="text-ink-faint">Claude suggested </span>
             <Highlight text={hit.coachIdea} terms={terms} />

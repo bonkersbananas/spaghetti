@@ -145,7 +145,10 @@ function alsoFor(term: SearchTerm): string[] {
 
 /** Reads a typed question. `now` and `tzOffset` place time phrases. */
 export function parseQuery(query: string, now: number, tzOffset = 0): ParsedQuery {
-  let rest = fold(query).replace(/[’']s\b/g, "");
+  // "0,4" is the decimal 0.4, and "Marie's" is Marie.
+  let rest = fold(query)
+    .replace(/(\d),(\d)/g, "$1.$2")
+    .replace(/[’']s\b/g, "");
   let when: When | null = null;
   for (const { pattern, range } of PHRASES) {
     if (!pattern.test(rest)) continue;

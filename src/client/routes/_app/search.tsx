@@ -1,21 +1,20 @@
-import type { AttemptHit, ItemHit, Recipe, SearchResponse, Spool } from "@shared/api";
+import type { AttemptHit, ItemHit, Recipe, Spool } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, type LinkProps, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot, NoodleSearch } from "@/components/illustrations";
 import { Filters } from "@/components/journal/Filters";
 import { LazyRecipeSheet } from "@/components/recipes/LazyRecipeSheet";
 import { AttemptResult, attemptLink, ItemResult, itemLink } from "@/components/search/Results";
-import { StartAgain } from "@/components/search/StartAgain";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
 import { ChipRow } from "@/components/ui/FilterChips";
-import { CalendarIcon, RecentIcon, SearchIcon, SparkleIcon, TagIcon } from "@/components/ui/icons";
+import { RecentIcon, SearchIcon, TagIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { RowSkeleton } from "@/components/ui/Skeleton";
@@ -29,8 +28,8 @@ import { forgetSearches, recentSearches, rememberSearch, SEARCH_BOX_ID, searchQu
 /** Recipe results are drawn only when the search found one. */
 const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then((m) => ({ default: m.RecipeResult })));
 
-/** Spools found are drawn only when the search found one. */
-const SpoolResult = lazy(() => import("@/components/search/SpoolResult").then((m) => ({ default: m.SpoolResult })));
+/** What only some answers need (a spool, a mended typo, "Start again" on one that worked) loads when one appears. */
+const Extra = lazy(() => import("@/components/search/Extra"));
 
 type SearchParams = FilterValues & { q?: string };
 
@@ -50,6 +49,10 @@ type Result =
   | { kind: "attempt"; hit: AttemptHit; link: LinkProps }
   | { kind: "recipe"; hit: Recipe }
   | { kind: "spool"; hit: Spool; link: LinkProps };
+
+/** An attempt that worked: the answer to "what worked". */
+const didWork = (r: Result): r is Extract<Result, { kind: "attempt" }> =>
+  r.kind === "attempt" && r.hit.attempt.outcome === "success";
 
 function Search() {
   const { q = "", ...filters } = Route.useSearch();
@@ -95,9 +98,9 @@ function Search() {
     const attempts = shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) }));
     return [
       ...shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })),
-      ...attempts.filter((r) => r.hit.attempt.outcome === "success"),
+      ...attempts.filter(didWork),
       ...shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
-      ...attempts.filter((r) => r.hit.attempt.outcome !== "success"),
+      ...attempts.filter((r) => !didWork(r)),
       ...shown.ideas.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
       ...(shown.spools ?? []).map((hit) => ({
         kind: "spool" as const,
@@ -174,17 +177,20 @@ function Search() {
         {result.kind === "attempt" ? (
           <>
             <AttemptResult hit={result.hit} {...common} />
-            {result.hit.attempt.outcome === "success" && (
+            {didWork(result) && (
               // Beside the link, not in it: a button can't live inside a link. Lined up with the text column.
               <div className="pb-1 pl-[6.375rem] md:pl-[7.5rem]">
-                <StartAgain hit={result.hit} onStart={common.onOpen} />
+                <Suspense fallback={null}>
+                  <Extra part="start" hit={result.hit} onStart={common.onOpen} />
+                </Suspense>
               </div>
             )}
           </>
         ) : result.kind === "spool" ? (
           <Suspense fallback={<RowSkeleton />}>
-            <SpoolResult
-              ref={common.ref as never}
+            <Extra
+              part="spool"
+              innerRef={common.ref}
               spool={result.hit}
               terms={common.terms}
               selected={common.selected}
@@ -215,9 +221,9 @@ function Search() {
   const groups: Array<[string, Result[]]> = shown
     ? [
         ["Recipes", list.filter((r) => r.kind === "recipe")],
-        ["What worked", list.filter((r) => r.kind === "attempt" && r.hit.attempt.outcome === "success")],
+        ["What worked", list.filter(didWork)],
         ["Builds", list.filter((r) => r.kind === "item" && r.hit.item.stage !== "idea")],
-        ["Attempts", list.filter((r) => r.kind === "attempt" && r.hit.attempt.outcome !== "success")],
+        ["Attempts", list.filter((r) => r.kind === "attempt" && !didWork(r))],
         ["Ideas", list.filter((r) => r.kind === "item" && r.hit.item.stage === "idea")],
         ["Spools", list.filter((r) => r.kind === "spool")],
       ]
@@ -278,7 +284,11 @@ function Search() {
               <p className="sr-only" aria-live="polite">
                 {shown ? `${total} ${total === 1 ? "result" : "results"}` : ""}
               </p>
-              {shown && <Understood shown={shown} />}
+              {shown && (shown.corrected || shown.when) && (
+                <Suspense fallback={null}>
+                  <Extra part="understood" shown={shown} />
+                </Suspense>
+              )}
               {!shown ? (
                 <div aria-hidden>
                   <RowSkeleton />
@@ -337,40 +347,6 @@ function Search() {
       </div>
       <LazyRecipeSheet recipeId={openRecipe} onOpenChange={(next) => !next && setOpenRecipe(null)} />
     </>
-  );
-}
-
-/** What the search made of the question, when it did more than read the words: a mended typo, a time. */
-function Understood({ shown }: { shown: SearchResponse }) {
-  if (!shown.corrected && !shown.when) return null;
-  return (
-    <div className="text-small text-ink-soft flex flex-wrap items-center gap-x-4 gap-y-1">
-      {shown.corrected && (
-        <p className="flex items-center gap-1.5">
-          <SparkleIcon size={16} aria-hidden className="text-ink-faint" />
-          <span>
-            Showing results for <span className="text-ink font-semibold">{shown.corrected}</span>
-          </span>
-        </p>
-      )}
-      {shown.when && (
-        <p className="flex items-center gap-1.5">
-          <CalendarIcon size={16} aria-hidden className="text-ink-faint" />
-          <span>
-            Printed <span className="text-ink font-semibold">{shown.when.label}</span>
-          </span>
-          {shown.when.weekMonday && (
-            <Link
-              to="/week/$monday"
-              params={{ monday: shown.when.weekMonday }}
-              className="focus-ring text-tomato-ink rounded-xs font-semibold underline-offset-2 hover:underline"
-            >
-              Open that week
-            </Link>
-          )}
-        </p>
-      )}
-    </div>
   );
 }
 

@@ -30,11 +30,11 @@ export function fold(text: string): string {
 
 /** The words of a text, as the index splits them. */
 export function words(text: string): string[] {
-  return (fold(text).match(NUMBER_OR_WORD) ?? []).map((word) => word.replace(",", "."));
+  return fold(text).match(NUMBER_OR_WORD) ?? [];
 }
 
-/** A decimal number ("0.4", "0,4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
-const NUMBER_OR_WORD = /\p{N}+(?:[.,]\p{N}+)?(?![\p{L}])|[\p{L}\p{N}]+/gu;
+/** A decimal number ("0.4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
+const NUMBER_OR_WORD = /\p{N}+(?:\.\p{N}+)?(?![\p{L}])|[\p{L}\p{N}]+/gu;
 const DECIMAL = /^\d+\.\d+$/;
 
 /** "PETG warp" → petg (prefix), warp (prefix). Empty when there is nothing to look for. */
@@ -52,7 +52,7 @@ export function searchTerms(query: string): SearchTerm[] {
 
 /** Whether a word of the text matches one of the terms. */
 export function matchesTerm(word: string, terms: readonly SearchTerm[]): boolean {
-  const folded = fold(word).replace(",", ".");
+  const folded = fold(word);
   return terms.some(
     (term) =>
       (term.prefix ? folded.startsWith(term.text) : folded === term.text) ||
