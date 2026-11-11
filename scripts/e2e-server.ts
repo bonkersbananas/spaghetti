@@ -12,7 +12,7 @@ import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startFakeClaude } from "./lib/fake-claude.ts";
-import { seedThrowawayState, startBuiltServer } from "./lib/local-app.ts";
+import { type DevServer, seedThrowawayState, startBuiltServer } from "./lib/local-app.ts";
 import { root } from "./lib/wrangler.ts";
 
 const slots = Number(process.env.E2E_SLOTS ?? 1);
@@ -33,19 +33,29 @@ const states = Array.from({ length: slots }, () => {
 seeded.cleanup();
 
 const claudes = await Promise.all(states.map((_, slot) => startFakeClaude(basePort + slot + 100)));
-const servers = await Promise.all(
+const servers: DevServer[] = [];
+
+function shutdown(code = 0) {
+  for (const server of servers) server.stop();
+  for (const claude of claudes) claude.stop();
+  for (const dir of states) rmSync(dir, { recursive: true, force: true });
+  process.exit(code);
+}
+process.on("SIGINT", () => shutdown());
+process.on("SIGTERM", () => shutdown());
+
+// Every start settles (a server that doesn't answer within a minute is stopped by startBuiltServer itself); if one
+// failed, the ones that did start are stopped too, so no port or state is left behind.
+const started = await Promise.allSettled(
   states.map((stateDir, slot) =>
     startBuiltServer({ port: basePort + slot, stateDir, claudeUrl: claudes[slot]?.url, inspectorPort: 9300 + slot }),
   ),
 );
-console.log(`e2e servers ready on ${servers.map((server) => server.url).join(", ")}`);
-
-function shutdown() {
-  for (const server of servers) server.stop();
-  for (const claude of claudes) claude.stop();
-  for (const dir of states) rmSync(dir, { recursive: true, force: true });
-  process.exit(0);
+for (const result of started) if (result.status === "fulfilled") servers.push(result.value);
+const failed = started.find((result) => result.status === "rejected");
+if (failed) {
+  console.error(failed.reason);
+  shutdown(1);
 }
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+console.log(`e2e servers ready on ${servers.map((server) => server.url).join(", ")}`);
 setInterval(() => {}, 1 << 30);
