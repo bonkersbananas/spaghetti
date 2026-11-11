@@ -21,6 +21,8 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   /** R2 key of the profile picture (people/<id>/<version>); null means initials. */
   photoKey: text("photo_key"),
+  /** Their wishlist is shared with the others who sign in unless they keep it to themselves. */
+  wishlistPrivate: integer("wishlist_private", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
 
@@ -821,6 +823,26 @@ export const commentReads = sqliteTable(
 );
 
 export type CommentRow = typeof comments.$inferSelect;
+
+/**
+ * Each person's wishlist: the ideas they would print first, ranked (`position`, 1 is the top).
+ * Only ideas count: an entry whose item is deleted or became a build is hidden, not removed,
+ * so restoring the idea or undoing "start building" brings it back in its place.
+ */
+export const wishlistEntries = sqliteTable(
+  "wishlist_entries",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    addedAt: integer("added_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
+);
 
 /**
  * A webhook: the change feed POSTed to `url`, signed with a secret (decision 0025). The secret is stored

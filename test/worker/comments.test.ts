@@ -257,11 +257,19 @@ describe("the push", () => {
     });
     expect(response.status).toBe(204);
   }
-  const noon = () => {
-    const d = new Date();
-    d.setUTCHours(12, 0, 0, 0);
-    return d.getTime() > Date.now() ? d.getTime() - 24 * 3600_000 : d.getTime();
-  };
+  // A fixed clock, so what these tests say about "noon" and "night" doesn't depend on when CI runs: comments are
+  // written at the faked instant, and sendCommentPush is given times within the hour after them.
+  const AFTERNOON = Date.UTC(2026, 2, 10, 12, 30);
+  const LATE_EVENING = Date.UTC(2026, 2, 10, 22, 30);
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(AFTERNOON);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  /** 12:00 UTC on the faked day: awake hours, half an hour before the comments of the afternoon. */
+  const noon = () => Date.UTC(2026, 2, 10, 12, 0);
 
   it("tells the other person once for a burst, and nobody for the author's own devices", async () => {
     await subscribe(alex, "alex-phone");
@@ -279,10 +287,11 @@ describe("the push", () => {
   it("stays quiet at night, and the comments aren't pushed in the morning either", async () => {
     await subscribe(alex, "alex-phone");
     const itemId = await item();
+    // Written at 22:30 UTC: 23:00 is within the hour after it, so the comment is claimed in the quiet hours.
+    vi.setSystemTime(LATE_EVENING);
     await say(itemId, "Late", sam);
-    const night = new Date(noon());
-    night.setUTCHours(23);
-    expect(await sendCommentPush(env, itemId, samId, night.getTime())).toEqual({ sent: 0 });
+    const night = Date.UTC(2026, 2, 10, 23, 0);
+    expect(await sendCommentPush(env, itemId, samId, night)).toEqual({ sent: 0 });
     expect(await sendCommentPush(env, itemId, samId, noon())).toEqual({ sent: 0 });
     expect(pushes).toEqual([]);
   });

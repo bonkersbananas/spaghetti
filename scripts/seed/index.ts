@@ -12,6 +12,7 @@ import { seedComments } from "./comments.ts";
 import { seedIdeas } from "./ideas.ts";
 import { seedPantry } from "./pantry.ts";
 import { seedRecipes } from "./recipes.ts";
+import { seedWishlists } from "./wishlists.ts";
 
 /**
  * The instant the seed counts back from when screenshots are taken: a
@@ -58,6 +59,7 @@ export async function seedAll({
     await seedBuilds(browser, { alex, sam }, origin, stateDir, now);
     await seedRecipes(alex, origin, stateDir);
     await seedComments({ alex, sam }, origin, stateDir, now);
+    await seedWishlists({ alex, sam }, origin);
     // What the link in the desk tidy-up note calls itself. The sandbox can't fetch pages, and a screenshot
     // shouldn't depend on one: the preview cache is filled as if it had (stamped with the real clock, so it stays fresh).
     executeSql(
