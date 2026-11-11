@@ -72,6 +72,16 @@ The script never prints the private key and refuses to overwrite a file. The dep
 
 The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
 
+## Webhooks
+
+Webhooks ([0025](decisions/0025-webhooks-signed-from-the-cron.md)) keep their signing secrets encrypted under a key made from the `WEBHOOK_SECRET_KEY` secret, or from `VAPID_PRIVATE_KEY` when that isn't set (so they work without any step here; adding a webhook without either answers `503`). Set a key of its own so that redoing push doesn't make the stored secrets unreadable, once, before the first webhook is added, and never change it afterwards (webhooks made under another key fail until they are added again):
+
+```sh
+openssl rand -base64 32 | pnpm exec wrangler secret put WEBHOOK_SECRET_KEY
+```
+
+The 5-minute cron sends the deliveries. The e2e tests and screenshots set `WEBHOOKS_ALLOW_LOCAL` (webhooks may then go to 127.0.0.1, where the stand-in receiver in `scripts/lib/fake-claude.ts` listens); never set it on a real Worker.
+
 ## Claude drafting ideas
 
 Drafting an idea from a model page ([0019](decisions/0019-claude-drafts-ideas-from-model-pages.md)) uses the `ANTHROPIC_API_KEY` secret, already set on the live Worker (`pnpm exec wrangler secret put ANTHROPIC_API_KEY`; it is kept across `pnpm ship`). Without it the feature is hidden. Locally, put `ANTHROPIC_API_KEY=sk-ant-…` in `.dev.vars` (never committed). The e2e tests and screenshots don't need a key: they point `ANTHROPIC_BASE_URL` at a stand-in server (`scripts/lib/fake-claude.ts`). The 5-minute cron also finishes drafts whose request was lost.

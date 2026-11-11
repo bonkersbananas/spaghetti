@@ -58,6 +58,10 @@ Any client that takes a JSON config:
 
 Everything an agent writes is recorded as you, "via Claude for Alex" in the journal, attempts and idea cards, and in the change feed as the agent. The server can't delete anything; deleting stays with people.
 
+## The API as OpenAPI
+
+The tools are a curated slice. Everything the API can do, and what each token may do, is described as OpenAPI 3.1 at `GET /api/openapi.json` (made from the code; see [api.md](api.md#the-openapi-document)): hand it to anything that reads OpenAPI when a tool doesn't exist for what you want. A token only sees what its scopes allow. To be told about changes instead of asking, a person can add a [webhook](api.md#webhooks-people-only) on the Agents page.
+
 ## How it works
 
 `POST /mcp` takes one JSON-RPC message (or a batch) and answers with JSON: `initialize`, `ping`, `tools/list` and `tools/call`. `GET` and `DELETE` are `405` (there are no sessions or streams), a missing or revoked token is `401`. A tool never touches the database: it calls Spaghetti's own API with the caller's token, so scopes, validation, attribution and the change feed behave exactly as for any other request (`src/worker/mcp/`). Photos sent to `capture_idea` can't be resized on the Worker, so the one image is stored as both sizes (cap 12 MB), with a neutral placeholder colour, and flagged: the next browser that opens the app resizes it quietly and replaces the copies (see decision 0004).
