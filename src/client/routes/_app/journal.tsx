@@ -249,7 +249,7 @@ function Group({
   return (
     <section aria-label={group.kind === "day" ? dayLabel(group.start) : weekLabel(group.start, group.end)}>
       {group.kind === "day" ? (
-        <h3 className="text-title text-ink mb-3.5 flex items-baseline gap-2.5 md:mb-4">
+        <h3 className="text-body text-ink mb-3 flex items-baseline gap-2.5 font-sans font-semibold md:mb-3.5">
           {dayLabel(group.start)}
           <span className="text-small text-ink-faint font-sans font-medium">{shortDate(group.start)}</span>
         </h3>
