@@ -1,7 +1,8 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { KeyboardEvent, PointerEvent, ReactNode, Ref } from "react";
 import { cn } from "@/lib/cn";
-import { DragIcon, IdeasIcon } from "./icons";
+import { DragIcon, IdeasIcon, NoteIcon } from "./icons";
+import { MetaList } from "./MetaList";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
@@ -12,9 +13,8 @@ interface RankRowProps {
   photo?: { src: string; color?: string };
   note?: string;
   title: string;
-  /** A real title (semibold) or the note standing in for one (regular, softer). */
-  titled?: boolean;
-  meta?: ReactNode;
+  /** Short pieces for the line under the name ("for Mila", "2 days ago"), wrapped by MetaList. */
+  meta?: string[];
   link: LinkProps;
   /** Buttons at the end of the row (Start building). */
   actions?: ReactNode;
@@ -26,23 +26,11 @@ interface RankRowProps {
 }
 
 /**
- * One place in a ranked list (a wishlist): the place as a Fraunces numeral, the picture, the name and a
- * meta line as one link, then the row's actions and its drag handle. The top place wears a small semolina
+ * One place in a ranked list (a wishlist): the place as a Fraunces numeral, the picture (a note-only idea
+ * shows a small index card with a pencil: its words would be too small), the name and a meta line as one link, then the row's actions and its drag handle. The top place wears a small semolina
  * medal. A lifted row floats on `shadow-float` while it moves.
  */
-export function RankRow({
-  rank,
-  photo,
-  note,
-  title,
-  titled = true,
-  meta,
-  link,
-  actions,
-  handle,
-  lifted,
-  className,
-}: RankRowProps) {
+export function RankRow({ rank, photo, note, title, meta, link, actions, handle, lifted, className }: RankRowProps) {
   return (
     <div
       data-lifted={lifted || undefined}
@@ -59,7 +47,7 @@ export function RankRow({
       >
         <RankMark rank={rank} />
         <span
-          className="bg-well relative size-14 shrink-0 overflow-hidden rounded-md select-none md:size-20"
+          className="bg-well relative size-14 shrink-0 overflow-hidden rounded-md select-none md:size-20 lg:size-24"
           aria-hidden
         >
           {photo ? (
@@ -71,7 +59,11 @@ export function RankRow({
               imgClassName="pointer-events-none"
             />
           ) : note ? (
-            <NoteFace note={note} size="xl" />
+            // Too small for the note's words: an index card with its rule and a pencil says "a note" instead.
+            <span className="paper-grain bg-note text-ink-faint relative flex size-full items-center justify-center">
+              <span className="bg-tomato/25 absolute inset-x-2 top-2.5 h-px md:inset-x-3 md:top-3.5" />
+              <NoteIcon size={22} />
+            </span>
           ) : (
             <span className="text-ink-faint flex size-full items-center justify-center">
               <IdeasIcon size={22} />
@@ -79,15 +71,16 @@ export function RankRow({
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
-          <span
-            className={cn(
-              "text-body group-hover/rank:decoration-ink/20 line-clamp-2 break-words group-hover/rank:underline group-hover/rank:underline-offset-4",
-              titled ? "text-ink font-semibold" : "text-ink-soft",
-            )}
-          >
+          <span className="text-body text-ink group-hover/rank:decoration-ink/20 line-clamp-2 font-semibold break-words group-hover/rank:underline group-hover/rank:underline-offset-4">
             {title}
           </span>
-          {meta && <span className="text-small text-ink-faint truncate">{meta}</span>}
+          {meta && meta.length > 0 && (
+            <MetaList className="text-small text-ink-faint">
+              {meta.map((piece) => (
+                <span key={piece}>{piece}</span>
+              ))}
+            </MetaList>
+          )}
         </span>
       </Link>
       {actions}

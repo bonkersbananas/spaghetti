@@ -30,7 +30,7 @@ export function WishlistsSection() {
             rank={1}
             photo={tugboat}
             title="Bath tugboat for Mila"
-            meta="for Mila · 2 days ago"
+            meta={["for Mila", "2 days ago"]}
             link={link}
             actions={start("Bath tugboat")}
             handle={handle("Bath tugboat")}
@@ -39,7 +39,7 @@ export function WishlistsSection() {
             rank={2}
             note="Keyhole slots, 160 mm apart."
             title="Wall mount for the router"
-            meta="Aug 11"
+            meta={["Aug 11"]}
             link={link}
             actions={start("Wall mount")}
             handle={handle("Wall mount")}
@@ -47,8 +47,7 @@ export function WishlistsSection() {
           <RankRow
             rank={3}
             title="Hook for the bike helmet"
-            titled={false}
-            meta="3 weeks ago"
+            meta={["3 weeks ago"]}
             link={link}
             actions={start("Hook")}
           />
@@ -59,8 +58,7 @@ export function WishlistsSection() {
             rank={2}
             note="Bag clips for the coffee"
             title="Bag clips for the coffee"
-            titled={false}
-            meta="Sep 4"
+            meta={["Sep 4"]}
             link={link}
             lifted
             actions={start("Bag clips")}

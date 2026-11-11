@@ -22,10 +22,9 @@ const rowProps = (item: ItemView, rank: number) => {
   return {
     rank,
     title: name.text,
-    titled: name.titled,
     photo: cover ? { src: photoSrc(cover.id, "thumb"), color: cover.color || undefined } : undefined,
     note: item.note.trim() || undefined,
-    meta: item.forWhom ? `for ${item.forWhom} · ${relativeTime(item.createdAt)}` : relativeTime(item.createdAt),
+    meta: [...(item.forWhom ? [`for ${item.forWhom}`] : []), relativeTime(item.createdAt)],
     link: { to: "/ideas/$ideaId", params: { ideaId: item.id } } as const,
   };
 };

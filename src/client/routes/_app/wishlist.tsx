@@ -6,6 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { WishingBowl } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -19,7 +20,7 @@ import { WishPicker } from "@/components/wishlist/WishPicker";
 import { useIdeas } from "@/lib/items";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useReadOnly } from "@/lib/read-only";
-import { useIsWide } from "@/lib/use-media-query";
+import { useIsDesktop, useIsWide } from "@/lib/use-media-query";
 import { setWishlistPrivate, useWishlists, wishedIdeas } from "@/lib/wishlist";
 
 export const Route = createFileRoute("/_app/wishlist")({
@@ -161,7 +162,9 @@ function MyList({
   const shareHint = list.private
     ? "Only you can see it now."
     : `${other ?? "Everyone who signs in"} can see it. Only you can change it.`;
-  const pick = ideas.length > 0 && (
+  const isDesktop = useIsDesktop();
+  // On a phone, picking more sits within thumb reach, on the tab bar; desktop keeps it beside the heading.
+  const pick = ideas.length > 0 && isDesktop && (
     <Button variant="quiet" size="sm" icon={PlusIcon} onClick={onPick} disabled={readOnly} className="-mr-3">
       Pick ideas
     </Button>
@@ -185,7 +188,8 @@ function MyList({
           illustration={<WishingBowl />}
           title="Nothing on your plate yet"
           action={
-            <Button variant="primary" icon={PlusIcon} onClick={onPick} disabled={readOnly}>
+            // The sidebar's "New idea" is desktop's one primary action.
+            <Button variant={isDesktop ? "secondary" : "primary"} icon={PlusIcon} onClick={onPick} disabled={readOnly}>
               Pick ideas
             </Button>
           }
@@ -202,6 +206,13 @@ function MyList({
         onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
         className="mt-2"
       />
+      {!isDesktop && ideas.length > 0 && (
+        <ActionBar>
+          <Button variant="secondary" size="lg" icon={PlusIcon} fullWidth onClick={onPick} disabled={readOnly}>
+            Pick ideas
+          </Button>
+        </ActionBar>
+      )}
     </Column>
   );
 }
@@ -232,7 +243,7 @@ function TheirList({
         <ListSkeleton />
       ) : list.private ? (
         <Quiet>
-          <EyeSlashIcon size={20} className="text-ink-faint shrink-0" aria-hidden />
+          <EyeSlashIcon size={18} className="shrink-0" aria-hidden />
           {name} keeps this list private for now.
         </Quiet>
       ) : ideas.length ? (
@@ -278,5 +289,5 @@ function Column({
 }
 
 function Quiet({ children }: { children: ReactNode }) {
-  return <p className="bg-ink/4 text-body text-ink-soft flex items-center gap-3 rounded-lg px-5 py-6">{children}</p>;
+  return <p className="text-body text-ink-faint flex items-center gap-2.5 py-2">{children}</p>;
 }

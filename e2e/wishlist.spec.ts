@@ -74,6 +74,8 @@ test("picks ideas, reorders them with the keyboard and starts a build from a row
 
   // Dragging by the handle (mouse on desktop, a finger's pointer on phones) moves it too.
   if (!isMobile) {
+    // Let the keyboard moves' layout animation settle: a drag that starts mid-animation measures the old places.
+    await page.waitForTimeout(1500);
     const from = await mine(page)
       .getByRole("button", { name: /^Move Hose clip/ })
       .boundingBox();
@@ -85,7 +87,9 @@ test("picks ideas, reorders them with the keyboard and starts a build from a row
     await page.mouse.down();
     for (let step = 1; step <= 12; step++) {
       await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + ((to.y - from.y - 10) * step) / 12);
+      await page.waitForTimeout(30);
     }
+    await page.waitForTimeout(200);
     await page.mouse.up();
     await expect.poll(() => serverList(page)).toEqual(["Hose clip", "Lamp shade", "Seed tray"]);
   }
