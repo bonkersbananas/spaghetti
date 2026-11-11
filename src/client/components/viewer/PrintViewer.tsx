@@ -25,7 +25,6 @@ export interface PrintViewerProps {
   plate: number;
   /** The matched spools' colours, for filaments the file doesn't colour. */
   fallbackColors?: (string | null | undefined)[];
-  /** A print in progress: the layer it is on (counting from 1) and how many there are. */
   /** Set while the attempt prints: the viewer follows the printer's own layer while the bridge reports it. */
   printing?: { id: string } | null;
   className?: string;

@@ -1,14 +1,10 @@
 import { fileUrl } from "@shared/api";
-import { LIVE_FRESH_MS } from "@shared/print-progress";
-import { useQuery } from "@tanstack/react-query";
 import { type ComponentType, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CubeIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
-import { printerQuery } from "@/lib/pantry-queries";
-import { useNow } from "@/lib/use-now";
 
 /** The viewer's code (three.js and the scene) loads on first use, or when a finger comes near the control. */
 const importViewer = () => import("./PrintViewer");
