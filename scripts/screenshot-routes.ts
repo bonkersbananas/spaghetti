@@ -64,6 +64,110 @@ async function subscribedDevice(page: Page) {
   }, endpoint);
 }
 
+/** Webhooks as the Agents page sees them, with times counted back from the shots' clock (SEED_NOW); the page is reloaded to show them. */
+const minutesAgo = (n: number) => SEED_NOW - n * 60_000;
+const webhookBase = {
+  id: "11111111-1111-4111-8111-111111111111",
+  url: "https://hooks.example.org/spaghetti",
+  kinds: ["item", "attempt", "comment"],
+  agentId: null as string | null,
+  secretPrefix: "whsec_Ab3x9",
+  state: "active",
+  lastError: null as string | null,
+  lastErrorAt: null as number | null,
+  lastDeliveredAt: minutesAgo(12) as number | null,
+  createdAt: minutesAgo(60 * 24 * 3),
+};
+const deliveryBase = {
+  webhookId: webhookBase.id,
+  seq: 41,
+  test: false,
+  entity: "attempt",
+  action: "updated",
+  status: "delivered",
+  attempts: 1,
+  httpStatus: 200,
+  error: null as string | null,
+  nextAt: null as number | null,
+  createdAt: minutesAgo(12),
+  lastAttemptAt: minutesAgo(12),
+};
+const workingDeliveries = [
+  { ...deliveryBase, id: "d1", seq: 42, entity: "comment", action: "created" },
+  { ...deliveryBase, id: "d2", seq: 41, createdAt: minutesAgo(47), lastAttemptAt: minutesAgo(47) },
+  {
+    ...deliveryBase,
+    id: "d3",
+    seq: null,
+    test: true,
+    entity: "item",
+    createdAt: minutesAgo(60 * 22),
+    lastAttemptAt: minutesAgo(60 * 22),
+  },
+];
+const failingDeliveries = [
+  {
+    ...deliveryBase,
+    id: "d4",
+    seq: 44,
+    status: "pending",
+    attempts: 3,
+    httpStatus: 502,
+    error: "It answered 502.",
+    nextAt: SEED_NOW + 90 * 60_000,
+    lastAttemptAt: minutesAgo(20),
+    createdAt: minutesAgo(60),
+  },
+  {
+    ...deliveryBase,
+    id: "d5",
+    seq: 40,
+    status: "failed",
+    attempts: 7,
+    httpStatus: 502,
+    error: "It answered 502.",
+    createdAt: minutesAgo(60 * 25),
+    lastAttemptAt: minutesAgo(95),
+  },
+];
+
+async function mockWebhooks(
+  page: Page,
+  webhooks: object[],
+  deliveries: object[] = [],
+  agent?: { id: string; name: string },
+) {
+  await page.route(/\/api\/webhooks(\/[^/]+\/deliveries)?$/, (route) => {
+    const request = route.request();
+    if (request.method() === "POST") {
+      return route.fulfill({
+        status: 201,
+        json: { webhook: webhookBase, secret: "whsec_k3P9mQ2xT7vLw0aBn5RyUe8CdHs4JzFgI1oXtVq6MA" },
+      });
+    }
+    return route.fulfill({ json: request.url().endsWith("/deliveries") ? { deliveries } : { webhooks } });
+  });
+  if (agent) {
+    await page.route(/\/api\/agents$/, async (route) => {
+      const response = await route.fetch();
+      const json = (await response.json()) as { agents: object[] };
+      const me = (await (await page.request.get("/api/session")).json()) as { user: { id: string } };
+      await route.fulfill({
+        response,
+        json: {
+          agents: [...json.agents, { ...agent, ownerId: me.user.id, createdAt: minutesAgo(60 * 24 * 9), tokens: [] }],
+        },
+      });
+    });
+  }
+  await page.reload({ waitUntil: "networkidle" });
+}
+
+const openDeliveries = async (page: Page) => {
+  await page.getByRole("button", { name: "Recent deliveries" }).click();
+  await page.getByRole("list", { name: "Recent deliveries" }).waitFor();
+};
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -843,6 +947,86 @@ export const shots: Shot[] = [
     },
   },
   { name: "agents", path: "/agents" },
+  // Webhooks, a small section under the agents: nothing yet, one that works (with its deliveries), one that is failing,
+  // and the sheet that adds one, then its secret (shown once).
+  {
+    name: "agents-webhooks-empty",
+    path: "/agents",
+    fullPage: true,
+    prepare: (page) => mockWebhooks(page, []),
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  {
+    name: "agents-webhooks",
+    path: "/agents",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockWebhooks(page, [{ ...webhookBase, agentId: "claude-for-alex" }], workingDeliveries, {
+        id: "claude-for-alex",
+        name: "Claude for Alex",
+      });
+      await openDeliveries(page);
+    },
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  {
+    name: "agents-webhooks-failing",
+    path: "/agents",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockWebhooks(
+        page,
+        [
+          {
+            ...webhookBase,
+            url: "https://printer-notes.example.net/api/spaghetti/events",
+            kinds: ["all"],
+            state: "failing",
+            lastError: "It answered 502.",
+            lastErrorAt: minutesAgo(95),
+            lastDeliveredAt: minutesAgo(60 * 30),
+          },
+        ],
+        failingDeliveries,
+      );
+      await openDeliveries(page);
+    },
+    cleanup: (page) => page.unrouteAll({ behavior: "ignoreErrors" }),
+  },
+  {
+    name: "agents-webhook-new",
+    path: "/agents",
+    prepare: async (page) => {
+      await mockWebhooks(page, [], [], { id: "claude-for-alex", name: "Claude for Alex" });
+      await page.getByRole("button", { name: "New webhook" }).click();
+      const sheet = page.getByRole("dialog", { name: "New webhook" });
+      await sheet.getByLabel("Address").fill("https://hooks.example.org/spaghetti");
+      await sheet.getByRole("button", { name: "Attempts" }).click();
+      await sheet.getByRole("button", { name: "Comments" }).click();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    name: "agents-webhook-secret",
+    path: "/agents",
+    prepare: async (page) => {
+      await mockWebhooks(page, []);
+      await page.getByRole("button", { name: "New webhook" }).click();
+      const sheet = page.getByRole("dialog", { name: "New webhook" });
+      await sheet.getByLabel("Address").fill("https://hooks.example.org/spaghetti");
+      await sheet.getByRole("button", { name: "Add webhook" }).click();
+      await page.getByRole("dialog", { name: "Copy the secret" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
   {
     // The iPhone Shortcut's steps, with the key already in them (a stand-in here: the real one is random).
     name: "agents-share-setup",

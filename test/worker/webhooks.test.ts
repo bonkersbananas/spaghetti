@@ -385,6 +385,18 @@ describe("test events and retries by hand", () => {
     ).toBe(404);
   });
 
+  it("purges a webhook removed a month ago, with its deliveries", async () => {
+    const { made } = await make();
+    stubWeb();
+    await request(`/api/webhooks/${made?.webhook.id}/test`, { method: "POST", cookie });
+    await request(`/api/webhooks/${made?.webhook.id}`, { method: "DELETE", cookie });
+    await pruneDeliveries(env, Date.now());
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM webhooks").first<{ n: number }>())?.n).toBe(1);
+    await pruneDeliveries(env, Date.now() + 31 * 24 * 60 * 60 * 1000);
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM webhooks").first<{ n: number }>())?.n).toBe(0);
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM webhook_deliveries").first<{ n: number }>())?.n).toBe(0);
+  });
+
   it("tidies old finished deliveries daily, never pending ones", async () => {
     const { made } = await make();
     stubWeb();

@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { CHANGES_PAGE } from "../../shared/changes.ts";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
 import {
@@ -17,6 +17,7 @@ import { toApiChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { changes, type Webhook, type WebhookDelivery, webhookDeliveries, webhooks } from "../db/schema.ts";
 import { resolvesPublic } from "../link-preview.ts";
+import { PURGE_AFTER_MS } from "../photos.ts";
 import { openSecret, sign } from "./secrets.ts";
 
 /** A delivery is leased for this long while it is being sent, so two runs never send it twice. */
@@ -271,13 +272,17 @@ export async function runWebhooks(env: Env, now = Date.now()) {
   return { made, ...result };
 }
 
-/** The daily tidy: finished deliveries older than a week. */
+/** The daily tidy: finished deliveries older than a week, and webhooks removed a month ago (their deliveries go with them). */
 export async function pruneDeliveries(env: Env, now = Date.now()) {
-  await getDb(env.DB)
+  const db = getDb(env.DB);
+  await db
     .delete(webhookDeliveries)
     .where(
       and(ne(webhookDeliveries.status, "pending"), lt(webhookDeliveries.createdAt, new Date(now - DELIVERIES_KEEP_MS))),
     );
+  await db
+    .delete(webhooks)
+    .where(and(isNotNull(webhooks.deletedAt), lt(webhooks.deletedAt, new Date(now - PURGE_AFTER_MS))));
 }
 
 /** Sends one delivery now (a test event, or "Retry"), starting a fresh day of retries. */
