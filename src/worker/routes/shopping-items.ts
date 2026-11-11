@@ -124,31 +124,36 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     return c.json<ShoppingItemResponse>({ shoppingItem }, 201);
   })
 
-  /** The order of what's still to buy: these first, in this order; anything not mentioned keeps its turn after them. */
+  /** The order of what's still to buy: the named things trade slots among themselves in this order; the rest stay put. */
   .put("/order", async (c) => {
     const parsed = shoppingOrder.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return apiError(c, 400, "invalid", "That order couldn't be read.");
     const db = c.var.db;
     const listed = await db
-      .select({ id: shoppingItems.id })
+      .select({ id: shoppingItems.id, position: shoppingItems.position })
       .from(shoppingItems)
-      .where(and(isNull(shoppingItems.deletedAt), isNull(shoppingItems.boughtAt)))
-      .orderBy(asc(shoppingItems.position), desc(shoppingItems.createdAt));
-    const known = new Set(listed.map((row) => row.id));
-    const order = [
-      ...new Set(parsed.data.ids.filter((itemId) => known.has(itemId))),
-      ...listed.map((row) => row.id).filter((itemId) => !parsed.data.ids.includes(itemId)),
-    ];
-    if (order.length) {
+      .where(and(isNull(shoppingItems.deletedAt), isNull(shoppingItems.boughtAt)));
+    // The list as people see it (shared/shopping.ts splitShopping: by place, ties by id).
+    const current = listed.sort((x, y) => x.position - y.position || (x.id > y.id ? 1 : -1));
+    const known = new Set(current.map((row) => row.id));
+    // The named things fill the slots they occupy, in the order asked; anything not named (added by someone else since
+    // the list was read, say) keeps its own slot. Then every row gets its slot's number, which also untangles ties
+    // (a restored thing keeps its old place and can share it).
+    const named = [...new Set(parsed.data.ids.filter((itemId) => known.has(itemId)))];
+    const isNamed = new Set(named);
+    let next = 0;
+    const order = current.map((row) => (isNamed.has(row.id) ? (named[next++] as string) : row.id));
+    const was = new Map(current.map((row) => [row.id, row.position]));
+    const moves = order.flatMap((itemId, index) =>
+      was.get(itemId) === index + 1 ? [] : [{ itemId, position: index + 1 }],
+    );
+    if (moves.length) {
       const now = new Date();
       await db.batch([
-        ...order.map((itemId, index) =>
-          db
-            .update(shoppingItems)
-            .set({ position: index + 1, updatedAt: now })
-            .where(eq(shoppingItems.id, itemId)),
+        ...moves.map(({ itemId, position }) =>
+          db.update(shoppingItems).set({ position, updatedAt: now }).where(eq(shoppingItems.id, itemId)),
         ),
-        recordChange(db, { entity: "shopping", id: order[0] as string, action: "updated", actor: c.var.actor }),
+        recordChange(db, { entity: "shopping", id: moves[0]?.itemId as string, action: "updated", actor: c.var.actor }),
       ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
     }
     return c.json<ShoppingItemsResponse>({ shoppingItems: await liveList(db) });
