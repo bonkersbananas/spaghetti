@@ -364,6 +364,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.evaluate(() => {
         sessionStorage.setItem("sg-passkey-ask", "1");
+        sessionStorage.setItem("sg-force-offer", "1");
         localStorage.removeItem("sg-passkey-offer");
         localStorage.removeItem("sg-passkey-here");
       });

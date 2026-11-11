@@ -26,6 +26,9 @@ export function usePasskeyOffer() {
       return;
     }
     if (!asked || !canOfferPasskey()) return;
+    // A browser driven by a test sits on its sign-in password screens a hundred times, and the offer would cover
+    // the sheets under test: it stays quiet there unless a test asks for it (sessionStorage "sg-force-offer").
+    if (navigator.webdriver && sessionStorage.getItem("sg-force-offer") !== "1") return;
     // Taken and settled when the toast shows, not before: React's double effect in development must find it still pending.
     const timer = setTimeout(() => {
       try {

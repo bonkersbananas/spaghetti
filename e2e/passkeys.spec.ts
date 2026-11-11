@@ -258,6 +258,7 @@ test("after a password sign-in, a quiet offer for a passkey comes once and never
   context,
   isMobile,
 }) => {
+  await context.addInitScript(() => sessionStorage.setItem("sg-force-offer", "1"));
   await addAuthenticator(context, page);
   await page.goto("/sign-in");
   await page.getByLabel("Name").fill(SEED_USERS[0].username);
