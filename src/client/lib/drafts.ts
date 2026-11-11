@@ -81,6 +81,17 @@ export function announceDraft(queryClient: QueryClient, item: Pick<Item, "id" | 
   toast.undo(`Drafted from ${siteName(draft)}`, { onUndo: () => void undoDraft(queryClient, item.id) });
 }
 
+/** "Get the pictures" on a drafted idea that has none: the Worker tries the page's pictures again. */
+export async function getPictures(queryClient: QueryClient, id: string) {
+  try {
+    const { stored = 0 } = await api<DraftResponse>(`/items/${id}/draft/pictures`, { method: "POST" });
+    if (!stored) toast.message("No pictures came from that page");
+  } catch {
+    toast.error("Couldn't get the pictures");
+  }
+  refreshItem(queryClient, id);
+}
+
 /** Takes a draft back (the Worker only removes what is still exactly what it wrote). */
 export async function undoDraft(queryClient: QueryClient, id: string) {
   const before = cachedItem(queryClient, id);

@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { DraftResponse, FeaturesResponse } from "../../shared/api.ts";
 import { firstModelLink } from "../../shared/model-links.ts";
 import { itemDrafts, items } from "../db/schema.ts";
-import { draftsEnabled, runDraft, startDraft, toApiDraft, undoDraft } from "../draft/run.ts";
+import { draftsEnabled, getPictures, runDraft, startDraft, toApiDraft, undoDraft } from "../draft/run.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
@@ -50,6 +50,15 @@ export const draftRoutes = new Hono<AppEnv>()
     if (started || current?.status === "reading") await runDraft(c.env, id, db);
     const row = await db.select().from(itemDrafts).where(eq(itemDrafts.itemId, id)).get();
     return c.json<DraftResponse>({ draft: toApiDraft(row) });
+  })
+  /** "Get the pictures": for a drafted idea without any, tries the page's pictures again. */
+  .post("/items/:id/draft/pictures", async (c) => {
+    if (!draftsEnabled(c.env)) return apiError(c, 404, "not_found", "Drafting isn't set up.");
+    const id = c.req.param("id");
+    const stored = await getPictures(c.env, c.var.db, id, c.var.user);
+    if (stored === null) return apiError(c, 404, "not_found", "There's nothing to fetch pictures for.");
+    const row = await c.var.db.select().from(itemDrafts).where(eq(itemDrafts.itemId, id)).get();
+    return c.json<DraftResponse>({ draft: toApiDraft(row), stored });
   })
   /** Undo: takes back what the draft wrote, as long as it is still what's there. */
   .delete("/items/:id/draft", async (c) => {

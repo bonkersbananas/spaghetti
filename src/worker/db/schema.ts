@@ -737,6 +737,8 @@ export interface DraftResult {
   findings: DraftFindings;
   /** The photos it stored on the idea, so undo can take them off again. */
   photoIds: string[];
+  /** The picture addresses the page named, so "Get the pictures" can try again without reading the page. */
+  imageUrls?: string[];
 }
 
 /**
