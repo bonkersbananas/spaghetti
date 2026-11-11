@@ -37,7 +37,11 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
             </Link>
           )}
           {user && (
-            <button type="button" onClick={() => setAccountOpen(true)} className="pressable focus-ring rounded-full">
+            <button
+              type="button"
+              onClick={() => setAccountOpen(true)}
+              className="pressable focus-ring touch-target relative rounded-full"
+            >
               <Avatar person={user} size="md" decorative />
               <span className="sr-only">Account</span>
             </button>

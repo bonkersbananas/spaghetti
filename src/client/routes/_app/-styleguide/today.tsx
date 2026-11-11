@@ -1,10 +1,12 @@
 import type { Item, Spool } from "@shared/api";
 import { DEFAULT_PRINTER } from "@shared/spools";
+import { useState } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
 import { NowPrintingCard } from "@/components/shell/NowPrinting";
 import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { PickUpAgain } from "@/components/today/PickUpAgain";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { ItemView } from "@/lib/items";
 import { attempt, item, photo, planFile, useSamplePictures } from "./journal";
 import { Label, Panel, people, SAMPLE_COLOR, Section } from "./shared";
@@ -98,14 +100,6 @@ const spools = [
   spool("s4", "Bambu green", "#00ae42", "half"), // design-lint-ignore: a filament color is data
 ];
 
-const oldIdea = view(
-  item("sample-old-idea", {
-    stage: "idea",
-    title: null,
-    note: "Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely.",
-    createdAt: now - 36 * DAY,
-  }),
-);
 const oldPhotoIdea = view(
   item("sample-old-photo", {
     stage: "idea",
@@ -114,10 +108,19 @@ const oldPhotoIdea = view(
     createdAt: now - 80 * DAY,
   }),
 );
+const oldIdea = view(
+  item("sample-old-idea", {
+    stage: "idea",
+    title: null,
+    note: "Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely.",
+    createdAt: now - 36 * DAY,
+  }),
+);
 
 export function TodaySection() {
   const ready = useSamplePictures();
   const [alex, sam] = people;
+  const [burner, setBurner] = useState<"note" | "photo">("note");
   return (
     <Section
       id="today"
@@ -146,10 +149,25 @@ export function TodaySection() {
                 spools={spools}
               />
             </Panel>
-            <Label>On the back burner: a note, and a photo</Label>
-            <Panel className="flex flex-col gap-8">
-              <BackBurner idea={oldIdea} person={alex} />
-              <BackBurner idea={oldPhotoIdea} person={sam} />
+            <Label>On the back burner: a note or a photo</Label>
+            <Panel className="flex flex-col gap-6">
+              {/* One at a time: both would be two landmarks of the same name, which the axe test refuses. */}
+              <SegmentedControl
+                label="Back burner specimen"
+                labelHidden
+                options={[
+                  { value: "note", label: "A note" },
+                  { value: "photo", label: "A photo" },
+                ]}
+                value={burner}
+                onChange={setBurner}
+                className="w-56"
+              />
+              {burner === "note" ? (
+                <BackBurner idea={oldIdea} person={alex} />
+              ) : (
+                <BackBurner idea={oldPhotoIdea} person={sam} />
+              )}
             </Panel>
           </div>
         </div>

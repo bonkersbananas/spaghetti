@@ -76,7 +76,7 @@ export function BuildSummary({
                   <Link
                     to="/pantry/$spoolId"
                     params={{ spoolId: filament.spoolId }}
-                    className="focus-ring hover:text-ink -mx-1 inline-flex items-center gap-1.5 rounded-xs px-1 font-medium"
+                    className="focus-ring touch-target hover:text-ink relative -mx-1 inline-flex items-center gap-1.5 rounded-xs px-1 font-medium"
                   >
                     {inner}
                   </Link>

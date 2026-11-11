@@ -122,7 +122,7 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
                     <Link
                       to="/search"
                       search={{ tag: failure.slug }}
-                      className="font-display text-title text-ink focus-ring w-fit rounded-md"
+                      className="font-display text-title text-ink focus-ring touch-target relative w-fit rounded-md"
                     >
                       {failure.label}
                       <span className="text-ink-faint tabular text-lead ml-2 font-sans">
@@ -229,7 +229,11 @@ function Rates({ title, id, rows, link }: { title: string; id: string; rows: Rat
         label={
           link
             ? (row) => (
-                <Link to="/journal" search={{ material: row.label }} className="focus-ring rounded-sm hover:underline">
+                <Link
+                  to="/journal"
+                  search={{ material: row.label }}
+                  className="focus-ring touch-target relative rounded-sm hover:underline"
+                >
                   {row.label}
                 </Link>
               )

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { clearIdeas, signIn } from "./helpers";
@@ -125,7 +125,9 @@ for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
 
     await screen(page, "/ideas", "Ideas");
-    await expectAccessible(page, "Ideas");
+    // The seeded build began as an idea, so Ideas ends with its Started section.
+    await expect(page.getByRole("heading", { name: /^Started/ })).toBeVisible();
+    await expectAccessible(page, "Ideas, with the Started section");
 
     await screen(page, `/ideas/${data.ideaId}`, "Bath tugboat");
     await expectAccessible(page, "An idea");
@@ -241,6 +243,261 @@ for (const scheme of ["light", "dark"] as const) {
     await page.request.delete("/api/people/me/photo", { headers: { Origin: origin(page) } });
   });
 }
+
+/**
+ * The screens the axe tests visit, by route file. A new route fails "every screen is checked" until it is visited
+ * here (or in the empty states), so axe keeps covering the whole app.
+ */
+const CHECKED_ROUTES = [
+  "today",
+  "ideas.index",
+  "ideas.$ideaId",
+  "builds.index",
+  "builds.$buildId",
+  "journal",
+  "search",
+  "pantry.index",
+  "pantry.$spoolId",
+  "printer",
+  "agents",
+  "year",
+  "deleted",
+  "styleguide",
+  // Redirects and hand-offs with no screen of their own.
+  "index",
+  "share",
+];
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`an idea while Claude reads its page, and once drafted, passes axe in ${scheme}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({ colorScheme: scheme });
+    const headers = { Origin: origin(page) };
+    const id = crypto.randomUUID();
+    // The e2e Worker drafts with a stand-in for Claude (scripts/lib/fake-claude.ts); "slow" in the address takes a while.
+    await post(page, "/api/items", { headers, data: { id, note: "https://makerworld.com/en/models/2-slow-comb" } });
+    // Not awaited: the request answers once the draft is done, and the page should be seen while it is read.
+    const drafting = page.request.post(`/api/items/${id}/draft`, { headers, data: {} });
+    await page.goto(`/ideas/${id}`);
+    await expect(page.getByText(/Reading the MakerWorld page/)).toBeVisible();
+    await expectAccessible(page, "An idea while its page is read");
+    await drafting;
+    await page.reload();
+    await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible({ timeout: 20_000 });
+    await expectAccessible(page, "A drafted idea");
+  });
+}
+
+test("every screen is checked", () => {
+  const routes = readdirSync("src/client/routes/_app")
+    .filter((file) => file.endsWith(".tsx"))
+    .map((file) => file.replace(/\.tsx$/, ""));
+  expect(routes.filter((route) => !CHECKED_ROUTES.includes(route))).toEqual([]);
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`the rest of the screens and the settings sheets pass axe in ${scheme}`, async ({ page, isMobile }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: scheme });
+
+    await screen(page, "/agents", "Agents");
+    await expectAccessible(page, "Agents");
+
+    await screen(page, "/year", /\d{4}/);
+    await expectAccessible(page, "The year so far");
+
+    await screen(page, "/deleted", "Recently deleted");
+    await expectAccessible(page, "Recently deleted");
+
+    // Every specimen in the design system, not just a few sections.
+    await screen(page, "/styleguide", "Styleguide");
+    await expectAccessible(page, "The styleguide");
+    // The back burner's other specimen (one shows at a time).
+    await page.getByRole("radio", { name: "A photo" }).evaluate((input: HTMLInputElement) => input.click());
+    await expect(page.locator("#today").getByText("Articulated dragon").first()).toBeVisible();
+    await expectAccessible(page, "Styleguide: the back burner with a photo", "#today");
+
+    await screen(page, "/pantry", "Pantry");
+    await page.getByRole("button", { name: "Add spool" }).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expectAccessible(page, "The add-spool sheet", "[role=dialog]");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await screen(page, "/printer", /X2D|Printer/);
+    await page
+      .getByRole("button", { name: /Check the belts/ })
+      .first()
+      .click();
+    await expect(page.getByRole("dialog", { name: "Check the belts" })).toBeVisible();
+    await expectAccessible(page, "An upkeep task", "[role=dialog]");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // The account's own sheets, from the account sheet (phones) or the account menu (desktop).
+    for (const [row, sheet] of [
+      ["Notifications", "Notifications"],
+      ["Change password", "Change password"],
+    ] as const) {
+      await screen(page, "/ideas", "Ideas");
+      if (isMobile) {
+        await page.getByRole("button", { name: "Account" }).click();
+        await page.getByRole("dialog").getByRole("button", { name: row }).click();
+      } else {
+        await page.getByRole("button", { name: "Account menu" }).click();
+        const menu = page.getByRole("dialog", { name: "Account" });
+        await expect(menu).toBeVisible();
+        if (row === "Notifications") await expectAccessible(page, "The account menu", "[role=dialog]");
+        await menu.getByRole("button", { name: row }).click();
+      }
+      await expect(page.getByRole("dialog", { name: sheet })).toBeVisible();
+      await expectAccessible(page, `The ${sheet.toLowerCase()} sheet`, "[role=dialog]");
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+  });
+}
+
+/**
+ * Controls drawn smaller than 44 px that have no 44 px hit area (`touch-target`), on the visible page or in a sheet.
+ * Links inside running text are left out, as WCAG does.
+ */
+async function smallTargets(page: Page, within = "body") {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector) ?? document.body;
+    const small: string[] = [];
+    const controls = root.querySelectorAll<HTMLElement>(
+      "a[href], button, [role=switch], [role=radio], [role=checkbox], input:not([type=hidden]), select, textarea, summary",
+    );
+    for (const control of Array.from(controls)) {
+      if (control.closest("[aria-hidden=true], [inert]")) continue;
+      // Marked by hand where 44 px can't fit and the same thing is a big target nearby (the outcome strip's dots).
+      if (control.hasAttribute("data-small-target")) continue;
+      const box = control.getBoundingClientRect();
+      // Hidden, or a native radio under a drawn control (SegmentedControl).
+      if (box.width <= 1 || box.height <= 1) continue;
+      const style = getComputedStyle(control);
+      if (style.visibility === "hidden") continue;
+      if (control.tagName === "A" && style.display === "inline" && control.parentElement?.closest("p")) continue;
+      // A writing surface that reads as text (a title, the "for" line) is tapped anywhere along its full width.
+      if ((control.tagName === "TEXTAREA" || control.tagName === "INPUT") && box.width >= 160 && box.height >= 28)
+        continue;
+      // A link around a button (the app's way to give a link a button's look) is as big as the button it holds.
+      if (control.tagName === "A" && control.querySelector("button")) continue;
+      // The hit area: the control, its touch-target (an ::after), or the label it sits in and that label's.
+      let width = 0;
+      let height = 0;
+      for (const element of [control, control.closest("label")]) {
+        if (!element) continue;
+        const rect = element.getBoundingClientRect();
+        const hit = getComputedStyle(element, "::after");
+        const extended = hit.content !== "none" && hit.position === "absolute";
+        width = Math.max(width, rect.width, extended ? Number.parseFloat(hit.width) || 0 : 0);
+        height = Math.max(height, rect.height, extended ? Number.parseFloat(hit.height) || 0 : 0);
+      }
+      if (width < 43.5 || height < 43.5) {
+        const name = (control.getAttribute("aria-label") ?? control.textContent ?? "").trim().slice(0, 40);
+        small.push(`${Math.round(width)}×${Math.round(height)} ${control.tagName.toLowerCase()} "${name}"`);
+      }
+    }
+    return small;
+  }, within);
+}
+
+test("every control on a phone has a 44 px target", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Touch targets are a phone rule; desktop has a pointer");
+  test.setTimeout(180_000);
+  const screens: Array<[string, string | RegExp]> = [
+    ["/today", "Today"],
+    ["/ideas", "Ideas"],
+    [`/ideas/${data.ideaId}`, "Bath tugboat"],
+    ["/builds", "Builds"],
+    ["/journal", "Journal"],
+    ["/search?q=warping", "Search"],
+    ["/pantry", "Pantry"],
+    [`/pantry/${data.spoolId}`, /Teal|PETG/],
+    ["/printer", /X2D|Printer/],
+    ["/agents", "Agents"],
+    ["/year", /\d{4}/],
+    ["/deleted", "Recently deleted"],
+  ];
+  for (const [path, heading] of screens) {
+    await screen(page, path, heading);
+    await page.waitForTimeout(400);
+    expect(await smallTargets(page), path).toEqual([]);
+  }
+  await page.goto(`/builds/${data.buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  expect(await smallTargets(page), "A build").toEqual([]);
+
+  // The sheets: capture, the account sheet.
+  await screen(page, "/ideas", "Ideas");
+  await page.getByRole("button", { name: "New idea" }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.waitForTimeout(400);
+  expect(await smallTargets(page, "[role=dialog]"), "The capture sheet").toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Account" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.waitForTimeout(400);
+  expect(await smallTargets(page, "[role=dialog]"), "The account sheet").toEqual([]);
+});
+
+/** Whether the focused element shows the focus ring: a box shadow or an outline. */
+async function focusShows(page: Page) {
+  return page.evaluate(() => {
+    const focused = document.activeElement as HTMLElement | null;
+    if (!focused || focused === document.body) return "nothing focused";
+    const style = getComputedStyle(focused);
+    const ring =
+      style.boxShadow !== "none" || (style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0);
+    const name = (focused.getAttribute("aria-label") ?? focused.textContent ?? focused.tagName).trim().slice(0, 40);
+    return ring ? null : `no visible focus on ${focused.tagName.toLowerCase()} "${name}"`;
+  });
+}
+
+test("keyboard focus is visible in the sheets and menus", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Keyboard use is a desktop thing here");
+  const tabThrough = async (what: string, steps = 8) => {
+    const missing: string[] = [];
+    for (let step = 0; step < steps; step++) {
+      await page.keyboard.press("Tab");
+      const problem = await focusShows(page);
+      if (problem) missing.push(problem);
+    }
+    expect(missing, what).toEqual([]);
+  };
+
+  await screen(page, "/ideas", "Ideas");
+  await page.keyboard.press("c");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await tabThrough("The capture sheet", 5);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Account menu" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Account" })).toBeVisible();
+  await tabThrough("The account menu", 7);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByRole("dialog", { name: "Change password" })).toBeVisible();
+  await tabThrough("The change-password sheet", 5);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.goto(`/builds/${data.buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await page
+    .getByRole("button", { name: /^Log attempt/ })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog", { name: "Attempt 3" })).toBeVisible();
+  await tabThrough("The attempt sheet", 10);
+});
 
 test("empty states and sign-in pass axe", async ({ page }) => {
   await clearIdeas(page);

@@ -176,7 +176,6 @@ export function CaptureSheet() {
           <SegmentedControl
             label="Where it goes"
             labelHidden
-            size="sm"
             options={[
               { value: "idea", label: "New idea" },
               {
