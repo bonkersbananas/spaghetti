@@ -86,7 +86,7 @@ function PressedPanel() {
       ),
     ],
     [
-      "Chip · shrinks, pressed surface",
+      "Chip · shrinks, veil",
       (held?: boolean) => (
         <ToggleChip selected={false} data-pressed={held || undefined}>
           Silk PLA
@@ -94,7 +94,23 @@ function PressedPanel() {
       ),
     ],
     [
-      "Card or row · shrinks, pressed surface",
+      "Selected chip · keeps its tone",
+      (held?: boolean) => (
+        <ToggleChip selected data-pressed={held || undefined}>
+          Silk PLA
+        </ToggleChip>
+      ),
+    ],
+    [
+      "Danger button · deepens, text turns light",
+      (held?: boolean) => (
+        <Button variant="danger" data-pressed={held || undefined}>
+          Delete
+        </Button>
+      ),
+    ],
+    [
+      "Card or row · shrinks, veil",
       (held?: boolean) => (
         <button
           type="button"
@@ -138,8 +154,9 @@ function PressedPanel() {
     <Panel className="flex min-w-0 flex-col gap-4">
       <p className="text-small text-ink-soft max-w-prose">
         Held: <code>pressable</code> shrinks to 97% and takes a tint in 90 ms (a primary button deepens to the pressed
-        tomato, chips and cards to the pressed surface, a tab bar item gets a round highlight); tappable things without
-        it (inline links, plain rows) dim to 60%. Both start on the touch itself, never after it.
+        tomato, chips, cards and rows to a veil of their own text colour, so selected and toned ones keep their tone, a
+        tab bar item gets a round highlight); tappable things without it (inline links, plain rows) dim to 60%. Both
+        start on the touch itself, never after it.
       </p>
       <div className="bg-paper grid max-w-lg grid-cols-2 items-center gap-x-4 gap-y-2 rounded-md p-4">
         <span className="text-caption text-ink font-semibold">Resting</span>

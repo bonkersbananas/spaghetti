@@ -18,7 +18,7 @@
   /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
   --sg-lifted: #fffcf7;
   --sg-well: #ebe3d5;
-  /* What a held chip, card or row turns: a soft warm tint, darker than cream and paper. */
+  /* The soft round behind a held tab bar icon. */
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
   --sg-note: #f6f1e8;
@@ -125,6 +125,7 @@
   --sg-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --sg-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --sg-press-scale: 0.97;
+  --sg-press-veil: color-mix(in srgb, currentColor 8%, transparent);
   /* What is tappable but not `pressable` (inline links, plain rows) dims to this while held. */
   --sg-press-dim: 0.6;
 }
@@ -347,21 +348,26 @@
   &:active:not(:disabled),
   &[data-pressed] {
     transform: scale(var(--sg-press-scale));
-    /* The tint: the surface under the finger turns --press-bg (a soft pressed surface unless the control sets its own). */
-    background-color: var(--press-bg, var(--sg-pressed));
+    /* The tint: a veil of the control's own text color over whatever surface it has, so a selected or toned control
+       keeps its tone and its contrast while held (a chip's label never meets a surface it wasn't drawn for). */
+    background-image: linear-gradient(var(--sg-press-veil), var(--sg-press-veil));
     transition-duration: var(--sg-duration-instant);
   }
 }
-/* A filled tomato control (primary button, capture button) deepens instead of going pale. */
+/* A filled tomato control (the primary and capture buttons) deepens to the pressed tomato instead of taking the veil. */
 @utility press-tomato {
-  --press-bg: var(--sg-tomato-pressed);
+  &:active:not(:disabled),
+  &[data-pressed] {
+    background-color: var(--sg-tomato-pressed);
+    background-image: none;
+  }
 }
 /* The held highlight is drawn by something else (the tab bar's round highlight behind its icon). */
 @utility press-none {
   &:active:not(:disabled),
   &[data-pressed] {
     transform: none;
-    background-color: transparent;
+    background-image: none;
   }
 }
 
