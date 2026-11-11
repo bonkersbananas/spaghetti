@@ -11,14 +11,16 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
+import { WishlistLink } from "@/components/wishlist/WishlistLink";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { useArrived } from "@/lib/live";
-import { peopleQuery } from "@/lib/queries";
+import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
 export const Route = createFileRoute("/_app/ideas/")({
   component: Ideas,
@@ -33,6 +35,9 @@ function Ideas() {
   const { items: builds } = useBuilds();
   const started = startedIdeas(builds);
   const { data: people } = useQuery(peopleQuery);
+  const { data: user } = useQuery(sessionQuery);
+  const me = user?.id;
+  const wished = new Set(useWishlistIds(me));
   const { landed } = useCapture();
   const arrived = useArrived();
   const via = useVia();
@@ -47,6 +52,7 @@ function Ideas() {
     onToggle: () => setUpNext(queryClient, item, index < 0),
     onMoveUp: index > 0 ? () => moveUpNext(queryClient, queue, item.id, -1) : undefined,
     onMoveDown: index >= 0 && index < queue.length - 1 ? () => moveUpNext(queryClient, queue, item.id, 1) : undefined,
+    wish: me ? { on: wished.has(item.id), onToggle: () => toggleWishlist(queryClient, me, item) } : undefined,
   });
   const card = (item: (typeof items)[number], index: number) => (
     <IdeaCard
@@ -91,6 +97,7 @@ function Ideas() {
         </div>
       ) : items.length || started.length ? (
         <>
+          {!isDesktop && me && <WishlistLink me={me} ideas={items} people={people ?? []} className="mb-8" />}
           {!items.length && (
             <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
           )}

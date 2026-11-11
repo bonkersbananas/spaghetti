@@ -130,7 +130,7 @@ export const wishlistRoutes = new Hono<AppEnv>()
         .onConflictDoNothing(),
       recordChange(db, { entity: "wishlist", id: me, action: "created", actor: c.var.actor }),
       ...renumber(db, me, ids),
-    ] as Batch);
+    ] as unknown as Batch);
     return c.json<WishlistResponse>({ wishlist: await loadMine(db, me) });
   })
 
@@ -166,7 +166,7 @@ export const wishlistRoutes = new Hono<AppEnv>()
       await db.batch([
         ...renumber(db, me, ids),
         recordChange(db, { entity: "wishlist", id: me, action: "updated", actor: c.var.actor }),
-      ] as Batch);
+      ] as unknown as Batch);
     }
     return c.json<WishlistResponse>({ wishlist: await loadMine(db, me) });
   })
