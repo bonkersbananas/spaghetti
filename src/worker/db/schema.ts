@@ -6,6 +6,7 @@ import type { BridgeStatusData } from "../../shared/bridge.ts";
 import type { ChangeAction, ChangeActorKind, ChangeEntity } from "../../shared/changes.ts";
 import type { DraftFailure, DraftFindings, ItemDraft } from "../../shared/draft.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
+import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 
@@ -128,6 +129,8 @@ export const attempts = sqliteTable(
     failureTags: text("failure_tags", { mode: "json" }).$type<string[]>().notNull().default([]),
     successNotes: text("success_notes", { mode: "json" }).$type<string[]>().notNull().default([]),
     settings: text("settings", { mode: "json" }).$type<AttemptSettings>().notNull().default({}),
+    /** What it printed of the build's parts, with good pieces counted (shared/parts.ts). */
+    parts: text("parts", { mode: "json" }).$type<AttemptPart[]>().notNull().default([]),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -145,6 +148,28 @@ export const attempts = sqliteTable(
     // The "how did it go?" nudges look at prints with no outcome, every few minutes: that is a handful of rows.
     index("attempts_open_idx").on(table.printedAt).where(sql`${table.outcome} is null and ${table.deletedAt} is null`),
   ],
+);
+
+/**
+ * What a build is made of, when it is more than one thing ("Hull half ×2"). Hard-deleted (the client's undo puts
+ * the row back under the same id), so attempts' counts for a part that is gone are simply not shown.
+ */
+export const parts = sqliteTable(
+  "parts",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    position: integer("position").notNull().default(0),
+    /** One of the build's photos (not a foreign key: a removed photo just stops showing). */
+    photoId: text("photo_id"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("parts_item_idx").on(table.itemId, table.position)],
 );
 
 /**
@@ -276,7 +301,7 @@ export const draftRuns = sqliteTable("draft_runs", {
 });
 
 /**
- * Claude looking at one attempt photo (decision 0022): the job, its answer and the record of the run, in one row per
+ * Claude looking at one attempt photo (decision 0023): the job, its answer and the record of the run, in one row per
  * photo (a photo is never read twice). Also what the day's cap counts (rows with `ranAt`).
  */
 export const photoReads = sqliteTable(
@@ -441,6 +466,8 @@ export const attemptFiles = sqliteTable(
     slicer: text("slicer"),
     /** The settings read from the file, so the app can mark the values that came from it. */
     prefill: text("prefill", { mode: "json" }).$type<AttemptSettings>().notNull(),
+    /** The object names on that plate, as the file spells them: where a build's parts can come from. */
+    objects: text("objects", { mode: "json" }).$type<string[]>().notNull().default([]),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -452,6 +479,7 @@ export const attemptFiles = sqliteTable(
 
 export type Spool = typeof spools.$inferSelect;
 export type AmsSlot = typeof amsSlots.$inferSelect;
+export type Part = typeof parts.$inferSelect;
 export type AttemptFileRow = typeof attemptFiles.$inferSelect;
 
 /**

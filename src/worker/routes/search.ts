@@ -11,10 +11,11 @@ import type {
 } from "../../shared/api.ts";
 import { byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
 import { OUTCOME_FILTERS, outcomesFor } from "../../shared/journal.ts";
+import { attemptPartsLabel } from "../../shared/parts.ts";
 import { recipeMatchesTerms, recipesFor } from "../../shared/recipes.ts";
 import { ftsQuery, SNIPPET_CLOSE, SNIPPET_OPEN, searchTerms } from "../../shared/search.ts";
 import type { Db } from "../db/index.ts";
-import { type Attempt, attempts, items, type Photo, photos, tags } from "../db/schema.ts";
+import { type Attempt, attempts, items, type Photo, parts, photos, tags } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
 import { liveRecipes } from "./recipes.ts";
@@ -127,9 +128,10 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
   if (!ids.length) return [];
   const rows = await db.select().from(attempts).where(inArray(attempts.id, ids));
   const itemIds = unique(rows.map((row) => row.itemId));
-  const [itemRows, siblings] = await Promise.all([
+  const [itemRows, siblings, partRows] = await Promise.all([
     db.select().from(items).where(inArray(items.id, itemIds)),
     liveAttempts(db, itemIds),
+    db.select().from(parts).where(inArray(parts.itemId, itemIds)),
   ]);
   const itemPhotos = await livePhotos(db, itemIds, new Set(siblings.map((row) => row.id)));
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -158,6 +160,7 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
           failureTags: attempt.failureTags,
           successNotes: attempt.successNotes,
           settings: attempt.settings,
+          parts: attempt.parts,
           createdBy: attempt.createdBy,
           createdVia: attempt.createdVia,
           finishedBy: attempt.finishedBy,
@@ -167,6 +170,10 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
         },
         number: ordered.findIndex((row) => row.id === attempt.id) + 1,
         item: { id: item.id, title: item.title, stage: item.stage },
+        partsLabel: attemptPartsLabel(
+          attempt,
+          partRows.filter((part) => part.itemId === item.id),
+        ),
         photo: photo ? toApiPhoto(photo) : null,
       },
     ];

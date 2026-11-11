@@ -1,5 +1,6 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
 import { OUTCOME_LABELS, tagLabel } from "@shared/attempts";
+import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
@@ -99,6 +100,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   const attempt = item.attempts[index];
   if (!attempt) return null;
   const offBed = isOffTheBed(attempt);
+  const partsLabel = attemptPartsLabel(attempt, item.parts);
   const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const [photo] = photos;
   // No photo yet, but the slicer's picture of the plate: shown in the photo's place and labeled as a preview.
@@ -173,6 +175,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           </h3>
           {picture && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
         </div>
+        {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
         {attempt.outcome === null && !offBed && (
           <PrintProgress
             startedAt={attempt.printedAt}

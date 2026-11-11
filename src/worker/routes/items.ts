@@ -10,6 +10,7 @@ import {
   type PhotoResponse,
 } from "../../shared/api.ts";
 import { beganAsIdea } from "../../shared/deleted.ts";
+import { cleanPartName, MAX_PART_QUANTITY, MAX_PARTS } from "../../shared/parts.ts";
 import type { PhotoRead } from "../../shared/photo-read.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
 import { afterChange, recordChange } from "../changes.ts";
@@ -23,7 +24,9 @@ import {
   type ItemStage,
   itemDrafts,
   items,
+  type Part,
   type Photo,
+  parts,
   photos,
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -61,6 +64,17 @@ const updateItem = z.object({
     .nullable()
     .optional(),
 });
+const partInput = z.object({
+  id,
+  name: z.string().transform(cleanPartName).pipe(z.string().min(1)),
+  quantity: z.number().int().min(1).max(MAX_PART_QUANTITY),
+  /** One of the build's photos; null for none; left out, unchanged. */
+  photoId: id.nullable().optional(),
+  /** Its place in the list; left out, a new part goes last and an old one stays. */
+  position: z.number().int().min(0).max(10_000).optional(),
+});
+/** Adds these parts or changes the ones that exist (the undo of a removal is the same call). */
+const putParts = z.object({ parts: z.array(partInput).min(1).max(MAX_PARTS) });
 const upNextOrder = z.object({ ids: z.array(id).max(500) });
 const reorder = z.object({ photoIds: z.array(id).max(200) });
 const unscrap = z.object({
@@ -128,8 +142,17 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   const rows = await db.select().from(items).where(where).orderBy(desc(items.createdAt), desc(items.id));
   if (!rows.length) return [];
   const slices = chunked(rows.map((row) => row.id));
-  const [draftSlices, photoSlices, attemptSlices] = await Promise.all([
+  const [draftSlices, partSlices, photoSlices, attemptSlices] = await Promise.all([
     Promise.all(slices.map((ids) => db.select().from(itemDrafts).where(inArray(itemDrafts.itemId, ids)))),
+    Promise.all(
+      slices.map((ids) =>
+        db
+          .select()
+          .from(parts)
+          .where(inArray(parts.itemId, ids))
+          .orderBy(asc(parts.position), asc(parts.createdAt), asc(parts.id)),
+      ),
+    ),
     Promise.all(
       slices.map((ids) =>
         db
@@ -165,6 +188,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     const read = toApiPhotoRead(rows);
     if (read) reads.set(attemptId, read);
   }
+  const partsByItem = groupBy<Part>(partSlices.flat());
   const draftsByItem = new Map(draftSlices.flat().map((draft) => [draft.itemId, draft]));
   const files = new Map(fileRows.map((file) => [file.attemptId, file]));
   const photosByItem = groupBy<Photo>(
@@ -180,6 +204,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       attemptsByItem.get(row.id) ?? [],
       files,
       draftsByItem.get(row.id),
+      partsByItem.get(row.id) ?? [],
       reads,
     );
   });
@@ -375,6 +400,98 @@ export const itemRoutes = new Hono<AppEnv>()
     const item = await loadItem(db, itemId);
     if (!item) return apiError(c, 404, "not_found", notFound);
     return c.json<ItemResponse>({ item });
+  })
+
+  /**
+   * A build's parts: adds the ones sent and changes the ones that exist, in one go (idempotent). Others are left
+   * alone; DELETE removes one. Parts are optional: a build with none is the simple case.
+   */
+  .put("/:id/parts", async (c) => {
+    const parsed = putParts.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "Those parts couldn't be read.");
+    if (!canUse(c, "attempts")) return missingScope(c, ["attempts"]);
+    const itemId = c.req.param("id");
+    const db = c.var.db;
+    const current = await db
+      .select({ id: items.id })
+      .from(items)
+      .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
+      .get();
+    if (!current) return apiError(c, 404, "not_found", notFound);
+    const existing = await db.select().from(parts).where(eq(parts.itemId, itemId));
+    const known = new Set(existing.map((part) => part.id));
+    const inputs = [...new Map(parsed.data.parts.map((part) => [part.id, part])).values()];
+    if (existing.length + inputs.filter((part) => !known.has(part.id)).length > MAX_PARTS) {
+      return apiError(c, 400, "invalid", `A build can have up to ${MAX_PARTS} parts.`);
+    }
+    // A photo is one of this build's.
+    const photoIds = [...new Set(inputs.flatMap((part) => (part.photoId ? [part.photoId] : [])))];
+    if (photoIds.length) {
+      const own = await db
+        .select({ id: photos.id })
+        .from(photos)
+        .where(and(eq(photos.itemId, itemId), inArray(photos.id, photoIds), isNull(photos.deletedAt)));
+      if (own.length !== photoIds.length) return apiError(c, 400, "invalid", "That photo isn't one of this build's.");
+    }
+    const now = new Date();
+    let next = existing.reduce((last, part) => Math.max(last, part.position + 1), 0);
+    const writes = inputs.map((part) => {
+      const created = !known.has(part.id);
+      const position = part.position ?? (created ? next++ : undefined);
+      return db
+        .insert(parts)
+        .values({
+          id: part.id,
+          itemId,
+          name: part.name,
+          quantity: part.quantity,
+          position: position ?? 0,
+          photoId: part.photoId ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: parts.id,
+          set: {
+            name: part.name,
+            quantity: part.quantity,
+            ...(part.photoId !== undefined ? { photoId: part.photoId } : {}),
+            ...(position !== undefined ? { position } : {}),
+            updatedAt: now,
+          },
+          setWhere: eq(parts.itemId, itemId),
+        });
+    });
+    await db.batch([
+      ...writes,
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
+      db
+        .update(items)
+        .set({ updatedAt: now })
+        .where(and(eq(items.id, itemId), afterChange)),
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    const item = await loadItem(db, itemId);
+    if (!item) return apiError(c, 404, "not_found", notFound);
+    return c.json<ItemResponse>({ item });
+  })
+
+  /** Removes a part; the app's undo puts it back with PUT. Attempts keep their counts, which then show nothing. */
+  .delete("/:id/parts/:partId", async (c) => {
+    const itemId = c.req.param("id");
+    const now = new Date();
+    const [removed] = await c.var.db.batch([
+      c.var.db
+        .delete(parts)
+        .where(and(eq(parts.id, c.req.param("partId")), eq(parts.itemId, itemId)))
+        .returning({ id: parts.id }),
+      recordChange(c.var.db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
+      c.var.db
+        .update(items)
+        .set({ updatedAt: now })
+        .where(and(eq(items.id, itemId), afterChange)),
+    ]);
+    if (!removed.length) return apiError(c, 404, "not_found", "That part isn't here any more.");
+    return c.body(null, 204);
   })
 
   .delete("/:id", async (c) => {
@@ -666,7 +783,7 @@ export const itemRoutes = new Hono<AppEnv>()
     ]);
     const photo = row ?? (await c.var.db.select().from(photos).where(eq(photos.id, photoId)).get());
     if (!photo) return apiError(c, 500, "server_error", "The photo wasn't saved.");
-    // A new photo of an attempt that still has no outcome: Claude takes a look, after the response (decision 0022).
+    // A new photo of an attempt that still has no outcome: Claude takes a look, after the response (decision 0023).
     // People's photos and the printer bridge's frame (a token with the attempts and printer scopes) start it; any other
     // agent's don't.
     if (

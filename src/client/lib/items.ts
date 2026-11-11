@@ -115,6 +115,8 @@ export function viewAttempts(
     const waiting = pendingFiles.find((file) => file.attemptId === attempt.id);
     return {
       ...attempt,
+      // A copy saved before parts existed has none.
+      parts: attempt.parts ?? [],
       changes: before ? describeChanges(before.settings, attempt.settings) : [],
       file: waiting ? { ...fromPendingFile(waiting), replaces: attempt.file } : attempt.file,
       number: index + 1,
@@ -135,6 +137,7 @@ function fromPendingFile(file: PendingFile): AttemptFileView {
     plateCount: file.plateCount,
     slicer: file.slicer ?? null,
     prefill: file.prefill,
+    objects: file.objects ?? [],
     createdAt: file.queuedAt,
     pending: true,
   };
@@ -239,7 +242,7 @@ export function connectOutbox(queryClient: QueryClient) {
         ...item,
         photos: sortPhotos([...item.photos.filter((p) => p.id !== photo.id), photo]),
       }));
-      // A photo of an attempt may start Claude looking at it (decision 0022): ask for the attempt's state now.
+      // A photo of an attempt may start Claude looking at it (decision 0023): ask for the attempt's state now.
       if (photo.attemptId) void queryClient.invalidateQueries({ queryKey: itemKeys.detail(photo.itemId) });
     },
     fileSaved: (attempt) =>
@@ -285,6 +288,7 @@ function fromPendingAttempt(itemId: string, attempt: PendingAttempt): Attempt {
     finishedBy: attempt.outcome ? attempt.createdBy : null,
     createdVia: null,
     finishedVia: null,
+    parts: attempt.parts ?? [],
     changes: [],
     file: null,
     updatedAt: attempt.createdAt,
@@ -337,6 +341,7 @@ function withOutbox(item: Item, state: OutboxState): ItemView {
     // A pending attempt on an idea makes it a build straight away, as the server will.
     stage: item.stage === "idea" && entry?.attempts?.length ? "building" : item.stage,
     photos: entry ? sortPhotos(photos) : photos,
+    parts: item.parts ?? [],
     attempts: withAttempts(item.id, item.attempts, entry),
     pending: false,
   };
@@ -359,6 +364,7 @@ function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
     coverPhotoId: null,
     upNext: null,
     forWhom: null,
+    parts: [],
     photos: sortPhotos(pendingPhotos(entry, state, [])),
     attempts: withAttempts(entry.itemId, [], entry),
     draft: null,
@@ -404,7 +410,7 @@ export function useItem(id: string) {
   const query = useQuery({
     ...itemQuery(id),
     enabled: !pendingEntry,
-    // Claude is looking at a photo of one of its attempts (decision 0022): ask again now and then instead of waiting
+    // Claude is looking at a photo of one of its attempts (decision 0023): ask again now and then instead of waiting
     // for the feed's slower beat, so the suggestion shows as soon as it is there.
     refetchInterval: (current) =>
       current.state.data?.attempts.some((attempt) => attempt.photoRead?.status === "reading") ? 3000 : false,

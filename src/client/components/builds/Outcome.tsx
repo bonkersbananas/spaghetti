@@ -48,7 +48,7 @@ interface OutcomePickerProps {
   /** "lg" in the attempt sheet (one tap, thumb-sized); "md" where it is a secondary choice. */
   size?: "md" | "lg";
   /**
-   * The outcome Claude suggests from the photo (decision 0022): hinted on its button, never picked. Tapping it picks it
+   * The outcome Claude suggests from the photo (decision 0023): hinted on its button, never picked. Tapping it picks it
    * like any other; nothing is saved until then.
    */
   suggested?: Outcome | null;

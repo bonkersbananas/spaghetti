@@ -24,6 +24,8 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   // The route narrows it: a photo of an attempt may come from "attempts", any other needs "capture".
   ["PUT", new RegExp(`^/items/${id}/photos/${id}$`), ["capture", "attempts"]],
   ["POST", new RegExp(`^/items/${id}/attempts$`), ["attempts"]],
+  // A build's parts: agents add and change them; removing one is for people.
+  ["PUT", new RegExp(`^/items/${id}/parts$`), ["attempts"]],
   ["PATCH", new RegExp(`^/attempts/${id}$`), ["attempts"]],
   ["POST", new RegExp(`^/attempts/${id}/finish$`), ["attempts"]],
   ["PUT", new RegExp(`^/attempts/${id}/file$`), ["attempts"]],

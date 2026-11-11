@@ -4,12 +4,13 @@ import type {
   Attempt as ApiAttempt,
   AttemptFile as ApiAttemptFile,
   Item as ApiItem,
+  Part as ApiPart,
   Photo as ApiPhoto,
   Person,
 } from "../shared/api.ts";
 import { byPrintTime, describeChanges } from "../shared/attempts.ts";
 import type { PhotoRead } from "../shared/photo-read.ts";
-import type { Attempt, AttemptFileRow, Item, ItemDraftRow, Photo, User } from "./db/schema.ts";
+import type { Attempt, AttemptFileRow, Item, ItemDraftRow, Part, Photo, User } from "./db/schema.ts";
 import { toApiDraft } from "./draft/run.ts";
 
 export function apiError(c: Context, status: ContentfulStatusCode, code: string, message: string) {
@@ -42,6 +43,19 @@ export function toApiPhoto(photo: Photo): ApiPhoto {
   };
 }
 
+export function toApiPart(part: Part): ApiPart {
+  return {
+    id: part.id,
+    itemId: part.itemId,
+    name: part.name,
+    quantity: part.quantity,
+    position: part.position,
+    photoId: part.photoId,
+    createdAt: part.createdAt.getTime(),
+    updatedAt: part.updatedAt.getTime(),
+  };
+}
+
 export function toApiFile(file: AttemptFileRow): ApiAttemptFile {
   return {
     id: file.id,
@@ -53,6 +67,7 @@ export function toApiFile(file: AttemptFileRow): ApiAttemptFile {
     plateCount: file.plateCount,
     slicer: file.slicer,
     prefill: file.prefill,
+    objects: file.objects,
     createdAt: file.createdAt.getTime(),
   };
 }
@@ -84,6 +99,7 @@ export function toApiAttempt(
     failureTags: attempt.failureTags,
     successNotes: attempt.successNotes,
     settings: attempt.settings,
+    parts: attempt.parts,
     changes: previous ? describeChanges(previous.settings, attempt.settings) : [],
     file: file ? toApiFile(file) : null,
     createdBy: attempt.createdBy,
@@ -119,6 +135,7 @@ export function toApiItem(
   itemAttempts: Attempt[] = [],
   files: FilesByAttempt = new Map(),
   draft: ItemDraftRow | null = null,
+  itemParts: Part[] = [],
   reads: ReadsByAttempt = new Map(),
 ): ApiItem {
   return {
@@ -135,6 +152,7 @@ export function toApiItem(
     coverPhotoId: item.coverPhotoId,
     upNext: item.upNext,
     forWhom: item.forWhom,
+    parts: itemParts.map(toApiPart),
     photos: itemPhotos.map(toApiPhoto),
     attempts: toApiAttempts(itemAttempts, files, reads),
     draft: toApiDraft(draft),

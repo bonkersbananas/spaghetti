@@ -43,6 +43,7 @@ export const attempt = (id: string, itemId: string, fields: Partial<Attempt>): A
     infillDensity: 15,
     bedType: "Textured PEI Plate",
   },
+  parts: [],
   changes: [],
   file: null,
   createdBy: "a",
@@ -68,6 +69,7 @@ export const item = (id: string, fields: Partial<Item>): Item => ({
   coverPhotoId: null,
   upNext: null,
   forWhom: null,
+  parts: [],
   photos: [],
   attempts: [],
   draft: null,
@@ -84,6 +86,7 @@ export const planFile = {
   plateCount: 2,
   slicer: "BambuStudio 02.01.00.00",
   prefill: {},
+  objects: [],
   createdAt: now,
 };
 

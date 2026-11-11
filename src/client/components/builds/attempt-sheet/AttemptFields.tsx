@@ -1,4 +1,6 @@
+import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, type Outcome } from "@shared/attempts";
+import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
 import { type ReactNode, useEffect, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
@@ -14,6 +16,7 @@ import { OutcomePicker } from "../Outcome";
 import { SettingsEditor } from "../SettingsEditor";
 import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
+import { PlateParts } from "./PlateParts";
 
 export interface FieldsProps {
   outcome: Outcome | null;
@@ -61,6 +64,8 @@ export interface FieldsProps {
   settingsKey?: number;
   /** Shown under the outcome: how long it took next to the estimate. */
   estimate?: ReactNode;
+  /** The build's parts and what the plate holds of them; nothing is shown for a build without parts. */
+  plate?: { parts: readonly Part[]; value: readonly AttemptPart[]; onChange: (value: AttemptPart[]) => void };
 }
 
 export function AttemptFields(props: FieldsProps) {
@@ -119,6 +124,16 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
+      {props.plate && (
+        <fieldset disabled={!!props.readOnly} className="contents">
+          <PlateParts
+            parts={props.plate.parts}
+            value={props.plate.value}
+            onChange={props.plate.onChange}
+            outcome={outcome}
+          />
+        </fieldset>
+      )}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>

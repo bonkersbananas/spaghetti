@@ -4,6 +4,7 @@ import type {
   AttemptResponse,
   FinishAttemptResponse,
   ItemHit,
+  ItemResponse,
   PrinterResponse,
   Recipe,
   RecipesResponse,
@@ -82,6 +83,20 @@ const successNotesArg = z
 const outcomeArg = z
   .enum(OUTCOMES)
   .describe(`How it went: ${OUTCOMES.map((outcome) => `"${outcome}" (${OUTCOME_LABELS[outcome]})`).join(", ")}.`);
+const partsArg = z
+  .array(
+    z.object({
+      part_id: id.describe("The part's id, from get_build's Parts list."),
+      count: z.number().int().min(0).max(999).describe("Good pieces of that part that came out (or are on the plate)."),
+    }),
+  )
+  .max(100)
+  .optional()
+  .describe(
+    "For a build with parts: which parts the print made and how many good pieces of each. Worked and partly worked prints count their pieces; a spaghetti counts none unless you say a number. Leave out for a build without parts.",
+  );
+const toPartCounts = (parts: Array<{ part_id: string; count: number }> | undefined) =>
+  parts?.map((part) => ({ partId: part.part_id, count: part.count }));
 const materialArg = z.string().max(20).optional().describe('A filament type such as "PLA", "PETG" or "TPU".');
 
 // --- formatting: short text a model can read and act on ------------------------------------------
@@ -114,7 +129,7 @@ function attemptLine(hit: AttemptHit & { sameBuild?: boolean }): string {
   const results = describeResults(a.settings);
   const name = hit.item.title?.trim() || "Untitled";
   return [
-    `- ${name}, attempt ${hit.number}: ${outcomeWord(a.outcome)}${hit.sameBuild ? " (this build)" : ""} (build_id: ${hit.item.id}, attempt_id: ${a.id})`,
+    `- ${name}, attempt ${hit.number}${hit.partsLabel ? ` · ${hit.partsLabel}` : ""}: ${outcomeWord(a.outcome)}${hit.sameBuild ? " (this build)" : ""} (build_id: ${hit.item.id}, attempt_id: ${a.id})`,
     a.note.trim() && `  note: ${a.note.trim()}`,
     settings.length && `  settings: ${settings.join(", ")}`,
     results.length && `  result: ${results.join(", ")}`,
@@ -278,6 +293,41 @@ export const tools: Tool[] = [
   }),
 
   tool({
+    name: "set_parts",
+    title: "Add or change a build's parts",
+    description:
+      'Say what a build is made of when it is more than one thing ("Hull half" ×2, "Deck" ×1): adds the parts listed and changes the ones that already exist (give their part_id). Parts are optional; most builds have none. Removing a part is for people, in the app. Needs the "attempts" scope.',
+    scopes: ["attempts"],
+    readOnly: false,
+    input: z.object({
+      build_id: id.describe("The build's id (from search)."),
+      parts: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(80).describe('The part\'s name, such as "Hull half".'),
+            quantity: z.number().int().min(1).max(999).describe("How many are needed."),
+            part_id: id.optional().describe("An existing part to rename or change; left out, a new part is added."),
+          }),
+        )
+        .min(1)
+        .max(100),
+    }),
+    async run(args, ctx) {
+      const given = args.parts.map((part) => ({
+        id: part.part_id ?? crypto.randomUUID(),
+        name: part.name,
+        quantity: part.quantity,
+      }));
+      const result = await ctx.call(`/api/items/${args.build_id}/parts`, { method: "PUT", json: { parts: given } });
+      if (!result.ok) return failure(result);
+      const saved = (result.json as ItemResponse).item.parts;
+      return {
+        text: `Parts of the build: ${saved.map((part) => `${part.name} ×${part.quantity} (part_id: ${part.id})`).join(", ")}.`,
+      };
+    },
+  }),
+
+  tool({
     name: "start_attempt",
     title: "Start a print attempt",
     description:
@@ -288,11 +338,18 @@ export const tools: Tool[] = [
       build_id: id.describe("The build's or idea's id (from search)."),
       note: noteArg.describe("A line about what this attempt is trying."),
       settings: settingsArg,
+      parts: partsArg,
     }),
     async run(args, ctx) {
       const result = await ctx.call(`/api/items/${args.build_id}/attempts`, {
         method: "POST",
-        json: { id: crypto.randomUUID(), outcome: null, note: args.note, settings: args.settings },
+        json: {
+          id: crypto.randomUUID(),
+          outcome: null,
+          note: args.note,
+          settings: args.settings,
+          parts: toPartCounts(args.parts),
+        },
       });
       if (!result.ok) return failure(result);
       const attempt = (result.json as AttemptResponse).attempt;
@@ -314,6 +371,7 @@ export const tools: Tool[] = [
       failure_tags: failureTagsArg,
       success_notes: successNotesArg,
       settings: settingsArg,
+      parts: partsArg,
     }),
     async run(args, ctx) {
       const result = await ctx.call(`/api/items/${args.build_id}/attempts`, {
@@ -325,6 +383,7 @@ export const tools: Tool[] = [
           failureTags: args.failure_tags,
           successNotes: args.success_notes,
           settings: args.settings,
+          parts: toPartCounts(args.parts),
         },
       });
       if (!result.ok) return failure(result);
@@ -347,6 +406,7 @@ export const tools: Tool[] = [
       note: noteArg.describe("A line about how it went."),
       failure_tags: failureTagsArg,
       success_notes: successNotesArg,
+      parts: partsArg,
     }),
     async run(args, ctx) {
       const result = await ctx.call(`/api/attempts/${args.attempt_id}/finish`, {
@@ -356,6 +416,7 @@ export const tools: Tool[] = [
           note: args.note,
           failureTags: args.failure_tags,
           successNotes: args.success_notes,
+          parts: toPartCounts(args.parts),
         },
       });
       if (!result.ok) return failure(result);

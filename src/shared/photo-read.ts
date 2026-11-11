@@ -1,5 +1,5 @@
 /**
- * Claude glancing at an attempt's photo and suggesting how it went (docs/decisions/0022). It only ever suggests: the
+ * Claude glancing at an attempt's photo and suggesting how it went (docs/decisions/0023). It only ever suggests: the
  * attempt keeps no outcome until a person picks one, and the picked outcome and tags are the person's.
  */
 import { FAILURE_TAGS, OUTCOMES, type Outcome, SUCCESS_NOTES, tagLabel } from "./attempts.ts";

@@ -14,6 +14,7 @@ import {
   SUPPORT_TYPES,
   unionTags,
 } from "../../shared/attempts.ts";
+import { type AttemptPart, MAX_PART_QUANTITY, MAX_PARTS, zeroCounts } from "../../shared/parts.ts";
 import { afterChange, itemOfAttempt, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { type Attempt, attemptFiles, attempts, items } from "../db/schema.ts";
@@ -76,6 +77,15 @@ const slugs = z
   .max(40)
   .transform((list) => [...new Set(list)]);
 
+/** What an attempt printed: a part and its good pieces, each part once. */
+const attemptParts = z
+  .array(z.object({ partId: id, count: z.number().int().min(0).max(MAX_PART_QUANTITY) }))
+  .max(MAX_PARTS)
+  .transform((list) => [...new Map(list.map((part) => [part.partId, part])).values()]) satisfies z.ZodType<
+  AttemptPart[],
+  unknown
+>;
+
 const outcome = z.enum(OUTCOMES).nullable();
 const printedAt = z.number().int().positive();
 const note = z.string().max(20_000);
@@ -88,6 +98,7 @@ const createAttempt = z.object({
   failureTags: slugs.optional(),
   successNotes: slugs.optional(),
   settings: settings.optional(),
+  parts: attemptParts.optional(),
 });
 
 const updateAttempt = z.object({
@@ -99,6 +110,7 @@ const updateAttempt = z.object({
   failureTags: slugs.optional(),
   successNotes: slugs.optional(),
   settings: settings.optional(),
+  parts: attemptParts.optional(),
   /** Change some settings and leave the rest as the server has them (the sheet, which follows the other person's edits). */
   settingsMerge: z
     .object({ set: settings.optional(), unset: z.array(z.enum(SETTING_KEYS)).max(40).optional() })
@@ -111,6 +123,7 @@ const finishAttempt = z.object({
   note: note.optional(),
   failureTags: slugs.optional(),
   successNotes: slugs.optional(),
+  parts: attemptParts.optional(),
 });
 
 const notFound = "That attempt isn't here any more.";
@@ -216,6 +229,8 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
         failureTags: body.failureTags ?? [],
         successNotes: body.successNotes ?? [],
         settings: attemptSettings,
+        // A spaghetti counts none unless counts are given.
+        parts: body.parts ?? [],
         createdBy: c.var.user.id,
         createdAt: now,
         updatedAt: now,
@@ -246,7 +261,17 @@ export const attemptRoutes = new Hono<AppEnv>()
     const found = await findLive(db, c.req.param("id"));
     if (!found) return apiError(c, 404, "not_found", notFound);
     const current = found.attempt;
-    const { printedAt: printedTime, endedAt: endedTime, outcome: nextOutcome, settingsMerge, ...changes } = parsed.data;
+    const {
+      printedAt: printedTime,
+      endedAt: endedTime,
+      outcome: nextOutcome,
+      settingsMerge,
+      parts: nextParts,
+      ...changes
+    } = parsed.data;
+    // Counts the person sent stand; a print that comes out as spaghetti counts none unless they say otherwise.
+    const partsValue =
+      nextParts ?? (nextOutcome === "failed" && current.outcome !== "failed" ? zeroCounts(current.parts) : undefined);
     // A merge applies to the settings as they are now (or to the whole replacement sent with it).
     const mergedSettings = settingsMerge
       ? Object.fromEntries(
@@ -275,6 +300,7 @@ export const attemptRoutes = new Hono<AppEnv>()
         .set({
           ...changes,
           ...(mergedSettings ? { settings: mergedSettings } : {}),
+          ...(partsValue ? { parts: partsValue } : {}),
           ...(nextOutcome !== undefined ? { outcome: nextOutcome } : {}),
           ...(printedTime !== undefined ? { printedAt: notFuture(printedTime, now) } : {}),
           ...(endedTime !== undefined ? { endedAt: endedTime === null ? null : notFuture(endedTime, now) } : {}),
@@ -354,6 +380,7 @@ export const attemptRoutes = new Hono<AppEnv>()
                 ),
                 finishedBy: c.var.user.id,
                 finishedVia: c.var.via,
+                parts: body.parts ?? (body.outcome === "failed" ? zeroCounts(current.parts) : current.parts),
               }
             : {}),
           updatedAt: note !== current.note || finishing ? now : current.updatedAt,

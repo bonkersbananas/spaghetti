@@ -3,6 +3,7 @@ import type { BridgeStatus } from "./bridge.ts";
 import type { ItemDraft } from "./draft.ts";
 import type { Insights } from "./insights.ts";
 import type { JournalKind, JournalSummary } from "./journal.ts";
+import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
@@ -44,6 +45,8 @@ export interface PeopleResponse {
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+export type { AttemptPart, Part } from "./parts.ts";
 
 export type ItemStage = "idea" | "building" | "done" | "shelved";
 
@@ -89,7 +92,7 @@ export interface Attempt {
   /** A failure tag the printer suggests (a failed or cancelled print, spaghetti seen). A suggestion, not a verdict. */
   suggestedFailureTag: string | null;
   /**
-   * What Claude made of the attempt's photo (decision 0022): "Looking at the photo…" while it reads, then a
+   * What Claude made of the attempt's photo (decision 0023): "Looking at the photo…" while it reads, then a
    * suggested outcome with tags and a reason. Never an outcome of its own; null when there is nothing to show.
    */
   photoRead: PhotoRead | null;
@@ -100,6 +103,8 @@ export interface Attempt {
   /** Slugs of success notes. */
   successNotes: string[];
   settings: AttemptSettings;
+  /** What it printed of the build's parts, with good pieces counted; empty for a build without parts. */
+  parts: AttemptPart[];
   /** What changed since the attempt before it; empty for the first. */
   changes: SettingChange[];
   /** The slicer file it was printed from, if one was added. */
@@ -134,6 +139,8 @@ export interface AttemptFile {
   slicer: string | null;
   /** The settings read from the file: values still equal to these show as "from the file". */
   prefill: AttemptSettings;
+  /** The names of the objects on that plate, as the file spells them (for parts). */
+  objects: string[];
   createdAt: number;
 }
 
@@ -168,6 +175,8 @@ export interface Item {
   upNext: number | null;
   /** Who it is for ("Mila"), if anyone. */
   forWhom: string | null;
+  /** What the build is made of, in order; empty for a simple build (and for ideas). */
+  parts: Part[];
   /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */
   photos: Photo[];
   /** Oldest first: the first is attempt 1. Always empty for ideas. */
@@ -180,7 +189,7 @@ export interface Item {
 export interface FeaturesResponse {
   /** Claude can draft an idea from a model page (the Worker has an ANTHROPIC_API_KEY). */
   drafts: boolean;
-  /** Claude can suggest how a print went from its photo (decision 0022); the same key. */
+  /** Claude can suggest how a print went from its photo (decision 0023); the same key. */
   photoReads: boolean;
 }
 
@@ -280,6 +289,8 @@ export interface CreateAttemptRequest {
   failureTags?: string[];
   successNotes?: string[];
   settings?: AttemptSettings;
+  /** What it printed of the build's parts, with good pieces counted. */
+  parts?: AttemptPart[];
 }
 
 /** PATCH /api/attempts/:id. `settings` replaces the whole object. */
@@ -293,6 +304,8 @@ export interface UpdateAttemptRequest {
   failureTags?: string[];
   successNotes?: string[];
   settings?: AttemptSettings;
+  /** What it printed of the build's parts (replaces the list). */
+  parts?: AttemptPart[];
 }
 
 export interface AttemptResponse {
@@ -314,6 +327,8 @@ export interface FinishAttemptRequest {
   note?: string;
   failureTags?: string[];
   successNotes?: string[];
+  /** Good pieces per part, set when this finishes the print. Left out, the plate's counts stand (a spaghetti zeroes them). */
+  parts?: AttemptPart[];
 }
 
 export interface FinishAttemptResponse {
@@ -397,6 +412,8 @@ export interface AttemptHit {
   /** Its number in its build: 1 for the first. */
   number: number;
   item: { id: string; title: string | null; stage: ItemStage };
+  /** What it printed, as names ("Hull half ×2, Deck"), for a build with parts. */
+  partsLabel: string | null;
   /** The attempt's first photo, else its build's. */
   photo: Photo | null;
 }
