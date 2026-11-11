@@ -476,7 +476,12 @@ function attemptEntry(
       id,
       label: `${name}, attempt ${hit.number}`,
       title: <Highlight text={name} terms={terms} />,
-      subtitle: [`Attempt ${hit.number} · ${relativeTime(hit.attempt.printedAt)}`, ...matched].join(" · "),
+      subtitle: (
+        <Highlight
+          text={[`Attempt ${hit.number} · ${relativeTime(hit.attempt.printedAt)}`, ...matched].join(" · ")}
+          terms={terms}
+        />
+      ),
       photo: hit.photo ? { src: photoSrc(hit.photo.id, "thumb"), color: hit.photo.color || undefined } : null,
       icon: BuildsIcon,
       trailing: <OutcomeChip outcome={hit.attempt.outcome} />,

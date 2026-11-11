@@ -13,9 +13,17 @@ import type {
 import { BUILT_IN_TAGS, byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
 import { OUTCOME_FILTERS, outcomesFor } from "../../shared/journal.ts";
 import { attemptPartsLabel } from "../../shared/parts.ts";
-import { recipeMatchesTerms, recipesFor } from "../../shared/recipes.ts";
+import { recipesFor } from "../../shared/recipes.ts";
 import { ftsQuery, matchesTerm, type SearchTerm, SNIPPET_CLOSE, SNIPPET_OPEN, words } from "../../shared/search.ts";
-import { correctTerms, type Intent, parseQuery, splitNames, type When } from "../../shared/search-intent.ts";
+import {
+  correctTerms,
+  type Intent,
+  markTerms,
+  parseQuery,
+  splitNames,
+  textMatchesTerms,
+  type When,
+} from "../../shared/search-intent.ts";
 import type { Db } from "../db/index.ts";
 import {
   type Attempt,
@@ -54,8 +62,6 @@ export const filters = z.object({
 const whatWorkedQuery = z.object({ item: z.uuid(), material: material.optional() });
 const searchQuery = filters.extend({
   q: z.string().max(200).optional(),
-  /** Minutes east of UTC, so "last week" starts on the person's Monday. */
-  tz: z.coerce.number().int().min(-840).max(840).optional(),
   tag: z
     .string()
     .max(48)
@@ -270,7 +276,7 @@ function spoolMatches(spool: Spool, terms: readonly SearchTerm[]) {
   const haystack = words(
     [spool.material, spool.brand, spool.colorName, spool.finish, spool.note, spool.slot ? "loaded ams" : ""].join(" "),
   );
-  return terms.every((term) => haystack.some((word) => matchesTerm(word, [term])));
+  return textMatchesTerms(haystack.join(" "), terms);
 }
 
 /** The words the notebook knows, most used first: what a mistyped word is corrected to. */
@@ -316,7 +322,7 @@ async function withCoachIdeas(db: Db, hits: AttemptHit[], terms: readonly Search
     const idea = run?.suggestions.find(
       (suggestion) =>
         !run.dismissed.includes(suggestion.id) &&
-        words(`${suggestion.title} ${suggestion.why}`).some((word) => matchesTerm(word, terms)),
+        words(`${suggestion.title} ${suggestion.why}`).some((word) => matchesTerm(word, markTerms(terms))),
     );
     return idea ? { ...hit, coachIdea: idea.title } : hit;
   });
@@ -347,7 +353,11 @@ async function searchWith(
     let list = await liveRecipes(db);
     if (f.material) list = recipesFor(list, { material: f.material });
     if (f.person) list = list.filter((recipe) => recipe.createdBy === f.person);
-    return terms.length ? list.filter((recipe) => recipeMatchesTerms(recipe, terms)) : list;
+    return terms.length
+      ? list.filter((recipe) =>
+          textMatchesTerms(`${recipe.name} ${recipe.note} ${recipe.material} ${recipe.finish ?? ""}`, terms),
+        )
+      : list;
   };
   const findSpools = async (): Promise<Spool[]> => {
     if (!terms.length || narrowsAttempts || f.person || when) return [];
@@ -498,9 +508,9 @@ export const searchRoutes = new Hono<AppEnv>()
   .get("/search", async (c) => {
     const parsed = searchQuery.safeParse(c.req.query());
     if (!parsed.success) return apiError(c, 400, "invalid", "That search couldn't be read.");
-    const { q = "", tz, ...f } = parsed.data;
+    const { q = "", ...f } = parsed.data;
     const db = c.var.db;
-    const read = parseQuery(q, Date.now(), tz ?? 0);
+    const read = parseQuery(q, Date.now());
     const people = await db.select({ id: users.id, name: users.name }).from(users);
     const firstNames = people.map((person) => ({ id: person.id, name: words(person.name)[0] ?? "" }));
     const named = splitNames(
@@ -544,17 +554,10 @@ export const searchRoutes = new Hono<AppEnv>()
     }
     return c.json<SearchResponse>({
       ...result,
-      terms,
+      terms: markTerms(terms),
       corrected,
       intent: read.intent,
-      when: read.when
-        ? {
-            label: read.when.label,
-            weekMonday: /week$/.test(read.when.label)
-              ? new Date(read.when.from + (tz ?? 0) * 60_000).toISOString().slice(0, 10)
-              : null,
-          }
-        : null,
+      when: read.when ? { label: read.when.label, weekMonday: read.when.weekMonday } : null,
     });
   })
 

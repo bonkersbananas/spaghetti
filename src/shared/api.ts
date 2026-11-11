@@ -456,7 +456,7 @@ export interface SearchResponse {
   /** Spools on the shelf whose material, brand, colour or finish match (a few); none while a filter is on. */
   spools: Spool[];
   /** The words the answer is for, as the server read the question (filler dropped, typos mended, synonyms added): what to mark. */
-  terms?: Array<{ text: string; prefix: boolean; also?: string[] }>;
+  terms?: Array<{ text: string; prefix: boolean }>;
   /** The question with its mistyped words mended ("petgg" → "petg") when nothing matched as typed. */
   corrected?: string | null;
   /** "what worked" or "what failed" in the question: attempts that did are first. */

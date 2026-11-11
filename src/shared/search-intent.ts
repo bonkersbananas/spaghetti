@@ -5,7 +5,8 @@
  * English twin, and a mistyped word is corrected from what the notebook knows. Shared so the Worker answers and
  * the app marks the same words.
  */
-import { fold, type SearchTerm, searchTerms, words } from "./search.ts";
+import { EXACT_WORDS, fold, MAX_TERMS, matchesTerm, type SearchTerm, searchTerms, words } from "./search.ts";
+import { addWeeks, mondayOf, startOfZonedDay, zonedParts } from "./week.ts";
 
 /** What the question prefers: attempts that worked first, or the ones that went wrong. */
 export type Intent = "worked" | "failed";
@@ -16,6 +17,8 @@ export interface When {
   to: number;
   /** "last week": how to say it back. */
   label: string;
+  /** The Monday of the week it names ("this week", "last week"): the week page to link. */
+  weekMonday: string | null;
 }
 
 export interface ParsedQuery {
@@ -55,33 +58,31 @@ const PHRASES: Array<{ pattern: RegExp; range: "today" | "yesterday" | "week" | 
     { pattern: /\btoday\b|\bidag\b/, range: "today" },
   ];
 
-const DAY = 86_400_000;
+/** A calendar day (YYYY-MM-DD) some days from another. */
+const dayPlus = (day: string, days: number) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 /**
- * The stretch of time a range names. Weeks start on Monday, in the person's own time zone (`tzOffset`: minutes
- * east of UTC, as the app sends it; none means UTC).
+ * The stretch of time a range names, in the workspace's time zone with weeks from Monday, the way the week pages
+ * count them (shared/week.ts): "last week" is the page /week/<monday> that `weekMonday` names.
  */
-export function whenRange(range: (typeof PHRASES)[number]["range"], now: number, tzOffset = 0): When {
-  const local = now + tzOffset * 60_000;
-  const day = Math.floor(local / DAY) * DAY;
-  const weekday = (new Date(day).getUTCDay() + 6) % 7; // Monday 0
-  const monday = day - weekday * DAY;
-  const startOfMonth = Date.UTC(new Date(local).getUTCFullYear(), new Date(local).getUTCMonth(), 1);
-  const startOfLastMonth = Date.UTC(new Date(local).getUTCFullYear(), new Date(local).getUTCMonth() - 1, 1);
+export function whenRange(range: (typeof PHRASES)[number]["range"], now: number): When {
+  const p = zonedParts(now);
+  const today = new Date(Date.UTC(p.year, p.month - 1, p.day)).toISOString().slice(0, 10);
+  const monday = mondayOf(now);
+  const first = `${today.slice(0, 7)}-01`;
+  const nextFirst = new Date(Date.UTC(p.year, p.month, 1)).toISOString().slice(0, 10);
+  const lastFirst = new Date(Date.UTC(p.year, p.month - 2, 1)).toISOString().slice(0, 10);
   const spans = {
-    today: [day, day + DAY, "today"],
-    yesterday: [day - DAY, day, "yesterday"],
-    week: [monday, monday + 7 * DAY, "this week"],
-    lastweek: [monday - 7 * DAY, monday, "last week"],
-    month: [
-      startOfMonth,
-      Date.UTC(new Date(local).getUTCFullYear(), new Date(local).getUTCMonth() + 1, 1),
-      "this month",
-    ],
-    lastmonth: [startOfLastMonth, startOfMonth, "last month"],
+    today: [today, dayPlus(today, 1), "today", null],
+    yesterday: [dayPlus(today, -1), today, "yesterday", null],
+    week: [monday, addWeeks(monday, 1), "this week", monday],
+    lastweek: [addWeeks(monday, -1), monday, "last week", addWeeks(monday, -1)],
+    month: [first, nextFirst, "this month", null],
+    lastmonth: [lastFirst, first, "last month", null],
   } as const;
-  const [from, to, label] = spans[range];
-  return { from: from - tzOffset * 60_000, to: to - tzOffset * 60_000, label };
+  const [from, to, label, weekMonday] = spans[range];
+  return { from: startOfZonedDay(from), to: startOfZonedDay(to), label, weekMonday };
 }
 
 /**
@@ -143,8 +144,12 @@ function alsoFor(term: SearchTerm): string[] {
   return [...found];
 }
 
-/** Reads a typed question. `now` and `tzOffset` place time phrases. */
-export function parseQuery(query: string, now: number, tzOffset = 0): ParsedQuery {
+/** A decimal number ("0.4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
+const NUMBER_OR_WORD = /\p{N}+(?:\.\p{N}+)?(?![\p{L}])|[\p{L}\p{N}]+/gu;
+const DECIMAL = /^\d+\.\d+$/;
+
+/** Reads a typed question. `now` places time phrases. */
+export function parseQuery(query: string, now: number): ParsedQuery {
   // "0,4" is the decimal 0.4, and "Marie's" is Marie.
   let rest = fold(query)
     .replace(/(\d),(\d)/g, "$1.$2")
@@ -152,17 +157,18 @@ export function parseQuery(query: string, now: number, tzOffset = 0): ParsedQuer
   let when: When | null = null;
   for (const { pattern, range } of PHRASES) {
     if (!pattern.test(rest)) continue;
-    when ??= whenRange(range, now, tzOffset);
+    when ??= whenRange(range, now);
     rest = rest.replace(pattern, " ");
   }
   let intent: Intent | null = null;
   const kept: string[] = [];
-  for (const word of words(rest)) {
+  for (const word of rest.match(NUMBER_OR_WORD) ?? []) {
     if (WORKED.has(word)) intent ??= "worked";
     else if (FAILED.has(word)) intent ??= "failed";
     else if (!FILLER.has(word) && (word.length > 1 || /\d/.test(word))) kept.push(word);
   }
-  const terms = searchTerms(kept.join(" ")).map((term) => {
+  const terms = [...new Set(kept)].slice(0, MAX_TERMS).map((word): SearchTerm => {
+    const term = { text: word, prefix: !EXACT_WORDS.has(word) && !DECIMAL.test(word) };
     const also = alsoFor(term);
     return also.length ? { ...term, also } : term;
   });
@@ -239,4 +245,18 @@ export function correctTerms(terms: readonly SearchTerm[], vocabulary: readonly 
     return { text: fixed, prefix: true, ...(term.also ? { also: term.also } : {}) };
   });
   return changed ? next : null;
+}
+
+/** A term and the words it also stands for, each as a plain term: what the app marks, and what a match is tested against. */
+export const markTerms = (terms: readonly SearchTerm[]): SearchTerm[] =>
+  terms.flatMap((term) => [
+    { text: term.text, prefix: term.prefix },
+    ...(term.also ?? []).map((text) => ({ text, prefix: true })),
+  ]);
+
+/** Whether a text has a word for every term (or for a word it also stands for). */
+export function textMatchesTerms(text: string, terms: readonly SearchTerm[]): boolean {
+  if (!terms.length) return false;
+  const found = words(text);
+  return terms.every((term) => found.some((word) => matchesTerm(word, markTerms([term]))));
 }

@@ -126,7 +126,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
         <OutcomeChip outcome={attempt.outcome} />
         <span className="text-small text-ink-faint ml-auto shrink-0">{relativeTime(attempt.printedAt)}</span>
       </span>
-      <span className="text-body text-ink min-w-0 truncate font-semibold">
+      <span className="text-body text-ink line-clamp-2 min-w-0 font-semibold">
         <Highlight text={title} terms={terms} />
         <span className="text-small text-ink-faint font-medium">
           {" "}

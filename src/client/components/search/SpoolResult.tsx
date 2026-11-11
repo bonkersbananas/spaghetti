@@ -1,11 +1,11 @@
 import type { Spool } from "@shared/api";
 import type { SearchTerm } from "@shared/search";
-import { REMAINING_LABELS } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
 import { forwardRef } from "react";
 import { Highlight } from "@/components/ui/Highlight";
-import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
+import { RemainingMeter } from "@/components/ui/RemainingMeter";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
 import { photoSrc } from "@/lib/previews";
 
@@ -24,8 +24,6 @@ export const SpoolResult = forwardRef<HTMLAnchorElement, SpoolResultProps>(funct
 ) {
   const name = [spool.colorName, spool.brand].filter(Boolean).join(" · ") || spool.material;
   const kind = [spool.finish, spool.material].filter(Boolean).join(" ");
-  const left =
-    spool.gramsLeft !== null ? `about ${Math.round(spool.gramsLeft)} g left` : REMAINING_LABELS[spool.remaining];
   return (
     <Link
       ref={ref}
@@ -47,14 +45,11 @@ export const SpoolResult = forwardRef<HTMLAnchorElement, SpoolResultProps>(funct
           className="size-20 shrink-0 rounded-md md:size-24"
         />
       ) : (
-        <span
-          aria-hidden
-          className="shadow-soft size-20 shrink-0 rounded-md md:size-24"
-          style={{ backgroundColor: spool.colorHex ?? "var(--color-ink-ghost)" }}
-        />
+        <span className="bg-well flex size-20 shrink-0 items-center justify-center rounded-md md:size-24">
+          <SpoolDisc color={spool.colorHex} size="lg" />
+        </span>
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <Overline>Spool</Overline>
         <span className="text-body text-ink min-w-0 truncate font-semibold">
           <Highlight text={name} terms={terms} />
         </span>
@@ -62,7 +57,7 @@ export const SpoolResult = forwardRef<HTMLAnchorElement, SpoolResultProps>(funct
           <Highlight text={kind} terms={terms} />
           {spool.slot ? ` · loaded in ${spool.slot}` : ""}
         </span>
-        <span className="text-small text-ink-faint">{left}</span>
+        <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel />
       </span>
     </Link>
   );

@@ -178,12 +178,10 @@ function Search() {
           <>
             <AttemptResult hit={result.hit} {...common} />
             {didWork(result) && (
-              // Beside the link, not in it: a button can't live inside a link. Lined up with the text column.
-              <div className="pb-1 pl-[6.375rem] md:pl-[7.5rem]">
-                <Suspense fallback={null}>
-                  <Extra part="start" hit={result.hit} onStart={common.onOpen} />
-                </Suspense>
-              </div>
+              // Beside the link, not in it: a button can't live inside a link.
+              <Suspense fallback={null}>
+                <Extra part="start" hit={result.hit} onStart={common.onOpen} />
+              </Suspense>
             )}
           </>
         ) : result.kind === "spool" ? (
@@ -253,7 +251,7 @@ function Search() {
             type="search"
             icon={SearchIcon}
             aria-label="Search"
-            placeholder="PETG bed temp, what worked for the tugboat…"
+            placeholder="PETG warping, tugboat, tree supports…"
             enterKeyHint="search"
             autoComplete="off"
             value={text}
@@ -284,7 +282,7 @@ function Search() {
               <p className="sr-only" aria-live="polite">
                 {shown ? `${total} ${total === 1 ? "result" : "results"}` : ""}
               </p>
-              {shown && (shown.corrected || shown.when) && (
+              {shown && (shown.corrected || shown.when || shown.intent === "worked") && (
                 <Suspense fallback={null}>
                   <Extra part="understood" shown={shown} />
                 </Suspense>

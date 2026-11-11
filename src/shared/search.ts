@@ -21,7 +21,7 @@ export const MAX_TERMS = 8;
  * Short material names that are whole words, not the start of others: "PLA"
  * shouldn't find every "plate" and "planter", nor "PA" every "part".
  */
-const EXACT_WORDS = new Set(["pla", "pa", "pc", "abs"]);
+export const EXACT_WORDS = new Set(["pla", "pa", "pc", "abs"]);
 
 /** Lowercase, without accents, the way FTS5's unicode61 tokenizer (remove_diacritics 2) reads text. */
 export function fold(text: string): string {
@@ -30,12 +30,8 @@ export function fold(text: string): string {
 
 /** The words of a text, as the index splits them. */
 export function words(text: string): string[] {
-  return fold(text).match(NUMBER_OR_WORD) ?? [];
+  return fold(text).match(/[\p{L}\p{N}]+/gu) ?? [];
 }
-
-/** A decimal number ("0.4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
-const NUMBER_OR_WORD = /\p{N}+(?:\.\p{N}+)?(?![\p{L}])|[\p{L}\p{N}]+/gu;
-const DECIMAL = /^\d+\.\d+$/;
 
 /** "PETG warp" → petg (prefix), warp (prefix). Empty when there is nothing to look for. */
 export function searchTerms(query: string): SearchTerm[] {
@@ -44,7 +40,7 @@ export function searchTerms(query: string): SearchTerm[] {
   for (const word of words(query)) {
     if (seen.has(word)) continue;
     seen.add(word);
-    terms.push({ text: word, prefix: !EXACT_WORDS.has(word) && !DECIMAL.test(word) });
+    terms.push({ text: word, prefix: !EXACT_WORDS.has(word) });
     if (terms.length === MAX_TERMS) break;
   }
   return terms;
@@ -53,11 +49,7 @@ export function searchTerms(query: string): SearchTerm[] {
 /** Whether a word of the text matches one of the terms. */
 export function matchesTerm(word: string, terms: readonly SearchTerm[]): boolean {
   const folded = fold(word);
-  return terms.some(
-    (term) =>
-      (term.prefix ? folded.startsWith(term.text) : folded === term.text) ||
-      term.also?.some((other) => folded.startsWith(other)),
-  );
+  return terms.some((term) => (term.prefix ? folded.startsWith(term.text) : folded === term.text));
 }
 
 /**
@@ -109,7 +101,7 @@ export function highlight(text: string, terms: readonly SearchTerm[]): Segment[]
   if (!terms.length || !text) return text ? [{ text, match: false }] : [];
   const segments: Segment[] = [];
   let last = 0;
-  for (const found of text.matchAll(NUMBER_OR_WORD)) {
+  for (const found of text.matchAll(/[\p{L}\p{N}]+/gu)) {
     const start = found.index ?? 0;
     if (!matchesTerm(found[0], terms)) continue;
     if (start > last) segments.push({ text: text.slice(last, start), match: false });

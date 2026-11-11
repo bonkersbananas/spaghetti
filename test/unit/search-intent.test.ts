@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ftsQuery, highlight } from "../../src/shared/search.ts";
-import { correctWord, distance, parseQuery, splitNames, whenRange } from "../../src/shared/search-intent.ts";
+import { correctWord, distance, markTerms, parseQuery, splitNames, whenRange } from "../../src/shared/search-intent.ts";
 
 // Wednesday 11 November 2026, noon UTC.
 const NOW = Date.UTC(2026, 10, 11, 12);
@@ -41,21 +41,23 @@ describe("parseQuery", () => {
     const read = parseQuery("skevhet", NOW);
     expect(read.terms[0]?.also).toContain("warping");
     expect(ftsQuery(read.terms)).toContain('"warping"*');
-    expect(highlight("Warping at the corners", read.terms).some((piece) => piece.match)).toBe(true);
+    expect(highlight("Warping at the corners", markTerms(read.terms)).some((piece) => piece.match)).toBe(true);
     // Short words are whole words only: "gra" is grey, not "grattis".
     expect(parseQuery("grattis", NOW).terms[0]?.also).toBeUndefined();
   });
 });
 
 describe("whenRange", () => {
-  it("starts weeks on Monday, in the person's zone", () => {
+  it("counts weeks from Monday in the workspace's zone, as the week pages do", () => {
+    // Wednesday 11 November 2026: Stockholm is UTC+1, so its Monday begins at 23:00 UTC on Sunday.
     const week = whenRange("lastweek", NOW);
-    expect(new Date(week.from).toISOString()).toBe("2026-11-02T00:00:00.000Z");
-    expect(new Date(week.to).toISOString()).toBe("2026-11-09T00:00:00.000Z");
-    // Stockholm is UTC+1 in November: its Monday starts an hour earlier in UTC.
-    expect(new Date(whenRange("week", NOW, 60).from).toISOString()).toBe("2026-11-08T23:00:00.000Z");
-    expect(new Date(whenRange("lastmonth", NOW).from).toISOString()).toBe("2026-10-01T00:00:00.000Z");
-    expect(new Date(whenRange("yesterday", NOW).from).toISOString()).toBe("2026-11-10T00:00:00.000Z");
+    expect(new Date(week.from).toISOString()).toBe("2026-11-01T23:00:00.000Z");
+    expect(new Date(week.to).toISOString()).toBe("2026-11-08T23:00:00.000Z");
+    expect(week.weekMonday).toBe("2026-11-02");
+    expect(whenRange("week", NOW).weekMonday).toBe("2026-11-09");
+    expect(new Date(whenRange("lastmonth", NOW).from).toISOString()).toBe("2026-09-30T22:00:00.000Z");
+    expect(new Date(whenRange("yesterday", NOW).from).toISOString()).toBe("2026-11-09T23:00:00.000Z");
+    expect(whenRange("today", NOW).weekMonday).toBeNull();
   });
 });
 

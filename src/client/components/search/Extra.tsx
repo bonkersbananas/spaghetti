@@ -24,7 +24,14 @@ export type ExtraProps =
  */
 export default function Extra(props: ExtraProps) {
   if (props.part === "understood") return <Understood shown={props.shown} />;
-  if (props.part === "start") return <StartAgain hit={props.hit} onStart={props.onStart} />;
+  if (props.part === "start") {
+    // Lined up with the text column of the result above it.
+    return (
+      <div className="pb-1 pl-[6.375rem] md:pl-[7.5rem]">
+        <StartAgain hit={props.hit} onStart={props.onStart} />
+      </div>
+    );
+  }
   const { part: _part, innerRef, ...rest } = props;
   return <SpoolResult ref={innerRef} {...rest} />;
 }
