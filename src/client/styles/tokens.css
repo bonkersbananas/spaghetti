@@ -22,6 +22,38 @@
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
   --sg-note: #f6f1e8;
+  /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
+  --sg-plate: #d8c4a0;
+  --sg-plate-edge: #b59f78;
+  --sg-stage: #faf5ea;
+  /* The studio's light on the print: the same warm lamp in both themes (a print under a lamp doesn't dim at night). */
+  --sg-studio-light: #fff2de;
+  --sg-studio-sky: #fffaf0;
+  --sg-studio-ground: #a39078;
+  /* The 3D viewer's data colours: what each kind of move is drawn in when colouring by feature, and a stand-in for filaments nobody coloured. */
+  --sg-feature-0: #9a8f84;
+  --sg-feature-1: #d9573a;
+  --sg-feature-2: #e8a33d;
+  --sg-feature-3: #c2418a;
+  --sg-feature-4: #6fa37a;
+  --sg-feature-5: #3f8f86;
+  --sg-feature-6: #e8d27a;
+  --sg-feature-7: #8f7a62;
+  --sg-feature-8: #4f7fc7;
+  --sg-feature-9: #a77fc2;
+  --sg-feature-10: #8d9aa3;
+  --sg-feature-11: #5e6f8a;
+  --sg-feature-12: #bfae98;
+  --sg-feature-13: #7a5f4a;
+  --sg-feature-14: #f2c6a0;
+  --sg-fil-0: #cfc4b3;
+  --sg-fil-1: #d9573a;
+  --sg-fil-2: #4f7fc7;
+  --sg-fil-3: #6fa37a;
+  --sg-fil-4: #e8a33d;
+  --sg-fil-5: #a77fc2;
+  --sg-fil-6: #8d9aa3;
+  --sg-fil-7: #8f7a62;
 
   /* Ink */
   /* A QR code is dark on light in both themes: scanners need the contrast the right way round. */
@@ -169,6 +201,9 @@
   --sg-well: #120f0d;
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
+  --sg-plate: #6b5d47;
+  --sg-plate-edge: #4a4032;
+  --sg-stage: #2b2520;
   --sg-ink: #ece4d9;
   --sg-ink-soft: #c6bab0;
   --sg-ink-faint: #ab9f93;

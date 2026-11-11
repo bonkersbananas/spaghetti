@@ -40,6 +40,7 @@ export {
   CookingPot as TodayIcon,
   Copy as CopyIcon,
   Cube as BuildsIcon,
+  Cube as CubeIcon,
   DeviceMobile as PhoneIcon,
   Devices as DevicesIcon,
   Disc as SpoolIcon,

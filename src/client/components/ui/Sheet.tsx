@@ -25,6 +25,8 @@ export interface SheetProps {
   wide?: boolean;
   /** On phones, as tall as a sheet gets instead of as tall as its content (the compare sheet's two attempts). */
   tall?: boolean;
+  /** The body fills the sheet edge to edge, with no padding or scrolling, for content that draws itself (the 3D view). Taller, and wider on desktop. */
+  fill?: boolean;
   children: ReactNode;
 }
 
@@ -71,7 +73,17 @@ export function Sheet(props: SheetProps) {
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
 }
 
-function PhoneSheet({ open, onOpenChange, title, description, footer, headerActions, tall, children }: SheetProps) {
+function PhoneSheet({
+  open,
+  onOpenChange,
+  title,
+  description,
+  footer,
+  headerActions,
+  tall,
+  fill,
+  children,
+}: SheetProps) {
   const returnFocus = useReturnFocus(open);
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
@@ -92,7 +104,7 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, headerActi
           // Sits on the keyboard when it is up (lib/viewport.ts), so the footer's button stays in view.
           className={cn(
             "bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex flex-col rounded-t-xl focus:outline-none",
-            tall
+            tall || fill
               ? "h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))]"
               : "max-h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))]",
           )}
@@ -111,7 +123,13 @@ function PhoneSheet({ open, onOpenChange, title, description, footer, headerActi
             </div>
             {headerActions && <div className="-mr-2 flex shrink-0 items-center gap-1">{headerActions}</div>}
           </div>
-          <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">{children}</div>
+          {fill ? (
+            <div className="min-h-0 flex-1 overflow-hidden pt-2">{children}</div>
+          ) : (
+            <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">
+              {children}
+            </div>
+          )}
           {footer && (
             <div className="flex shrink-0 items-center gap-3 px-5 pt-2 pb-[max(1rem,var(--sg-safe-bottom))]">
               {footer}
@@ -133,6 +151,7 @@ function DesktopSheet({
   headerActions,
   desktop = "dialog",
   wide,
+  fill,
   children,
 }: SheetProps) {
   const isPanel = desktop === "panel";
@@ -165,7 +184,11 @@ function DesktopSheet({
               ? "sg-panel inset-y-3 right-3 w-full max-w-md rounded-xl"
               : cn(
                   "sg-dialog left-1/2 w-full -translate-x-1/2 rounded-xl",
-                  wide ? "top-[8vh] max-h-[84vh] max-w-4xl" : "top-[14vh] max-h-[72vh] max-w-xl",
+                  fill
+                    ? "top-[5vh] h-[90vh] max-w-6xl overflow-hidden"
+                    : wide
+                      ? "top-[8vh] max-h-[84vh] max-w-4xl"
+                      : "top-[14vh] max-h-[72vh] max-w-xl",
                 ),
           )}
         >
@@ -187,7 +210,14 @@ function DesktopSheet({
               </Dialog.Close>
             </div>
           </div>
-          <div ref={body} className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5">
+          <div
+            ref={body}
+            className={
+              fill
+                ? "min-h-0 flex-1 overflow-hidden pt-3"
+                : "scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5"
+            }
+          >
             {children}
           </div>
           {footer && (
