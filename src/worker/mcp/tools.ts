@@ -20,6 +20,7 @@ import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import { SLOT_PATTERN } from "../../shared/spools.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
 import { formatHours, sinceWords } from "../../shared/upkeep.ts";
+import { mondayOf, printsWords, type WeekResponse } from "../../shared/week.ts";
 import { settings as attemptSettings } from "../routes/attempts.ts";
 import { fromBase64, fromUrl, readImage } from "./image.ts";
 
@@ -544,6 +545,42 @@ export const tools: Tool[] = [
       });
       if (!result.ok) return failure(result);
       return { text: args.spool_id ? `Loaded into ${args.slot}.` : `${args.slot} is now empty.` };
+    },
+  }),
+
+  tool({
+    name: "get_week",
+    title: "Look back at a week",
+    description:
+      'Get one week of the notebook (Monday to Sunday, the workspace\'s time zone): how many prints and how they went, builds finished, ideas captured, comments, filament used, what is waiting, and the paragraph Claude wrote for it when there is one. Leave out "monday" for the week so far. Needs the "read" scope.',
+    scopes: ["read"],
+    readOnly: true,
+    input: z.object({
+      monday: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional()
+        .describe("The week's Monday as YYYY-MM-DD. Defaults to this week."),
+    }),
+    async run(args, ctx) {
+      const result = await ctx.call(`/api/weeks/${args.monday ?? mondayOf(Date.now())}`);
+      if (!result.ok) return failure(result);
+      const { week } = result.json as WeekResponse;
+      const title = (entry: { title: string | null }) => entry.title?.trim() || "untitled";
+      const lines = [
+        `Week of ${week.monday} to ${week.sunday}.`,
+        printsWords(week.prints)
+          ? `${printsWords(week.prints)}; ${week.prints.worked} worked, ${week.prints.partly} partly.`
+          : "No prints.",
+        week.buildsFinished.length ? `Builds finished: ${week.buildsFinished.map(title).join(", ")}.` : "",
+        week.ideas.length
+          ? `Ideas captured: ${week.ideas.map((idea) => (title(idea) === "untitled" ? idea.note : title(idea))).join("; ")}.`
+          : "",
+        week.comments.total ? `${week.comments.total} comments.` : "",
+        week.grams !== null ? `About ${week.grams} g of filament.` : "",
+        week.note?.text ? `Claude's note: ${week.note.text}` : "",
+      ];
+      return { text: lines.filter(Boolean).join("\n") };
     },
   }),
 

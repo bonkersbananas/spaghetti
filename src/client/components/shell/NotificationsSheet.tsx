@@ -49,7 +49,7 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
       open={open}
       onOpenChange={onOpenChange}
       title="Notifications"
-      description="A nudge when a print is done, a note when the other person comments, and now and then when the printer needs care."
+      description="A nudge when a print is done, a note when the other person comments, now and then when the printer needs care, and a look back on Sunday."
     >
       <div className="flex flex-col gap-3">
         {status === "install" ? (
@@ -93,6 +93,12 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
               hint="One gentle nudge a day at most: a dirty plate, a worn filter."
               checked={device.upkeepNudges}
               onChange={(next) => device.setUpkeepNudges.mutate(next)}
+            />
+            <Toggle
+              label="Your week, on Sunday evening"
+              hint="One look back at 19:00 when there was a print or an idea."
+              checked={device.weekNudges}
+              onChange={(next) => device.setWeekNudges.mutate(next)}
             />
             <Button
               variant="secondary"

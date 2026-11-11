@@ -42,6 +42,8 @@ export async function resetDb() {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM upkeep_logs"),
     env.DB.prepare("DELETE FROM upkeep_tasks"),
+    env.DB.prepare("DELETE FROM week_pushes"),
+    env.DB.prepare("DELETE FROM weeks"),
     env.DB.prepare("DELETE FROM push_nudges"),
     env.DB.prepare("DELETE FROM push_subscriptions"),
     env.DB.prepare("DELETE FROM webhook_deliveries"),
