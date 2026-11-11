@@ -920,7 +920,7 @@ export const shots: Shot[] = [
         await page.request.delete(`/api/items/${id}`, { headers });
       }
       await page.reload();
-      await page.getByRole("heading", { level: 1, name: "Recently deleted" }).waitFor();
+      await page.getByRole("heading", { level: 1, name: "Deleted" }).waitFor();
       await page
         .getByRole("button", { name: /^Restore/ })
         .first()
