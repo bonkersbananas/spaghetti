@@ -5,6 +5,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { bundleReport } from "./scripts/vite-bundle-report.ts";
+import { phosphorWeights } from "./scripts/vite-phosphor-weights.ts";
 import { serviceWorker } from "./scripts/vite-service-worker.ts";
 
 // SPAGHETTI_STATE_DIR points local D1/R2 state elsewhere (the screenshot
@@ -21,6 +22,7 @@ export default defineConfig({
       routesDirectory: "./src/client/routes",
       generatedRouteTree: "./src/client/routeTree.gen.ts",
     }),
+    phosphorWeights(),
     react(),
     tailwindcss(),
     serviceWorker(),

@@ -93,6 +93,9 @@ function Shell() {
   // so the first tap on an idea or a build doesn't wait for it. The routes have no loaders, so nothing else loads.
   const router = useRouter();
   useWhenIdle(() => {
+    // Every section's code too (it used to start with the first render and compete with it for the network). A tap
+    // before then still gets a head start from the touch itself (the router preloads on intent).
+    for (const { to } of [...sections, ...workshop]) void router.preloadRoute({ to });
     void router.preloadRoute({ to: "/builds/$buildId", params: { buildId: "-" } });
     void router.preloadRoute({ to: "/ideas/$ideaId", params: { ideaId: "-" } });
     void import("@/components/ideas/CardMenu");
