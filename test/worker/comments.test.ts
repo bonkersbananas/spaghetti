@@ -296,3 +296,23 @@ describe("the push", () => {
     expect(pushes).toEqual([]);
   });
 });
+
+describe("the unread list names the newest comment, for Today's line", () => {
+  it("carries its author, the start of its text and the thread's title and stage", async () => {
+    const itemId = await item("building", "Tugboat");
+    await say(itemId, "First thought", sam);
+    const { id } = await say(itemId, "Started it tonight", sam);
+    const { threads } = await unread(alex);
+    expect(threads).toEqual([
+      expect.objectContaining({
+        itemId,
+        count: 2,
+        latestId: id,
+        latestAuthorId: samId,
+        latestBody: "Started it tonight",
+        title: "Tugboat",
+        stage: "building",
+      }),
+    ]);
+  });
+});

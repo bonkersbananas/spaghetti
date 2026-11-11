@@ -116,3 +116,22 @@ test("a photo Claude can't tell from changes nothing", async ({ page }) => {
   await expect.poll(async () => (await attemptOf(page, itemId, attemptId)).photoRead, { timeout: 20_000 }).toBeNull();
   await expect(entry.getByText(/suggested/)).toHaveCount(0);
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Today's off-the-bed card shows Claude's guess on the matching button and its reason, ${theme}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    const { itemId, attemptId } = await offTheBed(page, "Spaghetti comb");
+    await addPhoto(page, itemId, attemptId);
+    await page.goto("/today");
+    const card = page.getByRole("article").filter({ hasText: "Spaghetti comb" });
+    await expect(card.getByRole("radio", { name: /Spaghetti suggested/ })).toBeVisible({ timeout: 20_000 });
+    await expect(card.getByText(/Loose strands across the top half/)).toBeVisible();
+    // Nothing is picked for anyone.
+    expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ outcome: null });
+    await expect(card.getByRole("radio", { checked: true })).toHaveCount(0);
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toEqual([]);
+  });
+}

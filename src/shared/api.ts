@@ -424,8 +424,10 @@ export interface ItemHit {
   /** How many attempts it has, and how the last one went. */
   attempts: number;
   lastOutcome: Outcome | null;
-  /** The part of a long note that matched, with SNIPPET_OPEN/CLOSE around matched words. */
+  /** The part of a long note (or of the comment) that matched, with SNIPPET_OPEN/CLOSE around matched words. */
   snippet: string | null;
+  /** Set when the hit is a comment in its thread, not the item's own words: the snippet is that comment's. */
+  comment: { id: string; authorId: string; via: string | null; createdAt: number } | null;
   photo: Photo | null;
 }
 

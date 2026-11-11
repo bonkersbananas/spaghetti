@@ -42,6 +42,7 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
   const [draft, setDraft] = useDraft(itemId);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [lit, setLit] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const root = useRef<HTMLDivElement>(null);
 
@@ -70,10 +71,31 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
   // Opened from a notification (?thread=1): bring the thread into view once, without opening the keyboard.
   const arrived = useRef(false);
   useEffect(() => {
-    if (arrived.current || !ready || !new URLSearchParams(window.location.search).has("thread")) return;
+    const params = new URLSearchParams(window.location.search);
+    // A search hit scrolls to its own comment instead.
+    if (arrived.current || !ready || !params.has("thread") || params.has("comment")) return;
     arrived.current = true;
     root.current?.scrollIntoView({ block: "center", behavior: scrollBehavior() });
   }, [ready]);
+
+  // Opened from a search hit (?comment=…): scroll to that comment and light it for a moment.
+  const found = useRef(false);
+  useEffect(() => {
+    if (found.current || !ready) return;
+    const id = new URLSearchParams(window.location.search).get("comment");
+    if (!id || !comments.some((comment) => comment.id === id)) return;
+    found.current = true;
+    setLit(id);
+    // After the thread has laid out (the first paint of its bubbles), so the scroll lands on the right place.
+    requestAnimationFrame(() =>
+      document.getElementById(`comment-${id}`)?.scrollIntoView({ block: "center", behavior: scrollBehavior() }),
+    );
+  }, [ready, comments]);
+  useEffect(() => {
+    if (!lit) return;
+    const timer = window.setTimeout(() => setLit(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [lit]);
 
   function send() {
     if (!me) return;
@@ -165,6 +187,7 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
                       editing={editing === comment.id}
                       onEdit={(on) => setEditing(on ? comment.id : null)}
                       readOnly={readOnly}
+                      highlighted={lit === comment.id}
                     />
                   ))}
                 </MessageGroup>

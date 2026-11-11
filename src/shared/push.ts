@@ -100,23 +100,57 @@ export interface PushMessage {
 export const attemptUrl = (itemId: string, attemptId: string) =>
   `/builds/${itemId}?attempt=${encodeURIComponent(attemptId)}&finish=1`;
 
-/** `owner` is the other person's name when the print isn't the recipient's own. */
+/** What Claude's read of the photo suggested before the nudge went out (decision 0023): a hint, never an answer. */
+export interface NudgeSuggestion {
+  outcome: Outcome;
+  reason: string | null;
+}
+
+const LOOKS_LIKE: Record<Outcome, string> = {
+  success: "Looks like it worked",
+  partial: "Looks like it came out partly",
+  failed: "Looks like spaghetti",
+};
+
+/** The suggested button first, the others in their usual order. The platform shows as many as it has room for. */
+export function actionsWith(suggested?: Outcome | null): typeof NUDGE_ACTIONS {
+  if (!suggested) return NUDGE_ACTIONS;
+  return [...NUDGE_ACTIONS].sort((a, b) => Number(b.action === suggested) - Number(a.action === suggested));
+}
+
+/** The line a suggestion adds: "Looks like it worked: clean walls and a smooth top." Gentle, with its reason when it has one. */
+export function suggestionLine({ outcome, reason }: NudgeSuggestion): string {
+  const lead = LOOKS_LIKE[outcome];
+  // The reason follows a colon: lower-case its first word unless it is a name or an acronym.
+  const why = reason
+    ?.trim()
+    .replace(/[.!\s]+$/, "")
+    .replace(/^([A-Z])(?=[a-z]+\b)/, (letter) => letter.toLowerCase());
+  return why ? `${lead}: ${why}.` : `${lead}.`;
+}
+
+/**
+ * `owner` is the other person's name when the print isn't the recipient's own. A `suggestion` (Claude's read of
+ * the photo) is mentioned gently and its button comes first; nothing is set by it, a tap is the person's answer.
+ */
 export function nudgeMessage(
   kind: NudgeKind,
   attempt: { id: string; itemId: string },
   itemTitle: string,
   owner?: string,
+  suggestion?: NudgeSuggestion | null,
 ): PushMessage {
   const name = itemTitle.trim() || "A print";
+  const ask = suggestion ? suggestionLine(suggestion) : "How did it go?";
   return {
     kind,
     title: kind === "off_the_bed" ? `${name} is off the bed` : `${name} should be done by now`,
-    body: owner ? `${owner}'s print. How did it go?` : "How did it go?",
+    body: owner ? `${owner}'s print. ${ask}` : ask,
     tag: `attempt-${attempt.id}`,
     url: attemptUrl(attempt.itemId, attempt.id),
     attemptId: attempt.id,
     itemId: attempt.itemId,
-    actions: NUDGE_ACTIONS,
+    actions: actionsWith(suggestion?.outcome),
   };
 }
 

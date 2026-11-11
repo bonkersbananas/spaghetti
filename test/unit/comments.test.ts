@@ -8,6 +8,7 @@ import {
   PUSH_BATCH_MS,
   splitTrailingLink,
   threadUrl,
+  unreadLine,
 } from "../../src/shared/comments.ts";
 
 const MIN = 60_000;
@@ -115,5 +116,36 @@ describe("splitTrailingLink", () => {
       text: "a https://x.com/1 and",
       url: "https://x.com/2",
     });
+  });
+});
+
+describe("unreadLine", () => {
+  const thread = {
+    itemId: "i",
+    count: 1,
+    latestAt: 1,
+    latestId: "c",
+    latestAuthorId: "m",
+    latestBody: "Started it tonight",
+    title: "Tugboat",
+    stage: "building",
+  };
+  const name = () => "Marie";
+  it("quotes the one comment, or counts when there are several", () => {
+    expect(unreadLine([thread], name)).toMatchObject({ lead: "Marie on Tugboat", quote: "Started it tonight" });
+    expect(
+      unreadLine(
+        [
+          { ...thread, count: 2 },
+          { ...thread, itemId: "j" },
+        ],
+        name,
+      )?.lead,
+    ).toBe("3 new comments · latest from Marie on Tugboat");
+  });
+  it("names an untitled thread by its stage, and says nothing when all is read or the copy is old", () => {
+    expect(unreadLine([{ ...thread, title: null, stage: "idea" }], name)?.lead).toBe("Marie on an idea");
+    expect(unreadLine([], name)).toBeNull();
+    expect(unreadLine([{ itemId: "i", count: 1, latestAt: 1 }], name)).toBeNull();
   });
 });
