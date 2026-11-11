@@ -58,12 +58,12 @@ function Agents() {
       />
       <ShareCard />
       {isPending ? (
-        <div className="flex max-w-2xl flex-col gap-3" aria-hidden>
+        <div className="max-w-content flex flex-col gap-3" aria-hidden>
           <RowSkeleton />
           <RowSkeleton />
         </div>
       ) : mine.length ? (
-        <ul className="flex max-w-2xl flex-col gap-4" aria-label="Your agents">
+        <ul className="max-w-content flex flex-col gap-4" aria-label="Your agents">
           {mine.map((agent) => (
             <AgentCard key={agent.id} agent={agent} owner={owner} readOnly={readOnly} onAddToken={() => open(agent)} />
           ))}
@@ -207,9 +207,7 @@ function ConnectedCard({
         {owner && <AgentAvatar name={agent.name} owner={owner} size="lg" />}
         <div className="min-w-0 flex-1">
           <h2 className="text-lead text-ink font-semibold break-words">{agent.name}</h2>
-          <p className="text-small text-ink-faint">
-            Signed in with {connection.app} · acts for {displayName(owner, "you")}
-          </p>
+          <p className="text-small text-ink-faint">Signed in with {connection.app}</p>
         </div>
       </div>
       <ul className="flex flex-wrap gap-1.5" aria-label="Scopes">
