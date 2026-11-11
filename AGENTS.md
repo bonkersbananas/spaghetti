@@ -99,7 +99,7 @@ pnpm agent:add      # make an agent token (--owner --name --scopes; see docs/api
 pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
-pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 4 shards (`pnpm test:e2e --shard=1/4`), so a test must not depend on another test's data
+pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 5 shards of spec files balanced by measured time (`pnpm test:e2e $(node scripts/e2e-shard.ts 1 5)`; refresh e2e/timings.json with `node scripts/e2e-timings.ts <CI shard logs>`), so a test must not depend on another test's data
 pnpm exec playwright test --project=performance   # first-load JavaScript per screen, tap latency and the resumed app on a phone profile, and a throttled 100-photo inbox
 pnpm build && pnpm perf [--runs 5]   # the whole speed table: cold start of Today and Ideas (first visit, service worker only, installed app) and the common taps, at 390 px, 4× CPU, slow 4G
 pnpm build:report   # what the first load holds: the entry's chunks with their biggest modules, and the on-demand chunks

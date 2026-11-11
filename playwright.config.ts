@@ -104,12 +104,18 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
-    {
-      command: "node scripts/e2e-server.ts",
-      url: `http://127.0.0.1:${builtPort}/api/health`,
-      env: { PORT: String(builtPort), E2E_BUILT: "1" },
-      reuseExistingServer: !process.env.CI,
-      timeout: 180_000,
-    },
+    // The production build (and its server) is only started when the specs that run need it: a CI shard without
+    // them (scripts/e2e-shard.ts says which) sets E2E_BUILT_SERVER=off and skips the build.
+    ...(process.env.E2E_BUILT_SERVER === "off"
+      ? []
+      : [
+          {
+            command: "node scripts/e2e-server.ts",
+            url: `http://127.0.0.1:${builtPort}/api/health`,
+            env: { PORT: String(builtPort), E2E_BUILT: "1" },
+            reuseExistingServer: !process.env.CI,
+            timeout: 180_000,
+          },
+        ]),
   ],
 });
