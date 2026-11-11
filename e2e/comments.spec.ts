@@ -261,6 +261,42 @@ test("a message that ends with a link shows a card in place of the address, and 
 });
 
 for (const theme of ["light", "dark"] as const) {
+  test(`Today has one quiet line for what Sam wrote, until it is read, ${theme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    const id = await newIdea(page, "Bath tugboat", "building");
+    const other = await newIdea(page, "Lamp base", "building");
+    await page.goto("/today");
+    const line = page.getByRole("link", { name: /on Bath tugboat/ });
+    await expect(page.getByRole("link", { name: /new comments?/ })).toHaveCount(0);
+    const sams = await samSession(page);
+    await sams.say(id, "Started it tonight, the first layer looked great.");
+    await page.reload();
+    await expect(line).toHaveText(/Sam Okafor on Bath tugboat: Started it tonight/);
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+      .analyze();
+    expect(violations.map((violation) => `today: ${violation.id}`)).toEqual([]);
+
+    // Several: one line with the count, for the newest thread.
+    await sams.say(other, "Could it be taller?");
+    await sams.say(other, "Maybe 12 cm.");
+    await page.reload();
+    await expect(page.getByRole("link", { name: /3 new comments · latest from Sam Okafor on Lamp base/ })).toHaveCount(
+      1,
+    );
+
+    // Reading a thread clears it from the line; reading all clears the line.
+    await page.getByRole("link", { name: /3 new comments/ }).click();
+    await expect(thread(page).getByText("Maybe 12 cm.")).toBeVisible();
+    await page.goto("/today");
+    await expect(page.getByRole("link", { name: /on Bath tugboat: Started it tonight/ })).toBeVisible();
+    await page.getByRole("link", { name: /on Bath tugboat/ }).click();
+    await expect(thread(page).getByText("Started it tonight, the first layer looked great.")).toBeVisible();
+    await page.goto("/today");
+    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /on (Bath tugboat|Lamp base)/ })).toHaveCount(0);
+  });
+
   test(`search finds a build by what Sam said and opens the thread at that comment, ${theme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme });
     const id = await newIdea(page, "Lamp base", "building");

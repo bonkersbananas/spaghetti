@@ -591,7 +591,10 @@ export const shots: Shot[] = [
     name: "search-comment",
     path: "/search?q=chunkier",
     prepare: async (page) => {
-      await page.getByRole("link", { name: /tugboat/i }).first().waitFor();
+      await page
+        .getByRole("link", { name: /tugboat/i })
+        .first()
+        .waitFor();
       await page.getByRole("searchbox", { name: "Search" }).blur();
     },
   },
@@ -600,7 +603,10 @@ export const shots: Shot[] = [
     name: "comments-found",
     path: `/builds/${SEED_BUILD_IDS.tugboat}?thread=1&comment=${commentId(5)}`,
     prepare: async (page) => {
-      await page.locator(`#comment-${commentId(5)} > div`).first().waitFor();
+      await page
+        .locator(`#comment-${commentId(5)} > div`)
+        .first()
+        .waitFor();
     },
   },
   {
