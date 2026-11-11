@@ -100,10 +100,11 @@ describe("what is due", () => {
     expect(sinceWords(status, 42.6, 3)).toBe("42 print hours since");
     expect(sinceWords(upkeepStatus({ intervalHours: null, intervalDays: 14 }, 1, 63), 1, 63)).toBe("63 days since");
     const plate = { name: "Clean the build plate", status, sinceHours: 42.6, sinceDays: 3 };
-    expect(dueLine([plate])).toBe("Time to clean the build plate, 42 print hours since.");
-    expect(dueLine([plate, { ...plate, name: "Check the belts", status: { ...status, fraction: 1.1 } }])).toBe(
-      "Time to clean the build plate, 42 print hours since, and 1 more.",
-    );
+    expect(dueLine([plate])).toEqual({ text: "Clean the build plate: it's been 42 print hours", more: null });
+    expect(dueLine([plate, { ...plate, name: "Check the belts", status: { ...status, fraction: 1.1 } }])).toEqual({
+      text: "Clean the build plate: it's been 42 print hours",
+      more: "1 more due",
+    });
     expect(dueLine([])).toBeNull();
   });
 });
