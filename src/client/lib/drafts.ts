@@ -2,6 +2,7 @@ import type { DraftResponse, FeaturesResponse, Item } from "@shared/api";
 import type { ItemDraft } from "@shared/draft";
 import { firstModelLink, lonelyModelLink } from "@shared/model-links";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
+import { toast as sonnerToast } from "sonner";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { cachedItem, itemKeys, patchCachedItem } from "./items";
@@ -78,7 +79,12 @@ export function announceDraft(queryClient: QueryClient, item: Pick<Item, "id" | 
   const draft = item.draft;
   if (draft?.status !== "drafted" || !draft.applied.length || announced.has(item.id)) return;
   announced.add(item.id);
-  toast.undo(`Drafted from ${siteName(draft)}`, { onUndo: () => void undoDraft(queryClient, item.id) });
+  // toast.undo's look, with an id of its own so starting to build this idea can put just this one away (builds.ts).
+  sonnerToast(`Drafted from ${siteName(draft)}`, {
+    id: `draft-${item.id}`,
+    duration: 6000,
+    action: { label: "Undo", onClick: () => void undoDraft(queryClient, item.id) },
+  });
 }
 
 /** Takes a draft back (the Worker only removes what is still exactly what it wrote). */
