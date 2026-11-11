@@ -2,7 +2,8 @@ import type { Layer } from "@shared/gcode";
 import { formatDuration } from "@shared/time";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { UndoIcon } from "@/components/ui/icons";
+import { PlayIcon } from "@/components/ui/icons";
+import { Kbd } from "@/components/ui/Kbd";
 import { LayerSlider } from "@/components/ui/LayerSlider";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
@@ -245,7 +246,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
             aria-label="What the colours mean"
             // biome-ignore lint/a11y/noNoninteractiveTabindex: a row that scrolls sideways on a phone must be reachable by keyboard
             tabIndex={0}
-            className="no-scrollbar focus-ring absolute top-3 right-14 left-0 flex gap-1.5 overflow-x-auto px-3 md:flex-wrap md:overflow-visible"
+            className="no-scrollbar focus-ring sg-fade-x absolute inset-x-0 top-3 flex gap-1.5 overflow-x-auto px-3 md:flex-wrap md:overflow-visible"
           >
             {showFilaments &&
               filaments.map((f, i) =>
@@ -264,10 +265,10 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
         )}
         {state === "ready" && count > 1 && (
           <IconButton
-            icon={UndoIcon}
+            icon={PlayIcon}
             label="Build it up again"
             size="sm"
-            className="bg-cream/90 shadow-soft absolute top-3 right-3"
+            className="bg-cream/90 shadow-soft absolute right-3 bottom-3"
             onClick={() => {
               if (prefersReducedMotion()) return;
               setBuilding(true);
@@ -276,32 +277,48 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
           />
         )}
         {state === "ready" && summary?.stats.decimated && (
-          <p className="bg-cream/90 text-caption text-ink-faint absolute right-3 bottom-3 rounded-full px-2.5 py-1">
+          <p className="bg-cream/90 text-caption text-ink-faint absolute bottom-3 left-3 rounded-full px-2.5 py-1">
             Simplified to fit this device
           </p>
         )}
       </div>
-      <div className="bg-lifted flex shrink-0 flex-wrap items-center gap-x-3 px-5 pt-3 pb-[max(1rem,var(--sg-safe-bottom))] md:px-6 md:pb-4">
-        <p className="text-small text-ink-soft tabular order-1 w-full min-w-0 truncate md:w-auto md:flex-1">
-          {state === "ready" || count > 0 ? text : "\u00a0"}
-        </p>
-        <SegmentedControl
-          label="Colour by"
-          labelHidden
-          options={MODES}
-          value={mode}
-          onChange={setMode}
-          className="order-3 mt-1 w-full md:order-2 md:mt-0 md:w-52"
-        />
-        <LayerSlider
-          label="Layer"
-          value={Math.min(layer, Math.max(0, count - 1))}
-          max={Math.max(0, count - 1)}
-          onChange={scrub}
-          valueText={text}
-          live={live0}
-          className="order-2 w-full md:order-3"
-        />
+      <div className="bg-lifted shrink-0 px-5 pt-3 pb-[max(1rem,var(--sg-safe-bottom))] md:px-6 md:pb-4">
+        <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-3">
+          <p className="text-small text-ink-faint tabular order-1 w-full min-w-0 truncate md:w-auto md:flex-1">
+            {state === "ready" || count > 0 ? (
+              <>
+                <span className="text-ink font-semibold">{text.split(" · ")[0]}</span>
+                {text.slice(text.split(" · ")[0]?.length ?? 0)}
+              </>
+            ) : (
+              "\u00a0"
+            )}
+          </p>
+          <SegmentedControl
+            label="Colour by"
+            labelHidden
+            options={MODES}
+            value={mode}
+            onChange={setMode}
+            className="order-3 mt-1 w-full md:order-2 md:mt-0 md:w-52"
+          />
+          <LayerSlider
+            label="Layer"
+            value={Math.min(layer, Math.max(0, count - 1))}
+            max={Math.max(0, count - 1)}
+            onChange={scrub}
+            valueText={text}
+            live={live0}
+            className="order-2 w-full md:order-3"
+          />
+          <p className="text-caption text-ink-faint order-4 mt-1 hidden w-full items-center justify-center gap-1.5 md:flex">
+            <Kbd keys={["←"]} />
+            <Kbd keys={["→"]} />
+            step layers
+            <Kbd keys={["Shift"]} className="ml-2" />
+            ten at a time
+          </p>
+        </div>
       </div>
     </div>
   );

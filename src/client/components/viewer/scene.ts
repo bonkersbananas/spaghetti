@@ -358,10 +358,14 @@ export class PrintScene {
   /** The plate and its light, in the colours of the current theme. */
   setTheme(colors: SceneColors) {
     const u = this.material.uniforms;
-    (u.uLight?.value as Color).copy(colors.light);
-    (u.uSky?.value as Color).copy(colors.sky);
-    (u.uGround?.value as Color).copy(colors.ground);
-    (u.uGhost?.value as Color).copy(colors.plate);
+    for (const [name, color] of [
+      ["uLight", colors.light],
+      ["uSky", colors.sky],
+      ["uGround", colors.ground],
+      ["uGhost", colors.plate],
+    ] as const) {
+      (u[name]?.value as Color | undefined)?.copy(color);
+    }
     if (this.plate) {
       this.print.remove(this.plate);
       this.plate.traverse((o) => {
@@ -535,7 +539,7 @@ export class PrintScene {
     const fov = (this.camera.fov * Math.PI) / 180;
     const aspect = this.width / this.height;
     const fitFov = aspect < 1 ? 2 * Math.atan(Math.tan(fov / 2) * aspect) : fov;
-    const distance = Math.max(90, (radius * 2.1) / Math.sin(fitFov / 2));
+    const distance = Math.max(90, (radius * 1.5) / Math.sin(fitFov / 2));
     // three's frame: x → x, z → −y, y → z.
     this.controls.target.set(cx, cz, -cy);
     this.camera.position.set(cx + distance * 0.42, cz + distance * 0.5, -cy + distance * 0.76);
