@@ -43,7 +43,7 @@
     // VAPID_PRIVATE_KEY secret, set with wrangler secret put and kept across deploys.
     "VAPID_PUBLIC_KEY": "BH-5N3yXrnBw6sRw6FtNUKjoOmcZI8-Dj1JWPn3bJ64BYGEiznM1EUjzJWsUuKtErRaQ-OeOrH-mbE3Zdqoatng",
     "VAPID_SUBJECT": "https://spaghetti.day",
-    // Passkeys: the relying party (docs/decisions/0023). The dev server, the e2e tests and `pnpm start` override
+    // Passkeys: the relying party (docs/decisions/0025). The dev server, the e2e tests and `pnpm start` override
     // these with localhost (vite.config.ts, scripts/lib/local-app.ts, scripts/start.ts).
     "WEBAUTHN_RP_ID": "spaghetti.day",
     "WEBAUTHN_ORIGINS": "https://spaghetti.day"

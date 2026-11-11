@@ -29,7 +29,9 @@ export function PasskeysSheet({ open, onOpenChange }: { open: boolean; onOpenCha
     },
   });
 
-  const passkeys = list.data ?? [];
+  const passkeys = list.data?.passkeys ?? [];
+  // Joined with a passkey only: the last one stays, or nothing could sign them in.
+  const lastWayIn = list.data?.hasPassword === false && passkeys.length === 1;
   return (
     <Sheet
       open={open}
@@ -61,7 +63,7 @@ export function PasskeysSheet({ open, onOpenChange }: { open: boolean; onOpenCha
               renaming={renaming === passkey.id}
               onRename={() => setRenaming(passkey.id)}
               onDone={() => setRenaming(null)}
-              onRemove={() => removePasskey(queryClient, passkey)}
+              onRemove={lastWayIn ? undefined : () => removePasskey(queryClient, passkey)}
             />
           ))}
         </ul>
@@ -81,7 +83,7 @@ function PasskeyRow({
   renaming: boolean;
   onRename: () => void;
   onDone: () => void;
-  onRemove: () => void;
+  onRemove?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(passkey.name);
@@ -115,12 +117,12 @@ function PasskeyRow({
           passkey.name
         )
       }
-      meta={`Added ${relativeTime(passkey.createdAt)} · ${passkey.lastUsedAt ? `used ${inlineTime(passkey.lastUsedAt)}` : "not used yet"}`}
+      meta={`${onRemove ? "" : "Your only way in · "}Added ${relativeTime(passkey.createdAt)} · ${passkey.lastUsedAt ? `used ${inlineTime(passkey.lastUsedAt)}` : "not used yet"}`}
       actions={
         !renaming && (
           <>
             <IconButton icon={RenameIcon} label={`Rename ${passkey.name}`} onClick={onRename} />
-            <IconButton icon={TrashIcon} label={`Remove ${passkey.name}`} onClick={onRemove} />
+            {onRemove && <IconButton icon={TrashIcon} label={`Remove ${passkey.name}`} onClick={onRemove} />}
           </>
         )
       }

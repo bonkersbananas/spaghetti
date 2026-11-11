@@ -101,6 +101,14 @@ export async function takeHit(c: Context<AppEnv>, bucket: string, limit: number,
   return Boolean(taken?.meta.changes);
 }
 
+/** How many tries `bucket` holds in the window, without adding one. */
+export async function hitsIn(c: Context<AppEnv>, bucket: string, windowMs = WINDOW_MS): Promise<number> {
+  const row = await c.env.DB.prepare("SELECT count(*) AS n FROM auth_hits WHERE bucket = ? AND at > ?")
+    .bind(bucket, Date.now() - windowMs)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 /** SHA-256 of a secret, hex: what is stored in place of a token or code. */
 export async function hashSecret(secret: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));

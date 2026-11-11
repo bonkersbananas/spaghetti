@@ -10,7 +10,7 @@ import { canEdit } from "./read-only";
 
 export const passkeysQuery = queryOptions({
   queryKey: ["passkeys"],
-  queryFn: async () => (await api<PasskeysResponse>("/account/passkeys")).passkeys,
+  queryFn: () => api<PasskeysResponse>("/account/passkeys"),
 });
 
 export const devicesQuery = queryOptions({
@@ -31,10 +31,9 @@ const waiting = new Map<string, ReturnType<typeof setTimeout>>();
 export function removePasskey(queryClient: QueryClient, passkey: PasskeyInfo) {
   if (!canEdit() || waiting.has(passkey.id)) return;
   const key = passkeysQuery.queryKey;
-  const before = queryClient.getQueryData<PasskeyInfo[]>(key) ?? [];
-  queryClient.setQueryData<PasskeyInfo[]>(
+  queryClient.setQueryData<PasskeysResponse>(
     key,
-    before.filter((p) => p.id !== passkey.id),
+    (data) => data && { ...data, passkeys: data.passkeys.filter((p) => p.id !== passkey.id) },
   );
   waiting.set(
     passkey.id,
@@ -71,7 +70,10 @@ if (typeof window !== "undefined") {
 
 export async function renamePasskey(queryClient: QueryClient, id: string, name: string) {
   const key = passkeysQuery.queryKey;
-  queryClient.setQueryData<PasskeyInfo[]>(key, (list) => list?.map((p) => (p.id === id ? { ...p, name } : p)));
+  queryClient.setQueryData<PasskeysResponse>(
+    key,
+    (data) => data && { ...data, passkeys: data.passkeys.map((p) => (p.id === id ? { ...p, name } : p)) },
+  );
   try {
     await api(`/account/passkeys/${id}`, { method: "PATCH", json: { name } });
   } catch {

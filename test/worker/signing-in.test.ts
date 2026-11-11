@@ -249,6 +249,28 @@ describe("adding a passkey", () => {
   });
 });
 
+describe("the last way in", () => {
+  it("keeps a passkey-only person's last passkey, and lets a person with a password remove theirs", async () => {
+    const { key } = await addPasskey();
+    expect((await (await request("/api/account/passkeys", { cookie })).json<PasskeysResponse>()).hasPassword).toBe(
+      true,
+    );
+    // Make Alex passkey-only, as joining by invite with a passkey does.
+    await env.DB.prepare("UPDATE users SET password_hash = '!' WHERE id = ?").bind(alex).run();
+    expect((await (await request("/api/account/passkeys", { cookie })).json<PasskeysResponse>()).hasPassword).toBe(
+      false,
+    );
+    const refused = await request(`/api/account/passkeys/${key.id}`, { method: "DELETE", cookie });
+    expect(refused.status).toBe(409);
+    expect((await errorOf(refused)).code).toBe("last_way_in");
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM passkeys").first<{ n: number }>())?.n).toBe(1);
+    // With a second one, either can go.
+    const second = await addPasskey();
+    expect((await request(`/api/account/passkeys/${key.id}`, { method: "DELETE", cookie })).status).toBe(204);
+    expect((await request(`/api/account/passkeys/${second.key.id}`, { method: "DELETE", cookie })).status).toBe(409);
+  });
+});
+
 describe("signing in with a passkey", () => {
   it("signs in the person it belongs to, counts up and remembers when it was used", async () => {
     const { key } = await addPasskey();
@@ -409,11 +431,18 @@ describe("signing in on another device", () => {
     for (let i = 0; i < 31; i++) last = (await redeem({ token: `spl_${i}` })).status;
     expect(last).toBe(429);
     await env.DB.prepare("DELETE FROM auth_hits").run();
-    for (let i = 0; i < 25; i++) {
-      await env.DB.prepare("DELETE FROM auth_hits WHERE bucket LIKE 'link:%'").run();
-      last = (await redeem({ code: "ABCD-EFGH" })).status;
-    }
-    expect(last).toBe(429);
+    // Wrong codes anywhere share an allowance of 200; right ones don't spend it.
+    const link = await makeLink();
+    await env.DB.prepare(
+      "INSERT INTO auth_hits (bucket, at) SELECT 'link-code', ? FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 199) SELECT i FROM n)",
+    )
+      .bind(Date.now())
+      .run();
+    expect((await redeem({ code: link.code })).status).toBe(200);
+    await env.DB.prepare("DELETE FROM auth_hits WHERE bucket LIKE 'link:%'").run();
+    expect((await redeem({ code: "ABCD-EFGH" })).status).toBe(410);
+    await env.DB.prepare("DELETE FROM auth_hits WHERE bucket LIKE 'link:%'").run();
+    expect((await redeem({ code: "ABCD-EFGH" })).status).toBe(429);
   });
 });
 

@@ -18,7 +18,15 @@ import {
   type SignInWithPasskeyRequest,
 } from "../../shared/signing-in.ts";
 import { endSession, readSession, startSession } from "../auth/session.ts";
-import { clientKey, hashSecret, relyingParty, saveChallenge, takeChallenge, takeHit } from "../auth/webauthn.ts";
+import {
+  clientKey,
+  hashSecret,
+  hitsIn,
+  relyingParty,
+  saveChallenge,
+  takeChallenge,
+  takeHit,
+} from "../auth/webauthn.ts";
 import { changes, passkeys, pushSubscriptions, signInLinks, users } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toPerson } from "../http.ts";
@@ -33,6 +41,10 @@ const credentials = z.object({
  * that a wrong username takes as long as a wrong password.
  */
 const DUMMY_HASH = "pbkdf2-sha256$100000$c3BhZ2hldHRpLWR1bW15$Zm9yLXRpbWluZy1vbmx5LW5vdC1hLXJlYWwtaGFzaCE=";
+
+/** Wrong codes allowed anywhere in the window, before typed-code sign-in waits. */
+const CODE_FAILURES = 200;
+const CODE_WINDOW_MS = 10 * 60 * 1000;
 
 const tooMany = (c: Context<AppEnv>) =>
   apiError(c, 429, "rate_limited", "Too many tries. Wait a few minutes and try again.");
@@ -128,8 +140,10 @@ export const sessionRoutes = new Hono<AppEnv>()
       return apiError(c, typeof body?.code === "string" ? 400 : 410, "invalid", "That code isn't the right shape.");
     }
     if (!(await takeHit(c, `link:${clientKey(c)}`, 30))) return tooMany(c);
-    // A code is short enough to guess at, so every wrong one anywhere counts against a shared allowance.
-    if (!token && !(await takeHit(c, "link-code", 20, 10 * 60 * 1000))) return tooMany(c);
+    // A code is short enough to guess at, so wrong ones anywhere count against a shared allowance (spent by
+    // failures only, so a right code never uses it up; 200 guesses at 40 bits is nothing, and a script can't
+    // spend it faster than one try every three seconds without also being refused per address above).
+    if (!token && (await hitsIn(c, "link-code", CODE_WINDOW_MS)) >= CODE_FAILURES) return tooMany(c);
     const hash = await hashSecret(token || (code ?? ""));
     const now = new Date();
     const db = c.var.db;
@@ -144,7 +158,10 @@ export const sessionRoutes = new Hono<AppEnv>()
         ),
       )
       .returning();
-    if (!link) return gone();
+    if (!link) {
+      if (!token) await takeHit(c, "link-code", CODE_FAILURES, CODE_WINDOW_MS);
+      return gone();
+    }
     const user = await db.select().from(users).where(eq(users.id, link.userId)).get();
     if (!user) return gone();
     await db.insert(changes).values({

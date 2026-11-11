@@ -32,6 +32,7 @@ import { recordChange } from "../changes.ts";
 import { type Invite, invites, type Passkey, passkeys, type SignInLink, sessions, signInLinks } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { NO_PASSWORD } from "./join.ts";
 
 /** A person keeps this many passkeys at most (a phone, a laptop and a few spares). */
 const MAX_PASSKEYS = 12;
@@ -92,7 +93,10 @@ export const signingInRoutes = new Hono<AppEnv>()
       .from(passkeys)
       .where(eq(passkeys.userId, c.var.user.id))
       .orderBy(asc(passkeys.createdAt));
-    return c.json<PasskeysResponse>({ passkeys: rows.map(toPasskeyInfo) });
+    return c.json<PasskeysResponse>({
+      passkeys: rows.map(toPasskeyInfo),
+      hasPassword: c.var.user.passwordHash !== NO_PASSWORD,
+    });
   })
 
   .post("/passkeys/options", async (c) => {
@@ -180,6 +184,13 @@ export const signingInRoutes = new Hono<AppEnv>()
   .delete("/passkeys/:id", async (c) => {
     const db = c.var.db;
     const id = c.req.param("id");
+    // Someone with no password (they joined with a passkey) keeps at least one: nothing else would let them in.
+    if (c.var.user.passwordHash === NO_PASSWORD) {
+      const own = await db.select({ id: passkeys.id }).from(passkeys).where(eq(passkeys.userId, c.var.user.id));
+      if (own.length <= 1 && own.some((p) => p.id === id)) {
+        return apiError(c, 409, "last_way_in", "That's the only way you can sign in. Add another passkey first.");
+      }
+    }
     await db.batch([
       db.delete(passkeys).where(and(eq(passkeys.id, id), eq(passkeys.userId, c.var.user.id))),
       recordChange(db, { entity: "passkey", id, action: "deleted", actor: c.var.actor }),

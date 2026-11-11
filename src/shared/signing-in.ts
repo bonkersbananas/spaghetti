@@ -81,6 +81,8 @@ export interface PasskeyInfo {
 
 export interface PasskeysResponse {
   passkeys: PasskeyInfo[];
+  /** False for someone who joined with a passkey only: their last passkey can't be removed, nothing else would sign them in. */
+  hasPassword: boolean;
 }
 
 /** What the browser needs to start a ceremony, and the id to send back with its answer. */
