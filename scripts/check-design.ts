@@ -29,6 +29,11 @@ const rules: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /\b(?:rounded|font|leading|tracking)-\[[^\]]+\]/g, message: "arbitrary type or radius: use a token" },
   { pattern: /-\[[^\]]*\d+(?:\.\d+)?px[^\]]*\]/g, message: "pixel value in an arbitrary class: use the spacing scale" },
   {
+    // The build leaves these weights out of every icon (scripts/vite-phosphor-weights.ts): they'd draw nothing.
+    pattern: /\bweight=(?:"|\{")(?:thin|duotone)"/g,
+    message: "icon weight left out of the build: use regular, light, bold or fill",
+  },
+  {
     pattern: /style=\{\{[^}]*\b(?:color|background|fontSize|fontFamily|boxShadow)\s*:/g,
     message: "inline style: use tokens via classes",
   },

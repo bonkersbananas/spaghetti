@@ -161,6 +161,8 @@ test("a title typed just before leaving a new build is not lost", async ({ page 
     .getByRole("button", { name: /^(New build|Start a build)$/ })
     .first()
     .click();
+  // The new build's page has opened (its id is in the address) before anything is typed or read from it.
+  await expect(page).toHaveURL(/\/builds\/[0-9a-f-]{36}/);
   const title = page.getByRole("textbox", { name: "Title" });
   await title.fill("Quick title");
   // Leave at once, before autosave's pause has passed.
