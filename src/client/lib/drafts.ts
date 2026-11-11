@@ -35,7 +35,13 @@ const refreshItem = (queryClient: QueryClient, id: string) => {
  * person sees the result through the change feed. A request that is lost leaves the job on the server, which
  * the cron finishes.
  */
-export async function requestDraft(queryClient: QueryClient, item: Pick<Item, "id" | "note">, url?: string) {
+export async function requestDraft(
+  queryClient: QueryClient,
+  item: Pick<Item, "id" | "note">,
+  url?: string,
+  /** The title that came with a share and may be replaced by the draft's. */
+  sharedTitle?: string | null,
+) {
   const found = url ? firstModelLink(url) : firstModelLink(item.note);
   if (!found || asking.has(item.id)) return;
   asking.add(item.id);
@@ -52,7 +58,10 @@ export async function requestDraft(queryClient: QueryClient, item: Pick<Item, "i
   };
   patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, draft: reading }));
   try {
-    const { draft } = await api<DraftResponse>(`/items/${item.id}/draft`, { method: "POST", json: { url: found.url } });
+    const { draft } = await api<DraftResponse>(`/items/${item.id}/draft`, {
+      method: "POST",
+      json: { url: found.url, ...(sharedTitle ? { sharedTitle } : {}) },
+    });
     patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, draft }));
   } catch {
     // Lost on the way: the server's copy of the job is the truth, and the next refresh shows it.
@@ -63,11 +72,13 @@ export async function requestDraft(queryClient: QueryClient, item: Pick<Item, "i
 }
 
 /** Starts a draft by itself when a freshly saved capture is only a model link (and nothing else was written). */
-export async function draftSavedCapture(queryClient: QueryClient, item: Item) {
-  if (item.stage !== "idea" || item.title?.trim() || item.draft || !lonelyModelLink(item.note)) return;
+export async function draftSavedCapture(queryClient: QueryClient, item: Item, sharedTitle: string | null = null) {
+  // A title that came with the share (the page's own) doesn't count as written by the person.
+  const typedTitle = !!item.title?.trim() && item.title !== sharedTitle;
+  if (item.stage !== "idea" || typedTitle || item.draft || !lonelyModelLink(item.note)) return;
   try {
     const features = await queryClient.fetchQuery(featuresQuery);
-    if (features.drafts) await requestDraft(queryClient, item);
+    if (features.drafts) await requestDraft(queryClient, item, undefined, sharedTitle);
   } catch {
     // Offline or signed out: nothing to draft with.
   }
@@ -83,6 +94,17 @@ export function announceDraft(queryClient: QueryClient, item: Pick<Item, "id" | 
     id: `draft-${item.id}`,
     onUndo: () => void undoDraft(queryClient, item.id),
   });
+}
+
+/** "Get the pictures" on a drafted idea that has none: the Worker tries the page's pictures again. */
+export async function getPictures(queryClient: QueryClient, id: string) {
+  try {
+    const { stored = 0 } = await api<DraftResponse>(`/items/${id}/draft/pictures`, { method: "POST" });
+    if (!stored) toast.message("No pictures came from that page");
+  } catch {
+    toast.error("Couldn't get the pictures");
+  }
+  refreshItem(queryClient, id);
 }
 
 /** Takes a draft back (the Worker only removes what is still exactly what it wrote). */

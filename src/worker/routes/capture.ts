@@ -157,9 +157,10 @@ async function draftFromLink(
 ) {
   const scopes = c.var.scopes;
   const sharingToken = scopes?.length === 1 && scopes[0] === "capture";
-  if ((scopes && !sharingToken) || !draftsEnabled(c.env) || title || photoCount) return;
+  // A title that came with the share is the page's own, not the person's: it doesn't stop the draft, and the draft may replace it.
+  if ((scopes && !sharingToken) || !draftsEnabled(c.env) || photoCount) return;
   const found = lonelyModelLink(note);
-  if (!found || !(await startDraft(c.var.db, itemId, found.url, c.var.user))) return;
+  if (!found || !(await startDraft(c.var.db, itemId, found.url, c.var.user, title))) return;
   try {
     c.executionCtx.waitUntil(runDraft(c.env, itemId, c.var.db));
   } catch {

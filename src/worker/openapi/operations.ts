@@ -370,6 +370,11 @@ export const operations: Record<string, Operation> = {
       404: "not_found: no such idea, or drafting isn't set up.",
     },
   },
+  "POST /items/:id/draft/pictures": {
+    summary: "Gets the pictures of a drafted idea that has none (tries the model page's pictures again).",
+    response: z.object({ draft: z.looseObject({}).nullable(), stored: z.number().int() }),
+    errors: { 404: "not_found: no draft, the idea has pictures already, or drafting isn't set up." },
+  },
   "DELETE /items/:id/draft": {
     summary: "Drops Claude's draft of an idea.",
     response: z.object({ draft: z.null() }),
