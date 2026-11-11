@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "@/components/ui/Composer";
 import { CommentIcon } from "@/components/ui/icons";
 import { Bubble, MessageGroup, NewDivider } from "@/components/ui/Message";
+import { Section } from "@/components/ui/Section";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Sheet } from "@/components/ui/Sheet";
 import { useVia } from "@/lib/agents";
-import { cn } from "@/lib/cn";
 import { sendComment, useDraft, useThread } from "@/lib/comments";
 import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -40,7 +40,7 @@ export default function Thread({ itemId, writeAsk, readOnly }: ThreadProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
-  const root = useRef<HTMLElement>(null);
+  const root = useRef<HTMLDivElement>(null);
 
   const other = people?.find((person) => person.id !== me?.id);
   const placeholder = other ? `Say something to ${displayName(other)}` : "Say something";
@@ -82,91 +82,95 @@ export default function Thread({ itemId, writeAsk, readOnly }: ThreadProps) {
   }
 
   const empty = comments.length === 0;
-  return (
-    <section
-      ref={root}
-      aria-labelledby={`thread-${itemId}`}
-      className="max-w-content mt-12 flex flex-col gap-4 md:mt-16"
-    >
-      <SectionHeading id={`thread-${itemId}`} size="title" className={cn(empty && "sr-only")}>
-        Talk it over
-      </SectionHeading>
-
-      {!empty && me && (
-        <ol className="flex flex-col gap-3" aria-label="Comments">
-          {entries.map((entry) => {
-            if (entry.kind === "new") return <NewDivider key="new" />;
-            const author = person(entry.authorId);
-            const mine = entry.authorId === me.id;
-            const first = entry.comments[0] as Comment;
-            return (
-              <MessageGroup
-                key={entry.key}
-                person={author ?? { name: "?", color: "clay" }}
-                name={mine ? "You" : displayName(author, "Someone")}
-                via={via(entry.via)}
-                mine={mine}
-                time={first.createdAt}
-              >
-                {entry.comments.map((comment) => (
-                  <EditableBubble
-                    key={comment.id}
-                    comment={comment}
-                    mine={mine}
-                    editing={editing === comment.id}
-                    onEdit={(on) => setEditing(on ? comment.id : null)}
-                    readOnly={readOnly}
-                  />
-                ))}
-              </MessageGroup>
-            );
-          })}
-        </ol>
-      )}
-
-      {isDesktop ? (
+  const headingId = `thread-${itemId}`;
+  const writing = isDesktop ? (
+    <Composer
+      inputRef={field}
+      value={draft}
+      onChange={setDraft}
+      onSend={send}
+      placeholder={placeholder}
+      label={placeholder}
+      disabled={readOnly || !me}
+      maxLength={COMMENT_MAX}
+    />
+  ) : (
+    <>
+      <button
+        type="button"
+        disabled={readOnly || !me}
+        onClick={() => setSheetOpen(true)}
+        className="pressable focus-ring bg-ink/4 shadow-well text-body flex min-h-12 w-full items-center gap-3 rounded-lg px-4 text-left disabled:opacity-60"
+      >
+        <CommentIcon size={20} className="text-ink-faint shrink-0" aria-hidden />
+        {draft.trim() ? (
+          <span className="text-ink min-w-0 flex-1 truncate">
+            <span className="text-ink-faint">Draft: </span>
+            {draft.trim().split("\n")[0]}
+          </span>
+        ) : (
+          <span className="text-ink-faint">{placeholder}</span>
+        )}
+      </button>
+      {/* Mounted closed from the start: a sheet that mounts already open can lay its content wrong. */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen} title={placeholder}>
         <Composer
-          inputRef={field}
+          autoFocus
           value={draft}
           onChange={setDraft}
           onSend={send}
-          placeholder={placeholder}
+          placeholder="Write here…"
           label={placeholder}
-          disabled={readOnly || !me}
           maxLength={COMMENT_MAX}
         />
+      </Sheet>
+    </>
+  );
+
+  return (
+    <div ref={root} className="max-w-content mt-12 md:mt-16">
+      {empty || !me ? (
+        // Nothing said yet: one quiet line to write on, and a heading only screen readers see.
+        <section aria-labelledby={headingId} className="flex flex-col gap-4">
+          <SectionHeading id={headingId} size="title" className="sr-only">
+            Talk it over
+          </SectionHeading>
+          {writing}
+        </section>
       ) : (
-        <>
-          <button
-            type="button"
-            disabled={readOnly || !me}
-            onClick={() => setSheetOpen(true)}
-            className="pressable focus-ring bg-ink/4 shadow-well text-body flex min-h-12 w-full items-center gap-3 rounded-lg px-4 text-left disabled:opacity-60"
-          >
-            <CommentIcon size={20} className="text-ink-faint shrink-0" aria-hidden />
-            {draft.trim() ? (
-              <span className="text-ink min-w-0 flex-1 truncate">
-                <span className="text-ink-faint">Draft: </span>
-                {draft.trim().split("\n")[0]}
-              </span>
-            ) : (
-              <span className="text-ink-faint">{placeholder}</span>
-            )}
-          </button>
-          {/* Mounted closed from the start: a sheet that mounts already open can lay its content wrong. */}
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen} title={placeholder}>
-            <Composer
-              autoFocus
-              value={draft}
-              onChange={setDraft}
-              onSend={send}
-              placeholder="Write here…"
-              label={placeholder}
-              maxLength={COMMENT_MAX}
-            />
-          </Sheet>
-        </>
+        <Section id={headingId} title="Talk it over" size="title">
+          <ol className="flex flex-col gap-3" aria-label="Comments">
+            {entries.map((entry) => {
+              if (entry.kind === "new") return <NewDivider key="new" />;
+              const author = person(entry.authorId);
+              const mine = entry.authorId === me.id;
+              const first = entry.comments[0] as Comment;
+              return (
+                <MessageGroup
+                  key={entry.key}
+                  person={author ?? { name: "?", color: "clay" }}
+                  name={mine ? "You" : displayName(author, "Someone")}
+                  via={via(entry.via)}
+                  mine={mine}
+                  time={first.createdAt}
+                >
+                  {entry.comments.map((comment) => (
+                    <EditableBubble
+                      key={comment.id}
+                      comment={comment}
+                      mine={mine}
+                      editing={editing === comment.id}
+                      onEdit={(on) => setEditing(on ? comment.id : null)}
+                      readOnly={readOnly}
+                    />
+                  ))}
+                </MessageGroup>
+              );
+            })}
+          </ol>
+          {writing}
+        </Section>
       )}
-    </section>
+    </div>
   );
 }
