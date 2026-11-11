@@ -35,7 +35,15 @@ export default defineConfig(({ command }) => ({
       config: () => ({
         vars: {
           ...(command === "serve" ? localPasskeys : {}),
-          ...(fakeClaude ? { ANTHROPIC_API_KEY: "sk-ant-fake", ANTHROPIC_BASE_URL: fakeClaude } : {}),
+          ...(fakeClaude
+            ? {
+                ANTHROPIC_API_KEY: "sk-ant-fake",
+                ANTHROPIC_BASE_URL: fakeClaude,
+                // The same stand-in receives webhooks (scripts/lib/fake-claude.ts), which may go to 127.0.0.1 only here.
+                WEBHOOKS_ALLOW_LOCAL: "1",
+                WEBHOOK_SECRET_KEY: "throwaway-test-key",
+              }
+            : {}),
         },
       }),
     }),

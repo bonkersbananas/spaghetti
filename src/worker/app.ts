@@ -10,6 +10,7 @@ import { actorOf } from "./changes.ts";
 import { getDb } from "./db/index.ts";
 import type { AppEnv } from "./env.ts";
 import { apiError } from "./http.ts";
+import { buildOpenApi } from "./openapi/document.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { agentRoutes } from "./routes/agents.ts";
 import { attemptRoutes, itemAttemptRoutes } from "./routes/attempts.ts";
@@ -35,6 +36,8 @@ import { signingInRoutes } from "./routes/signing-in.ts";
 import { spoolRoutes } from "./routes/spools.ts";
 import { storyRoutes } from "./routes/story.ts";
 import { tagRoutes } from "./routes/tags.ts";
+import { webhookRoutes } from "./routes/webhooks.ts";
+import { runWebhooks } from "./webhooks/deliver.ts";
 
 /**
  * Everything under /api except signing in needs a person's session or an
@@ -92,17 +95,33 @@ export const app = new Hono<AppEnv>()
     c.header("Cache-Control", "no-store");
     await next();
   })
+  // A write that went through starts a delivery pass for webhooks that want it, so an agent isn't left waiting for
+  // the cron (which stays the fallback). One indexed read when there are no webhooks.
+  .use(async (c, next) => {
+    await next();
+    const write = c.req.method !== "GET" && c.req.method !== "HEAD";
+    if (!write || c.res.status >= 400 || c.env.WEBHOOKS_ON_WRITE === "off" || c.req.path.startsWith("/api/webhooks"))
+      return;
+    try {
+      c.executionCtx.waitUntil(runWebhooks(c.env).catch((error) => console.error("webhooks failed", error)));
+    } catch {
+      // No execution context (a test calling the app directly): the cron picks it up.
+    }
+  })
   .get("/health", (c) => c.json({ ok: true }))
   .route("/session", sessionRoutes)
   .route("/join", joinRoutes)
   .use(requireAuth)
   .use(requireScope)
+  // What this caller may do, as OpenAPI 3.1 (made from the code: worker/openapi).
+  .get("/openapi.json", (c) => c.json(buildOpenApi(c.var.scopes, new URL(c.req.url).origin)))
   .route("/account", accountRoutes)
   .route("/account", signingInRoutes)
   .route("/push", pushRoutes)
   .route("/people", peopleRoutes)
   .route("/agents", agentRoutes)
   .route("/changes", changeRoutes)
+  .route("/webhooks", webhookRoutes)
   .route("/capture", captureRoutes)
   .route("/deleted", deletedRoutes)
   .route("/", draftRoutes)

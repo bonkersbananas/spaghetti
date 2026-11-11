@@ -44,6 +44,8 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM upkeep_tasks"),
     env.DB.prepare("DELETE FROM push_nudges"),
     env.DB.prepare("DELETE FROM push_subscriptions"),
+    env.DB.prepare("DELETE FROM webhook_deliveries"),
+    env.DB.prepare("DELETE FROM webhooks"),
     env.DB.prepare("DELETE FROM agent_tokens"),
     env.DB.prepare("DELETE FROM agents"),
     env.DB.prepare("DELETE FROM changes"),

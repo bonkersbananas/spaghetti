@@ -96,6 +96,7 @@ export {
   Trash as TrashIcon,
   UserPlus as InviteIcon,
   WarningCircle as WarningIcon,
+  WebhooksLogo as WebhookIcon,
   WifiSlash as OfflineIcon,
   X as CloseIcon,
 } from "@phosphor-icons/react";

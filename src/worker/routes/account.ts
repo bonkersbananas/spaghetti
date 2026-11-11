@@ -64,3 +64,6 @@ export const accountRoutes = new Hono<AppEnv>().put("/password", async (c) => {
   ]);
   return c.json<ChangePasswordResponse>({ signedOut: others[2].length });
 });
+
+/** For the OpenAPI document (worker/openapi). */
+export { body as changePasswordBody };

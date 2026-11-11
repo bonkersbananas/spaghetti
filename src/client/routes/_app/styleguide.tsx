@@ -27,6 +27,7 @@ import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
 import { TodaySection } from "./-styleguide/today";
 import { TypeSection } from "./-styleguide/type";
+import { WebhooksSection } from "./-styleguide/webhooks";
 import { YearSection } from "./-styleguide/year";
 
 export const Route = createFileRoute("/_app/styleguide")({
@@ -62,6 +63,7 @@ const toc = [
   ["today", "Today"],
   ["sheets", "Sheets & toasts"],
   ["notifications", "Notifications"],
+  ["webhooks", "Webhooks"],
   ["palette", "Palette & shortcuts"],
   ["empty", "Empty states"],
   ["skeletons", "Skeletons"],
@@ -110,6 +112,7 @@ function Styleguide() {
           <PaletteSection />
           <SheetSection />
           <NotificationSection />
+          <WebhooksSection />
           <EmptySection />
           <SkeletonSection />
           <SigningInSection />

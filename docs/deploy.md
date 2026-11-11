@@ -49,7 +49,7 @@ This exports every table and the search index's own SQL (see `scripts/db-export.
 
 ## Adding or resetting a person
 
-**In the app (the usual way):** account menu → Invite someone makes a single-use link, good for a week; the new person opens it, picks a name, a username, a color and a passkey or a password, and is signed in ([0025](decisions/0025-passkeys-sign-in-links-and-invites.md)). Pending invites are listed there and can be withdrawn. Someone who can't sign in but still has a signed-in device makes "Sign in on another device" there (a QR code or a code, good for ten minutes).
+**In the app (the usual way):** account menu → Invite someone makes a single-use link, good for a week; the new person opens it, picks a name, a username, a color and a passkey or a password, and is signed in ([0026](decisions/0026-passkeys-sign-in-links-and-invites.md)). Pending invites are listed there and can be withdrawn. Someone who can't sign in but still has a signed-in device makes "Sign in on another device" there (a QR code or a code, good for ten minutes).
 
 **From a session (resets, or when nobody can sign in):** `pnpm user:add` keeps working. Passwords come from an environment variable, never from the command line. Running the command again for an existing username changes their name, color and password and signs them out everywhere, which is how a forgotten password is reset. People change their own in the app (account menu → Change password). A reset leaves their passkeys alone; remove those in the app (account menu → Passkeys) if a device is lost.
 
@@ -77,6 +77,16 @@ pnpm exec wrangler secret put VAPID_PRIVATE_KEY < /tmp/vapid.key && rm /tmp/vapi
 The script never prints the private key and refuses to overwrite a file. The deploy token can set secrets. For local development, `pnpm vapid:generate --dev-vars` appends a fresh pair (both lines) to `.dev.vars`, which is never committed; the dev server has no service worker, so a real subscription needs `pnpm build && pnpm start`, and a browser that can reach its push service (Chrome uses Google's).
 
 The nudges run from a cron every 5 minutes (`*/5 * * * *`, next to the daily purge at 04:00 UTC): an open attempt that the bridge saw come off the bed, or whose slicer estimate plus ten minutes has passed. iPhone and iPad only get web push for an app added to the Home Screen (iOS 16.4 or later): the settings say so.
+
+## Webhooks
+
+Webhooks ([0025](decisions/0025-webhooks-signed-from-the-cron.md)) keep their signing secrets encrypted under a key made from the `WEBHOOK_SECRET_KEY` secret, and from nothing else (not the VAPID key, so redoing push can never break them). Without it the Agents page says "Webhooks need a key on the server; see docs/deploy.md" and every `/api/webhooks` endpoint answers `503 webhooks_unavailable`. Set it once, before the first webhook is added; this generates and sets it without ever printing it, and `wrangler deploy` keeps it. Never change it afterwards (webhooks made under another key fail until they are added again):
+
+```sh
+openssl rand -base64 32 | pnpm exec wrangler secret put WEBHOOK_SECRET_KEY
+```
+
+A write that records a change also starts a delivery pass (`waitUntil`), and the 5-minute cron sends what that missed and the retries. The e2e tests and screenshots set `WEBHOOKS_ALLOW_LOCAL` (webhooks may then go to 127.0.0.1, where the stand-in receiver in `scripts/lib/fake-claude.ts` listens); never set it on a real Worker.
 
 ## Claude drafting ideas
 

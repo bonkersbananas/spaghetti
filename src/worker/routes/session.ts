@@ -32,6 +32,7 @@ import { changes, passkeys, pushSubscriptions, signInLinks, users } from "../db/
 import type { AppEnv } from "../env.ts";
 import { apiError, toPerson } from "../http.ts";
 
+const signOutBody = z.object({ pushEndpoint: z.string().max(2048) });
 const credentials = z.object({
   username: z.string().trim().toLowerCase().min(1).max(64),
   password: z.string().min(1).max(1024),
@@ -195,7 +196,7 @@ export const sessionRoutes = new Hono<AppEnv>()
   })
   .delete("/", async (c) => {
     // A device that signs out stops getting this person's notifications: the app says which one it is.
-    const forget = z.object({ pushEndpoint: z.string().max(2048) }).safeParse(await c.req.json().catch(() => null));
+    const forget = signOutBody.safeParse(await c.req.json().catch(() => null));
     if (forget.success) {
       const user = await readSession(c, c.var.db);
       if (user) {
@@ -207,3 +208,6 @@ export const sessionRoutes = new Hono<AppEnv>()
     await endSession(c, c.var.db);
     return c.body(null, 204);
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { credentials, signOutBody };

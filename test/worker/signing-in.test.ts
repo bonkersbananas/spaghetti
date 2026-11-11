@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { NewTokenResponse } from "../../src/shared/agents.ts";
 import type { PeopleResponse, SessionResponse } from "../../src/shared/api.ts";
 import { toBase64Url } from "../../src/shared/base64url.ts";
+import type { ChangesResponse } from "../../src/shared/changes.ts";
 import type {
   CeremonyOptions,
   DevicesResponse,
@@ -18,6 +19,7 @@ import type {
   PasskeysResponse,
   SignInLinkInfo,
 } from "../../src/shared/signing-in.ts";
+import { wantsChange } from "../../src/shared/webhooks.ts";
 import { SoftAuthenticator } from "./authenticator.ts";
 import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 
@@ -718,5 +720,24 @@ describe("agent tokens", () => {
     expect((await env.DB.prepare("SELECT count(*) AS n FROM sign_in_links").first<{ n: number }>())?.n).toBe(1);
     // A token is no sign-in: the session route reads cookies only.
     expect((await asAgent("/api/session")).status).toBe(401);
+  });
+
+  it("never sees sign-in changes in the feed, and a webhook never wants them", async () => {
+    const made = await request("/api/agents", { method: "POST", json: { name: "Claude", scopes: ["read"] }, cookie });
+    const { token } = await made.json<NewTokenResponse>();
+    await addPasskey();
+    await request("/api/account/invites", { method: "POST", cookie });
+    const link = await (await request("/api/account/sign-in-links", { method: "POST", cookie })).json<NewSignInLink>();
+    await request("/api/session/link", { method: "POST", json: { token: link.url.split("#")[1] } });
+    const entities = async (headers?: Record<string, string>, as?: string) =>
+      (await (await request("/api/changes?after=0", { headers, cookie: as })).json<ChangesResponse>()).changes.map(
+        (change) => change.entity,
+      );
+    // The people's own feed has them; a token's doesn't.
+    expect(await entities(undefined, cookie)).toEqual(expect.arrayContaining(["passkey", "invite", "signin"]));
+    const asAgent = await entities({ Authorization: `Bearer ${token}`, Origin: "http://other.test" });
+    expect(asAgent.filter((entity) => ["passkey", "invite", "signin"].includes(entity))).toEqual([]);
+    for (const entity of ["passkey", "invite", "signin"] as const) expect(wantsChange(["all"], entity)).toBe(false);
+    expect(wantsChange(["all"], "item")).toBe(true);
   });
 });

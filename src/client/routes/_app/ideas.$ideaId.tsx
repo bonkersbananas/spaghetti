@@ -285,9 +285,12 @@ function Idea({ item }: { item: ItemView }) {
               )}
             </p>
           </div>
+          {/* The conversation follows the words it is about, in the same column (as on a build). */}
+          {!item.pending && (
+            <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />
+          )}
         </div>
       </div>
-      {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
       {!isDesktop && (
         <ActionBar>
           <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>

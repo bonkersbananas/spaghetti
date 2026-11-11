@@ -1,7 +1,7 @@
 import { asc, gt, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { CHANGES_PAGE, type ChangesResponse } from "../../shared/changes.ts";
+import { CHANGES_PAGE, type ChangesResponse, isPrivateChange } from "../../shared/changes.ts";
 import { toApiChange } from "../changes.ts";
 import { changes } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
@@ -42,9 +42,13 @@ export const changeRoutes = new Hono<AppEnv>().get("/", async (c) => {
     .limit(CHANGES_PAGE + 1);
   const page = rows.slice(0, CHANGES_PAGE);
   return c.json<ChangesResponse>({
-    changes: page.map(toApiChange),
+    // Sign-in changes are the people's: an agent's token never sees them (the cursor still moves past them).
+    changes: page.map(toApiChange).filter((change) => !c.var.scopes || !isPrivateChange(change.entity)),
     cursor: page.at(-1)?.seq ?? after,
     more: rows.length > page.length,
     reset: false,
   });
 });
+
+/** For the OpenAPI document (worker/openapi). */
+export { query as changesQuery };
