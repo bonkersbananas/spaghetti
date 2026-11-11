@@ -34,3 +34,15 @@ test("J and K walk the cards on Ideas, Enter opens one", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/ideas\/[0-9a-f-]+$/);
 });
+
+test("J and K also walk Today's cards", async ({ page }) => {
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Today's build" } });
+  await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await page.keyboard.press("j");
+  const first = page.locator("main [data-picks] a[href]").first();
+  await expect(first).toBeFocused();
+});

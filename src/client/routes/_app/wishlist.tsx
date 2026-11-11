@@ -18,6 +18,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { EditableWishList, WishListView } from "@/components/wishlist/WishList";
 import { WishPicker } from "@/components/wishlist/WishPicker";
 import { useIdeas } from "@/lib/items";
+import { useListPicker } from "@/lib/list-picker";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop, useIsWide } from "@/lib/use-media-query";
@@ -31,6 +32,7 @@ const firstName = (person: Person | undefined) => displayName(person, "Someone")
 const possessive = (name: string) => (name.endsWith("s") ? `${name}'` : `${name}'s`);
 
 function WishlistPage() {
+  useListPicker();
   const { data: user } = useQuery(sessionQuery);
   const { data: people } = useQuery(peopleQuery);
   const { wishlists, isPending } = useWishlists();
