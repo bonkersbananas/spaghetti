@@ -1,0 +1,71 @@
+name: Images
+
+# The container (Dockerfile, the app on workerd) and the printer bridge's image (bridge/Dockerfile) build and start.
+# On every push to main, and on pull requests that change what goes into them; the rest of the app is checked by CI.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - compose.yaml
+      - bridge/**
+      # The bridge's image runs bridge/ with src/shared on Node, with only the production dependencies.
+      - src/shared/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      # The container builds the app and starts it with scripts/start.ts, which applies the migrations.
+      - vite.config.ts
+      - scripts/vite-*.ts
+      - wrangler.jsonc
+      - migrations/**
+      - scripts/start.ts
+      - scripts/user-add.ts
+      - scripts/lib/**
+      - .github/workflows/images.yml
+  push:
+    branches: [main]
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  images:
+    name: Container and bridge images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Both at once: each spends most of its time downloading and installing.
+      - name: Build both images
+        run: |
+          docker build -t spaghetti:ci . > container.log 2>&1 &
+          container=$!
+          docker build -f bridge/Dockerfile -t spaghetti-bridge:ci . > bridge.log 2>&1 &
+          bridge=$!
+          status=0
+          wait "$container" || { echo "::error::The container image didn't build"; cat container.log; status=1; }
+          wait "$bridge" || { echo "::error::The bridge image didn't build"; cat bridge.log; status=1; }
+          exit "$status"
+      - name: The container runs, and keeps the API, the SPA and its data across a restart
+        run: |
+          docker run -d --name spaghetti -p 8787:8787 -v spaghetti-data:/data spaghetti:ci
+          for i in $(seq 1 60); do curl -fs localhost:8787/api/health && break; sleep 1; done
+          curl -fs localhost:8787/api/health
+          curl -fs -H 'Sec-Fetch-Mode: navigate' localhost:8787/ideas | grep -q '<div id="root">'
+          docker exec -e SPAGHETTI_PASSWORD=ci-password-123 spaghetti \
+            node scripts/user-add.ts --username ci --name CI --color basil
+          curl -fs -X POST localhost:8787/api/session -H 'Origin: http://localhost:8787' \
+            -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
+          docker restart spaghetti
+          for i in $(seq 1 60); do curl -fs localhost:8787/api/health && break; sleep 1; done
+          curl -fs -X POST localhost:8787/api/session -H 'Origin: http://localhost:8787' \
+            -H 'Content-Type: application/json' -d '{"username":"ci","password":"ci-password-123"}'
+      - if: failure()
+        run: docker logs spaghetti || true
+      - name: The bridge starts, finds ffmpeg, and says what is missing
+        run: |
+          docker run --rm --entrypoint ffmpeg spaghetti-bridge:ci -version | head -1
+          ! docker run --rm spaghetti-bridge:ci 2>&1 | tee out.txt
+          grep -q "Missing settings" out.txt

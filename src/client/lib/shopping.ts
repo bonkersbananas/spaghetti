@@ -30,6 +30,8 @@ const keepServer = (queryClient: QueryClient, saved: ShoppingItem) =>
 
 /** Adds still on their way to the server: an order waits for them, or it would name a thing the server doesn't have yet. */
 const adding = new Set<Promise<unknown>>();
+/** The newest order sent: an older one's answer doesn't move rows. */
+let latestOrder = 0;
 
 const topPosition = (items: ShoppingItem[]) =>
   Math.min(1, ...items.filter((item) => item.boughtAt === null).map((item) => item.position)) - 1;
@@ -136,7 +138,7 @@ export async function setBought(queryClient: QueryClient, item: ShoppingItem, bo
 /** Sets the order of what's still to buy (every id, first to last), at once. */
 export async function reorderShopping(queryClient: QueryClient, ids: string[]) {
   if (!canEdit()) return;
-  const before = queryClient.getQueryData<ShoppingItem[]>(shoppingQuery.queryKey);
+  const mine = ++latestOrder;
   const place = new Map(ids.map((id, index) => [id, index + 1]));
   patchList(queryClient, (items) =>
     items.map((item) => (place.has(item.id) ? { ...item, position: place.get(item.id) as number } : item)),
@@ -147,10 +149,19 @@ export async function reorderShopping(queryClient: QueryClient, ids: string[]) {
       method: "PUT",
       json: { ids },
     });
-    // The server's order is the truth (the other person may have added or moved something meanwhile).
-    queryClient.setQueryData<ShoppingItem[]>(shoppingQuery.queryKey, shoppingItems);
+    // A newer move is on its way: its answer will say where things are.
+    if (mine !== latestOrder) return;
+    // Only the places of what's still to buy come from the answer; anything added, ticked or edited here meanwhile
+    // stays as it is (the other person's changes arrive through the change feed).
+    const server = new Map(shoppingItems.map((item) => [item.id, item.position]));
+    patchList(queryClient, (items) =>
+      items.map((item) =>
+        item.boughtAt === null && server.has(item.id) ? { ...item, position: server.get(item.id) as number } : item,
+      ),
+    );
   } catch {
-    if (before) queryClient.setQueryData(shoppingQuery.queryKey, before);
+    // Not a copy from before (it would undo what happened since): the server's list, fetched again.
+    void queryClient.invalidateQueries({ queryKey: shoppingQuery.queryKey });
     toast.error("Couldn't save the new order", "It's back the way it was. Try again in a moment.");
   }
 }

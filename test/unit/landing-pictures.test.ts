@@ -28,9 +28,9 @@ describe("the landing page's pictures", () => {
     }
   });
 
-  it("shows no one's picture: the page is public, so the two people stay off it", () => {
+  it("draws no one itself: people appear only inside the app's screenshots", () => {
+    // The page's own toasts and notes say what happened, not who (docs/landing.md).
     expect(html).not.toMatch(/person-|lp-avatar/);
-    expect(existsSync(join(root, "scripts/landing/people"))).toBe(false);
   });
 
   it("gives each picture the shape of its file", async () => {
