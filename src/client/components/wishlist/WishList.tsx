@@ -59,7 +59,7 @@ function StartButton({ item, name }: { item: ItemView; name: string }) {
 /** Someone else's list: the same rows, to read and start from, not to rearrange. */
 export function WishListView({ ideas, label }: { ideas: ItemView[]; label: string }) {
   return (
-    <ol className="flex flex-col gap-2" aria-label={label}>
+    <ol data-picks className="flex flex-col gap-2" aria-label={label}>
       {ideas.map((item, index) => {
         const props = rowProps(item, index + 1);
         return (
@@ -125,6 +125,7 @@ export function EditableWishList({ me, ideas, label }: { me: string; ideas: Item
         axis="y"
         values={order}
         onReorder={setOrder}
+        data-picks
         className="flex flex-col gap-2"
         aria-label={label}
       >

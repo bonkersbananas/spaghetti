@@ -57,14 +57,22 @@ export function canView3d(file: AttemptFileView | undefined): file is AttemptFil
   );
 }
 
+/** The attempt a file belongs to while it prints: what the viewer needs to follow it. */
+export interface PrintingAttempt {
+  id: string;
+}
+
 /** A quiet "3D" pill on the plate picture. Opens the viewer; its code is fetched as a finger or the pointer nears it. */
 export function ThreeDButton({
   file,
   fallbackColors,
+  printing,
   className,
 }: {
   file: AttemptFileView;
   fallbackColors?: (string | null | undefined)[];
+  /** Set while the attempt is printing: the viewer shows the layers printed so far solid and the rest as a ghost. */
+  printing?: PrintingAttempt;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -85,7 +93,15 @@ export function ThreeDButton({
         <CubeIcon size={12} weight="bold" aria-hidden />
         3D
       </button>
-      {open && <ViewerSheet open={open} onOpenChange={setOpen} file={file} fallbackColors={fallbackColors} />}
+      {open && (
+        <ViewerSheet
+          open={open}
+          onOpenChange={setOpen}
+          file={file}
+          fallbackColors={fallbackColors}
+          printing={printing}
+        />
+      )}
     </>
   );
 }
@@ -95,13 +111,13 @@ export function ViewerSheet({
   onOpenChange,
   file,
   fallbackColors,
-  live,
+  printing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: AttemptFileView;
   fallbackColors?: (string | null | undefined)[];
-  live?: { layer: number; totalLayers: number | null } | null;
+  printing?: PrintingAttempt;
 }) {
   return (
     <Sheet
@@ -117,7 +133,7 @@ export function ViewerSheet({
         fileId={file.id}
         plate={file.plate}
         fallbackColors={fallbackColors}
-        live={live}
+        printing={printing}
       />
     </Sheet>
   );

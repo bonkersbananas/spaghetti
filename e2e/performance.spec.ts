@@ -33,7 +33,7 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // main (spool labels, weeks, search questions) Ideas, Builds, Search and Pantry were a fraction over their limits, +1 kB each. Its page,
 // sheet, rows and illustration load on demand.
 // The stale-build recovery (the router's error component, a preloadError listener) adds about 0.3 kB to the shell: Sign-in,
-// Ideas, Journal and Printer +1 kB each; the error screen and the reload logic load on demand.
+// Ideas and Journal +1 kB each (Printer's limit came with main); the error screen and the reload logic load on demand.
 const BUDGET_KB = {
   "/sign-in": 195,
   "/today": 299,
@@ -41,8 +41,8 @@ const BUDGET_KB = {
   "/builds": 287,
   "/journal": 288,
   "/search": 293,
-  "/pantry": 297,
-  "/printer": 298,
+  "/pantry": 298, // same as /printer: the first-load files are main's byte for byte, and main sits on 297.0x
+  "/printer": 298, // main itself measured 297.0x kB after the shopping-list merge: headroom restored
 } as const;
 
 /**
