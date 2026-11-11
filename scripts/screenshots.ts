@@ -12,6 +12,7 @@
  *   pnpm screenshots --built        # on the production build (service worker included): what offline screens really show
  *   pnpm screenshots --iphone       # as the Home Screen app on an iPhone: standalone, 59 px top and 34 px bottom safe area (files named ideas-iphone-390.png)
  *   pnpm screenshots --out DIR      # write somewhere else (default ./screenshots)
+ *   pnpm screenshots --width 1440   # one width only (390 is the phone; any other number is a desktop window of that width, 900 tall)
  *   pnpm screenshots --scale 1      # device pixel ratio 1 at both widths (default 3 on the phone, 2 on the desktop)
  *
  * Every theme and width is taken on its own freshly seeded app, so a shot that changes data (finishing a
@@ -36,14 +37,30 @@ const allViewports = [
   { width: 1440, height: 900, deviceScaleFactor: 2, isMobile: false, hasTouch: false },
 ];
 // The iPhone insets only mean something on the phone.
-const viewports = process.argv.includes("--iphone") ? allViewports.slice(0, 1) : allViewports;
+const widthArg = process.argv.includes("--width")
+  ? Number(process.argv[process.argv.indexOf("--width") + 1])
+  : undefined;
+if (widthArg !== undefined && !(widthArg >= 320)) throw new Error("--width needs a number such as 390, 1280 or 1920.");
+const viewports: typeof allViewports = process.argv.includes("--iphone")
+  ? allViewports.slice(0, 1)
+  : widthArg === undefined
+    ? allViewports
+    : [
+        allViewports.find((v) => v.width === widthArg) ?? {
+          width: widthArg,
+          height: 900,
+          deviceScaleFactor: 2,
+          isMobile: false,
+          hasTouch: false,
+        },
+      ];
 
 const argv = process.argv.slice(2);
 const option = (name: string) => {
   const index = argv.indexOf(name);
   return index >= 0 ? argv[index + 1] : undefined;
 };
-const optionValues = new Set(["--out", "--scale"].flatMap((name) => (option(name) ? [option(name)] : [])));
+const optionValues = new Set(["--out", "--scale", "--width"].flatMap((name) => (option(name) ? [option(name)] : [])));
 const themes: Array<"light" | "dark"> = argv.includes("--both")
   ? ["light", "dark"]
   : argv.includes("--dark")

@@ -42,7 +42,7 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
   if (!started.length) return null;
   return (
     <Section id="started-heading" title="Started" size="title" count={started.length} className="mt-12 md:mt-16">
-      <ul className="flex flex-col md:grid md:grid-cols-2 md:gap-x-8 xl:grid-cols-3" aria-label="Started">
+      <ul data-picks className="flex flex-col md:grid md:grid-cols-2 md:gap-x-8 xl:grid-cols-3" aria-label="Started">
         {started.slice(0, MOST).map((item) => (
           <li key={item.id}>
             <Row item={item} />

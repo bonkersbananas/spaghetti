@@ -38,7 +38,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0031](0031-claude-reads-a-spool-label-from-its-photo.md) | Claude reads a spool's label from its photo, and only fills what is empty | Accepted |
 | [0032](0032-search-reads-questions.md) | Search reads questions: filler, outcome, time, names, Swedish twins and typos, in the Worker, with no new index | Accepted |
 | [0033](0033-mac-bridge-paired-by-code.md) | The bridge runs on a Mac as one program, paired with a short code | Accepted |
-| [0034](0034-a-landing-page-at-the-root-for-visitors.md) | A landing page at the root for visitors, the app for the two people | Accepted |
+| [0035](0035-a-landing-page-at-the-root-for-visitors.md) | A landing page at the root for visitors, the app for the two people | Accepted |
 | [0036](0036-the-3d-view-reads-the-slicer-file-in-the-browser.md) | The 3D view reads the slicer file in the browser and loads only when asked for | Accepted |
 
 ## Format
