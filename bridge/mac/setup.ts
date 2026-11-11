@@ -88,15 +88,28 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
     );
   }
 
-  // 1. Is there a way to reach Spaghetti? The code is only spent at the end (step 4): a printer that can't be reached
-  // must not use up a single-use code, or revoke the token a working bridge has.
+  // 1. The token. Pairing comes first because the code only lasts ten minutes, and it is saved at once: the code is
+  // spent and the bridge's old token ended, so a later hiccup (the printer unreachable) must not lose the new one.
+  // Running setup again without a code keeps what was saved.
   let appUrl = (args.appUrl ?? saved.appUrl ?? DEFAULT_APP_URL).replace(/\/+$/, "");
   let token = saved.token;
-  if (!args.code && !token) {
+  if (args.code) {
+    say("Pairing with Spaghetti…");
+    try {
+      const paired = await env.pair(appUrl, args.code);
+      token = paired.token;
+      appUrl = paired.appUrl.replace(/\/+$/, "");
+      writeSettings(paths.config, { ...saved, appUrl, token, dataDir: paths.dataDir } as SavedSettings);
+      say("  ✓ Paired and saved. (The code is spent; it can't be used again.)");
+    } catch (error) {
+      if (error instanceof PairingError) throw new SetupStop(error.message);
+      throw error;
+    }
+  } else if (!token) {
     throw new SetupStop(
       "This needs a pairing code: open Spaghetti, go to Printer → Connect the bridge, and paste the command it shows.",
     );
-  }
+  } else say("Keeping the bridge's saved connection to Spaghetti.");
 
   // 2. The printer.
   let printerHost = args.printerHost ?? saved.printerHost;
@@ -151,25 +164,12 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
         : "n";
       if (!goOn.startsWith("y")) {
         throw new SetupStop(
-          "Nothing was changed, and your code is still good. Fix that, then run the same command again.",
+          "The pairing is saved, so no new code is needed: fix that, then run the installer command again without the code.",
         );
       }
     }
   }
 
-  // 4. Pair now that everything else is known: this spends the code and replaces the old token.
-  if (args.code) {
-    say("Pairing with Spaghetti…");
-    try {
-      const paired = await env.pair(appUrl, args.code);
-      token = paired.token;
-      appUrl = paired.appUrl.replace(/\/+$/, "");
-      say("  ✓ Paired. (The code is spent; it can't be used again.)");
-    } catch (error) {
-      if (error instanceof PairingError) throw new SetupStop(error.message);
-      throw error;
-    }
-  } else say("Keeping the bridge's saved connection to Spaghetti.");
   const settings: SavedSettings = {
     printerHost: printerHost as string,
     serial: serial as string,
@@ -180,7 +180,7 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
     ...(args.camera ? { camera: args.camera } : saved.camera ? { camera: saved.camera } : {}),
   };
 
-  // 5. Write it down.
+  // 4. Write it down.
   mkdirSync(paths.dataDir, { recursive: true });
   mkdirSync(paths.logDir, { recursive: true });
   writeSettings(paths.config, settings);
@@ -188,7 +188,7 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
   writeFileSync(paths.plist, launchAgentPlist(paths));
   say(`Saved the settings (only you can read them) in ${paths.config}.`);
 
-  // 6. Start it.
+  // 5. Start it.
   if (args.noStart) {
     say("Not started (--no-start).");
     return;
@@ -209,7 +209,7 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
   env.run("launchctl", ["kickstart", "-k", `${domain}/${LABEL}`]);
   say("Started. It starts again whenever you log in, and if it stops.");
 
-  // 7. Did Spaghetti hear it?
+  // 6. Did Spaghetti hear it?
   say("Waiting for it to check in with Spaghetti…");
   for (let i = 0; i < 12; i++) {
     await env.sleep(2_000);

@@ -165,7 +165,7 @@ describe("setup", () => {
 
   it("without a terminal and without the details, stops and says how to give them", async () => {
     await expect(runSetup(parseSetupArgs(["ABCD-EFGH"]), env())).rejects.toThrow(/--ip, --serial and --access-code/);
-    expect(existsSync(macPaths(home).config)).toBe(false);
+    expect(existsSync(macPaths(home).plist)).toBe(false);
     expect(launchctl).toEqual([]);
   });
 
@@ -186,9 +186,12 @@ describe("setup", () => {
       ),
     ).rejects.toThrow(SetupStop);
     expect(said.join("\n")).toContain("allow Local Network");
-    expect(existsSync(macPaths(home).config)).toBe(false);
+    // The code was spent, so the token is saved at once (and no login item is installed): running it again needs no code.
+    expect(readSettings(macPaths(home).config).token).toBe("spg_secret_token");
+    expect(existsSync(macPaths(home).plist)).toBe(false);
     expect(launchctl).toEqual([]);
-    // The code wasn't spent: the same command can be run again.
+    paired.length = 0;
+    await runSetup(parseSetupArgs([]), env({ ask: null, check: async () => ({ ok: true }) })).catch(() => undefined);
     expect(paired).toEqual([]);
   });
 
