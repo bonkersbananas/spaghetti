@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { bundleReport } from "./scripts/vite-bundle-report.ts";
 import { serviceWorker } from "./scripts/vite-service-worker.ts";
 
 // SPAGHETTI_STATE_DIR points local D1/R2 state elsewhere (the screenshot
@@ -23,6 +24,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     serviceWorker(),
+    ...(process.env.SPAGHETTI_BUNDLE_REPORT ? [bundleReport()] : []),
     cloudflare({
       persistState: stateDir ? { path: stateDir } : true,
       // The e2e tests and screenshots point drafting at a stand-in for the Anthropic API (scripts/lib/fake-claude.ts).

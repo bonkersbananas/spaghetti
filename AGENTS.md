@@ -98,7 +98,9 @@ pnpm lint           # Biome + design lint
 pnpm typecheck
 pnpm test           # Vitest (worker + unit projects)
 pnpm test:e2e       # Playwright, phone and desktop (with axe, e2e/accessibility.spec.ts); offline and performance tests run against the production build; CI runs it in 4 shards (`pnpm test:e2e --shard=1/4`), so a test must not depend on another test's data
-pnpm exec playwright test --project=performance   # first-load JavaScript per screen, and a throttled 100-photo inbox
+pnpm exec playwright test --project=performance   # first-load JavaScript per screen, tap latency and the resumed app on a phone profile, and a throttled 100-photo inbox
+pnpm build && pnpm perf [--runs 5]   # the whole speed table: cold start of Today and Ideas (first visit, service worker only, installed app) and the common taps, at 390 px, 4× CPU, slow 4G
+pnpm build:report   # what the first load holds: the entry's chunks with their biggest modules, and the on-demand chunks
 pnpm screenshots    # PNGs of every screen at 390 and 1440 px into screenshots/ (--dark, --both, --scale 1, --out DIR; see Screenshots)
 pnpm screenshots:compare   # shots on main and on your branch, a diff image per changed screen, contact sheets (see Screenshots)
 pnpm new route|component|endpoint <name>   # scaffolding with the wiring (see How to…)
@@ -264,6 +266,10 @@ Declare it in `wrangler.jsonc`, run `pnpm types` to regenerate `worker-configura
 2. Show it in the styleguide: in the matching section file under `routes/_app/-styleguide/` or a new one built from `./shared`'s `Section` and `Panel` (`pnpm new component` makes it), and list a new one in `styleguide.tsx`'s `toc` and page.
 3. Document it in `docs/design.md`.
 4. Icons: add the Phosphor icon to `components/ui/icons.tsx` and import it from there.
+
+## Measuring speed
+
+`pnpm perf` (scripts/perf.ts, helpers in scripts/lib/perf.ts) seeds a throwaway app, serves the production build and prints medians at 390 px with touch, 4× CPU and slow 4G: cold start (first visit, service worker without saved data, installed app resumed) and input-to-next-paint (Event Timing) plus tap-to-result for the common taps. CDP network throttling doesn't reach the service worker's own `/api` fetches, so resumed numbers leave out network time. `pnpm build:report` prints the bundle breakdown. The budgets that fail CI are in `e2e/performance.spec.ts`. Lessons: a `lazy()` component needs its own `<Suspense>`, or the whole screen waits for its chunk (the idea card's menu cost every first visit to Ideas 300 ms); the shell opens from the remembered session and checks it in the background; the Latin Fraunces file is pinned and subset (see app.css) and both Latin faces are preloaded in index.html.
 
 ## Design rules
 

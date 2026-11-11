@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { installProbe, median, onScreen, PHONE, type TapResult, tapLatency, throttle } from "../scripts/lib/perf.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
@@ -26,7 +27,7 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // composer are a lazy chunk of the idea and build pages, and the palette's "New comments" row loads with the palette.
 // Merging main (photo reads, spare parts) and comments together took the lists about 1 kB past their old limits: budgets +1 to +2 kB.
 const BUDGET_KB = {
-  "/sign-in": 214,
+  "/sign-in": 212,
   // Today pulls in the journal rows, the print card, the printer strip and the Up next row on top of what Ideas needs.
   "/today": 322,
   // The desktop account menu (its popover) and the change-password sheet load on demand, and no route checks its
@@ -249,5 +250,155 @@ test("an inbox of a hundred photo ideas scrolls smoothly on a mid-range phone", 
   expect(frames.long / frames.count, "share of frames over 50 ms").toBeLessThan(0.1);
 
   await clearIdeas(page);
+  await context.close();
+});
+
+/**
+ * How fast it feels (docs: AGENTS.md, "Measuring speed"; `pnpm perf` prints the whole table): on a phone profile
+ * (390 px, touch, 4× CPU) the taps people make most must paint a reaction within a frame or two, and the installed
+ * app must open from its caches. Budgets are the median of three, about twice what a quiet machine measures, so a
+ * busy CI runner holds them and a real regression (a lazy chunk that blocks a screen, a network wait before a
+ * tap shows) doesn't.
+ */
+const TAP_BUDGET_MS = { inp: 200, shown: 300 };
+
+test("the taps people make most answer quickly on a mid-range phone", async ({ browser, baseURL }) => {
+  test.setTimeout(180_000);
+  const context = await browser.newContext({ baseURL, ...PHONE });
+  await installProbe(context);
+  const page = await context.newPage();
+  await signIn(page);
+  await clearIdeas(page);
+  const headers = { Origin: origin(page) };
+  const ids: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const id = crypto.randomUUID();
+    ids.push(id);
+    await page.request.post("/api/items", { headers, data: { id, title: `Idea ${i + 1}`, note: "A quick sketch" } });
+  }
+  // Two of them become builds.
+  for (const id of ids.slice(0, 2))
+    await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+  await page.goto("/today");
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(2500);
+  await throttle(page, { network: false });
+
+  const tabs = page.getByRole("navigation", { name: "Sections" });
+  const heading = (title: string) =>
+    `document.querySelector('h1')?.textContent === ${JSON.stringify(title)} && !document.querySelector('.sg-skeleton')`;
+  const taps: Record<string, TapResult[]> = {};
+  const add = (name: string, tap: TapResult) => (taps[name] = [...(taps[name] ?? []), tap]);
+  const settle = () => page.waitForTimeout(400);
+
+  for (let run = 0; run < 3; run++) {
+    await settle();
+    add(
+      "capture button → sheet",
+      await tapLatency(page, () => tabs.getByRole("button", { name: "New idea" }).tap(), onScreen("[role=dialog]")),
+    );
+    await page.keyboard.press("Escape");
+    await page.locator("[role=dialog]").waitFor({ state: "detached" });
+    await settle();
+    add(
+      "tab Today → Ideas",
+      await tapLatency(page, () => tabs.getByRole("link", { name: "Ideas" }).tap(), heading("Ideas")),
+    );
+    await settle();
+    add(
+      "open an idea",
+      await tapLatency(
+        page,
+        () => page.locator('main a[href^="/ideas/"]').first().tap(),
+        `location.pathname.startsWith('/ideas/') && !!document.querySelector('textarea, input[type=text]')`,
+      ),
+    );
+    await page.goBack();
+    await tabs.getByRole("link", { name: "Builds" }).tap();
+    await page.locator('main a[href^="/builds/"]').first().waitFor();
+    await settle();
+    add(
+      "open a build",
+      await tapLatency(
+        page,
+        () => page.locator('main a[href^="/builds/"]').first().tap(),
+        `location.pathname.startsWith('/builds/') && !!document.querySelector('textarea, input[type=text]')`,
+      ),
+    );
+    await page.getByRole("button", { name: "Log attempt" }).first().waitFor();
+    await settle();
+    add(
+      "log attempt → sheet",
+      await tapLatency(
+        page,
+        () => page.getByRole("button", { name: "Log attempt" }).first().tap(),
+        onScreen("[role=dialog] [role=radio]"),
+      ),
+    );
+    await settle();
+    add(
+      "pick an outcome",
+      await tapLatency(
+        page,
+        () => page.getByRole("dialog").getByRole("radio", { name: "Worked" }).tap(),
+        `document.querySelector('[role=dialog] [role=radio][aria-checked=true]')?.textContent?.includes('Worked')`,
+      ),
+    );
+    await page.keyboard.press("Escape");
+    await page.locator("[role=dialog]").waitFor({ state: "detached" });
+    await tabs.getByRole("link", { name: "Today" }).tap();
+    await expect(page.locator("h1").first()).toHaveText("Today");
+  }
+  const rows: string[] = [];
+  const over: string[] = [];
+  for (const [name, results] of Object.entries(taps)) {
+    const inp = median(results.map((r) => r.inp));
+    const shown = median(results.map((r) => r.shown));
+    rows.push(
+      `${name.padEnd(24)} input to paint ${inp.toFixed(0).padStart(4)} ms, tap to result ${shown.toFixed(0).padStart(4)} ms`,
+    );
+    if (inp > TAP_BUDGET_MS.inp) over.push(`${name}: ${inp} ms to the next paint, budget ${TAP_BUDGET_MS.inp}`);
+    if (shown < 0 || shown > TAP_BUDGET_MS.shown)
+      over.push(`${name}: ${shown} ms to the result, budget ${TAP_BUDGET_MS.shown}`);
+  }
+  console.log(`Taps on a phone, 4× CPU:\n${rows.join("\n")}`);
+  expect(over, "slower than the budget").toEqual([]);
+  await clearIdeas(page);
+  await context.close();
+});
+
+test("the installed app opens from its caches, on a slow phone", async ({ browser, baseURL }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext({ baseURL, ...PHONE });
+  const user = SEED_USERS[0];
+  const signedIn = await context.request.post("/api/session", {
+    data: { username: user.username, password: SEED_PASSWORD },
+    headers: { Origin: new URL(baseURL ?? "").origin },
+  });
+  expect(signedIn.ok()).toBe(true);
+  await installProbe(
+    context,
+    `document.querySelector('h1')?.textContent === 'Today' && !document.querySelector('.sg-skeleton')`,
+  );
+  const first = await context.newPage();
+  await first.goto("/today");
+  await first.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await first.waitForLoadState("networkidle");
+  await first.waitForTimeout(2500);
+  await first.close();
+  const times: number[] = [];
+  for (let run = 0; run < 3; run++) {
+    const page = await context.newPage();
+    await throttle(page);
+    await page.goto("/today", { waitUntil: "commit" });
+    await page.waitForFunction(() => window.__perf.ready >= 0, undefined, { timeout: 30_000 });
+    times.push(await page.evaluate(() => window.__perf.ready));
+    await page.close();
+  }
+  const resumed = median(times);
+  console.log(`Installed app resumed, Today useful: ${resumed.toFixed(0)} ms (4× CPU, slow 4G)`);
+  // About 500 ms on a quiet machine; a first visit with nothing cached takes over 3 s on the same profile.
+  expect(resumed, "Today on a resumed app").toBeLessThan(1500);
   await context.close();
 });

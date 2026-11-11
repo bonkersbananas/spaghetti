@@ -1243,6 +1243,14 @@ export const shots: Shot[] = [
     },
   },
   // The design system's own pages for the building blocks: print progress and the outcome strip, spool rims.
+  {
+    name: "styleguide-pressed",
+    path: "/styleguide",
+    beforeShot: async (page) => {
+      await page.locator("#pressed").evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(300);
+    },
+  },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
