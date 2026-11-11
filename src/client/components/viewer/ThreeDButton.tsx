@@ -5,6 +5,7 @@ import { CubeIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
+import { usePrintProgress } from "@/lib/print-progress";
 
 /** The viewer's code (three.js and the scene) loads on first use, or when a finger comes near the control. */
 const importViewer = () => import("./PrintViewer");
@@ -58,13 +59,23 @@ export function canView3d(file: AttemptFileView | undefined): file is AttemptFil
 }
 
 /** A quiet "3D" pill on the plate picture. Opens the viewer; its code is fetched as a finger or the pointer nears it. */
+/** The attempt a file belongs to while it prints: what the viewer needs to follow it. */
+export interface PrintingAttempt {
+  id: string;
+  startedAt: number;
+  estimatedMinutes?: number;
+}
+
 export function ThreeDButton({
   file,
   fallbackColors,
+  printing,
   className,
 }: {
   file: AttemptFileView;
   fallbackColors?: (string | null | undefined)[];
+  /** Set while the attempt is printing: the viewer shows the layers printed so far solid and the rest as a ghost. */
+  printing?: PrintingAttempt;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -85,7 +96,15 @@ export function ThreeDButton({
         <CubeIcon size={12} weight="bold" aria-hidden />
         3D
       </button>
-      {open && <ViewerSheet open={open} onOpenChange={setOpen} file={file} fallbackColors={fallbackColors} />}
+      {open && (
+        <ViewerSheet
+          open={open}
+          onOpenChange={setOpen}
+          file={file}
+          fallbackColors={fallbackColors}
+          printing={printing}
+        />
+      )}
     </>
   );
 }
@@ -95,20 +114,32 @@ export function ViewerSheet({
   onOpenChange,
   file,
   fallbackColors,
-  live,
+  printing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: AttemptFileView;
   fallbackColors?: (string | null | undefined)[];
-  live?: { layer: number; totalLayers: number | null } | null;
+  printing?: PrintingAttempt;
 }) {
+  // The printer's own progress while the bridge reports it (null otherwise: a print it isn't following has no live layer).
+  const progress = usePrintProgress(printing?.id, printing?.startedAt ?? 0, printing?.estimatedMinutes);
+  const live =
+    printing && progress.live && progress.layer
+      ? { layer: progress.layer, totalLayers: progress.totalLayers ?? null }
+      : null;
   return (
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
       title="3D view"
-      description={file.plateCount > 1 ? `${file.name}, plate ${file.plate}` : file.name}
+      description={
+        live
+          ? `Printing now · layer ${live.layer}${live.totalLayers ? ` of ${live.totalLayers}` : ""}`
+          : file.plateCount > 1
+            ? `${file.name}, plate ${file.plate}`
+            : file.name
+      }
       desktop="dialog"
       fill
     >

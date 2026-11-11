@@ -18,6 +18,9 @@ export interface PrintProgressResult {
   state: PrintProgressState;
   /** "About 45 min left", "Done around 10:38", "Should be done by now", "On the bed now". */
   label: string;
+  /** The printer's own layer (counting from 1) and the file's total, when it reported them. */
+  layer?: number;
+  totalLayers?: number;
 }
 
 /** The clock time a print is due, written like every other time in the app (the journal's "9:00 AM"): no leading zero. */
@@ -78,7 +81,11 @@ export function livePrintProgress(live: LiveProgress | null | undefined, now: nu
   }
   const text = parts.join(" · ");
   const label = text ? text.charAt(0).toUpperCase() + text.slice(1) : `${Math.round(live.percent)}% done`;
-  return { fraction: Math.min(1, Math.max(0, live.percent / 100)), state: "running", label };
+  const layers =
+    live.layer !== null && live.totalLayers !== null && live.totalLayers > 0
+      ? { layer: live.layer, totalLayers: live.totalLayers }
+      : {};
+  return { fraction: Math.min(1, Math.max(0, live.percent / 100)), state: "running", label, ...layers };
 }
 
 /**

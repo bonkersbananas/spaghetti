@@ -72,6 +72,9 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
   const follow = useRef(true);
   const animation = useRef(0);
   const live0 = live ? live.layer - 1 : null;
+  // A print in progress shows where it is at once; the build-up is for finished prints.
+  const liveNow = useRef(false);
+  liveNow.current = live0 !== null;
 
   const setLayer = useCallback((index: number) => {
     scene.current?.setLayer(index);
@@ -139,7 +142,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, live, 
           setState("ready");
           setProgress(1);
           ps.fit();
-          if (!prefersReducedMotion() && !introSeen(fileId)) {
+          if (!prefersReducedMotion() && !introSeen(fileId) && !liveNow.current) {
             markIntroSeen(fileId);
             setBuilding(true);
             setReplays((n) => n + 1);
