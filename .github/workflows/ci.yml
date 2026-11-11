@@ -26,10 +26,10 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-  # The Playwright suite runs in shards, each on its own runner with its own dev and built servers (the
-  # config starts both). `--shard=i/n` splits the tests; the projects and the test list are unchanged.
+  # The Playwright suite runs in shards, each on its own runner with its own servers. scripts/e2e-shard.ts splits
+  # the spec files by measured time (e2e/timings.json: refresh with scripts/e2e-timings.ts); projects and tests are unchanged.
   e2e-shards:
-    name: Playwright shard ${{ matrix.shard }}/4
+    name: Playwright shard ${{ matrix.shard }}/5
     runs-on: ubuntu-latest
     # Playwright's own image has the browser and its system libraries installed, so the job never calls apt
     # (apt being unreachable took every shard down). Keep the tag on the @playwright/test version.
@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -48,7 +48,12 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:e2e --shard=${{ matrix.shard }}/4
+      # The files of this shard, balanced by how long they took (e2e/timings.json); only the shard with the specs
+      # that need the production build builds it.
+      - name: Run this shard's specs
+        run: |
+          if [ "$(node scripts/e2e-shard.ts ${{ matrix.shard }} 5 --needs-built)" = "0" ]; then export E2E_BUILT_SERVER=off; fi
+          pnpm test:e2e $(node scripts/e2e-shard.ts ${{ matrix.shard }} 5)
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
