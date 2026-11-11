@@ -1,144 +1,17 @@
 import { readFileSync } from "node:fs";
-import { gzipSync } from "node:zlib";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { installProbe, median, onScreen, PHONE, type TapResult, tapLatency, throttle } from "../scripts/lib/perf.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
- * Performance on the production build (the "built" projects): how much
- * JavaScript each screen loads first, and whether an inbox of a hundred
- * photo ideas scrolls smoothly on a mid-range phone (4× CPU throttling).
- * A heavy import that slips into the first load fails here rather than on
- * a phone.
+ * Speed on the production build, measured: whether an inbox of a hundred photo ideas scrolls smoothly, the taps
+ * people make most answer quickly and the installed app opens fast, on a mid-range phone profile (4× CPU). These need
+ * a quiet machine, so CI runs them only for pushes to main, in a job of their own with one worker (E2E_SPEED=1 adds
+ * this project; docs/ci.md). How much JavaScript each screen loads is e2e/first-load.spec.ts, on every pull request.
  */
 
 const origin = (page: Page) => new URL(page.url()).origin;
-
-/**
- * First-load JavaScript per screen, gzip, in kB. Each budget is the measured size plus 1 kB of headroom (the sum of
- * PERF_FILES=1's per-file sizes, rounded up, plus 1), so the next small feature doesn't have to raise it; a budget is
- * only raised after moving what isn't needed at first paint out of the first load (dynamic import, a lazy sheet, a file
- * of its own: see AGENTS.md and the notes on illustrations, Chip, sonner and lib/pantry-queries). PERF_FILES=1 prints
- * each screen's files with their gzip sizes: diff them against a main worktree to see what grew.
- * Most of the size is React, the router, TanStack Query, sheets (vaul and Radix), toasts and motion, which every
- * screen needs at once.
- *
- * Measured on 2026-11-11 (after merging main with the spool labels) after moving the pantry and printer queries out of lib/pantry.ts (about 2.4 kB of the
- * pantry's writes, weighing and photo upload had come into every screen's first load through the sidebar's printing card):
- *   /sign-in 193.4   /today 297.0   /ideas 285.9   /builds 284.8   /journal 285.1   /search 290.0   /pantry 294.9   /printer 295.0
- * (Sign-in keeps 194: 0.6 kB of headroom, the screen hasn't changed.)
- */
-// The shopping list adds its sidebar row (basket icon, two shortcuts, feed and cache wiring) to the shell, about 1 kB: after merging
-// main (spool labels, weeks, search questions) Ideas, Builds, Search and Pantry were a fraction over their limits, +1 kB each. Its page,
-// sheet, rows and illustration load on demand.
-const BUDGET_KB = {
-  "/sign-in": 194,
-  "/today": 299,
-  "/ideas": 288,
-  "/builds": 287,
-  "/journal": 287,
-  "/search": 293,
-  "/pantry": 297,
-  "/printer": 297,
-} as const;
-
-/**
- * The .js a screen needs before it first shows (its heading appears), with
- * sizes before and after gzip. What starts later (section code preloaded
- * once the tab bar is visible, motion's features) doesn't hold the screen up.
- */
-async function scriptsLoadedBy(page: Page, path: string, ready: () => Promise<void>) {
-  const bodies = new Map<string, Buffer>();
-  const pending: Promise<void>[] = [];
-  page.on("response", (response) => {
-    const url = new URL(response.url());
-    if (!url.pathname.endsWith(".js") || url.pathname === "/sw.js") return;
-    pending.push(
-      response
-        .body()
-        .then((body) => void bodies.set(url.pathname, body))
-        .catch(() => undefined),
-    );
-  });
-  await page.goto(path);
-  await ready();
-  await page.waitForLoadState("networkidle");
-  await Promise.all(pending);
-  const before = new Set(
-    await page.evaluate(() => {
-      const shown = (window as Window & { __shownAt?: number }).__shownAt ?? performance.now();
-      return performance
-        .getEntriesByType("resource")
-        .filter((entry) => entry.startTime <= shown)
-        .map((entry) => new URL(entry.name).pathname);
-    }),
-  );
-  const first = [...bodies].filter(([file]) => before.has(file));
-  const kb = (bytes: number) => bytes / 1024;
-  if (process.env.PERF_FILES) {
-    const sizes = first.map(([file, body]) => `${(gzipSync(body).length / 1024).toFixed(1).padStart(6)} ${file}`);
-    console.log(`${path}:\n${sizes.sort().reverse().join("\n")}`);
-  }
-  return {
-    files: first.map(([file]) => file),
-    zod: first.some(([, body]) => body.includes("ZodError")),
-    raw: kb(first.reduce((sum, [, body]) => sum + body.length, 0)),
-    gzip: kb(first.reduce((sum, [, body]) => sum + gzipSync(body).length, 0)),
-  };
-}
-
-test("each screen's first load stays within its JavaScript budget, without the rarely used parts", async ({
-  browser,
-  baseURL,
-}) => {
-  test.setTimeout(120_000);
-  const rows: string[] = [];
-  const over: string[] = [];
-  for (const [path, budget] of Object.entries(BUDGET_KB)) {
-    // A fresh context per screen, with no service worker: what a first visit downloads.
-    const context = await browser.newContext({ baseURL, serviceWorkers: "block" });
-    if (path !== "/sign-in") {
-      const user = SEED_USERS[0];
-      const response = await context.request.post("/api/session", {
-        data: { username: user.username, password: SEED_PASSWORD },
-        headers: { Origin: new URL(baseURL ?? "").origin },
-      });
-      expect(response.ok()).toBe(true);
-    }
-    // Nothing that waits for an idle moment (warming the palette's code, photos for offline) counts as first load.
-    await context.addInitScript(() => {
-      window.requestIdleCallback = () => 0;
-      // When the screen first shows: its heading is in the page.
-      const observer = new MutationObserver(() => {
-        if (!document.querySelector("h1")) return;
-        (window as Window & { __shownAt?: number }).__shownAt = performance.now();
-        observer.disconnect();
-      });
-      observer.observe(document, { childList: true, subtree: true });
-    });
-    const page = await context.newPage();
-    const { files, zod, raw, gzip } = await scriptsLoadedBy(page, path, async () => {
-      await expect(page.locator("h1").first()).toBeVisible();
-    });
-    if (process.env.PERF_FILES) console.log(path, files.map((f) => f.split("/").pop()).join(" "));
-    rows.push(`${path.padEnd(10)} ${raw.toFixed(0).padStart(5)} kB  ${gzip.toFixed(0).padStart(4)} kB gzip`);
-    // The styleguide, the .3mf reader, the command palette and the shortcut list wait until they are needed
-    // (nothing loads them until asked, except the palette's idle prefetch, switched off here).
-    for (const lazy of ["styleguide", "/read-", "CommandPalette", "ShortcutOverlay"]) {
-      expect(
-        files.filter((file) => file.includes(lazy) && !file.includes("read-only")),
-        `${path} loads ${lazy}`,
-      ).toEqual([]);
-    }
-    // zod is for the Worker; a route's validateSearch loads with the app, so the client checks search params by hand.
-    expect(zod, `${path} loads zod`).toBe(false);
-    over.push(...(gzip > budget ? [`${path}: ${gzip.toFixed(0)} kB gzip, budget ${budget} kB`] : []));
-    await context.close();
-  }
-  console.log(`First-load JavaScript per screen:\n${rows.join("\n")}`);
-  expect(over, "over budget").toEqual([]);
-});
 
 test("an inbox of a hundred photo ideas scrolls smoothly on a mid-range phone", async ({ browser, baseURL }) => {
   test.setTimeout(240_000);

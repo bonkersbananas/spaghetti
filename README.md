@@ -41,7 +41,7 @@ Sessions last 400 days (the browser maximum) and renew with use, so a phone stay
 pnpm lint         # Biome, plus the design lint (tokens only, see docs/design.md)
 pnpm typecheck    # tsc for the client, the Worker and the Node scripts
 pnpm test         # Vitest: API tests in workerd with real D1 and R2, unit tests in Node
-pnpm test:e2e     # Playwright smoke test at 390 and 1440 px against the dev server
+pnpm test:e2e     # Playwright at 390 and 1440 px against the production build, one server per worker
 pnpm format       # fix formatting and import order
 ```
 

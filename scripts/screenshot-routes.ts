@@ -1031,6 +1031,38 @@ export const shots: Shot[] = [
     cleanup: closeDialog,
   },
   {
+    // The tugboat's attempt that is printing: the printer is at layer 140, so the rest of the file is a faint ghost.
+    name: "viewer-live",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.request.put("/api/printer/bridge", {
+        headers: { Origin: new URL(page.url()).origin },
+        data: {
+          printerState: "printing",
+          progress: {
+            attemptId: "5eed0000-0000-4000-8000-0000000a0003",
+            percent: 44,
+            remainingMinutes: 105,
+            layer: 140,
+            totalLayers: 317,
+          },
+        },
+      });
+      await page.reload();
+      await page
+        .locator(`[data-attempt-id="5eed0000-0000-4000-8000-0000000a0003"]`)
+        .getByRole("button", { name: "See tugboat.gcode.3mf in 3D" })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "3D view" });
+      await dialog.getByText("Printing now · layer 140 of 317").waitFor({ timeout: 30_000 });
+      await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
+  {
     // The same print coloured by feature, scrubbed back to half its height.
     name: "viewer-feature",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,

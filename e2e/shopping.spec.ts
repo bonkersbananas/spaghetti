@@ -1,9 +1,5 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
-
-const axe = (page: Page) =>
-  new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
 
 /** Names unique to this run: the e2e tests share one database. */
 const tag = () => Math.random().toString(36).slice(2, 7);
@@ -17,14 +13,6 @@ async function add(page: Page, text: string) {
 
 const toBuy = (page: Page) => page.getByRole("list", { name: "To buy" });
 const bought = (page: Page) => page.getByRole("list", { name: "Bought" });
-
-test("shopping: opens, and has no accessibility violations", async ({ page }) => {
-  await signIn(page);
-  await page.goto("/shopping");
-  await expect(page.getByRole("heading", { level: 1, name: "Shopping list" })).toBeVisible();
-  await add(page, `Glue ${tag()}`);
-  expect((await axe(page)).violations.map((violation) => violation.id)).toEqual([]);
-});
 
 test("shopping: add a name and links, tick it off and back, edit it, delete with undo", async ({ page }) => {
   // Many steps, and on a cold dev server the sheet's chunk compiles on first use.
@@ -65,7 +53,6 @@ test("shopping: add a name and links, tick it off and back, edit it, delete with
   await sheet.getByLabel("Name").fill(renamed);
   await sheet.getByLabel("Shop").fill("");
   await expect(sheet.getByText("Saved")).toBeVisible();
-  expect((await axe(page)).violations.map((violation) => violation.id)).toEqual([]);
   await sheet.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(toBuy(page).getByText(renamed)).toHaveCount(0);

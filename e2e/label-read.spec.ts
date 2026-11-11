@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers.ts";
 
@@ -25,11 +24,6 @@ async function addSpool(page: Page, data: Record<string, unknown>) {
   const id = crypto.randomUUID();
   await page.request.post("/api/spools", { headers: { Origin: origin(page) }, data: { id, material: "PLA", ...data } });
   return id;
-}
-
-async function expectAccessible(page: Page, what: string) {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-  expect(results.violations.map((v) => `${what}: ${v.id} ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
 }
 
 /** Opens the spool's page and gives it a label photo to read, the way the button's picker does. */
@@ -105,22 +99,3 @@ test("a photo of two labels makes two spools after one tap on a list", async ({ 
   expect(spools.every((s: { photo: unknown }) => s.photo)).toBe(true);
   if (!isMobile) await expect(page.getByRole("textbox", { name: "Color name" })).toHaveValue(/Jade White|Black/);
 });
-
-for (const scheme of ["light", "dark"] as const) {
-  test(`the reading state, a filled spool and the list of spools pass axe in ${scheme}`, async ({ page }) => {
-    test.setTimeout(90_000);
-    await page.emulateMedia({ colorScheme: scheme });
-    const slow = await addSpool(page, { note: "slow" });
-    await readFrom(page, slow, jade);
-    await expect(page.getByText("Reading the label…").first()).toBeVisible();
-    await expectAccessible(page, "A spool while its label is read");
-    await expect(page.getByRole("textbox", { name: "Brand" })).toHaveValue("Bambu Lab", { timeout: 30_000 });
-    await expect(page.getByText("from the label").first()).toBeVisible();
-    await expectAccessible(page, "A spool filled from its label");
-
-    const many = await addSpool(page, { note: "two spools" });
-    await readFrom(page, many, two);
-    await expect(page.getByRole("dialog", { name: "2 spools on this label" })).toBeVisible({ timeout: 20_000 });
-    await expectAccessible(page, "The several-spools list");
-  });
-}

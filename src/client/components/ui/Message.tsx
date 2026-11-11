@@ -135,7 +135,7 @@ export function NewDivider() {
   );
 }
 
-// --- Reactions (decision 0037). Kept in this file, not one of their own: a new module in this lazy chunk renames it,
+// --- Reactions (decision 0038). Kept in this file, not one of their own: a new module in this lazy chunk renames it,
 // and the changed name in the entry's preload map costs every screen's first load a few bytes. ---
 
 /** Each reaction's glyph and its color: a little sticker, drawn filled. */

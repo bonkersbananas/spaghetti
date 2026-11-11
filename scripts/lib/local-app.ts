@@ -41,7 +41,13 @@ export async function startBuiltServer({
   port,
   stateDir,
   claudeUrl,
-}: { port: number; stateDir: string } & FakeClaude): Promise<DevServer> {
+  inspectorPort,
+}: {
+  port: number;
+  stateDir: string;
+  /** wrangler's devtools port (default 9229): servers that start side by side each need their own. */
+  inspectorPort?: number;
+} & FakeClaude): Promise<DevServer> {
   return waitForServer(
     spawn(
       join(root, "node_modules/.bin/wrangler"),
@@ -56,6 +62,10 @@ export async function startBuiltServer({
         stateDir,
         "--show-interactive-dev-session=false",
         "--live-reload=false",
+        // The Worker sees the address the browser opened, as on the dev server: by default wrangler rewrites the Origin
+        // header to the route's host (spaghetti.day), and a passkey made at localhost can't be verified.
+        "--infer-origin-from-routes=false",
+        ...(inspectorPort ? ["--inspector-port", String(inspectorPort)] : []),
         ...localPasskeyVars,
         ...(claudeUrl
           ? [

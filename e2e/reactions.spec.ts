@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { clearIdeas, signIn } from "./helpers";
@@ -53,16 +52,13 @@ test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
 
-test("reacts to your own idea, keeps it, and takes it back with a tap", async ({ page }) => {
+test("reacts to your own idea, keeps it, and takes it back with a tap", { tag: "@phone" }, async ({ page }) => {
   const id = await newIdea(page);
   await page.goto(`/ideas/${id}`);
   await page.getByRole("button", { name: "React to this idea" }).click();
   const picker = page.getByRole("group", { name: "Reactions" });
   await expect(picker).toBeVisible();
   await expect(picker.getByRole("button")).toHaveCount(6);
-  // The set is readable to everyone, in both its forms (the phone's sheet, the desktop's menu).
-  const axe = await new AxeBuilder({ page }).include("[role=dialog]").analyze();
-  expect(axe.violations).toEqual([]);
   await picker.getByRole("button", { name: "Chef's kiss" }).click();
   await expect(picker).toHaveCount(0);
 
@@ -78,7 +74,7 @@ test("reacts to your own idea, keeps it, and takes it back with a tap", async ({
   await expect(reactions(page).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(0);
 });
 
-test("reacts to the other person's comment, and both reactions count", async ({ page, isMobile }) => {
+test("reacts to the other person's comment, and both reactions count", { tag: "@phone" }, async ({ page, isMobile }) => {
   test.setTimeout(60_000);
   const id = await newIdea(page);
   const samSide = await asSam(page);

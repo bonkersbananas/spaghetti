@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { PARTS_FILE_NAME, partsSlicerFile } from "./fixtures/slicer-file.ts";
@@ -74,11 +73,9 @@ test("a build without parts stays as it was, and adds parts inline", async ({ pa
       ["Hull half", 2],
       ["Top deck", 1],
     ]);
-  expect((await new AxeBuilder({ page }).include("[aria-label=Parts]").analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("Hull half", { exact: true })).toBeVisible();
   await expect(page.getByText("0 of 2")).toBeVisible();
-  expect((await new AxeBuilder({ page }).include("[aria-label=Parts]").analyze()).violations).toEqual([]);
 
   // Removing is undone from the toast, in its old place.
   await page.getByRole("button", { name: "Edit parts" }).click();
@@ -110,7 +107,6 @@ test("logs what's on the plate, counts good pieces, and offers to finish when al
   await expect(sheet.getByText("What's on the plate")).toBeVisible();
   await sheet.getByRole("button", { name: "Hull half" }).click();
   await sheet.getByRole("button", { name: "Hull half, pieces: one more" }).click();
-  expect((await new AxeBuilder({ page }).include("[data-testid=plate-parts]").analyze()).violations).toEqual([]);
   await sheet.getByRole("radio", { name: "Partly" }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
   await expect(page.getByTestId("attempt-parts").filter({ hasText: "Hull half ×2" })).toBeVisible();

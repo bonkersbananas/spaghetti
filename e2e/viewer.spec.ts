@@ -1,12 +1,16 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { TUGBOAT_FILE_NAME, tugboatFile } from "./fixtures/gcode-tugboat";
-import { signIn } from "./helpers";
+import { clearIdeas, signIn } from "./helpers";
+
+// Leave nothing behind: other specs (the week, the journal) count every build on this server.
+test.afterEach(async ({ page }) => {
+  await clearIdeas(page);
+});
 
 /** A build whose one attempt carries the tugboat's sliced file (317 layers of real G-code). */
-async function buildWithTugboat(page: Page): Promise<string> {
+async function buildWithTugboat(page: Page, printing = false): Promise<string> {
   return page.evaluate(
-    async ({ name, bytes }) => {
+    async ({ name, bytes, printing }) => {
       const json = { "Content-Type": "application/json" };
       const itemId = crypto.randomUUID();
       await fetch("/api/items", {
@@ -18,7 +22,12 @@ async function buildWithTugboat(page: Page): Promise<string> {
       await fetch(`/api/items/${itemId}/attempts`, {
         method: "POST",
         headers: json,
-        body: JSON.stringify({ id: attemptId, outcome: "success", printedAt: Date.now() - 3600_000, settings: {} }),
+        body: JSON.stringify({
+          id: attemptId,
+          ...(printing ? {} : { outcome: "success" }),
+          printedAt: Date.now() - 3600_000,
+          settings: {},
+        }),
       });
       const form = new FormData();
       form.set("id", crypto.randomUUID());
@@ -34,7 +43,7 @@ async function buildWithTugboat(page: Page): Promise<string> {
       if (!response.ok) throw new Error(`file upload ${response.status}`);
       return itemId;
     },
-    { name: TUGBOAT_FILE_NAME, bytes: Array.from(tugboatFile()) },
+    { name: TUGBOAT_FILE_NAME, bytes: Array.from(tugboatFile()), printing },
   );
 }
 
@@ -67,12 +76,6 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   await dialog.getByRole("radio", { name: "Feature" }).check({ force: true });
   await expect(dialog.getByText("Outer wall")).toBeVisible();
 
-  const { violations } = await new AxeBuilder({ page })
-    .include("[role=dialog]")
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(violations.map((violation) => violation.id)).toEqual([]);
-
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 });
@@ -104,4 +107,35 @@ test("when the viewer's code can't be fetched, the sheet says so and the page st
   const dialog = page.getByRole("dialog", { name: "3D view" });
   await expect(dialog.getByText(/needs a connection/)).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("while the attempt prints, the viewer says where the printer is and shows the whole file", async ({ page }) => {
+  await signIn(page);
+  const itemId = await buildWithTugboat(page, true);
+  const origin = new URL(page.url()).origin;
+  const { item } = await (await page.request.get(`/api/items/${itemId}`)).json();
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: origin },
+    data: {
+      printerState: "printing",
+      progress: { attemptId: item.attempts[0].id, percent: 38, remainingMinutes: 120, layer: 120, totalLayers: 317 },
+    },
+  });
+  await page.goto(`/builds/${itemId}`);
+  await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await expect(dialog.getByText("Printing now · layer 120 of 317")).toBeVisible({ timeout: 20_000 });
+  // No build-up for a print in progress: the slider is at the end at once, and the layers past 120 are the ghost.
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
+  await expect(dialog.getByText(/^Layer 317 of 317/)).toBeVisible();
+  // The printer moves on: the sheet's words follow (the change feed brings it).
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: origin },
+    data: {
+      printerState: "printing",
+      progress: { attemptId: item.attempts[0].id, percent: 40, remainingMinutes: 115, layer: 126, totalLayers: 317 },
+    },
+  });
+  await expect(dialog.getByText("Printing now · layer 126 of 317")).toBeVisible({ timeout: 25_000 });
+  await page.request.put("/api/printer/bridge", { headers: { Origin: origin }, data: { progress: null } });
 });

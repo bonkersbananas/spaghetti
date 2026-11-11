@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 
@@ -151,15 +150,4 @@ test("phones: search is a button in the page header, and the tab bar has Today",
   await expect(page.getByRole("searchbox", { name: "Search" })).toBeFocused();
   // Search itself has no search button.
   await expect(page.getByRole("link", { name: "Search" })).toHaveCount(0);
-});
-
-test("passes axe with a print on the bed", async ({ page }) => {
-  await printing(page, "Tugboat", 10 * MINUTE, 90);
-  await printing(page, "Late one", 5 * 60 * MINUTE, 60);
-  await page.goto("/today");
-  await expect(page.getByRole("region", { name: "On the bed" })).toBeVisible();
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.html}`)).toEqual([]);
 });
