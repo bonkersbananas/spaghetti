@@ -58,7 +58,6 @@ export function canView3d(file: AttemptFileView | undefined): file is AttemptFil
   );
 }
 
-/** A quiet "3D" pill on the plate picture. Opens the viewer; its code is fetched as a finger or the pointer nears it. */
 /** The attempt a file belongs to while it prints: what the viewer needs to follow it. */
 export interface PrintingAttempt {
   id: string;
@@ -66,6 +65,7 @@ export interface PrintingAttempt {
   estimatedMinutes?: number;
 }
 
+/** A quiet "3D" pill on the plate picture. Opens the viewer; its code is fetched as a finger or the pointer nears it. */
 export function ThreeDButton({
   file,
   fallbackColors,
