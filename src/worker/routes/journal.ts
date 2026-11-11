@@ -156,3 +156,6 @@ export const journalRoutes = new Hono<AppEnv>()
       },
     });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { journalQuery, summaryQuery };

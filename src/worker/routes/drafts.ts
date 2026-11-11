@@ -8,6 +8,7 @@ import { draftsEnabled, runDraft, startDraft, toApiDraft, undoDraft } from "../d
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
+import { secretKeySource } from "../webhooks/secrets.ts";
 
 const body = z.object({ url: z.string().max(2000).optional() });
 
@@ -18,7 +19,11 @@ const body = z.object({ url: z.string().max(2000).optional() });
  */
 export const draftRoutes = new Hono<AppEnv>()
   .get("/features", (c) =>
-    c.json<FeaturesResponse>({ drafts: draftsEnabled(c.env), photoReads: photoReadsEnabled(c.env) }),
+    c.json<FeaturesResponse>({
+      drafts: draftsEnabled(c.env),
+      photoReads: photoReadsEnabled(c.env),
+      webhooks: Boolean(secretKeySource(c.env)),
+    }),
   )
   /**
    * Asks for the draft and, because the browser keeps this request open, does it here: an Opus call that reads a
@@ -53,3 +58,6 @@ export const draftRoutes = new Hono<AppEnv>()
     if (!done) return apiError(c, 404, "not_found", "There's no draft to take back.");
     return c.json<DraftResponse>({ draft: null });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { body as draftBody };

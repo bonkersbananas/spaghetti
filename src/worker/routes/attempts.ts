@@ -475,3 +475,6 @@ export const attemptRoutes = new Hono<AppEnv>()
     if (!attempt) return apiError(c, 404, "not_found", "That attempt is gone for good.");
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createAttempt, finishAttempt, updateAttempt };

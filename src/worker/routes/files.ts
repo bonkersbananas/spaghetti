@@ -242,3 +242,6 @@ export const fileRoutes = new Hono<AppEnv>().get("/:id/:part?", async (c) => {
   c.header("Content-Length", String(object.size));
   return c.body(object.body);
 });
+
+/** For the OpenAPI document (worker/openapi). */
+export { fileFields };

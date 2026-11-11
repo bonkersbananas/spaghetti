@@ -53,8 +53,8 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] Agent identities and scoped tokens ("via Claude for Alex" in the journal): named agents with bearer tokens in four scopes, shown quietly as "via"; see [docs/api.md](api.md)
 - [x] MCP server on the Worker: search, what worked, a build's story, capture idea, start, log and finish attempt, spools and slots; see [docs/mcp.md](mcp.md) and [the decision](decisions/0014-mcp-hand-written-stateless.md)
 - [ ] OAuth for the MCP server, so clients that insist on it can connect (tokens work today)
-- [ ] OpenAPI from the zod schemas (a build's whole story as markdown is done: `GET /api/builds/:id/story.md`)
-- [ ] Events: a cursor and webhooks (the cursor is done: the change feed, `GET /api/changes`; webhooks are left)
+- [x] OpenAPI from the zod schemas: `GET /api/openapi.json`, per caller's scopes, with a test that every route is described (a build's whole story as markdown: `GET /api/builds/:id/story.md`)
+- [x] Events: a cursor and webhooks (the change feed, `GET /api/changes`, and signed, retried webhooks on it, managed on the Agents page; decision 0025)
 - [ ] Resident agents, suggest-only: failure coach, idea scout, label photo to spool fields, weekly digest
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 

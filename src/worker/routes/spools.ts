@@ -437,3 +437,6 @@ export const spoolRoutes = new Hono<AppEnv>()
       ),
     });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { createSpool, photoFields as spoolPhotoFields, updateSpool, weighBody, weightBody };

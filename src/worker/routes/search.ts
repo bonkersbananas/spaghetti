@@ -35,6 +35,7 @@ export const filters = z.object({
   person: z.string().max(64).optional(),
 });
 
+const whatWorkedQuery = z.object({ item: z.uuid(), material: material.optional() });
 const searchQuery = filters.extend({
   q: z.string().max(200).optional(),
   tag: z
@@ -379,7 +380,7 @@ export const searchRoutes = new Hono<AppEnv>()
    * first: what to start from. Without a material, only the build's own.
    */
   .get("/what-worked", async (c) => {
-    const parsed = z.object({ item: z.uuid(), material: material.optional() }).safeParse(c.req.query());
+    const parsed = whatWorkedQuery.safeParse(c.req.query());
     if (!parsed.success) return apiError(c, 400, "invalid", "That question couldn't be read.");
     const { item, material: type } = parsed.data;
     const rows = await all<{ id: string; same: number }>(c.env, {
@@ -398,3 +399,6 @@ export const searchRoutes = new Hono<AppEnv>()
       recipes: type ? recipesFor(await liveRecipes(c.var.db), { material: type }).slice(0, 3) : [],
     });
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { searchQuery, whatWorkedQuery };

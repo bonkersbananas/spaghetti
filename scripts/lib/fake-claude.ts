@@ -11,7 +11,7 @@
  * partly good one, anything else worked.
  */
 import { readFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join } from "node:path";
 import { root } from "./wrangler.ts";
 
@@ -88,11 +88,56 @@ async function answerPhoto(body: string, response: import("node:http").ServerRes
   );
 }
 
+/** What the webhook receiver below was sent: the signature headers and the body, for the tests to check. */
+export interface ReceivedHook {
+  path: string;
+  signature: string;
+  timestamp: string;
+  delivery: string;
+  body: string;
+}
+
+/**
+ * Also a stand-in for a webhook receiver (the Worker may post to http://127.0.0.1 only while it is pointed at these
+ * stand-ins: WEBHOOKS_ALLOW_LOCAL). POST /hooks/ok answers 200, /hooks/broken answers 500; GET /hooks lists what
+ * arrived and DELETE /hooks forgets it.
+ */
+function receiveHook(request: IncomingMessage, response: ServerResponse, received: ReceivedHook[]) {
+  const path = request.url ?? "";
+  if (request.method === "GET") {
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify(received));
+    return;
+  }
+  if (request.method === "DELETE") {
+    received.length = 0;
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+  let body = "";
+  request.on("data", (chunk) => (body += chunk));
+  request.on("end", () => {
+    const header = (name: string) => String(request.headers[name] ?? "");
+    received.push({
+      path,
+      signature: header("spaghetti-signature"),
+      timestamp: header("spaghetti-timestamp"),
+      delivery: header("spaghetti-delivery"),
+      body,
+    });
+    response.statusCode = path.endsWith("/broken") ? 500 : 200;
+    response.end();
+  });
+}
+
 export async function startFakeClaude(port: number): Promise<{ url: string; stop: () => void; server: Server }> {
   const base = `http://127.0.0.1:${port}`;
   // The model's pictures, served from here (the Worker allows this one origin for pictures while it talks to a stand-in).
   const pictures = [1, 2, 3].map((n) => readFileSync(join(root, `e2e/fixtures/model-${n}.jpg`)));
+  const received: ReceivedHook[] = [];
   const server = createServer((request, response) => {
+    if (request.url?.startsWith("/hooks")) return receiveHook(request, response, received);
     const picture = /^\/images\/(\d)\.jpg$/.exec(request.url ?? "");
     if (picture) {
       response.setHeader("Content-Type", "image/jpeg");

@@ -148,3 +148,6 @@ export const pushRoutes = new Hono<AppEnv>()
       return apiError(c, 502, "push_failed", "The push service didn't take it. Try again in a moment.");
     return c.body(null, 204);
   });
+
+/** For the OpenAPI document (worker/openapi). */
+export { change as pushChange, subscribe, target as pushTarget };
