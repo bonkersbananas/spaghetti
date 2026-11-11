@@ -75,7 +75,8 @@ export function Upkeep() {
                 <span className="text-small text-ink-faint tabular truncate">{upkeepRowText(task)}</span>
               </button>
               <Button
-                variant="secondary"
+                // Raised only where something is due; the rest are a quiet word, so nothing looks due that isn't.
+                variant={task.due ? "secondary" : "quiet"}
                 size="sm"
                 icon={CheckIcon}
                 disabled={readOnly}
