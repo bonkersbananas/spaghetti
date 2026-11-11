@@ -27,6 +27,7 @@ export const WEBHOOK_KIND_LABELS: Record<WebhookKind, string> = {
   tag: "Tags",
   agent: "Agents",
   person: "People",
+  wishlist: "Wishlists",
 };
 
 /** Whether a webhook that asked for `kinds` wants a change of this entity. */

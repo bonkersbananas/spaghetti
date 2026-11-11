@@ -86,7 +86,15 @@ export interface PendingFinish {
 export interface OutboxEntry {
   itemId: string;
   /** Present until the item exists on the server. */
-  create?: { title: string | null; note: string; createdAt: number; createdBy: string; stage?: ItemStage };
+  create?: {
+    title: string | null;
+    note: string;
+    createdAt: number;
+    createdBy: string;
+    stage?: ItemStage;
+    /** The title came with a share (the page's own), not from the person: a draft may replace it. Typing one clears this. */
+    titleShared?: boolean;
+  };
   /** Attempts to log, sent after the item and before the photos. */
   attempts?: PendingAttempt[];
   /** Slicer files for attempts, sent after the attempts. */
@@ -113,7 +121,8 @@ export interface OutboxState {
 }
 
 export interface OutboxHandlers {
-  itemSaved: (item: Item) => void;
+  /** `sharedTitle`: the title the idea still has from a share, which a draft may replace. */
+  itemSaved: (item: Item, info: { sharedTitle: string | null }) => void;
   attemptSaved: (attempt: Attempt) => void;
   /** A queued finish landed. `finished` is false when someone else had finished that print first. */
   attemptFinished: (attempt: Attempt, result: { finished: boolean; pending: PendingFinish; photos: number }) => void;
@@ -309,7 +318,11 @@ class Outbox {
   updatePending(itemId: string, changes: { title?: string | null; note?: string; stage?: ItemStage }): boolean {
     const entry = this.entry(itemId);
     if (!entry?.create) return false;
-    void this.save({ ...entry, create: { ...entry.create, ...changes } });
+    const typedTitle = changes.title !== undefined;
+    void this.save({
+      ...entry,
+      create: { ...entry.create, ...changes, ...(typedTitle ? { titleShared: false } : {}) },
+    });
     return true;
   }
 
@@ -492,7 +505,8 @@ class Outbox {
         json: { title: current.create.title, note: current.create.note, stage },
       }).catch(() => ({ item })));
     }
-    this.handlers.itemSaved?.(item);
+    const sharedTitle = this.entry(entry.itemId)?.create?.titleShared ? item.title : null;
+    this.handlers.itemSaved?.(item, { sharedTitle });
     const latest = this.entry(entry.itemId);
     if (latest) await this.save({ ...latest, create: undefined });
   }

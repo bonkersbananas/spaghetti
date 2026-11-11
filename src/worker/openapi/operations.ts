@@ -29,6 +29,7 @@ import { createSpool, spoolPhotoFields, updateSpool, weighBody, weightBody } fro
 import { createTag } from "../routes/tags.ts";
 import { createTask, logBody, updateTask, upkeepPhotoFields } from "../routes/upkeep.ts";
 import { createWebhook } from "../routes/webhooks.ts";
+import { addToWishlist, updateWishlist, wishlistOrder } from "../routes/wishlists.ts";
 import {
   Agent,
   Attempt,
@@ -43,6 +44,7 @@ import {
   Photo,
   Spool,
   Webhook,
+  Wishlist,
 } from "./schemas.ts";
 
 /**
@@ -371,6 +373,11 @@ export const operations: Record<string, Operation> = {
       404: "not_found: no such idea, or drafting isn't set up.",
     },
   },
+  "POST /items/:id/draft/pictures": {
+    summary: "Gets the pictures of a drafted idea that has none (tries the model page's pictures again).",
+    response: z.object({ draft: z.looseObject({}).nullable(), stored: z.number().int() }),
+    errors: { 404: "not_found: no draft, the idea has pictures already, or drafting isn't set up." },
+  },
   "DELETE /items/:id/draft": {
     summary: "Drops Claude's draft of an idea.",
     response: z.object({ draft: z.null() }),
@@ -448,6 +455,35 @@ export const operations: Record<string, Operation> = {
     response: one("attempt", Attempt),
     status: 201,
     errors: { 404: notFound("build") },
+  },
+
+  // Wishlists: everyone reads them; each person changes only their own, and only as a person.
+  "GET /wishlists": {
+    summary: "Everyone's wishlist of top ideas, yours first; a private one comes with no entries.",
+    response: list("wishlists", Wishlist),
+  },
+  "PUT /wishlists/me/items/:itemId": {
+    summary: "Puts an idea on your wishlist, at the end or at `position`; adding it again changes nothing.",
+    body: addToWishlist,
+    response: one("wishlist", Wishlist),
+    errors: {
+      404: notFound("idea"),
+      409: "not_an_idea: it is a build now; full: the list holds 50.",
+    },
+  },
+  "DELETE /wishlists/me/items/:itemId": {
+    summary: "Takes an idea off your wishlist.",
+    response: one("wishlist", Wishlist),
+  },
+  "PUT /wishlists/me/order": {
+    summary: "Sets your wishlist's order: these first, in this order; the rest keep their turn after them.",
+    body: wishlistOrder,
+    response: one("wishlist", Wishlist),
+  },
+  "PATCH /wishlists/me": {
+    summary: "Shares your wishlist with the others who sign in (the default) or keeps it private.",
+    body: updateWishlist,
+    response: one("wishlist", Wishlist),
   },
 
   // Comments.

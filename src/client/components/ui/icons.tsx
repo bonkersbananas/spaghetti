@@ -92,6 +92,7 @@ export {
   SlidersHorizontal as SettingsIcon,
   Sparkle as SparkleIcon,
   Stack as LayersIcon,
+  Star as WishIcon,
   Sun as SunIcon,
   Tag as TagIcon,
   Thermometer as TemperatureIcon,

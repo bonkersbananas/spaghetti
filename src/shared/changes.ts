@@ -20,6 +20,7 @@ export const PUBLIC_CHANGE_ENTITIES = [
   "tag",
   "agent",
   "person",
+  "wishlist",
 ] as const;
 /**
  * Changes about how people sign in (a sign-in link used, an invite made, a passkey added). They show in the app's
@@ -52,7 +53,8 @@ export interface Change {
   entity: ChangeEntity;
   /**
    * The thing's id: a uuid for items, attempts, photos, files, spools, recipes and shopping list things; the slot
-   * name ("A1", "Ext") for a slot; "x2d" for the printer; "<kind>:<slug>" for a tag.
+   * name ("A1", "Ext") for a slot; "x2d" for the printer; "<kind>:<slug>" for a tag; the
+   * owner's user id for a wishlist (never which idea, so a private list stays private).
    */
   id: string;
   /**

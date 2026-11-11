@@ -16,3 +16,8 @@ export function useMediaQuery(query: string): boolean {
 export function useIsDesktop(): boolean {
   return useMediaQuery("(min-width: 48rem)");
 }
+
+/** Matches the lg breakpoint (64rem = 1024 px): room for columns side by side beside the sidebar. */
+export function useIsWide(): boolean {
+  return useMediaQuery("(min-width: 64rem)");
+}

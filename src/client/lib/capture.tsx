@@ -308,7 +308,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       });
       void outbox.add({
         itemId,
-        create: { title: name, note, createdAt: now, createdBy: user.id },
+        create: { title: name, note, createdAt: now, createdBy: user.id, titleShared: !!name },
         photos: pending,
         queuedAt: now,
       });

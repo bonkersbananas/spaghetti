@@ -21,6 +21,7 @@ import { subscribeToSeen } from "./seen-store";
  */
 export const PERSISTED_ROOTS = [
   "items",
+  "wishlists",
   "tags",
   "people",
   "journal",

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChecklistRow, checklistSurface, DragHandle, TickBox } from "@/components/ui/Checklist";
+import { ChecklistRow, checklistSurface, TickBox } from "@/components/ui/Checklist";
+import { DragHandle } from "@/components/ui/DragHandle";
 import { PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
 import { Label, Panel, Section } from "./shared";
@@ -34,7 +35,7 @@ export function ChecklistSection() {
             <Label>Disabled</Label>
           </div>
           <div className="flex flex-col items-center gap-1">
-            <DragHandle label="Move a row" onPointerDown={() => undefined} onMove={() => undefined} />
+            <DragHandle size="line" label="Move a row" onPointerDown={() => undefined} onMove={() => undefined} />
             <Label>Drag handle</Label>
           </div>
           <div className="flex flex-col items-start gap-1">
@@ -79,7 +80,12 @@ export function ChecklistSection() {
                       )
                     }
                     handle={
-                      <DragHandle label={`Move ${row.name}`} onPointerDown={() => undefined} onMove={() => undefined} />
+                      <DragHandle
+                        size="line"
+                        label={`Move ${row.name}`}
+                        onPointerDown={() => undefined}
+                        onMove={() => undefined}
+                      />
                     }
                   >
                     <span

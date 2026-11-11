@@ -2,9 +2,9 @@ import { type DraftFailure, FAILURE_LINES, type ItemDraft } from "@shared/draft"
 import { firstModelLink } from "@shared/model-links";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
-import { SparkleIcon, UndoIcon } from "@/components/ui/icons";
+import { ImageIcon, SparkleIcon, UndoIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
-import { requestDraft, siteName, undoDraft, useDraftsEnabled } from "@/lib/drafts";
+import { getPictures, requestDraft, siteName, undoDraft, useDraftsEnabled } from "@/lib/drafts";
 import type { ItemView } from "@/lib/items";
 
 interface DraftNoteProps {
@@ -81,6 +81,17 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
               Undo
             </Button>
           </p>
+        )}
+        {!item.photos.some((photo) => !photo.attemptId) && (
+          <Button
+            variant="secondary"
+            icon={ImageIcon}
+            className="self-start"
+            disabled={disabled}
+            onClick={() => void getPictures(queryClient, item.id)}
+          >
+            Get the pictures
+          </Button>
         )}
         <FromThePage draft={draft} />
       </div>

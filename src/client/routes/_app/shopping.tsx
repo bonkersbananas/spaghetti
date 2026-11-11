@@ -7,7 +7,8 @@ import { EmptyBasket } from "@/components/illustrations/EmptyBasket";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ShoppingRow, useShoppingName } from "@/components/shopping/ShoppingRow";
 import { Button } from "@/components/ui/Button";
-import { checklistSurface, DragHandle } from "@/components/ui/Checklist";
+import { checklistSurface } from "@/components/ui/Checklist";
+import { DragHandle } from "@/components/ui/DragHandle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
 import { PlusIcon } from "@/components/ui/icons";
@@ -325,6 +326,7 @@ function ToBuyRow({
         handle={
           sortable ? (
             <DragHandle
+              size="line"
               ref={handleRef}
               label={`Move ${name}, at ${place}`}
               onPointerDown={(event) => {

@@ -1,9 +1,9 @@
 import { m } from "motion/react";
-import { type KeyboardEvent, type PointerEvent, type ReactNode, type Ref, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
 import { tap } from "@/lib/haptics";
 import { spring } from "@/lib/motion";
-import { CheckIcon, DragIcon } from "./icons";
+import { CheckIcon } from "./icons";
 
 /** The surface a checklist's rows sit on: one soft card, rows told apart by an inset hairline. */
 export const checklistSurface = "bg-cream shadow-soft rounded-lg";
@@ -65,49 +65,6 @@ export function TickBox({ checked, onChange, label, disabled, className }: TickB
           </m.span>
         )}
       </span>
-    </button>
-  );
-}
-
-interface DragHandleProps {
-  /** "Move Liquid glue": what it moves. */
-  label: string;
-  /** Starts a drag (mouse or finger); the list follows. */
-  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
-  /** The arrow keys move it a place up (-1) or down (+1); focus stays on it. */
-  onMove: (step: -1 | 1) => void;
-  disabled?: boolean;
-  ref?: Ref<HTMLButtonElement>;
-  className?: string;
-}
-
-/**
- * The grip a row is dragged by: six dots in a 44 px target that doesn't scroll the page under a finger
- * (`touch-none`). With the keyboard, Up and Down move the row a place.
- */
-export function DragHandle({ label, onPointerDown, onMove, disabled, ref, className }: DragHandleProps) {
-  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-    event.preventDefault();
-    event.stopPropagation();
-    onMove(event.key === "ArrowUp" ? -1 : 1);
-  }
-  return (
-    <button
-      ref={ref}
-      type="button"
-      aria-label={label}
-      aria-keyshortcuts="ArrowUp ArrowDown"
-      title="Drag, or use the arrow keys"
-      disabled={disabled}
-      onPointerDown={disabled ? undefined : onPointerDown}
-      onKeyDown={disabled ? undefined : onKeyDown}
-      className={cn(
-        "text-ink-faint hover:text-ink-soft focus-ring press-none flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md select-none active:cursor-grabbing disabled:cursor-default disabled:opacity-40",
-        className,
-      )}
-    >
-      <DragIcon size={20} weight="bold" aria-hidden />
     </button>
   );
 }
