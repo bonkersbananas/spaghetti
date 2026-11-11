@@ -127,6 +127,8 @@ export const pairs: Pair[] = [
   { label: "Column names and labels in the compare sheet", fg: "ink-faint", bg: "lifted", min: 4.5 },
   { label: "A link card's letter tile", fg: "ink-soft", bg: "ink/0.05", under: "cream", min: 4.5 },
   { label: "Attempt count on the outcome strip", fg: "ink-faint", bg: "cream", min: 4.5 },
+  { label: "An open tick box on a card", fg: "ink/0.55", bg: "cream", min: 3 },
+  { label: "An open tick box on a sheet", fg: "ink/0.55", bg: "lifted", min: 3 },
 ];
 
 export function measure(theme: Theme, pair: Pair, tokens = readTokens()[theme]): number {

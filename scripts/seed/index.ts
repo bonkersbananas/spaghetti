@@ -12,6 +12,7 @@ import { seedComments } from "./comments.ts";
 import { seedIdeas } from "./ideas.ts";
 import { seedPantry } from "./pantry.ts";
 import { seedRecipes } from "./recipes.ts";
+import { seedShopping } from "./shopping.ts";
 import { seedWishlists } from "./wishlists.ts";
 
 /**
@@ -68,6 +69,7 @@ export async function seedAll({
     );
     await seedBridge(alex, origin);
     await seedUpkeep(alex, stateDir);
+    await seedShopping({ alex, sam }, origin, stateDir, now);
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);
   }

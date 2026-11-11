@@ -36,6 +36,10 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   // A recipe is saved from an attempt that worked; its name and note change the same way. Deleting is for people.
   ["POST", /^\/recipes$/, ["attempts"]],
   ["PATCH", new RegExp(`^/recipes/${id}$`), ["attempts"]],
+  // The shopping list: an agent (or the bridge) may add to it, tick things off and sort it. Removing is for people.
+  ["POST", /^\/shopping-items$/, ["printer"]],
+  ["PUT", /^\/shopping-items\/order$/, ["printer"]],
+  ["PATCH", new RegExp(`^/shopping-items/${id}$`), ["printer"]],
   ["POST", /^\/spools$/, ["printer"]],
   ["PATCH", new RegExp(`^/spools/${id}$`), ["printer"]],
   ["PUT", new RegExp(`^/spools/${id}/photo/${id}$`), ["printer"]],
