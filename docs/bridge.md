@@ -9,12 +9,49 @@ An optional, read-only program that listens to the X2D over your home network an
 
 Everything below about the X2D that we could not check against a real one is marked **[uncertain]**, as in [printer.md](printer.md). This was built from the community's documentation of Bambu's local protocols and tested against a fake printer; the first run on a real X2D is the real test, so read the log.
 
+## On a Mac (the easy way)
+
+For a Mac that is usually on. No Node, pnpm, Docker or Homebrew: one program, installed by one command. In Spaghetti open **Printer → Connect the bridge**; it walks through this and shows the command.
+
+**1. On the printer.** Turn on **LAN Only mode**, then **Developer mode** (Bambu's wiki says Developer mode is what opens MQTT, the live stream and FTP to other programs on current firmware; it sits under the access code on the printer's Settings, General tab). Note the printer's **IP address**, its **serial number** and the **access code** from its screen. Keep the Mac and the printer on the same network. See [1. Put the printer in LAN Only mode](#1-put-the-printer-in-lan-only-mode) for what LAN Only costs.
+
+**2. On the Mac.** Paste the command from the app into Terminal:
+
+```sh
+curl -fsSL https://spaghetti.day/bridge/install.sh | sh -s -- ABCD-EFGH
+```
+
+`ABCD-EFGH` is the pairing code: valid for ten minutes and usable once. It is traded for the bridge's token, which is never in the command or your shell history. The installer:
+
+1. downloads the right program (Apple silicon or Intel) from the repository's GitHub releases and checks it against the release's `SHA256SUMS`;
+2. puts it in `~/Library/Application Support/Spaghetti Bridge/bin/` and signs it ad hoc (Apple silicon only runs signed programs; this needs no developer account);
+3. runs `spaghetti-bridge setup`: pairs, listens for the printer announcing itself (so it can often fill in the address and serial number), asks for what it doesn't know (the access code is always asked, never taken from the command line), and **checks the printer answers** from Terminal, so a problem shows up while you're looking;
+4. writes `config.json` there (readable only by you), a LaunchAgent in `~/Library/LaunchAgents/day.spaghetti.bridge.plist` (`RunAtLoad` and `KeepAlive`: it starts when you log in and again if it stops) and logs to `~/Library/Logs/Spaghetti Bridge/bridge.log`; then starts it and waits until Spaghetti has heard from it.
+
+**Update:** run the same command again (a new code is only needed to pair again; without one it keeps the saved connection and settings). **Remove:** `curl -fsSL https://spaghetti.day/bridge/install.sh | sh -s -- uninstall`, then **Disconnect** on the Printer page to end its token. `spaghetti-bridge status` (in the `bin/` folder) shows whether it is running and the end of its log. Options after the code: `--app URL` for a Spaghetti elsewhere than spaghetti.day, `--ip`, `--serial`, `--access-code` (it would be in your history: prefer being asked), `--camera off`, `--no-check`, `--no-start`, `--version TAG`.
+
+**Sleep, wake, restarts.** It starts at login and is restarted by macOS if it stops. A Mac that sleeps can't hear the printer, so a print that starts and ends while it sleeps is missed (the bridge cannot wake it). When the Mac wakes the bridge notices (its timer ran late), reconnects and sends `pushall`, so a print still going is picked up from where it is. If the printer's address changes, after about half a minute of failures the bridge listens for the printer's announcement, follows it to the new address and saves it; giving the printer a fixed address in the router is still better. Without the announcement the Printer page says it can't find the printer at the old address, and `spaghetti-bridge setup --ip NEW` fixes it.
+
+**Camera.** We do not download ffmpeg for you (a third-party binary fetched by a script is a risk we'd rather not take). The bridge takes a frame when a print ends in this order: the printer's RTSPS stream through ffmpeg if you have it (`brew install ffmpeg`; the LaunchAgent's PATH includes Homebrew's folders), then the printer's own picture stream (JPEG over TLS, port 6000, no ffmpeg) where the printer serves one, then no photo. Which of these the X2D serves is **[uncertain]**; if none, prints simply get no camera photo. `--camera off` stops the attempts.
+
+**What was verified and what was not.** Verified in the sandbox (Linux): the program compiles for both Mac targets and, built natively, passes `scripts/bridge-smoke.ts`: against a TLS MQTT broker and an FTPS server it starts the attempt, fetches and attaches the file, pins the certificates, and sends the printer only `pushall` and the card only list and download; the installer script, plist and settings are unit tested; the Worker side is tested. CI runs the same smoke test on macOS runners (Apple silicon and Intel) before it publishes a release. **Not verified on a real Mac and X2D:** everything below marked [uncertain], and the first real run.
+
+- **Gatekeeper and signing.** A file downloaded by `curl` doesn't get the quarantine flag, so Gatekeeper doesn't assess it; the installer clears the flag anyway and signs the program ad hoc. A program downloaded in a browser would be quarantined and refused unsigned/unnotarised: use the command, not the browser. Not notarised (that needs a paid Apple developer account): **[uncertain]** whether a future macOS tightens this for curl downloads. Each update changes the program's signature; macOS may then ask about the local network again.
+- **Local Network privacy (macOS 15 and later).** Apple lets a program reach devices on the home network only if the person allows it; Apple's note TN3179 says programs run as root or as a launchd *daemon* are allowed automatically, and others may be asked. The bridge is a LaunchAgent (no password needed to install). What is known from Apple's developer forums: an agent that is refused gets `EHOSTUNREACH` ("No route to host") for LAN addresses, a program run from Terminal is judged as Terminal, and the permission prompt may not appear at all for a program launchd starts, or only if it keeps trying instead of exiting. Whether a prompt appears for this program, and under what name, **[uncertain]**. The design therefore: (a) the installer's check runs *in Terminal*, where macOS prompts for Terminal if it needs to; (b) the bridge never exits on a refused connection, it keeps retrying every few seconds; (c) a "No route to host" on a Mac is reported to the app as "Can't reach the printer at … macOS may be blocking Spaghetti Bridge from the local network: open System Settings → Privacy & Security → Local Network and turn on Spaghetti Bridge" (the Printer page shows it); (d) the same words are in the log. If it is not listed there, run `spaghetti-bridge check` in Terminal and allow Terminal, or tell us: a LaunchDaemon (needs `sudo`) is the fallback we did not build.
+- **Developer mode.** Bambu's own wiki says Developer mode opens MQTT, the live stream and FTP; third-party sites (SimplyPrint's X2D guide) say current firmware wants LAN Only plus Developer mode for third-party control. Whether *read-only* listening works without Developer mode on the X2D is **[uncertain]**; if the bridge says "isn't telling the bridge anything", turn it on. Bambu's disclaimer for Developer mode says they can't oversee what third-party software does; this one only listens.
+- **Finding the printer.** Bambu printers announce themselves with SSDP (UDP broadcast to port 2021, multicast to 1990), naming address, serial and model; the bridge only listens. That the X2D does so, and that this passes macOS's Local Network privacy, is **[uncertain]**. The serial number is also tried from the common name of the printer's MQTT certificate **[uncertain]**; otherwise you type it.
+- **Not tested on a real sleep/wake.** The wake logic watches for a late timer; the test uses fake clocks.
+
+## Other ways to run it: Raspberry Pi, NAS, Docker, Node
+
+Everything below this line is for a computer that isn't the Mac above: a Pi, a NAS, a spare Linux box. The settings are the same five.
+
 ## 1. Put the printer in LAN Only mode
 
 The local protocols (MQTT, FTP, camera) are served by the printer on your network, protected by an **access code** that only you know. Bambu ties them to **LAN Only mode**.
 
 1. On the printer's screen, open the network settings and turn on **LAN Only Mode** **[uncertain: the menu names on the X2D]**.
-2. Some firmware also asks you to turn on **Developer mode** before third-party programs may connect over MQTT, even to listen **[uncertain]**. Try without it first; if the bridge connects but never hears a report, switch it on.
+2. Bambu's wiki says **Developer mode** (below the access code) is what opens MQTT, the live stream and FTP to other programs; turn it on after LAN Only mode. Whether listening alone works without it on the X2D is **[uncertain]**.
 3. Keep the printer and the bridge's computer on the same network (same Wi-Fi or LAN, no guest-network isolation).
 
 **What it costs.** LAN Only mode turns off the printer's connection to Bambu's cloud. You lose what depends on it: the Bambu Handy app and remote monitoring away from home, sending prints from Bambu Studio over the internet (printing from Studio on your network still works), cloud print history, and notifications from Bambu. Firmware updates are done from Studio or an SD card instead of automatically. You can switch it back whenever you like; the bridge then simply stops hearing from the printer. Bambu has changed how third-party access to its printers is authorised before, and may again; because the bridge is optional, nothing in Spaghetti breaks when it stops working.
@@ -35,7 +72,7 @@ The bridge reaches Spaghetti with an agent token with three scopes ([api.md](api
 pnpm agent:add --owner alex --name "Printer bridge" --scopes read,attempts,printer
 ```
 
-Or make it in the app: account menu, Agents, New agent. Use `--remote` for the deployed database. The token is shown once; keep it with the access code.
+Or make it in the app: account menu, Agents, New agent. (The Mac installer makes it by itself, from a pairing code.) Use `--remote` for the deployed database. The token is shown once; keep it with the access code.
 
 ## 4. Configure it
 
