@@ -16,6 +16,9 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { EditableBubble } from "./EditableBubble";
 
+/** The reactions under an idea or build, which load with the thread (ItemReactions in CommentThread.tsx). */
+export { default as ItemReactions } from "../reactions/ItemReactions";
+
 interface ThreadProps {
   itemId: string;
   /** Counts up each time something asks to write (the M key, the palette, a notification): focus the field, or open the sheet. */

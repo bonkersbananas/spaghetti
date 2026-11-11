@@ -3,8 +3,14 @@ import { type Reaction, toggleReaction } from "@shared/reactions";
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Composer } from "@/components/ui/Composer";
-import { Bubble, MessageGroup, NewDivider } from "@/components/ui/Message";
-import { AddReactionButton, ReactionPicker, ReactionPills } from "@/components/ui/Reactions";
+import {
+  AddReactionButton,
+  Bubble,
+  MessageGroup,
+  NewDivider,
+  ReactionPicker,
+  ReactionPills,
+} from "@/components/ui/Message";
 import { Label, Panel, people, Section } from "./shared";
 
 const [alex, sam] = people as [Person, Person];

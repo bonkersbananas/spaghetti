@@ -234,7 +234,7 @@ Never edit a migration that has been merged; add a new one.
 ### Reactions
 
 - Six fixed reactions ([0037](docs/decisions/0037-reactions-a-curated-six.md)), the list and pure rules in `shared/reactions.ts`. `reactions` table, keyed by `(target_id, user_id, kind)` where the target is an item or a comment; routes in `worker/routes/reactions.ts` (`PUT`/`DELETE /api/items/:id/reactions/:kind` and `/api/comments/:id/reactions/:kind`, idempotent, person-only), recorded in the change feed as an `updated` item or comment. `Item.reactions` comes from `loadItems`, `Comment.reactions` from the thread's GET.
-- The client writes through `reactTo` in `lib/reactions.ts` (optimistic; only the latest answer replaces the cache): `reactToItem` patches the item caches, `reactToComment` (lib/comments.ts) the thread. UI: `ui/Reactions.tsx` (in the styleguide's Conversation section), `components/reactions/` (`ItemReactions`, lazy, on the idea and build pages), and the comment menu in `comments/EditableBubble.tsx`.
+- The client writes through `reactTo` in `lib/reactions.ts` (optimistic; only the latest answer replaces the cache): `reactToItem` patches the item caches, `reactToComment` (lib/comments.ts) the thread. UI: `ui/Message.tsx` (`ReactionPills`, `ReactionPicker`, `AddReactionButton`; in the styleguide's Conversation section), `components/reactions/ItemReactions.tsx` (on the idea and build pages, loaded with the thread's chunk through `ItemReactions` in `comments/CommentThread.tsx`, so no new lazy import joins the preload map), and the comment menu in `comments/EditableBubble.tsx`.
 
 ### Sharing in
 
