@@ -14,6 +14,9 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- The two faces every first screen draws (body text and headings, Latin), fetched with the page rather than once the styles are applied, so launching the app doesn't flash a fallback font and shift. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/src/client/assets/fonts/fraunces-latin-soft-pinned.woff2" />
     <!-- Sets the theme before the first paint, so a dark night never opens on a white flash. Keep in step with src/client/lib/theme.ts. -->
     <script>
       (() => {

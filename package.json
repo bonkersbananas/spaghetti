@@ -23,6 +23,8 @@
     "doctor": "node scripts/doctor.ts",
     "screenshots": "node scripts/screenshots.ts",
     "screenshots:compare": "node scripts/screenshots-compare.ts",
+    "perf": "node scripts/perf.ts",
+    "build:report": "SPAGHETTI_BUNDLE_REPORT=1 vite build",
     "new": "node scripts/new.ts",
     "icons": "node scripts/icons.ts",
     "types": "wrangler types",

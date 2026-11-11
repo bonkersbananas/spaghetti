@@ -1,5 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Outlet, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
@@ -17,9 +17,11 @@ import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
 import { useServiceWorkerMessages } from "@/lib/push";
-import { sessionQuery } from "@/lib/queries";
+import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { isSigningOut } from "@/lib/use-sign-out";
+import { useWhenIdle } from "@/lib/when-idle";
 
 // Desktop-only overlays, loaded once the app is idle rather than with the first screen.
 const loadPalette = () => import("@/components/shell/CommandPalette");
@@ -32,7 +34,20 @@ const ShortcutOverlay = lazy(() => loadShortcuts().then((m) => ({ default: m.Sho
 /** The signed-in app: sidebar on desktop, tab bar on phones. */
 export const Route = createFileRoute("/_app")({
   beforeLoad: async ({ context, location }) => {
-    const user = await context.queryClient.ensureQueryData(sessionQuery);
+    const { queryClient } = context;
+    let user = queryClient.getQueryData(sessionQuery.queryKey);
+    if (user === undefined) {
+      // A resumed app opens as the person who was signed in at once, rather than after a round trip to the server;
+      // the server confirms in the background (AppLayout signs out a session it no longer knows).
+      const remembered = rememberedUser();
+      if (remembered) {
+        queryClient.setQueryData(sessionQuery.queryKey, remembered);
+        void queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 }).catch(() => undefined);
+        user = remembered;
+      } else {
+        user = await queryClient.ensureQueryData(sessionQuery);
+      }
+    }
     if (!user) {
       throw redirect({ to: "/sign-in", search: { redirect: location.href } });
     }
@@ -41,6 +56,15 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
+  // The background check of a remembered session found it ended (or this person signed out in another tab).
+  const navigate = useNavigate();
+  const { data: user } = useQuery(sessionQuery);
+  useEffect(() => {
+    // Signing out navigates by itself; a session the server ended keeps the page for after signing in again.
+    if (user === null && !isSigningOut()) {
+      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } });
+    }
+  }, [user, navigate]);
   return (
     <CaptureProvider>
       <PaletteProvider>
@@ -68,6 +92,14 @@ function Shell() {
   );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.
   useEffect(() => followUnresizedPhotos(queryClient), [queryClient]);
+  // The two pages every list opens: their code is fetched once the app is idle (the tab bar already warms the lists),
+  // so the first tap on an idea or a build doesn't wait for it. The routes have no loaders, so nothing else loads.
+  const router = useRouter();
+  useWhenIdle(() => {
+    void router.preloadRoute({ to: "/builds/$buildId", params: { buildId: "-" } });
+    void router.preloadRoute({ to: "/ideas/$ideaId", params: { ideaId: "-" } });
+    void import("@/components/ideas/CardMenu");
+  });
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();
   useHotkeys({
