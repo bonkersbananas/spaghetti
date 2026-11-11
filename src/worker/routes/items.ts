@@ -10,6 +10,7 @@ import {
   type PhotoResponse,
 } from "../../shared/api.ts";
 import { beganAsIdea } from "../../shared/deleted.ts";
+import type { PhotoRead } from "../../shared/photo-read.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
@@ -27,6 +28,7 @@ import {
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiItem, toApiPhoto } from "../http.ts";
+import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey } from "../photos.ts";
 
 const id = z.uuid();
@@ -158,6 +160,11 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       ),
     )
   ).flat();
+  const reads = new Map<string, PhotoRead>();
+  for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
+    const read = toApiPhotoRead(rows);
+    if (read) reads.set(attemptId, read);
+  }
   const draftsByItem = new Map(draftSlices.flat().map((draft) => [draft.itemId, draft]));
   const files = new Map(fileRows.map((file) => [file.attemptId, file]));
   const photosByItem = groupBy<Photo>(
@@ -173,6 +180,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       attemptsByItem.get(row.id) ?? [],
       files,
       draftsByItem.get(row.id),
+      reads,
     );
   });
 }
@@ -658,5 +666,20 @@ export const itemRoutes = new Hono<AppEnv>()
     ]);
     const photo = row ?? (await c.var.db.select().from(photos).where(eq(photos.id, photoId)).get());
     if (!photo) return apiError(c, 500, "server_error", "The photo wasn't saved.");
+    // A new photo of an attempt that still has no outcome: Claude takes a look, after the response (decision 0022).
+    // People's photos and the printer bridge's frame (a token with the attempts and printer scopes) start it; any other
+    // agent's don't.
+    if (
+      row &&
+      attemptId &&
+      photoReadsEnabled(c.env) &&
+      (!c.var.scopes || (canUse(c, "attempts") && canUse(c, "printer")))
+    ) {
+      const started = await startRead(c.var.db, { id: photoId, attemptId, itemId }, c.var.user).catch(() => false);
+      if (started)
+        c.executionCtx.waitUntil(
+          runRead(c.env, photoId, c.var.db).catch((error) => console.error("photo read failed", error)),
+        );
+    }
     return c.json<PhotoResponse>({ photo: toApiPhoto(photo) }, 201);
   });

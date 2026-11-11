@@ -33,6 +33,7 @@ export const attempt = (id: string, itemId: string, fields: Partial<Attempt>): A
   finishedAt: now - 2 * HOUR,
   endedAt: null,
   suggestedFailureTag: null,
+  photoRead: null,
   note: "",
   failureTags: [],
   successNotes: [],

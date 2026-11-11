@@ -54,6 +54,7 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM spools"),
     env.DB.prepare("DELETE FROM printer"),
     env.DB.prepare("DELETE FROM bridge"),
+    env.DB.prepare("DELETE FROM photo_reads"),
     env.DB.prepare("DELETE FROM photos"),
     env.DB.prepare("DELETE FROM attempts"),
     env.DB.prepare("DELETE FROM recipes"),

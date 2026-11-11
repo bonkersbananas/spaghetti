@@ -48,6 +48,7 @@ const sampleAttempt: AttemptView = {
   finishedAt: Date.now() - 23 * 60 * 60 * 1000,
   endedAt: null,
   suggestedFailureTag: null,
+  photoRead: null,
   note: "Stayed down this time, but the stern corners curled up a little.",
   failureTags: ["warping"],
   successNotes: ["great-first-layer"],

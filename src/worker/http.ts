@@ -8,6 +8,7 @@ import type {
   Person,
 } from "../shared/api.ts";
 import { byPrintTime, describeChanges } from "../shared/attempts.ts";
+import type { PhotoRead } from "../shared/photo-read.ts";
 import type { Attempt, AttemptFileRow, Item, ItemDraftRow, Photo, User } from "./db/schema.ts";
 import { toApiDraft } from "./draft/run.ts";
 
@@ -58,12 +59,15 @@ export function toApiFile(file: AttemptFileRow): ApiAttemptFile {
 
 /** Live (not deleted) files by attempt id. */
 export type FilesByAttempt = ReadonlyMap<string, AttemptFileRow>;
+/** What Claude made of each attempt's photos (worker/photo-read/run.ts toApiPhotoRead), by attempt id. */
+export type ReadsByAttempt = ReadonlyMap<string, PhotoRead>;
 
 /** An attempt, with what changed since `previous` (the non-deleted attempt printed before it, if any). */
 export function toApiAttempt(
   attempt: Attempt,
   previous: Attempt | null | undefined,
   files: FilesByAttempt = new Map(),
+  reads: ReadsByAttempt = new Map(),
 ): ApiAttempt {
   const file = files.get(attempt.id);
   return {
@@ -74,6 +78,8 @@ export function toApiAttempt(
     finishedAt: attempt.finishedAt?.getTime() ?? null,
     endedAt: attempt.endedAt?.getTime() ?? null,
     suggestedFailureTag: attempt.suggestedFailureTag,
+    // Only while there is still a question: once someone said how it went, the suggestion has done its work.
+    photoRead: attempt.outcome ? null : (reads.get(attempt.id) ?? null),
     note: attempt.note,
     failureTags: attempt.failureTags,
     successNotes: attempt.successNotes,
@@ -90,7 +96,11 @@ export function toApiAttempt(
 }
 
 /** One item's non-deleted attempts, oldest first, each compared with the one before. */
-export function toApiAttempts(itemAttempts: Attempt[], files: FilesByAttempt = new Map()): ApiAttempt[] {
+export function toApiAttempts(
+  itemAttempts: Attempt[],
+  files: FilesByAttempt = new Map(),
+  reads: ReadsByAttempt = new Map(),
+): ApiAttempt[] {
   const ordered = byPrintTime(
     itemAttempts.map((row) => ({
       row,
@@ -99,7 +109,7 @@ export function toApiAttempts(itemAttempts: Attempt[], files: FilesByAttempt = n
       createdAt: row.createdAt.getTime(),
     })),
   ).map(({ row }) => row);
-  return ordered.map((attempt, index) => toApiAttempt(attempt, ordered[index - 1], files));
+  return ordered.map((attempt, index) => toApiAttempt(attempt, ordered[index - 1], files, reads));
 }
 
 /** `itemAttempts` are the item's non-deleted attempts, in any order. */
@@ -109,6 +119,7 @@ export function toApiItem(
   itemAttempts: Attempt[] = [],
   files: FilesByAttempt = new Map(),
   draft: ItemDraftRow | null = null,
+  reads: ReadsByAttempt = new Map(),
 ): ApiItem {
   return {
     id: item.id,
@@ -125,7 +136,7 @@ export function toApiItem(
     upNext: item.upNext,
     forWhom: item.forWhom,
     photos: itemPhotos.map(toApiPhoto),
-    attempts: toApiAttempts(itemAttempts, files),
+    attempts: toApiAttempts(itemAttempts, files, reads),
     draft: toApiDraft(draft),
   };
 }

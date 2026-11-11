@@ -19,6 +19,7 @@ import type { Db } from "../db/index.ts";
 import { type Attempt, attemptFiles, attempts, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
+import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
 import { stageDates } from "./items.ts";
 
 const id = z.uuid();
@@ -135,7 +136,12 @@ export async function loadAttempt(db: Db, attempt: Attempt) {
       .get(),
   ]);
   const siblings = siblingRows.filter((row) => row.id !== attempt.id);
-  const all = toApiAttempts([...siblings, attempt], new Map(file ? [[attempt.id, file]] : []));
+  const read = toApiPhotoRead((await readsByAttempt(db, [attempt.id])).get(attempt.id) ?? []);
+  const all = toApiAttempts(
+    [...siblings, attempt],
+    new Map(file ? [[attempt.id, file]] : []),
+    new Map(read ? [[attempt.id, read]] : []),
+  );
   const found = all.find((row) => row.id === attempt.id);
   if (!found) throw new Error("The attempt went missing.");
   return found;
