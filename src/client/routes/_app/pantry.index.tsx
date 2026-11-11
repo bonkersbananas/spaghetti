@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { PantryJar } from "@/components/illustrations";
-import { AddSpoolSheet } from "@/components/pantry/AddSpoolSheet";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { RunningLow } from "@/components/pantry/RunningLow";
 import { SpoolCard } from "@/components/pantry/SpoolCard";
@@ -24,6 +23,10 @@ import { canEdit, useReadOnly } from "@/lib/read-only";
 import { recipesQuery } from "@/lib/recipes-query";
 import { useRunningLow } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
+
+const AddSpoolSheet = lazy(() =>
+  import("@/components/pantry/AddSpoolSheet").then((m) => ({ default: m.AddSpoolSheet })),
+);
 
 export const Route = createFileRoute("/_app/pantry/")({
   validateSearch: (search: Record<string, unknown>): { add?: boolean } =>
@@ -79,6 +82,9 @@ function Pantry() {
   const [adding, setAdding] = useState<{ open: boolean; slot: string | null }>({ open: !!add, slot: null });
   // Offline, the pantry is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
+  // The sheet is loaded the first time it is asked for: the pantry's first load doesn't carry it.
+  const [sheetLoaded, setSheetLoaded] = useState(!!add);
+  if (adding.open && !sheetLoaded) setSheetLoaded(true);
   const openAdd = (slot: string | null = null) => canEdit() && setAdding({ open: true, slot });
   useHotkeys({ pantryAdd: () => openAdd() });
 
@@ -219,19 +225,23 @@ function Pantry() {
           </Button>
         </ActionBar>
       )}
-      <AddSpoolSheet
-        open={adding.open}
-        onOpenChange={(open) => setAdding((current) => ({ ...current, open }))}
-        description={
-          adding.slot
-            ? `It goes straight into ${adding.slot === "Ext" ? "the external holder" : `slot ${adding.slot}`}.`
-            : undefined
-        }
-        stayPut={!!adding.slot}
-        onAdded={(spool, saved) => {
-          if (adding.slot) void loadSlot(queryClient, adding.slot, spool.id, saved);
-        }}
-      />
+      {sheetLoaded && (
+        <Suspense fallback={null}>
+          <AddSpoolSheet
+            open={adding.open}
+            onOpenChange={(open) => setAdding((current) => ({ ...current, open }))}
+            description={
+              adding.slot
+                ? `It goes straight into ${adding.slot === "Ext" ? "the external holder" : `slot ${adding.slot}`}.`
+                : undefined
+            }
+            stayPut={!!adding.slot}
+            onAdded={(spool, saved) => {
+              if (adding.slot) void loadSlot(queryClient, adding.slot, spool.id, saved);
+            }}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

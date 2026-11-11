@@ -1,5 +1,4 @@
 import type {
-  LabelReadResponse,
   PrinterResponse,
   Spool,
   SpoolAttemptsResponse,
@@ -9,8 +8,8 @@ import type {
   UpdatePrinterRequest,
   UpdateSpoolRequest,
 } from "@shared/api";
-import { NO_LABEL } from "@shared/label-read";
 import { gramsFromScale, levelOf } from "@shared/ledger";
+import { NO_LABEL } from "@shared/no-label";
 import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "@shared/spools";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
@@ -86,8 +85,8 @@ export function addSpool(
   draft: SpoolDraft,
   createdBy: string,
   photo?: File,
-  /** Have Claude read the photo's label once it is saved; these are the fields the person hadn't set. */
-  read?: { placeholders: Array<"material" | "netGrams"> },
+  /** Given the photo's upload, for what follows it (Claude reading its label); the spool shows "Reading the label…" meanwhile. */
+  afterPhoto?: (uploaded: Promise<boolean>, spoolId: string) => void,
 ): { spool: Spool; saved: Promise<boolean> } {
   const now = Date.now();
   const spool: Spool = {
@@ -109,7 +108,7 @@ export function addSpool(
     slot: null,
     trayUuid: null,
     ...NO_LABEL,
-    labelRead: photo && read ? { status: "reading", photoId: "", spools: [] } : null,
+    labelRead: photo && afterPhoto ? { status: "reading", photoId: "", spools: [] } : null,
     createdBy,
     createdAt: now,
     updatedAt: now,
@@ -135,10 +134,7 @@ export function addSpool(
       patchSpool(queryClient, spool.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
       if (photo) {
         const uploaded = setSpoolPhoto(queryClient, spool.id, photo);
-        if (read)
-          void uploaded.then((ok) =>
-            ok ? requestLabelRead(queryClient, spool.id, read.placeholders) : clearLabelRead(queryClient, spool.id),
-          );
+        afterPhoto?.(uploaded, spool.id);
       }
       return true;
     } catch {
@@ -237,35 +233,6 @@ export async function weighSpool(
     },
   });
 }
-
-/** Reads the label in the spool's photo (already uploaded). The spool shows "Reading the label…" at once. */
-export async function requestLabelRead(
-  queryClient: QueryClient,
-  spoolId: string,
-  placeholders: Array<"material" | "netGrams"> = [],
-) {
-  patchSpool(queryClient, spoolId, (spool) => ({
-    ...spool,
-    labelRead: { status: "reading", photoId: spool.photo?.id ?? "", spools: [] },
-  }));
-  try {
-    const { spool } = await api<LabelReadResponse>(`/spools/${spoolId}/label-read`, {
-      method: "POST",
-      json: { placeholders },
-    });
-    patchSpool(queryClient, spoolId, (current) => ({
-      ...spool,
-      photo: current.photo ?? spool.photo,
-      slot: current.slot,
-    }));
-  } catch {
-    clearLabelRead(queryClient, spoolId);
-    toast.error("Couldn't start reading the label", "The spool is saved as it is. Try again from its page.");
-  }
-}
-
-export const clearLabelRead = (queryClient: QueryClient, spoolId: string) =>
-  patchSpool(queryClient, spoolId, (spool) => ({ ...spool, labelRead: null }));
 
 /** A new photo of the label: shown from the device at once, then uploaded. */
 export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, file: File): Promise<boolean> {

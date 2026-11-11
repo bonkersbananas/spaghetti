@@ -43,17 +43,10 @@ import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { SwatchPicker } from "@/components/ui/Swatch";
+import { useLabelReadsEnabled } from "@/lib/drafts";
 import { useHotkeys } from "@/lib/hotkeys";
-import { useLabelReadsEnabled } from "@/lib/label-read";
-import {
-  deleteSpool,
-  loadSlot,
-  requestLabelRead,
-  saveSpool,
-  setSpoolPhoto,
-  spoolAttemptsQuery,
-  spoolsQuery,
-} from "@/lib/pantry";
+import { requestLabelRead } from "@/lib/label-read";
+import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto, spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry";
 import { photoSrc } from "@/lib/previews";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useRecipes } from "@/lib/recipes";
@@ -315,7 +308,6 @@ function SpoolPage({ spool }: { spool: Spool }) {
                 <span key={piece}>{piece}</span>
               ))}
             </MetaList>
-            {fromLabel("colorName", "colorHex")}
           </div>
 
           <fieldset disabled={readOnly} className="contents">
@@ -423,6 +415,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               <div className="flex flex-col gap-1.5">
                 <span className="flex items-baseline gap-2 px-0.5">
                   <span className="text-small text-ink-soft font-semibold">Color</span>
+                  {fromLabel("colorName", "colorHex")}
                 </span>
                 <SwatchPicker
                   value={value.colorHex ?? undefined}

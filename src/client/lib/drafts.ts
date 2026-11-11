@@ -17,6 +17,9 @@ export const featuresQuery = queryOptions({
 /** Whether anything about drafting should show at all: without the Worker's key nothing does. */
 export const useDraftsEnabled = () => useQuery(featuresQuery).data?.drafts === true;
 
+/** Whether anything about reading spool labels shows at all: without the Worker's key nothing does. */
+export const useLabelReadsEnabled = () => useQuery(featuresQuery).data?.labelReads === true;
+
 /** Drafts being asked for right now on this device, so a tap or a capture can't ask twice. */
 const asking = new Set<string>();
 /** Drafts that already said so with a toast, so a second poll doesn't say it again. */

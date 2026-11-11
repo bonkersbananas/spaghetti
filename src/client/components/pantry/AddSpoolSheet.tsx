@@ -12,7 +12,7 @@ import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTi
 import { Sheet } from "@/components/ui/Sheet";
 import { SwatchPicker } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
-import { useLabelReadsEnabled } from "@/lib/label-read";
+import { useLabelReadsEnabled } from "@/lib/drafts";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -103,7 +103,19 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
           ),
         }
       : undefined;
-    const { spool, saved } = addSpool(queryClient, draft, user.id, label ?? photo ?? undefined, read);
+    const { spool, saved } = addSpool(
+      queryClient,
+      draft,
+      user.id,
+      label ?? photo ?? undefined,
+      read &&
+        ((uploaded, spoolId) => {
+          // Claude's part loads only when a label is read.
+          void import("@/lib/label-read").then((m) =>
+            m.readUploaded(queryClient, spoolId, uploaded, read.placeholders),
+          );
+        }),
+    );
     setPhoto(null);
     onOpenChange(false);
     onAdded?.(spool, saved);
@@ -163,8 +175,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
             )}
           </div>
           {labelReads && !photo && (
-            <p className="text-small text-ink-faint flex items-start gap-1.5">
-              <SparkleIcon size={14} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
+            <p className="text-small text-ink-faint">
               Claude fills in what the label says. Anything you've set stays as you set it.
             </p>
           )}

@@ -11,6 +11,8 @@ export const MAX_LABEL_SPOOLS = 4;
 
 import { finishLabel } from "./spools.ts";
 
+export { NO_LABEL } from "./no-label.ts";
+
 /** The spool fields a label can fill, by their names in the spool's API object. */
 export const LABEL_FIELDS = [
   "brand",
@@ -114,20 +116,6 @@ export function labelSpoolLine(spool: LabelSpool): { title: string; detail: stri
     detail: [spool.colorName ? kind : null, grams].filter(Boolean).join(" · "),
   };
 }
-
-/** A spool with nothing from a label: what a spool made on the device starts with. */
-export const NO_LABEL = {
-  diameterMm: null,
-  nozzleTempMin: null,
-  nozzleTempMax: null,
-  bedTempMin: null,
-  bedTempMax: null,
-  dryTempC: null,
-  dryHours: null,
-  productCode: null,
-  fromLabel: [] as LabelField[],
-  labelRead: null,
-};
 
 export const emptyLabelSpool = (): LabelSpool => ({
   brand: null,

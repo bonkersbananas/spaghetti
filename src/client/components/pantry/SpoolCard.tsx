@@ -8,7 +8,7 @@ import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
 import { photoSrc } from "@/lib/previews";
 import { spoolDragProps } from "./Ams";
-import { ReadingLine } from "./LabelReadNote";
+import { ReadingLine } from "./ReadingLine";
 
 /**
  * A spool in the pantry grid: its label photo, or the spool itself in its
