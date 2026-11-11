@@ -94,7 +94,8 @@ function Pantry() {
         <Section
           key={group.material}
           id={`material-${group.material}`}
-          as="h3"
+          // Under "All spools" on desktop; on phones, where that heading isn't drawn, they are the page's own sections.
+          as={isDesktop ? "h3" : "h2"}
           title={group.material}
           count={group.spools.length}
           size={view === "list" ? "overline" : "title"}

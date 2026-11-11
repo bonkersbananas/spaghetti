@@ -364,9 +364,12 @@ function SpoolPage({ spool }: { spool: Spool }) {
             placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
           />
 
-          <UsedBy spool={spool} />
-          <SpoolRecipes material={value.material} finish={value.finish} />
-          <PrintedWith spool={spool} />
+          {/* The spool's sections, a section's distance apart and from the note above. */}
+          <div className="mt-5 flex flex-col gap-12 empty:hidden md:gap-16">
+            <UsedBy spool={spool} />
+            <SpoolRecipes material={value.material} finish={value.finish} />
+            <PrintedWith spool={spool} />
+          </div>
         </div>
       </div>
 
@@ -393,7 +396,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
 function SpoolRecipes({ material, finish }: { material: string; finish: string | null }) {
   const recipes = recipesFor(useRecipes(), { material, finish });
   const kind = [finish ? finishLabel(finish).toLowerCase() : null, material.trim()].filter(Boolean).join(" ");
-  return <LazyRecipeShelf recipes={recipes} title={`Recipes for ${kind}`} className="mt-4" />;
+  return <LazyRecipeShelf recipes={recipes} title={`Recipes for ${kind}`} />;
 }
 
 /** "How does this silk PLA behave": every attempt printed with it, and how they went. */
@@ -408,7 +411,6 @@ function PrintedWith({ spool }: { spool: Spool }) {
       id="printed-with"
       title="Printed with it"
       count={hits?.length || undefined}
-      className="mt-4"
       description={
         counts.length > 0 && (
           <MetaList className="text-small text-ink-faint">
