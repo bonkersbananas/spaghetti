@@ -4,11 +4,12 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-11-01",
   // The client is built by Vite and served as static assets. Client routes
-  // fall back to index.html; /api/*, /mcp and the OAuth endpoints (/oauth/*, /.well-known/*) always reach the Worker first,
+  // get index.html from the Worker (src/worker/spa.ts), not from the assets' single-page fallback: that answers a
+  // missing /assets/*.js with index.html too, and a stale tab then fails with a MIME error instead of a 404. /api/*, /mcp and the OAuth endpoints (/oauth/*, /.well-known/*) always reach the Worker first,
   // and so does / alone, which is the app when signed in and the landing page (landing.html) otherwise (src/worker/home.ts).
   "assets": {
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
+    "not_found_handling": "none",
     "run_worker_first": ["/", "/api/*", "/mcp", "/oauth/*", "/.well-known/*"]
   },
   "d1_databases": [

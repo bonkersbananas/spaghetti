@@ -1891,6 +1891,7 @@ export const shots: Shot[] = [
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   { name: "styleguide-year", path: "/styleguide", selector: "#year" },
+  { name: "styleguide-error", path: "/styleguide", selector: "#error" },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",

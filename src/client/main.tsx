@@ -8,6 +8,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerServiceWorker } from "./lib/offline";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
+import { RouterError } from "./lib/router-error";
 import { initTheme } from "./lib/theme";
 import { trackVisibleViewport } from "./lib/viewport";
 import { warmPhotosFor } from "./lib/warm-photos";
@@ -35,6 +36,7 @@ const router = createRouter({
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,
+  defaultErrorComponent: RouterError,
 });
 
 declare module "@tanstack/react-router" {
@@ -43,6 +45,9 @@ declare module "@tanstack/react-router" {
   }
 }
 
+// A chunk of this build is gone (a deploy): the app takes the new version once (lib/stale-build.ts, loaded only now).
+// The error still reaches the router's error screen, which does the same (and says what is happening).
+addEventListener("vite:preloadError", () => void import("./lib/stale-build").then((m) => m.reloadIntoNewBuild()));
 initTheme();
 trackVisibleViewport();
 registerServiceWorker();

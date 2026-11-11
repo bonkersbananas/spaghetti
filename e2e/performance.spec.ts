@@ -32,15 +32,17 @@ const origin = (page: Page) => new URL(page.url()).origin;
 // The shopping list adds its sidebar row (basket icon, two shortcuts, feed and cache wiring) to the shell, about 1 kB: after merging
 // main (spool labels, weeks, search questions) Ideas, Builds, Search and Pantry were a fraction over their limits, +1 kB each. Its page,
 // sheet, rows and illustration load on demand.
+// The stale-build recovery (the router's error component, a preloadError listener) adds about 0.3 kB to the shell: Sign-in,
+// Ideas, Journal and Printer +1 kB each; the error screen and the reload logic load on demand.
 const BUDGET_KB = {
-  "/sign-in": 194,
+  "/sign-in": 195,
   "/today": 299,
-  "/ideas": 288,
+  "/ideas": 289,
   "/builds": 287,
-  "/journal": 287,
+  "/journal": 288,
   "/search": 293,
   "/pantry": 297,
-  "/printer": 297,
+  "/printer": 298,
 } as const;
 
 /**

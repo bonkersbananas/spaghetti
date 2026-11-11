@@ -55,9 +55,16 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
+      // The newest older version stays: a page still running it (iOS keeps the Home Screen app suspended in memory)
+      // imports its route chunks long after this worker took over, and the new deploy no longer has those files.
+      const older = [];
       for (const name of await caches.keys()) {
-        if (name.startsWith("sg-shell-") && name !== SHELL_CACHE) await caches.delete(name);
+        if (!name.startsWith("sg-shell-") || name === SHELL_CACHE) continue;
+        const entry = await (await caches.open(name)).match(SHELL_URL);
+        older.push({ name, at: Date.parse(entry?.headers.get("Date") ?? "") || 0 });
       }
+      older.sort((a, b) => b.at - a.at);
+      for (const { name } of older.slice(1)) await caches.delete(name);
       await self.clients.claim();
     })(),
   );
@@ -303,7 +310,18 @@ async function shell(request) {
 
 async function asset(request) {
   const cached = await caches.match(request, { cacheName: SHELL_CACHE });
-  return cached ?? fetch(request);
+  if (cached) return cached;
+  // A file of the previous version (kept by "activate"), for a page that hasn't reloaded yet. Only hashed build
+  // files: they never change under one name.
+  const url = new URL(request.url);
+  if (url.pathname.startsWith("/assets/")) {
+    for (const name of await caches.keys()) {
+      if (!name.startsWith("sg-shell-")) continue;
+      const old = await (await caches.open(name)).match(request);
+      if (old) return old;
+    }
+  }
+  return fetch(request);
 }
 
 async function photo(event, request) {
