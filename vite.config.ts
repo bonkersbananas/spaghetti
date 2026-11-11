@@ -38,6 +38,9 @@ export default defineConfig(({ command }) => ({
       }),
     }),
   ],
+  // Loaded on demand, so the dev server would only find them mid-session, re-bundle and reload the page under the
+  // person (and under the e2e tests): list them up front.
+  optimizeDeps: { include: ["@simplewebauthn/browser", "qrcode-generator"] },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src/client", import.meta.url)),
