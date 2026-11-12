@@ -179,3 +179,20 @@ test("sets up sharing from iPhone: a capture-only key, in the steps ready to cop
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(sheet).toBeHidden();
 });
+
+test("the API reference opens the OpenAPI spec in a new tab and the app stays on Agents", async ({
+  page,
+  context,
+  isMobile,
+}) => {
+  await goToAgents(page, isMobile);
+  const opened = context.waitForEvent("page");
+  await page.getByRole("link", { name: "API reference" }).click();
+  const tab = await opened;
+  await tab.waitForLoadState();
+  expect(new URL(tab.url()).pathname).toBe("/api/openapi.json");
+  expect(await tab.locator("body").textContent()).toContain('"openapi"');
+  expect(new URL(page.url()).pathname).toBe("/agents");
+  await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
+  await tab.close();
+});
