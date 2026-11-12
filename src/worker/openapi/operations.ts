@@ -33,6 +33,7 @@ import { credentials, signOutBody } from "../routes/session.ts";
 import { createShoppingItem, shoppingOrder, updateShoppingItem } from "../routes/shopping-items.ts";
 import { createSpool, readLabelBody, spoolPhotoFields, updateSpool, weighBody, weightBody } from "../routes/spools.ts";
 import { createTag } from "../routes/tags.ts";
+import { createTwist, updateTwist } from "../routes/twists.ts";
 import { createTask, logBody, updateTask, upkeepPhotoFields } from "../routes/upkeep.ts";
 import { createWebhook } from "../routes/webhooks.ts";
 import { addToWishlist, updateWishlist, wishlistOrder } from "../routes/wishlists.ts";
@@ -753,6 +754,32 @@ export const operations: Record<string, Operation> = {
   },
   "DELETE /recipes/:id": { summary: "Deletes a recipe (it can be restored).", response: "empty", status: 204 },
   "POST /recipes/:id/restore": { summary: "Restores a deleted recipe.", response: one("recipe", z.looseObject({})) },
+
+  // Twists.
+  "GET /twists": {
+    summary: "Twists (models we print our own way), newest first.",
+    response: list("twists", z.looseObject({})),
+  },
+  "GET /twists/:id": {
+    summary: "One twist.",
+    response: one("twist", z.looseObject({})),
+    errors: { 404: notFound("twist") },
+  },
+  "POST /twists": {
+    summary:
+      "Makes a twist, usually from an idea (`fromItemId`): its model link, title and cover come along unless given.",
+    body: createTwist,
+    response: one("twist", z.looseObject({})),
+    status: 201,
+    errors: { 404: notFound("idea or recipe") },
+  },
+  "PATCH /twists/:id": {
+    summary: "Changes a twist's name, note, source, recipe or its whole list of changes.",
+    body: updateTwist,
+    response: one("twist", z.looseObject({})),
+  },
+  "DELETE /twists/:id": { summary: "Deletes a twist (it can be restored).", response: "empty", status: 204 },
+  "POST /twists/:id/restore": { summary: "Restores a deleted twist.", response: one("twist", z.looseObject({})) },
 
   // The shopping list.
   "GET /shopping-items": {

@@ -12,6 +12,7 @@ import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PriceSuggestion, ShoppingPrices } from "../../shared/prisjakt.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
+import type { TwistChange } from "../../shared/twists.ts";
 import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
 
 /** The two people who share the workspace. Made with `pnpm user:add`. */
@@ -332,6 +333,33 @@ export const recipes = sqliteTable("recipes", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
 });
+
+/**
+ * A model we print our own way (decision 0043). The ids that point at an idea, a photo or a recipe are not foreign
+ * keys: a twist outlives them and the link just goes quiet, like a recipe's.
+ */
+export const twists = sqliteTable("twists", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  note: text("note").notNull().default(""),
+  sourceUrl: text("source_url"),
+  sourceTitle: text("source_title"),
+  designer: text("designer"),
+  license: text("license"),
+  /** One of the idea's photos, to lead with. */
+  sourcePhotoId: text("source_photo_id"),
+  fromItemId: text("from_item_id"),
+  recipeId: text("recipe_id"),
+  /** shared/twists.ts TwistChange[], in the order people wrote them. */
+  changes: text("changes", { mode: "json" }).$type<TwistChange[]>().notNull().default(sql`'[]'`),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+});
+export type TwistRow = typeof twists.$inferSelect;
 
 /**
  * Failure tags and success notes people added to the built-in ones. The slug

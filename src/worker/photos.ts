@@ -13,6 +13,7 @@ import {
   recipes,
   shoppingItems,
   spools,
+  twists,
   upkeepLogs,
 } from "./db/schema.ts";
 
@@ -124,6 +125,7 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     .where(and(isNotNull(items.deletedAt), lt(items.deletedAt, cutoff)))
     .returning({ id: items.id });
   await db.delete(recipes).where(and(isNotNull(recipes.deletedAt), lt(recipes.deletedAt, cutoff)));
+  await db.delete(twists).where(and(isNotNull(twists.deletedAt), lt(twists.deletedAt, cutoff)));
   await db.delete(comments).where(and(isNotNull(comments.deletedAt), lt(comments.deletedAt, cutoff)));
   // Their pictures first (R2 goes first, like the rest), so a cut-short purge leaves rows the next run finishes.
   const goneShopping = await db

@@ -73,6 +73,7 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM photos"),
     env.DB.prepare("DELETE FROM attempts"),
     env.DB.prepare("DELETE FROM recipes"),
+    env.DB.prepare("DELETE FROM twists"),
     env.DB.prepare("DELETE FROM tags"),
     env.DB.prepare("DELETE FROM draft_runs"),
     env.DB.prepare("DELETE FROM item_drafts"),
