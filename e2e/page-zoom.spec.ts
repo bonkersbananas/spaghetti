@@ -136,7 +136,8 @@ test("a zoomed photo pans and springs back inside its edges", { tag: "@phone" },
   await tap();
   await page.waitForTimeout(80);
   await tap();
-  await expect.poll(() => scaleOf(frame)).toBeCloseTo(2.5, 1);
+  // Wait for the zoom spring to finish: a touch that lands mid-spring freezes it there, and the edge is then measured at that scale.
+  await expect.poll(() => scaleOf(frame)).toBeCloseTo(2.5, 3);
   // The browser takes touch-action from the next touch on: drag far past the edge, with a swipe that would turn the page.
   await send("touchStart", [{ x: cx, y: cy, id: 1 }]);
   for (let step = 1; step <= 12; step++) {

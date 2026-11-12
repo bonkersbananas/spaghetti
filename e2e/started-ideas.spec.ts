@@ -137,13 +137,13 @@ test("Recently deleted lists what was deleted, and Restore brings it back", asyn
 
   await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
-  await page.getByRole("link", { name: "Recently deleted" }).click();
+  await page.getByRole("link", { name: "Recently deleted", exact: true }).click();
   await expect(page).toHaveURL(/\/deleted$/);
   const row = page.getByRole("listitem").filter({ hasText: title });
   await expect(row).toContainText("goes for good in 30 days");
   await row.getByRole("button", { name: /^Restore/ }).click();
   await expect(row).toHaveCount(0);
-  await expect.poll(async () => (await getItem(page, id)).title).toBe(title);
+  await expect.poll(async () => (await getItem(page, id))?.title).toBe(title);
 });
 
 test("a new build left empty removes itself without a toast, and isn't listed as deleted", async ({ page }) => {
