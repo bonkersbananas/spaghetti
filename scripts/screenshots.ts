@@ -43,6 +43,8 @@ const widthArg = process.argv.includes("--width")
   : undefined;
 if (widthArg !== undefined && !(widthArg >= 320)) throw new Error("--width needs a number such as 390, 1280 or 1920.");
 const webkitRun = process.argv.includes("--webkit");
+if (webkitRun && widthArg !== undefined && widthArg >= 768)
+  throw new Error("--webkit takes the iPhone: use a width under 768 (402, or 375 for the smallest).");
 // Safari on an iPhone 17 Pro: 402×874 CSS px at 3×, whatever the width option says about the height.
 const iphoneViewport = {
   width: widthArg ?? 402,
@@ -53,17 +55,18 @@ const iphoneViewport = {
 };
 const viewports: typeof allViewports = webkitRun
   ? [iphoneViewport]
-  : process.argv.includes("--iphone")
+  : process.argv.includes("--iphone") && widthArg === undefined
     ? allViewports.slice(0, 1)
     : widthArg === undefined
       ? allViewports
       : [
           allViewports.find((v) => v.width === widthArg) ?? {
             width: widthArg,
-            height: 900,
-            deviceScaleFactor: 2,
-            isMobile: false,
-            hasTouch: false,
+            // Any width under 768 is a phone (touch, 3×), as in AGENTS.md; wider is a desktop window.
+            height: widthArg < 768 ? 844 : 900,
+            deviceScaleFactor: widthArg < 768 ? 3 : 2,
+            isMobile: widthArg < 768,
+            hasTouch: widthArg < 768,
           },
         ];
 
