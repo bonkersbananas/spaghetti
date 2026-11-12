@@ -20,7 +20,7 @@ export function ControlSection() {
       title="Controls"
       note="For print settings: choices side by side, numbers with their units, a filament's color, and detail tucked behind one tap."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex flex-col gap-5">
           <Label>Segmented control (arrow keys move)</Label>
           <SegmentedControl

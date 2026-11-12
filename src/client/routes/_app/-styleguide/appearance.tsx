@@ -9,7 +9,7 @@ export function AppearanceSection() {
       title="Dark & offline"
       note="Every token has a dark value, so every screen has a night version. Switch here to check a component in both. In the dark, elevation comes from lighter surfaces and a lit top edge rather than shadow."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex flex-col gap-6">
           <ThemeSwitch />
           <p className="text-small text-ink-faint">

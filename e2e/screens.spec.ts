@@ -537,3 +537,17 @@ test("closing a sheet puts focus back on what opened it", async ({ page, isMobil
   await expect(sheet).toHaveCount(0);
   await expect(isMobile ? open : page.getByRole("button", { name: /^Log attempt/ }).first()).toBeFocused();
 });
+
+test("the styleguide fits a phone's width, so it doesn't widen the layout viewport", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "phone only");
+  await signIn(page);
+  await page.goto("/styleguide");
+  await expect(page.getByRole("heading", { level: 1, name: "Styleguide" })).toBeVisible();
+  // Sideways overflow (a panel wider than the screen) makes iOS and Chrome lay the page out wider than the phone,
+  // and sheets opened afterwards move under taps.
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(wide).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+});

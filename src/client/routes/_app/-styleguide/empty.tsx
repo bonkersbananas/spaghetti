@@ -10,7 +10,7 @@ export function EmptySection() {
       title="Empty states"
       note="A small pasta joke in the title, plain words in the body, one next step. Illustrations: 160×120, ink outlines, one or two accents."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="py-10">
           <EmptyState illustration={<EmptyPot />} title="Nothing simmering yet">
             Ideas land here first.

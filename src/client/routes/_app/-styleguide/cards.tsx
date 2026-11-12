@@ -84,7 +84,7 @@ export function CardSection() {
           Link cards, under a note: the page's title and site once known, the address until then (and for good when
           there is none)
         </Label>
-        <div className="max-w-content grid gap-2">
+        <div className="max-w-content grid grid-cols-1 gap-2">
           <LinkCard url="https://makerworld.com/en/models/drawer-bins" />
           <LinkCard url="https://www.example.com/a/model/without-a-title-yet" />
         </div>

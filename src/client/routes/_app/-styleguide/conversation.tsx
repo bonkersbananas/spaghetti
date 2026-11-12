@@ -29,7 +29,7 @@ export function ConversationSection() {
       title="Conversation"
       note="The short thread at the foot of an idea or build. It reads like a small messaging app, not a comment list: one person's messages sit together under one name and time, yours at the end on a tomato tint, the other person's at the start on cream. A thread with nothing in it is a single quiet field."
     >
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Panel className="bg-paper shadow-none">
           <Label>Messages</Label>
           <ol className="flex flex-col gap-3">

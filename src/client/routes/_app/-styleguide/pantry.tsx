@@ -60,7 +60,7 @@ export function PantrySection() {
       title="Pantry & printer"
       note="Spools are drawn as spools, in their own color (data, set inline), with a rough meter of what's left. Printer checks are a gentle semolina line, never a dialog; values from a slicer file carry a small file mark until someone changes them."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex flex-col gap-5">
           <Label>Spool discs: sm, md, lg, xl, and an empty slot</Label>
           <div className="flex flex-wrap items-end gap-4">
