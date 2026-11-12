@@ -75,13 +75,15 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 
 ## The shopping list
 
-Things to buy for the printer, shared by both people. A thing is `{ id, name, link, priceLink, position, boughtAt, boughtBy, createdBy, createdVia, createdAt, updatedAt }`: `link` is the shop's page, `priceLink` its Prisjakt page, `name` may be empty when there is a link (the app shows the page's title), `boughtAt` is null while it is still to buy.
+Things to buy for the printer, shared by both people. A thing is `{ id, name, link, priceLink, picture, prices, pricesTriedAt, position, boughtAt, boughtBy, createdBy, createdVia, createdAt, updatedAt }`: `link` is the shop's page, `priceLink` its Prisjakt page, `name` may be empty when there is a link (the app shows the page's title), `boughtAt` is null while it is still to buy.
 
 - `GET /shopping-items` (`read`): `{ shoppingItems }`, what's still to buy in its order (`position`, smallest first), then what was bought, the latest first.
 - `POST /shopping-items` `{ id, name?, link?, priceLink? }` (`printer`): needs a name or a link; links must be http(s). It goes on top of the list. Idempotent on `id`; `409 deleted` for an id taken off the list, `422 too_many` past 300 things.
 - `PATCH /shopping-items/:id` `{ name?, link?, priceLink?, bought? }` (`printer`): an empty string or `null` clears a link. `bought: true` ticks it off (now, by whoever asks; ticking again keeps the first), `bought: false` puts it back on top of the list.
 - `PUT /shopping-items/order` `{ ids }` (`printer`): the named things that are still to buy trade the places they hold so they come in this order; anything not named (added since the list was read, say) keeps its own place, and unknown or bought ids are ignored. Answers the whole list.
 - `DELETE /shopping-items/:id` and `POST /shopping-items/:id/restore`: soft delete and its undo, people only; purged 30 days after.
+- `POST /shopping-items/:id/check-prices` (`printer`): reads its Prisjakt product page now; answers the thing. A check within the last 20 seconds stands. `GET /shopping-items/:id/picture`: its picture (people only).
+- `picture` is `{ url, source: "prisjakt" | "shop" }` or null; `prices` is `{ checkedAt, lowest, highest, count, offers: [{ shop, price, inStock }] }` (kronor, up to three offers, in stock first) or null: what the linked Prisjakt product page said when it was read, never a promise. Adding or changing a link reads its page in the background; unbought things are read again at most once a day ([0039](decisions/0039-shopping-list-reads-the-prisjakt-pages-people-link.md)).
 - Every write records a `shopping` change (no `itemId`).
 
 ## Comments

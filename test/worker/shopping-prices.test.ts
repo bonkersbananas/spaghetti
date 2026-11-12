@@ -247,4 +247,29 @@ describe("a shop link's picture", () => {
     await settled(added.id, (item) => item.picture?.source === "prisjakt");
     expect(asked).not.toContain(SHOP);
   });
+
+  it("goes back to the shop's picture when the Prisjakt link is removed", async () => {
+    const added = await add({ name: "PLA Basic", link: SHOP });
+    await settled(added.id, (item) => item.picture?.source === "shop");
+    await patch(added.id, { priceLink: PRODUCT });
+    await settled(added.id, (item) => item.picture?.source === "prisjakt");
+    await patch(added.id, { priceLink: null });
+    expect((await get(added.id)).picture).toBeNull();
+    await settled(added.id, (item) => item.picture?.source === "shop");
+  });
+});
+
+describe("the daily refresh", () => {
+  it("keeps the picture it has, so its address stays the same", async () => {
+    const added = await add({ name: "Bambu P2S", priceLink: PRODUCT });
+    await settled(added.id, (item) => !!item.prices && !!item.picture);
+    const before = await get(added.id);
+    await setTried(added.id, Date.now() - 25 * 3600_000);
+    stubWeb();
+    await refreshPrices(env);
+    expect(asked).not.toContain(PRODUCT_PICTURE);
+    const after = await get(added.id);
+    expect(after.picture?.url).toBe(before.picture?.url);
+    expect(after.prices?.checkedAt).toBeGreaterThanOrEqual(before.prices?.checkedAt ?? 0);
+  });
 });

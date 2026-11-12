@@ -189,7 +189,7 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
           // A new Prisjakt page means new prices: what the old one said goes. A picture goes with the link it came from,
           // and the new link is asked for its own.
           ...(fields.priceLink !== undefined && { prices: null, pricesTriedAt: null }),
-          ...(fields.link !== undefined && { pictureTried: null }),
+          ...((fields.link !== undefined || fields.priceLink !== undefined) && { pictureTried: null }),
           ...((fields.priceLink !== undefined || fields.link !== undefined) && {
             pictureSource: sql`CASE WHEN (${sql.raw(fields.priceLink !== undefined ? "1" : "0")} AND ${shoppingItems.pictureSource} = 'prisjakt')
               OR (${sql.raw(fields.link !== undefined ? "1" : "0")} AND ${shoppingItems.pictureSource} = 'shop') THEN NULL ELSE ${shoppingItems.pictureSource} END`,
@@ -210,7 +210,8 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     if (!row) return apiError(c, 404, "not_found", notFound);
     const shoppingItem = await loadOne(db, itemId);
     if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
-    if (fields.link || fields.priceLink) c.executionCtx.waitUntil(lookupShopping(c.env, itemId, { db }));
+    if (fields.link !== undefined || fields.priceLink !== undefined)
+      c.executionCtx.waitUntil(lookupShopping(c.env, itemId, { db }));
     return c.json<ShoppingItemResponse>({ shoppingItem });
   })
 

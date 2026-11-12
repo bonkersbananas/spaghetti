@@ -72,6 +72,8 @@ export function TickBox({ checked, onChange, label, disabled, className }: TickB
 interface ChecklistRowProps {
   /** The TickBox. */
   tick: ReactNode;
+  /** A small picture of the thing (Thumb), between the tick box and the name. */
+  thumb?: ReactNode;
   /** The name, usually a button that opens the thing. */
   children: ReactNode;
   /** A line under the name: links (LinkChip), who and when. */
@@ -92,7 +94,17 @@ interface ChecklistRowProps {
  * drag handle. Rows sit on `checklistSurface`, an inset hairline between them; a lifted row floats on
  * `shadow-float` while it moves.
  */
-export function ChecklistRow({ tick, children, meta, handle, done, lifted, last, className }: ChecklistRowProps) {
+export function ChecklistRow({
+  tick,
+  thumb,
+  children,
+  meta,
+  handle,
+  done,
+  lifted,
+  last,
+  className,
+}: ChecklistRowProps) {
   return (
     <div
       data-done={done || undefined}
@@ -105,6 +117,7 @@ export function ChecklistRow({ tick, children, meta, handle, done, lifted, last,
       )}
     >
       {tick}
+      {thumb && <div className="shrink-0 py-1">{thumb}</div>}
       <div className="flex min-w-0 flex-1 flex-col gap-1 py-1">
         <div className={cn("min-w-0", done && "text-ink-faint")}>{children}</div>
         {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">{meta}</div>}

@@ -1,6 +1,6 @@
 # 0034. The shopping list keeps links, not prices
 
-Status: Accepted
+Status: Accepted; the "no prices" part is superseded by [0039](0039-shopping-list-reads-the-prisjakt-pages-people-link.md)
 
 **Decision:** the shopping list (`shopping_items`, `/shopping`) is one shared list of things to buy for the printer. Each thing has a name and, optionally, a shop link and a Prisjakt link that people paste; the app never looks prices up itself. With no Prisjakt link, the thing's sheet offers Prisjakt's search for its name, so the page is one tap to find and one paste to keep. A thing added as a bare link takes its page's title through the link preview. People sort what's still to buy by hand; ticking a thing off moves it to Bought (who and when), unticking puts it back on top, and Clear takes every bought thing off with one Undo.
 

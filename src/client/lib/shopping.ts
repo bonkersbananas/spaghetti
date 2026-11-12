@@ -107,7 +107,14 @@ type Changes = Partial<Pick<ShoppingItem, "name" | "link" | "priceLink">>;
 
 /** Renames a thing or changes its links. Resolves once the server has it (autosave shows "Saved"). */
 export async function updateShopping(queryClient: QueryClient, id: string, changes: Changes) {
-  patchOne(queryClient, id, (item) => ({ ...item, ...changes }));
+  patchOne(queryClient, id, (item) => ({
+    ...item,
+    ...changes,
+    // A new Prisjakt page means new prices, as the server does it; a new shop page drops the shop's picture.
+    ...(changes.priceLink !== undefined && { prices: null, pricesTriedAt: null }),
+    ...(((changes.priceLink !== undefined && item.picture?.source === "prisjakt") ||
+      (changes.link !== undefined && item.picture?.source === "shop")) && { picture: null }),
+  }));
   const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}`, {
     method: "PATCH",
     json: changes,
@@ -210,4 +217,10 @@ export function removeShopping(queryClient: QueryClient, gone: ShoppingItem[], p
       void queryClient.invalidateQueries({ queryKey: shoppingQuery.queryKey });
     },
   });
+}
+
+/** "Check prices again": the server reads the Prisjakt page now and answers with what it found. */
+export async function checkPrices(queryClient: QueryClient, id: string) {
+  const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}/check-prices`, { method: "POST" });
+  keepServer(queryClient, shoppingItem);
 }

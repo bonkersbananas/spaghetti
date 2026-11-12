@@ -144,12 +144,12 @@ const prisjaktImage = (url: string) => {
 
 interface Outcome {
   prices?: ShoppingPrices | null;
-  picture?: { source: "prisjakt" | "shop" } | null;
+  picture?: { source: "prisjakt" | "shop"; kept?: boolean } | null;
   pictureTried?: string;
   triedPrices?: boolean;
 }
 
-async function lookupPrices(env: Env, row: ShoppingItemRow, standIn: string | null): Promise<Outcome> {
+async function lookupPrices(env: Env, row: ShoppingItemRow, standIn: string | null, force: boolean): Promise<Outcome> {
   if (!row.priceLink) return {};
   const product = prisjaktProduct(row.priceLink);
   // Another price site's link is kept as it is: nothing is read from it, and it isn't asked about again.
@@ -173,7 +173,10 @@ async function lookupPrices(env: Env, row: ShoppingItemRow, standIn: string | nu
       offers: facts.offers,
     },
   };
-  if (facts.image && (prisjaktImage(facts.image) || (standIn && facts.image.startsWith(`${standIn}/`)))) {
+  // The daily refresh keeps the picture it has (its address stays cacheable); "Check prices again" fetches it anew.
+  const haveIt = row.pictureSource === "prisjakt" && !force;
+  if (haveIt) outcome.picture = { source: "prisjakt", kept: true };
+  else if (facts.image && (prisjaktImage(facts.image) || (standIn && facts.image.startsWith(`${standIn}/`)))) {
     if (await storePicture(env, row.id, facts.image, { robots: false, standIn: !!standIn })) {
       outcome.picture = { source: "prisjakt" };
     }
@@ -222,7 +225,7 @@ export async function lookupShopping(
     const now = Date.now();
     if (force && row.pricesTriedAt && now - row.pricesTriedAt.getTime() < RECHECK_GAP_MS) return false;
     const standIn = standInOrigin(env);
-    const priced = await lookupPrices(env, row, standIn);
+    const priced = await lookupPrices(env, row, standIn, force);
     // A Prisjakt picture is better than a shop's; the shop is only asked when there is none.
     const havePrisjakt = priced.picture?.source === "prisjakt" || (row.pictureSource === "prisjakt" && !!row.priceLink);
     const shop = havePrisjakt ? {} : await lookupShopPicture(env, row, standIn);
@@ -231,7 +234,7 @@ export async function lookupShopping(
     const changes = {
       ...(priced.triedPrices ? { pricesTriedAt: when } : {}),
       ...(priced.prices ? { prices: priced.prices } : {}),
-      ...(picture ? { pictureSource: picture.source, pictureAt: when } : {}),
+      ...(picture && !picture.kept ? { pictureSource: picture.source, pictureAt: when } : {}),
       ...(shop.pictureTried ? { pictureTried: shop.pictureTried } : {}),
     };
     if (!Object.keys(changes).length) return true;
@@ -247,7 +250,7 @@ export async function lookupShopping(
         ),
       )
       .returning({ id: shoppingItems.id });
-    if (written.length && (priced.prices || picture)) {
+    if (written.length && (priced.prices || (picture && !picture.kept))) {
       await recordChange(db, {
         entity: "shopping",
         id,

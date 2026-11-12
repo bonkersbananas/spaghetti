@@ -27,10 +27,6 @@ A product page fetch is within robots.txt, and one page per thing per day, kept 
 
 Web search is billed per search (about $0.01) plus a few thousand tokens for the model: roughly 1–3 cents per match, once per thing. Refreshing prices needs no Claude call: one Worker fetch of the product page.
 
-## Options
+## Outcome
 
-1. **Build it as described** (Claude web search finds the page once; the Worker reads picture and offers, refreshes daily, daily cap, hidden without a key). Risks: the terms above; a changed page format; a wrong match (mitigated by "clear or paste another link").
-2. **Thumbnail and Prisjakt link only**, no prices: same match step, one fetch for the picture, and no refresh. Smaller exposure, still needs the search step.
-3. **Pasted Prisjakt links only**: when a person pastes a Prisjakt link (already supported), read picture and cheapest offers from it. No Claude, no search, no matching risk; people still paste the link themselves.
-
-Recommendation: option 3 first (verified end to end, nothing to guess), then add the Claude match step behind it once a key is available to test with and the terms question is settled.
+Carl Oscar chose the boundary the terms allow (Nov 12): option 3, pasted Prisjakt links only, no Claude match step, no search; plus a shop page's `og:image` where its robots.txt allows. Recorded in [0039](../decisions/0039-shopping-list-reads-the-prisjakt-pages-people-link.md).

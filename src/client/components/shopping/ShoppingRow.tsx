@@ -7,6 +7,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
+import { PriceLine } from "@/components/ui/Prices";
+import { Thumb } from "@/components/ui/Thumb";
 import { cn } from "@/lib/cn";
 import { linkPreviewQuery } from "@/lib/queries";
 
@@ -89,8 +91,17 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       sendNow();
     };
   }, []);
+  const cheapest = item.prices?.offers[0];
   const links = (
     <>
+      {item.prices && !bought && (
+        <PriceLine
+          price={item.prices.lowest}
+          shop={cheapest?.shop}
+          checkedAt={item.prices.checkedAt}
+          className="w-full"
+        />
+      )}
       {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
       {item.priceLink && (
         <LinkChip href={item.priceLink} icon={PriceIcon}>
@@ -102,6 +113,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   return (
     <ChecklistRow
       done={bought}
+      thumb={item.picture && <Thumb src={item.picture.url} alt="" faded={bought} />}
       lifted={lifted}
       last={last}
       tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}
