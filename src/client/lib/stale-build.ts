@@ -39,7 +39,15 @@ export function reloadIntoNewBuild(onStart?: () => void): Promise<boolean> {
     if (started) onStart();
     else onStarts.add(onStart);
   }
-  attempt ??= run();
+  attempt ??= run().then((reloading) => {
+    // Only an attempt in flight is shared: a "no" (offline, no new build yet) must not outlive the moment, or a
+    // later chunk error in this long-lived page would never be looked at again.
+    if (!reloading) {
+      attempt = undefined;
+      onStarts.clear();
+    }
+    return reloading;
+  });
   return attempt;
 }
 
