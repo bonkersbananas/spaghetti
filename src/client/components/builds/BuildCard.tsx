@@ -50,12 +50,13 @@ function ActivityLine({ item }: { item: ItemView }) {
       ? lowerFirst(progress.label)
       : relativeTime(last.finishedAt ?? last.printedAt);
   // A half-width card on a phone has room for two short lines: the one thing that is news (time left, the
-  // question, when), without the attempt's number (the badge says how it went) or the layer count.
+  // question, when), in sentence case, without the attempt's number (the badge says how it went, and "Off the
+  // bed") or the layer count.
   const short = offBed
-    ? "off the bed · how did it go?"
+    ? "How did it go?"
     : last.outcome === null
-      ? (lowerFirst(progress.label).split(" · ").at(-1) ?? "")
-      : when;
+      ? upperFirst(progress.label.split(" · ").at(-1) ?? "")
+      : upperFirst(when);
   return (
     <>
       <span className="md:hidden">{short}</span>
@@ -69,6 +70,7 @@ function ActivityLine({ item }: { item: ItemView }) {
 }
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * A build in progress: its newest photo first (what came off the bed last),
