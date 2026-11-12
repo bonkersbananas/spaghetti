@@ -144,7 +144,7 @@
 
   /* Layout */
   /* The tab bar's buttons; the bar itself also holds the home indicator's room below them. */
-  --sg-tabbar-row: 3.25rem;
+  --sg-tabbar-row: 3.5rem;
   /* A screen's own action bar on phones, which sits on the tab bar. */
   --sg-actionbar-height: 4.75rem;
   --sg-sidebar-width: 16rem;
@@ -152,8 +152,12 @@
   --sg-wide-width: 72rem;
   --sg-safe-top: env(safe-area-inset-top, 0px);
   --sg-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The room under the tab bar's buttons. In a browser the whole safe area when the toolbar is hidden (the home indicator),
+     and a little air when the toolbar sits below the bar. The row is taller than it was (3.25rem) so the icons have air above them.
+     Installed, the home indicator needs less than the full safe area: the labels sit just above its line (see the media query below). */
+  --sg-tabbar-foot: max(var(--sg-safe-bottom), 0.5rem);
   /* The whole tab bar, home indicator included: everything that floats above it or clears it uses this one. */
-  --sg-tabbar-height: calc(var(--sg-tabbar-row) + var(--sg-safe-bottom));
+  --sg-tabbar-height: calc(var(--sg-tabbar-row) + var(--sg-tabbar-foot));
   /* What the on-screen keyboard covers, and what is left above it (lib/viewport.ts keeps them current). */
   --sg-keyboard-inset: 0px;
   --sg-visible-height: 100dvh;
@@ -170,6 +174,14 @@
   --sg-press-veil: color-mix(in srgb, currentColor 8%, transparent);
   /* What is tappable but not `pressable` (inline links, plain rows) dims to this while held. */
   --sg-press-dim: 0.6;
+}
+
+/* Installed on an iPhone (the Home Screen app) the bar reaches the screen's edge: the home indicator's line takes the lowest ~21 px of the safe area,
+   so the labels may sit lower than the whole safe area would put them. */
+@media (display-mode: standalone) {
+  :root {
+    --sg-tabbar-foot: max(calc(var(--sg-safe-bottom) - 0.875rem), 0.5rem);
+  }
 }
 
 @media (min-width: 48rem) {
