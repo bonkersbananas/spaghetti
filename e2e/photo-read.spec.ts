@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByLabel("Name").fill(user.username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
 });
 
 // Leave nothing behind: other specs expect empty sections.
@@ -128,9 +128,11 @@ test("Today's off-the-bed card shows Claude's guess on the matching button and i
 
 test("at the printer, a photo from Today's card brings the suggestion there, in one tap", { tag: "@phone" }, async ({
   page,
+  isMobile,
 }) => {
   await offTheBed(page, "Spaghetti clip");
-  await page.goto("/today");
+  // The same card: on the Journal's Now block on phones, on Today on desktop.
+  await page.goto(isMobile ? "/journal" : "/today");
   await expect(page.getByText(/Off the bed at/).first()).toBeVisible();
   // The card's Take photo opens the camera on a phone; here the file goes straight to its input.
   await page.getByRole("button", { name: "Take photo", exact: true }).first().waitFor();

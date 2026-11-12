@@ -68,7 +68,7 @@ test("the Pantry, idea and build actions sit above the tab bar", async ({ page }
 
 test("a page title is not under anything translucent at rest", async ({ page }) => {
   for (const [path, name] of [
-    ["/today", "Today"],
+    ["/workshop", "Workshop"],
     ["/ideas", "Ideas"],
     ["/agents", "Agents"],
   ] as const) {
@@ -92,9 +92,9 @@ test("a page title is not under anything translucent at rest", async ({ page }) 
 });
 
 test("the page never scrolls past its content and the tab bar's bottom is on screen", async ({ page }) => {
-  await page.goto("/today");
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-  for (const path of ["/today", "/ideas", "/builds", "/journal", "/agents"]) {
+  await page.goto("/journal");
+  await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
+  for (const path of ["/workshop", "/ideas", "/builds", "/journal", "/agents"]) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
     const { docHeight, viewport, barBottom, scrollable } = await page.evaluate(() => {

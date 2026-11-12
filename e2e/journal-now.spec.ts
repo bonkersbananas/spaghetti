@@ -67,3 +67,18 @@ test("desktop: the journal has no Now block (Today is in the sidebar)", async ({
   await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
   await expect(page.getByRole("region", { name: "On the bed" })).toHaveCount(0);
 });
+
+test("phones: Snap this print on the Journal's card opens the sheet aimed at that print", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The camera is the phone's.");
+  await printing(page, "Towel hook", 30 * MINUTE, 90);
+  await page.goto("/journal");
+  const card = page.locator("article").filter({ hasText: "Towel hook" });
+  await expect(card).toBeVisible();
+  await card.getByTestId("snap-camera-input").setInputFiles("e2e/fixtures/tugboat.jpg");
+  const sheet = page.getByRole("dialog", { name: "Add to the print" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("Towel hook, attempt 1, is printing.")).toBeVisible();
+});

@@ -2,7 +2,7 @@ import type { Item, Person } from "@shared/api";
 import { monthLabel, summaryLine } from "@shared/journal";
 import { backBurnerIdea } from "@shared/today";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { lazy, Suspense, useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
@@ -42,6 +42,11 @@ const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 const ScoutSection = lazy(() => import("@/components/scout/ScoutSection"));
 
 export const Route = createFileRoute("/_app/today")({
+  // Phones have no Today: what it showed is the top of the Journal (the Now block), so old links, push
+  // notifications and the Home Screen icon (start_url /today) land there. Desktop keeps the page.
+  beforeLoad: () => {
+    if (!window.matchMedia("(min-width: 48rem)").matches) throw redirect({ to: "/journal", replace: true });
+  },
   component: Today,
 });
 

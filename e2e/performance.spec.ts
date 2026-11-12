@@ -156,7 +156,7 @@ test("the taps people make most answer quickly on a mid-range phone", async ({ b
   // Two of them become builds.
   for (const id of ids.slice(0, 2))
     await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
-  await page.goto("/today");
+  await page.goto("/journal");
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(2500);
@@ -179,7 +179,7 @@ test("the taps people make most answer quickly on a mid-range phone", async ({ b
     await page.locator("[role=dialog]").waitFor({ state: "detached" });
     await settle();
     add(
-      "tab Today → Ideas",
+      "tab Journal → Ideas",
       await tapLatency(page, () => tabs.getByRole("link", { name: "Ideas" }).tap(), heading("Ideas")),
     );
     await settle();
@@ -224,8 +224,8 @@ test("the taps people make most answer quickly on a mid-range phone", async ({ b
     );
     await page.keyboard.press("Escape");
     await page.locator("[role=dialog]").waitFor({ state: "detached" });
-    await tabs.getByRole("link", { name: "Today" }).tap();
-    await expect(page.locator("h1").first()).toHaveText("Today");
+    await tabs.getByRole("link", { name: "Journal" }).tap();
+    await expect(page.locator("h1").first()).toHaveText("Journal");
   }
   const rows: string[] = [];
   const over: string[] = [];
@@ -347,9 +347,10 @@ test("the installed app opens from its caches, on a slow phone", async ({ browse
   expect(signedIn.ok()).toBe(true);
   await installProbe(
     context,
-    `document.querySelector('h1')?.textContent === 'Today' && !document.querySelector('.sg-skeleton')`,
+    `document.querySelector('h1')?.textContent === 'Journal' && !document.querySelector('.sg-skeleton')`,
   );
   const first = await context.newPage();
+  // The Home Screen icon opens /today, which phones turn into the Journal.
   await first.goto("/today");
   await first.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   await first.waitForLoadState("networkidle");
@@ -365,9 +366,9 @@ test("the installed app opens from its caches, on a slow phone", async ({ browse
     await page.close();
   }
   const resumed = median(times);
-  console.log(`Installed app resumed, Today useful: ${resumed.toFixed(0)} ms (4× CPU, slow 4G)`);
+  console.log(`Installed app resumed, Journal useful: ${resumed.toFixed(0)} ms (4× CPU, slow 4G)`);
   // About 500 ms on a quiet machine; a first visit with nothing cached takes over 3 s on the same profile.
-  expect(resumed, "Today on a resumed app").toBeLessThan(1500);
+  expect(resumed, "The Journal on a resumed app").toBeLessThan(1500);
   await context.close();
 });
 

@@ -21,7 +21,6 @@ import {
   ThemeSwitch,
 } from "./lazy-account";
 import type { SigningInSheet } from "./SigningInSheets";
-import { workshop } from "./sections";
 
 /** Phone-only: who is signed in, the two people, the styleguide, sign out. */
 export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -77,16 +76,6 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               })
             : [0, 1].map((i) => <RowSkeleton key={i} />)}
         </ul>
-        <Overline as="h3" className="mt-6 mb-2 block">
-          Workshop
-        </Overline>
-        <MenuGroup label="Workshop">
-          {workshop.map(({ to, label, icon }) => (
-            <MenuItem key={to} to={to} icon={icon} onClick={() => onOpenChange(false)}>
-              {label}
-            </MenuItem>
-          ))}
-        </MenuGroup>
         <Overline as="h3" className="mt-6 mb-2 block">
           Settings
         </Overline>
