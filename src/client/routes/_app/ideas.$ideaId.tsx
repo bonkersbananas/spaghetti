@@ -214,14 +214,6 @@ function Idea({ item }: { item: ItemView }) {
         <DetailBar back={back}>
           <SaveStatus state={saveState} className="mr-2" />
           <IconButton
-            icon={MoveIntoIcon}
-            label="Add to a build…"
-            title={`Add to a build (${shortcutCaps("ideaMove").join("")})`}
-            onClick={move}
-            disabled={readOnly}
-            aria-keyshortcuts="A"
-          />
-          <IconButton
             icon={TrashIcon}
             label="Delete idea"
             title={`Delete idea (${shortcutCaps("ideaDelete").join("")})`}
@@ -229,6 +221,17 @@ function Idea({ item }: { item: ItemView }) {
             disabled={readOnly}
             aria-keyshortcuts="Backspace Delete"
           />
+          {isDesktop && (
+            <Button
+              icon={MoveIntoIcon}
+              shortcut={shortcutCaps("ideaMove")}
+              onClick={move}
+              disabled={readOnly}
+              className="ml-2"
+            >
+              Add to a build
+            </Button>
+          )}
           {isDesktop && (
             <Button
               variant="primary"
@@ -372,7 +375,17 @@ function Idea({ item }: { item: ItemView }) {
         )}
         {!isDesktop && (
           <ActionBar>
-            <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>
+            <Button size="lg" icon={MoveIntoIcon} className="min-w-0 flex-1" disabled={readOnly} onClick={move}>
+              Add to a build
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              icon={BuildsIcon}
+              className="min-w-0 flex-1"
+              disabled={readOnly}
+              onClick={build}
+            >
               Start building
             </Button>
           </ActionBar>

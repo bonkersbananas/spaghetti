@@ -1,15 +1,20 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import type { Icon } from "./icons";
 import { Photo } from "./Photo";
 
 interface PickRowProps {
-  /** The leading picture (its thumbnail and color), or none: a quiet tile holds the place. */
-  photo?: { src: string; color?: string } | null;
+  /** The leading picture: a photo's thumbnail, or a slicer's plate (`contain`, whole on the well). */
+  photo?: { src: string; color?: string; fit?: "cover" | "contain" } | null;
+  /** With no picture: a glyph tile. `tone` is the tile's soft colors (an outcome's); the default is a quiet ink wash. */
+  glyph?: { icon: Icon; tone?: string };
   title: string;
-  /** A quiet second line. */
+  /** A quiet second line: pieces in `MetaList` or plain words. */
   meta?: ReactNode;
-  /** A small mark at the end: "On the bed", "Latest". */
+  /** A small label beside the title (a neutral `Chip`). */
   mark?: ReactNode;
+  /** A step quieter: a smaller tile and softer title, for what is rarely the answer (done and shelved builds). */
+  quiet?: boolean;
   onSelect: () => void;
   /** Starts with focus (the suggested choice), so Enter takes it. */
   autoFocus?: boolean;
@@ -18,9 +23,11 @@ interface PickRowProps {
 
 /**
  * One choice in a list of things to pick from, picture first: a tap takes it. Builds in "Add to a build", attempts in
- * the second step. 56 px tall (a thumb's row), a faint wash on hover.
+ * the second step. 56 px tall (a thumb's row), a faint wash on hover. Always a picture or a glyph, never an empty tile.
  */
-export function PickRow({ photo, title, meta, mark, onSelect, autoFocus, className }: PickRowProps) {
+export function PickRow({ photo, glyph, title, meta, mark, quiet, onSelect, autoFocus, className }: PickRowProps) {
+  const tile = cn("shrink-0 rounded-md", quiet ? "size-9 md:size-10" : "size-10 md:size-11");
+  const GlyphIcon = glyph?.icon;
   return (
     <button
       type="button"
@@ -33,15 +40,30 @@ export function PickRow({ photo, title, meta, mark, onSelect, autoFocus, classNa
       )}
     >
       {photo ? (
-        <Photo src={photo.src} alt="" color={photo.color} className="size-10 shrink-0 rounded-md md:size-11" />
+        <Photo
+          src={photo.src}
+          alt=""
+          color={photo.color}
+          fit={photo.fit}
+          className={cn(tile, photo.fit === "contain" && "p-0.5")}
+        />
       ) : (
-        <span aria-hidden className="bg-well size-10 shrink-0 rounded-md md:size-11" />
+        <span
+          aria-hidden
+          className={cn(tile, "flex items-center justify-center", glyph?.tone ?? "bg-ink/5 text-ink-faint")}
+        >
+          {GlyphIcon && <GlyphIcon size={quiet ? 18 : 22} />}
+        </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="text-body text-ink block truncate font-semibold">{title}</span>
-        {meta && <span className="text-small text-ink-faint block truncate">{meta}</span>}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={cn("text-body truncate", quiet ? "text-ink-soft font-medium" : "text-ink font-semibold")}>
+            {title}
+          </span>
+          {mark}
+        </span>
+        {meta && <span className="text-small text-ink-faint block min-w-0">{meta}</span>}
       </span>
-      {mark && <span className="text-caption text-ink-soft shrink-0 font-semibold">{mark}</span>}
     </button>
   );
 }

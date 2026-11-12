@@ -56,13 +56,13 @@ test("a capture moves into the newest attempt of a build, and Undo puts it all b
 }) => {
   const { buildId, ideaId, photoId, attemptIds } = await seed(page);
   await page.goto(`/ideas/${ideaId}`);
-  await page.getByRole("button", { name: "Add to a build…" }).click();
+  await page.getByRole("button", { name: /^Add to a build/ }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("button", { name: /Towel hook/ }).click();
   await expect(sheet.getByText("Which print is it about?")).toBeVisible();
   await sheet.getByRole("button", { name: /Attempt 2/ }).click();
 
-  await expect(page.getByText("Moved to Towel hook, attempt 2")).toBeVisible();
+  await expect(page.getByText("Moved to attempt 2")).toBeVisible();
   await expect(page).toHaveURL(/\/ideas$/);
   await expect
     .poll(async () => {

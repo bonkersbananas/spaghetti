@@ -98,8 +98,10 @@ export function moveIntoBuild(
     },
   );
 
-  const where = attempt ? `${itemName(build, "build")}, attempt ${attempt.number}` : itemName(build, "build");
-  toast.undo(`Moved to ${where}`, {
+  // Short enough to read beside View and Undo on one line: the print (or the build) leads, the build name follows.
+  const name = itemName(build, "build");
+  toast.undo(attempt ? `Moved to attempt ${attempt.number}` : `Moved to ${name}`, {
+    description: attempt ? name : undefined,
     view: { label: "View", onClick: () => go(build.id) },
     onUndo: async () => {
       if (!(await sent)) return;

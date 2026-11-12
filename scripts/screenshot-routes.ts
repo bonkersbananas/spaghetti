@@ -2818,7 +2818,7 @@ const looseCapture = "5eed0000-0000-4000-8000-000000000001";
 
 /** Opens "Add to a build…" on the loose capture's page and waits for the picker. */
 async function openMovePicker(page: Page) {
-  await page.getByRole("button", { name: "Add to a build…" }).click();
+  await page.getByRole("button", { name: /^Add to a build/ }).click();
   const sheet = page.getByRole("dialog", { name: "Add to a build" });
   await sheet.getByRole("button", { name: /Towel hook/ }).waitFor();
   await page.waitForTimeout(400);
@@ -2840,6 +2840,15 @@ shots.push(
         await page.waitForTimeout(300);
       },
       cleanup: closeDialog,
+    },
+    {
+      // The action on the idea's page: beside Start building (desktop), in the action bar (phones).
+      name: "move-action",
+      path: `/ideas/${looseCapture}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: /^Add to a build/ }).waitFor();
+        await page.waitForTimeout(400);
+      },
     },
     {
       // The action on the idea's page, then the picker: the print on the bed first.
@@ -2876,7 +2885,7 @@ shots.push(
           .getByRole("dialog")
           .getByRole("button", { name: /Attempt 1/ })
           .click();
-        await page.getByText(/^Moved to Towel hook, attempt/).waitFor();
+        await page.getByText(/^Moved to attempt/).waitFor();
         await page.waitForTimeout(500);
       },
       cleanup: async (page) => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { PickRow } from "@/components/ui/PickRow";
@@ -85,10 +86,25 @@ export function SheetSection() {
       </div>
       <div className="mt-6">
         <Panel className="max-w-md">
-          <Label>Pick rows (a list of things to choose from, in a sheet)</Label>
-          <PickRow title="Towel hook" meta="3 attempts" mark="On the bed" onSelect={() => undefined} />
-          <PickRow title="Cable comb" meta="Done" onSelect={() => undefined} />
-          <PickRow title="Attempt 2" meta="Spaghetti · 2 hours ago" mark="Latest" onSelect={() => undefined} />
+          <Label>
+            Pick rows (a list to choose from in a sheet: a picture or a glyph tile, status in its own ink, quiet for
+            what is rarely the answer)
+          </Label>
+          <PickRow glyph={{ icon: Icons.BuildsIcon }} title="Towel hook" meta="2 attempts" onSelect={() => undefined} />
+          <PickRow
+            glyph={{ icon: Icons.SpaghettiIcon, tone: "bg-tomato-soft text-tomato-ink" }}
+            title="Attempt 2"
+            mark={<Chip>Latest</Chip>}
+            meta={<span className="text-tomato-ink font-semibold">Spaghetti</span>}
+            onSelect={() => undefined}
+          />
+          <PickRow
+            quiet
+            glyph={{ icon: Icons.BuildsIcon }}
+            title="Cable comb"
+            meta="Done · Sep 27"
+            onSelect={() => undefined}
+          />
         </Panel>
       </div>
       <ChangePasswordSheet open={password} onOpenChange={setPassword} />
