@@ -36,10 +36,14 @@ async function ideaWithPhoto(page: Page) {
 
 test("a tapped card's photo travels to its page: one name, on the hero, let go a moment later", async ({ page }) => {
   const id = await ideaWithPhoto(page);
-  await page.goto("/ideas");
+  // The idea page's code is loaded before the tap: the name is let go 800 ms after it, and a page whose code arrives
+  // later (a busy runner) is not named at all, which is not what this test is about.
+  await page.goto(`/ideas/${id}`);
+  const hero = page.getByRole("region", { name: "Photos" }).getByRole("figure");
+  await expect(hero.first()).toBeVisible();
+  await page.getByRole("link", { name: "Ideas", exact: true }).first().click();
   const card = page.getByRole("link", { name: /Tugboat/ });
   await expect(card).toBeVisible();
-  const hero = page.getByRole("region", { name: "Photos" }).getByRole("figure");
   await card.click();
   await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
   // The page's hero photo carries the transition's name while the transition runs, and only it.
