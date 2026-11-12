@@ -109,7 +109,7 @@ export function readProductPage(html: string): ProductFacts | null {
   }
   return {
     name: typeof product.name === "string" ? product.name.slice(0, 200) : null,
-    image: image && /^https:\/\//.test(image) ? image : null,
+    image: image && /^https?:\/\//.test(image) ? image : null,
     low,
     high: num(offers?.highPrice),
     count: num(offers?.offerCount),
