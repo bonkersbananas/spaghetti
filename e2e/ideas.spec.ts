@@ -187,11 +187,12 @@ test("sliding off the capture button after the hold cancels it", { tag: "@phone"
     touchPoints: at(box.x + box.width / 2, box.y + box.height / 2),
   });
   await page.waitForTimeout(700);
-  await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(box.x + box.width / 2, 300) });
+  await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(20, box.y + box.height / 2) });
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(600);
   expect(chosen).toBe(false);
   // Nothing is left armed: the keyboard opens the sheet, not the camera.
+  await expect(page.getByRole("button", { name: "New idea" }).locator("svg:visible")).toHaveCount(1);
   await button.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "New idea" })).toBeVisible();

@@ -63,6 +63,12 @@ function CaptureButton() {
         onPointerUp={() => {
           down.current = false;
           window.clearTimeout(timer.current);
+          // A release on the button is followed by its click, at once. If none comes (the finger slid off and lifted
+          // with nothing cancelling the gesture), the hold is over: don't stay armed.
+          timer.current = window.setTimeout(() => {
+            held.current = false;
+            setArmed(false);
+          }, 300);
         }}
         onPointerCancel={() => {
           down.current = false;
