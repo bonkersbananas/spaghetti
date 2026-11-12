@@ -53,7 +53,10 @@ interface Caller {
 
 /** Calls Spaghetti's API as the same agent. */
 function apiCaller({ authorization, origin, env, ctx }: Caller) {
-  return async (path: string, init: { method?: string; json?: unknown; form?: FormData } = {}): Promise<ApiResult> => {
+  return async (
+    path: string,
+    init: { method?: string; json?: unknown; form?: FormData; binary?: boolean } = {},
+  ): Promise<ApiResult> => {
     const headers = new Headers({ Authorization: authorization, Accept: "application/json, text/markdown" });
     let body: BodyInit | undefined;
     if (init.json !== undefined) {
@@ -65,6 +68,24 @@ function apiCaller({ authorization, origin, env, ctx }: Caller) {
       env,
       ctx,
     );
+    if (init.binary) {
+      const bytes = response.ok ? new Uint8Array(await response.arrayBuffer()) : undefined;
+      const text = response.ok ? "" : await response.text();
+      let json: unknown = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        // Not JSON.
+      }
+      return {
+        ok: response.ok,
+        status: response.status,
+        json,
+        text,
+        bytes,
+        contentType: response.headers.get("content-type") ?? "",
+      };
+    }
     const text = response.status === 204 ? "" : await response.text();
     let json: unknown = null;
     try {
@@ -114,9 +135,12 @@ async function handle(msg: Message, caller: Caller): Promise<ReturnType<typeof r
         });
       }
       try {
-        const result = await entry.run(args.data as never, { call: apiCaller(caller) });
+        const result = await entry.run(args.data as never, { call: apiCaller(caller), scopes: caller.scopes });
         return rpcResult(id, {
-          content: [{ type: "text", text: result.text }],
+          content: [
+            { type: "text", text: result.text },
+            ...(result.images ?? []).map((image) => ({ type: "image", data: image.data, mimeType: image.mimeType })),
+          ],
           ...(result.isError ? { isError: true } : {}),
         });
       } catch (error) {
