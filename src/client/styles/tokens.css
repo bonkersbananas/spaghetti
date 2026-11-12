@@ -109,7 +109,8 @@
   --sg-shadow-raised: 0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08);
   /* A button's face on a card: cream on cream needs a hair of edge to read as something to press. */
   --sg-shadow-key: 0 1px 1px rgb(80 50 20 / 0.06), 0 2px 6px rgb(80 50 20 / 0.06), 0 0 0 1px rgb(80 50 20 / 0.11);
-  --sg-shadow-key-hover: 0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08), 0 0 0 1px rgb(80 50 20 / 0.16);
+  --sg-shadow-key-hover:
+    0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08), 0 0 0 1px rgb(80 50 20 / 0.16);
   --sg-shadow-float: 0 2px 6px rgb(80 50 20 / 0.06), 0 16px 48px rgb(80 50 20 / 0.16);
   --sg-shadow-well: inset 0 1px 2px rgb(80 50 20 / 0.07);
   --sg-shadow-bar: 0 -1px 0 rgb(43 36 32 / 0.05), 0 -8px 24px rgb(80 50 20 / 0.06);
