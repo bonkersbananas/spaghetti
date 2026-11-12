@@ -5,7 +5,7 @@ import { robotsAllows } from "../../shared/robots.ts";
 import { recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { type ShoppingItemRow, shoppingItems } from "../db/schema.ts";
-import { readCapped, resolvesPublic } from "../link-preview.ts";
+import { nameMissing, readCapped, resolvesPublic } from "../link-preview.ts";
 import { fromUrl, readImage } from "../mcp/image.ts";
 
 /**
@@ -33,17 +33,44 @@ export const shoppingPictureKey = (id: string) => `shopping/${id}/picture`;
 const standInOrigin = (env: Pick<Env, "ANTHROPIC_BASE_URL">) =>
   env.ANTHROPIC_BASE_URL?.trim() ? new URL(env.ANTHROPIC_BASE_URL.trim()).origin : null;
 
+/** Redirects followed for a robots.txt, as RFC 9309 asks (at least five). */
+const ROBOTS_REDIRECTS = 5;
+
+/**
+ * Whether robots.txt lets us read `url` (RFC 9309): a robots.txt that isn't there (any 4xx, or a redirect to a name
+ * that doesn't exist, as Bambu Lab's EU store sends) has no rules; a server error, a network failure or too many
+ * redirects mean we don't know, so we don't read.
+ */
 async function robotsPermit(url: URL, signal: AbortSignal): Promise<boolean> {
   try {
-    const response = await fetch(new URL("/robots.txt", url), {
-      headers: { "User-Agent": USER_AGENT },
-      signal,
-      redirect: "follow",
-    });
-    // No robots.txt means no rules; any other trouble means we don't know, so we don't read.
-    if (response.status === 404 || response.status === 410) return true;
-    if (!response.ok) return false;
-    return robotsAllows(await readCapped(response, 512 * 1024), url.pathname + url.search, AGENT);
+    let at = new URL("/robots.txt", url);
+    for (let hop = 0; hop <= ROBOTS_REDIRECTS; hop++) {
+      const response = await fetch(at, { headers: { "User-Agent": USER_AGENT }, signal, redirect: "manual" });
+      const location = response.headers.get("location");
+      if (response.status >= 300 && response.status < 400 && location) {
+        await response.body?.cancel().catch(() => undefined);
+        let next: URL;
+        try {
+          next = new URL(location, at);
+        } catch {
+          return true;
+        }
+        if (!/^https?:$/.test(next.protocol)) return false;
+        if (next.hostname !== at.hostname && (await nameMissing(next.hostname.replace(/\.$/, ""), signal))) return true;
+        at = next;
+        continue;
+      }
+      if (response.status >= 400 && response.status < 500) {
+        await response.body?.cancel().catch(() => undefined);
+        return true;
+      }
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        return false;
+      }
+      return robotsAllows(await readCapped(response, 512 * 1024), url.pathname + url.search, AGENT);
+    }
+    return false;
   } catch {
     return false;
   }
@@ -111,12 +138,32 @@ export function pageImage(html: string, base: URL): string | null {
   return null;
 }
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** A PNG's size from its IHDR chunk, which must come first; null when it isn't a PNG. */
+export function pngSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 24 || PNG_SIGNATURE.some((byte, i) => bytes[i] !== byte)) return null;
+  if (String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR") return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/** Shops' pictures may be PNG too (Bambu Lab's are); photos people take stay JPEG or WebP. */
+function readPicture(bytes: Uint8Array) {
+  if (bytes[0] !== 0x89) return readImage(bytes);
+  const size = pngSize(bytes);
+  if (!size || size.width < 1 || size.height < 1 || size.width > 10_000 || size.height > 10_000) {
+    throw new Error("That picture isn't a PNG whose size can be read.");
+  }
+  return { bytes, contentType: "image/png" };
+}
+
 async function putPicture(env: Env, id: string, bytes: Uint8Array) {
-  const image = readImage(bytes);
+  const image = readPicture(bytes);
   await env.PHOTOS.put(shoppingPictureKey(id), image.bytes, { httpMetadata: { contentType: image.contentType } });
 }
 
-/** Downloads a picture and keeps it in R2; false when it isn't a JPEG or WebP, or can't be had. */
+/** Downloads a picture and keeps it in R2; false when it isn't a JPEG, PNG or WebP, or can't be had. */
 async function storePicture(env: Env, id: string, url: string, check: { robots: boolean; standIn: boolean }) {
   try {
     const parsed = new URL(url);

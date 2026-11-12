@@ -225,6 +225,9 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
     if (fields.link !== undefined || fields.priceLink !== undefined)
       c.executionCtx.waitUntil(lookupShopping(c.env, itemId, { db }));
+    // A thing added with only a link gets its name afterwards (the page's title): that is when it can be searched for.
+    if (fields.name && !shoppingItem.priceLink)
+      c.executionCtx.waitUntil(suggestPage(c.env, itemId, { firstOnly: true, db }));
     return c.json<ShoppingItemResponse>({ shoppingItem });
   })
 

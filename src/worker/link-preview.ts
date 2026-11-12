@@ -29,6 +29,20 @@ export async function resolvesPublic(host: string, signal: AbortSignal): Promise
   return addresses.length > 0 && addresses.every(isPublicAddress);
 }
 
+/** Whether DNS says a name doesn't exist at all (NXDOMAIN); false for a name that resolves, and for any doubt. */
+export async function nameMissing(host: string, signal: AbortSignal): Promise<boolean> {
+  try {
+    const response = await fetch(`${DOH}?name=${encodeURIComponent(host)}&type=A`, {
+      headers: { Accept: "application/dns-json" },
+      signal,
+    });
+    if (!response.ok) return false;
+    return ((await response.json()) as { Status?: number }).Status === 3;
+  } catch {
+    return false;
+  }
+}
+
 /** Reads at most `maxBytes` of a body, then lets go of the rest. */
 export async function readCapped(response: Response, maxBytes: number): Promise<string> {
   const reader = response.body?.getReader();
