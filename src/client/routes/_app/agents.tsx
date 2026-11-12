@@ -17,11 +17,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { KeyIcon, PlusIcon } from "@/components/ui/icons";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { agentsQuery, disconnectApp, revokeToken, usePendingRevokes } from "@/lib/agents";
+import { isInstalled } from "@/lib/push";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 // Webhooks and their sheet load on their own, after the page: the Agents screen's first load stays as it was.
+const PUBLISHED_REFERENCE = "https://github.com/bonkersbananas/spaghetti/blob/main/docs/openapi.json";
+
 const Webhooks = lazy(() => import("@/components/agents/Webhooks"));
 
 export const Route = createFileRoute("/_app/agents")({
@@ -95,12 +98,14 @@ function Agents() {
           href="/api/openapi.json"
           target="_blank"
           rel="noopener noreferrer"
-          // An installed (Home Screen) app keeps an in-scope target=_blank link in its own window; window.open
-          // with noopener asks for a separate browsing context instead (it returns null by design). Middle-click and the link's href still work.
+          // An installed (Home Screen) app keeps every URL inside its scope (the whole of spaghetti.day) in its own
+          // window, whatever the target; only another origin opens in Safari's sheet. So the installed app links
+          // the published copy on GitHub (docs/openapi.json, kept in sync by a test); browsers keep the live document.
+          // Middle-click and the link's href still work.
           onClick={(event) => {
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
-            window.open("/api/openapi.json", "_blank", "noopener,noreferrer");
+            window.open(isInstalled() ? PUBLISHED_REFERENCE : "/api/openapi.json", "_blank", "noopener,noreferrer");
           }}
           className="focus-ring text-ink-soft decoration-ink/30 font-semibold underline underline-offset-2"
         >

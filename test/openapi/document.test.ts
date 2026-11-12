@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { Validator } from "@seriousme/openapi-schema-validator";
 import { describe, expect, it } from "vitest";
 import { app } from "../../src/worker/app.ts";
@@ -20,6 +21,15 @@ describe("the OpenAPI document", () => {
       [...described].filter((key) => !routes.includes(key)),
       "operations without a route",
     ).toEqual([]);
+  });
+
+  it("is published as docs/openapi.json, for the installed app's link (UPDATE_OPENAPI=1 rewrites it)", () => {
+    const file = "docs/openapi.json";
+    const made = `${JSON.stringify(buildOpenApi(null, "https://spaghetti.day"), null, 2)}\n`;
+    if (process.env.UPDATE_OPENAPI) writeFileSync(file, made);
+    expect(readFileSync(file, "utf8") === made, "docs/openapi.json is stale: run UPDATE_OPENAPI=1 pnpm test").toBe(
+      true,
+    );
   });
 
   it("is valid OpenAPI 3.1", async () => {

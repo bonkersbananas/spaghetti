@@ -196,3 +196,27 @@ test("the API reference opens the OpenAPI spec in a new tab and the app stays on
   await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
   await tab.close();
 });
+
+test("the installed app opens the published API reference on another origin, which leaves its window", async ({
+  page,
+  context,
+  isMobile,
+}) => {
+  // Browsers here don't emulate display-mode: standalone, so the page is told it is installed.
+  await page.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) =>
+      query.includes("display-mode: standalone")
+        ? ({ ...real("(min-width: 0px)"), media: query, matches: true } as MediaQueryList)
+        : real(query);
+  });
+  await page.reload();
+  await goToAgents(page, isMobile);
+  const opened = context.waitForEvent("page");
+  await page.getByRole("link", { name: "API reference" }).click();
+  const tab = await opened;
+  await tab.waitForURL(/github\.com\/bonkersbananas\/spaghetti\/blob\/main\/docs\/openapi\.json/).catch(() => {});
+  expect(new URL(tab.url()).hostname).not.toBe(new URL(page.url()).hostname);
+  expect(new URL(page.url()).pathname).toBe("/agents");
+  await tab.close();
+});
