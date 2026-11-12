@@ -15,8 +15,10 @@ import {
   createItem,
   itemPhotoFields,
   listQuery,
+  moveInto,
   putParts,
   reorder,
+  unmoveInto,
   unscrap,
   updateItem,
   upNextOrder,
@@ -468,6 +470,21 @@ export const operations: Record<string, Operation> = {
     summary: "Undoes a scrap: the build as it was.",
     body: unscrap,
     response: one("item", Item),
+  },
+  "POST /items/:id/move": {
+    summary: "Moves an idea's photos and note into a build or one of its attempts; the idea goes away. People only.",
+    body: moveInto,
+    response: one("item", Item),
+    errors: {
+      404: notFound("idea or build"),
+      409: "not_an_idea, not_a_build, too_long (the joined note passes the limit) or has_comments: the idea has comments or reactions, which stay with it.",
+    },
+  },
+  "POST /items/:id/unmove": {
+    summary: "Undoes a move: the idea comes back with its note and photos. People only.",
+    body: unmoveInto,
+    response: one("item", Item),
+    errors: { 404: notFound("idea") },
   },
   "POST /items/:id/restore": {
     summary: "Restores a deleted item.",

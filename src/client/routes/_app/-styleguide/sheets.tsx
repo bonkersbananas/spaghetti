@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
+import { PickRow } from "@/components/ui/PickRow";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
@@ -33,6 +35,16 @@ export function SheetSection() {
           }
         >
           Delete with undo
+        </Button>
+        <Button
+          onClick={() =>
+            toast.undo("Moved to Towel hook, attempt 2", {
+              view: { label: "View", onClick: () => undefined },
+              onUndo: () => toast.success("Back in Ideas"),
+            })
+          }
+        >
+          Undo with a View
         </Button>
         <Button onClick={() => toast.success("Saved to Ideas")}>Success toast</Button>
         <Button onClick={() => toast.action("Saved to Ideas", { label: "View", onClick: () => undefined })}>
@@ -70,6 +82,29 @@ export function SheetSection() {
             <MenuItem icon={Icons.BellIcon}>Notifications</MenuItem>
             <MenuItem icon={Icons.SignOutIcon}>Sign out</MenuItem>
           </MenuGroup>
+        </Panel>
+      </div>
+      <div className="mt-6">
+        <Panel className="max-w-md">
+          <Label>
+            Pick rows (a list to choose from in a sheet: a picture or a glyph tile, status in its own ink, quiet for
+            what is rarely the answer)
+          </Label>
+          <PickRow glyph={{ icon: Icons.BuildsIcon }} title="Towel hook" meta="2 attempts" onSelect={() => undefined} />
+          <PickRow
+            glyph={{ icon: Icons.SpaghettiIcon, tone: "bg-tomato-soft text-tomato-ink" }}
+            title="Attempt 2"
+            mark={<Chip>Latest</Chip>}
+            meta={<span className="text-tomato-ink font-semibold">Spaghetti</span>}
+            onSelect={() => undefined}
+          />
+          <PickRow
+            quiet
+            glyph={{ icon: Icons.BuildsIcon }}
+            title="Cable comb"
+            meta="Done · Sep 27"
+            onSelect={() => undefined}
+          />
         </Panel>
       </div>
       <ChangePasswordSheet open={password} onOpenChange={setPassword} />

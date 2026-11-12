@@ -10,6 +10,7 @@ export {
   Archive as ShelveIcon,
   ArrowCounterClockwise as UndoIcon,
   ArrowDown as MoveDownIcon,
+  ArrowElbowDownRight as MoveIntoIcon,
   ArrowRight as ArrowRightIcon,
   ArrowsClockwise as SameAgainIcon,
   ArrowsOutCardinal as MoveIcon,
