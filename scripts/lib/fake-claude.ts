@@ -116,7 +116,10 @@ const labels = {
  * `second` product 2 instead). The product pages themselves are served below, at /produkt.php.
  */
 async function answerSearch(body: string, response: import("node:http").ServerResponse) {
-  const asked = (/Find the Prisjakt page for this thing[^{]*(\{.*\})/.exec(body)?.[1] ?? "").toLowerCase();
+  const raw = /Find the Prisjakt page for this thing[^{]*(\{.*\})/.exec(body)?.[1] ?? "";
+  const asked = raw.toLowerCase();
+  // The suggested page is called what the thing is called.
+  const named = /name\\?":\\?"((?:[^"\\]|\\.)*?)\\?"/.exec(raw)?.[1]?.replace(/\\"/g, '"') ?? "";
   if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
   response.setHeader("Content-Type", "application/json");
   if (asked.includes("broken")) {
@@ -132,7 +135,7 @@ async function answerSearch(body: string, response: import("node:http").ServerRe
     ? { url: "https://www.prisjakt.nu/produkt.php?p=999", title: "Made up" }
     : none
       ? { url: null, title: null }
-      : { url, title: `Bambu Lab PLA Basic ${product}` };
+      : { url, title: named || `Bambu Lab PLA Basic ${product}` };
   response.end(
     JSON.stringify({
       id: "msg_fake",
@@ -152,7 +155,7 @@ async function answerSearch(body: string, response: import("node:http").ServerRe
                     {
                       type: "web_search_result",
                       url,
-                      title: `Bambu Lab PLA Basic ${product}`,
+                      title: named || `Bambu Lab PLA Basic ${product}`,
                       page_age: null,
                       encrypted_content: "x",
                     },

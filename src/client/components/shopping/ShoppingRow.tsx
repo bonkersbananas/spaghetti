@@ -105,11 +105,15 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
           </Chip>
         </button>
       )}
-      {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
+      {item.link && (
+        <LinkChip href={item.link} quietArrow>
+          {shopName(item.link)}
+        </LinkChip>
+      )}
       {item.priceLink && (
-        <LinkChip href={item.priceLink} icon={PriceIcon}>
-          {/* With a price in the line above, the phone keeps just the icon: both chips then fit on one line. */}
-          <span className={cn(item.prices && !bought && "max-md:sr-only")}>Prisjakt</span>
+        // With a price in the line above, the chip is just the word (no coin): both chips then fit on one phone line.
+        <LinkChip href={item.priceLink} icon={item.prices && !bought ? undefined : PriceIcon} quietArrow>
+          Prisjakt
         </LinkChip>
       )}
     </>

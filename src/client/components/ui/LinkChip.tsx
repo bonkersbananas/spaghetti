@@ -9,6 +9,8 @@ interface LinkChipProps {
   href: string;
   icon?: Icon;
   children: ReactNode;
+  /** Leave the small arrow out on phones, where a row of two chips needs the room (still opens a new tab; screen readers are told). */
+  quietArrow?: boolean;
   className?: string;
 }
 
@@ -16,7 +18,7 @@ interface LinkChipProps {
  * A small link that leaves the app, as a chip: the shop a thing is sold in, its Prisjakt page. A quiet neutral pill
  * with a small arrow, opened in a new tab; `touch-target` gives it a 44 px hit area on phones.
  */
-export function LinkChip({ href, icon: IconComponent, children, className }: LinkChipProps) {
+export function LinkChip({ href, icon: IconComponent, children, quietArrow, className }: LinkChipProps) {
   return (
     <a
       href={href}
@@ -30,7 +32,12 @@ export function LinkChip({ href, icon: IconComponent, children, className }: Lin
     >
       {IconComponent && <IconComponent size={14} weight="bold" aria-hidden />}
       <span className="truncate">{children}</span>
-      <ExternalIcon size={12} weight="bold" className="shrink-0 opacity-70" aria-hidden />
+      <ExternalIcon
+        size={12}
+        weight="bold"
+        className={cn("shrink-0 opacity-70", quietArrow && "max-md:hidden")}
+        aria-hidden
+      />
       <span className="sr-only"> (opens in a new tab)</span>
     </a>
   );
