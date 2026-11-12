@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { type ReactNode, useRef } from "react";
 import { Drawer } from "vaul";
 import { cn } from "@/lib/cn";
+import { useReturnFocus } from "@/lib/return-focus";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { IconButton } from "./Button";
 import { CloseIcon } from "./icons";
@@ -30,35 +31,6 @@ export interface SheetProps {
   children: ReactNode;
 }
 
-/**
- * The one overlay. Bottom sheet on phones (drag down to dismiss, thumb-reach
- * actions), dialog or side panel on desktop. Never an "are you sure?" box:
- * deletes use an undo toast instead.
- */
-/**
- * Puts focus back where it was when the sheet opened. Radix only returns it
- * to a Dialog.Trigger, and our sheets open from state (a shortcut, a button
- * elsewhere, the palette), so without this it would fall to the page.
- */
-function useReturnFocus(open: boolean) {
-  const opener = useRef<HTMLElement | null>(null);
-  const wasOpen = useRef(false);
-  if (open && !wasOpen.current && typeof document !== "undefined") {
-    const active = document.activeElement;
-    opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
-  }
-  wasOpen.current = open;
-  return (event: Event) => {
-    const target = opener.current;
-    opener.current = null;
-    if (!target?.isConnected) return;
-    // Another sheet opened as this one closed (an action that opens the next step): leave focus there.
-    if (document.activeElement?.closest("[role=dialog]")) return;
-    event.preventDefault();
-    target.focus({ preventScroll: true });
-  };
-}
-
 /** A press on a toast (Undo) isn't "outside" the sheet: it must not close it. */
 const keepOpenForToast = (event: { target: EventTarget | null; preventDefault: () => void }) => {
   if (event.target instanceof Element && event.target.closest("[data-sonner-toaster]")) event.preventDefault();
@@ -68,6 +40,11 @@ const keepOpenForToast = (event: { target: EventTarget | null; preventDefault: (
 const FOCUSABLE =
   "input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])";
 
+/**
+ * The one overlay. Bottom sheet on phones (drag down to dismiss, thumb-reach
+ * actions), dialog or side panel on desktop. Never an "are you sure?" box:
+ * deletes use an undo toast instead.
+ */
 export function Sheet(props: SheetProps) {
   const isDesktop = useIsDesktop();
   return isDesktop ? <DesktopSheet {...props} /> : <PhoneSheet {...props} />;
