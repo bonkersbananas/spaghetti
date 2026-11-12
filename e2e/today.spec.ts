@@ -171,8 +171,8 @@ test("Snap this print opens the capture sheet aimed at that print, and the photo
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText("Towel hook, attempt 1, is printing.")).toBeVisible();
   // Two prints on the bed: the sheet says which, and the other is one tap away.
-  await expect(sheet.getByRole("button", { name: "Towel hook · 1" })).toHaveAttribute("aria-pressed", "true");
-  await expect(sheet.getByRole("button", { name: "Bath tugboat · 1" })).toHaveAttribute("aria-pressed", "false");
+  await expect(sheet.getByRole("button", { name: "Towel hook" })).toHaveAttribute("aria-pressed", "true");
+  await expect(sheet.getByRole("button", { name: "Bath tugboat" })).toHaveAttribute("aria-pressed", "false");
   if (!isMobile) await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
   await sheet.getByRole("button", { name: "Add to print" }).click();
   await expect(sheet).toBeHidden();

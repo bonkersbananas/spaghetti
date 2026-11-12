@@ -210,14 +210,18 @@ export function CaptureSheet() {
         )}
         {!asIdea && auto.kind === "attempt" && prints.length > 1 && (
           // Several prints: which one is this photo of? Named by the build; the first is where the sheet started.
-          <ChipRow label="Which print" wrap>
+          <ChipRow label="Which print">
             {prints.map(({ item, attempt }) => (
               <ToggleChip
                 key={attempt.id}
                 selected={attempt.id === auto.attemptId}
                 onClick={() => setPickedPrint(attempt.id)}
               >
-                {item.title || "Untitled build"} · {attempt.number}
+                {item.title || "Untitled build"}
+                {/* The attempt only when two prints are of one build; elsewhere "· 2" reads like a count. */}
+                {prints.some((other) => other.item.id === item.id && other.attempt.id !== attempt.id)
+                  ? ` · attempt ${attempt.number}`
+                  : ""}
               </ToggleChip>
             ))}
           </ChipRow>
