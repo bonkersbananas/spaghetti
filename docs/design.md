@@ -149,7 +149,8 @@ Surfaces are separated by soft, warm shadows, not borders.
 | Class           | Use                                          |
 | --------------- | -------------------------------------------- |
 | `shadow-well`   | Inset: fields, photo tiles, wells.           |
-| `shadow-soft`   | Cards and secondary buttons at rest.         |
+| `shadow-soft`   | Cards at rest.                               |
+| `shadow-key`    | Secondary buttons: a 1 px warm edge (the one place an edge is allowed, since cream on a cream card disappears); `shadow-key-hover` on hover. In dark the same as `soft`/`raised`. |
 | `shadow-raised` | Hover, the sign-in card, the capture button. |
 | `shadow-float`  | Sheets, dialogs, toasts.                     |
 | `shadow-bar`    | The phone tab bar (casts upward).            |
@@ -182,7 +183,7 @@ One family: [Phosphor](https://phosphoricons.com). Import from `@/components/ui/
 
 All in `src/client/components/ui`, all shown in `/styleguide`.
 
-- **Button** — `primary` (tomato, one per screen), `secondary` (cream, soft shadow), `quiet` (toolbars, lists), `danger` (soft tomato). Sizes `sm`/`md`/`lg`; phone targets are at least 44 px. Optional `icon`, `shortcut` (keyboard hint, desktop only) and `loading`. **IconButton** needs a `label`.
+- **Button** — `primary` (tomato, one per screen), `secondary` (cream, `shadow-key` edge), `quiet` (toolbars, lists), `danger` (soft tomato). Sizes `sm`/`md`/`lg`; phone targets are at least 44 px. Optional `icon`, `shortcut` (keyboard hint, desktop only) and `loading`. **IconButton** needs a `label`.
 - **TextField / TextArea** — built for autosave: pass `saveState` to show "Saving… / Saved" beside the label instead of a save button. `appearance="plain"` for writing surfaces that read as text. TextArea grows with its content.
 - **SaveStatus** — the quiet autosave indicator on its own.
 - **Sheet** — the one overlay. A bottom sheet (vaul) on phones; on desktop a centered `dialog` (quick tasks like capture) or a right `panel` (detail views). Focus moves into it when it opens, stays there, and goes back to what opened it when it closes, also when it was opened from a shortcut or the palette. `wide` makes the desktop dialog `max-w-4xl` for content in columns, and `tall` makes the phone sheet as tall as a sheet gets instead of as tall as its content (both used by the compare sheet). `fill` gives the body edge to edge with no padding or scrolling, for content that draws itself (the 3D view): a full-height phone sheet, a `max-w-7xl` desktop dialog, 94vh tall.
