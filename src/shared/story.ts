@@ -10,6 +10,7 @@ import {
 import { liveCoachItems } from "./coach.ts";
 import type { Comment } from "./comments.ts";
 import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
+import { formatDuration } from "./time.ts";
 
 /** What the story needs to name people and agents. */
 export interface StoryContext {
@@ -91,6 +92,20 @@ export function buildStory(item: Item, context: StoryContext): string {
   lines.push("## Notes", "", item.note.trim() || "_No notes._", "");
   const photos = item.photos.filter((photo) => !photo.attemptId).length;
   if (photos) lines.push(`${photos} ${photos === 1 ? "photo" : "photos"} of the idea.`, "");
+
+  if (item.files?.length) {
+    lines.push(`## Files (${item.files.length})`, "", "Slicer files kept with the idea, to download in the app.", "");
+    for (const file of item.files) {
+      const bits = [
+        file.plateCount > 1 ? `plate ${file.plate} of ${file.plateCount}` : "",
+        file.prefill.estimatedMinutes !== undefined ? `est. ${formatDuration(file.prefill.estimatedMinutes)}` : "",
+        file.slicer ?? "",
+        file.stored ? "" : "too big to keep, only what it said",
+      ].filter(Boolean);
+      lines.push(`- ${file.name}${bits.length ? ` (${bits.join(", ")})` : ""}`);
+    }
+    lines.push("");
+  }
 
   if (item.parts.length) {
     const progress = partProgress(item.parts, item.attempts);

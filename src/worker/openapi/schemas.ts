@@ -76,7 +76,7 @@ const Part = z
   })
   .meta({ id: "Part" });
 
-const AttemptFile = z
+export const AttemptFile = z
   .object({
     id,
     name: z.string(),
@@ -149,6 +149,7 @@ export const Item = z
     attempts: z.array(Attempt),
     draft: z.looseObject({}).nullable().describe("Claude's draft from a model page, while there is one."),
     reactions: z.array(Reaction).describe("Who reacted, and how, oldest first."),
+    files: z.array(AttemptFile).describe("Slicer files kept with the idea (and its build), oldest first."),
   })
   .meta({ id: "Item", description: "An idea, or a build (an idea that is being printed)." });
 

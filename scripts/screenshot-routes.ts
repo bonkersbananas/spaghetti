@@ -1150,6 +1150,38 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // An idea with a sliced file kept with it: the file's card under the chips, and the sticker on its card.
+  { name: "idea-file", path: `/ideas/${SEED_IDS.bigTugboat}`, fullPage: true },
+  {
+    // A second file added to the idea: it shows at once, with the plate's picture.
+    name: "idea-file-added",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    prepare: async (page) => {
+      await page.getByTestId("idea-file-input").setInputFiles({
+        name: SLICER_FILE_NAME,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(slicerFile()),
+      });
+      await page.getByText(SLICER_FILE_NAME).waitFor();
+    },
+    // Both cards in view, clear of the action bar and the tab bar on a phone.
+    beforeShot: async (page) => {
+      await page.getByRole("button", { name: "Add a file" }).evaluate((button) => {
+        button.scrollIntoView({ block: "center" });
+      });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    // The 3D view opened from the idea's own file.
+    name: "idea-file-viewer",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    prepare: openViewer,
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
   {
     // The 3D view of the tugboat's sliced file, built up and showing every layer, coloured by filament.
     name: "viewer",
@@ -2243,9 +2275,10 @@ export const shots: Shot[] = [
     fullPage: true,
   },
   {
-    // The way in: an idea with a model has "Make a twist" among its chips (the desk tidy-up one already has its twist).
+    // The way in: an idea with a model has "Make a twist" in the quiet row under the model, beside "Add a file".
     name: "twist-from-idea",
     path: "/ideas/5eed0000-0000-4000-8000-000000000001",
+    fullPage: true,
     prepare: async (page) => {
       const patched = await page.request.patch("/api/items/5eed0000-0000-4000-8000-000000000001", {
         headers: { Origin: new URL(page.url()).origin },
@@ -2256,6 +2289,15 @@ export const shots: Shot[] = [
       if (!patched.ok()) throw new Error(`Planter note: ${patched.status()} ${await patched.text()}`);
       await page.reload();
       await page.getByRole("button", { name: "Make a twist" }).waitFor();
+    },
+  },
+  {
+    // The idea the bins twist came from: the same action now reads "Twist" and opens it.
+    name: "twist-from-idea-made",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Twist", exact: true }).waitFor();
     },
   },
   {

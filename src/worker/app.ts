@@ -20,7 +20,7 @@ import { changeRoutes } from "./routes/changes.ts";
 import { commentRoutes, itemCommentRoutes } from "./routes/comments.ts";
 import { deletedRoutes } from "./routes/deleted.ts";
 import { draftRoutes } from "./routes/drafts.ts";
-import { attemptFileRoutes, fileRoutes } from "./routes/files.ts";
+import { attemptFileRoutes, fileRoutes, itemFileRoutes } from "./routes/files.ts";
 import { insightRoutes } from "./routes/insights.ts";
 import { itemRoutes } from "./routes/items.ts";
 import { joinRoutes } from "./routes/join.ts";
@@ -141,6 +141,7 @@ export const app = new Hono<AppEnv>()
   .route("/", draftRoutes)
   .route("/items", itemRoutes)
   .route("/items", itemAttemptRoutes)
+  .route("/items", itemFileRoutes)
   .route("/items", itemCommentRoutes)
   .route("/comments", commentRoutes)
   .route("/items", itemReactionRoutes)
