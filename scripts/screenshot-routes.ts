@@ -1969,6 +1969,27 @@ export const shots: Shot[] = [
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   { name: "styleguide-year", path: "/styleguide", selector: "#year" },
+  { name: "styleguide-error", path: "/styleguide", selector: "#error" },
+  {
+    // The error screen as people meet it: a screen's code throws as the app opens it (the styleguide's module is
+    // made to fail), so the router shows its default error component inside the app.
+    name: "error-screen",
+    path: "/today",
+    prepare: async (page) => {
+      await page.route("**/routes/_app/styleguide.tsx*", (route) =>
+        route.fulfill({
+          contentType: "text/javascript",
+          body: "throw new Error(\"Cannot read properties of undefined (reading 'title')\");",
+        }),
+      );
+      await page.evaluate(() => {
+        history.pushState({}, "", "/styleguide");
+        dispatchEvent(new PopStateEvent("popstate"));
+      });
+      await page.getByText("That got tangled").waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
   {
     // The AMS loadout on its own, with a slot's sheet open (phones) or a slot being picked.
     name: "ams",

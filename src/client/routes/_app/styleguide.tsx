@@ -13,6 +13,7 @@ import { ControlSection } from "./-styleguide/controls";
 import { ConversationSection } from "./-styleguide/conversation";
 import { ElevationSection } from "./-styleguide/elevation";
 import { EmptySection } from "./-styleguide/empty";
+import { ErrorSection } from "./-styleguide/error";
 import { FieldSection } from "./-styleguide/fields";
 import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
@@ -74,6 +75,7 @@ const toc = [
   ["webhooks", "Webhooks"],
   ["palette", "Palette & shortcuts"],
   ["empty", "Empty states"],
+  ["error", "Error screen"],
   ["skeletons", "Skeletons"],
   ["signing-in", "Signing in"],
   ["layer-slider", "Layer slider"],
@@ -128,6 +130,7 @@ function Styleguide() {
           <NotificationSection />
           <WebhooksSection />
           <EmptySection />
+          <ErrorSection />
           <SkeletonSection />
           <LayerSliderSection />
           <LiveStatusSection />

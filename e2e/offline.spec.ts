@@ -527,3 +527,55 @@ test("Today opens with no connection from what was last seen, and a print can st
   await bed.getByRole("button", { name: "Finish" }).click();
   await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
 });
+
+// A page from the previous build whose route chunk is gone after a deploy. No service worker in these two, so
+// route() sees the requests (what the worker keeps for old pages is the first-load budget's and sw.js's business).
+test.describe("a deploy while the app is open", () => {
+  test.use({ serviceWorkers: "block" });
+
+  test("a missing build file is a real 404, an app route still gets the app", async ({ request }) => {
+    for (const headers of [{} as Record<string, string>, { "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "script" }]) {
+      const missing = await request.get("/assets/_app-gone.js", { headers });
+      expect(missing.status()).toBe(404);
+      expect(missing.headers()["content-type"]).not.toContain("html");
+    }
+    const route = await request.get("/builds/anything", { headers: { "Sec-Fetch-Mode": "navigate" } });
+    expect(route.status()).toBe(200);
+    expect(route.headers()["content-type"]).toContain("html");
+  });
+
+  test("an app whose route chunk is gone reloads into the new version once, with no error screen", async ({ page }) => {
+    await signIn(page);
+    const seen = new Set<string>();
+    let failed = 0;
+    // The deploy: the server's app now names another entry script than this page runs (what the reload looks for).
+    await page.route(/\/\?shell$/, (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<script type="module" src="/assets/index-newbuild.js"></script>',
+      }),
+    );
+    await page.route("**/assets/*.js", async (route) => {
+      const url = route.request().url();
+      // The first chunk the page has not loaded yet is "gone"; after the reload everything is there.
+      if (failed === 0 && !seen.has(url)) {
+        failed++;
+        await route.fulfill({ status: 404, contentType: "text/plain", body: "Not found" });
+        return;
+      }
+      seen.add(url);
+      await route.continue();
+    });
+    // A screen nothing preloads: the styleguide, reached by the app's own navigation, not a page load.
+    const reloaded = page.waitForEvent("load");
+    await page.evaluate(() => {
+      history.pushState({}, "", "/styleguide");
+      dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await reloaded;
+    expect(failed).toBe(1);
+    await expect(page.getByRole("heading", { level: 1, name: "Styleguide" })).toBeVisible();
+    // (The styleguide shows the error screen as a specimen, so the screen itself is told by its heading.)
+    await expect(page.getByText("Something went wrong")).toHaveCount(0);
+  });
+});

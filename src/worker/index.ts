@@ -11,6 +11,7 @@ import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
 import { sendWeekPush } from "./push/week.ts";
+import { spa } from "./spa.ts";
 import { pruneDeliveries, runWebhooks } from "./webhooks/deliver.ts";
 
 const DAILY = "0 4 * * *";
@@ -43,6 +44,9 @@ export default {
       return oauthEndpoints.fetch(request, env, ctx);
     }
     if (pathname === "/api/share" && request.method === "POST") return shareFallback(request);
+    if (!pathname.startsWith("/api/") && (request.method === "GET" || request.method === "HEAD")) {
+      return spa(request, env);
+    }
     return app.fetch(request, env, ctx);
   },
   /**
