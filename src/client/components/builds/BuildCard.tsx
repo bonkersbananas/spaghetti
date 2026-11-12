@@ -49,12 +49,22 @@ function ActivityLine({ item }: { item: ItemView }) {
     : last.outcome === null
       ? lowerFirst(progress.label)
       : relativeTime(last.finishedAt ?? last.printedAt);
+  // A half-width card on a phone has room for two short lines: the one thing that is news (time left, the
+  // question, when), without the attempt's number (the badge says how it went) or the layer count.
+  const short = offBed
+    ? "off the bed · how did it go?"
+    : last.outcome === null
+      ? (lowerFirst(progress.label).split(" · ").at(-1) ?? "")
+      : when;
   return (
-    <MetaList>
-      <span className="whitespace-nowrap">Attempt {last.number}</span>
-      {/* "done around 10:38 AM" may wrap in a narrow card; a relative time never does. */}
-      <span className={cn(last.outcome !== null && !offBed && "whitespace-nowrap")}>{when}</span>
-    </MetaList>
+    <>
+      <span className="md:hidden">{short}</span>
+      <MetaList className="hidden md:block">
+        <span className="whitespace-nowrap">Attempt {last.number}</span>
+        {/* "done around 10:38 AM" may wrap in a narrow card; a relative time never does. */}
+        <span className={cn(last.outcome !== null && !offBed && "whitespace-nowrap")}>{when}</span>
+      </MetaList>
+    </>
   );
 }
 
@@ -106,7 +116,7 @@ export function BuildCard({
         }
         meta={
           <>
-            {item.forWhom && <span className="block">for {item.forWhom}</span>}
+            {item.forWhom && <span className="hidden md:block">for {item.forWhom}</span>}
             <ActivityLine item={item} />
           </>
         }
