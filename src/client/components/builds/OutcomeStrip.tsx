@@ -88,10 +88,9 @@ function AttemptPicker({
 }: Required<Pick<OutcomeStripProps, "attempts" | "onPick">> & Pick<OutcomeStripProps, "selected" | "className">) {
   const hidden = Math.max(0, attempts.length - MAX_DOTS);
   return (
-    <span
-      role="group"
+    <fieldset
       aria-label={outcomeSentence(attempts)}
-      className={cn("flex flex-wrap items-center gap-2", className)}
+      className={cn("m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0", className)}
     >
       {hidden > 0 && (
         <span aria-hidden className="text-caption text-ink-faint tabular">
@@ -131,6 +130,6 @@ function AttemptPicker({
           </button>
         );
       })}
-    </span>
+    </fieldset>
   );
 }
