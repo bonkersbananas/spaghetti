@@ -89,7 +89,17 @@ describe("reacting to an idea", () => {
 
   it("refuses a reaction outside the set, and a deleted idea", async () => {
     const itemId = await idea();
-    for (const bad of ["thumbsdown", "love", "ab", "👍👍", "👍a", "%20", enc("❤️❤️"), enc("🔥".repeat(30)), enc("❤")]) {
+    for (const bad of [
+      "thumbsdown",
+      "toString",
+      "ab",
+      "👍👍",
+      "👍a",
+      "%20",
+      enc("❤️❤️"),
+      enc("🔥".repeat(30)),
+      enc("❤"),
+    ]) {
       expect((await react(`/api/items/${itemId}/reactions/${bad}`, true)).status).toBe(400);
     }
     // Skin tones, flags and ZWJ sequences are one emoji each.
@@ -198,5 +208,13 @@ describe("reacting to a comment", () => {
     expect(mine.popular[0]).toBe("🔥");
     expect(mine.popular).toHaveLength(3);
     expect(mine.recent).toEqual(["🍝", "🔥"]);
+  });
+
+  it("still takes the six old names from a tab opened before the emoji", async () => {
+    const itemId = await idea();
+    const given = await react(`/api/items/${itemId}/reactions/love`, true);
+    expect(kinds(given.body?.reactions)).toEqual([["❤️", alexId]]);
+    const back = await react(`/api/items/${itemId}/reactions/love`, false);
+    expect(kinds(back.body?.reactions)).toEqual([]);
   });
 });

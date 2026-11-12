@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type Context, Hono } from "hono";
-import { type EmojiUse, isEmoji, type Reaction } from "../../shared/reactions.ts";
+import { type EmojiUse, isEmoji, LEGACY_REACTIONS, type Reaction } from "../../shared/reactions.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { comments, items, type ReactionRow, reactions } from "../db/schema.ts";
@@ -108,7 +108,9 @@ async function liveComment(c: Context<AppEnv>): Promise<Target | null> {
 /** PUT gives the reaction, DELETE takes it back; both answer with the target's reactions as they now are. */
 function reactionRoutes(find: (c: Context<AppEnv>) => Promise<Target | null>) {
   const handle = (on: boolean) => async (c: Context<AppEnv>) => {
-    const kind = c.req.param("kind") ?? "";
+    const named = c.req.param("kind") ?? "";
+    // A tab opened before the emoji still sends the six old names (love, chef, …): they mean the emoji they became.
+    const kind = Object.hasOwn(LEGACY_REACTIONS, named) ? (LEGACY_REACTIONS[named] as string) : named;
     if (!isEmoji(kind)) return apiError(c, 400, "invalid", "A reaction is one emoji.");
     const target = await find(c);
     if (!target) return apiError(c, 404, "not_found", notFound);

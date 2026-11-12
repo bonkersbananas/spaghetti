@@ -129,7 +129,20 @@ test("any emoji from the full picker, shown on the Ideas list and on the idea", 
   await expect(search).toBeVisible();
   if (!isMobile) await expect(search).toBeFocused();
   await search.fill("party");
+  // Results are one grid, no category headings, and nothing matching is a friendly word, not a collapse.
+  await expect(page.getByRole("gridcell", { name: "party popper" })).toBeVisible();
+  await expect(page.getByText("Smileys & emotion", { exact: true })).toHaveCount(0);
+  const body = page.getByRole("grid", { name: "Search results" });
+  const height = (await body.boundingBox())?.height ?? 0;
+  await search.fill("zzzzq");
+  await expect(page.getByText("Nothing like that in the pantry")).toBeVisible();
+  await search.fill("party");
+  await expect(page.getByRole("grid", { name: "Search results" })).toBeVisible();
+  expect(
+    Math.abs(((await page.getByRole("grid", { name: "Search results" }).boundingBox())?.height ?? 0) - height),
+  ).toBeLessThan(2);
   const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
+  // Enter picks the first result.
   await page.getByRole("gridcell", { name: "party popper" }).first().click();
   expect((await saved).ok()).toBe(true);
   expect(dataRequests.every((url) => new URL(url).origin === origin(page))).toBe(true);
@@ -145,6 +158,14 @@ test("any emoji from the full picker, shown on the Ideas list and on the idea", 
   // The Ideas list shows it on the card.
   await page.goto("/ideas");
   await expect(page.getByRole("img", { name: /^Reactions: 🎉/ })).toBeVisible();
+});
+
+test("old tabs: the six old names still work", async ({ page }) => {
+  const id = await newIdea(page);
+  const response = await page.request.put(`/api/items/${id}/reactions/love`, { headers: { Origin: origin(page) } });
+  expect(response.ok()).toBe(true);
+  await page.goto(`/ideas/${id}`);
+  await expect(reactions(page).getByRole("button", { name: /❤️, from You/ })).toBeVisible();
 });
 
 test("the other person's emoji shows with a tooltip saying who", async ({ page }) => {
