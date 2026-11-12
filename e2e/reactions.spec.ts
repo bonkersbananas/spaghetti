@@ -95,9 +95,11 @@ test("reacts to the other person's comment, and both reactions count", { tag: "@
     await message.hover();
     await page.getByRole("button", { name: /^React to .+'s comment$/ }).click();
   }
+  const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
   await page.getByRole("group", { name: "Reactions" }).getByRole("button", { name: "Bravo" }).click();
   const pill = page.locator(`#comment-${commentId}`).getByRole("button", { name: /Bravo, from You/ });
   await expect(pill).toHaveAttribute("aria-pressed", "true");
+  expect((await saved).ok()).toBe(true);
 
   // Sam gives the same one: after the feed (or a reload) it reads "2", from both of you.
   await samSide.react(`/comments/${commentId}`, "bravo");
