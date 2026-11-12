@@ -12,6 +12,14 @@ describe("parseQuery", () => {
     expect(read.intent).toBe("worked");
   });
 
+  it("drops 'settings' and its kin, so 'PETG settings' finds the PETG attempts", () => {
+    for (const query of ["PETG settings", "PETG setting", "PETG profile", "PETG parameters", "settings for PETG"]) {
+      expect(parseQuery(query, NOW).terms.map((term) => term.text)).toEqual(["petg"]);
+    }
+    expect(parseQuery("PETG inställningar", NOW).terms.map((term) => term.text)).toEqual(["petg"]);
+    expect(parseQuery("settings", NOW).terms.map((term) => term.text)).toEqual(["settings"]);
+  });
+
   it("reads Swedish fillers, outcomes and time", () => {
     const read = parseQuery("vad fungerade för tugboat förra veckan", NOW);
     expect(read.terms.map((term) => term.text)).toEqual(["tugboat"]);
