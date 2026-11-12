@@ -69,7 +69,8 @@ Proposal: [docs/proposals/twists.md](proposals/twists.md); decision [0043](decis
 
 - [x] Stage 1a: the `twists` table and `/api/twists` (data and API)
 - [x] Stage 1b: the Twists screen and twist page, "Make a twist" from an idea (a build or attempt gets "Save as twist" in 1c)
-- [ ] Stage 1c: builds that print a twist, "Print it again", MCP tools, search
+- [x] Stage 1c, builds: a build can print a twist (`items.twist_id`), "Print it" / "Print it again" on the twist page, and the page lists what was printed
+- [ ] Stage 1c, the rest: "Save as twist" from an attempt, MCP tools, search
 - [ ] Stage 2a: STL scale, mirror, rotate and "fit to N mm"; then the 3MF spike
 
 ## Deploy

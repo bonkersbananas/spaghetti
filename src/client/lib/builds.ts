@@ -110,14 +110,21 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   });
 }
 
-/** A build from scratch, with nothing in it yet. Returns its id. */
-export function createBuild(createdBy: string): string {
+/** A build from scratch, with nothing in it yet (or named for the twist it prints). Returns its id. */
+export function createBuild(createdBy: string, from?: { title: string; twistId: string }): string {
   const itemId = crypto.randomUUID();
   const now = Date.now();
   markFresh(itemId);
   void outbox.add({
     itemId,
-    create: { title: null, note: "", createdAt: now, createdBy, stage: "building" },
+    create: {
+      title: from?.title ?? null,
+      note: "",
+      createdAt: now,
+      createdBy,
+      stage: "building",
+      twistId: from?.twistId,
+    },
     photos: [],
     queuedAt: now,
   });

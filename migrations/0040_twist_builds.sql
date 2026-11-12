@@ -1,0 +1,1 @@
+ALTER TABLE `items` ADD `twist_id` text;

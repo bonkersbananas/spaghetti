@@ -7,23 +7,30 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Fusilli } from "@/components/illustrations/Fusilli";
 import { DetailBar } from "@/components/shell/DetailBar";
+import { PrintedRow } from "@/components/twists/PrintedRow";
 import { sourceLine } from "@/components/twists/TwistCard";
 import { TwistChanges } from "@/components/twists/TwistChanges";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { ArrowRightIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, BuildsIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { createBuild } from "@/lib/builds";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
+import { useBuilds } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
+import { sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { deleteTwist, twistsQuery, updateTwist } from "@/lib/twists";
 import { useLiveFields } from "@/lib/use-autosave";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/twists/$twistId")({
   component: TwistPage,
@@ -78,6 +85,11 @@ function TwistBody({ twist }: { twist: Twist }) {
   const navigate = useNavigate();
   const readOnly = useReadOnly();
   const stickyColumn = useStickyColumn();
+  const isDesktop = useIsDesktop();
+  const { data: user } = useQuery(sessionQuery);
+  const { items: allBuilds } = useBuilds();
+  const printed = // The idea it came from counts once it has grown into a build.
+    allBuilds.filter((build) => build.twistId === twist.id || build.id === twist.fromItemId);
   const [editingLink, setEditingLink] = useState(false);
   const { value, change, saveState } = useLiveFields(
     { name: twist.name, note: twist.note, sourceUrl: twist.source.url ?? "", changes: twist.changes },
@@ -95,6 +107,19 @@ function TwistBody({ twist }: { twist: Twist }) {
   const mark = value.sourceUrl ? modelMarkOf(value.sourceUrl) : null;
   const subtitle = sourceLine(twist);
 
+  // "Print it again": a build named for the twist, which remembers it, opens ready for its first attempt.
+  const printLabel = printed.length ? "Print it again" : "Print it";
+  function printIt() {
+    if (!user || !canEdit(false)) return;
+    const id = createBuild(user.id, { title: value.name.trim() || twist.name, twistId: twist.id });
+    void navigate({ to: "/builds/$buildId", params: { buildId: id } });
+  }
+
+  useHotkeys({
+    twistBack: () => void navigate({ to: "/twists" }),
+    twistPrint: printIt,
+  });
+
   function remove() {
     if (!canEdit(false)) return;
     deleteTwist(queryClient, twist);
@@ -107,6 +132,18 @@ function TwistBody({ twist }: { twist: Twist }) {
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
         <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
+        {isDesktop && (
+          <Button
+            variant="primary"
+            icon={BuildsIcon}
+            shortcut={shortcutCaps("twistPrint")}
+            onClick={printIt}
+            disabled={readOnly || !user}
+            className="ml-2"
+          >
+            {printLabel}
+          </Button>
+        )}
       </DetailBar>
       <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14">
         {photo && (
@@ -188,8 +225,32 @@ function TwistBody({ twist }: { twist: Twist }) {
               )}
             </div>
           </div>
+
+          {printed.length > 0 && (
+            <Section id="printed" title="Printed" count={printed.length}>
+              <ul className="flex flex-col gap-2.5">
+                {printed.map((build) => (
+                  <PrintedRow key={build.id} build={build} fallback={photo} />
+                ))}
+              </ul>
+            </Section>
+          )}
         </div>
       </div>
+      {!isDesktop && (
+        <ActionBar>
+          <Button
+            variant="primary"
+            size="lg"
+            icon={BuildsIcon}
+            className="min-w-0 flex-1"
+            disabled={readOnly || !user}
+            onClick={printIt}
+          >
+            {printLabel}
+          </Button>
+        </ActionBar>
+      )}
     </article>
   );
 }

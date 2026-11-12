@@ -135,3 +135,22 @@ describe("twists", () => {
     expect((await request(`/api/twists/${id}`, { cookie })).status).toBe(200);
   });
 });
+
+describe("a build that prints a twist", () => {
+  it("is made with the twist's id, shows it, and lets it go", async () => {
+    const twistId = uuid();
+    await request("/api/twists", { method: "POST", cookie, json: { id: twistId, name: "Bin" } });
+    const id = uuid();
+    const made = await request("/api/items", {
+      method: "POST",
+      cookie,
+      json: { id, title: "Bin", stage: "building", twistId },
+    });
+    expect(made.status).toBe(201);
+    expect((await made.json<ItemResponse>()).item.twistId).toBe(twistId);
+    const cleared = await request(`/api/items/${id}`, { method: "PATCH", cookie, json: { twistId: null } });
+    expect((await cleared.json<ItemResponse>()).item.twistId).toBeNull();
+    const plain = await request("/api/items", { method: "POST", cookie, json: { id: uuid(), title: "Plain" } });
+    expect((await plain.json<ItemResponse>()).item.twistId).toBeNull();
+  });
+});

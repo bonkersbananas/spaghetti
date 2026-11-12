@@ -70,4 +70,24 @@ export async function seedTwists(alex: APIRequestContext, origin: string) {
     if (saved.status() === 404) return;
     if (!saved.ok()) throw new Error(`Seeding twist "${spec.name}" failed: ${saved.status()} ${await saved.text()}`);
   }
+  // The bins were printed from their twist once, and it worked: the twist page lists that build.
+  const bins = await alex.post("/api/items", {
+    headers: { Origin: origin },
+    data: {
+      id: "5eed0000-0000-4000-8000-0000000e2001",
+      title: "Drawer bins, 42 mm grid",
+      stage: "building",
+      twistId: SEED_TWIST_IDS.bins,
+    },
+  });
+  if (bins.status() === 400 || bins.status() === 404) return;
+  if (!bins.ok()) throw new Error(`Seeding the twist's build failed: ${bins.status()} ${await bins.text()}`);
+  await alex.post("/api/items/5eed0000-0000-4000-8000-0000000e2001/attempts", {
+    headers: { Origin: origin },
+    data: {
+      id: "5eed0000-0000-4000-8000-0000000e2002",
+      outcome: "success",
+      note: "Lid snaps shut at +0.2. Six in the drawer.",
+    },
+  });
 }

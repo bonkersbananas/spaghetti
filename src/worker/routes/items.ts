@@ -56,6 +56,8 @@ const createItem = z.object({
   note: note.optional(),
   createdAt: z.number().int().positive().optional(),
   stage: z.enum(["idea", "building"]).optional(),
+  /** The twist it prints (a build made from a twist). */
+  twistId: id.optional(),
 });
 const updateItem = z.object({
   title: title.optional(),
@@ -64,6 +66,8 @@ const updateItem = z.object({
   coverPhotoId: id.nullable().optional(),
   /** true: at the end of the queue; false or null: off it; a number: that place (the undo of taking it off). */
   upNext: z.union([z.boolean(), z.number().int().min(1).max(10_000), z.null()]).optional(),
+  /** The twist this prints; null lets it go. */
+  twistId: id.nullable().optional(),
   /** Who it is for; empty clears it. */
   forWhom: z
     .string()
@@ -300,7 +304,7 @@ export const itemRoutes = new Hono<AppEnv>()
     const starts = parsed.data.stage === "building";
     if (!canUse(c, starts ? "attempts" : "capture")) return missingScope(c, [starts ? "attempts" : "capture"]);
     const now = Date.now();
-    const { id: itemId, title: itemTitle, note: itemNote, createdAt, stage = "idea" } = parsed.data;
+    const { id: itemId, title: itemTitle, note: itemNote, createdAt, stage = "idea", twistId } = parsed.data;
     // A capture made offline keeps the time it was made, but never one in the future.
     const created = new Date(Math.min(createdAt ?? now, now));
     // A retried capture finds its item already there and gets it back unchanged.
@@ -312,6 +316,7 @@ export const itemRoutes = new Hono<AppEnv>()
           title: itemTitle ?? null,
           note: itemNote ?? "",
           stage,
+          twistId: twistId ?? null,
           // A build started from scratch starts when it was made.
           startedAt: stage === "building" ? created : null,
           createdBy: c.var.user.id,
@@ -389,6 +394,7 @@ export const itemRoutes = new Hono<AppEnv>()
       (changes.title !== undefined ||
         changes.note !== undefined ||
         changes.forWhom !== undefined ||
+        changes.twistId !== undefined ||
         upNext !== undefined) &&
       !canUse(c, "capture")
     ) {

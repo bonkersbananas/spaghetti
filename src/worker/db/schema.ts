@@ -198,6 +198,8 @@ export const items = sqliteTable(
     upNext: integer("up_next"),
     /** Who it is for ("Mila"): optional, shown quietly under the title and searchable. */
     forWhom: text("for_whom"),
+    /** The twist this build prints (decision 0043). Not a foreign key: the twist may go, and the link goes quiet. */
+    twistId: text("twist_id"),
   },
   (table) => [index("items_stage_created_idx").on(table.stage, table.createdAt)],
 );
