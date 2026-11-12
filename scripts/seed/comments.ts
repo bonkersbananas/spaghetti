@@ -1,5 +1,4 @@
 import type { APIRequestContext } from "@playwright/test";
-import type { ReactionKind } from "../../src/shared/reactions.ts";
 import { executeSql } from "../lib/wrangler.ts";
 import { SEED_BUILD_IDS } from "./builds.ts";
 import { SEED_IDS } from "./ideas.ts";
@@ -63,17 +62,18 @@ export const SEED_COMMENTS: SeedComment[] = [
 ];
 
 /** Reactions from both people: on the desk tidy-up idea and the tugboat build, and on a few of their comments. */
-const SEED_REACTIONS: Array<{ by: "alex" | "sam"; path: string; kind: ReactionKind }> = [
-  { by: "sam", path: `/api/items/${SEED_IDS.deskTidy}`, kind: "want" },
-  { by: "alex", path: `/api/items/${SEED_IDS.deskTidy}`, kind: "want" },
-  { by: "sam", path: `/api/items/${SEED_IDS.deskTidy}`, kind: "chef" },
-  { by: "sam", path: `/api/items/${SEED_BUILD_IDS.tugboat}`, kind: "love" },
-  { by: "alex", path: `/api/items/${SEED_BUILD_IDS.tugboat}`, kind: "love" },
-  { by: "alex", path: `/api/comments/${commentId(1)}`, kind: "love" },
-  { by: "sam", path: `/api/comments/${commentId(3)}`, kind: "hot" },
-  { by: "alex", path: `/api/comments/${commentId(8)}`, kind: "bravo" },
-  { by: "sam", path: `/api/comments/${commentId(8)}`, kind: "bravo" },
-  { by: "alex", path: `/api/comments/${commentId(8)}`, kind: "melt" },
+const SEED_REACTIONS: Array<{ by: "alex" | "sam"; path: string; kind: string }> = [
+  { by: "sam", path: `/api/items/${SEED_IDS.deskTidy}`, kind: "🤩" },
+  { by: "alex", path: `/api/items/${SEED_IDS.deskTidy}`, kind: "🤩" },
+  { by: "sam", path: `/api/items/${SEED_IDS.deskTidy}`, kind: "🤌" },
+  { by: "sam", path: `/api/items/${SEED_BUILD_IDS.tugboat}`, kind: "❤️" },
+  { by: "alex", path: `/api/items/${SEED_BUILD_IDS.tugboat}`, kind: "❤️" },
+  { by: "alex", path: `/api/comments/${commentId(1)}`, kind: "❤️" },
+  { by: "sam", path: `/api/comments/${commentId(3)}`, kind: "🔥" },
+  { by: "alex", path: `/api/comments/${commentId(8)}`, kind: "👏" },
+  { by: "sam", path: `/api/comments/${commentId(8)}`, kind: "👏" },
+  { by: "alex", path: `/api/comments/${commentId(8)}`, kind: "🫠" },
+  { by: "sam", path: `/api/comments/${commentId(8)}`, kind: "🎉" },
 ];
 
 /**
@@ -94,7 +94,7 @@ export async function seedComments(
     if (!response.ok()) throw new Error(`Seeding comment ${comment.n} failed: ${response.status()}`);
   }
   for (const reaction of SEED_REACTIONS) {
-    const response = await people[reaction.by].put(`${reaction.path}/reactions/${reaction.kind}`, {
+    const response = await people[reaction.by].put(`${reaction.path}/reactions/${encodeURIComponent(reaction.kind)}`, {
       headers: { Origin: origin },
     });
     // screenshots:compare seeds an older base with this seed: one without reactions answers 404, and goes without.

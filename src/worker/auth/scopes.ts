@@ -60,7 +60,7 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
  * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
  */
 const PERSON_ONLY_READS =
-  /^\/(session|account|join|agents|oauth|webhooks|links|push|features|deleted|comments\/unread)(\/|$)/;
+  /^\/(session|account|join|agents|oauth|webhooks|links|push|features|deleted|reactions|comments\/unread)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {

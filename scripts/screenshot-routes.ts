@@ -555,6 +555,17 @@ async function openCommentMenu(page: Page, id: string, button: string | RegExp) 
   await page.waitForTimeout(500);
 }
 
+/** The idea page with its reaction picker open on the full emoji grid. */
+async function openFullPicker(page: Page) {
+  const button = page.getByRole("button", { name: "React to this idea" });
+  await button.evaluate((el) => {
+    el.scrollIntoView({ block: "center" });
+    (el as HTMLElement).click();
+  });
+  await page.getByRole("button", { name: "More emoji" }).click();
+  await page.getByRole("gridcell").first().waitFor();
+}
+
 const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
 
 type Slice = "all" | "none" | "young";
@@ -1854,6 +1865,96 @@ export const shots: Shot[] = [
       });
       await page.getByRole("group", { name: "Reactions" }).waitFor();
       await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "reactions-idea-picker-more",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const button = page.getByRole("button", { name: "React to this idea" });
+      await button.evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        (el as HTMLElement).click();
+      });
+      await page.getByRole("button", { name: "More emoji" }).click();
+      await page.getByRole("gridcell").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "reactions-idea-picker-full",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const button = page.getByRole("button", { name: "React to this idea" });
+      await button.evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        (el as HTMLElement).click();
+      });
+      await page.getByRole("button", { name: "More emoji" }).click();
+      const search = page.getByRole("searchbox", { name: "Search emoji" });
+      await search.waitFor();
+      await page.getByRole("gridcell").first().waitFor();
+      await search.fill("party");
+      await page.getByRole("gridcell", { name: "party popper" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    name: "reactions-picker-empty",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await openFullPicker(page);
+      await page.getByRole("searchbox", { name: "Search emoji" }).fill("zzzzq");
+      await page.getByText("Nothing like that in the pantry").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    name: "reactions-picker-scrolled",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await openFullPicker(page);
+      await page.locator("[frimousse-viewport]").evaluate((el) => {
+        el.scrollTop = 1500;
+      });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    name: "reactions-picker-skin-tone",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await openFullPicker(page);
+      await page.getByRole("searchbox", { name: "Search emoji" }).fill("thumbs");
+      const tone = page.getByRole("button", { name: /Skin tone/ });
+      await tone.click();
+      await tone.click();
+      await tone.click();
+      await page
+        .getByRole("gridcell", { name: /thumbs up/i })
+        .first()
+        .waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // Five or more different reactions on one idea: the card shows four and "+n".
+    name: "reactions-card-many",
+    path: "/ideas",
+    selector: "li:has(a:has-text('Desk tidy-up'))",
+    prepare: async (page) => {
+      const origin = new URL(page.url()).origin;
+      for (const emoji of ["🔥", "🎉", "🍝", "👏"]) {
+        await page.request.put(`/api/items/${SEED_IDS.deskTidy}/reactions/${encodeURIComponent(emoji)}`, {
+          headers: { Origin: origin },
+        });
+      }
+      await page.reload();
+      await page
+        .getByRole("img", { name: /^Reactions:/ })
+        .first()
+        .waitFor();
+      await page.waitForTimeout(400);
     },
   },
   {

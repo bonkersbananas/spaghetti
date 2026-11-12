@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { AGENT_SCOPES } from "../../shared/agents.ts";
-import { REACTION_KINDS } from "../../shared/reactions.ts";
 import { authorizeParams } from "../oauth/authorize.ts";
 import { changePasswordBody } from "../routes/account.ts";
 import { createAgent, createToken } from "../routes/agents.ts";
@@ -98,7 +97,12 @@ const joinDetails = z.object({
   color: z.string(),
 });
 
-const reactionKinds = REACTION_KINDS.join(", ");
+const reactionEmoji =
+  "kind is the emoji itself, URL-encoded (one emoji from the Unicode RGI set, such as %F0%9F%94%A5 for fire)";
+const emojiUse = z.object({
+  popular: z.array(z.string()).describe("The emoji the two of you give most, most used first."),
+  recent: z.array(z.string()).describe("The ones you gave last, newest first."),
+});
 const reactionsAnswer = z.object({ reactions: z.array(Reaction) });
 
 export const operations: Record<string, Operation> = {
@@ -604,25 +608,29 @@ export const operations: Record<string, Operation> = {
   },
 
   // Reactions: people only.
+  "GET /reactions/used": {
+    summary: "The emoji most used on reactions and the ones you used last (the picker's quick row).",
+    response: emojiUse,
+  },
   "PUT /items/:id/reactions/:kind": {
-    summary: `Gives your reaction to an idea or build (your own too); kind is one of ${reactionKinds}.`,
+    summary: `Gives your reaction to an idea or build (your own too); ${reactionEmoji}.`,
     response: reactionsAnswer,
-    errors: { 400: "invalid: not one of the reactions." },
+    errors: { 400: "invalid: a reaction is one emoji." },
   },
   "DELETE /items/:id/reactions/:kind": {
     summary: "Takes your reaction back.",
     response: reactionsAnswer,
-    errors: { 400: "invalid: not one of the reactions." },
+    errors: { 400: "invalid: a reaction is one emoji." },
   },
   "PUT /comments/:id/reactions/:kind": {
-    summary: `Gives your reaction to a comment (your own too); kind is one of ${reactionKinds}.`,
+    summary: `Gives your reaction to a comment (your own too); ${reactionEmoji}.`,
     response: reactionsAnswer,
-    errors: { 400: "invalid: not one of the reactions." },
+    errors: { 400: "invalid: a reaction is one emoji." },
   },
   "DELETE /comments/:id/reactions/:kind": {
     summary: "Takes your reaction to a comment back.",
     response: reactionsAnswer,
-    errors: { 400: "invalid: not one of the reactions." },
+    errors: { 400: "invalid: a reaction is one emoji." },
   },
 
   // Attempts and files.

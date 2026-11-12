@@ -1,6 +1,6 @@
 # 0038. Reactions: a curated six, on ideas, builds and comments, your own included
 
-Status: Accepted
+Status: Superseded by [0042](0042-reactions-are-any-emoji.md)
 
 **Decision:** Either person can react to an idea or build and to any comment, their own too, with one of six reactions: Love it, Chef's kiss, Want one, Hot, Bravo and Melting (`shared/reactions.ts`, Phosphor glyphs drawn filled in the palette's colors). Each person gives each reaction once per thing; giving it again takes it back. `reactions (target_id, item_id, comment_id, user_id, kind, created_at)` holds them, keyed by thing, person and kind; taking one back deletes the row, and they go with their item or comment when it is purged. Items and comments carry their `reactions` in the API, and a reaction is recorded in the change feed as an update of what was reacted to (`item` or `comment`), so the other person's screen refreshes without a new kind of change. Reactions are for people: an agent's token can't give them.
 

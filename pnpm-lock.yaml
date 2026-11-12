@@ -208,6 +208,9 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      frimousse:
+        specifier: 0.4.0
+        version: 0.4.0(react@19.3.1)(typescript@5.9.3)
       hono:
         specifier: ^4.13.17
         version: 4.13.17
@@ -281,6 +284,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+      emojibase-data:
+        specifier: ^18.0.0
+        version: 18.0.0(emojibase@18.0.0)
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@26.6.6)
@@ -2142,6 +2148,15 @@ packages:
   electron-to-chromium@1.5.478:
     resolution: {integrity: sha512-pftG+ma5Lm8O6/p45bhYT6StBN5ziQymaRzmCZwFl8DwWHKPPD93FdOmP1aqftcepolQYvrcyTLa17kE8Yf+jg==}
 
+  emojibase-data@18.0.0:
+    resolution: {integrity: sha512-TPPRRYv2zPd0jKI+pTpMquwWNZXYAsC3IVsCMeg2X8y8fEzKwOks4/5bz0YavF5r6d71aGPpb6oDnUEwSLLMoA==}
+    peerDependencies:
+      emojibase: '*'
+
+  emojibase@18.0.0:
+    resolution: {integrity: sha512-5PG+EEt5zQ9qvqdHZw61+T9iz96g+r621QS/w8jEzPg+3mjzAdjl8LPLc+e9ABv/yboNfMwEair7aK9qKnwAbQ==}
+    engines: {node: '>=20.0.0'}
+
   enhanced-resolve@5.26.1:
     resolution: {integrity: sha512-PPnnSJq3azKOIewXR/uppBV/6h98dprBJ/WaQ9Qgj10xX1lJLNfg+XShpbsrSqcDSy2yYYyhfXM1wWhftqgyzw==}
     engines: {node: '>=10.13.0'}
@@ -2226,6 +2241,15 @@ packages:
       react-dom:
         optional: true
       remix:
+        optional: true
+
+  frimousse@0.4.0:
+    resolution: {integrity: sha512-wA/1Xt9UTk51wYNpy+EvHKPUA4jdm4NuEFzSNNZxqT0Nxrj4RFwYByjRMuaq4qSLOco/ikDCpLKesB8W1w2q+Q==}
+    peerDependencies:
+      react: ^18 || ^19
+      typescript: '>=5.1.0'
+    peerDependenciesMeta:
+      typescript:
         optional: true
 
   fsevents@2.3.3:
@@ -4399,6 +4423,12 @@ snapshots:
 
   electron-to-chromium@1.5.478: {}
 
+  emojibase-data@18.0.0(emojibase@18.0.0):
+    dependencies:
+      emojibase: 18.0.0
+
+  emojibase@18.0.0: {}
+
   enhanced-resolve@5.26.1:
     dependencies:
       graceful-fs: 4.2.11
@@ -4533,6 +4563,12 @@ snapshots:
     optionalDependencies:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
+
+  frimousse@0.4.0(react@19.3.1)(typescript@5.9.3):
+    dependencies:
+      react: 19.3.1
+    optionalDependencies:
+      typescript: 5.9.3
 
   fsevents@2.3.3:
     optional: true

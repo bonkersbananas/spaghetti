@@ -4,6 +4,7 @@ import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense } from "react";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
+import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
@@ -125,6 +126,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           badge={item.photos.length > 1 ? <PhotoCountBadge count={item.photos.length} /> : undefined}
           chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
           sub={item.forWhom ? `for ${item.forWhom}` : undefined}
+          reactions={<ReactionGlance reactions={item.reactions} />}
           meta={relativeTime(item.createdAt)}
           person={person}
           via={via}
