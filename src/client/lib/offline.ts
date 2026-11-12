@@ -43,21 +43,28 @@ export function registerServiceWorker() {
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshing) location.reload();
   });
-  const offerRefresh = (worker: ServiceWorker) =>
+  // The toast waits at most a second for the note about what changed (lib/whats-new.ts, loaded only now); without
+  // one it says what it always said.
+  const offerRefresh = async (worker: ServiceWorker) => {
+    const sentence = await import("./whats-new").then(
+      (m) => m.fetchSentence(),
+      () => undefined,
+    );
     toast.update(() => {
       refreshing = true;
       worker.postMessage("SKIP_WAITING");
-    });
+    }, sentence);
+  };
 
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js", { updateViaCache: "none" })
       .then((registration) => {
-        if (registration.waiting && navigator.serviceWorker.controller) offerRefresh(registration.waiting);
+        if (registration.waiting && navigator.serviceWorker.controller) void offerRefresh(registration.waiting);
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           worker?.addEventListener("statechange", () => {
-            if (worker.state === "installed" && navigator.serviceWorker.controller) offerRefresh(worker);
+            if (worker.state === "installed" && navigator.serviceWorker.controller) void offerRefresh(worker);
           });
         });
         // Look for a new version when the app comes back to the front.

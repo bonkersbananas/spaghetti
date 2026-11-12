@@ -39,6 +39,11 @@ export function SheetSection() {
           Toast with an action
         </Button>
         <Button
+          onClick={() => toast.update(() => undefined, "You can react to comments now. Photos open faster on phones.")}
+        >
+          Update toast (with a note)
+        </Button>
+        <Button
           onClick={() =>
             toast.delight(
               "First one in the pot",
