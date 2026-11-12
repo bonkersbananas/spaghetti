@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AgentScope } from "../../shared/agents.ts";
 import type {
   AttemptHit,
   AttemptResponse,
@@ -22,7 +23,7 @@ import { describeResults, describeSettings } from "../../shared/story.ts";
 import { formatHours, sinceWords } from "../../shared/upkeep.ts";
 import { mondayOf, printsWords, type WeekResponse } from "../../shared/week.ts";
 import { settings as attemptSettings } from "../routes/attempts.ts";
-import { fromBase64, fromUrl, readImage } from "./image.ts";
+import { fromBase64, fromPublicUrl, readImage } from "./image.ts";
 
 /** What a tool can do: call Spaghetti's own API as the agent (same token, same scopes, same "via"). */
 export interface ApiResult {
@@ -48,8 +49,8 @@ export interface Tool {
   name: string;
   title: string;
   description: string;
-  /** Needs these scopes (any of); the API checks them. Said in the description too. */
-  scopes: string[];
+  /** Needs these scopes (any of): checked before the tool runs, and again by the API it calls. Said in the description too. */
+  scopes: AgentScope[];
   input: z.ZodObject;
   readOnly: boolean;
   run: (args: never, ctx: ToolContext) => Promise<ToolResult>;
@@ -262,7 +263,7 @@ export const tools: Tool[] = [
       let image: ReturnType<typeof readImage> | undefined;
       try {
         if (args.photo_base64) image = readImage(fromBase64(args.photo_base64));
-        else if (args.photo_url) image = readImage(await fromUrl(args.photo_url));
+        else if (args.photo_url) image = readImage(await fromPublicUrl(args.photo_url));
       } catch (error) {
         return { text: error instanceof Error ? error.message : "The photo couldn't be read.", isError: true };
       }

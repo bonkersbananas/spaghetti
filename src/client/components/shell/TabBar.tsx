@@ -9,13 +9,13 @@ function Tab({ to, label, icon: Icon }: Section) {
     <Link
       to={to}
       // Each section's code is fetched once the app is idle (routes/_app.tsx), and on the touch itself.
-      className="pressable press-none group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-0.5"
+      className="pressable press-none group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-px"
     >
       {({ isActive }) => (
         <>
           {/* The held highlight: a soft round behind the icon. */}
-          <span className="group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-8 w-12 items-center justify-center">
-            <Icon size={26} weight={isActive ? "fill" : "regular"} aria-hidden />
+          <span className="group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-7 w-12 items-center justify-center">
+            <Icon size={24} weight={isActive ? "fill" : "regular"} aria-hidden />
           </span>
           <span className="text-caption font-semibold">{label}</span>
         </>
@@ -93,11 +93,11 @@ function CaptureButton() {
         aria-label="New idea"
         aria-description="Hold to take a photo"
         style={{ WebkitTouchCallout: "none" }}
-        className="pressable press-tomato focus-ring bg-tomato text-on-accent shadow-raised flex size-14 items-center justify-center rounded-lg select-none"
+        className="pressable press-tomato focus-ring bg-tomato text-on-accent shadow-raised flex size-12 items-center justify-center rounded-lg select-none"
       >
         {/* Both stay in the page and one is hidden: swapping the node under the finger would drop the click. */}
-        <PlusIcon size={28} weight="bold" aria-hidden className={armed ? "hidden" : undefined} />
-        <CameraIcon size={28} weight="bold" aria-hidden className={armed ? undefined : "hidden"} />
+        <PlusIcon size={26} weight="bold" aria-hidden className={armed ? "hidden" : undefined} />
+        <CameraIcon size={26} weight="bold" aria-hidden className={armed ? undefined : "hidden"} />
       </button>
       <input
         ref={input}

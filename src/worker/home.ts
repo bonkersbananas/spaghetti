@@ -1,4 +1,5 @@
 import { SESSION_COOKIE } from "./auth/session.ts";
+import { setPageHeaders } from "./page-headers.ts";
 
 const signedInCookie = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=[^;]`);
 
@@ -21,5 +22,6 @@ export async function home(request: Request, env: Env): Promise<Response> {
   // The same address answers two ways, so no cache may keep one for the other.
   headers.set("Cache-Control", "private, no-cache");
   headers.append("Vary", "Cookie");
+  setPageHeaders(headers);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

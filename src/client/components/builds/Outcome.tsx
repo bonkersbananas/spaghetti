@@ -2,7 +2,15 @@ import { OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
 import { m } from "motion/react";
 import { useState } from "react";
 import { Chip, type ChipTone } from "@/components/ui/Chip";
-import { FinishIcon, type Icon, PartlyIcon, PrintingIcon, SpaghettiIcon, WorkedIcon } from "@/components/ui/icons";
+import {
+  FinishIcon,
+  type Icon,
+  PartlyIcon,
+  PrintingIcon,
+  SpaghettiIcon,
+  SparkleIcon,
+  WorkedIcon,
+} from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { tap } from "@/lib/haptics";
 import { spring } from "@/lib/motion";
@@ -39,7 +47,7 @@ const suggestedIcons: Record<Outcome, string> = {
   partial: "text-semolina",
   failed: "text-tomato",
 };
-const suggestedCaptions: Record<Outcome, string> = {
+const suggestedMarks: Record<Outcome, string> = {
   success: "text-basil-ink",
   partial: "text-semolina-ink",
   failed: "text-tomato-ink",
@@ -95,8 +103,8 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               onChange(outcome);
             }}
             className={cn(
-              "pressable focus-ring flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
-              size === "lg" ? "text-body h-22 md:h-20" : cn("text-small gap-1", suggested && !value ? "h-19" : "h-16"),
+              "pressable focus-ring relative flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
+              size === "lg" ? "text-body h-22 md:h-20" : "text-small h-16 gap-1",
               selected
                 ? cn(selectedStyles[outcome], "ring-2 ring-inset")
                 : hinted
@@ -116,14 +124,21 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
-            {suggested && !value && (
-              // Every button keeps the caption's line, so the icons and words line up across the row.
-              <span
-                aria-hidden={!hinted}
-                className={cn("text-micro -mt-1 font-normal", hinted ? suggestedCaptions[outcome] : "invisible")}
-              >
-                suggested
-              </span>
+            {hinted && (
+              // Claude's sparkle in the corner (as in its lines) and the word for screen readers: nothing in the flow, so the
+              // icon and the label stay centered in the square, like the other two.
+              <>
+                <span
+                  className={cn(
+                    "absolute",
+                    size === "lg" ? "top-2 right-2" : "top-1.5 right-1.5",
+                    suggestedMarks[outcome],
+                  )}
+                >
+                  <SparkleIcon size={14} weight="fill" aria-hidden />
+                </span>
+                <span className="sr-only"> suggested</span>
+              </>
             )}
           </button>
         );

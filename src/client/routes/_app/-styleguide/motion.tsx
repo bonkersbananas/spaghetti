@@ -3,6 +3,7 @@ import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { IdeasIcon } from "@/components/ui/icons";
+import { PullHint } from "@/components/ui/PullToGo";
 import { cn } from "@/lib/cn";
 import { Label, Panel, Section } from "./shared";
 
@@ -52,6 +53,20 @@ export function MotionSection() {
           </button>
         </div>
       </Panel>
+      <div id="pull-to-go" className="flex flex-col gap-3">
+        <Label>
+          PullToGo: on a phone, an idea or build page closes with a pull down at its top (the page follows with growing
+          resistance; past 72 px or a quick flick it slides away, under that it springs back)
+        </Label>
+        <Panel className="flex flex-wrap items-center gap-4">
+          <PullHint label="Ideas" ready={false} />
+          <PullHint label="Ideas" ready />
+          <span className="text-small text-ink-faint">
+            While pulling, then once a release goes back (a light tick where the phone can). Wrap a page in{" "}
+            <code>{"<PullToGo back={{ to, label }}>"}</code>; try it on an idea on a phone.
+          </span>
+        </Panel>
+      </div>
       <div id="pressed">
         <PressedPanel />
       </div>

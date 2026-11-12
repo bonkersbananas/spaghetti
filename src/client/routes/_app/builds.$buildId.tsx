@@ -54,6 +54,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
+import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -446,297 +447,302 @@ function Build({ item }: { item: ItemView }) {
   );
 
   return (
-    <article className="pb-6">
-      <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
-      <DetailBar back={back}>
-        <SaveStatus state={saveState} className="mr-2" />
-        {isDesktop ? (
-          <span className="mr-2 flex items-center gap-2">{stageActions}</span>
-        ) : (
-          active && (
-            <IconButton
-              icon={ShelveIcon}
-              label="Shelve build"
-              disabled={readOnly}
-              onClick={() => shelveBuild(queryClient, item)}
-            />
-          )
-        )}
-        <IconButton
-          icon={TrashIcon}
-          label={scrapsToIdea ? "Scrap build" : "Delete build"}
-          disabled={readOnly}
-          onClick={remove}
-        />
-      </DetailBar>
-
-      <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
-        {/* The build: its best photo large, its title and notes. */}
-        <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-4 md:flex-2">
-          {gallery.length > 0 ? (
-            <div className="relative">
-              <PhotoViewer
-                photos={gallery}
-                index={photoIndex}
-                onIndexChange={selectPhoto}
-                alt={alt}
-                onRemove={
-                  // Only the build's own photos come off here; an attempt's belong to their attempt.
-                  (offline && !gallery[photoIndex]?.upload) ||
-                  !own.some((photo) => photo.id === gallery[photoIndex]?.id)
-                    ? undefined
-                    : (photo) => removePhoto(queryClient, photo)
-                }
-                className="-mx-5 md:mx-0"
+    <PullToGo back={back}>
+      <article className="pb-6">
+        <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
+        <DetailBar back={back}>
+          <SaveStatus state={saveState} className="mr-2" />
+          {isDesktop ? (
+            <span className="mr-2 flex items-center gap-2">{stageActions}</span>
+          ) : (
+            active && (
+              <IconButton
+                icon={ShelveIcon}
+                label="Shelve build"
+                disabled={readOnly}
+                onClick={() => shelveBuild(queryClient, item)}
               />
-              {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
-                <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
-                  Final print
-                </Chip>
-              )}
-            </div>
-          ) : null}
-          {gallery.length > 0 && (
-            <PhotoStrip itemId={item.id} photos={own} selectedId={gallery[photoIndex]?.id} onSelect={setPhotoId} />
+            )
           )}
-          {gallery.length === 0 && <AddFirstPhotos itemId={item.id} />}
+          <IconButton
+            icon={TrashIcon}
+            label={scrapsToIdea ? "Scrap build" : "Delete build"}
+            disabled={readOnly}
+            onClick={remove}
+          />
+        </DetailBar>
 
-          <div className="flex flex-col gap-3 md:pt-2">
-            <TextArea
-              appearance="title"
-              aria-label="Title"
-              placeholder="Untitled build"
-              minRows={1}
-              maxLength={200}
-              // A new build from scratch: name it first (or don't).
-              autoFocus={isNew && isDesktop && !item.title}
-              readOnly={readOnly}
-              value={title}
-              onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === "Escape") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-            <ForField
-              aria-label="For"
-              value={forWhom}
-              onChange={(event) => setForWhom(event.target.value)}
-              readOnly={readOnly || item.pending}
-              asking={askFor}
-              onOpen={() => setAskFor(true)}
-              onDone={() => setAskFor(false)}
-            />
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-              <StageChip
-                item={item}
-                printing={!!printing}
-                offBed={!!printing && isOffTheBed(printing)}
-                celebrate={justFinished}
-              />
-              <div className="text-small text-ink-faint">
-                {item.stage === "done" && item.finishedAt ? (
-                  `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
-                ) : item.stage === "shelved" && item.finishedAt ? (
-                  `Shelved ${inlineTime(item.finishedAt)}`
-                ) : item.attempts.length ? (
-                  <MetaList>
-                    <span className="whitespace-nowrap">{attemptsWord}</span>
-                    <span className="whitespace-nowrap">started {inlineTime(started)}</span>
-                  </MetaList>
-                ) : (
-                  `Started ${inlineTime(started)}`
+        <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
+          {/* The build: its best photo large, its title and notes. */}
+          <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-4 md:flex-2">
+            {gallery.length > 0 ? (
+              <div className="relative">
+                <PhotoViewer
+                  photos={gallery}
+                  index={photoIndex}
+                  onIndexChange={selectPhoto}
+                  alt={alt}
+                  onRemove={
+                    // Only the build's own photos come off here; an attempt's belong to their attempt.
+                    (offline && !gallery[photoIndex]?.upload) ||
+                    !own.some((photo) => photo.id === gallery[photoIndex]?.id)
+                      ? undefined
+                      : (photo) => removePhoto(queryClient, photo)
+                  }
+                  className="-mx-5 md:mx-0"
+                />
+                {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
+                  <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
+                    Final print
+                  </Chip>
                 )}
               </div>
-              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
-              {!active && !isDesktop && (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  icon={ReopenIcon}
-                  disabled={readOnly}
-                  onClick={() => reopenBuild(queryClient, item)}
-                >
-                  {item.stage === "done" ? "Reopen" : "Back on the bed"}
-                </Button>
-              )}
-            </div>
-            <NoteField
-              value={note}
-              onChange={setNote}
-              readOnly={readOnly}
-              placeholder="Notes for the whole build: the plan, a link, what to try next…"
-              className="mt-1"
-            />
-            <NoteLinks note={note} />
-          </div>
+            ) : null}
+            {gallery.length > 0 && (
+              <PhotoStrip itemId={item.id} photos={own} selectedId={gallery[photoIndex]?.id} onSelect={setPhotoId} />
+            )}
+            {gallery.length === 0 && <AddFirstPhotos itemId={item.id} />}
 
-          <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />
-
-          <PartsSection
-            item={item}
-            active={active}
-            readOnly={readOnly}
-            onFinishBuild={() => finishBuild(queryClient, item)}
-          />
-
-          {worked && (
-            <WhatWorked
-              attempt={worked}
-              onOpen={() => openSheet(worked.id)}
-              recipes={recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)}
-              saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
-              onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
-              onOpenRecipe={setOpenRecipe}
-            />
-          )}
-        </div>
-
-        {/* The story: every attempt, newest first. */}
-        {/* The story column: what happened, then the conversation about it, a section apart at every width. */}
-        <div className="flex min-w-0 flex-col gap-12 md:flex-3 md:gap-16">
-          <Section
-            id="story"
-            title="Attempts"
-            count={item.attempts.length || undefined}
-            aside={
-              isDesktop && (
-                <Button
-                  variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
-                  icon={printing ? CheckIcon : PlusIcon}
-                  shortcut={shortcutCaps("buildLog")}
-                  onClick={primary}
-                >
-                  {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
-                </Button>
-              )
-            }
-          >
-            {/* One child: the list and what follows it keep their own spacing, not the section's gap. */}
-            <div className="flex flex-col">
-              {story.length === 0 ? (
-                <EmptyState
-                  className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
-                  illustration={<SpoolStrand />}
-                  title="The water's still heating"
-                >
-                  Log the first attempt when it comes off the bed, or start one now and finish it when the print is
-                  done.
-                </EmptyState>
-              ) : (
-                <ol aria-label="Attempts, newest first" className="flex flex-col">
-                  <AnimatePresence initial={false}>
-                    {shownStory.map((attempt, index) => (
-                      <AttemptEntry
-                        key={attempt.id}
-                        ref={(el) => {
-                          if (el) entryRefs.current.set(attempt.id, el);
-                          else entryRefs.current.delete(attempt.id);
-                        }}
-                        attempt={attempt}
-                        partsLabel={attemptPartsLabel(attempt, item.parts)}
-                        photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
-                        onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
-                        person={byId.get(attempt.createdBy)}
-                        via={via(attempt.createdVia)}
-                        selected={attempt.id === selected}
-                        first={index === 0}
-                        onOpen={() => {
-                          setSelected(attempt.id);
-                          openSheet(attempt.id);
-                        }}
-                        onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                        reserveExtras={reserveExtras}
-                        onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
-                        onSaveRecipe={
-                          recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
-                            ? () => setSavingRecipe(recipeSource(attempt) ?? null)
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </AnimatePresence>
-                </ol>
-              )}
-
-              {folds && (
-                // On the rail like the line under it, so it reads as part of the story, not a stray button.
-                <div className="mb-1 flex items-center gap-3 pl-0.5">
-                  <span className="bg-ink/10 size-3 shrink-0 rounded-full" aria-hidden />
+            <div className="flex flex-col gap-3 md:pt-2">
+              <TextArea
+                appearance="title"
+                aria-label="Title"
+                placeholder="Untitled build"
+                minRows={1}
+                maxLength={200}
+                // A new build from scratch: name it first (or don't).
+                autoFocus={isNew && isDesktop && !item.title}
+                readOnly={readOnly}
+                value={title}
+                onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              <ForField
+                aria-label="For"
+                value={forWhom}
+                onChange={(event) => setForWhom(event.target.value)}
+                readOnly={readOnly || item.pending}
+                asking={askFor}
+                onOpen={() => setAskFor(true)}
+                onDone={() => setAskFor(false)}
+              />
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+                <StageChip
+                  item={item}
+                  printing={!!printing}
+                  offBed={!!printing && isOffTheBed(printing)}
+                  celebrate={justFinished}
+                />
+                <div className="text-small text-ink-faint">
+                  {item.stage === "done" && item.finishedAt ? (
+                    `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
+                  ) : item.stage === "shelved" && item.finishedAt ? (
+                    `Shelved ${inlineTime(item.finishedAt)}`
+                  ) : item.attempts.length ? (
+                    <MetaList>
+                      <span className="whitespace-nowrap">{attemptsWord}</span>
+                      <span className="whitespace-nowrap">started {inlineTime(started)}</span>
+                    </MetaList>
+                  ) : (
+                    `Started ${inlineTime(started)}`
+                  )}
+                </div>
+                {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
+                  <ForChip onClick={() => setAskFor(true)} />
+                )}
+                {!active && !isDesktop && (
                   <Button
                     variant="quiet"
                     size="sm"
-                    icon={ExpandIcon}
-                    onClick={() => setShowEarlier(true)}
-                    className="-ml-2"
+                    icon={ReopenIcon}
+                    disabled={readOnly}
+                    onClick={() => reopenBuild(queryClient, item)}
                   >
-                    {story.length - SHOWN_ATTEMPTS} earlier attempts
+                    {item.stage === "done" ? "Reopen" : "Back on the bed"}
                   </Button>
-                </div>
-              )}
-              <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
-                <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-                {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
-                {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
-                <p>
-                  {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
-                  <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
-                    {inlineTime(started)}
-                  </time>
-                </p>
+                )}
               </div>
-            </div>
-            {!item.pending && (
-              <ItemReactions
-                itemId={item.id}
-                reactions={item.reactions}
-                noun="build"
+              <NoteField
+                value={note}
+                onChange={setNote}
                 readOnly={readOnly}
-                className="mt-4"
+                placeholder="Notes for the whole build: the plan, a link, what to try next…"
+                className="mt-1"
+              />
+              <NoteLinks note={note} />
+            </div>
+
+            <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />
+
+            <PartsSection
+              item={item}
+              active={active}
+              readOnly={readOnly}
+              onFinishBuild={() => finishBuild(queryClient, item)}
+            />
+
+            {worked && (
+              <WhatWorked
+                attempt={worked}
+                onOpen={() => openSheet(worked.id)}
+                recipes={recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)}
+                saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
+                onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
+                onOpenRecipe={setOpenRecipe}
               />
             )}
-          </Section>
-          {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
-          {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
-          {!isDesktop && active && (
-            <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>
-          )}
+          </div>
+
+          {/* The story: every attempt, newest first. */}
+          {/* The story column: what happened, then the conversation about it, a section apart at every width. */}
+          <div className="flex min-w-0 flex-col gap-12 md:flex-3 md:gap-16">
+            <Section
+              id="story"
+              title="Attempts"
+              count={item.attempts.length || undefined}
+              aside={
+                isDesktop && (
+                  <Button
+                    variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
+                    icon={printing ? CheckIcon : PlusIcon}
+                    shortcut={shortcutCaps("buildLog")}
+                    onClick={primary}
+                  >
+                    {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
+                  </Button>
+                )
+              }
+            >
+              {/* One child: the list and what follows it keep their own spacing, not the section's gap. */}
+              <div className="flex flex-col">
+                {story.length === 0 ? (
+                  <EmptyState
+                    className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
+                    illustration={<SpoolStrand />}
+                    title="The water's still heating"
+                  >
+                    Log the first attempt when it comes off the bed, or start one now and finish it when the print is
+                    done.
+                  </EmptyState>
+                ) : (
+                  <ol aria-label="Attempts, newest first" className="flex flex-col">
+                    <AnimatePresence initial={false}>
+                      {shownStory.map((attempt, index) => (
+                        <AttemptEntry
+                          key={attempt.id}
+                          ref={(el) => {
+                            if (el) entryRefs.current.set(attempt.id, el);
+                            else entryRefs.current.delete(attempt.id);
+                          }}
+                          attempt={attempt}
+                          partsLabel={attemptPartsLabel(attempt, item.parts)}
+                          photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
+                          onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
+                          person={byId.get(attempt.createdBy)}
+                          via={via(attempt.createdVia)}
+                          selected={attempt.id === selected}
+                          first={index === 0}
+                          onOpen={() => {
+                            setSelected(attempt.id);
+                            openSheet(attempt.id);
+                          }}
+                          onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                          reserveExtras={reserveExtras}
+                          onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
+                          onSaveRecipe={
+                            recipeSource(attempt) &&
+                            !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                              ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </ol>
+                )}
+
+                {folds && (
+                  // On the rail like the line under it, so it reads as part of the story, not a stray button.
+                  <div className="mb-1 flex items-center gap-3 pl-0.5">
+                    <span className="bg-ink/10 size-3 shrink-0 rounded-full" aria-hidden />
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      icon={ExpandIcon}
+                      onClick={() => setShowEarlier(true)}
+                      className="-ml-2"
+                    >
+                      {story.length - SHOWN_ATTEMPTS} earlier attempts
+                    </Button>
+                  </div>
+                )}
+                <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
+                  <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
+                  {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
+                  {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
+                  <p>
+                    {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
+                    <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
+                      {inlineTime(started)}
+                    </time>
+                  </p>
+                </div>
+              </div>
+              {!item.pending && (
+                <ItemReactions
+                  itemId={item.id}
+                  reactions={item.reactions}
+                  noun="build"
+                  readOnly={readOnly}
+                  className="mt-4"
+                />
+              )}
+            </Section>
+            {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
+            {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
+            {!isDesktop && active && (
+              <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
-      {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
-        <ActionBar>
-          <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
-            {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
-          </Button>
-        </ActionBar>
-      )}
+        {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
+        {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
+          <ActionBar>
+            <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
+              {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
+            </Button>
+          </ActionBar>
+        )}
 
-      <CompareSheet
-        item={item}
-        open={compare.open}
-        onOpenChange={(open) => setCompare((current) => ({ ...current, open }))}
-        pair={compare.pair}
-        onPairChange={(pair) => setCompare({ open: true, pair })}
-      />
-      <AttemptSheet
-        item={item}
-        attemptId={sheet.attemptId}
-        incomingFile={sheet.file}
-        initialOutcome={sheet.outcome}
-        open={sheet.open}
-        onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
-        onStep={(attemptId) => {
-          setSheet((current) => ({ ...current, attemptId, file: null }));
-          setSelected(attemptId);
-        }}
-      />
-      <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
-      <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
-    </article>
+        <CompareSheet
+          item={item}
+          open={compare.open}
+          onOpenChange={(open) => setCompare((current) => ({ ...current, open }))}
+          pair={compare.pair}
+          onPairChange={(pair) => setCompare({ open: true, pair })}
+        />
+        <AttemptSheet
+          item={item}
+          attemptId={sheet.attemptId}
+          incomingFile={sheet.file}
+          initialOutcome={sheet.outcome}
+          open={sheet.open}
+          onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
+          onStep={(attemptId) => {
+            setSheet((current) => ({ ...current, attemptId, file: null }));
+            setSelected(attemptId);
+          }}
+        />
+        <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
+        <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
+      </article>
+    </PullToGo>
   );
 }
 

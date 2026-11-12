@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { AGENT_SCOPES, type AgentScope, hashToken, isScope } from "../../shared/agents.ts";
 import { mcpResource } from "../../shared/oauth.ts";
+import { clientKey, takeHit } from "../auth/webauthn.ts";
 import { getDb } from "../db/index.ts";
 import { agents, agentTokens, oauthCodes, oauthRefreshTokens, users } from "../db/schema.ts";
 import { appName, findClient, registerClient, registration } from "./clients.ts";
@@ -17,6 +18,10 @@ import { disconnectAgent, issueGrant } from "./grants.ts";
  */
 
 const originOf = (url: string) => new URL(url).origin;
+
+/** Registrations one address may make in a window: plenty for connecting apps, too few to fill the table. */
+const REGISTRATIONS_PER_ADDRESS = 20;
+const REGISTRATION_WINDOW_MS = 60 * 60 * 1000;
 
 /** The error body every endpoint here answers with (RFC 6749 section 5.2). */
 const failure = (error: string, description: string, status: 400 | 401 | 429 = 400) =>
@@ -114,6 +119,13 @@ export const oauthEndpoints = new Hono<{ Bindings: Env }>()
   // RFC 7591.
   .post("/oauth/register", async (c) => {
     const db = getDb(c.env.DB);
+    // The table has a cap (clients.ts), so one address can't fill it: an app registers once per connection.
+    const hits = c as unknown as Parameters<typeof takeHit>[0];
+    if (
+      !(await takeHit(hits, `oauth-register:${clientKey(hits)}`, REGISTRATIONS_PER_ADDRESS, REGISTRATION_WINDOW_MS))
+    ) {
+      return failure("temporarily_unavailable", "Too many apps registered from here. Try again later.", 429);
+    }
     const parsed = registration.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return failure("invalid_client_metadata", "Send JSON with a client_name and redirect_uris.");
     const made = await registerClient(db, parsed.data);
