@@ -245,9 +245,9 @@ function SearchResults({
     );
   }
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a grid of buttons, like Frimousse's own (role grid, row, gridcell)
     // On a phone the results sit at the bottom, right above the search field and the keyboard, the best match
     // nearest the thumb (the column reverses, so the first row is the lowest and the scroll starts there).
+    // biome-ignore lint/a11y/useSemanticElements: a grid of buttons, like Frimousse's own (role grid, row, gridcell)
     <div
       className={cn("flex min-h-0 flex-1 overflow-y-auto overscroll-contain", sheet ? "flex-col-reverse" : "flex-col")}
       role="grid"
