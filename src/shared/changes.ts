@@ -14,6 +14,7 @@ export const PUBLIC_CHANGE_ENTITIES = [
   "comment",
   "spool",
   "recipe",
+  "twist",
   "shopping",
   "slot",
   "printer",

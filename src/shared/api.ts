@@ -11,6 +11,7 @@ import type { PhotoRead } from "./photo-read.ts";
 import type { PriceSuggestion, ShoppingPrices, SuggestState } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
+import type { TwistChange, TwistSourceFields } from "./twists.ts";
 
 /** A person as the client sees them: never includes credentials. */
 export interface Person {
@@ -865,4 +866,36 @@ export interface ShoppingItemsResponse {
 
 export interface ShoppingItemResponse {
   shoppingItem: ShoppingItem;
+}
+
+/**
+ * A model we print our own way (decision 0043): where it came from, what we changed, and the picture to lead with.
+ * Links to the idea, recipe and builds are plain ids: a twist outlives them, and the link goes quiet.
+ */
+export interface Twist {
+  id: string;
+  name: string;
+  note: string;
+  source: TwistSourceFields & {
+    /** "MakerWorld", "STL file": where the link points, from its address alone. */
+    place: string | null;
+    /** The picture the twist leads with, while the idea it came from still has it. */
+    photo: Photo | null;
+  };
+  changes: TwistChange[];
+  /** The idea it was made from, while that idea is still there. */
+  fromItemId: string | null;
+  /** The recipe that says how to print it. */
+  recipeId: string | null;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** GET /api/twists */
+export interface TwistsResponse {
+  twists: Twist[];
+}
+export interface TwistResponse {
+  twist: Twist;
 }

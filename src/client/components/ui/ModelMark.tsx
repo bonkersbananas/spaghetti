@@ -13,19 +13,19 @@ export function ModelMark({ mark, className }: { mark: Model; className?: string
   return (
     <span
       className={cn(
-        "bg-veil-strong text-on-veil ring-on-veil/70 shadow-raised relative m-2.5 flex size-13 rotate-[-6deg] flex-col items-center justify-center rounded-full ring-2 backdrop-blur-md",
+        "bg-veil-strong text-on-veil ring-on-veil/70 shadow-raised relative m-1.5 flex size-9 rotate-[-6deg] flex-col items-center justify-center rounded-full ring-1 backdrop-blur-md md:m-2.5 md:size-13 md:ring-2",
         className,
       )}
     >
-      <ModelIcon size={24} weight="fill" aria-hidden />
-      <span className="text-caption -mt-0.5 leading-none font-semibold" aria-hidden>
+      <ModelIcon weight="fill" aria-hidden className="size-4 md:size-6" />
+      <span className="text-micro md:text-caption -mt-px leading-none font-semibold md:-mt-0.5" aria-hidden>
         {modelLetter(mark)}
       </span>
       <span
         aria-hidden
-        className="bg-basil text-on-veil ring-on-veil/70 absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full ring-2"
+        className="bg-basil text-on-veil ring-on-veil/70 absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full ring-1 md:-top-1 md:-right-1 md:size-5 md:ring-2"
       >
-        <CheckIcon size={11} weight="bold" />
+        <CheckIcon weight="bold" className="size-2 md:size-3" />
       </span>
       <span className="sr-only">Ready to print, model on {modelPlace(mark)}</span>
     </span>

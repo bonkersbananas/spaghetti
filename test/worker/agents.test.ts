@@ -265,6 +265,20 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     path: `/api/recipes/${uuid()}`,
     json: { name: "Silk" },
   },
+  {
+    name: "make a twist",
+    scope: "capture",
+    method: "POST",
+    path: "/api/twists",
+    json: { id: uuid(), name: "42 mm bin" },
+  },
+  {
+    name: "change a twist",
+    scope: "capture",
+    method: "PATCH",
+    path: `/api/twists/${uuid()}`,
+    json: { note: "Looser" },
+  },
   { name: "add a spool", scope: "printer", method: "POST", path: "/api/spools", json: { id: uuid(), material: "PLA" } },
   {
     name: "update a spool",

@@ -15,6 +15,7 @@ import { ElevationSection } from "./-styleguide/elevation";
 import { EmptySection } from "./-styleguide/empty";
 import { ErrorSection } from "./-styleguide/error";
 import { FieldSection } from "./-styleguide/fields";
+import { HubTileSection } from "./-styleguide/hub-tile";
 import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
 import { LayerSliderSection } from "./-styleguide/layer-slider";
@@ -86,6 +87,7 @@ const toc = [
   ["command-block", "Command block"],
   ["steps", "Steps"],
   ["live-status", "Live status"],
+  ["hub-tile", "Hub tile"],
 ] as const;
 
 function Styleguide() {
@@ -138,6 +140,7 @@ function Styleguide() {
           <EmptySection />
           <ErrorSection />
           <SkeletonSection />
+          <HubTileSection />
           <LayerSliderSection />
           <LiveStatusSection />
           <StepsSection />
