@@ -19,6 +19,7 @@ import {
   IdeasIcon,
   PrintingIcon,
   ShelveIcon,
+  SlicerFileIcon,
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
@@ -119,26 +120,45 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
       onClick={(event) => heroClick(event, photo?.id)}
       aria-current={selected || undefined}
       className={cn(
-        "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring flex flex-col rounded-lg p-1.5 md:flex-row",
+        "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring rounded-lg p-1.5",
+        // A render isn't the result: on a phone it is a small picture beside the title, under a top row that says what
+        // it is, with the progress and settings full width below; from md it is the card's picture at the left.
+        plate
+          ? "grid max-md:grid-cols-[auto_minmax(0,1fr)] md:grid-cols-5 md:grid-rows-[auto_1fr]"
+          : "flex flex-col md:flex-row",
         selected && "shadow-ring hover:shadow-ring",
       )}
     >
       {plate && (
-        // A render isn't a photo: on a phone it gets a shorter frame, so it doesn't take more room than the print would.
-        <div className="relative aspect-video shrink-0 overflow-hidden rounded-md md:aspect-4/3 md:w-2/5">
-          {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
-          <Photo
-            src={fileThumbSrc(plate.id)}
-            alt=""
-            fit="contain"
-            className="size-full p-3"
-            imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
-          />
-          <span className="absolute top-2 left-2">
-            <SlicerPreviewBadge />
-          </span>
-          <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
-        </div>
+        <>
+          {/* Phones: the top row says what this is (a render, not a photo of the result) and how it went. */}
+          <div className="col-span-2 row-start-1 flex items-center gap-2 px-1 pt-1 pb-2 md:hidden">
+            <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
+            <span className="text-caption text-ink-faint inline-flex items-center gap-1 font-semibold">
+              <SlicerFileIcon size={12} weight="fill" aria-hidden />
+              Slicer preview
+            </span>
+            <Meta at={attempt.printedAt} time={time} person={person} via={via} />
+          </div>
+          <div className="relative col-start-1 row-start-2 size-24 overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:row-start-1 md:aspect-4/3 md:h-auto md:w-full">
+            {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
+            <Photo
+              src={fileThumbSrc(plate.id)}
+              alt=""
+              fit="contain"
+              className="size-full p-1.5 md:p-3"
+              imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
+            />
+            <span className="absolute top-2 left-2 max-md:hidden">
+              <SlicerPreviewBadge />
+            </span>
+            <OutcomeChip
+              outcome={attempt.outcome}
+              offTheBed={offBed}
+              className="shadow-soft absolute bottom-2 left-2 max-md:hidden"
+            />
+          </div>
+        </>
       )}
       {photo && (
         <div className="relative aspect-4/3 shrink-0 overflow-hidden rounded-md md:w-2/5">
@@ -158,70 +178,111 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           )}
         </div>
       )}
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3">
-        {/* Without a picture, the outcome leads the card. */}
-        {!picture && (
-          <div className="flex items-center gap-2">
-            <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-            <Meta at={attempt.printedAt} time={time} person={person} via={via} />
+      <div className={plate ? "contents" : "flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3"}>
+        <div
+          className={cn(
+            "flex flex-col gap-2.5",
+            plate &&
+              "col-start-2 row-start-2 min-w-0 pt-0.5 pl-3 md:col-span-3 md:col-start-3 md:row-start-1 md:px-4 md:pt-3",
+          )}
+        >
+          {/* Without a picture, the outcome leads the card. */}
+          {!picture && (
+            <div className="flex items-center gap-2">
+              <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
+              <Meta at={attempt.printedAt} time={time} person={person} via={via} />
+            </div>
+          )}
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-body text-ink min-w-0 flex-1 font-sans">
+              <MetaList>
+                <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
+                <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
+              </MetaList>
+            </h3>
+            {picture && (
+              <Meta
+                at={attempt.printedAt}
+                time={time}
+                person={person}
+                via={via}
+                className={cn(plate && "max-md:hidden")}
+              />
+            )}
           </div>
-        )}
-        <div className="flex items-baseline gap-2">
-          <h3 className="text-body text-ink min-w-0 flex-1 font-sans">
-            <MetaList>
-              <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
-              <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
-            </MetaList>
-          </h3>
-          {picture && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
+          {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
         </div>
-        {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
-        {attempt.outcome === null && !offBed && (
-          <PrintProgress
-            startedAt={attempt.printedAt}
-            estimatedMinutes={attempt.settings.estimatedMinutes}
-            attemptId={attempt.id}
-          />
-        )}
-        {offBed && attempt.endedAt !== null && (
-          <p className="text-small text-ink-soft">
-            <span className="text-ink font-semibold">{offTheBedLabel(attempt.endedAt)}</span> · how did it go?
-          </p>
-        )}
-        {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
-        {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
-          <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
-            {attempt.failureTags.map((slug) => (
-              <li key={`f-${slug}`}>
-                <Chip tone="tomato">{tagLabel("failure", slug, failureOptions)}</Chip>
-              </li>
-            ))}
-            {attempt.successNotes.map((slug) => (
-              <li key={`s-${slug}`}>
-                <Chip tone="basil" icon={CheckIcon}>
-                  {tagLabel("success", slug, successOptions)}
-                </Chip>
-              </li>
-            ))}
-          </ul>
-        )}
-        {(filaments.length > 0 || settings.length > 0) && (
-          <SettingsLine
-            filaments={filaments}
-            parts={settings}
-            name={(filament) => [filament.colorName, filament.type].filter(Boolean).join(" ") || "Filament"}
-            className="text-small text-ink-faint mt-auto"
-            filamentClassName="text-ink-soft"
-          />
-        )}
+        <div
+          className={cn(
+            "flex flex-1 flex-col gap-2.5",
+            plate &&
+              "col-span-2 row-start-3 px-2.5 pt-3 pb-2.5 md:col-span-3 md:col-start-3 md:row-start-2 md:px-4 md:pt-2.5 md:pb-3",
+          )}
+        >
+          {attempt.outcome === null && !offBed && (
+            <PrintProgress
+              startedAt={attempt.printedAt}
+              estimatedMinutes={attempt.settings.estimatedMinutes}
+              attemptId={attempt.id}
+            />
+          )}
+          {offBed && attempt.endedAt !== null && (
+            <p className="text-small text-ink-soft">
+              <span className="text-ink font-semibold">{offTheBedLabel(attempt.endedAt)}</span> · how did it go?
+            </p>
+          )}
+          {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
+          {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
+            <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
+              {attempt.failureTags.map((slug) => (
+                <li key={`f-${slug}`}>
+                  <Chip tone="tomato">{tagLabel("failure", slug, failureOptions)}</Chip>
+                </li>
+              ))}
+              {attempt.successNotes.map((slug) => (
+                <li key={`s-${slug}`}>
+                  <Chip tone="basil" icon={CheckIcon}>
+                    {tagLabel("success", slug, successOptions)}
+                  </Chip>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(filaments.length > 0 || settings.length > 0) && (
+            <SettingsLine
+              filaments={filaments}
+              parts={settings}
+              name={(filament) => [filament.colorName, filament.type].filter(Boolean).join(" ") || "Filament"}
+              className="text-small text-ink-faint mt-auto"
+              filamentClassName="text-ink-soft"
+            />
+          )}
+        </div>
       </div>
     </Link>
   );
 });
 
-function Meta({ at, time, person, via }: { at: number; time: string; person?: Person; via?: string }) {
+function Meta({
+  at,
+  time,
+  person,
+  via,
+  className,
+}: {
+  at: number;
+  time: string;
+  person?: Person;
+  via?: string;
+  className?: string;
+}) {
   return (
-    <span className="text-small text-ink-faint tabular ml-auto flex shrink-0 items-center gap-2 self-center pl-2">
+    <span
+      className={cn(
+        "text-small text-ink-faint tabular ml-auto flex shrink-0 items-center gap-2 self-center pl-2",
+        className,
+      )}
+    >
       <ViaText name={via} className="hidden md:inline" />
       <time dateTime={new Date(at).toISOString()} title={fullTime(at)}>
         {time}

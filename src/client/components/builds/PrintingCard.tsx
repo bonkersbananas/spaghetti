@@ -112,8 +112,8 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
           className={cn(
             "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
             // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
-            // print's state down.
-            !hero && !plate && !compact ? "aspect-5/2" : layout.picture,
+            // print's state down; the slicer's plate picture (a render, not the result) gets a calmer 16:9.
+            !hero && !plate && !compact ? "aspect-5/2" : plate && !compact ? "aspect-video" : layout.picture,
           )}
         >
           {hero ? (
