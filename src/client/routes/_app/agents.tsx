@@ -10,7 +10,6 @@ import { AgentSheet } from "@/components/agents/AgentSheet";
 import { ShareCard } from "@/components/agents/ShareCard";
 import { EmptyPot } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { ActionBar } from "@/components/ui/ActionBar";
 import { AgentAvatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -72,21 +71,20 @@ function Agents() {
           className="py-6 md:py-12"
           illustration={<EmptyPot />}
           title="No sous-chefs in the kitchen yet"
-          action={isDesktop ? newAgent : undefined}
+          action={newAgent}
         >
-          An agent is a helper that works for you with a key of its own: Claude searching your notes and logging a
-          print, or a bridge at home that watches the printer. Each gets only what you allow, and everything it does is
-          marked “via”.
+          A helper with a key of its own, such as Claude or a bridge at home, that does only what you allow.
         </EmptyState>
       )}
-      <ShareCard />
-      {!isDesktop && (
-        <ActionBar>
-          <Button variant="secondary" size="lg" icon={PlusIcon} fullWidth disabled={readOnly} onClick={() => open()}>
+      {/* On a phone the header has no room for it: it follows the last agent, in the page, not floating over it. */}
+      {!isDesktop && mine.length > 0 && (
+        <div className="max-w-content mt-4">
+          <Button variant="secondary" icon={PlusIcon} fullWidth onClick={() => open()} disabled={readOnly}>
             New agent
           </Button>
-        </ActionBar>
+        </div>
       )}
+      <ShareCard />
       <div className="mt-12 md:mt-16">
         <Suspense fallback={<div aria-hidden className="h-24" />}>
           <Webhooks agents={mine} />
