@@ -3,6 +3,7 @@ import { parseEntry, shoppingName, splitShopping, tidyPageTitle } from "@shared/
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
+import { featuresQuery } from "./drafts";
 import { linkPreviewQuery } from "./queries";
 import { canEdit } from "./read-only";
 
@@ -49,6 +50,11 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
   const optimistic: ShoppingItem = {
     id,
     ...entry,
+    picture: null,
+    prices: null,
+    suggestion: null,
+    suggestState: null,
+    pricesTriedAt: null,
     position: topPosition(before),
     boughtAt: null,
     boughtBy: null,
@@ -104,7 +110,14 @@ type Changes = Partial<Pick<ShoppingItem, "name" | "link" | "priceLink">>;
 
 /** Renames a thing or changes its links. Resolves once the server has it (autosave shows "Saved"). */
 export async function updateShopping(queryClient: QueryClient, id: string, changes: Changes) {
-  patchOne(queryClient, id, (item) => ({ ...item, ...changes }));
+  patchOne(queryClient, id, (item) => ({
+    ...item,
+    ...changes,
+    // A new Prisjakt page means new prices, as the server does it; a new shop page drops the shop's picture.
+    ...(changes.priceLink !== undefined && { prices: null, pricesTriedAt: null, suggestion: null, suggestState: null }),
+    ...(((changes.priceLink !== undefined && item.picture?.source === "prisjakt") ||
+      (changes.link !== undefined && item.picture?.source === "shop")) && { picture: null }),
+  }));
   const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}`, {
     method: "PATCH",
     json: changes,
@@ -208,3 +221,32 @@ export function removeShopping(queryClient: QueryClient, gone: ShoppingItem[], p
     },
   });
 }
+
+/** "Check prices again": the server reads the Prisjakt page now and answers with what it found. */
+export async function checkPrices(queryClient: QueryClient, id: string) {
+  const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}/check-prices`, { method: "POST" });
+  keepServer(queryClient, shoppingItem);
+}
+
+/** Claude looks for the Prisjakt page in a search engine's results; the answer is a suggestion to confirm. */
+export async function lookForPrisjakt(queryClient: QueryClient, id: string) {
+  patchOne(queryClient, id, (item) => ({ ...item, suggestion: null, suggestState: "searching" }));
+  try {
+    const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}/suggest`, { method: "POST" });
+    keepServer(queryClient, shoppingItem);
+  } catch (error) {
+    await queryClient.invalidateQueries({ queryKey: shoppingQuery.queryKey });
+    throw error;
+  }
+}
+
+/** "Not this one": the suggestion goes at once and isn't suggested again. */
+export async function dismissSuggestion(queryClient: QueryClient, id: string) {
+  patchOne(queryClient, id, (item) => ({ ...item, suggestion: null, suggestState: "none" }));
+  const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}/suggestion/dismiss`, {
+    method: "POST",
+  });
+  keepServer(queryClient, shoppingItem);
+}
+
+export const usePriceSuggestionsEnabled = () => useQuery(featuresQuery).data?.priceSuggestions === true;

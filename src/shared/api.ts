@@ -8,6 +8,7 @@ import type { LabelField, LabelRead } from "./label-read.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
+import type { PriceSuggestion, ShoppingPrices, SuggestState } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 
@@ -204,6 +205,8 @@ export interface FeaturesResponse {
   photoReads: boolean;
   /** Claude can read a spool's label from a photo (decision 0031); the same key. */
   labelReads: boolean;
+  /** Claude can look for the Prisjakt page of a shopping list thing in a search engine's results (decision 0041); the same key. */
+  priceSuggestions: boolean;
   /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
   coach: boolean;
   /** Claude scouts three models a week for the two of them (decision 0040); the same key. */
@@ -834,6 +837,16 @@ export interface ShoppingItem {
   link: string | null;
   /** A price comparison page (Prisjakt). */
   priceLink: string | null;
+  /** The thing's picture: from its Prisjakt page, else its shop's page. `url` includes a version, so it can be cached. */
+  picture: { url: string; source: "prisjakt" | "shop" } | null;
+  /** The cheapest offers found on its Prisjakt page, as found at `checkedAt`; null until it is read. */
+  prices: ShoppingPrices | null;
+  /** A Prisjakt page that might be it, waiting for a yes ("Use it") or a no ("Not this one"); never used before that. */
+  suggestion: PriceSuggestion | null;
+  /** Null until anyone looked for a Prisjakt page for it. */
+  suggestState: SuggestState | null;
+  /** The last time reading the Prisjakt page was tried (epoch ms); null if never. A failed try leaves older prices. */
+  pricesTriedAt: number | null;
   /** Its place among what's still to buy, smallest first. */
   position: number;
   /** When it was ticked off, epoch ms; null while it's still to buy. */

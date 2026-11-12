@@ -125,6 +125,15 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     .returning({ id: items.id });
   await db.delete(recipes).where(and(isNotNull(recipes.deletedAt), lt(recipes.deletedAt, cutoff)));
   await db.delete(comments).where(and(isNotNull(comments.deletedAt), lt(comments.deletedAt, cutoff)));
+  // Their pictures first (R2 goes first, like the rest), so a cut-short purge leaves rows the next run finishes.
+  const goneShopping = await db
+    .select({ id: shoppingItems.id })
+    .from(shoppingItems)
+    .where(and(isNotNull(shoppingItems.deletedAt), lt(shoppingItems.deletedAt, cutoff)));
+  // Every purged thing, picture source or not: clearing a link leaves the old object behind (a missing key is harmless).
+  for (let at = 0; at < goneShopping.length; at += 500) {
+    await env.PHOTOS.delete(goneShopping.slice(at, at + 500).map((row) => `shopping/${row.id}/picture`));
+  }
   await db.delete(shoppingItems).where(and(isNotNull(shoppingItems.deletedAt), lt(shoppingItems.deletedAt, cutoff)));
   // The change feed keeps a month: anyone who was away longer is told to reload everything.
   // The newest row stays however old, so the cursor never goes back to a smaller number.

@@ -5,8 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
+import { Chip } from "@/components/ui/Chip";
 import { PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
+import { PriceLine } from "@/components/ui/Prices";
+import { Thumb } from "@/components/ui/Thumb";
 import { cn } from "@/lib/cn";
 import { linkPreviewQuery } from "@/lib/queries";
 
@@ -89,11 +92,27 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       sendNow();
     };
   }, []);
+  const cheapest = item.prices?.offers[0];
+  const matched = !item.priceLink && !bought && item.suggestState === "found";
   const links = (
     <>
-      {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
+      {item.prices && !bought && <PriceLine price={item.prices.lowest} shop={cheapest?.shop} className="w-full" />}
+      {matched && (
+        // Claude's guess, not yet anyone's choice: the dashed chip, which opens the sheet to confirm it.
+        <button type="button" onClick={onOpen} className="focus-ring touch-target pressable rounded-pill relative">
+          <Chip suggested icon={PriceIcon}>
+            Prisjakt match?
+          </Chip>
+        </button>
+      )}
+      {item.link && (
+        <LinkChip href={item.link} quietArrow>
+          {shopName(item.link)}
+        </LinkChip>
+      )}
       {item.priceLink && (
-        <LinkChip href={item.priceLink} icon={PriceIcon}>
+        // With a price in the line above, the chip is just the word (no coin): both chips then fit on one phone line.
+        <LinkChip href={item.priceLink} icon={item.prices && !bought ? undefined : PriceIcon} quietArrow>
           Prisjakt
         </LinkChip>
       )}
@@ -102,6 +121,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   return (
     <ChecklistRow
       done={bought}
+      thumb={<Thumb src={item.picture?.url ?? null} alt="" faded={bought} />}
       lifted={lifted}
       last={last}
       tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}
@@ -115,7 +135,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
               {item.boughtAt && inlineTime(item.boughtAt)}
             </span>
           </span>
-        ) : item.link || item.priceLink ? (
+        ) : item.link || item.priceLink || matched ? (
           links
         ) : undefined
       }

@@ -394,6 +394,7 @@ export const operations: Record<string, Operation> = {
       drafts: z.boolean(),
       photoReads: z.boolean(),
       labelReads: z.boolean(),
+      priceSuggestions: z.boolean(),
       coach: z.boolean(),
       webhooks: z.boolean(),
     }),
@@ -754,6 +755,24 @@ export const operations: Record<string, Operation> = {
     summary: "Takes something off the list (it can be restored).",
     response: "empty",
     status: 204,
+  },
+  "POST /shopping-items/:id/check-prices": {
+    summary:
+      "Reads its Prisjakt product page again now: the picture and the cheapest offers, as found at that time. A check a moment ago stands.",
+    response: one("shoppingItem", z.looseObject({})),
+  },
+  "POST /shopping-items/:id/suggest": {
+    summary:
+      "Looks for its Prisjakt page again, in a search engine's results (Claude's web search; `404` without the key, a daily cap). The answer is a `suggestion` to confirm, never a link that is used.",
+    response: one("shoppingItem", z.looseObject({})),
+  },
+  "POST /shopping-items/:id/suggestion/dismiss": {
+    summary: '"Not this one": drops the suggested Prisjakt page so it isn\'t suggested again.',
+    response: one("shoppingItem", z.looseObject({})),
+  },
+  "GET /shopping-items/:id/picture": {
+    summary: "Its picture (from its Prisjakt page, else its shop's page), when it has one.",
+    response: "binary",
   },
   "POST /shopping-items/:id/restore": {
     summary: "Puts something taken off the list back.",
