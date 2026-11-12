@@ -190,14 +190,23 @@ function SearchResults({
   const [tone] = useSkinTone();
   const found = useMemo(() => (emojis ? find(emojis, query).slice(0, 160) : []), [emojis, query]);
   const shown = (entry: Entry) => (tone !== "none" && entry.skins ? (entry.skins[tone] ?? entry.emoji) : entry.emoji);
-  // The first result is on from the start (the picker remounts this for each query); arrows move, Enter picks. Heard
-  // on the document, in the capture phase, so it comes before Frimousse's own keys, which belong to its hidden grid.
+  // The first result is on from the start (the picker remounts this for each query); Up and Down move through the
+  // grid and Enter picks, but only from the search field: Tab to a button and Enter uses that button. Left and Right
+  // stay the caret's (to fix a typo) until Up or Down has started moving through the grid. Heard on the document, in the
+  // capture phase, so it comes before Frimousse's own keys, which belong to its hidden grid.
   const [active, setActive] = useState(0);
+  const [moving, setMoving] = useState(false);
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
-      const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -COLUMNS, ArrowDown: COLUMNS }[event.key];
-      if (step !== undefined) {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || target.type !== "search" || !found.length) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const step = { ArrowUp: -COLUMNS, ArrowDown: COLUMNS, ArrowLeft: moving ? -1 : 0, ArrowRight: moving ? 1 : 0 }[
+        event.key
+      ];
+      if (step) {
         event.preventDefault();
+        setMoving(true);
         setActive((index) => Math.max(0, Math.min(found.length - 1, index + step)));
       } else if (event.key === "Enter" && found[active]) {
         event.preventDefault();
