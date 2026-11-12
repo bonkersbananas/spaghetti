@@ -375,6 +375,7 @@ function Suggestions({
   }
   return (
     <div className="flex flex-col gap-6">
+      <p className="text-small text-ink-faint -mb-2">Ideas, builds and every attempt, by any word you remember.</p>
       {recent.length > 0 && (
         <SuggestionGroup
           title="Recent"
@@ -391,7 +392,7 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
-      {(tags.length > 0 || materials.length > 0) && (
+      {tags.length > 0 && (
         <SuggestionGroup title="Often tagged">
           {tags.map((tag) => {
             const label = tagLabel(tag.kind, tag.slug, tag.kind === "failure" ? failureOptions : successOptions);
@@ -401,6 +402,10 @@ function Suggestions({
               </ToggleChip>
             );
           })}
+        </SuggestionGroup>
+      )}
+      {materials.length > 0 && (
+        <SuggestionGroup title="Materials">
           {materials.map((material) => (
             <ToggleChip key={material.value} selected={false} onClick={() => onFilter({ material: material.value })}>
               {material.value}
@@ -408,10 +413,6 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
-      <EmptyState className="py-6 md:py-10" illustration={<NoodleSearch className="w-32" />} title="Dig up what worked">
-        Type what you remember: a filament, a failure, a name, a setting. One search covers ideas, builds and every
-        attempt.
-      </EmptyState>
     </div>
   );
 }
