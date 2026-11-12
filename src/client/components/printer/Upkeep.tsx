@@ -2,7 +2,7 @@ import type { UpkeepTask } from "@shared/api";
 import { formatHours, progressWords } from "@shared/upkeep";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -74,17 +74,29 @@ export function Upkeep() {
                 <UpkeepMeter fraction={task.fraction} label={upkeepRowText(task)} />
                 <span className="text-small text-ink-faint tabular truncate">{upkeepRowText(task)}</span>
               </button>
-              <Button
-                // Raised only where something is due; the rest are a quiet word, so nothing looks due that isn't.
-                variant={task.due ? "secondary" : "quiet"}
-                size="sm"
-                icon={CheckIcon}
-                disabled={readOnly}
-                aria-label={`Done: ${task.name}`}
-                onClick={() => setOpen({ kind: "done", id: task.id })}
-              >
-                Done
-              </Button>
+              {task.due ? (
+                // The one thing to do: raised only where something is due.
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={CheckIcon}
+                  disabled={readOnly}
+                  aria-label={`Done: ${task.name}`}
+                  onClick={() => setOpen({ kind: "done", id: task.id })}
+                >
+                  Done
+                </Button>
+              ) : (
+                // A quiet tick for marking it done early, so nothing looks due that isn't.
+                <IconButton
+                  icon={CheckIcon}
+                  size="sm"
+                  label={`Done: ${task.name}`}
+                  disabled={readOnly}
+                  className="text-ink-faint"
+                  onClick={() => setOpen({ kind: "done", id: task.id })}
+                />
+              )}
             </li>
           ))}
         </ul>

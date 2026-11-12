@@ -58,10 +58,23 @@ function Printer() {
 }
 
 /** A shared Section whose id comes from its title. */
-function PrinterSection({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+function PrinterSection({
+  title,
+  aside,
+  quiet,
+  description,
+  children,
+}: {
+  title: string;
+  aside?: ReactNode;
+  /** A quieter group (a smaller title) under the page's main sections, Upkeep and the AMS. */
+  quiet?: boolean;
+  description?: string;
+  children: ReactNode;
+}) {
   const id = `printer-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
-    <Section id={id} title={title} aside={aside}>
+    <Section id={id} title={title} aside={aside} size={quiet ? "title" : "headline"} description={description}>
       {children}
     </Section>
   );
@@ -180,7 +193,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
       )}
 
       <fieldset disabled={readOnly} className="contents">
-        <PrinterSection title="Nozzles">
+        <PrinterSection title="Nozzles" quiet>
           <div className="grid gap-3 md:grid-cols-2">
             {(["main", "auxiliary"] as const).map((nozzle) => {
               const fitted = setup.nozzles[nozzle];
@@ -218,7 +231,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <PrinterSection title="Plates you own">
+        <PrinterSection title="Plates you own" quiet description="Tap the ones you have.">
           {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
           <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
             {[...BED_TYPES, ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate))].map(
@@ -268,7 +281,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <PrinterSection title="Staying dry">
+        <PrinterSection title="Staying dry" quiet>
           <Disclosure
             open={dryingOpen}
             onOpenChange={setDryingOpen}
