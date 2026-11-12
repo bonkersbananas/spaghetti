@@ -21,6 +21,14 @@ const create = async (page: import("@playwright/test").Page, title: string) => {
   return id;
 };
 
+// The page takes focus only when the app asks (a permanent tabindex would catch taps), so a test asks the same way.
+const focusPage = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => {
+    const main = document.querySelector("main") as HTMLElement;
+    main.tabIndex = -1;
+    main.focus();
+  });
+
 test("the first Tab offers to skip the sidebar, and the next Tab is in the page", async ({ page }) => {
   await create(page, "Skippable");
   await page.goto("/ideas");
@@ -63,7 +71,7 @@ test("deleting an idea with Delete, then Undo, never leaves focus on the page's 
   await expect(page.locator("main")).toBeVisible();
   await page.waitForTimeout(500);
   // Out of the note field, onto the page itself.
-  await page.locator("main").focus();
+  await focusPage(page);
   await page.keyboard.press("Delete");
   await expect(page).toHaveURL(/\/ideas$/);
   await expect(page.locator("main")).toBeFocused();
@@ -73,7 +81,7 @@ test("deleting an idea with Delete, then Undo, never leaves focus on the page's 
     page.getByRole("list", { name: "Ideas" }).getByRole("link", { name: /Goes and comes back/ }),
   ).toBeVisible();
   // Tab goes on from the page, not from the top of the sidebar.
-  await page.locator("main").focus();
+  await focusPage(page);
   await page.keyboard.press("Tab");
   await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toBeFocused();
 });

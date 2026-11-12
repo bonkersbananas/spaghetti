@@ -144,7 +144,7 @@ function Shell() {
         Skip to content
       </a>
       <Sidebar />
-      <main id={CONTENT_ID} tabIndex={-1} className="pt-safe md:pl-sidebar focus-visible:shadow-none">
+      <main id={CONTENT_ID} className="pt-safe md:pl-sidebar focus-visible:shadow-none">
         <div className="max-w-wide pb-page mx-auto w-full px-5 md:px-12 md:pb-16">
           <OfflineNotice />
           <Outlet />

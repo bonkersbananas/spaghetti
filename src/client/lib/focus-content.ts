@@ -3,7 +3,17 @@ import type { AnyRouter } from "@tanstack/react-router";
 /** The page's own content, the target of the skip link and of focus after a move (`<main id="content" tabindex="-1">`). */
 export const CONTENT_ID = "content";
 
-export const focusContent = () => document.getElementById(CONTENT_ID)?.focus({ preventScroll: true });
+/**
+ * Focuses the page. It can only take focus while we ask: a permanent tabindex would make a tap on any text inside it
+ * move focus to the page (taking it from whatever the tap should leave alone), so it is set for the focus only.
+ */
+export function focusContent() {
+  const main = document.getElementById(CONTENT_ID);
+  if (!main) return;
+  main.tabIndex = -1;
+  main.addEventListener("blur", () => main.removeAttribute("tabindex"), { once: true });
+  main.focus({ preventScroll: true });
+}
 
 /**
  * After the router moves to another page, a keyboard starts from the page and not from where the old one's focused
