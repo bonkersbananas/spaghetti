@@ -161,6 +161,18 @@ function MyList({
     ? "Only you can see it now."
     : `${other ?? "Everyone who signs in"} can see it. Only you can change it.`;
   const isDesktop = useIsDesktop();
+  // On a phone the switch sits above the list, where it is found; on desktop (and with no list yet) it ends the column.
+  const above = !isDesktop && ideas.length > 0;
+  const share = (
+    <Toggle
+      label={shareLabel}
+      hint={shareHint}
+      checked={!list.private}
+      disabled={readOnly || !me}
+      onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
+      className={above ? "-mt-1" : "mt-2"}
+    />
+  );
   // On a phone, picking more sits within thumb reach, on the tab bar; desktop keeps it beside the heading.
   const pick = ideas.length > 0 && isDesktop && (
     <Button variant="quiet" size="sm" icon={PlusIcon} onClick={onPick} disabled={readOnly} className="-mr-3">
@@ -176,6 +188,7 @@ function MyList({
       count={ideas.length || undefined}
       aside={pick}
     >
+      {above && share}
       {loading && !ideas.length ? (
         <ListSkeleton />
       ) : ideas.length ? (
@@ -196,17 +209,17 @@ function MyList({
           {!list.private && other ? ` ${other} sees the list too.` : ""}
         </EmptyState>
       )}
-      <Toggle
-        label={shareLabel}
-        hint={shareHint}
-        checked={!list.private}
-        disabled={readOnly || !me}
-        onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
-        className="mt-2"
-      />
+      {!above && share}
       {!isDesktop && ideas.length > 0 && (
         <ActionBar>
-          <Button variant="secondary" size="lg" icon={PlusIcon} fullWidth onClick={onPick} disabled={readOnly}>
+          <Button
+            variant="secondary"
+            size="lg"
+            icon={PlusIcon}
+            onClick={onPick}
+            disabled={readOnly}
+            className="rounded-pill! shadow-float! bg-lifted! mx-auto px-6"
+          >
             Pick ideas
           </Button>
         </ActionBar>
