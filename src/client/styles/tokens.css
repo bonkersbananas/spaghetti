@@ -471,6 +471,18 @@
   mask-image: linear-gradient(to bottom, transparent, black 0.75rem, black calc(100% - 0.75rem), transparent);
 }
 
+/*
+ * A column that stays in view beside a longer one (the build's story beside its attempts), from md up: it sticks at
+ * --sticky-top, which lib/sticky-column.ts sets (1.5 rem, or negative for a column taller than the window so that
+ * its end is what sticks).
+ */
+@utility sticky-column {
+  @media (min-width: 48rem) {
+    position: sticky;
+    top: var(--sticky-top, 1.5rem);
+  }
+}
+
 /* Text that may run past its box (a long note on a card) fades out at the bottom instead of being cut mid-line. */
 @utility fade-bottom {
   mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
