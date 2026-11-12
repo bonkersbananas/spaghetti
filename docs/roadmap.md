@@ -68,7 +68,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 Proposal: [docs/proposals/twists.md](proposals/twists.md); decision [0043](decisions/0043-twists-are-models-we-print-our-own-way.md).
 
 - [x] Stage 1a: the `twists` table and `/api/twists` (data and API)
-- [ ] Stage 1b: the Twists screen and twist page, "Make a twist" from an idea and "Save as twist" from an attempt
+- [x] Stage 1b: the Twists screen and twist page, "Make a twist" from an idea (a build or attempt gets "Save as twist" in 1c)
 - [ ] Stage 1c: builds that print a twist, "Print it again", MCP tools, search
 - [ ] Stage 2a: STL scale, mirror, rotate and "fit to N mm"; then the 3MF spike
 

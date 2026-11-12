@@ -80,6 +80,7 @@ export {
   NotePencil as NoteIcon,
   Palette as PaletteIcon,
   PaperPlaneTilt as SendIcon,
+  PencilRuler as TwistIcon,
   PencilSimple as EditIcon,
   PencilSimple as RenameIcon,
   Play as PlayIcon,

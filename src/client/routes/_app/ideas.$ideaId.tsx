@@ -25,6 +25,7 @@ import {
   MoveIntoIcon,
   SlicerFileIcon,
   TrashIcon,
+  TwistIcon,
   UpNextIcon,
   WishIcon,
 } from "@/components/ui/icons";
@@ -50,6 +51,7 @@ import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-files";
 import { useStickyColumn } from "@/lib/sticky-column";
+import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
@@ -169,6 +171,26 @@ function Idea({ item }: { item: ItemView }) {
     setMoving(true);
   }
 
+  // A twist is made from the idea with one tap: the idea's model, title and cover come along, and its page opens at once.
+  const { twists } = useTwists();
+  const existingTwist = twists?.find((twist) => twist.fromItemId === item.id);
+  function twist() {
+    // The idea's own kept file is not a link out: a twist takes only a model that lives on a site.
+    const twistModelUrl = model && !model.url.startsWith("/api/files/") ? model.url : null;
+    // Until the list has loaded we can't know whether this idea already has one.
+    if (!canEdit(item.pending) || !user || !twists) return;
+    if (existingTwist) return void navigate({ to: "/twists/$twistId", params: { twistId: existingTwist.id } });
+    const id = makeTwist(
+      queryClient,
+      {
+        name: suggestedTwistName({ title }, twistModelUrl),
+        from: { id: item.id, photo: photos[0] ?? null, modelUrl: twistModelUrl, title },
+      },
+      user.id,
+    );
+    void navigate({ to: "/twists/$twistId", params: { twistId: id } });
+  }
+
   // Counts up each time something asks to write a comment: the M key, the palette.
   const [writeAsk, setWriteAsk] = useState(0);
   const comment = () => {
@@ -191,6 +213,13 @@ function Idea({ item }: { item: ItemView }) {
       shortcut: "ideaMove",
       keywords: "move tidy photos note attempt build into",
       run: move,
+    },
+    {
+      id: "twist",
+      label: existingTwist ? "Open this idea's twist" : "Make a twist",
+      icon: TwistIcon,
+      keywords: "twist adapt change scale model remix",
+      run: twist,
     },
     {
       id: "comment",
@@ -373,7 +402,7 @@ function Idea({ item }: { item: ItemView }) {
             <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
             <NoteLinks note={note} skip={model?.url} />
             {/* One model block under the note: the model's card, the files kept with the idea, and the quiet actions
-              (a second one, "Make a twist", joins the row beside "Add a file"). */}
+              ("Make a twist", or "Twist" once one exists, sits beside "Add a file"). */}
             {model && !model.url.startsWith("/api/files/") && (
               <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />
             )}
@@ -391,6 +420,16 @@ function Idea({ item }: { item: ItemView }) {
               >
                 Add a file
               </Button>
+              {(model || existingTwist) && (
+                <Button
+                  variant="quiet"
+                  icon={TwistIcon}
+                  disabled={readOnly || item.pending || !user || !twists}
+                  onClick={twist}
+                >
+                  {existingTwist ? "Twist" : "Make a twist"}
+                </Button>
+              )}
             </div>
 
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">

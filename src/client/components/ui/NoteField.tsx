@@ -8,6 +8,8 @@ interface NoteFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  /** The most characters the note may hold (what the server keeps). */
+  maxLength?: number;
   /** Shown as text only, with its links: no way to start editing (offline, for saved notes). */
   readOnly?: boolean;
   className?: string;
@@ -23,6 +25,7 @@ export function NoteField({
   onChange,
   placeholder = "Add a note…",
   label = "Note",
+  maxLength,
   readOnly,
   className,
 }: NoteFieldProps) {
@@ -44,6 +47,7 @@ export function NoteField({
         aria-label={label}
         placeholder={placeholder}
         minRows={2}
+        maxLength={maxLength}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         // An empty note shows its field, and typing the first letter must not swap it for the read view under the finger.

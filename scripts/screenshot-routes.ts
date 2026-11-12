@@ -6,6 +6,7 @@ import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
+import { SEED_TWIST_IDS } from "./seed/twists.ts";
 
 /** The spool that sat in A4 before the unknown-tray shot emptied it. */
 let unknownTraySlot: string | null = null;
@@ -2267,6 +2268,63 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
     },
   },
+  { name: "twists", path: "/twists", fullPage: true },
+  {
+    name: "twist",
+    path: `/twists/${SEED_TWIST_IDS.bins}`,
+    fullPage: true,
+  },
+  {
+    // The way in: an idea with a model has "Make a twist" in the quiet row under the model, beside "Add a file".
+    name: "twist-from-idea",
+    path: "/ideas/5eed0000-0000-4000-8000-000000000001",
+    fullPage: true,
+    prepare: async (page) => {
+      const patched = await page.request.patch("/api/items/5eed0000-0000-4000-8000-000000000001", {
+        headers: { Origin: new URL(page.url()).origin },
+        data: {
+          note: "Found this on the bed this morning. Retry the cable chain with a brim and a slower first layer.\n\nhttps://makerworld.com/en/models/301122-cable-chain",
+        },
+      });
+      if (!patched.ok()) throw new Error(`Planter note: ${patched.status()} ${await patched.text()}`);
+      await page.reload();
+      await page.getByRole("button", { name: "Make a twist" }).waitFor();
+    },
+  },
+  {
+    // The idea the bins twist came from: the same action now reads "Twist" and opens it.
+    name: "twist-from-idea-made",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Twist", exact: true }).waitFor();
+    },
+  },
+  {
+    name: "twist-new",
+    path: "/twists",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New twist" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("textbox", { name: "Name it" }).fill("Planter, 0.2 looser");
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // A twist with no picture: its card on the list is an index card, and its page has no photo column.
+    name: "twist-no-photo",
+    path: `/twists/${SEED_TWIST_IDS.lid}`,
+    fullPage: true,
+  },
+  {
+    name: "twists-no-photo",
+    path: "/twists",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("link", { name: /Pen cup/ }).waitFor();
+    },
+  },
   { name: "pantry", path: "/pantry", fullPage: true },
   {
     // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
@@ -2294,6 +2352,16 @@ export const shots: Shot[] = [
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
+  {
+    name: "styleguide-twists",
+    path: "/styleguide",
+    selector: "#twists",
+    // The empty state fades in: shoot it once it has.
+    beforeShot: async (page) => {
+      await page.locator("#twists").evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(800);
+    },
+  },
   { name: "styleguide-year", path: "/styleguide", selector: "#year" },
   { name: "styleguide-error", path: "/styleguide", selector: "#error" },
   {
@@ -2909,6 +2977,19 @@ export const shots: Shot[] = [
     // The samples' pictures are put in the preview cache once the section has fetched them.
     prepare: async (page) => {
       await page.locator("#journal img").first().waitFor({ state: "attached" });
+    },
+  },
+  // Last: it deletes the seeded twists, which the shots after it (the Workshop hub) would show gone.
+  {
+    name: "twists-empty",
+    path: "/twists",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const { twists } = await (await page.request.get("/api/twists")).json();
+      for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers });
+      await page.reload();
+      await page.getByText("Nothing twisted yet").waitFor();
+      await page.waitForTimeout(600);
     },
   },
 ];

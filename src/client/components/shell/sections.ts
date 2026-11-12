@@ -8,6 +8,7 @@ import {
   SearchIcon,
   ShoppingIcon,
   TodayIcon,
+  TwistIcon,
   WishIcon,
   WorkshopIcon,
 } from "@/components/ui/icons";
@@ -19,6 +20,7 @@ export interface Section {
     | "/workshop"
     | "/wishlist"
     | "/builds"
+    | "/twists"
     | "/journal"
     | "/search"
     | "/pantry"
@@ -32,6 +34,7 @@ export interface Section {
     | "goIdeas"
     | "goWishlist"
     | "goBuilds"
+    | "goTwists"
     | "goJournal"
     | "search"
     | "goPantry"
@@ -43,6 +46,7 @@ const today: Section = { to: "/today", label: "Today", icon: TodayIcon, shortcut
 const ideas: Section = { to: "/ideas", label: "Ideas", icon: IdeasIcon, shortcut: "goIdeas" };
 const wishlist: Section = { to: "/wishlist", label: "Wishlists", icon: WishIcon, shortcut: "goWishlist" };
 const builds: Section = { to: "/builds", label: "Builds", icon: BuildsIcon, shortcut: "goBuilds" };
+const twists: Section = { to: "/twists", label: "Twists", icon: TwistIcon, shortcut: "goTwists" };
 const journal: Section = { to: "/journal", label: "Journal", icon: JournalIcon, shortcut: "goJournal" };
 /** The phone's fourth tab: the hub for the three places of the workshop (it has no sidebar entry or shortcut). */
 const workshopTab: Pick<Section, "to" | "label" | "icon"> = { to: "/workshop", label: "Workshop", icon: WorkshopIcon };
@@ -58,11 +62,12 @@ export const sections: Section[] = [today, ideas, wishlist, builds, journal, sea
 export const tabs = [ideas, builds, journal, workshopTab] as const;
 
 /**
- * The workshop: the spools on hand, the printer and what to buy for it. In the sidebar below the
+ * The workshop: the spools on hand, the printer, what to buy for it and the models we twist. In the sidebar below the
  * sections on desktop; on phones the Workshop tab opens a page with the three (routes/_app/workshop.tsx).
  */
 export const workshop: Section[] = [
   { to: "/pantry", label: "Pantry", icon: PantryIcon, shortcut: "goPantry" },
   { to: "/printer", label: "Printer", icon: PrinterIcon, shortcut: "goPrinter" },
   { to: "/shopping", label: "Shopping list", icon: ShoppingIcon, shortcut: "goShopping" },
+  twists,
 ];
