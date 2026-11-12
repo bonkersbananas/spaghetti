@@ -60,6 +60,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [ ] Resident agents, suggest-only: ~~failure coach~~ (done, decision 0027), ~~weekly digest~~ (done: the week page, its Claude paragraph and the Sunday push, decision 0030), idea scout
   - [x] Label photo to spool fields: "Read the label" in Add a spool and on the spool page ([0031](decisions/0031-claude-reads-a-spool-label-from-its-photo.md))
 - [x] 3D view of a sliced print (#404): ~~G-code reader~~ (done: `src/shared/gcode`), ~~viewer with a layer slider~~ (done, decision 0036), live progress (the viewer of a printing attempt shows the printed layers solid and the rest as a ghost, following the bridge)
+- [x] Native phone feel: no page zoom on touch screens (viewport, `touch-action`, WebKit gesture events), photos zoom in place in the viewer (pinch, pan, double tap), text follows iOS's text size ([0039](decisions/0039-no-page-zoom-photos-zoom-in-place.md))
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
 ## Deploy
