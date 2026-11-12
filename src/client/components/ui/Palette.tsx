@@ -262,6 +262,7 @@ export function PaletteDialog({ open, onOpenChange, onClosed, children }: Palett
         <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
         <Dialog.Content
           aria-describedby={undefined}
+          data-palette
           onCloseAutoFocus={(event) => {
             // An action that started something (a sheet, a page) decides where focus goes; otherwise it goes back to
             // what had it when the palette opened (the sidebar's button, or the page).

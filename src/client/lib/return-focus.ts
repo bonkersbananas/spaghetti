@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
-/** What the last dialog opened from, for one that takes over from it while it is still open (see `inherit`). */
-let recent: { element: HTMLElement; at: number } | null = null;
+/** What the palette was opened from, for the real palette that takes over from its frame while open (see `inherit`). */
+let recent: HTMLElement | null = null;
 
 /**
  * Puts focus back where it was when the sheet opened. Radix only returns it
@@ -14,11 +14,12 @@ export function useReturnFocus(open: boolean, inherit = false) {
   if (open && !wasOpen.current && typeof document !== "undefined") {
     const active = document.activeElement;
     opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
-    // The palette's frame, replaced by the real palette while open: focus is in the frame's search box, which is about
-    // to go, so the opener is what the frame was opened from.
-    if (inherit && opener.current?.closest("[role=dialog]") && recent && Date.now() - recent.at < 2000) {
-      opener.current = recent.element;
-    } else if (opener.current) recent = { element: opener.current, at: Date.now() };
+    // `inherit` (the palette): focus is in the palette's own frame, which is being swapped for the real palette and
+    // is about to go, so the opener is what the frame was opened from, however long the swap took.
+    if (inherit) {
+      if (opener.current?.closest("[data-palette]") && recent) opener.current = recent;
+      else recent = opener.current;
+    }
   }
   wasOpen.current = open;
   return (event: Event) => {
