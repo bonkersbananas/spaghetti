@@ -47,7 +47,7 @@ const suggestedIcons: Record<Outcome, string> = {
   partial: "text-semolina",
   failed: "text-tomato",
 };
-const suggestedCaptions: Record<Outcome, string> = {
+const suggestedMarks: Record<Outcome, string> = {
   success: "text-basil-ink",
   partial: "text-semolina-ink",
   failed: "text-tomato-ink",
@@ -128,12 +128,16 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               // Claude's sparkle in the corner (as in its lines) and the word for screen readers: nothing in the flow, so the
               // icon and the label stay centered in the square, like the other two.
               <>
-                <SparkleIcon
-                  size={12}
-                  weight="fill"
-                  aria-hidden
-                  className={cn("absolute top-1.5 right-1.5", suggestedCaptions[outcome])}
-                />
+                <span
+                  title="Claude's guess"
+                  className={cn(
+                    "absolute",
+                    size === "lg" ? "top-2 right-2" : "top-1.5 right-1.5",
+                    suggestedMarks[outcome],
+                  )}
+                >
+                  <SparkleIcon size={14} weight="fill" aria-hidden />
+                </span>
                 <span className="sr-only"> suggested</span>
               </>
             )}
