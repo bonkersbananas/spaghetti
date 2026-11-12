@@ -21,7 +21,7 @@ import { useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { isSigningOut } from "@/lib/use-sign-out";
+import { forgetEndedSession, isSigningOut } from "@/lib/use-sign-out";
 import { useWhenIdle } from "@/lib/when-idle";
 
 // Desktop-only overlays, loaded once the app is idle rather than with the first screen.
@@ -66,6 +66,7 @@ function AppLayout() {
     // Signing out navigates by itself; a session the server ended keeps the page for after signing in again, and
     // forgets what this device kept of it, as signing out does (signed out from another device, or it lapsed).
     if (user === null && !isSigningOut()) {
+      forgetEndedSession();
       void clearOfflineData();
       void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } }).then(() =>
         queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" }),

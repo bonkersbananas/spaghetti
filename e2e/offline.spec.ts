@@ -225,9 +225,14 @@ test("a session ended from another device forgets what this one kept, as signing
   expect((await other.post("/api/account/devices/sign-out-others")).ok()).toBe(true);
   await other.dispose();
 
-  // Opened again, it shows sign-in and keeps nothing of the workspace.
+  // Opened again, it shows sign-in and keeps nothing of the workspace: the browser's own cache of photos is emptied by
+  // the server's sign-out answer, which the app asks for.
+  const signOut = page.waitForResponse(
+    (response) => response.request().method() === "DELETE" && new URL(response.url()).pathname === "/api/session",
+  );
   await page.goto("/ideas");
   await expect(page).toHaveURL(/\/sign-in/);
+  expect((await (await signOut).allHeaders())["clear-site-data"]).toBe('"cache"');
   await expect.poll(() => cacheHolds(page)).toBe(false);
   await expect.poll(() => cachedPhotos(page)).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem("sg-recent-items"))).toBeNull();
