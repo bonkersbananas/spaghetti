@@ -110,7 +110,7 @@ const labels = {
  * anything else is a good read of one spool.
  */
 /**
- * A request to find a thing's Prisjakt page (decision 0039): Claude's web search over a search engine's results. A
+ * A request to find a thing's Prisjakt page (decision 0040): Claude's web search over a search engine's results. A
  * word in the thing's name decides: `slow` takes a few seconds, `refused` is refused, `broken` is an API error,
  * `nomatch` finds no page, `invented` names an address the search never returned, anything else finds product 1 (and
  * `second` product 2 instead). The product pages themselves are served below, at /produkt.php.
@@ -388,6 +388,9 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
   });
 }
 
+/** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
+const PRODUCT_PRICES: Record<string, number> = { 13366548: 149, 12086734: 249, 14402211: 259 };
+
 export async function startFakeClaude(port: number): Promise<{ url: string; stop: () => void; server: Server }> {
   const base = `http://127.0.0.1:${port}`;
   // The model's pictures, served from here (the Worker allows this one origin for pictures while it talks to a stand-in).
@@ -397,6 +400,7 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
   const server = createServer((request, response) => {
     if (request.url?.startsWith("/hooks")) return receiveHook(request, response, received);
     // A Prisjakt product page (the Worker reads the stand-in instead of prisjakt.nu while it talks to this server).
+    // Believable prices for the seeded products (the fixture is a 7 699 kr printer): glue, a PLA spool, PETG.
     const product = /^\/produkt\.php\?p=(\d+)$/.exec(request.url ?? "");
     if (product) {
       response.setHeader("Content-Type", "text/html");
@@ -406,7 +410,12 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
             "https://cdn.pji.nu/product/standard/800/15633708.jpg",
             `${base}/images/${(Number(product[1]) % 3) + 1}.jpg`,
           )
-          .replace("Bambu Lab P2S Combo", `Bambu Lab PLA Basic ${product[1]}`),
+          .replace("Bambu Lab P2S Combo", `Bambu Lab PLA Basic ${product[1]}`)
+          .replace(
+            /((?:lowPrice|highPrice|amount)\\?":)(\d+)/g,
+            (_, key: string, amount: string) =>
+              key + Math.round((Number(amount) * (PRODUCT_PRICES[product[1] ?? ""] ?? 7699)) / 7699),
+          ),
       );
       return;
     }

@@ -149,9 +149,9 @@ test("shopping: what's added or ticked while an order is being saved stays", asy
   await expect(bought(page).getByText(a)).toBeVisible();
 });
 
-test("shopping: a Prisjakt page is suggested for a name, confirmed, and its picture and cheapest offers show", async ({
-  page,
-}) => {
+test("shopping: a Prisjakt page is suggested for a name, confirmed, and its picture and cheapest offers show", {
+  tag: "@phone",
+}, async ({ page }) => {
   test.setTimeout(60_000);
   await signIn(page);
   await page.goto("/shopping");
@@ -182,7 +182,10 @@ test("shopping: a Prisjakt page is suggested for a name, confirmed, and its pict
     .click()
     .catch(() => page.keyboard.press("Escape"));
   await expect(row).toContainText("7\u00a0699\u00a0kr");
+  // The picture really loads in its slot (also on a phone), and the line under the name is short.
   await expect(row.locator("img")).toBeVisible();
+  await expect.poll(() => row.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(row).not.toContainText("checked today");
 });
 
 test("shopping: 'Not this one' drops a suggested page, and a name with no match says so", async ({ page }) => {

@@ -1104,7 +1104,7 @@ export const shoppingItems = sqliteTable("shopping_items", {
   pictureAt: integer("picture_at", { mode: "timestamp_ms" }),
   /** The shop link whose picture was last tried, so a page without one isn't asked again and again. */
   pictureTried: text("picture_tried"),
-  /** The cheapest offers found on the Prisjakt page (decision 0039). */
+  /** The cheapest offers found on the Prisjakt page (decision 0040). */
   prices: text("prices", { mode: "json" }).$type<ShoppingPrices>(),
   /** A Prisjakt page a search found, waiting for a person to confirm it (never used before). */
   suggestion: text("suggestion", { mode: "json" }).$type<PriceSuggestion>(),
@@ -1130,7 +1130,7 @@ export const shoppingItems = sqliteTable("shopping_items", {
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
 });
 
-/** Claude looking for a Prisjakt page in search results (decision 0039): the record of the run, and what the day's cap counts. */
+/** Claude looking for a Prisjakt page in search results (decision 0040): the record of the run, and what the day's cap counts. */
 export const shoppingSearches = sqliteTable("shopping_searches", {
   id: text("id").primaryKey(),
   itemId: text("item_id").notNull(),

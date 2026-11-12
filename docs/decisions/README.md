@@ -29,7 +29,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0023](0023-claude-reads-a-print-from-its-photo.md) | Claude suggests how a print went from its photo, and only suggests | Accepted |
 | [0029](0029-oauth-small-and-on-d1.md) | OAuth for the MCP server is a small implementation on D1, and a connected app is an agent | Accepted |
 | [0027](0027-failure-coach-suggests-what-to-try-next.md) | A failure coach suggests what to try next, and only suggests | Accepted |
-| [0034](0034-shopping-list-links-not-prices.md) | The shopping list keeps links (shop, Prisjakt), not prices, in an order people set | Accepted (prices: see 0039) |
+| [0034](0034-shopping-list-links-not-prices.md) | The shopping list keeps links (shop, Prisjakt), not prices, in an order people set | Accepted (prices: see 0040) |
 | [0024](0024-comments-read-state-and-push-batching.md) | Comments between the two of you: read state per person, one push for a burst | Accepted |
 | [0025](0025-webhooks-signed-from-the-cron.md) | Webhooks are queued in D1, sent by the existing cron, signed with HMAC-SHA256 under a secret kept encrypted | Accepted |
 | [0026](0026-passkeys-sign-in-links-and-invites.md) | Passkeys, single-use sign-in links and invites, all in the app; password stays as the fallback | Accepted |
@@ -43,6 +43,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0037](0037-e2e-tests-what-matters-quickly.md) | The end-to-end tests check what the two people use, quickly: phone width for the core loop and `@phone` tests, no axe, timing on main only | Accepted |
 | [0038](0038-reactions-a-curated-six.md) | Reactions: a curated six on ideas, builds and comments, your own included | Accepted |
 | [0039](0039-no-page-zoom-photos-zoom-in-place.md) | No page zoom on touch screens, photos zoom in place, text follows the phone's size setting | Accepted |
+| [0040](0040-shopping-list-reads-the-prisjakt-pages-people-link.md) | The shopping list reads the Prisjakt pages people link (picture, cheapest offers), and nothing more | Accepted |
 
 ## Format
 
@@ -59,4 +60,3 @@ Status: Accepted | Open | Superseded by NNNN
 
 **Consequences:** what this rules out or requires of the code, and what would make us revisit it.
 ```
-| [0039](0039-shopping-list-reads-the-prisjakt-pages-people-link.md) | The shopping list reads the Prisjakt pages people link (picture, cheapest offers), and nothing more | Accepted |

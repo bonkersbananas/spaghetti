@@ -69,7 +69,7 @@ export default {
       ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
       // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
       ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));
-      // The gentle daily look at the Prisjakt pages of what's still to buy (decision 0039).
+      // The gentle daily look at the Prisjakt pages of what's still to buy (decision 0040).
       ctx.waitUntil(refreshPrices(env).catch((error) => console.error("price refresh failed", error)));
       ctx.waitUntil(resumeReads(env).catch((error) => console.error("photo read resume failed", error)));
       ctx.waitUntil(resumeLabelReads(env).catch((error) => console.error("label read resume failed", error)));

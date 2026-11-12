@@ -2,6 +2,7 @@ import type { PriceOffer } from "@shared/prisjakt";
 import { formatKr } from "@shared/prisjakt";
 import { cn } from "@/lib/cn";
 import { ExternalIcon } from "./icons";
+import { MetaList } from "./MetaList";
 
 /** "checked today", "checked 3 d ago": prices are always found at a time, never a promise. */
 export function checkedWords(checkedAt: number, now = Date.now()): string {
@@ -12,20 +13,22 @@ export function checkedWords(checkedAt: number, now = Date.now()): string {
 interface PriceLineProps {
   price: number;
   shop?: string;
-  checkedAt: number;
+  /** When it was found: the sheet says "checked today", the list's rows leave it out to stay short. */
+  checkedAt?: number;
   className?: string;
 }
 
 /**
- * The cheapest price found, in a quiet line under a thing's name: "189 kr · Kjell · checked today". The price is
- * a little heavier than the words around it; nothing is coloured.
+ * The cheapest price found, in a quiet line under a thing's name: "189 kr · Kjell". The price is a little heavier
+ * than the words around it; nothing is coloured. A `MetaList`, so it wraps cleanly.
  */
 export function PriceLine({ price, shop, checkedAt, className }: PriceLineProps) {
   return (
-    <span className={cn("text-small text-ink-faint min-w-0", className)}>
+    <MetaList className={cn("text-small text-ink-faint", className)}>
       <span className="text-ink-soft font-semibold">{formatKr(price)}</span>
-      {shop && <> · {shop}</>} · {checkedWords(checkedAt)}
-    </span>
+      {shop && <span className="truncate">{shop}</span>}
+      {checkedAt !== undefined && <span>{checkedWords(checkedAt)}</span>}
+    </MetaList>
   );
 }
 

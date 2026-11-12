@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
+import { Chip } from "@/components/ui/Chip";
 import { PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
 import { PriceLine } from "@/components/ui/Prices";
@@ -104,13 +105,11 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
         />
       )}
       {matched && (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="bg-ink/6 text-ink-soft hover:text-ink hover:bg-ink/10 text-small focus-ring touch-target pressable duration-fast rounded-pill relative inline-flex h-7 items-center gap-1.5 px-2.5 font-semibold transition-colors md:h-6"
-        >
-          <PriceIcon size={14} weight="bold" aria-hidden />
-          Prisjakt match?
+        // Claude's guess, not yet anyone's choice: the dashed chip, which opens the sheet to confirm it.
+        <button type="button" onClick={onOpen} className="focus-ring touch-target pressable rounded-pill relative">
+          <Chip suggested icon={PriceIcon}>
+            Prisjakt match?
+          </Chip>
         </button>
       )}
       {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
@@ -124,7 +123,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   return (
     <ChecklistRow
       done={bought}
-      thumb={item.picture && <Thumb src={item.picture.url} alt="" faded={bought} />}
+      thumb={<Thumb src={item.picture?.url ?? null} alt="" faded={bought} />}
       lifted={lifted}
       last={last}
       tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}

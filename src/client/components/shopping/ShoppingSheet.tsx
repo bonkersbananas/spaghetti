@@ -40,9 +40,49 @@ export function ShoppingSheet({
   const { data } = useQuery(shoppingQuery);
   const item = data?.find((i) => i.id === itemId);
   return (
-    <Sheet open={!!itemId && !!item} onOpenChange={onOpenChange} title="On the list">
+    <Sheet
+      open={!!itemId && !!item}
+      onOpenChange={onOpenChange}
+      title="On the list"
+      footer={item && <ShoppingActions key={item.id} item={item} onClose={() => onOpenChange(false)} />}
+    >
       {item && <ShoppingBody key={item.id} item={item} onClose={() => onOpenChange(false)} />}
     </Sheet>
+  );
+}
+
+/** "Got it" and "Delete", pinned at the sheet's foot. */
+function ShoppingActions({ item, onClose }: { item: ShoppingItem; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { data: me } = useQuery(sessionQuery);
+  const readOnly = useReadOnly();
+  const shown = useShoppingName(item);
+  const bought = item.boughtAt !== null;
+  return (
+    <div className="flex w-full flex-wrap items-center justify-between gap-3">
+      <Button
+        variant="secondary"
+        icon={bought ? UndoIcon : CheckIcon}
+        disabled={readOnly || !me}
+        onClick={() => {
+          if (me) void setBought(queryClient, item, !bought, me.id);
+          onClose();
+        }}
+      >
+        {bought ? "Back on the list" : "Got it"}
+      </Button>
+      <Button
+        variant="quiet"
+        icon={TrashIcon}
+        disabled={readOnly}
+        onClick={() => {
+          onClose();
+          removeShopping(queryClient, [item], shown);
+        }}
+      >
+        Delete
+      </Button>
+    </div>
   );
 }
 
@@ -65,7 +105,6 @@ function ShoppingBody({ item, onClose }: { item: ShoppingItem; onClose: () => vo
       if (Object.keys(next).length) await updateShopping(queryClient, item.id, next);
     },
   );
-  const bought = item.boughtAt !== null;
   return (
     <div className="flex flex-col gap-5">
       <PriceBlock item={item} name={shown} readOnly={readOnly} />
@@ -119,30 +158,6 @@ function ShoppingBody({ item, onClose }: { item: ShoppingItem; onClose: () => vo
           onChange={(event) => change({ priceLink: event.target.value })}
         />
       </fieldset>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button
-          variant="secondary"
-          icon={bought ? UndoIcon : CheckIcon}
-          disabled={readOnly || !me}
-          onClick={() => {
-            if (me) void setBought(queryClient, item, !bought, me.id);
-            onClose();
-          }}
-        >
-          {bought ? "Back on the list" : "Got it"}
-        </Button>
-        <Button
-          variant="quiet"
-          icon={TrashIcon}
-          disabled={readOnly}
-          onClick={() => {
-            onClose();
-            removeShopping(queryClient, [item], shown);
-          }}
-        >
-          Delete
-        </Button>
-      </div>
     </div>
   );
 }

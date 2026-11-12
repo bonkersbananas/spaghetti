@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "./Button";
+import { ClaudeLine } from "./ClaudeLine";
 import { ExternalIcon, PriceIcon } from "./icons";
 
 interface SuggestionCardProps {
@@ -25,7 +26,7 @@ export function SuggestionCard({ title, href, onUse, onDismiss, disabled, classN
       className={cn("bg-ink/4 flex flex-col gap-3 rounded-lg p-3", className)}
     >
       <div className="flex flex-col gap-0.5">
-        <p className="text-small text-ink-faint">Is this it?</p>
+        <ClaudeLine>Claude found this on Prisjakt. Is this it?</ClaudeLine>
         <a
           href={href}
           target="_blank"
