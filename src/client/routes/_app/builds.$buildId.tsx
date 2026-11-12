@@ -571,7 +571,7 @@ function Build({ item }: { item: ItemView }) {
             <NoteLinks note={note} />
           </div>
 
-          <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} />
+          <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />
 
           <PartsSection
             item={item}

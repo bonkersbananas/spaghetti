@@ -59,16 +59,21 @@ test("reacts to your own idea, keeps it, and takes it back with a tap", { tag: "
   const picker = page.getByRole("group", { name: "Reactions" });
   await expect(picker).toBeVisible();
   await expect(picker.getByRole("button")).toHaveCount(6);
+  // The pill shows at once (optimistic); a reload before the request lands would cancel it.
+  const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
   await picker.getByRole("button", { name: "Chef's kiss" }).click();
   await expect(picker).toHaveCount(0);
+  expect((await saved).ok()).toBe(true);
 
   const pill = reactions(page).getByRole("button", { name: /Chef's kiss, from You/ });
   await expect(pill).toHaveAttribute("aria-pressed", "true");
   await page.reload();
   await expect(pill).toBeVisible();
 
+  const removed = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "DELETE");
   await pill.click();
   await expect(reactions(page).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(0);
+  expect((await removed).ok()).toBe(true);
   await page.reload();
   await expect(page.getByRole("button", { name: "React to this idea" })).toBeVisible();
   await expect(reactions(page).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(0);
@@ -90,9 +95,11 @@ test("reacts to the other person's comment, and both reactions count", { tag: "@
     await message.hover();
     await page.getByRole("button", { name: /^React to .+'s comment$/ }).click();
   }
+  const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
   await page.getByRole("group", { name: "Reactions" }).getByRole("button", { name: "Bravo" }).click();
   const pill = page.locator(`#comment-${commentId}`).getByRole("button", { name: /Bravo, from You/ });
   await expect(pill).toHaveAttribute("aria-pressed", "true");
+  expect((await saved).ok()).toBe(true);
 
   // Sam gives the same one: after the feed (or a reload) it reads "2", from both of you.
   await samSide.react(`/comments/${commentId}`, "bravo");

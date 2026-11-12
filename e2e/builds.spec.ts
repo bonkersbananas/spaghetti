@@ -216,3 +216,25 @@ test("a long build folds its earlier attempts, and picking one unfolds them and 
   await expect(story.getByRole("listitem")).toHaveCount(7);
   await expect(story.getByRole("listitem").last()).toBeInViewport();
 });
+
+test("the summary's attempt tiles are touch targets and mark the open attempt", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "Desktop tiles are compact");
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Tiles", note: "" } });
+  for (const [index, outcome] of (["failed", "partial", "success"] as const).entries())
+    await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome, printedAt: Date.now() - (4 - index) * 3_600_000 },
+    });
+  await page.goto(`/builds/${id}`);
+  const tile = page.getByRole("group", { name: /^3 attempts/ }).getByRole("button", { name: "Attempt 2: partly" });
+  const box = await tile.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(43.5);
+  expect(box?.width).toBeGreaterThanOrEqual(43.5);
+  await tile.click();
+  await expect(tile).toHaveAttribute("aria-current", "true");
+});
