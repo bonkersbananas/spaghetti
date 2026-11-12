@@ -8,12 +8,28 @@ const KEY = "sg-stale-reload";
 const GAP_MS = 60_000;
 
 /**
+ * Whether the server's app is a different build from this page's: its index.html names another entry script. A chunk
+ * that failed with no new build out (no connection, a blocked request) is not for a reload: the screen that asked for it
+ * says what went wrong itself ("needs a connection", Try again).
+ */
+async function isNewBuildOut() {
+  try {
+    const entry = document.querySelector<HTMLScriptElement>("script[type=module][src]")?.getAttribute("src");
+    const html = await (await fetch("/?shell", { cache: "no-store" })).text();
+    return !!entry && !html.includes(entry);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Reloads into the new version unless it just did. The old service worker would serve the old shell again, so a new
  * one takes over first: update() resolves when it starts installing, so wait (up to 5 s) until it is installed, tell
  * it to take over, and wait (up to 3 s) for it to become the controller.
  */
 export async function reloadIntoNewBuild() {
   if (Date.now() - Number(sessionStorage.getItem(KEY)) < GAP_MS) return;
+  if (!(await isNewBuildOut())) return;
   sessionStorage.setItem(KEY, String(Date.now()));
   try {
     const registration = await navigator.serviceWorker?.getRegistration();

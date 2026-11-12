@@ -548,6 +548,13 @@ test.describe("a deploy while the app is open", () => {
     await signIn(page);
     const seen = new Set<string>();
     let failed = 0;
+    // The deploy: the server's app now names another entry script than this page runs (what the reload looks for).
+    await page.route(/\/\?shell$/, (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<script type="module" src="/assets/index-newbuild.js"></script>',
+      }),
+    );
     await page.route("**/assets/*.js", async (route) => {
       const url = route.request().url();
       // The first chunk the page has not loaded yet is "gone"; after the reload everything is there.
