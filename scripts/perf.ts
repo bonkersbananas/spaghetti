@@ -7,7 +7,7 @@
  *     skeletons) on a first visit, with the service worker's cache but nothing saved, and as the installed app
  *     resumed (service worker and saved data);
  *   - the taps people make most: input to next paint (what INP measures) and tap to result on screen;
- *   - the desktop's command palette, at 4× CPU, at 1440 px.
+ *   - the desktop's command palette, J, `/`, delete and Undo, at 4× CPU, at 1440 px.
  *
  *   pnpm perf [--runs 5] [--json]
  */
@@ -433,6 +433,67 @@ try {
   }
   record("tap command palette (desktop)", "input to next paint (ms)", opens.inp);
   record("tap command palette (desktop)", "tap to result (ms)", opens.shown);
+
+  // The rest of the laptop's keyboard loop, at the same 4× CPU: J and K on the inbox, `/` to search, Backspace to
+  // delete an idea and Undo from the toast.
+  const keys: Record<string, { inp: number[]; shown: number[] }> = {};
+  const keyAdd = (name: string, tap: { inp: number; shown: number }) => {
+    const entry = keys[name] ?? { inp: [], shown: [] };
+    keys[name] = entry;
+    entry.inp.push(tap.inp);
+    entry.shown.push(tap.shown);
+  };
+  const card = 'main a[href^="/ideas/"]';
+  await dpage.goto("/ideas");
+  await dpage.locator(card).first().waitFor();
+  for (let run = 0; run < runs; run++) {
+    await dpage.waitForTimeout(500);
+    keyAdd(
+      "J: next card",
+      await tapLatency(
+        dpage,
+        () => dpage.keyboard.press("j"),
+        `document.querySelectorAll('main [data-picks] a')[${run}] === document.activeElement`,
+      ),
+    );
+  }
+  for (let run = 0; run < runs; run++) {
+    await dpage.waitForTimeout(500);
+    await dpage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    keyAdd(
+      "/: search",
+      await tapLatency(
+        dpage,
+        () => dpage.keyboard.press("/"),
+        `location.pathname === '/search' && document.activeElement?.tagName === 'INPUT'`,
+      ),
+    );
+    await dpage.goBack();
+    await dpage.locator(card).first().waitFor();
+  }
+  for (let run = 0; run < runs; run++) {
+    await dpage.goto("/ideas");
+    await dpage.locator(card).nth(1).waitFor();
+    await dpage.waitForTimeout(800);
+    await dpage.locator(card).nth(1).click();
+    await dpage.waitForTimeout(800);
+    keyAdd(
+      "Backspace: delete an idea",
+      await tapLatency(dpage, () => dpage.keyboard.press("Backspace"), `location.pathname === '/ideas'`),
+    );
+    const undo = dpage.getByRole("button", { name: "Undo" });
+    await undo.waitFor();
+    await dpage.waitForTimeout(500);
+    // Event Timing is the number to read here: the toast takes its own 200 ms to leave.
+    keyAdd(
+      "Undo from the toast",
+      await tapLatency(dpage, () => undo.click(), `!document.querySelector('[data-sonner-toast]')`),
+    );
+  }
+  for (const [name, { inp, shown }] of Object.entries(keys)) {
+    record(`key ${name} (desktop)`, "input to next paint (ms)", inp);
+    record(`key ${name} (desktop)`, "tap to result (ms)", shown);
+  }
   await desktop.close();
 
   if (asJson) console.log(JSON.stringify(results, null, 2));

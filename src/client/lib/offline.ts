@@ -1,16 +1,31 @@
 import { toast } from "@/components/ui/Toast";
 import { clearPersistedQueries } from "./persist";
 
-/** The service worker's cache of photos already seen (src/sw/sw.js). */
-const PHOTO_CACHE = "sg-photos";
+/** The service worker's caches of what came from the server or a share (src/sw/sw.js, lib/share.ts). */
+const DEVICE_CACHES = ["sg-photos", "sg-share"];
+/** What the device remembers of the workspace: the palette's recent items (lib/recent.ts) and searches (lib/search.ts). */
+const REMEMBERED_KEYS = ["sg-recent-items", "sg-recent-searches"];
 
-/** Forgets what was kept for offline use. Signing out calls it: the next person to use this device sees none of it. */
+/**
+ * Forgets what was kept of the workspace on this device: the offline copy, the photos, a share on its way and the
+ * recent lists. Signing out calls it, and so does a session the server ended: the next person to use this device
+ * sees none of it. Work not yet sent (the outbox, drafts being typed) stays, to be sent by whoever signs in.
+ */
 export async function clearOfflineData() {
   await clearPersistedQueries();
-  try {
-    await caches.delete(PHOTO_CACHE);
-  } catch {
-    // No Cache Storage here (or a private window): nothing was kept.
+  for (const key of REMEMBERED_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Private mode: nothing was remembered.
+    }
+  }
+  for (const name of DEVICE_CACHES) {
+    try {
+      await caches.delete(name);
+    } catch {
+      // No Cache Storage here (or a private window): nothing was kept.
+    }
   }
 }
 

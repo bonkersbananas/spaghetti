@@ -21,6 +21,7 @@ import { ForChip, ForField } from "@/components/ui/ForField";
 import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
+import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
@@ -182,155 +183,157 @@ function Idea({ item }: { item: ItemView }) {
   const alt = photoAlt({ title, note });
 
   return (
-    <article className="pb-6">
-      <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
-      <DetailBar back={back}>
-        <SaveStatus state={saveState} className="mr-2" />
-        <IconButton
-          icon={TrashIcon}
-          label="Delete idea"
-          onClick={remove}
-          disabled={readOnly}
-          aria-keyshortcuts="Backspace Delete"
-        />
-        {isDesktop && (
-          <Button
-            variant="primary"
-            icon={BuildsIcon}
-            shortcut={shortcutCaps("ideaBuild")}
-            onClick={build}
+    <PullToGo back={back}>
+      <article className="pb-6">
+        <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
+        <DetailBar back={back}>
+          <SaveStatus state={saveState} className="mr-2" />
+          <IconButton
+            icon={TrashIcon}
+            label="Delete idea"
+            onClick={remove}
             disabled={readOnly}
-            className="ml-2"
-          >
-            Start building
-          </Button>
-        )}
-      </DetailBar>
+            aria-keyshortcuts="Backspace Delete"
+          />
+          {isDesktop && (
+            <Button
+              variant="primary"
+              icon={BuildsIcon}
+              shortcut={shortcutCaps("ideaBuild")}
+              onClick={build}
+              disabled={readOnly}
+              className="ml-2"
+            >
+              Start building
+            </Button>
+          )}
+        </DetailBar>
 
-      {/* The build page's proportions (photo two parts, text three), so an idea that becomes a build keeps its photo
+        {/* The build page's proportions (photo two parts, text three), so an idea that becomes a build keeps its photo
           where it was at the size it was, and the attempts take the side the text had. */}
-      <div
-        className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}
-      >
-        {hasPhotos && (
-          <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
-            <PhotoViewer
-              photos={photos}
-              index={selectedIndex}
-              onIndexChange={select}
-              alt={alt}
-              onRemove={
-                offline && !photos[selectedIndex]?.upload ? undefined : (photo) => removePhoto(queryClient, photo)
-              }
-              className="-mx-5 md:mx-0"
-            />
-            <PhotoStrip
-              itemId={item.id}
-              photos={photos}
-              selectedId={photos[selectedIndex]?.id}
-              onSelect={setSelectedId}
-            />
-          </div>
-        )}
-
-        <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
-          {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
-          {!hasPhotos &&
-            (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
-          {reading && !title.trim() ? (
-            <Skeleton className="my-1.5 h-8 w-3/4" />
-          ) : (
-            <TextArea
-              appearance="title"
-              aria-label="Title"
-              placeholder="Untitled idea"
-              minRows={1}
-              maxLength={200}
-              readOnly={readOnly}
-              value={title}
-              onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === "Escape") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
+        <div
+          className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}
+        >
+          {hasPhotos && (
+            <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
+              <PhotoViewer
+                photos={photos}
+                index={selectedIndex}
+                onIndexChange={select}
+                alt={alt}
+                onRemove={
+                  offline && !photos[selectedIndex]?.upload ? undefined : (photo) => removePhoto(queryClient, photo)
                 }
-              }}
-            />
+                className="-mx-5 md:mx-0"
+              />
+              <PhotoStrip
+                itemId={item.id}
+                photos={photos}
+                selectedId={photos[selectedIndex]?.id}
+                onSelect={setSelectedId}
+              />
+            </div>
           )}
-          <ForField
-            aria-label="For"
-            value={forWhom}
-            onChange={(event) => setForWhom(event.target.value)}
-            readOnly={readOnly || item.pending}
-            asking={askFor}
-            onOpen={() => setAskFor(true)}
-            onDone={() => setAskFor(false)}
-          />
-          <div className="flex flex-wrap gap-2">
-            <ToggleChip
-              selected={item.upNext !== null}
-              icon={UpNextIcon}
-              disabled={readOnly || item.pending}
-              onClick={() => setUpNext(queryClient, item, item.upNext === null)}
-            >
-              Up next
-            </ToggleChip>
-            <ToggleChip
-              selected={wished}
-              icon={WishIcon}
-              disabled={readOnly || item.pending || !user}
-              onClick={() => user && toggleWishlist(queryClient, user.id, item)}
-            >
-              My wishlist
-            </ToggleChip>
-            {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
-          </div>
-          <NoteField
-            value={note}
-            onChange={setNote}
-            readOnly={readOnly}
-            placeholder="Add a note: a link, a measurement, a half-thought…"
-          />
-          <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
-          <NoteLinks note={note} />
 
-          <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
-            {person && <Avatar person={person} size="sm" via={via} />}
-            <p>
-              {person ? `${displayName(person)} captured this` : "Captured"}{" "}
-              <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
-                {inlineTime(item.createdAt)}
-              </time>
-              {via && (
-                <>
-                  {" "}
-                  <ViaText name={via} />
-                </>
-              )}
-            </p>
-          </div>
-          {!item.pending && (
-            <ItemReactions
-              itemId={item.id}
-              reactions={item.reactions}
-              noun="idea"
-              readOnly={readOnly}
-              className="mt-1"
+          <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
+            {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
+            {!hasPhotos &&
+              (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
+            {reading && !title.trim() ? (
+              <Skeleton className="my-1.5 h-8 w-3/4" />
+            ) : (
+              <TextArea
+                appearance="title"
+                aria-label="Title"
+                placeholder="Untitled idea"
+                minRows={1}
+                maxLength={200}
+                readOnly={readOnly}
+                value={title}
+                onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            )}
+            <ForField
+              aria-label="For"
+              value={forWhom}
+              onChange={(event) => setForWhom(event.target.value)}
+              readOnly={readOnly || item.pending}
+              asking={askFor}
+              onOpen={() => setAskFor(true)}
+              onDone={() => setAskFor(false)}
             />
-          )}
-          {/* The conversation follows the words it is about, in the same column (as on a build). */}
-          {!item.pending && (
-            <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />
-          )}
+            <div className="flex flex-wrap gap-2">
+              <ToggleChip
+                selected={item.upNext !== null}
+                icon={UpNextIcon}
+                disabled={readOnly || item.pending}
+                onClick={() => setUpNext(queryClient, item, item.upNext === null)}
+              >
+                Up next
+              </ToggleChip>
+              <ToggleChip
+                selected={wished}
+                icon={WishIcon}
+                disabled={readOnly || item.pending || !user}
+                onClick={() => user && toggleWishlist(queryClient, user.id, item)}
+              >
+                My wishlist
+              </ToggleChip>
+              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
+            </div>
+            <NoteField
+              value={note}
+              onChange={setNote}
+              readOnly={readOnly}
+              placeholder="Add a note: a link, a measurement, a half-thought…"
+            />
+            <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
+            <NoteLinks note={note} />
+
+            <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
+              {person && <Avatar person={person} size="sm" via={via} />}
+              <p>
+                {person ? `${displayName(person)} captured this` : "Captured"}{" "}
+                <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
+                  {inlineTime(item.createdAt)}
+                </time>
+                {via && (
+                  <>
+                    {" "}
+                    <ViaText name={via} />
+                  </>
+                )}
+              </p>
+            </div>
+            {!item.pending && (
+              <ItemReactions
+                itemId={item.id}
+                reactions={item.reactions}
+                noun="idea"
+                readOnly={readOnly}
+                className="mt-1"
+              />
+            )}
+            {/* The conversation follows the words it is about, in the same column (as on a build). */}
+            {!item.pending && (
+              <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />
+            )}
+          </div>
         </div>
-      </div>
-      {!isDesktop && (
-        <ActionBar>
-          <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>
-            Start building
-          </Button>
-        </ActionBar>
-      )}
-    </article>
+        {!isDesktop && (
+          <ActionBar>
+            <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>
+              Start building
+            </Button>
+          </ActionBar>
+        )}
+      </article>
+    </PullToGo>
   );
 }
