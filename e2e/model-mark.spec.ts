@@ -26,7 +26,7 @@ test("ideas with a model are marked, found with one tap, and show a model card o
   });
   await page.goto("/ideas");
   const list = page.getByRole("list", { name: "Ideas" });
-  await expect(list.getByText("MakerWorld")).toHaveCount(1);
+  await expect(list.getByText("MakerWorld", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: /^Has a model/ }).click();
   await expect(list.getByRole("heading", { name: "Bins" })).toBeVisible();
   await expect(list.getByRole("heading", { name: "Wobbly idea" })).toHaveCount(0);

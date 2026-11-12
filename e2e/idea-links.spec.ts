@@ -37,7 +37,7 @@ test("links in a note become cards under it: distinct, in order, three at most, 
   await expect(cards.nth(0)).toContainText("printables.com/@mila/drawer-bins");
   await expect(cards.nth(0)).toContainText("printables.com");
   // The links inside the note are still links (it has the first address twice).
-  await expect(page.getByRole("link", { name: /^printables\.com\/model\/42-drawer-bins$/ })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: /^printables\.com\/@mila\/drawer-bins$/ })).toHaveCount(2);
 });
 
 test("a note without a link has no cards, and the build page shows them too", async ({ page }) => {

@@ -143,7 +143,7 @@ function Ideas() {
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">
               <ul data-picks className={`${grid} relative`} aria-label="Up next">
-                <Reflow>{queue.map((item, index) => card(item, index))}</Reflow>
+                <Reflow key={filter ?? "all"}>{queue.map((item, index) => card(item, index))}</Reflow>
               </ul>
             </Section>
           )}
@@ -151,12 +151,12 @@ function Ideas() {
             (queue.length > 0 ? (
               <Section id="inbox-heading" title="The rest">
                 <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                  <Reflow>{rest.map((item) => card(item, -1))}</Reflow>
+                  <Reflow key={filter ?? "all"}>{rest.map((item) => card(item, -1))}</Reflow>
                 </ul>
               </Section>
             ) : (
               <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                <Reflow>{rest.map((item) => card(item, -1))}</Reflow>
+                <Reflow key={filter ?? "all"}>{rest.map((item) => card(item, -1))}</Reflow>
               </ul>
             ))}
           <StartedIdeas builds={builds} />
