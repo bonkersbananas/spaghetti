@@ -1,5 +1,5 @@
 import type { Part } from "@shared/api";
-import { type AttemptSettings, describeChanges, type Outcome } from "@shared/attempts";
+import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
 import { type ReactNode, useEffect, useState } from "react";
@@ -73,6 +73,7 @@ export interface FieldsProps {
 export function AttemptFields(props: FieldsProps) {
   const { outcome, previous, settings } = props;
   const isDesktop = useIsDesktop();
+  const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
   // A file was read: show what it filled in.
   useEffect(() => {
@@ -117,7 +118,26 @@ export function AttemptFields(props: FieldsProps) {
   );
 
   return (
-    <div className="flex flex-col gap-5" data-capture>
+    // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
+    <div
+      className="flex flex-col gap-5"
+      data-capture
+      onKeyDown={(event) => {
+        // 1, 2, 3 answer "How did it go?" when focus isn't in a field (a note's digits are the note's).
+        if (props.readOnly === "all" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey)
+          return;
+        const target = event.target as HTMLElement;
+        if (target.closest("input, textarea, select, [contenteditable]")) return;
+        const index = Number(event.key) - 1;
+        if (!OUTCOMES[index]) return;
+        // Through the button itself, as a tap: the outcome's own moment plays and focus moves to the picked one.
+        const button = event.currentTarget.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')[index];
+        if (!button) return;
+        event.preventDefault();
+        button.focus();
+        button.click();
+      }}
+    >
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
@@ -126,7 +146,9 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
-      {props.coach}
+      {/* Claude's ideas for the next try sit under the outcome, until a failure's own questions (tags) need the room:
+          then they wait under them, so the photo and the tags stay within reach of the thumb. */}
+      {!withTags && props.coach}
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts
@@ -137,22 +159,14 @@ export function AttemptFields(props: FieldsProps) {
           />
         </fieldset>
       )}
-      <fieldset disabled={!!props.readOnly} className="contents">
-        {props.when}
-      </fieldset>
       {props.photos}
       <fieldset disabled={props.readOnly === "all"} className="contents">
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
           aria-label="Note"
           minRows={1}
-          placeholder={
-            outcome === "failed"
-              ? "What went wrong? One line is plenty."
-              : outcome === "success"
-                ? "What made it work? One line is plenty."
-                : "A line about this attempt"
-          }
+          // The tags under it ask "What went wrong?" / "What worked?": the note doesn't repeat the question.
+          placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
           maxLength={500}
           enterKeyHint="done"
           value={props.note}
@@ -169,6 +183,7 @@ export function AttemptFields(props: FieldsProps) {
           <TagPicker
             kind="failure"
             label="What went wrong?"
+            hide={outcome === "failed" ? ["spaghetti"] : undefined}
             value={props.failureTags}
             onChange={props.onFailureTags}
             suggested={props.suggestedFailureTag}
@@ -186,6 +201,11 @@ export function AttemptFields(props: FieldsProps) {
           />
         )}
       </fieldset>
+      {/* Rarely changed, so it sits under the tags: a failed attempt's tags are in reach without a scroll. */}
+      <fieldset disabled={!!props.readOnly} className="contents">
+        {props.when}
+      </fieldset>
+      {withTags && props.coach}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>
