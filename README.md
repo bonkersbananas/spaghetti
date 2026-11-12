@@ -3,7 +3,7 @@
 A private notebook for 3D printing, shared by two people: capture ideas in seconds, follow each build through every print attempt, and keep a journal of what worked and what failed (the spaghetti too).
 
 <p align="center">
-    <img width="600" height="261" alt="Spaghetti app" src="https://github.com/user-attachments/assets/3b3b6c5f-8b61-495a-84d8-16c36a0f08d8" />
+    <img width="798" height="348" alt="Spaghetti app" src="https://github.com/user-attachments/assets/3b3b6c5f-8b61-495a-84d8-16c36a0f08d8" />
 </p>
 
 It runs on Cloudflare Workers with D1 and R2, and just as well entirely locally on workerd, inside or outside a container, without a Cloudflare account.
