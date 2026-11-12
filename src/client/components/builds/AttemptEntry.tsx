@@ -7,7 +7,7 @@ import { m } from "motion/react";
 import { forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { CompareIcon, RecipeIcon, SameAgainIcon } from "@/components/ui/icons";
+import { SameAgainIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import type { AttemptView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
+import { AttemptMenu } from "./AttemptMenu";
 import { AttemptTags } from "./AttemptTags";
 import { EstimateLine } from "./Estimate";
 import { NotEnoughNote } from "./NotEnoughNote";
@@ -88,24 +89,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
 
-  // The quiet extras of an entry are one row at its foot, above the open button so they work. On a print that is
-  // still on the bed or off it, awaiting its answer, the foot is below the progress and the question.
-  const footerRow =
-    onCompare || onSaveRecipe ? (
-      <div className="pointer-events-auto relative z-10 -ml-3 flex flex-wrap items-center gap-x-1">
-        {onCompare && (
-          <Button variant="quiet" size="sm" icon={CompareIcon} onClick={onCompare}>
-            {attempt.changes.length > 0 ? "Compare" : `Compare with attempt ${attempt.number - 1}`}
-          </Button>
-        )}
-        {onSaveRecipe && (
-          <Button variant="quiet" size="sm" icon={RecipeIcon} onClick={onSaveRecipe}>
-            Save as recipe
-          </Button>
-        )}
-      </div>
-    ) : null;
-
   return (
     <m.li
       ref={ref}
@@ -149,19 +132,33 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 <h3 className="text-body text-ink font-sans font-semibold whitespace-nowrap">
                   Attempt {attempt.number}
                 </h3>
-                {/* The time gives way (truncates) before the chip or the title would: "Attempt 12" never wraps. */}
+                {/* Wide screens: the time sits on the line. Phones have no room for it beside the avatar and the menu: it goes under. */}
                 <span className="text-small text-ink-faint ml-auto flex min-w-0 items-center gap-2 whitespace-nowrap">
                   <ViaText name={via} className="hidden md:inline" />
                   <time
                     dateTime={new Date(attempt.printedAt).toISOString()}
                     title={fullTime(attempt.printedAt)}
-                    className="min-w-0 truncate"
+                    className="hidden min-w-0 truncate md:inline"
                   >
                     {relativeTime(attempt.printedAt)}
                   </time>
                   {person && <Avatar person={person} size="xs" via={via} />}
                 </span>
+                {/* Above the open button, so it works. */}
+                <span className="pointer-events-auto relative z-10 -my-1.5 flex shrink-0">
+                  <AttemptMenu
+                    number={attempt.number}
+                    onCompare={onCompare}
+                    onSaveRecipe={onSaveRecipe}
+                    changed={attempt.changes.length > 0}
+                  />
+                </span>
               </div>
+              <p className="text-small text-ink-faint -mt-0.5 md:hidden">
+                <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
+                  {relativeTime(attempt.printedAt)}
+                </time>
+              </p>
               {partsLabel && (
                 <p className="text-small text-ink-soft" data-testid="attempt-parts">
                   {partsLabel}
@@ -214,6 +211,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               // Above the open button, so its download link works.
               <div className="pointer-events-auto relative z-10 md:max-w-md">
                 <SavedFileCard
+                  compact
                   file={attempt.file}
                   filaments={attempt.settings.filaments}
                   printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
@@ -238,8 +236,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 filamentClassName="text-ink-soft"
               />
             )}
-
-            {!printing && !offBed && footerRow}
 
             {attempt.coach && (
               // Above the open button, so its dismiss buttons work.
@@ -278,8 +274,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </Button>
               </div>
             )}
-
-            {(printing || offBed) && footerRow}
           </div>
         </div>
       </div>

@@ -33,7 +33,7 @@ import {
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
-import { photoKey } from "../photos.ts";
+import { photoKey, photoOwner } from "../photos.ts";
 import { reactionsFor } from "./reactions.ts";
 
 const id = z.uuid();
@@ -695,7 +695,8 @@ export const itemRoutes = new Hono<AppEnv>()
     }
 
     const existing = await c.var.db.select().from(photos).where(eq(photos.id, photoId)).get();
-    if (existing && existing.itemId !== itemId) {
+    const owner = existing ? null : await photoOwner(c.var.db, photoId);
+    if ((existing && existing.itemId !== itemId) || owner) {
       return apiError(c, 409, "conflict", "That photo belongs to something else.");
     }
 

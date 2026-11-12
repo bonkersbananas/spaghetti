@@ -14,7 +14,7 @@ Other clients that speak MCP's OAuth (MCP Inspector, Claude Code's `/mcp` sign-i
 | --- | --- |
 | `GET /.well-known/oauth-protected-resource` (also under `/mcp`) | RFC 9728: the resource and its authorization server |
 | `GET /.well-known/oauth-authorization-server` | RFC 8414: the endpoints below, `code_challenge_methods_supported: ["S256"]` |
-| `POST /oauth/register` | RFC 7591: JSON `{ client_name, redirect_uris }`, answers `201` with a `client_id` (a `client_secret` only if the client asks for client authentication) |
+| `POST /oauth/register` | RFC 7591: JSON `{ client_name, redirect_uris }`, answers `201` with a `client_id` (a `client_secret` only if the client asks for client authentication); at most 20 an hour from one address (`429` after) |
 | `/authorize` | The consent screen (a page, not an API): `response_type=code`, `client_id`, `redirect_uri`, `code_challenge` (S256 only), `state`, optional `scope` (`read capture attempts printer`, default all) and `resource` |
 | `POST /oauth/token` | `authorization_code` (with `code_verifier`) and `refresh_token` (each refresh token works once and comes back replaced); answers `access_token` (`spg_…`, one hour), `refresh_token` (`spr_…`), `scope` |
 | `POST /oauth/revoke` | RFC 7009: ends the connection from the app's side |
@@ -84,6 +84,6 @@ The tools are a curated slice. Everything the API can do, and what each token ma
 
 ## How it works
 
-`POST /mcp` takes one JSON-RPC message (or a batch) and answers with JSON: `initialize`, `ping`, `tools/list` and `tools/call`. `GET` and `DELETE` are `405` (there are no sessions or streams), a missing or revoked token is `401`. A tool never touches the database: it calls Spaghetti's own API with the caller's token, so scopes, validation, attribution and the change feed behave exactly as for any other request (`src/worker/mcp/`). Photos sent to `capture_idea` can't be resized on the Worker, so the one image is stored as both sizes (cap 12 MB), with a neutral placeholder colour, and flagged: the next browser that opens the app resizes it quietly and replaces the copies (see decision 0004).
+`POST /mcp` takes one JSON-RPC message (or a batch) and answers with JSON: `initialize`, `ping`, `tools/list` and `tools/call`. `GET` and `DELETE` are `405` (there are no sessions or streams), a missing or revoked token is `401`. A tool never touches the database: it calls Spaghetti's own API with the caller's token, so scopes, validation, attribution and the change feed behave exactly as for any other request (`src/worker/mcp/`). A tool is also refused before it runs to a token that has none of its scopes, so it does nothing of its own (such as fetching a photo) for that token. `capture_idea` fetches a `photo_url` only from the open internet: https on the default port, a public name that resolves to public addresses only, checked again on every redirect (the rules of link previews), so it never reaches a local network. Photos sent to `capture_idea` can't be resized on the Worker, so the one image is stored as both sizes (cap 12 MB), with a neutral placeholder colour, and flagged: the next browser that opens the app resizes it quietly and replaces the copies (see decision 0004).
 
 Not built: server-sent events, scope choice on the consent screen (all or nothing), and tools for deleting or editing past entries.

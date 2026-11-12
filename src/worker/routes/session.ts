@@ -44,6 +44,14 @@ const credentials = z.object({
  */
 const DUMMY_HASH = "pbkdf2-sha256$100000$c3BhZ2hldHRpLWR1bW15$Zm9yLXRpbWluZy1vbmx5LW5vdC1hLXJlYWwtaGFzaCE=";
 
+/**
+ * The hash a password is checked against: the person's own, or the dummy for an unknown name and for someone who
+ * joined with a passkey only (no hash). The slow check always runs, so how long a wrong password takes never tells
+ * which names exist or whose account has a password; a match against the dummy is still refused.
+ */
+export const hashToCheck = (user: { passwordHash: string } | undefined) =>
+  user?.passwordHash.startsWith("pbkdf2-") ? user.passwordHash : DUMMY_HASH;
+
 /** Wrong passwords before signing in waits: per username, and per address (two people may share one). */
 const PASSWORD_FAILURES_PER_NAME = 10;
 const PASSWORD_FAILURES_PER_IP = 30;
@@ -77,7 +85,8 @@ export const sessionRoutes = new Hono<AppEnv>()
       return tooMany(c);
     }
     const user = await c.var.db.select().from(users).where(eq(users.username, username)).get();
-    const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
+    const hash = hashToCheck(user);
+    const ok = (await verifyPassword(password, hash)) && hash !== DUMMY_HASH;
     if (!user || !ok) {
       return apiError(c, 401, "wrong_credentials", "That name and password don't match.");
     }
@@ -206,8 +215,11 @@ export const sessionRoutes = new Hono<AppEnv>()
       }
     }
     await endSession(c, c.var.db);
+    // The browser forgets what it cached for this origin (photos are kept a year), so the next person on a shared
+    // device can't read them back. The app clears its own caches and the offline copy itself (lib/offline.ts).
+    c.header("Clear-Site-Data", '"cache"');
     return c.body(null, 204);
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { credentials, signOutBody };
+export { credentials, DUMMY_HASH, signOutBody };

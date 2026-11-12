@@ -56,6 +56,30 @@ const jpegBase64 = () => {
   return btoa(String.fromCharCode(...bytes));
 };
 
+const jpegResponse = () =>
+  new Response(
+    Uint8Array.from(atob(jpegBase64()), (c) => c.charCodeAt(0)),
+    { headers: { "Content-Type": "image/jpeg" } },
+  );
+
+/** The web as the Worker sees it: answers by address, and DNS over HTTPS (public unless `dns` says otherwise). */
+function stubWeb(pages: Record<string, () => Response>, dns: Record<string, string[]> = {}) {
+  const asked: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    asked.push(url.href);
+    if (url.hostname === "cloudflare-dns.com") {
+      const type = url.searchParams.get("type");
+      const answers = (dns[url.searchParams.get("name") ?? ""] ?? ["93.184.216.34"])
+        .filter((address) => (type === "AAAA") === address.includes(":"))
+        .map((data) => ({ type: type === "AAAA" ? 28 : 1, data }));
+      return Response.json({ Status: 0, Answer: answers });
+    }
+    return pages[url.href]?.() ?? new Response("not found", { status: 404 });
+  });
+  return { pages: () => asked.filter((href) => !href.includes("cloudflare-dns.com")) };
+}
+
 describe("the MCP endpoint", () => {
   it("needs an agent token: nothing, a cookie, a bad or a revoked one is refused", async () => {
     expect((await rpc(null, "ping")).response.status).toBe(401);
@@ -184,23 +208,18 @@ describe("tools, scopes and attribution", () => {
     const stored = await env.PHOTOS.get(`photos/${item.photos[0]?.id}/large`);
     expect(stored).not.toBeNull();
 
-    const fetched = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      expect(String(input)).toBe("https://example.com/boat.jpg");
-      return new Response(
-        Uint8Array.from(atob(jpegBase64()), (c) => c.charCodeAt(0)),
-        { headers: { "Content-Type": "image/jpeg" } },
-      );
-    });
+    const fetched = stubWeb({ "https://example.com/boat.jpg": () => jpegResponse() });
     try {
       const url = await callTool(made.token, "capture_idea", { photo_url: "https://example.com/boat.jpg" });
       expect(url.text).toContain("photo was added");
+      expect(fetched.pages()).toEqual(["https://example.com/boat.jpg"]);
     } finally {
-      fetched.mockRestore();
+      vi.restoreAllMocks();
     }
     // A download with no (or a false) Content-Length is cut off at the cap, not buffered whole.
     let sent = 0;
-    const endless = vi.spyOn(globalThis, "fetch").mockImplementation(
-      async () =>
+    stubWeb({
+      "https://example.com/huge.jpg": () =>
         new Response(
           new ReadableStream({
             pull(controller) {
@@ -210,14 +229,14 @@ describe("tools, scopes and attribution", () => {
           }),
           { headers: { "Content-Length": "100" } },
         ),
-    );
+    });
     try {
       const huge = await callTool(made.token, "capture_idea", { photo_url: "https://example.com/huge.jpg" });
       expect(huge.isError).toBe(true);
       expect(huge.text).toContain("too large");
       expect(sent).toBeLessThan(20);
     } finally {
-      endless.mockRestore();
+      vi.restoreAllMocks();
     }
     expect((await callTool(made.token, "capture_idea", { photo_url: "http://example.com/boat.jpg" })).text).toContain(
       "https",
@@ -225,6 +244,66 @@ describe("tools, scopes and attribution", () => {
     expect((await callTool(made.token, "capture_idea", { photo_base64: btoa("not an image at all") })).text).toContain(
       "JPEG or WebP",
     );
+  });
+
+  it("checks the tool's scopes before it runs: a token without them makes the Worker fetch nothing", async () => {
+    const fetched = vi.spyOn(globalThis, "fetch");
+    try {
+      for (const scopes of [["read"], ["attempts", "printer"]] as AgentScope[][]) {
+        const { token } = await makeAgent(scopes, scopes.join(" "));
+        const refused = await callTool(token, "capture_idea", { photo_url: "https://example.com/boat.jpg" });
+        expect(refused).toEqual({ text: 'This token needs the "capture" scope for that.', isError: true });
+      }
+      expect(fetched).not.toHaveBeenCalled();
+    } finally {
+      fetched.mockRestore();
+    }
+    // Every tool is refused the same way to a token with none of its scopes.
+    const { token } = await makeAgent(["printer"], "printer only");
+    const { body } = await rpc(token, "tools/list");
+    for (const tool of body.result?.tools ?? []) {
+      const result = await callTool(token, String(tool.name), {});
+      if (String(tool.description).includes('"printer"')) continue;
+      expect(result.text, String(tool.name)).toMatch(/^This token needs the .* scope for that\.$/);
+    }
+  });
+
+  it("capture_idea fetches a photo only from the open internet, on every hop", async () => {
+    const { token } = await makeAgent(["capture"]);
+    const web = stubWeb(
+      {
+        "https://example.com/moved.jpg": () => Response.redirect("http://192.168.1.20/snapshot.jpg", 302),
+        "https://example.com/indoors.jpg": () => Response.redirect("https://camera.example.com/snapshot.jpg", 302),
+        "https://camera.example.com/snapshot.jpg": () => jpegResponse(),
+      },
+      { "camera.example.com": ["10.0.0.20"], "rebind.example.com": ["93.184.216.34", "::1"] },
+    );
+    try {
+      for (const url of [
+        "http://example.com/boat.jpg",
+        "https://127.0.0.1/boat.jpg",
+        "https://[::1]/boat.jpg",
+        "https://localhost/boat.jpg",
+        "https://printer.local/boat.jpg",
+        "https://example.com:8080/boat.jpg",
+        "https://user:pass@example.com/boat.jpg",
+        "https://rebind.example.com/boat.jpg",
+        "https://example.com/moved.jpg",
+        "https://example.com/indoors.jpg",
+      ]) {
+        const result = await callTool(token, "capture_idea", { photo_url: url });
+        expect(result, url).toEqual({
+          text: "The photo URL must be an https address on the open internet.",
+          isError: true,
+        });
+      }
+      // Only the two public addresses were asked for anything; the private ones never.
+      expect(new Set(web.pages())).toEqual(
+        new Set(["https://example.com/moved.jpg", "https://example.com/indoors.jpg"]),
+      );
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it("set_parts adds parts and the attempt tools take their counts", async () => {
