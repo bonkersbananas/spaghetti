@@ -12,7 +12,8 @@ interface ForFieldProps extends Omit<ComponentPropsWithRef<"input">, "type" | "i
 }
 
 /**
- * "for Mila": who an idea or build is for, quiet under the title. It reads as a line of text until it is edited.
+ * "for Mila": who an idea or build is for, quiet under the title. It reads as a line of text, also while edited: like
+ * the title, it shows the caret and no focus ring.
  * Nobody named, it draws nothing: the page offers `ForChip` among its chips, so a page without a name has no empty
  * field on it, and tapping the chip opens this line with the focus in it.
  */
@@ -38,7 +39,7 @@ export function ForField({ className, asking = false, onOpen, onDone, onFocus, o
         maxLength={80}
         autoComplete="off"
         placeholder="someone"
-        className="text-ink placeholder:text-ink-faint focus-visible:shadow-ring min-w-0 flex-1 rounded-sm bg-transparent py-1"
+        className="text-ink placeholder:text-ink-faint min-w-0 flex-1 bg-transparent py-1 focus:shadow-none"
         onFocus={(event) => {
           // Open from here on, so clearing the last letter to type another name keeps it (and the page hides the chip).
           onOpen?.();

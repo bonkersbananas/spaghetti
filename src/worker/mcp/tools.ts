@@ -6,6 +6,7 @@ import type {
   FinishAttemptResponse,
   ItemHit,
   ItemResponse,
+  Photo,
   PrinterResponse,
   Recipe,
   RecipesResponse,
@@ -24,7 +25,7 @@ import { describeResults, describeSettings } from "../../shared/story.ts";
 import { formatHours, sinceWords } from "../../shared/upkeep.ts";
 import { mondayOf, printsWords, type WeekResponse } from "../../shared/week.ts";
 import { settings as attemptSettings } from "../routes/attempts.ts";
-import { fromBase64, fromPublicUrl, readImage } from "./image.ts";
+import { fromBase64, fromPublicUrl, readImage, toBase64 } from "./image.ts";
 
 /** What a tool can do: call Spaghetti's own API as the agent (same token, same scopes, same "via"). */
 export interface ApiResult {
@@ -32,13 +33,23 @@ export interface ApiResult {
   status: number;
   json: unknown;
   text: string;
+  /** The body of a `binary` call that succeeded. */
+  bytes?: Uint8Array;
+  contentType?: string;
 }
 export interface ToolContext {
-  call: (path: string, init?: { method?: string; json?: unknown; form?: FormData }) => Promise<ApiResult>;
+  call: (
+    path: string,
+    init?: { method?: string; json?: unknown; form?: FormData; binary?: boolean },
+  ) => Promise<ApiResult>;
+  /** The token's scopes, for a tool that must know before it fetches anything. */
+  scopes: readonly AgentScope[];
 }
 export interface ToolResult {
   text: string;
   isError?: boolean;
+  /** Pictures for Claude to look at, as MCP image content. */
+  images?: Array<{ data: string; mimeType: string }>;
 }
 
 const failure = (result: ApiResult): ToolResult => {
@@ -139,9 +150,63 @@ function attemptLine(hit: AttemptHit & { sameBuild?: boolean }): string {
     results.length && `  result: ${results.join(", ")}`,
     a.failureTags.length && `  went wrong: ${a.failureTags.join(", ")}`,
     a.successNotes.length && `  went well: ${a.successNotes.join(", ")}`,
+    hit.photo && `  photo_id: ${hit.photo.id} (look at it with get_photo)`,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// --- photos --------------------------------------------------------------------------------------
+
+const photoUrlArg = z.string().max(2000).optional().describe("An https URL of a JPEG or WebP photo.");
+const photoBase64Arg = z.string().optional().describe("Or the photo itself as base64 (JPEG or WebP, up to 12 MB).");
+
+/** A picture sent to Claude stays under this (base64 makes it a third bigger): well under what claude.ai takes in a result. */
+const MAX_SHOWN_BYTES = 900_000;
+/** Pictures in one get_photo answer. */
+const MAX_SHOWN = 4;
+
+const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** Where a photo belongs, in words: "the idea" or "attempt 2". */
+function photoPlace(photo: Photo, attemptNumbers: Map<string, number>): string {
+  const number = photo.attemptId ? attemptNumbers.get(photo.attemptId) : undefined;
+  return number ? `attempt ${number}` : "the idea/build";
+}
+
+function photoLine(photo: Photo, place: string): string {
+  const taken = dayOf(photo.takenAt ?? photo.createdAt);
+  return `photo_id: ${photo.id} (${place}, ${photo.takenAt ? "taken" : "added"} ${taken}, ${photo.width}×${photo.height}${photo.needsResize ? ", original size" : ""})`;
+}
+
+/** Reads and uploads one photo to an item (and attempt), the way capture_idea does. */
+async function readPhotoArgs(args: { photo_url?: string; photo_base64?: string }) {
+  if (args.photo_base64) return readImage(fromBase64(args.photo_base64));
+  if (args.photo_url) return readImage(await fromPublicUrl(args.photo_url));
+  return undefined;
+}
+
+async function uploadPhoto(
+  ctx: ToolContext,
+  itemId: string,
+  image: ReturnType<typeof readImage>,
+  attemptId?: string,
+): Promise<{ ok: true; photo: Photo } | { ok: false; text: string }> {
+  const form = new FormData();
+  form.set("width", String(image.width));
+  form.set("height", String(image.height));
+  // The average color is worked out in the browser; a neutral one stands in until then.
+  form.set("color", "#a9a095");
+  // The next browser that sees the photo resizes it and replaces the two copies below.
+  form.set("needsResize", "1");
+  if (attemptId) form.set("attemptId", attemptId);
+  // Nothing here can resize: the one image serves as both sizes until a browser does it.
+  const file = () => new File([image.bytes], "photo", { type: image.contentType });
+  form.set("large", file());
+  form.set("thumb", file());
+  const uploaded = await ctx.call(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, { method: "PUT", form });
+  if (!uploaded.ok) return { ok: false, text: failure(uploaded).text };
+  return { ok: true, photo: (uploaded.json as { photo: Photo }).photo };
 }
 
 // --- the tools -----------------------------------------------------------------------------------
@@ -234,13 +299,87 @@ export const tools: Tool[] = [
     name: "get_build",
     title: "Read a build's whole story",
     description:
-      'Get one build (or idea) as a single markdown document: the idea and its notes, every attempt in order with outcome, settings, what changed from the one before, notes and tags, and what worked. Use the id from search. Needs the "read" scope.',
+      'Get one build (or idea) as a single markdown document: the idea and its notes, every attempt in order with outcome, settings, what changed from the one before, notes and tags, and what worked, and a Photos list (photo_id, what it belongs to, when, size) of every picture. To look at a picture, use get_photo with the build_id and a photo_id. Use the id from search. Needs the "read" scope.',
     scopes: ["read"],
     readOnly: true,
     input: z.object({ build_id: id.describe("The build's or idea's id.") }),
     async run(args, ctx) {
       const result = await ctx.call(`/api/builds/${args.build_id}/story.md`);
-      return result.ok ? { text: result.text } : failure(result);
+      if (!result.ok) return failure(result);
+      const item = await ctx.call(`/api/items/${args.build_id}`);
+      const found = item.ok ? (item.json as ItemResponse).item : null;
+      if (!found?.photos.length) return { text: result.text };
+      const numbers = new Map(found.attempts.map((attempt, index) => [attempt.id, index + 1]));
+      const list = found.photos.map((photo) => `- ${photoLine(photo, photoPlace(photo, numbers))}`);
+      return {
+        text: `${result.text}\n\n## Photos (${found.photos.length})\n\nLook at one with get_photo (build_id: ${found.id}, photo_id).\n\n${list.join("\n")}`,
+      };
+    },
+  }),
+
+  tool({
+    name: "get_photo",
+    title: "Look at a photo",
+    description:
+      'Use get_photo to look at or show a photo of an idea, build or print attempt: it comes back as an image. Give the build_id and a photo_id (both are listed by get_build, and search names the photo of an attempt), or an "attempt" number to get that attempt\'s photos, or neither for the build\'s own photos (most recent last, up to "limit", at most 4). Pictures are the app\'s display-size copies, small enough to look at. Needs the "read" scope.',
+    scopes: ["read"],
+    readOnly: true,
+    input: z.object({
+      build_id: id.describe("The build's or idea's id."),
+      photo_id: id.optional().describe("One photo (from get_build's Photos list)."),
+      attempt: z
+        .number()
+        .int()
+        .min(1)
+        .max(999)
+        .optional()
+        .describe("Instead: the photos of this attempt number (attempt 1 is the first)."),
+      limit: z.number().int().min(1).max(MAX_SHOWN).optional().describe("How many at most, default 1."),
+    }),
+    async run(args, ctx) {
+      const item = await ctx.call(`/api/items/${args.build_id}`);
+      if (!item.ok) return failure(item);
+      const found = (item.json as ItemResponse).item;
+      const numbers = new Map(found.attempts.map((attempt, index) => [attempt.id, index + 1]));
+      let chosen: Photo[];
+      if (args.photo_id) {
+        chosen = found.photos.filter((photo) => photo.id === args.photo_id);
+        if (!chosen.length) return { text: "That photo isn't one of this build's.", isError: true };
+      } else if (args.attempt) {
+        const attempt = found.attempts[args.attempt - 1];
+        if (!attempt) return { text: `This build has no attempt ${args.attempt}.`, isError: true };
+        chosen = found.photos.filter((photo) => photo.attemptId === attempt.id);
+      } else {
+        chosen = found.photos.filter((photo) => !photo.attemptId);
+      }
+      if (!chosen.length) return { text: "There are no photos there." };
+      const limit = args.photo_id ? 1 : (args.limit ?? 1);
+      const images: NonNullable<ToolResult["images"]> = [];
+      const lines: string[] = [];
+      for (const photo of chosen.slice(0, limit)) {
+        // The display copy; when it is big, the thumb stands in. An original no browser has resized yet is stored as
+        // both, so asking for the thumb would download the same big file twice: it waits for a browser to resize it.
+        let bytes: Uint8Array | undefined;
+        let mimeType = "image/webp";
+        for (const variant of photo.needsResize ? ["large"] : ["large", "thumb"]) {
+          const fetched = await ctx.call(`/api/photos/${photo.id}/${variant}`, { binary: true });
+          if (fetched.ok && fetched.bytes && fetched.bytes.length <= MAX_SHOWN_BYTES) {
+            bytes = fetched.bytes;
+            mimeType = fetched.contentType?.split(";")[0] || mimeType;
+            break;
+          }
+        }
+        const line = photoLine(photo, photoPlace(photo, numbers));
+        if (!bytes) {
+          lines.push(`${line}: too big to show here${photo.needsResize ? " until the app has resized it" : ""}.`);
+          continue;
+        }
+        images.push({ data: toBase64(bytes), mimeType });
+        lines.push(line);
+      }
+      const more =
+        chosen.length > limit ? ` ${chosen.length - limit} more: ask with a photo_id or a higher limit.` : "";
+      return { text: `${lines.join("\n")}${more}`, images };
     },
   }),
 
@@ -254,8 +393,8 @@ export const tools: Tool[] = [
     input: z.object({
       title: z.string().max(200).optional().describe("A short name, if there is one. Optional."),
       note: z.string().max(20_000).optional().describe("The thought itself: what it is, a link, a measurement."),
-      photo_url: z.string().max(2000).optional().describe("An https URL of a JPEG or WebP photo to attach."),
-      photo_base64: z.string().optional().describe("Or the photo itself as base64 (JPEG or WebP, up to 12 MB)."),
+      photo_url: photoUrlArg,
+      photo_base64: photoBase64Arg,
     }),
     async run(args, ctx) {
       if (!args.title?.trim() && !args.note?.trim() && !args.photo_url && !args.photo_base64) {
@@ -263,8 +402,7 @@ export const tools: Tool[] = [
       }
       let image: ReturnType<typeof readImage> | undefined;
       try {
-        if (args.photo_base64) image = readImage(fromBase64(args.photo_base64));
-        else if (args.photo_url) image = readImage(await fromPublicUrl(args.photo_url));
+        image = await readPhotoArgs(args);
       } catch (error) {
         return { text: error instanceof Error ? error.message : "The photo couldn't be read.", isError: true };
       }
@@ -276,23 +414,46 @@ export const tools: Tool[] = [
       if (!created.ok) return failure(created);
       let photo = "";
       if (image) {
-        const form = new FormData();
-        form.set("width", String(image.width));
-        form.set("height", String(image.height));
-        // The average color is worked out in the browser; a neutral one stands in until then.
-        form.set("color", "#a9a095");
-        // The next browser that sees the photo resizes it and replaces the two copies below.
-        form.set("needsResize", "1");
-        // Nothing here can resize: the one image serves as both sizes until a browser does it.
-        const file = () => new File([image.bytes], "photo", { type: image.contentType });
-        form.set("large", file());
-        form.set("thumb", file());
-        const uploaded = await ctx.call(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, { method: "PUT", form });
-        photo = uploaded.ok
-          ? " Its photo was added."
-          : ` The idea was saved but its photo wasn't: ${failure(uploaded).text}`;
+        const uploaded = await uploadPhoto(ctx, itemId, image);
+        photo = uploaded.ok ? " Its photo was added." : ` The idea was saved but its photo wasn't: ${uploaded.text}`;
       }
       return { text: `Captured idea. build_id: ${itemId}.${photo}` };
+    },
+  }),
+
+  tool({
+    name: "add_photo",
+    title: "Add a photo to an idea, build or attempt",
+    description:
+      'Add a photo to something that already exists: an idea or build (build_id), or one of its print attempts (also give attempt_id). It goes after the photos already there and shows in the app marked as added via this agent; people can remove it there. Send an https photo_url or photo_base64 (JPEG or WebP, up to 12 MB). Use capture_idea for a new idea. Needs the "capture" scope for an idea or build, the "attempts" scope for an attempt.',
+    scopes: ["capture", "attempts"],
+    readOnly: false,
+    input: z.object({
+      build_id: id.describe("The build's or idea's id (from search)."),
+      attempt_id: id
+        .optional()
+        .describe(
+          "The attempt the photo shows (from get_build or search); left out, the photo is of the idea or build.",
+        ),
+      photo_url: photoUrlArg,
+      photo_base64: photoBase64Arg,
+    }),
+    async run(args, ctx) {
+      if (!args.photo_url && !args.photo_base64) return { text: "Give a photo_url or photo_base64.", isError: true };
+      const needs = args.attempt_id ? "attempts" : "capture";
+      if (!ctx.scopes.includes(needs))
+        return { text: `This token needs the "${needs}" scope for that.`, isError: true };
+      let image: ReturnType<typeof readImage> | undefined;
+      try {
+        image = await readPhotoArgs(args);
+      } catch (error) {
+        return { text: error instanceof Error ? error.message : "The photo couldn't be read.", isError: true };
+      }
+      if (!image) return { text: "Give a photo_url or photo_base64.", isError: true };
+      const uploaded = await uploadPhoto(ctx, args.build_id, image, args.attempt_id);
+      return uploaded.ok
+        ? { text: `Photo added. photo_id: ${uploaded.photo.id}.` }
+        : { text: uploaded.text, isError: true };
     },
   }),
 
@@ -396,8 +557,16 @@ export const tools: Tool[] = [
       success_notes: successNotesArg,
       settings: settingsArg,
       parts: partsArg,
+      photo_url: photoUrlArg.describe("An https URL of a JPEG or WebP photo of the print, to attach to the attempt."),
+      photo_base64: photoBase64Arg,
     }),
     async run(args, ctx) {
+      let image: ReturnType<typeof readImage> | undefined;
+      try {
+        image = await readPhotoArgs(args);
+      } catch (error) {
+        return { text: error instanceof Error ? error.message : "The photo couldn't be read.", isError: true };
+      }
       const result = await ctx.call(`/api/items/${args.build_id}/attempts`, {
         method: "POST",
         json: {
@@ -411,9 +580,13 @@ export const tools: Tool[] = [
         },
       });
       if (!result.ok) return failure(result);
-      return {
-        text: `Logged: ${outcomeWord(args.outcome)}. attempt_id: ${(result.json as AttemptResponse).attempt.id}.`,
-      };
+      const attemptId = (result.json as AttemptResponse).attempt.id;
+      let photo = "";
+      if (image) {
+        const uploaded = await uploadPhoto(ctx, args.build_id, image, attemptId);
+        photo = uploaded.ok ? " Its photo was added." : ` The attempt was saved but its photo wasn't: ${uploaded.text}`;
+      }
+      return { text: `Logged: ${outcomeWord(args.outcome)}. attempt_id: ${attemptId}.${photo}` };
     },
   }),
 
@@ -431,8 +604,16 @@ export const tools: Tool[] = [
       failure_tags: failureTagsArg,
       success_notes: successNotesArg,
       parts: partsArg,
+      photo_url: photoUrlArg.describe("An https URL of a JPEG or WebP photo of the print, to attach to the attempt."),
+      photo_base64: photoBase64Arg,
     }),
     async run(args, ctx) {
+      let image: ReturnType<typeof readImage> | undefined;
+      try {
+        image = await readPhotoArgs(args);
+      } catch (error) {
+        return { text: error instanceof Error ? error.message : "The photo couldn't be read.", isError: true };
+      }
       const result = await ctx.call(`/api/attempts/${args.attempt_id}/finish`, {
         method: "POST",
         json: {
@@ -445,10 +626,17 @@ export const tools: Tool[] = [
       });
       if (!result.ok) return failure(result);
       const done = result.json as FinishAttemptResponse;
+      let photo = "";
+      if (image) {
+        const uploaded = await uploadPhoto(ctx, done.attempt.itemId, image, args.attempt_id);
+        photo = uploaded.ok ? " Its photo was added." : ` The photo wasn't saved: ${uploaded.text}`;
+      }
       return {
-        text: done.finished
-          ? `Finished: ${outcomeWord(done.attempt.outcome)}.`
-          : `It was already finished as ${outcomeWord(done.attempt.outcome)}; that stands, and your note and tags were added.`,
+        text:
+          (done.finished
+            ? `Finished: ${outcomeWord(done.attempt.outcome)}.`
+            : `It was already finished as ${outcomeWord(done.attempt.outcome)}; that stands, and your note and tags were added.`) +
+          photo,
       };
     },
   }),
