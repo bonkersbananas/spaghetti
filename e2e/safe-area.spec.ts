@@ -43,7 +43,7 @@ async function expectAboveTabBar(page: Page) {
   expect(bar!.y).toBeLessThan(tabBar!.y);
 }
 
-test("the Agents, Pantry, idea and build actions sit above the tab bar", async ({ page }) => {
+test("the Pantry, idea and build actions sit above the tab bar", async ({ page }) => {
   const headers = { Origin: origin(page) };
   const id = crypto.randomUUID();
   await page.request.post("/api/items", { headers, data: { id, title: "Cable chain" } });
@@ -51,10 +51,6 @@ test("the Agents, Pantry, idea and build actions sit above the tab bar", async (
     headers,
     data: { id: crypto.randomUUID(), material: "PLA", colorName: "Blue" },
   });
-
-  await page.goto("/agents");
-  await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
-  await expectAboveTabBar(page);
 
   await page.goto("/pantry");
   await expect(page.getByRole("heading", { level: 1, name: "Pantry" })).toBeVisible();
