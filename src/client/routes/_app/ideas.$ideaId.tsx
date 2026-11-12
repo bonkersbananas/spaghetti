@@ -59,7 +59,7 @@ function IdeaDetail() {
       <DetailBar back={back} />
       {isPending || isBuild ? (
         <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14" aria-hidden>
-          <Skeleton className="-mx-5 aspect-4/3 rounded-none md:mx-0 md:flex-2 md:rounded-xl" />
+          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 md:rounded-xl" />
           <div className="flex flex-col gap-3 md:flex-3">
             <Skeleton className="h-8 w-3/4" />
             <Skeleton className="h-4 w-full" />

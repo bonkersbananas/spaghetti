@@ -316,7 +316,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
         {/* The spool: its label photo, or the spool itself in its color. */}
         <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-3 md:flex-2">
-          <div className="bg-ink/3 relative -mx-5 aspect-4/3 overflow-hidden md:mx-0 md:aspect-square md:rounded-xl">
+          <div className="bg-ink/3 relative -mx-5 aspect-4/3 w-[calc(100%+2.5rem)] overflow-hidden md:mx-0 md:aspect-square md:w-auto md:rounded-xl">
             {spool.photo ? (
               <Photo
                 src={photoSrc(spool.photo.id, "large")}
