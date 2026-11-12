@@ -216,3 +216,25 @@ test("a long build folds its earlier attempts, and picking one unfolds them and 
   await expect(story.getByRole("listitem")).toHaveCount(7);
   await expect(story.getByRole("listitem").last()).toBeInViewport();
 });
+
+test("the story column stays reachable in a short window", async ({ page, isMobile }) => {
+  test.skip(isMobile, "the column only sticks beside the attempts on a laptop");
+  const id = crypto.randomUUID();
+  const note = Array.from({ length: 30 }, (_, line) => `Line ${line + 1} of a long plan for this build.`).join("\n");
+  await page.request.post("/api/items", {
+    headers: { Origin: origin(page) },
+    data: { id, title: "Tall notes", note, stage: "building" },
+  });
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Tall notes");
+  // A sticky column taller than the window would leave its end out of reach while the attempts scroll: it fits the
+  // window and scrolls inside itself instead.
+  const column = page.locator("article .md\\:sticky");
+  const box = await column.evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    scrolls: el.scrollHeight > el.clientHeight,
+  }));
+  expect(box.height).toBeLessThanOrEqual(600);
+  expect(box.scrolls).toBe(true);
+});

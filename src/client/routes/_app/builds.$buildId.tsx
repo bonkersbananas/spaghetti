@@ -470,7 +470,7 @@ function Build({ item }: { item: ItemView }) {
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
         {/* The build: its best photo large, its title and notes. */}
-        <div className="flex min-w-0 flex-col gap-4 md:sticky md:top-8 md:flex-2">
+        <div className="flex min-w-0 flex-col gap-4 md:sticky md:top-6 md:-m-2 md:max-h-[calc(100dvh-3rem)] md:flex-2 md:overflow-y-auto md:overscroll-contain md:p-2">
           {gallery.length > 0 ? (
             <div className="relative">
               <PhotoViewer
