@@ -34,6 +34,7 @@ import { SkeletonSection } from "./-styleguide/skeletons";
 import { SpaceSection } from "./-styleguide/space";
 import { StepsSection } from "./-styleguide/steps";
 import { TodaySection } from "./-styleguide/today";
+import { TwistsSection } from "./-styleguide/twists";
 import { TypeSection } from "./-styleguide/type";
 import { WebhooksSection } from "./-styleguide/webhooks";
 import { WishlistsSection } from "./-styleguide/wishlists";
@@ -67,6 +68,7 @@ const toc = [
   ["builds", "Builds & attempts"],
   ["pantry", "Pantry & printer"],
   ["recipes", "Recipes"],
+  ["twists", "Twists"],
   ["year", "Year so far"],
   ["search", "Journal & search"],
   ["journal", "Journal entries"],
@@ -124,6 +126,7 @@ function Styleguide() {
           <BuildsSection />
           <PantrySection />
           <RecipesSection />
+          <TwistsSection />
           <YearSection />
           <SearchSection />
           <JournalSection />

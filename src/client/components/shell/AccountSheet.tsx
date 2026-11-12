@@ -2,7 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon, TwistIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
@@ -86,6 +86,10 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               {label}
             </MenuItem>
           ))}
+          {/* Phones have no sidebar: until the Workshop hub, Twists is reached from here. */}
+          <MenuItem to="/twists" icon={TwistIcon} onClick={() => onOpenChange(false)}>
+            Twists
+          </MenuItem>
         </MenuGroup>
         <Overline as="h3" className="mt-6 mb-2 block">
           Settings

@@ -8,11 +8,22 @@ import {
   SearchIcon,
   ShoppingIcon,
   TodayIcon,
+  TwistIcon,
   WishIcon,
 } from "@/components/ui/icons";
 
 export interface Section {
-  to: "/today" | "/ideas" | "/wishlist" | "/builds" | "/journal" | "/search" | "/pantry" | "/printer" | "/shopping";
+  to:
+    | "/today"
+    | "/ideas"
+    | "/wishlist"
+    | "/builds"
+    | "/twists"
+    | "/journal"
+    | "/search"
+    | "/pantry"
+    | "/printer"
+    | "/shopping";
   label: string;
   icon: Icon;
   /** The shortcut that opens it (see shared/shortcuts.ts); the sidebar shows its keys. */
@@ -21,6 +32,7 @@ export interface Section {
     | "goIdeas"
     | "goWishlist"
     | "goBuilds"
+    | "goTwists"
     | "goJournal"
     | "search"
     | "goPantry"
@@ -32,11 +44,12 @@ const today: Section = { to: "/today", label: "Today", icon: TodayIcon, shortcut
 const ideas: Section = { to: "/ideas", label: "Ideas", icon: IdeasIcon, shortcut: "goIdeas" };
 const wishlist: Section = { to: "/wishlist", label: "Wishlists", icon: WishIcon, shortcut: "goWishlist" };
 const builds: Section = { to: "/builds", label: "Builds", icon: BuildsIcon, shortcut: "goBuilds" };
+const twists: Section = { to: "/twists", label: "Twists", icon: TwistIcon, shortcut: "goTwists" };
 const journal: Section = { to: "/journal", label: "Journal", icon: JournalIcon, shortcut: "goJournal" };
 const search: Section = { to: "/search", label: "Search", icon: SearchIcon, shortcut: "search" };
 
 /** Every section, in order: the sidebar, the hotkeys and the command palette read this list. */
-export const sections: Section[] = [today, ideas, wishlist, builds, journal, search];
+export const sections: Section[] = [today, ideas, wishlist, builds, twists, journal, search];
 
 /**
  * The phone's tabs, around the capture button: places only. Search is a tool, so it lives in the page

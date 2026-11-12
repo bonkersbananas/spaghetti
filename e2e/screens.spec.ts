@@ -126,6 +126,8 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
 
   await screen(page, "/builds", "Builds");
 
+  await screen(page, "/twists", "Twists");
+
   await page.goto(`/builds/${data.buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   // The compare sheet (a changes line is the way in; the seeded build changed its bed temperature and brim).
@@ -231,6 +233,8 @@ const CHECKED_ROUTES = [
   "builds.$buildId",
   "journal",
   "search",
+  "twists.index",
+  "twists.$twistId",
   "pantry.index",
   "pantry.$spoolId",
   "printer",

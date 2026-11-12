@@ -13,6 +13,7 @@ import { seedIdeas } from "./ideas.ts";
 import { seedPantry } from "./pantry.ts";
 import { seedRecipes } from "./recipes.ts";
 import { seedShopping } from "./shopping.ts";
+import { seedTwists } from "./twists.ts";
 import { seedWishlists } from "./wishlists.ts";
 
 /**
@@ -59,6 +60,7 @@ export async function seedAll({
     await seedPantry(browser, alex, origin, stateDir, now);
     await seedBuilds(browser, { alex, sam }, origin, stateDir, now);
     await seedRecipes(alex, origin, stateDir);
+    await seedTwists(alex, origin);
     await seedComments({ alex, sam }, origin, stateDir, now);
     await seedWishlists({ alex, sam }, origin);
     // What the link in the desk tidy-up note calls itself. The sandbox can't fetch pages, and a screenshot

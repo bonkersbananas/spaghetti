@@ -68,6 +68,7 @@ export const SHORTCUTS = define([
   { id: "goIdeas", group: "anywhere", label: "Go to Ideas", keys: ["g i"] },
   { id: "goWishlist", group: "anywhere", label: "Go to Wishlists", keys: ["g w"] },
   { id: "goBuilds", group: "anywhere", label: "Go to Builds", keys: ["g b"] },
+  { id: "goTwists", group: "anywhere", label: "Go to Twists", keys: ["g x"] },
   { id: "goJournal", group: "anywhere", label: "Go to Journal", keys: ["g j"] },
   { id: "search", group: "anywhere", label: "Search", keys: ["/"] },
   { id: "goPantry", group: "anywhere", label: "Go to the Pantry", keys: ["g p"] },

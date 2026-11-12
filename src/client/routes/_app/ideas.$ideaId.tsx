@@ -19,7 +19,15 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
-import { BuildsIcon, CommentIcon, MoveIntoIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
+import {
+  BuildsIcon,
+  CommentIcon,
+  MoveIntoIcon,
+  TrashIcon,
+  TwistIcon,
+  UpNextIcon,
+  WishIcon,
+} from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -40,6 +48,7 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { useStickyColumn } from "@/lib/sticky-column";
+import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
@@ -158,6 +167,23 @@ function Idea({ item }: { item: ItemView }) {
     setMoving(true);
   }
 
+  // A twist is made from the idea with one tap: the idea's model, title and cover come along, and its page opens at once.
+  const { twists } = useTwists();
+  const existingTwist = twists?.find((twist) => twist.fromItemId === item.id);
+  function twist() {
+    if (!canEdit(item.pending) || !user) return;
+    if (existingTwist) return void navigate({ to: "/twists/$twistId", params: { twistId: existingTwist.id } });
+    const id = makeTwist(
+      queryClient,
+      {
+        name: suggestedTwistName({ title }, model?.url ?? null),
+        from: { id: item.id, photo: photos[0] ?? null, modelUrl: model?.url ?? null, title },
+      },
+      user.id,
+    );
+    void navigate({ to: "/twists/$twistId", params: { twistId: id } });
+  }
+
   // Counts up each time something asks to write a comment: the M key, the palette.
   const [writeAsk, setWriteAsk] = useState(0);
   const comment = () => {
@@ -180,6 +206,13 @@ function Idea({ item }: { item: ItemView }) {
       shortcut: "ideaMove",
       keywords: "move tidy photos note attempt build into",
       run: move,
+    },
+    {
+      id: "twist",
+      label: existingTwist ? "Open this idea's twist" : "Make a twist",
+      icon: TwistIcon,
+      keywords: "twist adapt change scale model remix",
+      run: twist,
     },
     {
       id: "comment",
@@ -331,6 +364,16 @@ function Idea({ item }: { item: ItemView }) {
               >
                 My wishlist
               </ToggleChip>
+              {model && (
+                <ToggleChip
+                  selected={!!existingTwist}
+                  icon={TwistIcon}
+                  disabled={readOnly || item.pending || !user}
+                  onClick={twist}
+                >
+                  {existingTwist ? "Twist" : "Make a twist"}
+                </ToggleChip>
+              )}
               {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
             </div>
             {model && <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />}

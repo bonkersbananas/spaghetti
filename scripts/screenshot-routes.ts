@@ -6,6 +6,7 @@ import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
+import { SEED_TWIST_IDS } from "./seed/twists.ts";
 
 /** The spool that sat in A4 before the unknown-tray shot emptied it. */
 let unknownTraySlot: string | null = null;
@@ -2196,6 +2197,39 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
     },
   },
+  { name: "twists", path: "/twists", fullPage: true },
+  {
+    name: "twist",
+    path: `/twists/${SEED_TWIST_IDS.bins}`,
+    fullPage: true,
+  },
+  {
+    // The way in: an idea with a model has "Make a twist" among its chips (the desk tidy-up one already has its twist).
+    name: "twist-from-idea",
+    path: "/ideas/5eed0000-0000-4000-8000-000000000001",
+    prepare: async (page) => {
+      const patched = await page.request.patch("/api/items/5eed0000-0000-4000-8000-000000000001", {
+        headers: { Origin: new URL(page.url()).origin },
+        data: {
+          note: "Found this on the bed this morning. Retry the cable chain with a brim and a slower first layer.\n\nhttps://makerworld.com/en/models/301122-cable-chain",
+        },
+      });
+      if (!patched.ok()) throw new Error(`Planter note: ${patched.status()} ${await patched.text()}`);
+      await page.reload();
+      await page.getByRole("button", { name: "Make a twist" }).waitFor();
+    },
+  },
+  {
+    name: "twist-new",
+    path: "/twists",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New twist" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("textbox", { name: "Name it" }).fill("Planter, 0.2 looser");
+      await page.waitForTimeout(400);
+    },
+  },
   { name: "pantry", path: "/pantry", fullPage: true },
   {
     // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
@@ -2223,6 +2257,7 @@ export const shots: Shot[] = [
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
+  { name: "styleguide-twists", path: "/styleguide", selector: "#twists" },
   { name: "styleguide-year", path: "/styleguide", selector: "#year" },
   { name: "styleguide-error", path: "/styleguide", selector: "#error" },
   {

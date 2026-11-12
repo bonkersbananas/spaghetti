@@ -32,6 +32,8 @@ import { Route as AppIdeasIndexRouteImport } from './routes/_app/ideas.index'
 import { Route as AppIdeasIdeaIdRouteImport } from './routes/_app/ideas.$ideaId'
 import { Route as AppPantryIndexRouteImport } from './routes/_app/pantry.index'
 import { Route as AppPantrySpoolIdRouteImport } from './routes/_app/pantry.$spoolId'
+import { Route as AppTwistsIndexRouteImport } from './routes/_app/twists.index'
+import { Route as AppTwistsTwistIdRouteImport } from './routes/_app/twists.$twistId'
 import { Route as AppWeekMondayRouteImport } from './routes/_app/week.$monday'
 
 const AppRoute = AppRouteImport.update({
@@ -148,6 +150,16 @@ const AppPantrySpoolIdRoute = AppPantrySpoolIdRouteImport.update({
   path: '/pantry/$spoolId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTwistsIndexRoute = AppTwistsIndexRouteImport.update({
+  id: '/twists/',
+  path: '/twists/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTwistsTwistIdRoute = AppTwistsTwistIdRouteImport.update({
+  id: '/twists/$twistId',
+  path: '/twists/$twistId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWeekMondayRoute = AppWeekMondayRouteImport.update({
   id: '/week/$monday',
   path: '/week/$monday',
@@ -174,10 +186,12 @@ export interface FileRoutesByFullPath {
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/twists/$twistId': typeof AppTwistsTwistIdRoute
   '/week/$monday': typeof AppWeekMondayRoute
   '/builds/': typeof AppBuildsIndexRoute
   '/ideas/': typeof AppIdeasIndexRoute
   '/pantry/': typeof AppPantryIndexRoute
+  '/twists/': typeof AppTwistsIndexRoute
 }
 export interface FileRoutesByTo {
   '/authorize': typeof AuthorizeRoute
@@ -199,10 +213,12 @@ export interface FileRoutesByTo {
   '/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/twists/$twistId': typeof AppTwistsTwistIdRoute
   '/week/$monday': typeof AppWeekMondayRoute
   '/builds': typeof AppBuildsIndexRoute
   '/ideas': typeof AppIdeasIndexRoute
   '/pantry': typeof AppPantryIndexRoute
+  '/twists': typeof AppTwistsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -226,10 +242,12 @@ export interface FileRoutesById {
   '/_app/builds/$buildId': typeof AppBuildsBuildIdRoute
   '/_app/ideas/$ideaId': typeof AppIdeasIdeaIdRoute
   '/_app/pantry/$spoolId': typeof AppPantrySpoolIdRoute
+  '/_app/twists/$twistId': typeof AppTwistsTwistIdRoute
   '/_app/week/$monday': typeof AppWeekMondayRoute
   '/_app/builds/': typeof AppBuildsIndexRoute
   '/_app/ideas/': typeof AppIdeasIndexRoute
   '/_app/pantry/': typeof AppPantryIndexRoute
+  '/_app/twists/': typeof AppTwistsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -253,10 +271,12 @@ export interface FileRouteTypes {
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
+    | '/twists/$twistId'
     | '/week/$monday'
     | '/builds/'
     | '/ideas/'
     | '/pantry/'
+    | '/twists/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/authorize'
@@ -278,10 +298,12 @@ export interface FileRouteTypes {
     | '/builds/$buildId'
     | '/ideas/$ideaId'
     | '/pantry/$spoolId'
+    | '/twists/$twistId'
     | '/week/$monday'
     | '/builds'
     | '/ideas'
     | '/pantry'
+    | '/twists'
   id:
     | '__root__'
     | '/_app'
@@ -304,10 +326,12 @@ export interface FileRouteTypes {
     | '/_app/builds/$buildId'
     | '/_app/ideas/$ideaId'
     | '/_app/pantry/$spoolId'
+    | '/_app/twists/$twistId'
     | '/_app/week/$monday'
     | '/_app/builds/'
     | '/_app/ideas/'
     | '/_app/pantry/'
+    | '/_app/twists/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -481,6 +505,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPantrySpoolIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/twists/': {
+      id: '/_app/twists/'
+      path: '/twists'
+      fullPath: '/twists/'
+      preLoaderRoute: typeof AppTwistsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/twists/$twistId': {
+      id: '/_app/twists/$twistId'
+      path: '/twists/$twistId'
+      fullPath: '/twists/$twistId'
+      preLoaderRoute: typeof AppTwistsTwistIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/week/$monday': {
       id: '/_app/week/$monday'
       path: '/week/$monday'
@@ -507,10 +545,12 @@ interface AppRouteChildren {
   AppBuildsBuildIdRoute: typeof AppBuildsBuildIdRoute
   AppIdeasIdeaIdRoute: typeof AppIdeasIdeaIdRoute
   AppPantrySpoolIdRoute: typeof AppPantrySpoolIdRoute
+  AppTwistsTwistIdRoute: typeof AppTwistsTwistIdRoute
   AppWeekMondayRoute: typeof AppWeekMondayRoute
   AppBuildsIndexRoute: typeof AppBuildsIndexRoute
   AppIdeasIndexRoute: typeof AppIdeasIndexRoute
   AppPantryIndexRoute: typeof AppPantryIndexRoute
+  AppTwistsIndexRoute: typeof AppTwistsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -529,10 +569,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppBuildsBuildIdRoute: AppBuildsBuildIdRoute,
   AppIdeasIdeaIdRoute: AppIdeasIdeaIdRoute,
   AppPantrySpoolIdRoute: AppPantrySpoolIdRoute,
+  AppTwistsTwistIdRoute: AppTwistsTwistIdRoute,
   AppWeekMondayRoute: AppWeekMondayRoute,
   AppBuildsIndexRoute: AppBuildsIndexRoute,
   AppIdeasIndexRoute: AppIdeasIndexRoute,
   AppPantryIndexRoute: AppPantryIndexRoute,
+  AppTwistsIndexRoute: AppTwistsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

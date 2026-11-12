@@ -22,13 +22,17 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 
 /**
  * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-12, after #631 (gzip kB):
+
+ * Raised by 2 kB for /today, /ideas and /builds with Twists (#722): the sidebar's entry brings Phosphor's Spiral icon
+ * (0.9 kB gzip, all six weights in one file) into every first load, and the two route stubs a little more. Main was
+ * then 281.5 / 268.5 / 268.1; with Twists 282.9 / 269.8 / 269.4.
  *   /sign-in 178.1   /today 276.9   /ideas 263.5   /builds 263.4   /journal 263.4   /search 272.4   /pantry 272.2   /printer 272.0
  */
 const CEILING_KB = {
   "/sign-in": 184,
-  "/today": 282,
-  "/ideas": 269,
-  "/builds": 269,
+  "/today": 284,
+  "/ideas": 271,
+  "/builds": 271,
   "/journal": 269,
   "/search": 278,
   "/pantry": 278,
