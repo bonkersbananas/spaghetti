@@ -105,9 +105,12 @@ function BuildDetail() {
   const { item, isPending, error } = useItem(buildId);
   const navigate = useNavigate();
   const isIdea = item?.stage === "idea";
-  // Taken back to an idea (undo, or on the other phone): it lives under Ideas again.
+  // Taken back to an idea (undo, or on the other phone): it lives under Ideas again. Not when this page is already on
+  // its way elsewhere: scrapping turns the build into an idea as it leaves for the Ideas list, whose code may still
+  // be loading while this page shows (the router changes the address at once).
   useEffect(() => {
-    if (isIdea) void navigate({ to: "/ideas/$ideaId", params: { ideaId: buildId }, replace: true });
+    if (!isIdea || window.location.pathname !== `/builds/${buildId}`) return;
+    void navigate({ to: "/ideas/$ideaId", params: { ideaId: buildId }, replace: true });
   }, [isIdea, buildId, navigate]);
   if (item && !isIdea) return <Build key={item.id} item={item} />;
   return (
