@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { outcomeDots } from "@/components/builds/Outcome";
 import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
-import { OpenNotebook } from "@/components/illustrations";
+import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { MonthBars } from "@/components/insights/MonthBars";
 import { Mosaic } from "@/components/insights/Mosaic";
 import { RateRows } from "@/components/insights/RateRows";

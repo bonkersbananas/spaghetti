@@ -3,7 +3,7 @@ import { recipesFor } from "@shared/recipes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
-import { PantryJar } from "@/components/illustrations";
+import { PantryJar } from "@/components/illustrations/PantryJar";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { RunningLow } from "@/components/pantry/RunningLow";
 import { SpoolCard } from "@/components/pantry/SpoolCard";

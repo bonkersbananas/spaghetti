@@ -1,6 +1,6 @@
 import type { Item, PhotoVariant } from "@shared/api";
 import { photoUrl } from "@shared/api";
-import { itemKeys } from "./items";
+import { itemKeys } from "./item-keys";
 
 /**
  * Photos are the point of the app, offline too. The service worker keeps

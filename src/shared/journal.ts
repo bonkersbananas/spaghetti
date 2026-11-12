@@ -3,18 +3,14 @@
  * by week further back, inside months. Pure helpers, shared by the app and
  * the unit tests.
  */
-import { OUTCOMES, type Outcome } from "./attempts.ts";
+import type { Outcome } from "./attempts.ts";
+import type { OutcomeFilter } from "./outcomes.ts";
 
 /** What a journal entry records. */
 export const JOURNAL_KINDS = ["attempt", "idea", "started", "finished", "shelved"] as const;
 export type JournalKind = (typeof JOURNAL_KINDS)[number];
 
-/**
- * The outcome filter: one outcome, or "failures" (spaghetti and partly: every
- * attempt with something to learn from).
- */
-export const OUTCOME_FILTERS = ["failures", ...OUTCOMES] as const;
-export type OutcomeFilter = (typeof OUTCOME_FILTERS)[number];
+export { OUTCOME_FILTERS, type OutcomeFilter } from "./outcomes.ts";
 
 /** The outcomes an outcome filter lets through. */
 export function outcomesFor(filter: OutcomeFilter): Outcome[] {
