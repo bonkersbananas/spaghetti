@@ -44,20 +44,17 @@ export function ScoutCard({
   className,
 }: ScoutCardProps) {
   return (
-    <article
-      className={cn(
-        "bg-cream shadow-soft duration-base flex h-full flex-col rounded-lg p-1.5 transition-opacity",
-        state === "dismissed" && "opacity-60",
-        className,
-      )}
-    >
+    <article className={cn("bg-cream shadow-soft flex h-full flex-col rounded-lg p-1.5", className)}>
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
         tabIndex={-1}
         aria-hidden
-        className="relative block aspect-4/3 w-full overflow-hidden rounded-md"
+        className={cn(
+          "duration-base relative block aspect-4/3 w-full overflow-hidden rounded-md transition-opacity",
+          state === "dismissed" && "opacity-50",
+        )}
       >
         {picture ? <Photo src={picture} alt="" eager className="size-full" /> : <div className="bg-well size-full" />}
         <span className="bg-veil text-on-veil text-small rounded-pill absolute bottom-2 left-2 inline-flex h-6 items-center px-2.5 font-semibold">
@@ -65,7 +62,12 @@ export function ScoutCard({
         </span>
       </a>
       <div className="flex flex-1 flex-col gap-1 px-2 pt-2.5 pb-1.5">
-        <h3 className="text-body text-ink line-clamp-2 font-semibold break-words">
+        <h3
+          className={cn(
+            "text-body text-ink line-clamp-2 font-semibold break-words",
+            state === "dismissed" && "text-ink-faint",
+          )}
+        >
           <a
             href={url}
             target="_blank"
@@ -77,16 +79,16 @@ export function ScoutCard({
             <span className="sr-only"> (opens {siteName})</span>
           </a>
         </h3>
-        <p className="text-small text-ink-soft text-pretty">{why}</p>
+        <p className="font-display text-body text-ink-soft text-pretty">{why}</p>
       </div>
-      <div className="flex items-center gap-1.5 px-0.5 pt-1 pb-0.5">
+      <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 pb-0.5">
         {state === "suggested" ? (
           <>
             <Button
               variant="secondary"
               icon={PlusIcon}
               onClick={onKeep}
-              className="bg-ink/5 hover:bg-ink/8 text-small flex-1 px-2 shadow-none"
+              className="bg-ink/5 hover:bg-ink/8 text-small min-w-24 flex-1 px-2 shadow-none"
             >
               Keep
             </Button>

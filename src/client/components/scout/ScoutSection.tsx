@@ -74,7 +74,7 @@ export default function ScoutSection({ where, showEmpty = true }: { where: "toda
         id="today-scout"
         title={scoutHeading(waiting.length)}
         size="overline"
-        description={<ClaudeLine>Picked by Claude from your wishlists and what you've printed</ClaudeLine>}
+        description={<ClaudeLine>Picked by Claude from your wishlists</ClaudeLine>}
       >
         <Cards picks={waiting} round="today" />
       </Section>
@@ -103,9 +103,9 @@ export default function ScoutSection({ where, showEmpty = true }: { where: "toda
   return (
     <Section
       id="week-scout"
-      title={waiting.length ? scoutHeading(waiting.length) : "This week's three"}
+      title="This week's three"
       size="overline"
-      description={<ClaudeLine>Picked by Claude from your wishlists and what you've printed</ClaudeLine>}
+      description={<ClaudeLine>Picked by Claude from your wishlists</ClaudeLine>}
     >
       <Cards picks={round.picks} round="week" />
     </Section>

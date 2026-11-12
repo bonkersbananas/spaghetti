@@ -255,15 +255,15 @@ function Today() {
                 </Suspense>
               )}
             </div>
-            <div className="order-2 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
-            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
-            <div className="order-3 empty:hidden">
+            <div className="order-2 empty:hidden">
               {!loading && hasScoutPicks && (
                 <Suspense fallback={null}>
                   <ScoutSection where="today" />
                 </Suspense>
               )}
             </div>
+            <div className="order-2 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
+            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
             <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>

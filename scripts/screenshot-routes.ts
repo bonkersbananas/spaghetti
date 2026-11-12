@@ -782,7 +782,21 @@ export const shots: Shot[] = [
     },
   },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
-  { name: "today", path: "/today", fullPage: true },
+  {
+    name: "today",
+    path: "/today",
+    fullPage: true,
+    // The scout's pictures come from the Worker: let them land before the shot.
+    prepare: async (page) => {
+      await page
+        .waitForFunction(() =>
+          Array.from(document.querySelectorAll("section[aria-labelledby=today-scout] img")).every(
+            (img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0,
+          ),
+        )
+        .catch(() => undefined);
+    },
+  },
   {
     // Both prints started four hours earlier than the seed says: past their estimates, so each asks how it went.
     // (The data is moved, not the browser's clock: jumping the clock back and forth stalls motion's animations.)
