@@ -151,3 +151,41 @@ test("phones: search is a button in the page header, and the tab bar has Today",
   // Search itself has no search button.
   await expect(page.getByRole("link", { name: "Search" })).toHaveCount(0);
 });
+
+test("Snap this print opens the capture sheet aimed at that print, and the photo joins its attempt", async ({
+  page,
+  isMobile,
+}) => {
+  const hook = await printing(page, "Towel hook", 30 * MINUTE, 90);
+  await printing(page, "Bath tugboat", 10 * MINUTE, 120);
+  await page.reload();
+  const card = page.locator("article").filter({ hasText: "Towel hook" });
+  await expect(card).toBeVisible();
+  if (isMobile) {
+    // The camera opens at once; the sheet comes up after the shot, already on "This print".
+    await card.getByTestId("snap-camera-input").setInputFiles("e2e/fixtures/tugboat.jpg");
+  } else {
+    await card.getByRole("button", { name: "Snap this print" }).click();
+  }
+  const sheet = page.getByRole("dialog", { name: "Add to the print" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("Towel hook, attempt 1, is printing.")).toBeVisible();
+  // Two prints on the bed: the sheet says which, and the other is one tap away.
+  await expect(sheet.getByRole("button", { name: "Towel hook · 1" })).toHaveAttribute("aria-pressed", "true");
+  await expect(sheet.getByRole("button", { name: "Bath tugboat · 1" })).toHaveAttribute("aria-pressed", "false");
+  if (!isMobile) await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
+  await sheet.getByRole("button", { name: "Add to print" }).click();
+  await expect(sheet).toBeHidden();
+  await expect
+    .poll(async () => {
+      const item = (await (await page.request.get(`/api/items/${hook.id}`)).json()).item;
+      return item.photos.filter((photo: { attemptId: string | null }) => photo.attemptId === hook.attempt).length;
+    })
+    .toBe(1);
+
+  // The + button after it starts on "New idea" again.
+  if (isMobile) {
+    await page.getByRole("button", { name: "New idea" }).first().click();
+    await expect(page.getByRole("dialog", { name: "New idea" })).toBeVisible();
+  }
+});

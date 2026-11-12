@@ -3,15 +3,18 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { OutcomePicker } from "@/components/builds/Outcome";
 import { Button } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { TextArea } from "@/components/ui/Field";
+import { ChipRow } from "@/components/ui/FilterChips";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
-import { usePrintingNow } from "@/lib/builds";
+import { printingAttempts, usePrintingNow } from "@/lib/builds";
 import { type CaptureTarget, useCapture } from "@/lib/capture";
+import { useBuilds } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -26,8 +29,10 @@ type Target =
  * second segment: the sheet always opens on "New idea".
  */
 function useCaptureTarget(): Target {
-  const { pageItem } = useCapture();
+  const { pageItem, aim } = useCapture();
   const printingNow = usePrintingNow();
+  // Opened from "Snap this print": that print, whatever else is on the bed or on screen.
+  if (aim) return { kind: "attempt", itemId: aim.itemId, attemptId: aim.attemptId, name: aim.name, number: aim.number };
   if (pageItem?.printing) {
     return {
       kind: "attempt",
@@ -68,22 +73,37 @@ function useCaptureTarget(): Target {
  * "This build" or "This print" (which can finish the print), one tap away.
  */
 export function CaptureSheet() {
-  const { open, setOpen, draft, setDraft, photos, addFiles, removePhoto, save, saveTo } = useCapture();
+  const { open, setOpen, draft, setDraft, photos, addFiles, removePhoto, save, saveTo, aim } = useCapture();
   const isDesktop = useIsDesktop();
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
   const library = useFilePicker({ multiple: true, onFiles: addFiles });
-  const auto = useCaptureTarget();
-  const [asIdea, setAsIdea] = useState(true);
+  const found = useCaptureTarget();
+  const { items: builds } = useBuilds();
+  const prints = printingAttempts(builds);
+  // With several prints on the bed, "This print" can be any of them: the one the sheet picked is only the start.
+  const [pickedPrint, setPickedPrint] = useState<string | null>(null);
+  const chosen = found.kind === "attempt" ? prints.find((p) => p.attempt.id === pickedPrint) : undefined;
+  const auto: Target = chosen
+    ? {
+        kind: "attempt",
+        itemId: chosen.item.id,
+        attemptId: chosen.attempt.id,
+        name: chosen.item.title || "the build",
+        number: chosen.attempt.number,
+      }
+    : found;
+  const [asIdea, setAsIdea] = useState(!aim);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   // Each time it opens, it starts on "New idea" again.
   useEffect(() => {
     if (!open) {
       setAsIdea(true);
       setOutcome(null);
-    }
-  }, [open]);
+      setPickedPrint(null);
+    } else if (aim) setAsIdea(false);
+  }, [open, aim]);
   const target: Target = asIdea ? { kind: "idea" } : auto;
   const canSave = !!draft.trim() || photos.length > 0 || (target.kind === "attempt" && !!outcome);
 
@@ -187,6 +207,20 @@ export function CaptureSheet() {
             onChange={(value) => setAsIdea(value === "idea")}
             className="w-full"
           />
+        )}
+        {!asIdea && auto.kind === "attempt" && prints.length > 1 && (
+          // Several prints: which one is this photo of? Named by the build; the first is where the sheet started.
+          <ChipRow label="Which print" wrap>
+            {prints.map(({ item, attempt }) => (
+              <ToggleChip
+                key={attempt.id}
+                selected={attempt.id === auto.attemptId}
+                onClick={() => setPickedPrint(attempt.id)}
+              >
+                {item.title || "Untitled build"} · {attempt.number}
+              </ToggleChip>
+            ))}
+          </ChipRow>
         )}
         {photos.length > 0 ? (
           <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pt-1 pb-1 md:-mx-6 md:px-6">
