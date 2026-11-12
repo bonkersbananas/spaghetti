@@ -44,7 +44,7 @@ export function ScoutCard({
   className,
 }: ScoutCardProps) {
   return (
-    <article className={cn("bg-cream shadow-soft flex h-full flex-col rounded-lg p-1.5", className)}>
+    <article className={cn("bg-cream shadow-soft @container flex h-full flex-col rounded-lg p-1.5", className)}>
       <div
         className={cn(
           "duration-base relative block aspect-4/3 w-full overflow-hidden rounded-md transition-opacity",
@@ -59,7 +59,7 @@ export function ScoutCard({
       <div className="flex flex-1 flex-col gap-1 px-2 pt-2.5 pb-1.5">
         <h3
           className={cn(
-            "text-body text-ink line-clamp-2 font-semibold break-words",
+            "text-small @xs:text-body text-ink line-clamp-2 font-semibold break-words",
             state === "dismissed" && "text-ink-faint",
           )}
         >
@@ -74,20 +74,20 @@ export function ScoutCard({
             <span className="sr-only"> (opens {siteName})</span>
           </a>
         </h3>
-        <p className="font-display text-body text-ink-soft text-pretty">{why}</p>
+        <p className="font-display text-small @xs:text-body text-ink-soft text-pretty">{why}</p>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 pb-0.5">
+      <div className="flex items-center gap-1 px-0.5 pt-1 pb-0.5">
         {state === "suggested" ? (
           <>
             <Button
               variant="secondary"
               icon={PlusIcon}
               onClick={onKeep}
-              className="bg-ink/5 hover:bg-ink/8 text-small min-w-24 flex-1 px-2 shadow-none"
+              className="bg-ink/5 hover:bg-ink/8 text-small min-w-0 flex-1 gap-1.5 px-2 shadow-none"
             >
               Keep
             </Button>
-            <Button variant="quiet" onClick={onDismiss} className="text-small px-2.5">
+            <Button variant="quiet" onClick={onDismiss} className="text-small shrink-0 px-2">
               Not for us
             </Button>
           </>

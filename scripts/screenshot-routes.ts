@@ -636,7 +636,7 @@ async function waitUntilEased(page: Page, title: string) {
  * The idea scout's week, answered from here: the Worker's clock is the real one, so what it keeps for "this week"
  * is a different Monday from the shots'. "none": the scout hasn't been out yet; "answered": one kept, one put away.
  */
-async function mockScout(page: Page, mode: "none" | "answered") {
+async function mockScout(page: Page, mode: "none" | "answered" | "one") {
   await page.route(/\/api\/scout$/, async (route) => {
     if (mode === "none") {
       await route.fulfill({ json: { scout: { monday: "2026-10-19", state: "none", picks: [] } } });
@@ -646,7 +646,7 @@ async function mockScout(page: Page, mode: "none" | "answered") {
     const body = (await response.json()) as { scout: { picks: Array<{ status: string; itemId: string | null }> } };
     const [first, second] = body.scout.picks;
     if (first) Object.assign(first, { status: "kept", itemId: SEED_IDS.desiccantHook });
-    if (second) second.status = "dismissed";
+    if (second && mode === "answered") second.status = "dismissed";
     await route.fulfill({ response, json: body });
   });
   await page.reload();
@@ -788,6 +788,7 @@ export const shots: Shot[] = [
     fullPage: true,
     // The scout's pictures come from the Worker: let them land before the shot.
     prepare: async (page) => {
+      await page.locator("section[aria-labelledby=today-scout] img").first().waitFor();
       await page
         .waitForFunction(() =>
           Array.from(document.querySelectorAll("section[aria-labelledby=today-scout] img")).every(
@@ -795,6 +796,22 @@ export const shots: Shot[] = [
           ),
         )
         .catch(() => undefined);
+      // The pictures fade in once decoded.
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    // One of the three answered: the block counts what is left.
+    name: "today-scout-answered",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockScout(page, "one");
+      await page.getByRole("heading", { name: "Two for you this week" }).waitFor();
+      await page.waitForTimeout(900);
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
     },
   },
   {
@@ -1277,6 +1294,8 @@ export const shots: Shot[] = [
       await withWeekMock(page, { waiting: true, note: true });
       await mockScout(page, "answered");
       await page.getByText("Not for us", { exact: true }).first().waitFor();
+      // The waiting card slides to the front once the page's own answer is in.
+      await page.waitForTimeout(1200);
     },
     cleanup: async (page) => {
       await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -1290,7 +1309,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await withWeekMock(page, { waiting: false, note: false });
       await mockScout(page, "none");
-      await waitUntilEased(page, "The scout is out shopping");
+      await page.getByText(/The scout is out shopping/).waitFor();
     },
     cleanup: async (page) => {
       await page.unrouteAll({ behavior: "ignoreErrors" });

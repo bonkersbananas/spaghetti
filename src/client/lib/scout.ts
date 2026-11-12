@@ -17,6 +17,12 @@ export const scoutQuery = queryOptions({
 /** Whether the scout is set up (the Worker has the key): nothing about it shows otherwise. */
 export const useScoutEnabled = () => useQuery(featuresQuery).data?.scout === true;
 
+/** Whether this page's own answer has come (not just the copy saved from last time). */
+export function useScoutFetched(): boolean {
+  const enabled = useScoutEnabled();
+  return useQuery({ ...scoutQuery, enabled }).isFetchedAfterMount;
+}
+
 /** This week's round, or undefined until it is known (and always while the scout isn't set up). */
 export function useScout(): ScoutRound | undefined {
   const enabled = useScoutEnabled();

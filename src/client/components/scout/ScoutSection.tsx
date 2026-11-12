@@ -2,13 +2,12 @@ import type { ScoutPick } from "@shared/scout";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m } from "motion/react";
-import { EmptyBasket } from "@/components/illustrations/EmptyBasket";
+import { useEffect, useRef, useState } from "react";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ScoutCard } from "@/components/ui/ScoutCard";
 import { Section } from "@/components/ui/Section";
 import { duration, ease } from "@/lib/motion";
-import { scoutPictureUrl, useScout, waitingPicks } from "@/lib/scout";
+import { scoutPictureUrl, useScout, useScoutFetched, waitingPicks } from "@/lib/scout";
 import { dismissPick, keepPick, undoDismiss, undoKeep } from "@/lib/scout-actions";
 
 const NUMBER_WORDS = ["No", "One", "Two", "Three"];
@@ -17,8 +16,24 @@ const NUMBER_WORDS = ["No", "One", "Two", "Three"];
 export const scoutHeading = (left: number) => `${NUMBER_WORDS[Math.min(left, 3)] ?? "Some"} for you this week`;
 
 /** The row of cards: a swipeable row with the next card peeking on phones, three columns from md. */
-function Cards({ picks, round }: { picks: ScoutPick[]; round: "today" | "week" }) {
+function Cards({ picks: current, round }: { picks: ScoutPick[]; round: "today" | "week" }) {
   const queryClient = useQueryClient();
+  // The ones still waiting come first when the row appears with the page's own answer; after that the order stays,
+  // so a card never jumps away from under a tap.
+  const waitingFirst = () =>
+    [...current]
+      .sort((x, y) => Number(y.status === "suggested") - Number(x.status === "suggested"))
+      .map((pick) => pick.id);
+  const fresh = useScoutFetched();
+  const [order, setOrder] = useState(waitingFirst);
+  const ordered = useRef(fresh);
+  useEffect(() => {
+    if (fresh && !ordered.current) {
+      ordered.current = true;
+      setOrder(waitingFirst());
+    }
+  });
+  const picks = [...current].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return (
     <ul className="no-scrollbar relative -mx-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0">
       <AnimatePresence initial={false}>
@@ -92,13 +107,9 @@ export default function ScoutSection({ where, showEmpty = true }: { where: "toda
   if (round.picks.length === 0) {
     if (!showEmpty) return null;
     return (
-      <EmptyState
-        className="py-4 md:py-8"
-        illustration={<EmptyBasket className="w-32" />}
-        title="The scout is out shopping"
-      >
-        Three models to print land here on Monday mornings, picked from your wishlists and what you've printed.
-      </EmptyState>
+      <Section id="week-scout" title="This week's three" size="overline">
+        <ClaudeLine>The scout is out shopping: three models to print land here on Monday mornings.</ClaudeLine>
+      </Section>
     );
   }
   return (
