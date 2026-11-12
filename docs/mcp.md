@@ -14,7 +14,7 @@ Other clients that speak MCP's OAuth (MCP Inspector, Claude Code's `/mcp` sign-i
 | --- | --- |
 | `GET /.well-known/oauth-protected-resource` (also under `/mcp`) | RFC 9728: the resource and its authorization server |
 | `GET /.well-known/oauth-authorization-server` | RFC 8414: the endpoints below, `code_challenge_methods_supported: ["S256"]` |
-| `POST /oauth/register` | RFC 7591: JSON `{ client_name, redirect_uris }`, answers `201` with a `client_id` (a `client_secret` only if the client asks for client authentication) |
+| `POST /oauth/register` | RFC 7591: JSON `{ client_name, redirect_uris }`, answers `201` with a `client_id` (a `client_secret` only if the client asks for client authentication); at most 20 an hour from one address (`429` after) |
 | `/authorize` | The consent screen (a page, not an API): `response_type=code`, `client_id`, `redirect_uri`, `code_challenge` (S256 only), `state`, optional `scope` (`read capture attempts printer`, default all) and `resource` |
 | `POST /oauth/token` | `authorization_code` (with `code_verifier`) and `refresh_token` (each refresh token works once and comes back replaced); answers `access_token` (`spg_…`, one hour), `refresh_token` (`spr_…`), `scope` |
 | `POST /oauth/revoke` | RFC 7009: ends the connection from the app's side |
