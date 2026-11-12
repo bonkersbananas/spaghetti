@@ -22,9 +22,9 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 
-// Webhooks and their sheet load on their own, after the page: the Agents screen's first load stays as it was.
 const PUBLISHED_REFERENCE = "https://github.com/bonkersbananas/spaghetti/blob/main/docs/openapi.json";
 
+// Webhooks and their sheet load on their own, after the page: the Agents screen's first load stays as it was.
 const Webhooks = lazy(() => import("@/components/agents/Webhooks"));
 
 export const Route = createFileRoute("/_app/agents")({

@@ -215,8 +215,10 @@ test("the installed app opens the published API reference on another origin, whi
   const opened = context.waitForEvent("page");
   await page.getByRole("link", { name: "API reference" }).click();
   const tab = await opened;
-  await tab.waitForURL(/github\.com\/bonkersbananas\/spaghetti\/blob\/main\/docs\/openapi\.json/).catch(() => {});
-  expect(new URL(tab.url()).hostname).not.toBe(new URL(page.url()).hostname);
+  // "commit": the tab may not finish loading where there is no network, but it must be asked for the GitHub copy.
+  await tab.waitForURL(/^https:\/\/github\.com\/bonkersbananas\/spaghetti\/blob\/main\/docs\/openapi\.json$/, {
+    waitUntil: "commit",
+  });
   expect(new URL(page.url()).pathname).toBe("/agents");
   await tab.close();
 });
