@@ -30,6 +30,13 @@ interface CaptureContextValue {
   photos: DraftPhoto[];
   addFiles: (files: Iterable<File>) => void;
   removePhoto: (id: string) => void;
+  /**
+   * A print the sheet was opened for ("Snap this print" on Today's cards): the sheet starts on "This print" with it
+   * aimed, and forgets it when it closes. Null otherwise, and then the sheet opens on "New idea".
+   */
+  aim: PrintAim | null;
+  /** Opens the sheet aimed at a print, with its photos already in when the camera came first. */
+  snapPrint: (aim: PrintAim, files?: Iterable<File>) => void;
   /** Opens the sheet with photos or text already in it (paste, drop). */
   openWith: (input: { files?: Iterable<File>; text?: string }) => void;
   /** Saves the capture to the outbox and closes the sheet at once. Returns the new id. */
@@ -59,6 +66,15 @@ export interface SharedInput {
   text?: string | null;
   url?: string | null;
   files?: Iterable<File>;
+}
+
+/** A print on the bed, as the capture sheet needs it. */
+export interface PrintAim {
+  itemId: string;
+  attemptId: string;
+  /** The build's name, for the sheet to say which print it is. */
+  name: string;
+  number: number;
 }
 
 /** What the capture sheet needs to know about the idea or build on screen. */
@@ -142,6 +158,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
   const { photos, photosRef, addFiles, removePhoto, clear: clearPhotos } = useDraftPhotos();
   // The idea or build on screen, which captures go to while it shows.
   const [pageItem, setPageItem] = useState<PageItem | null>(null);
+  const [aim, setAim] = useState<PrintAim | null>(null);
   const [landed, setLanded] = useState<string | null>(null);
   const [shared, setShared] = useState<string | null>(null);
   // The welcome animation plays once, on the inbox the capture lands in.
@@ -150,6 +167,10 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => setLanded(null), 1500);
     return () => clearTimeout(timer);
   }, [landed]);
+  // The aim is for one opening of the sheet: the + button after it starts on "New idea" again.
+  useEffect(() => {
+    if (!open) setAim(null);
+  }, [open]);
   const setDraft = useCallback((value: string) => {
     setDraftState(value);
     try {
@@ -172,6 +193,15 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
           return next;
         });
       }
+      setOpen(true);
+    },
+    [addFiles],
+  );
+
+  const snapPrint = useCallback(
+    (target: PrintAim, files?: Iterable<File>) => {
+      setAim(target);
+      if (files) addFiles(files);
       setOpen(true);
     },
     [addFiles],
@@ -329,6 +359,8 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       photos,
       addFiles,
       removePhoto,
+      aim,
+      snapPrint,
       openWith,
       save,
       saveTo,
@@ -346,6 +378,8 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       photos,
       addFiles,
       removePhoto,
+      aim,
+      snapPrint,
       openWith,
       save,
       saveTo,

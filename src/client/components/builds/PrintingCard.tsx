@@ -6,12 +6,13 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
-import { BuildsIcon } from "@/components/ui/icons";
+import { Button, IconButton } from "@/components/ui/Button";
+import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto } from "@/lib/builds";
+import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
 import { duration } from "@/lib/motion";
@@ -78,6 +79,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   const name = itemName(item);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
+
+  // "Snap this print": on a phone the camera opens at once and the photo lands in the capture sheet already aimed at
+  // this print; on desktop (no camera) the sheet opens aimed, ready for a drop or a note.
+  const { snapPrint } = useCapture();
+  const camera = useRef<HTMLInputElement>(null);
+  const aim = { itemId: item.id, attemptId: attempt.id, name: item.title || "the build", number: attempt.number };
 
   const finish = (outcome?: Outcome) =>
     void navigate({
@@ -215,16 +222,35 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                   >
                     {progress.label}
                   </p>
-                  {!due && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => finish()}
-                      className="pointer-events-auto shrink-0"
-                    >
-                      Finish
-                    </Button>
-                  )}
+                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
+                    {!readOnly && (
+                      <IconButton
+                        icon={CameraIcon}
+                        label="Snap this print"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => (isDesktop ? snapPrint(aim) : camera.current?.click())}
+                      />
+                    )}
+                    {!due && (
+                      <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
+                        Finish
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    ref={camera}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    hidden
+                    data-testid="snap-camera-input"
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      event.target.value = "";
+                      if (files.length) snapPrint(aim, files);
+                    }}
+                  />
                 </div>
               </div>
               {due && (
