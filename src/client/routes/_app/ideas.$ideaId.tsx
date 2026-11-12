@@ -350,13 +350,15 @@ function Idea({ item }: { item: ItemView }) {
               >
                 My wishlist
               </ToggleChip>
-              <ToggleChip
-                icon={SlicerFileIcon}
-                disabled={readOnly || item.pending}
-                onClick={() => filePicker.current?.click()}
-              >
-                Add a file
-              </ToggleChip>
+              {files.length === 0 && (
+                <ToggleChip
+                  icon={SlicerFileIcon}
+                  disabled={readOnly || item.pending}
+                  onClick={() => filePicker.current?.click()}
+                >
+                  Add a file
+                </ToggleChip>
+              )}
               <input
                 ref={filePicker}
                 type="file"
@@ -374,11 +376,6 @@ function Idea({ item }: { item: ItemView }) {
             {model && !model.url.startsWith("/api/files/") && (
               <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />
             )}
-            {files.length > 0 && (
-              <Suspense fallback={null}>
-                <ItemFiles itemId={item.id} files={files} readOnly={offline} />
-              </Suspense>
-            )}
             <NoteField
               value={note}
               onChange={setNote}
@@ -387,6 +384,16 @@ function Idea({ item }: { item: ItemView }) {
             />
             <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
             <NoteLinks note={note} skip={model?.url} />
+            {files.length > 0 && (
+              <Suspense fallback={null}>
+                <ItemFiles
+                  itemId={item.id}
+                  files={files}
+                  readOnly={readOnly || item.pending}
+                  onAdd={() => filePicker.current?.click()}
+                />
+              </Suspense>
+            )}
 
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
               {person && <Avatar person={person} size="sm" via={via} />}

@@ -1155,7 +1155,6 @@ export const shots: Shot[] = [
     // A second file added to the idea: it shows at once, with the plate's picture.
     name: "idea-file-added",
     path: `/ideas/${SEED_IDS.bigTugboat}`,
-    fullPage: true,
     prepare: async (page) => {
       await page.getByTestId("idea-file-input").setInputFiles({
         name: SLICER_FILE_NAME,
@@ -1163,6 +1162,13 @@ export const shots: Shot[] = [
         buffer: Buffer.from(slicerFile()),
       });
       await page.getByText(SLICER_FILE_NAME).waitFor();
+    },
+    // Both cards in view, clear of the action bar and the tab bar on a phone.
+    beforeShot: async (page) => {
+      await page.getByRole("button", { name: "Add another file" }).evaluate((button) => {
+        button.scrollIntoView({ block: "center" });
+      });
+      await page.waitForTimeout(300);
     },
   },
   {

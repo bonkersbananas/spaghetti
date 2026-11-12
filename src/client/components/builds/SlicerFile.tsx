@@ -46,6 +46,8 @@ interface FileCardProps {
   onRemove?: () => void;
   /** On a story card: no box of its own and a smaller plate. */
   compact?: boolean;
+  /** A raised card (like a model's link card) with a larger plate; on desktop it hugs its content and Remove shows on hover. */
+  raised?: boolean;
   className?: string;
 }
 
@@ -59,15 +61,30 @@ export function FileCard({
   plateOverlay,
   onRemove,
   compact,
+  raised,
   className,
 }: FileCardProps) {
   return (
-    <div className={cn("flex items-center gap-3", compact ? "-mr-1.5" : "bg-ink/3 rounded-lg p-2.5 pr-1.5", className)}>
+    <div
+      className={cn(
+        "flex items-center gap-3",
+        compact
+          ? "-mr-1.5"
+          : raised
+            ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5 md:w-fit md:max-w-full"
+            : "bg-ink/3 rounded-lg p-2.5 pr-1.5",
+        className,
+      )}
+    >
       <span className="relative shrink-0">
-        <PlateThumb src={thumbSrc} alt="The plate, as sliced" className={compact ? "size-12" : "size-16"} />
+        <PlateThumb
+          src={thumbSrc}
+          alt="The plate, as sliced"
+          className={compact ? "size-12" : raised ? "size-20" : "size-16"}
+        />
         {plateOverlay}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className={cn("flex min-w-0 flex-col gap-0.5", raised ? "flex-1 md:flex-none md:pr-3" : "flex-1")}>
         <span className="text-small text-ink truncate font-semibold" title={name}>
           {name}
         </span>
@@ -91,7 +108,15 @@ export function FileCard({
           <DownloadIcon size={20} aria-hidden />
         </a>
       )}
-      {onRemove && <IconButton icon={CloseIcon} label="Remove the slicer file" size="sm" onClick={onRemove} />}
+      {onRemove && (
+        <IconButton
+          icon={CloseIcon}
+          label="Remove the slicer file"
+          size="sm"
+          onClick={onRemove}
+          className={raised ? "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100" : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -118,10 +143,12 @@ export function SavedFileCard({
   printing,
   onRemove,
   compact,
+  raised,
   className,
 }: {
   file: AttemptFileView;
   compact?: boolean;
+  raised?: boolean;
   /** The attempt, while it prints: the 3D view then follows the printer. */
   printing?: PrintingAttempt;
   /** The attempt's filaments: their colours stand in for any the file doesn't give. */
@@ -144,6 +171,7 @@ export function SavedFileCard({
       }
       onRemove={onRemove}
       compact={compact}
+      raised={raised}
       className={className}
     />
   );
