@@ -14,6 +14,15 @@ export const signOutSettled = () => signingOut;
 let leaving = false;
 export const isSigningOut = () => leaving;
 
+/**
+ * A session the server ended (from another device, a changed password) leaves this browser's own HTTP cache: photos
+ * are kept there a year and served without asking. Only an answer from the server can empty it, the sign-out's
+ * `Clear-Site-Data: "cache"`, so the device asks for one; it also drops the dead cookie. Signing in again waits for it.
+ */
+export function forgetEndedSession() {
+  signingOut = api("/session", { method: "DELETE", keepalive: true }).catch(() => undefined);
+}
+
 /** Signs out at once: the device forgets everything and shows sign-in while the server ends the session. */
 export function useSignOut() {
   const queryClient = useQueryClient();

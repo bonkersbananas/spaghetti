@@ -15,7 +15,7 @@ import type { Db } from "../db/index.ts";
 import { attempts, items, upkeepLogs, upkeepTasks } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
-import { photoKey } from "../photos.ts";
+import { photoKey, photoOwner } from "../photos.ts";
 
 const HISTORY = 5;
 const id = z.uuid();
@@ -287,6 +287,10 @@ export const upkeepRoutes = new Hono<AppEnv>()
       .where(and(eq(upkeepLogs.id, logId), isNull(upkeepLogs.deletedAt)))
       .get();
     if (!current) return apiError(c, 404, "not_found", "That entry isn't in the log any more.");
+    const owner = await photoOwner(db, photoId);
+    if (owner && owner !== `log:${logId}`) {
+      return apiError(c, 409, "conflict", "That photo belongs to something else.");
+    }
     const form = await c.req.formData().catch(() => null);
     const parsed = photoFields.safeParse(form ? Object.fromEntries(form) : null);
     const large = form?.get("large");

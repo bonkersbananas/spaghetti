@@ -8,6 +8,17 @@ import { authorizeParams, checkAuthorizeRequest, issueCode, returnTo } from "../
 export const decision = authorizeParams.extend({ approve: z.boolean() });
 
 /**
+ * Where the consent screen says the app returns to: the host of a web address, and an app's own scheme with its host
+ * ("someapp://claude.ai"), since such an address goes to whichever app on the device claims the scheme, not to that
+ * host. Showing the host alone would let any app look like the site it names.
+ */
+export function returnsTo(redirectUri: string): string {
+  const url = new URL(redirectUri);
+  if (url.protocol === "https:" || url.protocol === "http:") return url.host;
+  return url.host ? `${url.protocol}//${url.host}` : url.protocol;
+}
+
+/**
  * The consent screen's two calls, for a signed-in person only (the guard in app.ts refuses tokens): what is asked,
  * and the answer. The protocol's own endpoints are in worker/oauth/index.ts.
  */
@@ -17,7 +28,7 @@ export const oauthRoutes = new Hono<AppEnv>()
     if (!checked.ok) return apiError(c, 400, checked.error, checked.description);
     return c.json<AuthorizeRequestInfo>({
       app: checked.client.name,
-      returnsTo: new URL(checked.params.redirect_uri).host || new URL(checked.params.redirect_uri).protocol,
+      returnsTo: returnsTo(checked.params.redirect_uri),
       scopes: checked.scopes,
     });
   })

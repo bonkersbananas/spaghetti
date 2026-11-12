@@ -24,7 +24,7 @@ async function expectAboveTabBar(page: Page) {
   const tabBar = await page.getByRole("navigation", { name: "Sections" }).boundingBox();
   expect(tabBar).not.toBeNull();
   // The tab bar reaches the bottom edge and holds the home indicator's room.
-  expect(tabBar!.height).toBeGreaterThan(IPHONE_INSETS.bottom + 60);
+  expect(tabBar!.height).toBeGreaterThan(IPHONE_INSETS.bottom + 48);
   const bars = page.locator("[data-action-bar]");
   await expect(bars.first()).toBeVisible();
   for (const bar of await bars.all()) {

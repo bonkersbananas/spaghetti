@@ -42,8 +42,10 @@ test("J and K also walk Today's cards", async ({ page }) => {
   await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
   await page.goto("/today");
   await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
-  await page.keyboard.press("j");
   const first = page.locator("main [data-picks] a[href]").first();
+  // The build's card arrives after the heading: a J before it has nothing to walk to.
+  await expect(first).toBeVisible();
+  await page.keyboard.press("j");
   await expect(first).toBeFocused();
 });
 

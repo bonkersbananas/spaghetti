@@ -30,7 +30,7 @@ import {
   touchFields,
 } from "../label-read/run.ts";
 import { gramsFor, loadUsage, loadWeighings } from "../ledger.ts";
-import { photoKey } from "../photos.ts";
+import { photoKey, photoOwner } from "../photos.ts";
 import { attemptHits } from "./search.ts";
 
 const id = z.uuid();
@@ -440,6 +440,10 @@ export const spoolRoutes = new Hono<AppEnv>()
       .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
       .get();
     if (!current) return apiError(c, 404, "not_found", notFound);
+    const owner = await photoOwner(db, photoId);
+    if (owner && owner !== `spool:${spoolId}`) {
+      return apiError(c, 409, "conflict", "That photo belongs to something else.");
+    }
     const form = await c.req.formData().catch(() => null);
     const parsed = photoFields.safeParse(form ? Object.fromEntries(form) : null);
     const large = form?.get("large");
