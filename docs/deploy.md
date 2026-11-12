@@ -30,7 +30,7 @@ One-time setup (the bucket, the domain's `www` record and redirect rule, the zon
 pnpm ship
 ```
 
-(pnpm has its own `deploy` command, as it has `doctor`, so ours is `ship`. It is `scripts/ship.ts`.) It runs `pnpm build`, applies the remote migrations (`wrangler d1 migrations apply DB --remote`) and then `wrangler deploy`. Migrations go first, so a schema change must keep the running version working (add, don't rename or drop in one step).
+(pnpm has its own `deploy` command, as it has `doctor`, so ours is `ship`. It is `scripts/ship.ts`.) It runs `pnpm build`, applies the remote migrations (`wrangler d1 migrations apply DB --remote`) and then `wrangler deploy`. `pnpm ship --help` prints the usage and deploys nothing; `--message "<text>"` sets the version message, and any other argument is refused. Migrations go first, so a schema change must keep the running version working (add, don't rename or drop in one step).
 
 Check a deploy with `curl https://spaghetti.day/api/health`, which answers `{"ok":true}`.
 
