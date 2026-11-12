@@ -57,6 +57,15 @@
     font-feature-settings: "ss01" off;
   }
 
+  /* No page zoom on a touch screen, pinch or double tap (decision 0039): the page pans, a photo zooms itself
+     (lib/photo-zoom.ts). Mouse and trackpad keep the browser's zoom. The pull-to-go gesture narrows this
+     further at the top of a phone's page. */
+  @media (pointer: coarse) {
+    html {
+      touch-action: pan-x pan-y;
+    }
+  }
+
   body {
     /* No min-height in viewport units: iOS's standalone app can report a viewport taller than the screen
        (by the bottom inset) after resuming, which made the document scroll and the fixed tab bar sit low. */
