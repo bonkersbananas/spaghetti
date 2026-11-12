@@ -83,7 +83,7 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search emoji, like fire or pasta"
-          className="text-body text-ink placeholder:text-ink-faint min-w-0 flex-1 bg-transparent outline-none"
+          className="text-body text-ink placeholder:text-ink-faint min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 shadow-none outline-none"
         />
       </div>
       <Frimousse.SkinToneSelector
@@ -112,7 +112,7 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
             </p>
             <ul className="flex flex-wrap" aria-label="Recently used">
               {recent.slice(0, 8).map((emoji) => (
-                <li key={emoji} className="flex flex-1 basis-0">
+                <li key={emoji} className="flex basis-1/8">
                   <EmojiButton
                     emoji={emoji}
                     label={emoji}
@@ -125,7 +125,7 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
             </ul>
           </div>
         )}
-        <Frimousse.Viewport className={cn("min-h-0", sheet ? "h-[min(38dvh,20rem)]" : "h-64")}>
+        <Frimousse.Viewport className={cn("min-h-0", sheet ? "h-[min(40dvh,22rem)]" : "h-64")}>
           <Frimousse.Loading className="text-small text-ink-faint absolute inset-0 flex items-center justify-center">
             Loading emoji…
           </Frimousse.Loading>
@@ -145,8 +145,16 @@ function EmojiButton({
   label,
   given,
   sheet,
+  recent,
   ...props
-}: Omit<ComponentProps<"button">, "children"> & { emoji: string; label: string; given?: boolean; sheet: boolean }) {
+}: Omit<ComponentProps<"button">, "children"> & {
+  emoji: string;
+  label: string;
+  given?: boolean;
+  sheet: boolean;
+  /** In the recent row, where the list item is the eighth. */
+  recent?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -155,8 +163,10 @@ function EmojiButton({
       aria-pressed={given}
       title={label}
       className={cn(
-        "font-emoji data-[active]:bg-ink/8 flex flex-1 items-center justify-center rounded-md transition-colors",
+        "font-emoji data-[active]:bg-ink/8 flex flex-none items-center justify-center rounded-md transition-colors",
         sheet ? "text-headline h-12" : "text-title h-9",
+        // A grid cell is an eighth of the row; in the recent row the list item is.
+        recent ? "w-full" : "basis-1/8",
         given && "bg-tomato-soft ring-tomato/30 ring-1 ring-inset",
       )}
     >

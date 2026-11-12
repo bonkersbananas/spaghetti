@@ -1857,6 +1857,20 @@ export const shots: Shot[] = [
     },
   },
   {
+    name: "reactions-idea-picker-more",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const button = page.getByRole("button", { name: "React to this idea" });
+      await button.evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        (el as HTMLElement).click();
+      });
+      await page.getByRole("button", { name: "More emoji" }).click();
+      await page.getByRole("gridcell").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     name: "reactions-idea-picker-full",
     path: `/ideas/${SEED_IDS.deskTidy}`,
     prepare: async (page) => {

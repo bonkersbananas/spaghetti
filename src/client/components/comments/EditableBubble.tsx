@@ -186,7 +186,7 @@ export function EditableBubble({
       {/* On a phone the other person's message has no button beside it: it would stick out past a full-width bubble
           and widen the page. A tap on the bubble opens the sheet; a message that is only a link has its smiley under it. */}
       {mine && menuButton}
-      <Sheet open={menuOpen} onOpenChange={changeMenu} tall={more} title={mine ? "Your comment" : `React to ${label}`}>
+      <Sheet open={menuOpen} onOpenChange={changeMenu} title={mine ? "Your comment" : `React to ${label}`}>
         {rows(() => changeMenu(false))}
       </Sheet>
     </>

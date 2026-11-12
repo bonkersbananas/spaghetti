@@ -91,7 +91,6 @@ export default function ItemReactions({ itemId, reactions, noun, readOnly, class
               if (!open) setMore(false);
             }}
             title={title}
-            tall={more}
           >
             <ReactionPicker
               layout="sheet"
