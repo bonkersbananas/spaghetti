@@ -75,15 +75,20 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
     pause.current = window.setTimeout(send, TICK_PAUSE);
   }
   // Leaving the screen mid-pause still buys it: the tick was made.
-  useEffect(
-    () => () => {
+  // The page going away (a reload, the app swiped off a phone) counts as leaving too: unmount doesn't run then.
+  useEffect(() => {
+    const sendNow = () => {
       if (pause.current === null) return;
       window.clearTimeout(pause.current);
       pause.current = null;
       tickRef.current(true);
-    },
-    [],
-  );
+    };
+    window.addEventListener("pagehide", sendNow);
+    return () => {
+      window.removeEventListener("pagehide", sendNow);
+      sendNow();
+    };
+  }, []);
   const links = (
     <>
       {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}

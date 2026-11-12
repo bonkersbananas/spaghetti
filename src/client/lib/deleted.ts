@@ -18,6 +18,11 @@ function without(queryClient: QueryClient, drop: (list: Listed) => Listed) {
   queryClient.setQueryData<Listed>(deletedQuery.queryKey, (list) => (list ? drop(list) : list));
 }
 
+/**
+ * Both restores are small POSTs, so api() sends them with keepalive (lib/keepalive.ts): an Undo or Restore tapped
+ * right before the app closes still lands.
+ */
+
 /** Brings a deleted idea or build back (with its photos and attempts), at once in the list. */
 export async function restoreDeletedItem(queryClient: QueryClient, entry: DeletedItem, view: () => void) {
   without(queryClient, (list) => ({ ...list, items: list.items.filter((item) => item.id !== entry.id) }));
