@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
 import { Section } from "@/components/ui/Section";
 import { useVia } from "@/lib/agents";
@@ -18,8 +18,8 @@ const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 const ScoutRow = lazy(() => import("@/components/scout/ScoutRow"));
 
 /**
- * What is happening now, at the top of the phone's Journal (it replaces the Today tab): the prints on the bed (the
- * first one big, the rest compact, with the camera and Finish), the other person's new comments, upkeep that is
+ * What is happening now, at the top of the phone's Journal (it replaces the Today tab): under a "Now" label, the prints on the
+ * bed (all compact, with the camera and Finish, so the journal still starts on the first screen), the other person's new comments, upkeep that is
  * due and the scout's picks when they are new. Each part is drawn only when it has something to say, so a quiet
  * day has no block at all and the journal starts at the top.
  */
@@ -35,17 +35,19 @@ export default function Now() {
   const onBed = useMemo(() => printingAttempts(builds.items, now, live), [builds.items, now, live]);
 
   return (
-    <div className="flex flex-col gap-5 has-[>*:not(:empty)]:mb-8">
-      <AnimatePresence initial={false}>
-        {onBed.length > 0 && (
-          <m.div
-            key="bed"
-            exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.base, ease: ease.inOut } }}
-          >
-            <Block count={onBed.length}>
-              <div className="flex flex-col gap-3">
+    // The whole block is hidden (and takes no margin with it) while none of its parts has anything to show.
+    <Section id="now" title="Now" size="overline" className="mb-8 [&:not(:has(.now-parts>:not(:empty)))]:hidden">
+      <div className="now-parts flex flex-col gap-3">
+        <AnimatePresence initial={false}>
+          {onBed.length > 0 && (
+            <m.div
+              key="bed"
+              exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.base, ease: ease.inOut } }}
+            >
+              {/* All compact (a small square picture beside the name): the journal must still start on the first screen. */}
+              <section aria-label="On the bed" className="flex flex-col gap-3">
                 <AnimatePresence initial={false}>
-                  {onBed.map(({ item, attempt }, index) => (
+                  {onBed.map(({ item, attempt }) => (
                     <m.div
                       key={attempt.id}
                       exit={{
@@ -56,8 +58,7 @@ export default function Now() {
                       }}
                     >
                       <PrintingCard
-                        compact={index > 0}
-                        shallow
+                        compact
                         item={item}
                         attempt={attempt}
                         person={people?.find((person) => person.id === attempt.createdBy)}
@@ -66,37 +67,29 @@ export default function Now() {
                     </m.div>
                   ))}
                 </AnimatePresence>
-              </div>
-            </Block>
-          </m.div>
-        )}
-      </AnimatePresence>
-      <div className="flex flex-col gap-2 empty:hidden">
-        <Suspense fallback={null}>
-          <CommentsLine bare />
-        </Suspense>
-        {hasDueUpkeep && (
+              </section>
+            </m.div>
+          )}
+        </AnimatePresence>
+        {/* The two quiet lines sit together: each row already has its own 44 px of room. */}
+        <div className="-my-1 empty:hidden">
           <Suspense fallback={null}>
-            <UpkeepLine />
+            <CommentsLine bare />
           </Suspense>
-        )}
+          {hasDueUpkeep && (
+            <Suspense fallback={null}>
+              <UpkeepLine />
+            </Suspense>
+          )}
+        </div>
+        <div className="empty:hidden">
+          {hasScoutPicks && (
+            <Suspense fallback={null}>
+              <ScoutRow />
+            </Suspense>
+          )}
+        </div>
       </div>
-      {hasScoutPicks && (
-        <Suspense fallback={null}>
-          <ScoutRow />
-        </Suspense>
-      )}
-    </div>
-  );
-}
-
-/** The prints' block: a small label that counts when there are several; one print says "Printing" on its own card. */
-function Block({ count, children }: { count: number; children: ReactNode }) {
-  return count > 1 ? (
-    <Section id="now-bed" title="On the bed" size="overline" count={count}>
-      {children}
     </Section>
-  ) : (
-    <section aria-label="On the bed">{children}</section>
   );
 }

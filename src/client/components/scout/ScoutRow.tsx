@@ -34,7 +34,7 @@ export default function ScoutRow() {
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-body text-ink font-semibold">{scoutHeading(waiting.length)}</span>
-        <span className="text-small text-ink-faint truncate">Picked by Claude from your wishlists</span>
+        <span className="text-small text-ink-faint truncate">Picked by Claude</span>
       </span>
       <NextIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
     </Link>

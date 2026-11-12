@@ -41,6 +41,7 @@ test("phones: the journal opens on what is on the bed, and Finish leads to that 
   await page.goto("/journal");
 
   const bed = page.getByRole("region", { name: "On the bed" });
+  await expect(page.getByRole("heading", { name: "Now" })).toBeVisible();
   await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
   await expect(bed.getByRole("button", { name: "Snap this print" })).toBeVisible();
   // The notebook itself is still on the same screen, under it.
@@ -55,10 +56,8 @@ test("phones: with nothing printing the journal has no Now block", { tag: "@phon
   await page.goto("/journal");
   await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
   await expect(page.getByRole("region", { name: "On the bed" })).toHaveCount(0);
-  // And it leaves no gap behind: the journal starts where the header ends.
-  const now = page.locator("main header + div");
-  await expect(now).toHaveCount(1);
-  await expect(now).toHaveCSS("margin-bottom", "0px");
+  // And it leaves nothing behind: no "Now" label, no gap.
+  await expect(page.getByRole("heading", { name: "Now" })).toHaveCount(0);
 });
 
 test("desktop: the journal has no Now block (Today is in the sidebar)", async ({ page, isMobile }) => {
