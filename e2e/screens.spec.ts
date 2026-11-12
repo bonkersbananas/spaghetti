@@ -325,8 +325,6 @@ async function smallTargets(page: Page, within = "body") {
     );
     for (const control of Array.from(controls)) {
       if (control.closest("[aria-hidden=true], [inert]")) continue;
-      // Marked by hand where 44 px can't fit and the same thing is a big target nearby (the outcome strip's dots).
-      if (control.hasAttribute("data-small-target")) continue;
       const box = control.getBoundingClientRect();
       // Hidden, or a native radio under a drawn control (SegmentedControl).
       if (box.width <= 1 || box.height <= 1) continue;
