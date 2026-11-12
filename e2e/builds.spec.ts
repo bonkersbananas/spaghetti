@@ -230,13 +230,14 @@ test("the story column stays reachable in a short window", async ({ page, isMobi
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Tall notes");
   // A sticky column taller than the window would leave its end out of reach while the attempts scroll: it fits the
   // window and scrolls inside itself instead.
-  const column = page.locator("article .md\\:sticky");
+  const column = page.locator("article .sticky-column");
   const box = await column.evaluate((el) => ({
     height: el.getBoundingClientRect().height,
     scrolls: el.scrollHeight > el.clientHeight,
   }));
   expect(box.height).toBeLessThanOrEqual(600);
   expect(box.scrolls).toBe(true);
+});
 
 test("the summary's attempt tiles are touch targets and mark the open attempt", { tag: "@phone" }, async ({
   page,

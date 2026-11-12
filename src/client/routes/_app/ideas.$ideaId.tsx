@@ -211,7 +211,7 @@ function Idea({ item }: { item: ItemView }) {
         className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}
       >
         {hasPhotos && (
-          <div className="flex flex-col gap-4 md:sticky md:top-6 md:-m-2 md:max-h-[calc(100dvh-3rem)] md:min-w-0 md:flex-2 md:[scrollbar-width:thin] md:overflow-y-auto md:p-2 md:*:shrink-0">
+          <div className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
             <PhotoViewer
               photos={photos}
               index={selectedIndex}
