@@ -35,8 +35,9 @@ const FILLER = new Set(
     "what which who how did do does we i me my our the a an of for about with that this it is was were are and or " +
     "in on to at from when where show find tell last time times again idea ideas build builds print prints printed " +
     "attempt attempts try tries thing things some any said say says wrote write told think thought " +
+    "settings setting profile profiles parameters parameter params config configuration " +
     "vad hur som med av en ett det den de vi jag mitt vart min mina om till fran och eller senast sist gang gangen " +
-    "ide ideer bygge bygget utskrift forsok"
+    "ide ideer bygge bygget utskrift forsok installning installningar installningarna profil profiler"
   ).split(" "),
 );
 
