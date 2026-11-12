@@ -216,6 +216,15 @@ const liveItem = (c: { var: AppEnv["Variables"] }, itemId: string) =>
     .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
     .get();
 
+/** How many files an item keeps now (not removed). */
+const liveFileCount = async (c: { var: AppEnv["Variables"] }, itemId: string) =>
+  (
+    await c.var.db
+      .select({ id: itemFiles.id })
+      .from(itemFiles)
+      .where(and(eq(itemFiles.itemId, itemId), isNull(itemFiles.deletedAt)))
+  ).length;
+
 /** The most files an idea or build keeps. */
 export const MAX_ITEM_FILES = 20;
 
@@ -254,14 +263,9 @@ export const itemFileRoutes = new Hono<AppEnv>()
     if (existing && existing.itemId !== itemId) {
       return apiError(c, 409, "conflict", "That file belongs to another idea.");
     }
-    if (!existing) {
-      const live = await db
-        .select({ id: itemFiles.id })
-        .from(itemFiles)
-        .where(and(eq(itemFiles.itemId, itemId), isNull(itemFiles.deletedAt)));
-      if (live.length >= MAX_ITEM_FILES) {
-        return apiError(c, 409, "too_many", `An idea keeps at most ${MAX_ITEM_FILES} files.`);
-      }
+    // A new file, or a removed one coming back by its id, takes a place: the limit counts the live ones.
+    if ((!existing || existing.deletedAt) && (await liveFileCount(c, itemId)) >= MAX_ITEM_FILES) {
+      return apiError(c, 409, "too_many", `An idea keeps at most ${MAX_ITEM_FILES} files.`);
     }
     const stored = file instanceof File;
     const hasThumb = thumb instanceof File;
@@ -332,6 +336,9 @@ export const itemFileRoutes = new Hono<AppEnv>()
     const itemId = c.req.param("id");
     const fileId = c.req.param("fileId");
     if (!(await liveItem(c, itemId))) return apiError(c, 404, "not_found", "That idea isn't here any more.");
+    if ((await liveFileCount(c, itemId)) >= MAX_ITEM_FILES) {
+      return apiError(c, 409, "too_many", `An idea keeps at most ${MAX_ITEM_FILES} files.`);
+    }
     const db = c.var.db;
     const [[row]] = await db.batch([
       db

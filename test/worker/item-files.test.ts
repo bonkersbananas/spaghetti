@@ -102,6 +102,19 @@ describe("files on an idea", () => {
     ]);
   });
 
+  it("keeps at most 20 live files, also when one is restored or put again", async () => {
+    const item = await idea();
+    const first = uuid();
+    await put(item.id, first);
+    await request(`/api/items/${item.id}/files/${first}`, { method: "DELETE", cookie });
+    for (let i = 0; i < 20; i++) expect((await put(item.id, uuid())).status).toBe(201);
+    expect((await put(item.id, uuid())).status).toBe(409);
+    expect((await put(item.id, first)).status).toBe(409);
+    const back = await request(`/api/items/${item.id}/files/${first}/restore`, { method: "POST", cookie });
+    expect(back.status).toBe(409);
+    expect((await itemOf(item.id)).files).toHaveLength(20);
+  });
+
   it("keeps only what it said for a file over the cap, and refuses what it can't use", async () => {
     const item = await idea();
     const id = uuid();
