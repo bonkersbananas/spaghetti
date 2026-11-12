@@ -137,6 +137,41 @@ test("turns notifications on and off for this device, and asks about the other p
   expect(SEED_USERS[1].name).toBe("Sam Okafor");
 });
 
+test("a device the server forgot signs itself up again, and signing out lets go of it", async ({ page, isMobile }) => {
+  await fakeSubscription(page);
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const sheet = await openNotifications(page, isMobile);
+  await sheet.getByRole("switch", { name: /Notify this device/ }).click();
+  const devices = async () =>
+    (await (await page.request.get("/api/push")).json()).subscriptions.map((d: { endpoint: string }) => d.endpoint);
+  await expect.poll(devices).toEqual([ENDPOINT]);
+
+  // The server lets go of it (as when the push service once answers "gone"), the browser still holds it.
+  const origin = new URL(page.url()).origin;
+  await page.request.delete("/api/push/subscription", { data: { endpoint: ENDPOINT }, headers: { Origin: origin } });
+  await expect.poll(devices).toEqual([]);
+
+  // The next start signs it up again, with nobody touching anything.
+  await page.reload();
+  await expect.poll(devices).toEqual([ENDPOINT]);
+
+  // Signing out forgets it on both sides, so the next start has nothing to bring back.
+  if (isMobile) {
+    await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
+  } else {
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  }
+  await expect(page).toHaveURL(/\/sign-in/);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("e2e-push"))).toBeNull();
+  await signIn(page);
+  await waitForServiceWorker(page);
+  await page.waitForTimeout(1500);
+  expect(await devices()).toEqual([]);
+});
+
 test("a notification's answer records the outcome through the service worker, and the notification opens the sheet", async ({
   page,
 }) => {

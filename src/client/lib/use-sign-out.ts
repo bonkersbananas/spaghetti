@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { api } from "./api";
 import { clearOfflineData } from "./offline";
-import { thisDeviceEndpoint } from "./push";
+import { browserSubscription, thisDeviceEndpoint } from "./push";
 import { rememberUser, sessionQuery } from "./queries";
 
 /** The server-side sign-out still on its way; signing in again waits for it, so it can't end the new session. */
@@ -37,6 +37,11 @@ export function useSignOut() {
       keepalive: true,
       ...(pushEndpoint ? { json: { pushEndpoint } } : {}),
     }).catch(() => undefined);
+    // The browser lets go of it too, so a subscription left on a device always means "on here" (resyncPush).
+    if (pushEndpoint)
+      await browserSubscription()
+        .then((s) => s?.unsubscribe())
+        .catch(() => undefined);
     rememberUser(null);
     await clearOfflineData();
     queryClient.setQueryData(sessionQuery.queryKey, null);

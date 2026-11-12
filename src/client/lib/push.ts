@@ -1,5 +1,6 @@
-import type { NotificationPlatform } from "@shared/push";
+import type { NotificationPlatform, PushConfig, PushSubscriptionBody } from "@shared/push";
 import { useCallback, useEffect } from "react";
+import { api } from "./api";
 
 export const supported = () =>
   typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -34,6 +35,30 @@ export async function thisDeviceEndpoint(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * A device whose browser is still subscribed but that the server no longer knows (iOS renewed the subscription, the
+ * push service once said it was gone, an older sign-out forgot it) gets nothing and says nothing: the person only
+ * notices when the other one's comments stop arriving. On each start, such a device signs itself up again. A device
+ * turned off, or signed out, has no subscription left (both unsubscribe), so this never turns anything back on.
+ */
+export async function resyncPush(): Promise<void> {
+  if (!(await thisDeviceEndpoint())) return;
+  const subscription = await browserSubscription();
+  if (!subscription) return;
+  const config = await api<PushConfig>("/push");
+  if (!config.publicKey || config.subscriptions.some((s) => s.endpoint === subscription.endpoint)) return;
+  const keys = subscription.toJSON().keys;
+  if (!keys?.p256dh || !keys.auth) return;
+  await api("/push/subscription", {
+    method: "PUT",
+    json: {
+      endpoint: subscription.endpoint,
+      keys: { p256dh: keys.p256dh, auth: keys.auth },
+      timeZone: timeZone(),
+    } satisfies PushSubscriptionBody,
+  });
 }
 
 /** The service worker talks to the open app: "go to this attempt" (a tapped notification) and "the outbox changed". */

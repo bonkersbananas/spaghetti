@@ -18,7 +18,7 @@ import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
-import { useServiceWorkerMessages } from "@/lib/push";
+import { resyncPush, useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -111,6 +111,8 @@ function Shell() {
     void router.preloadRoute({ to: "/builds/$buildId", params: { buildId: "-" } });
     void router.preloadRoute({ to: "/ideas/$ideaId", params: { ideaId: "-" } });
     void import("@/components/ideas/CardMenu");
+    // A device the server lost track of is signed up for notifications again.
+    void resyncPush().catch(() => undefined);
   });
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();
