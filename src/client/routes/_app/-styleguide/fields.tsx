@@ -26,7 +26,7 @@ export function FieldSection() {
       title="Fields"
       note="Everything autosaves: no save buttons, just a quiet status beside the label. Plain fields read as text until you edit them."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex flex-col gap-5">
           <TextField
             label="Title"

@@ -17,7 +17,7 @@ export function SigningInSection() {
       title="Signing in"
       note="A QR card and a short code for the other device, rows for what you own (a passkey, a signed-in device, a waiting invite), and the six person colors as swatches."
     >
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Panel>
           <Label>QR card and code</Label>
           <div className="flex flex-col items-center gap-5">

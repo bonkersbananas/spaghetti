@@ -23,7 +23,7 @@ export function WishlistsSection() {
       title="Wishlists"
       note="RankRow: a place in a ranked list (the first on a semolina medal), the picture, the name, then actions and the DragHandle, which the arrow keys move too. Lifted while it is dragged. PickTile: an idea to pick, wearing its place once picked."
     >
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label>Rows</Label>
           <RankRow

@@ -27,7 +27,7 @@ export function SpaceSection() {
       title="Space & radii"
       note="A 4 px grid (Tailwind's spacing scale). Prefer generous space to lines; round corners, softer as things get bigger."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel>
           <Label>Spacing</Label>
           <div className="flex flex-col gap-2.5">

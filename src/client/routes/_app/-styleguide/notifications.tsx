@@ -21,7 +21,7 @@ export function NotificationSection() {
       title="Notifications"
       note="A nudge when a print is off the bed or past its estimate. Settings are switches that take effect at once; the notification itself is drawn by the system, and this is a picture of it."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex flex-col gap-3">
           <Label>Toggle</Label>
           <p className="text-small text-ink-faint">

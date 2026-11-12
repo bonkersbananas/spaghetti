@@ -108,7 +108,7 @@ export function Bubble({
               : undefined
           }
           className={cn(
-            "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 break-words whitespace-pre-wrap transition-shadow duration-700",
+            "text-body text-ink min-w-0 rounded-lg px-3.5 py-2 wrap-anywhere whitespace-pre-wrap transition-shadow duration-700",
             highlighted && "ring-semolina ring-offset-paper ring-2 ring-offset-2",
             mine ? "bg-tomato-soft rounded-ee-xs" : "bg-cream shadow-soft rounded-es-xs",
           )}

@@ -217,7 +217,7 @@ export function BuildsSection() {
       title="Builds & attempts"
       note="Logging an attempt next to the printer: the outcome is one big tap, tags and settings one more. A failed print is spaghetti, recorded with the same care as a success: soft tomato, never an error."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex min-w-0 flex-col gap-5">
           <Label>Parts and quantities (a build's progress, the plate's chips, the stepper)</Label>
           <ul className="flex flex-col gap-2.5">

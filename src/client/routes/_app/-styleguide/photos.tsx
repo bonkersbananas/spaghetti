@@ -19,7 +19,7 @@ export function PhotoSection() {
       title="Photos"
       note="A photo shows its own average color while it loads, then fades in. Captures upload in the background: the badge says how far along they are, and “Not saved yet” while a retry waits."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel className="flex min-w-0 flex-col gap-4">
           <Label>Photo: loading, then loaded</Label>
           <div className="grid grid-cols-2 gap-3">
