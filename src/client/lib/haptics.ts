@@ -8,3 +8,10 @@ export function tap() {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   navigator.vibrate(10);
 }
+
+/** A lighter tick than tap(): a threshold crossed under the finger (pull down to go back). */
+export function tick() {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  navigator.vibrate(6);
+}
