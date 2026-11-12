@@ -26,6 +26,7 @@ import { decision } from "../routes/oauth.ts";
 import { bridgeSchema, setSlot, setupSchema } from "../routes/printer.ts";
 import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
+import { scoutKeepBody } from "../routes/scout.ts";
 import { searchQuery, whatWorkedQuery } from "../routes/search.ts";
 import { credentials, signOutBody } from "../routes/session.ts";
 import { createShoppingItem, shoppingOrder, updateShoppingItem } from "../routes/shopping-items.ts";
@@ -520,6 +521,38 @@ export const operations: Record<string, Operation> = {
     summary: "Shares your wishlist with the others who sign in (the default) or keeps it private.",
     body: updateWishlist,
     response: one("wishlist", Wishlist),
+  },
+
+  // The idea scout: agents may read the suggestions, never act on them.
+  "GET /scout": {
+    summary:
+      "This week's three suggested models from the idea scout (state thinking, ready or none), each with its link, title, why it fits and whether it was kept or dismissed. Read-only for agents.",
+    response: any("The week's suggestions.", { scout: z.looseObject({}) }),
+    errors: { 404: "not_found: the idea scout isn't set up." },
+  },
+  "GET /scout/:id/picture": {
+    summary: "A suggested model's picture.",
+    response: "binary",
+    errors: { 404: notFound("picture") },
+  },
+  "PUT /scout/:id/keep": {
+    summary:
+      "Keeps a suggested model: it becomes an idea (the client picks its id) and Claude drafts the rest from its link. People only.",
+    body: scoutKeepBody,
+    response: any("The suggestion, now kept.", { pick: z.looseObject({}) }),
+    errors: { 404: notFound("suggestion"), 409: "decided: it was answered already." },
+  },
+  "DELETE /scout/:id/keep": {
+    summary: "Undo for Keep: the idea it made goes to the bin and the suggestion is waiting again. People only.",
+    response: any("The suggestion.", { pick: z.looseObject({}) }),
+  },
+  "PUT /scout/:id/dismiss": {
+    summary: '"Not for us": the scout never suggests that model again. People only.',
+    response: any("The suggestion, now dismissed.", { pick: z.looseObject({}) }),
+  },
+  "DELETE /scout/:id/dismiss": {
+    summary: "Undo for dismissing: the suggestion is waiting again. People only.",
+    response: any("The suggestion.", { pick: z.looseObject({}) }),
   },
 
   // Comments.

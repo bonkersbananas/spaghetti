@@ -406,6 +406,10 @@ describe("suggesting a Prisjakt page", () => {
     const added = await add({ name: "PLA Basic black" });
     await vi.waitFor(async () => expect((await get(added.id)).suggestState).toBe("none"));
     expect(searches).toHaveLength(0);
+    // Not marked as searched: once there is room again (the next day), the same name is searched without being forced.
+    await env.DB.prepare("DELETE FROM shopping_searches").run();
+    expect(await suggestPage(env, added.id)).toBe(true);
+    expect(searches).toHaveLength(1);
   });
 
   it("doesn't search for a thing that has a Prisjakt link, a link only, or a name too short to say anything", async () => {

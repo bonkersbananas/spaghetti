@@ -7,7 +7,7 @@ import { type Db, getDb } from "../db/index.ts";
 import { shoppingItems, shoppingSearches } from "../db/schema.ts";
 
 /**
- * Looking for the Prisjakt page of a thing on the shopping list (decision 0040). Claude's web search tool queries a
+ * Looking for the Prisjakt page of a thing on the shopping list (decision 0041). Claude's web search tool queries a
  * search engine's index ("prisjakt.nu produkt <name>"); Claude never fetches a Prisjakt page and never uses
  * Prisjakt's own search, and sees nothing but the search results' titles and addresses. It names at most one
  * candidate, which must be a Prisjakt product address that appeared in those results. The candidate is only a
@@ -234,7 +234,11 @@ export async function suggestPage(
     const runId = crypto.randomUUID();
     if (used >= SUGGESTIONS_PER_DAY) {
       await db.insert(shoppingSearches).values({ id: runId, itemId: id, at: new Date(now), outcome: "cap" });
-      await db.update(shoppingItems).set({ suggestionDoneAt: new Date() }).where(eq(shoppingItems.id, id));
+      // The name stays untried, so a later ask (or tomorrow's) searches.
+      await db
+        .update(shoppingItems)
+        .set({ suggestionDoneAt: new Date(), suggestionTried: null })
+        .where(eq(shoppingItems.id, id));
       return false;
     }
     await db.insert(shoppingSearches).values({ id: runId, itemId: id, at: new Date(now) });

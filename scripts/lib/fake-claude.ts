@@ -11,6 +11,12 @@
  * build's title or a print's note) decides the answer: `slow` takes ten seconds, `refused` is refused, `broken` is an
  * API error, `quiet` has nothing to add, anything else is a short paragraph.
  *
+ * A request that asks which models to print next is the idea scout (decision 0040): a word in the notebook (a saved
+ * idea's title) decides the answer: without the word `scout` in the notebook it finds nothing (unless started with
+ * `scoutAlways`, as the screenshots are), `scout-slow` takes ten seconds, `scout-refused` is refused, `scout-broken` is an API error, `scout-hollow`
+ * suggests only a dead link, anything else is three good models and one dead link (an address with `dead` in it,
+ * which the Worker drops because it checks links, as it does for real, against nothing but this stand-in).
+ *
  * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
  * note decides the answer: `slow` takes ten seconds ("Looking at the photo…" stays long enough to look at), `refused`
  * is refused, `broken` is an API error, `unsure` can't tell, `spaghetti` or `tangle` is a failed print, `partly` a
@@ -110,7 +116,7 @@ const labels = {
  * anything else is a good read of one spool.
  */
 /**
- * A request to find a thing's Prisjakt page (decision 0040): Claude's web search over a search engine's results. A
+ * A request to find a thing's Prisjakt page (decision 0041): Claude's web search over a search engine's results. A
  * word in the thing's name decides: `slow` takes a few seconds, `refused` is refused, `broken` is an API error,
  * `nomatch` finds no page, `invented` names an address the search never returned, anything else finds product 1 (and
  * `second` product 2 instead). The product pages themselves are served below, at /produkt.php.
@@ -348,6 +354,66 @@ async function answerWeek(body: string, response: import("node:http").ServerResp
   );
 }
 
+/** The models the stand-in scout suggests; the last one's link is dead. */
+const SCOUT_MODELS = [
+  {
+    url: "https://makerworld.com/en/models/1100001-drawer-divider-set",
+    title: "Drawer divider set",
+    why: "For the kitchen drawer you saved.",
+  },
+  {
+    url: "https://www.thingiverse.com/thing:6100002",
+    title: "Planter with a saucer",
+    why: "Uses the PETG you have on the shelf.",
+  },
+  {
+    url: "https://makerworld.com/en/models/1100003-cable-chain-clips",
+    title: "Cable chain clips",
+    why: "A neat second try at the cable comb.",
+  },
+  {
+    url: "https://makerworld.com/en/models/1100004-dead-link-vase",
+    title: "Spiral vase",
+    why: "Looks calm to print.",
+  },
+];
+
+async function answerScout(base: string, always: boolean, body: string, response: import("node:http").ServerResponse) {
+  let words = "";
+  try {
+    words = String(JSON.parse(body).messages?.[0]?.content ?? "").toLowerCase();
+  } catch {
+    // An unreadable request gets the good answer.
+  }
+  if (words.includes("scout-slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (words.includes("scout-broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = words.includes("scout-refused");
+  // Only a notebook that mentions "scout" (or a stand-in started for the screenshots) gets models: the e2e tests' other
+  // specs share the database and must find Today as they left it.
+  const models =
+    !always && !words.includes("scout") ? [] : words.includes("scout-hollow") ? SCOUT_MODELS.slice(3) : SCOUT_MODELS;
+  const answer = {
+    suggestions: models.map((model, index) => ({ ...model, imageUrl: `${base}/images/${(index % 3) + 1}.jpg` })),
+  };
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      content: refused ? [] : [{ type: "text", text: JSON.stringify(answer) }],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
+
 /** What the webhook receiver below was sent: the signature headers and the body, for the tests to check. */
 export interface ReceivedHook {
   path: string;
@@ -394,7 +460,10 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
 /** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
 const PRODUCT_PRICES: Record<string, number> = { 13366548: 149, 12086734: 249, 14402211: 259 };
 
-export async function startFakeClaude(port: number): Promise<{ url: string; stop: () => void; server: Server }> {
+export async function startFakeClaude(
+  port: number,
+  { scoutAlways = false }: { scoutAlways?: boolean } = {},
+): Promise<{ url: string; stop: () => void; server: Server }> {
   const base = `http://127.0.0.1:${port}`;
   // The model's pictures, served from here (the Worker allows this one origin for pictures while it talks to a stand-in).
   const productPage = readFileSync(join(root, "test/fixtures/pages/prisjakt-product.html"), "utf8");
@@ -434,6 +503,7 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
       if (body.includes("Find the Prisjakt page for this thing")) return answerSearch(body, response);
       if (body.includes("Read the spool label")) return answerLabel(body, response);
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
+      if (body.includes("Which models should they print next?")) return answerScout(base, scoutAlways, body, response);
       if (body.includes("What is the pattern in this week, if there is one?")) return answerWeek(body, response);
       if (body.includes('"type":"image"')) return answerPhoto(body, response);
       const asked = body.match(/https?:\/\/[^"\\\s]+/)?.[0] ?? "";

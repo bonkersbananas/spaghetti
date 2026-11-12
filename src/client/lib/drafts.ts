@@ -4,15 +4,10 @@ import { firstModelLink, lonelyModelLink } from "@shared/model-links";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
+import { featuresQuery } from "./features";
 import { cachedItem, itemKeys, patchCachedItem } from "./items";
 
-/** What the Worker can do beyond the basics; today only whether Claude can draft ideas (it has its key). */
-export const featuresQuery = queryOptions({
-  queryKey: ["features"],
-  queryFn: () => api<FeaturesResponse>("/features"),
-  staleTime: Number.POSITIVE_INFINITY,
-  retry: false,
-});
+export { featuresQuery } from "./features";
 
 /** Whether anything about drafting should show at all: without the Worker's key nothing does. */
 export const useDraftsEnabled = () => useQuery(featuresQuery).data?.drafts === true;

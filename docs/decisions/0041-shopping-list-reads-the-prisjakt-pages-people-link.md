@@ -1,4 +1,4 @@
-# 0040. The shopping list reads the Prisjakt pages people link, and suggests one through a search engine
+# 0041. The shopping list reads the Prisjakt pages people link, and suggests one through a search engine
 
 Status: Accepted. Supersedes the "no prices" part of [0034](0034-shopping-list-links-not-prices.md); its other choices (one shared list, links, a hand-made order, Bought, Clear with Undo) stand.
 

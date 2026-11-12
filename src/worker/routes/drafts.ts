@@ -10,6 +10,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { labelReadsEnabled } from "../label-read/run.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
+import { scoutEnabled } from "../scout/run.ts";
 import { suggestionsEnabled } from "../shopping/suggest.ts";
 import { secretKeySource } from "../webhooks/secrets.ts";
 
@@ -28,6 +29,7 @@ export const draftRoutes = new Hono<AppEnv>()
       labelReads: labelReadsEnabled(c.env),
       priceSuggestions: suggestionsEnabled(c.env),
       coach: coachEnabled(c.env),
+      scout: scoutEnabled(c.env),
       webhooks: Boolean(secretKeySource(c.env)),
     }),
   )

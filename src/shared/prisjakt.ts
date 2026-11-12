@@ -1,5 +1,5 @@
 /**
- * What a Prisjakt product page states (decision 0040): the product's picture, its lowest price and the cheapest
+ * What a Prisjakt product page states (decision 0041): the product's picture, its lowest price and the cheapest
  * offers. Read from a page a person linked, never searched for. The parser is pure and fails quietly: a page whose
  * format changed gives null, not a wrong price.
  */

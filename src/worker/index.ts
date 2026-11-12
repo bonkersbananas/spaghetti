@@ -11,6 +11,7 @@ import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
 import { sendWeekPush } from "./push/week.ts";
+import { purgeScoutPictures, scoutTick } from "./scout/run.ts";
 import { refreshPrices } from "./shopping/lookup.ts";
 import { spa } from "./spa.ts";
 import { pruneDeliveries, runWebhooks } from "./webhooks/deliver.ts";
@@ -59,6 +60,7 @@ export default {
       ctx.waitUntil(purgeDeleted(env).then((result) => console.log("purged", result)));
       ctx.waitUntil(pruneOauth(getDb(env.DB)).catch((error) => console.error("oauth tidy failed", error)));
       ctx.waitUntil(pruneDeliveries(env).catch((error) => console.error("webhook tidy failed", error)));
+      ctx.waitUntil(purgeScoutPictures(env).catch((error) => console.error("scout tidy failed", error)));
     } else {
       // Webhooks: new changes become deliveries, and what is due (first tries and retries) is sent.
       ctx.waitUntil(
@@ -69,11 +71,17 @@ export default {
       ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
       // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
       ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));
-      // The gentle daily look at the Prisjakt pages of what's still to buy (decision 0040).
+      // The gentle daily look at the Prisjakt pages of what's still to buy (decision 0041).
       ctx.waitUntil(refreshPrices(env).catch((error) => console.error("price refresh failed", error)));
       ctx.waitUntil(resumeReads(env).catch((error) => console.error("photo read resume failed", error)));
       ctx.waitUntil(resumeLabelReads(env).catch((error) => console.error("label read resume failed", error)));
       ctx.waitUntil(resumeCoaches(env).catch((error) => console.error("coach resume failed", error)));
+      // The idea scout's week: the first run of the cron after the morning that finds no round for this week makes it.
+      ctx.waitUntil(
+        scoutTick(env)
+          .then((result) => result !== "skipped" && console.log("scouted", result))
+          .catch((error) => console.error("scout failed", error)),
+      );
       ctx.waitUntil(sendUpkeepNudge(env).then((result) => result.sent && console.log("upkeep nudged", result)));
       // "Your week", Sunday 19:00 in the workspace's time zone (does nothing at any other time).
       ctx.waitUntil(

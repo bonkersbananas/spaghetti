@@ -11,7 +11,8 @@ test("marks a task done, with a note, and it shows in the history", async ({ pag
   await page.goto("/printer");
   const task = "Empty the purge chute";
   await expect(page.getByRole("list", { name: "Upkeep tasks" })).toBeVisible();
-  await page.getByRole("button", { name: `Done: ${task}` }).click();
+  // Not due: the open ring (a checkbox); a due task has a Done button.
+  await page.getByRole("checkbox", { name: `Done: ${task}` }).click();
   const sheet = page.getByRole("dialog", { name: task });
   await sheet.getByLabel("A note (optional)").fill("Emptied, a lot of teal");
   await sheet.getByRole("button", { name: "Done", exact: true }).click();

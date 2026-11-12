@@ -6,8 +6,13 @@ CREATE TABLE `shopping_searches` (
 	`detail` text
 );
 --> statement-breakpoint
+ALTER TABLE `shopping_items` ADD `picture_source` text;--> statement-breakpoint
+ALTER TABLE `shopping_items` ADD `picture_at` integer;--> statement-breakpoint
+ALTER TABLE `shopping_items` ADD `picture_tried` text;--> statement-breakpoint
+ALTER TABLE `shopping_items` ADD `prices` text;--> statement-breakpoint
 ALTER TABLE `shopping_items` ADD `suggestion` text;--> statement-breakpoint
 ALTER TABLE `shopping_items` ADD `suggestion_claimed_at` integer;--> statement-breakpoint
 ALTER TABLE `shopping_items` ADD `suggestion_done_at` integer;--> statement-breakpoint
 ALTER TABLE `shopping_items` ADD `suggestion_tried` text;--> statement-breakpoint
-ALTER TABLE `shopping_items` ADD `suggestion_rejected` text;
+ALTER TABLE `shopping_items` ADD `suggestion_rejected` text;--> statement-breakpoint
+ALTER TABLE `shopping_items` ADD `prices_tried_at` integer;

@@ -9,7 +9,7 @@ import { readCapped, resolvesPublic } from "../link-preview.ts";
 import { fromUrl, readImage } from "../mcp/image.ts";
 
 /**
- * Reading the pages people linked on their shopping list (decision 0040): a Prisjakt product page for its picture
+ * Reading the pages people linked on their shopping list (decision 0041): a Prisjakt product page for its picture
  * and cheapest offers, a shop page for its picture. Only a page a person linked, only within the site's
  * robots.txt, only for the two of us; nothing here searches, and no page is shown to a model.
  */
