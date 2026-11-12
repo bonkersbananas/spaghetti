@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { useReturnFocus } from "@/lib/return-focus";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { IconButton } from "./Button";
-import { CloseIcon } from "./icons";
+import { BackIcon, CloseIcon } from "./icons";
 
 export interface SheetProps {
   open: boolean;
@@ -14,6 +14,8 @@ export interface SheetProps {
   description?: ReactNode;
   /** Sticky actions at the bottom (phone) or footer (desktop). */
   footer?: ReactNode;
+  /** A step back, as a chevron before the title (a sheet with a second step). */
+  back?: { label: string; onClick: () => void };
   /** Small buttons at the right of the header, beside the title (stepping between things): next to the close button on desktop. */
   headerActions?: ReactNode;
   /**
@@ -57,6 +59,7 @@ function PhoneSheet({
   description,
   footer,
   headerActions,
+  back,
   tall,
   fill,
   children,
@@ -88,7 +91,8 @@ function PhoneSheet({
         >
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
           <div className="flex items-start justify-between gap-3 px-5 pt-2 pb-1">
-            <div className="min-w-0">
+            {back && <IconButton icon={BackIcon} label={back.label} onClick={back.onClick} className="-ml-2.5" />}
+            <div className="min-w-0 flex-1">
               <Drawer.Title className="font-display text-title text-ink line-clamp-2 font-semibold break-words">
                 {title}
               </Drawer.Title>
@@ -126,6 +130,7 @@ function DesktopSheet({
   description,
   footer,
   headerActions,
+  back,
   desktop = "dialog",
   wide,
   fill,
@@ -170,7 +175,16 @@ function DesktopSheet({
           )}
         >
           <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-1">
-            <div>
+            {back && (
+              <IconButton
+                icon={BackIcon}
+                label={back.label}
+                onClick={back.onClick}
+                size="sm"
+                className="-mt-0.5 -ml-2"
+              />
+            )}
+            <div className="flex-1">
               <Dialog.Title className="font-display text-title text-ink line-clamp-2 font-semibold break-words">
                 {title}
               </Dialog.Title>
@@ -192,7 +206,7 @@ function DesktopSheet({
             className={
               fill
                 ? "min-h-0 flex-1 overflow-hidden pt-3"
-                : "scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-5"
+                : "scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-8"
             }
           >
             {children}

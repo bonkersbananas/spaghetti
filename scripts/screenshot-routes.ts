@@ -2845,6 +2845,89 @@ shots.push(
   ] as Shot[]),
 );
 
+/** The untitled capture in the seed: a photo of a failed print and a note, still an idea. */
+const looseCapture = "5eed0000-0000-4000-8000-000000000001";
+
+/** Opens "Add to a build…" on the loose capture's page and waits for the picker. */
+async function openMovePicker(page: Page) {
+  await page.getByRole("button", { name: /^Add to a build/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Add to a build" });
+  await sheet.getByRole("button", { name: /Towel hook/ }).waitFor();
+  await page.waitForTimeout(400);
+  return sheet;
+}
+
+shots.push(
+  ...([
+    {
+      // The idea's menu on the list, with the new row.
+      name: "move-menu",
+      path: "/ideas",
+      prepare: async (page) => {
+        await page
+          .getByRole("button", { name: /^Options for Found this on the bed/ })
+          .first()
+          .click();
+        await page.getByRole("button", { name: "Add to a build…" }).waitFor();
+        await page.waitForTimeout(300);
+      },
+      cleanup: closeDialog,
+    },
+    {
+      // The action on the idea's page: beside Start building (desktop), in the action bar (phones).
+      name: "move-action",
+      path: `/ideas/${looseCapture}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: /^Add to a build/ }).waitFor();
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      // The action on the idea's page, then the picker: the print on the bed first.
+      name: "move-picker",
+      path: `/ideas/${looseCapture}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Start building" }).first().waitFor();
+        await openMovePicker(page);
+      },
+      cleanup: closeDialog,
+    },
+    {
+      // A build with attempts asks which one; the newest is first.
+      name: "move-attempt",
+      path: `/ideas/${looseCapture}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Start building" }).first().waitFor();
+        const sheet = await openMovePicker(page);
+        await sheet.getByRole("button", { name: /Towel hook/ }).click();
+        await page.getByText("Which print is it about?").waitFor();
+        await page.waitForTimeout(300);
+      },
+      cleanup: closeDialog,
+    },
+    {
+      // Moved: back on Ideas, the capture gone, the toast with View and Undo.
+      name: "move-done",
+      path: `/ideas/${looseCapture}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Start building" }).first().waitFor();
+        const sheet = await openMovePicker(page);
+        await sheet.getByRole("button", { name: /Towel hook/ }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: /Attempt 1/ })
+          .click();
+        await page.getByText(/^Moved to attempt/).waitFor();
+        await page.waitForTimeout(500);
+      },
+      cleanup: async (page) => {
+        await page.getByRole("button", { name: "Undo" }).click();
+        await page.waitForTimeout(800);
+      },
+    },
+  ] as Shot[]),
+);
+
 // Last: the queued finish stays offline and unsent, so nothing after it would work.
 shots.push(
   ...([
