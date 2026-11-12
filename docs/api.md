@@ -118,6 +118,7 @@ A build may be made of parts ("Hull half" ×2, "Deck" ×1); most builds have non
 - `parts` is accepted on `POST /items/:id/attempts`, `PATCH /attempts/:id` (replaces the list) and `POST /attempts/:id/finish`. Without `parts`, an attempt that goes from printing to spaghetti has its counts set to 0; one that worked keeps what was on the plate.
 - `GET /search` finds builds by part name, and each attempt hit has a `partsLabel` ("Hull half ×2, Deck"). `GET /builds/:id/story.md` has a Parts section and names parts on attempts.
 - An attempt's slicer file keeps the object names of its plate (`file.objects`, sent as the `objects` JSON field of `PUT /attempts/:id/file`); the app offers them as parts.
+- An idea or build keeps slicer files of its own: `PUT /items/:id/files/:fileId` (the same multipart fields as an attempt's file, scope `capture` or `attempts`; several at once, at most 20), `DELETE` and `POST …/restore` (people only), listed as `item.files`; `GET /files/:id` serves them like an attempt's ([0045](decisions/0045-ideas-keep-slicer-files.md)).
 
 ## Insights
 

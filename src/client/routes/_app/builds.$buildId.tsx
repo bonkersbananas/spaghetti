@@ -20,6 +20,7 @@ import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { photoAlt } from "@/components/ideas/IdeaCard";
+import ItemFiles from "@/components/ideas/ItemFiles";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
@@ -579,6 +580,8 @@ function Build({ item }: { item: ItemView }) {
             </div>
 
             <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />
+
+            {!!item.files?.length && <ItemFiles itemId={item.id} files={item.files} readOnly={readOnly} />}
 
             <PartsSection
               item={item}

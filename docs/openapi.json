@@ -9184,6 +9184,322 @@
         "x-scopes": "person"
       }
     },
+    "/api/items/{id}/files/{fileId}": {
+      "put": {
+        "operationId": "putItemsByIdFilesByFileId",
+        "summary": "Keeps a slicer file (.3mf or .gcode.3mf) with an idea or build, with its plate thumbnail. Several may be kept; the same id again changes it.",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "items"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "plate": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "plateCount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "slicer": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "prefill": {
+                    "type": "string",
+                    "maxLength": 64000
+                  },
+                  "objects": {
+                    "type": "string",
+                    "maxLength": 64000
+                  },
+                  "file": {
+                    "type": "string",
+                    "contentEncoding": "base64",
+                    "contentMediaType": "application/octet-stream",
+                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB."
+                  },
+                  "thumb": {
+                    "type": "string",
+                    "contentEncoding": "base64",
+                    "contentMediaType": "application/octet-stream",
+                    "description": "The plate's picture."
+                  }
+                },
+                "required": [
+                  "name",
+                  "size",
+                  "plate",
+                  "plateCount",
+                  "prefill"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "$ref": "#/components/schemas/AttemptFile"
+                    }
+                  },
+                  "required": [
+                    "file"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid: the request couldn't be read; the message says what is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such idea.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "too_many: an idea keeps at most 20 files.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported: not a picture.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteItemsByIdFilesByFileId",
+        "summary": "Removes a file kept with an idea or build (it can be restored). People only.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "items"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done; nothing comes back."
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
+    "/api/items/{id}/files/{fileId}/restore": {
+      "post": {
+        "operationId": "postItemsByIdFilesByFileIdRestore",
+        "summary": "Brings the file back.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "items"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "$ref": "#/components/schemas/AttemptFile"
+                    }
+                  },
+                  "required": [
+                    "file"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
     "/api/files/{id}": {
       "get": {
         "operationId": "getFilesById",
@@ -17217,6 +17533,13 @@
               "$ref": "#/components/schemas/Reaction"
             },
             "description": "Who reacted, and how, oldest first."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttemptFile"
+            },
+            "description": "Slicer files kept with the idea (and its build), oldest first."
           }
         },
         "required": [
@@ -17237,7 +17560,8 @@
           "photos",
           "attempts",
           "draft",
-          "reactions"
+          "reactions",
+          "files"
         ],
         "additionalProperties": false,
         "description": "An idea, or a build (an idea that is being printed)."

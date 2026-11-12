@@ -344,6 +344,27 @@ describe("tools, scopes and attribution", () => {
     expect(story.text).toContain("- Deck ×1: 0 of 1");
   });
 
+  it("get_build lists the slicer files kept with an idea", async () => {
+    const owner = await makeAgent(["capture", "read"]);
+    const idea = field((await callTool(owner.token, "capture_idea", { title: "Bin" })).text, "build_id");
+    const form = new FormData();
+    form.set("name", "Bin.gcode.3mf");
+    form.set("size", "4");
+    form.set("plate", "2");
+    form.set("plateCount", "3");
+    form.set("prefill", JSON.stringify({ estimatedMinutes: 90 }));
+    form.set("file", new File([new Uint8Array([1, 2, 3, 4])], "Bin.gcode.3mf"));
+    const put = await request(`/api/items/${idea}/files/${crypto.randomUUID()}`, {
+      method: "PUT",
+      body: form,
+      headers: { Authorization: `Bearer ${owner.token}` },
+    });
+    expect(put.status).toBe(201);
+    const story = await callTool(owner.token, "get_build", { build_id: idea });
+    expect(story.text).toContain("## Files (1)");
+    expect(story.text).toContain("- Bin.gcode.3mf (plate 2 of 3, est. 1 h 30 min)");
+  });
+
   it("start_attempt, log_attempt and finish_attempt need attempts, and say via", async () => {
     const owner = await makeAgent(["capture", "attempts", "read"]);
     const idea = field((await callTool(owner.token, "capture_idea", { title: "Cable chain" })).text, "build_id");

@@ -12,7 +12,17 @@ import { byPrintTime, describeChanges } from "../shared/attempts.ts";
 import type { Coach } from "../shared/coach.ts";
 import type { PhotoRead } from "../shared/photo-read.ts";
 import type { Reaction } from "../shared/reactions.ts";
-import type { Attempt, AttemptFileRow, CoachRunRow, Item, ItemDraftRow, Part, Photo, User } from "./db/schema.ts";
+import type {
+  Attempt,
+  AttemptFileRow,
+  CoachRunRow,
+  Item,
+  ItemDraftRow,
+  ItemFileRow,
+  Part,
+  Photo,
+  User,
+} from "./db/schema.ts";
 import { toApiDraft } from "./draft/run.ts";
 
 export function apiError(c: Context, status: ContentfulStatusCode, code: string, message: string) {
@@ -58,7 +68,7 @@ export function toApiPart(part: Part): ApiPart {
   };
 }
 
-export function toApiFile(file: AttemptFileRow): ApiAttemptFile {
+export function toApiFile(file: Omit<AttemptFileRow, "attemptId">): ApiAttemptFile {
   return {
     id: file.id,
     name: file.name,
@@ -158,6 +168,7 @@ export function toApiItem(
   reads: ReadsByAttempt = new Map(),
   coaches: CoachesByAttempt = new Map(),
   itemReactions: Reaction[] = [],
+  itemFiles: ItemFileRow[] = [],
 ): ApiItem {
   return {
     id: item.id,
@@ -178,5 +189,6 @@ export function toApiItem(
     attempts: toApiAttempts(itemAttempts, files, reads, coaches),
     draft: toApiDraft(draft),
     reactions: itemReactions,
+    files: itemFiles.map(toApiFile),
   };
 }

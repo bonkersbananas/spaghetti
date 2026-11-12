@@ -8,6 +8,7 @@ import {
   attempts,
   changes,
   comments,
+  itemFiles,
   items,
   photos,
   recipes,
@@ -97,6 +98,17 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     const batch = doomedFiles.slice(i, i + 50).map((file) => file.id);
     await env.PHOTOS.delete(batch.flatMap((fileId) => [fileKey(fileId, "file"), fileKey(fileId, "thumb")]));
     await db.delete(attemptFiles).where(inArray(attemptFiles.id, batch));
+  }
+  const doomedItemFiles = await db
+    .select({ id: itemFiles.id })
+    .from(itemFiles)
+    .where(
+      or(and(isNotNull(itemFiles.deletedAt), lt(itemFiles.deletedAt, cutoff)), inArray(itemFiles.itemId, goneItems)),
+    );
+  for (let i = 0; i < doomedItemFiles.length; i += 50) {
+    const batch = doomedItemFiles.slice(i, i + 50).map((file) => file.id);
+    await env.PHOTOS.delete(batch.flatMap((fileId) => [fileKey(fileId, "file"), fileKey(fileId, "thumb")]));
+    await db.delete(itemFiles).where(inArray(itemFiles.id, batch));
   }
   const doomedSpools = await db
     .select({ id: spools.id, photoId: spools.photoId })

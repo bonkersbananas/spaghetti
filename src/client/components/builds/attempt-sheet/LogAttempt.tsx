@@ -18,7 +18,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
-import { DraftFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
+import { DraftFile, fetchKeptFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
 import { WhenField } from "./WhenField";
 
 // Claude's ideas from the attempt before: only there when it went wrong.
@@ -172,6 +172,11 @@ export function LogAttempt({
               onPick={slicer.picker.open}
               onPlate={slicer.choosePlate}
               onAddUnknown={slicer.addUnknown}
+              ideaFiles={previous ? undefined : item.files}
+              onUseIdeaFile={async (kept) => {
+                const file = await fetchKeptFile(kept);
+                if (file) void slicer.take(file);
+              }}
               unknown={slicer.unknownFilaments}
               card={slicer.state?.prefill ? <DraftFile state={slicer.state} onRemove={slicer.clear} /> : null}
             />
