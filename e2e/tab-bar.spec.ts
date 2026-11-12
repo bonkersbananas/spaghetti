@@ -11,6 +11,11 @@ test("phones: the tab bar is Ideas, Builds, Journal and Workshop around capture,
   test.skip(!isMobile, "The tab bar is the phone's.");
   const tabs = page.getByRole("navigation", { name: "Sections" });
   await expect(tabs.getByRole("link")).toHaveText(["Ideas", "Builds", "Journal", "Workshop"]);
+  // Capture is in the middle: two tabs either side of it.
+  const x = async (locator: ReturnType<typeof tabs.getByRole>) => (await locator.boundingBox())?.x ?? 0;
+  const capture = await x(tabs.getByRole("button", { name: "New idea" }));
+  expect(await x(tabs.getByRole("link", { name: "Builds" }))).toBeLessThan(capture);
+  expect(await x(tabs.getByRole("link", { name: "Journal" }))).toBeGreaterThan(capture);
   await tabs.getByRole("link", { name: "Workshop" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Workshop" })).toBeVisible();
   await expect(page.locator("main").getByRole("link", { name: /^Printer/ })).toHaveAttribute("href", "/printer");

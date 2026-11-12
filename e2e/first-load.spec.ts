@@ -28,9 +28,10 @@ const CEILING_KB = {
   "/sign-in": 184,
   // 283: the journal's Now block imports PrintingCard too, so the bundler gives it a chunk of its own (+0.8 kB).
   "/today": 283,
-  "/ideas": 269,
-  "/builds": 269,
-  "/journal": 269,
+  // 270: the Workshop tab's Toolbox icon is in every screen's tab bar (+0.7 kB).
+  "/ideas": 270,
+  "/builds": 270,
+  "/journal": 270,
   "/search": 278,
   "/pantry": 278,
   "/printer": 278,

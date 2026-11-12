@@ -126,10 +126,10 @@ export function TabBar() {
     >
       <div className="h-tabbar-row mx-auto flex max-w-lg items-stretch px-2">
         <Tab {...ideas} />
+        <Tab {...builds} />
         <div className="flex flex-1 items-center justify-center">
           <CaptureButton />
         </div>
-        <Tab {...builds} />
         <Tab {...journal} />
         <Tab {...workshop} />
       </div>

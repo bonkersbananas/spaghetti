@@ -9,6 +9,7 @@ import {
   ShoppingIcon,
   TodayIcon,
   WishIcon,
+  WorkshopIcon,
 } from "@/components/ui/icons";
 
 export interface Section {
@@ -44,7 +45,7 @@ const wishlist: Section = { to: "/wishlist", label: "Wishlists", icon: WishIcon,
 const builds: Section = { to: "/builds", label: "Builds", icon: BuildsIcon, shortcut: "goBuilds" };
 const journal: Section = { to: "/journal", label: "Journal", icon: JournalIcon, shortcut: "goJournal" };
 /** The phone's fourth tab: the hub for the three places of the workshop (it has no sidebar entry or shortcut). */
-const workshopTab: Pick<Section, "to" | "label" | "icon"> = { to: "/workshop", label: "Workshop", icon: PrinterIcon };
+const workshopTab: Pick<Section, "to" | "label" | "icon"> = { to: "/workshop", label: "Workshop", icon: WorkshopIcon };
 const search: Section = { to: "/search", label: "Search", icon: SearchIcon, shortcut: "search" };
 
 /** Every section, in order: the sidebar, the hotkeys and the command palette read this list. */
