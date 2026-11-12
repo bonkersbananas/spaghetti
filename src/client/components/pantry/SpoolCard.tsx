@@ -46,7 +46,7 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
             <SpoolDisc
               color={spool.colorHex}
               size="sm"
-              className="ring-cream absolute right-1 bottom-1 size-5 ring-2"
+              className="ring-cream absolute right-1 bottom-1 size-5! ring-2"
             />
           )}
         </div>
