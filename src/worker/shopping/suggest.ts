@@ -228,7 +228,9 @@ export async function suggestPage(
     };
     // The day's cap is shared by both people (UTC days: it only has to be about right).
     const since = new Date(now - (now % DAY_MS));
-    const used = await db.$count(shoppingSearches, gte(shoppingSearches.at, since));
+    const base = env.ANTHROPIC_BASE_URL?.trim();
+    // With a stand-in Anthropic (e2e, screenshots) there is no bill to cap.
+    const used = base ? 0 : await db.$count(shoppingSearches, gte(shoppingSearches.at, since));
     const runId = crypto.randomUUID();
     if (used >= SUGGESTIONS_PER_DAY) {
       await db.insert(shoppingSearches).values({ id: runId, itemId: id, at: new Date(now), outcome: "cap" });
@@ -236,7 +238,6 @@ export async function suggestPage(
       return false;
     }
     await db.insert(shoppingSearches).values({ id: runId, itemId: id, at: new Date(now) });
-    const base = env.ANTHROPIC_BASE_URL?.trim();
     const result = await searchForPage(apiKey, name, row.link, row.suggestionRejected ?? [], base);
     const { outcome, ...detail } = result.diagnosis;
     await finish(result.ok ? result.suggestion : null, outcome, Object.keys(detail).length ? detail : undefined);

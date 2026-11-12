@@ -8,11 +8,21 @@ import { TextField } from "@/components/ui/Field";
 import { CheckIcon, LinkIcon, PriceIcon, SameAgainIcon, TrashIcon, UndoIcon } from "@/components/ui/icons";
 import { checkedWords, OfferRow } from "@/components/ui/Prices";
 import { Sheet } from "@/components/ui/Sheet";
+import { SuggestionCard, SuggestionNote } from "@/components/ui/Suggestion";
 import { Thumb } from "@/components/ui/Thumb";
 import { toast } from "@/components/ui/Toast";
 import { sessionQuery } from "@/lib/queries";
 import { useReadOnly } from "@/lib/read-only";
-import { checkPrices, removeShopping, setBought, shoppingQuery, updateShopping } from "@/lib/shopping";
+import {
+  checkPrices,
+  dismissSuggestion,
+  lookForPrisjakt,
+  removeShopping,
+  setBought,
+  shoppingQuery,
+  updateShopping,
+  usePriceSuggestionsEnabled,
+} from "@/lib/shopping";
 import { useLiveFields } from "@/lib/use-autosave";
 import { PriceSearchLink, useShoppingName } from "./ShoppingRow";
 
@@ -59,6 +69,13 @@ function ShoppingBody({ item, onClose }: { item: ShoppingItem; onClose: () => vo
   return (
     <div className="flex flex-col gap-5">
       <PriceBlock item={item} name={shown} readOnly={readOnly} />
+      <SuggestionBlock
+        item={item}
+        readOnly={readOnly}
+        use={(url) => {
+          change({ priceLink: url });
+        }}
+      />
       <fieldset disabled={readOnly} className="contents">
         <TextField
           label="Name"
@@ -200,5 +217,60 @@ function PriceBlock({ item, name, readOnly }: { item: ShoppingItem; name: string
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * Where the thing has no Prisjakt page: the one a search found, to confirm ("Is this it?"), or a note that the search
+ * is on its way or found nothing, with "Look for it". Nothing here is used until a person taps "Use it".
+ */
+function SuggestionBlock({
+  item,
+  readOnly,
+  use,
+}: {
+  item: ShoppingItem;
+  readOnly: boolean;
+  use: (url: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const enabled = usePriceSuggestionsEnabled();
+  if (item.priceLink || !enabled) return null;
+  const { suggestion, suggestState } = item;
+  if (suggestion) {
+    return (
+      <SuggestionCard
+        title={suggestion.title}
+        href={suggestion.url}
+        disabled={readOnly}
+        onUse={() => use(suggestion.url)}
+        onDismiss={() =>
+          void dismissSuggestion(queryClient, item.id).catch(() =>
+            toast.error("Couldn't do that", "Try again in a moment."),
+          )
+        }
+      />
+    );
+  }
+  if (suggestState === "searching") return <SuggestionNote>Looking for it on Prisjakt…</SuggestionNote>;
+  if (!item.name.trim()) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3">
+      <SuggestionNote>
+        {suggestState === "none" ? "No Prisjakt page found for it." : "Not looked for on Prisjakt yet."}
+      </SuggestionNote>
+      <Button
+        variant="quiet"
+        icon={SameAgainIcon}
+        disabled={readOnly}
+        onClick={() =>
+          void lookForPrisjakt(queryClient, item.id).catch(() =>
+            toast.error("Couldn't look for it", "Try again in a moment."),
+          )
+        }
+      >
+        Look for it
+      </Button>
+    </div>
   );
 }

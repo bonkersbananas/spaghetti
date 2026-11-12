@@ -92,6 +92,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
     };
   }, []);
   const cheapest = item.prices?.offers[0];
+  const matched = !item.priceLink && !bought && item.suggestState === "found";
   const links = (
     <>
       {item.prices && !bought && (
@@ -101,6 +102,16 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
           checkedAt={item.prices.checkedAt}
           className="w-full"
         />
+      )}
+      {matched && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="bg-ink/6 text-ink-soft hover:text-ink hover:bg-ink/10 text-small focus-ring touch-target pressable duration-fast rounded-pill relative inline-flex h-7 items-center gap-1.5 px-2.5 font-semibold transition-colors md:h-6"
+        >
+          <PriceIcon size={14} weight="bold" aria-hidden />
+          Prisjakt match?
+        </button>
       )}
       {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
       {item.priceLink && (
@@ -127,7 +138,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
               {item.boughtAt && inlineTime(item.boughtAt)}
             </span>
           </span>
-        ) : item.link || item.priceLink ? (
+        ) : item.link || item.priceLink || matched ? (
           links
         ) : undefined
       }
