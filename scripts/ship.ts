@@ -40,7 +40,7 @@ let note: string | undefined;
     } else if (a === "--message" && args[i + 1]) {
       message = args[++i];
     } else if (a === "--note" && args[i + 1]?.trim()) {
-      note = args[++i].trim();
+      note = args[++i]?.trim();
     } else {
       console.error(a === "--message" || a === "--note" ? `${a} needs a value.` : `Unknown argument: ${a}`);
       console.error(USAGE);
@@ -68,13 +68,13 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
 }
 
 step("Building", "pnpm", ["build"]);
-if (note) await writeNote(note);
+await writeNote(note ?? "");
 step("Applying remote migrations", "pnpm", ["exec", "wrangler", "d1", "migrations", "apply", "DB", "--remote"]);
 step("Deploying", "pnpm", ["exec", "wrangler", "deploy", ...(message ? ["--message", message] : [])]);
 console.log("\n✓ Live at https://spaghetti.day");
 
 /**
- * Adds the note to whats-new.json in the build: the live site's file plus this version's entry. Whatever goes wrong
+ * Adds this version to whats-new.json in the build: the live site's file plus an entry (with an empty note when the ship has no --note, so a page can tell which versions came after the last real note). Whatever goes wrong
  * here (no connection, a broken file, no entry script) only costs the sentence; the deploy goes on.
  */
 async function writeNote(text: string) {
@@ -94,7 +94,7 @@ async function writeNote(text: string) {
     }
     const file = addNote(live, { entry, date: new Date().toISOString().slice(0, 10), note: text });
     writeFileSync(join(dist, "whats-new.json"), `${JSON.stringify(file, null, 2)}\n`);
-    console.log(`\n→ Note for the update toast: ${text}`);
+    console.log(`\n→ Update toast: ${text || "no note for this version"}`);
   } catch (error) {
     console.warn(
       `\n! The note was not added (${error instanceof Error ? error.message : error}); deploying without it.`,

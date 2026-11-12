@@ -44,10 +44,10 @@ Write it the same way every time:
 
 - One sentence, at most about 60 characters, in plain words about what the two people can now do or what got better: "You can react to comments now.", "Photos open faster on phones."
 - No jargon (PR, CI, e2e, refactor, bundle), no names, no issue numbers.
-- Leave out what people can't notice (tests, tooling, docs). When nothing visible changed since the last ship, ship without `--note`: no entry is added.
+- Leave out what people can't notice (tests, tooling, docs). When nothing visible changed since the last ship, ship without `--note`: the version is still recorded, with no sentence, so pages on it or later never see an older note.
 - Several visible changes: pick the one they will care about most, or join two short ones.
 
-The ship adds the sentence to `whats-new.json` in the build, made from the live site's current file plus the new entry (the last 30 are kept, each named by the build's entry script, `/assets/index-<hash>.js`). A page several versions behind shows the notes newer than its own version (the newest two joined); a page whose version isn't listed (shipped without a note) shows only the newest. If the live file can't be read the ship starts a new one, and if the note can't be written it deploys without it. Without any note (local builds, Docker, a failed fetch) the toast keeps its old words, "Refresh to get it. Nothing you captured is lost."
+The ship adds the version to `whats-new.json` in the build (every ship, with or without a sentence), made from the live site's current file plus the new entry (the last 30 are kept, each named by the build's entry script, `/assets/index-<hash>.js`). A page several versions behind shows the notes newer than its own version (the newest two joined); a page whose version isn't listed (older than the last 30) shows only the newest entry, if it has a sentence. If the live file can't be read the ship starts a new one, and if the file can't be written it deploys without it. Without any note (local builds, Docker, a failed fetch) the toast keeps its old words, "Refresh to get it. Nothing you captured is lost."
 
 Check a deploy with `curl https://spaghetti.day/api/health`, which answers `{"ok":true}`.
 

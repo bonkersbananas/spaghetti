@@ -15,6 +15,11 @@ describe("sentenceFor", () => {
     expect(sentenceFor(notes, "/assets/index-9.js")).toBe("Note 4.");
     expect(sentenceFor(notes, null)).toBe("Note 4.");
   });
+  it("ignores versions shipped without a note, and an unlisted page gets only a newest entry that has one", () => {
+    expect(sentenceFor([e(1), e(2, ""), e(3, "")], "/assets/index-2.js")).toBeUndefined();
+    expect(sentenceFor([e(1), e(2, ""), e(3, "")], "/assets/index-1.js")).toBeUndefined();
+    expect(sentenceFor([e(1), e(2, ""), e(3)], "/assets/index-1.js")).toBe("Note 3.");
+  });
   it("says nothing when the page is on the newest entry or there are no notes", () => {
     expect(sentenceFor(notes, "/assets/index-4.js")).toBeUndefined();
     expect(sentenceFor([], "/assets/index-1.js")).toBeUndefined();
@@ -27,8 +32,8 @@ describe("parseNotes", () => {
       expect(parseNotes(bad)).toEqual([]);
     }
   });
-  it("drops malformed and empty entries", () => {
-    expect(parseNotes({ notes: [e(1), { entry: "a" }, e(2, "  ")] })).toEqual([e(1)]);
+  it("drops malformed entries and keeps note-less markers", () => {
+    expect(parseNotes({ notes: [e(1), { entry: "a" }, e(2, "")] })).toEqual([e(1), e(2, "")]);
   });
 });
 

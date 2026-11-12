@@ -11,17 +11,13 @@ export type WhatsNewFile = { notes: WhatsNewEntry[] };
 /** How many entries the file keeps, oldest dropped first. */
 export const KEEP_NOTES = 30;
 
-/** The entries of a file read from the network, oldest first; anything malformed is left out. Never throws. */
+/** The entries of a file read (an empty note marks a version shipped without one) from the network, oldest first; anything malformed is left out. Never throws. */
 export function parseNotes(value: unknown): WhatsNewEntry[] {
   const list = (value as { notes?: unknown } | null)?.notes;
   if (!Array.isArray(list)) return [];
   return list.filter(
     (e): e is WhatsNewEntry =>
-      !!e &&
-      typeof e.entry === "string" &&
-      typeof e.date === "string" &&
-      typeof e.note === "string" &&
-      e.note.trim() !== "",
+      !!e && typeof e.entry === "string" && typeof e.date === "string" && typeof e.note === "string",
   );
 }
 
@@ -48,6 +44,9 @@ export function sentenceFor(notes: WhatsNewEntry[], own: string | null | undefin
   if (!notes.length) return undefined;
   const at = own ? notes.findIndex((e) => e.entry === own) : -1;
   const newer = at >= 0 ? notes.slice(at + 1) : notes.slice(-1);
-  const last = newer.slice(-2).map((e) => e.note.trim());
+  const last = newer
+    .map((e) => e.note.trim())
+    .filter(Boolean)
+    .slice(-2);
   return last.length ? last.join(" ") : undefined;
 }
