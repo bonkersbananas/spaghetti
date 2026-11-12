@@ -16,6 +16,7 @@ import { type ShoppingItemRow, shoppingItems } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { lookupShopping, shoppingPictureKey } from "../shopping/lookup.ts";
+import { SEARCH_STALE_MS, suggestionsEnabled, suggestPage } from "../shopping/suggest.ts";
 
 const name = z.string().trim().max(SHOPPING_NAME_MAX);
 const link = z
@@ -41,6 +42,14 @@ const shoppingOrder = z.object({ ids: z.array(z.uuid()).max(SHOPPING_ITEMS_MAX) 
 
 const notFound = "That isn't on the list any more.";
 
+const suggestStateOf = (row: ShoppingItemRow): ShoppingItem["suggestState"] => {
+  if (row.priceLink || !row.suggestionClaimedAt) return null;
+  if (!row.suggestionDoneAt) {
+    return Date.now() - row.suggestionClaimedAt.getTime() < SEARCH_STALE_MS ? "searching" : null;
+  }
+  return row.suggestion ? "found" : "none";
+};
+
 function toApi(row: ShoppingItemRow): ShoppingItem {
   const picture =
     row.pictureSource && row.pictureAt
@@ -53,6 +62,8 @@ function toApi(row: ShoppingItemRow): ShoppingItem {
     priceLink: row.priceLink,
     picture,
     prices: row.prices ?? null,
+    suggestion: row.priceLink ? null : (row.suggestion ?? null),
+    suggestState: suggestStateOf(row),
     pricesTriedAt: row.pricesTriedAt?.getTime() ?? null,
     position: row.position,
     boughtAt: row.boughtAt?.getTime() ?? null,
@@ -131,6 +142,8 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     if (!shoppingItem) return apiError(c, 409, "deleted", "That was taken off the list.");
     // Reading the linked pages never makes the add wait.
     if (shoppingItem.link || shoppingItem.priceLink) c.executionCtx.waitUntil(lookupShopping(c.env, body.id, { db }));
+    // No Prisjakt page yet: a search looks for one to suggest (never to use before someone says yes).
+    if (!shoppingItem.priceLink && shoppingItem.name) c.executionCtx.waitUntil(suggestPage(c.env, body.id, { db }));
     return c.json<ShoppingItemResponse>({ shoppingItem }, 201);
   })
 
@@ -188,7 +201,7 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
           }),
           // A new Prisjakt page means new prices: what the old one said goes. A picture goes with the link it came from,
           // and the new link is asked for its own.
-          ...(fields.priceLink !== undefined && { prices: null, pricesTriedAt: null }),
+          ...(fields.priceLink !== undefined && { prices: null, pricesTriedAt: null, suggestion: null }),
           ...((fields.link !== undefined || fields.priceLink !== undefined) && { pictureTried: null }),
           ...((fields.priceLink !== undefined || fields.link !== undefined) && {
             pictureSource: sql`CASE WHEN (${sql.raw(fields.priceLink !== undefined ? "1" : "0")} AND ${shoppingItems.pictureSource} = 'prisjakt')
@@ -212,6 +225,45 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
     if (fields.link !== undefined || fields.priceLink !== undefined)
       c.executionCtx.waitUntil(lookupShopping(c.env, itemId, { db }));
+    return c.json<ShoppingItemResponse>({ shoppingItem });
+  })
+
+  /** "Look for it": a search for the Prisjakt page, again; the answer is a suggestion to confirm. */
+  .post("/:id/suggest", async (c) => {
+    if (!suggestionsEnabled(c.env)) return apiError(c, 404, "not_found", "That isn't switched on.");
+    const itemId = c.req.param("id");
+    if (!(await loadOne(c.var.db, itemId))) return apiError(c, 404, "not_found", notFound);
+    await suggestPage(c.env, itemId, { force: true, db: c.var.db });
+    const shoppingItem = await loadOne(c.var.db, itemId);
+    if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
+    return c.json<ShoppingItemResponse>({ shoppingItem });
+  })
+
+  /** "Not this one": the suggestion goes and isn't suggested again. */
+  .post("/:id/suggestion/dismiss", async (c) => {
+    const itemId = c.req.param("id");
+    const db = c.var.db;
+    const row = await db
+      .select()
+      .from(shoppingItems)
+      .where(and(eq(shoppingItems.id, itemId), isNull(shoppingItems.deletedAt)))
+      .get();
+    if (!row) return apiError(c, 404, "not_found", notFound);
+    if (row.suggestion) {
+      await db.batch([
+        db
+          .update(shoppingItems)
+          .set({
+            suggestion: null,
+            suggestionRejected: [...new Set([...(row.suggestionRejected ?? []), row.suggestion.url])].slice(-10),
+            updatedAt: new Date(),
+          })
+          .where(eq(shoppingItems.id, itemId)),
+        recordChange(db, { entity: "shopping", id: itemId, action: "updated", actor: c.var.actor }),
+      ]);
+    }
+    const shoppingItem = await loadOne(db, itemId);
+    if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
     return c.json<ShoppingItemResponse>({ shoppingItem });
   })
 

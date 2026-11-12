@@ -51,6 +51,8 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
     ...entry,
     picture: null,
     prices: null,
+    suggestion: null,
+    suggestState: null,
     pricesTriedAt: null,
     position: topPosition(before),
     boughtAt: null,

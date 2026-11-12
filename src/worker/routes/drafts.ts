@@ -10,6 +10,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { labelReadsEnabled } from "../label-read/run.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
+import { suggestionsEnabled } from "../shopping/suggest.ts";
 import { secretKeySource } from "../webhooks/secrets.ts";
 
 const body = z.object({ url: z.string().max(2000).optional(), sharedTitle: z.string().max(200).optional() });
@@ -25,6 +26,7 @@ export const draftRoutes = new Hono<AppEnv>()
       drafts: draftsEnabled(c.env),
       photoReads: photoReadsEnabled(c.env),
       labelReads: labelReadsEnabled(c.env),
+      priceSuggestions: suggestionsEnabled(c.env),
       coach: coachEnabled(c.env),
       webhooks: Boolean(secretKeySource(c.env)),
     }),

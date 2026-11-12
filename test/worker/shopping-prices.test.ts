@@ -1,9 +1,12 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShoppingItem, ShoppingItemResponse } from "../../src/shared/api.ts";
+import { SUGGESTIONS_PER_DAY } from "../../src/shared/prisjakt.ts";
+import { app } from "../../src/worker/app.ts";
 import { lookupShopping, refreshPrices } from "../../src/worker/shopping/lookup.ts";
+import { suggestPage } from "../../src/worker/shopping/suggest.ts";
 import productPage from "../fixtures/pages/prisjakt-product.html?raw";
-import { addUser, request, resetDb, signIn } from "./helpers.ts";
+import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 
 const PRODUCT = "https://www.prisjakt.nu/produkt.php?p=15633708";
 const PRODUCT_PICTURE = "https://cdn.pji.nu/product/standard/800/15633708.jpg";
@@ -14,6 +17,11 @@ const jpeg = () =>
     0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x04, 0xb0, 0x06, 0x40, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1,
   ]);
 const png = () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]);
+
+type Search = { results?: string[]; answer?: unknown; stopReason?: string; status?: number };
+let searches: Array<Record<string, unknown>> = [];
+let searching: Search = {};
+const found = (n = 1) => `https://www.prisjakt.nu/produkt.php?p=${n}`;
 
 interface Web {
   /** Prisjakt's product page. */
@@ -27,13 +35,50 @@ interface Web {
 let asked: string[] = [];
 function stubWeb(web: Web = {}) {
   asked = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  searches = [];
+  searching = {};
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     asked.push(url.href);
     if (url.hostname === "cloudflare-dns.com") {
       return Response.json({
         Status: 0,
         Answer: url.searchParams.get("type") === "A" ? [{ type: 1, data: "93.184.216.34" }] : [],
+      });
+    }
+    if (url.hostname === "api.anthropic.com") {
+      searches.push(JSON.parse(String(init?.body)));
+      if (searching.status) {
+        return Response.json(
+          { type: "error", error: { type: "api_error", message: "no" } },
+          { status: searching.status },
+        );
+      }
+      const results = searching.results ?? [found(7)];
+      return Response.json({
+        id: "msg_test",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content:
+          searching.stopReason === "refusal"
+            ? []
+            : [
+                {
+                  type: "web_search_tool_result",
+                  tool_use_id: "t",
+                  content: results.map((u) => ({
+                    type: "web_search_result",
+                    url: u,
+                    title: "PLA Basic",
+                    encrypted_content: "x",
+                  })),
+                },
+                { type: "text", text: JSON.stringify(searching.answer ?? { url: found(7), title: "PLA Basic" }) },
+              ],
+        stop_reason: searching.stopReason ?? "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 10, output_tokens: 10 },
       });
     }
     const html = { "Content-Type": "text/html" };
@@ -271,5 +316,123 @@ describe("the daily refresh", () => {
     const after = await get(added.id);
     expect(after.picture?.url).toBe(before.picture?.url);
     expect(after.prices?.checkedAt).toBeGreaterThanOrEqual(before.prices?.checkedAt ?? 0);
+  });
+});
+
+describe("suggesting a Prisjakt page", () => {
+  /** A thing with a name and nothing else, once the background search has finished. */
+  async function named(name = "PLA Basic black 1 kg Bambu") {
+    const added = await add({ name });
+    await settled(added.id, (item) => item.suggestState !== "searching" && item.suggestState !== null);
+    return added.id;
+  }
+
+  it("suggests the one page the search returned, and uses nothing until a person says yes", async () => {
+    const id = await named();
+    const item = await get(id);
+    expect(item).toMatchObject({
+      suggestState: "found",
+      suggestion: { url: found(7), title: "PLA Basic" },
+      priceLink: null,
+    });
+    // Claude sees the name, searches only prisjakt.nu with the search tool, and fetches nothing.
+    expect(searches).toHaveLength(1);
+    const asked = searches[0] as { tools: Array<Record<string, unknown>>; messages: Array<{ content: string }> };
+    expect(asked.tools).toEqual([
+      expect.objectContaining({ type: "web_search_20250305", allowed_domains: ["prisjakt.nu"] }),
+    ]);
+    expect(asked.messages[0]?.content).toContain("PLA Basic black 1 kg Bambu");
+    // No Prisjakt page was read, and the thing has no prices.
+    expect(asked.tools.some((tool) => String(tool.type).includes("fetch"))).toBe(false);
+    expect(item.prices).toBeNull();
+    expect(item.pricesTriedAt).toBeNull();
+
+    // "Use it" is a plain change of the Prisjakt link: now the page is read, and the suggestion goes.
+    stubWeb();
+    const used = await patch(id, { priceLink: item.suggestion?.url });
+    expect((await used.json<ShoppingItemResponse>()).shoppingItem.suggestion).toBeNull();
+  });
+
+  it("asks once per name, and again when asked", async () => {
+    const id = await named();
+    expect(await suggestPage(env, id)).toBe(false);
+    expect(searches).toHaveLength(1);
+    expect((await request(`/api/shopping-items/${id}/suggest`, { method: "POST", cookie })).status).toBe(200);
+    expect(searches).toHaveLength(2);
+  });
+
+  it("remembers 'not this one'", async () => {
+    const id = await named();
+    const dismissed = await request(`/api/shopping-items/${id}/suggestion/dismiss`, { method: "POST", cookie });
+    expect((await dismissed.json<ShoppingItemResponse>()).shoppingItem.suggestion).toBeNull();
+    // Asked again, the same page comes back: it isn't offered a second time.
+    await request(`/api/shopping-items/${id}/suggest`, { method: "POST", cookie });
+    const item = await get(id);
+    expect(item.suggestion).toBeNull();
+    expect(item.suggestState).toBe("none");
+    expect((searches[1] as { messages: Array<{ content: string }> }).messages[0]?.content).toContain(found(7));
+  });
+
+  it("keeps nothing when nothing matches, the answer isn't a search result, or it isn't a product page", async () => {
+    for (const search of [
+      { answer: { url: null, title: null } },
+      { answer: { url: found(999), title: "Made up" } },
+      {
+        results: ["https://www.prisjakt.nu/c/3d-skrivare"],
+        answer: { url: "https://www.prisjakt.nu/c/3d-skrivare", title: "x" },
+      },
+      { results: [found(7)], answer: { url: "https://evil.test/produkt.php?p=7", title: "x" } },
+    ] satisfies Search[]) {
+      searching = search;
+      const id = await named();
+      expect(await get(id)).toMatchObject({ suggestion: null, suggestState: "none" });
+    }
+  });
+
+  it("is quiet about a refusal and an API error", async () => {
+    for (const search of [{ stopReason: "refusal" }, { status: 500 }] satisfies Search[]) {
+      searching = search;
+      const id = await named();
+      expect(await get(id)).toMatchObject({ suggestion: null, suggestState: "none" });
+    }
+  });
+
+  it("stops at the day's cap", async () => {
+    for (let n = 0; n < SUGGESTIONS_PER_DAY; n++) {
+      await env.DB.prepare("INSERT INTO shopping_searches (id, item_id, at, outcome) VALUES (?, 'x', ?, 'none')")
+        .bind(crypto.randomUUID(), Date.now())
+        .run();
+    }
+    const added = await add({ name: "PLA Basic black" });
+    await vi.waitFor(async () => expect((await get(added.id)).suggestState).toBe("none"));
+    expect(searches).toHaveLength(0);
+  });
+
+  it("doesn't search for a thing that has a Prisjakt link, a link only, or a name too short to say anything", async () => {
+    await add({ name: "PLA Basic", priceLink: PRODUCT });
+    await add({ link: SHOP });
+    await add({ name: "PL" });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(searches).toHaveLength(0);
+  });
+
+  it("is hidden without the key", async () => {
+    const bare = { ...env, ANTHROPIC_API_KEY: undefined } as unknown as Env;
+    const features = await app.fetch(new Request(`${ORIGIN}/api/features`, { headers: { Cookie: cookie } }), bare);
+    expect((await features.json<{ priceSuggestions: boolean }>()).priceSuggestions).toBe(false);
+    expect(
+      (await (await request("/api/features", { cookie })).json<{ priceSuggestions: boolean }>()).priceSuggestions,
+    ).toBe(true);
+    const added = await add({ name: "PLA Basic black" });
+    await vi.waitFor(async () => expect((await get(added.id)).suggestState).not.toBeNull());
+    const ask = await app.fetch(
+      new Request(`${ORIGIN}/api/shopping-items/${added.id}/suggest`, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: ORIGIN },
+      }),
+      bare,
+    );
+    expect(ask.status).toBe(404);
+    expect(await suggestPage(bare, added.id, { force: true })).toBe(false);
   });
 });
