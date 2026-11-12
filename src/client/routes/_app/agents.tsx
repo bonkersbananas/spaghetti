@@ -43,7 +43,7 @@ function Agents() {
   const mine = agents?.filter((agent) => agent.ownerId === user?.id && agent.connection?.connected !== false) ?? [];
   const open = (agent?: AgentInfo) => canEdit() && setMaking({ open: true, agent });
   const newAgent = (
-    <Button variant="primary" icon={PlusIcon} onClick={() => open()} disabled={readOnly}>
+    <Button variant="secondary" icon={PlusIcon} onClick={() => open()} disabled={readOnly}>
       New agent
     </Button>
   );
@@ -56,7 +56,6 @@ function Agents() {
         // The empty state carries its own button.
         actions={!isPending && !mine.length ? undefined : newAgent}
       />
-      <ShareCard />
       {isPending ? (
         <div className="max-w-content flex flex-col gap-3" aria-hidden>
           <RowSkeleton />
@@ -70,7 +69,7 @@ function Agents() {
         </ul>
       ) : (
         <EmptyState
-          className="py-10 md:py-20"
+          className="py-6 md:py-12"
           illustration={<EmptyPot />}
           title="No sous-chefs in the kitchen yet"
           action={isDesktop ? newAgent : undefined}
@@ -80,9 +79,10 @@ function Agents() {
           marked “via”.
         </EmptyState>
       )}
+      <ShareCard />
       {!isDesktop && (
         <ActionBar>
-          <Button variant="primary" size="lg" icon={PlusIcon} fullWidth disabled={readOnly} onClick={() => open()}>
+          <Button variant="secondary" size="lg" icon={PlusIcon} fullWidth disabled={readOnly} onClick={() => open()}>
             New agent
           </Button>
         </ActionBar>
