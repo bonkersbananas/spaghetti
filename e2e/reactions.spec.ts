@@ -74,7 +74,10 @@ test("reacts to your own idea, keeps it, and takes it back with a tap", { tag: "
   await expect(reactions(page).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(0);
 });
 
-test("reacts to the other person's comment, and both reactions count", { tag: "@phone" }, async ({ page, isMobile }) => {
+test("reacts to the other person's comment, and both reactions count", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
   test.setTimeout(60_000);
   const id = await newIdea(page);
   const samSide = await asSam(page);
