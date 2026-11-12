@@ -13,7 +13,7 @@ import { unreadQuery } from "@/lib/unread-comments";
  * under a label that counts them when there are several, leading to the thread with that comment lit. Nothing when all is read.
  * It sits under what is on the bed, a block of its own under a quiet label: a note on the fridge, not a notification.
  */
-export default function CommentsLine() {
+export default function CommentsLine({ bare = false }: { bare?: boolean }) {
   const { data } = useQuery(unreadQuery);
   const { data: people } = useQuery(peopleQuery);
   const line = data
@@ -35,6 +35,18 @@ export default function CommentsLine() {
       </span>
     </QuietRowContent>
   );
+  const link =
+    thread.stage === "idea" ? (
+      <Link to="/ideas/$ideaId" params={{ ideaId: thread.itemId }} search={search} className={quietRowClass}>
+        {row}
+      </Link>
+    ) : (
+      <Link to="/builds/$buildId" params={{ buildId: thread.itemId }} search={search} className={quietRowClass}>
+        {row}
+      </Link>
+    );
+  // The phone's Now block has little room: the line alone, no label.
+  if (bare) return link;
   // A block of its own on Today, under a quiet label, so it reads as a note in its place rather than a stray line.
   return (
     <Section
@@ -43,15 +55,7 @@ export default function CommentsLine() {
       count={line.total > 1 ? line.total : undefined}
       size="overline"
     >
-      {thread.stage === "idea" ? (
-        <Link to="/ideas/$ideaId" params={{ ideaId: thread.itemId }} search={search} className={quietRowClass}>
-          {row}
-        </Link>
-      ) : (
-        <Link to="/builds/$buildId" params={{ buildId: thread.itemId }} search={search} className={quietRowClass}>
-          {row}
-        </Link>
-      )}
+      {link}
     </Section>
   );
 }

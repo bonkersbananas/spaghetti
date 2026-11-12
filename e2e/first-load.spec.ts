@@ -26,7 +26,8 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 const CEILING_KB = {
   "/sign-in": 184,
-  "/today": 282,
+  // 283: the journal's Now block imports PrintingCard too, so the bundler gives it a chunk of its own (+0.8 kB).
+  "/today": 283,
   "/ideas": 269,
   "/builds": 269,
   "/journal": 269,
