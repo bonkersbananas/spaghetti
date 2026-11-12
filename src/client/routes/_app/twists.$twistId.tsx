@@ -10,6 +10,7 @@ import { DetailBar } from "@/components/shell/DetailBar";
 import { PrintedRow } from "@/components/twists/PrintedRow";
 import { sourceLine } from "@/components/twists/TwistCard";
 import { TwistChanges } from "@/components/twists/TwistChanges";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
@@ -21,6 +22,7 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { createBuild } from "@/lib/builds";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
@@ -106,11 +108,17 @@ function TwistBody({ twist }: { twist: Twist }) {
   const subtitle = sourceLine(twist);
 
   // "Print it again": a build named for the twist, which remembers it, opens ready for its first attempt.
+  const printLabel = printed.length ? "Print it again" : "Print it";
   function printIt() {
     if (!user || !canEdit(false)) return;
     const id = createBuild(user.id, { title: value.name.trim() || twist.name, twistId: twist.id });
     void navigate({ to: "/builds/$buildId", params: { buildId: id } });
   }
+
+  useHotkeys({
+    twistBack: () => void navigate({ to: "/twists" }),
+    twistPrint: printIt,
+  });
 
   function remove() {
     if (!canEdit(false)) return;
@@ -124,6 +132,18 @@ function TwistBody({ twist }: { twist: Twist }) {
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
         <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
+        {isDesktop && (
+          <Button
+            variant="primary"
+            icon={BuildsIcon}
+            shortcut={shortcutCaps("twistPrint")}
+            onClick={printIt}
+            disabled={readOnly || !user}
+            className="ml-2"
+          >
+            {printLabel}
+          </Button>
+        )}
       </DetailBar>
       <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14">
         {photo && (
@@ -157,31 +177,9 @@ function TwistBody({ twist }: { twist: Twist }) {
             {subtitle && <p className="text-small text-ink-faint">{subtitle}</p>}
           </div>
 
-          <div>
-            {/* The sidebar's "New idea" is desktop's one primary action. */}
-            <Button
-              variant={isDesktop ? "secondary" : "primary"}
-              icon={BuildsIcon}
-              disabled={readOnly || !user}
-              onClick={printIt}
-            >
-              {printed.length ? "Print it again" : "Print it"}
-            </Button>
-          </div>
-
           <Section id="changes" title="What we changed">
             <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
           </Section>
-
-          {printed.length > 0 && (
-            <Section id="printed" title="Printed" count={printed.length}>
-              <ul className="flex flex-col gap-2.5">
-                {printed.map((build) => (
-                  <PrintedRow key={build.id} build={build} />
-                ))}
-              </ul>
-            </Section>
-          )}
 
           <NoteField
             label="Note"
@@ -227,8 +225,32 @@ function TwistBody({ twist }: { twist: Twist }) {
               )}
             </div>
           </div>
+
+          {printed.length > 0 && (
+            <Section id="printed" title="Printed" count={printed.length}>
+              <ul className="flex flex-col gap-2.5">
+                {printed.map((build) => (
+                  <PrintedRow key={build.id} build={build} fallback={photo} />
+                ))}
+              </ul>
+            </Section>
+          )}
         </div>
       </div>
+      {!isDesktop && (
+        <ActionBar>
+          <Button
+            variant="primary"
+            size="lg"
+            icon={BuildsIcon}
+            className="min-w-0 flex-1"
+            disabled={readOnly || !user}
+            onClick={printIt}
+          >
+            {printLabel}
+          </Button>
+        </ActionBar>
+      )}
     </article>
   );
 }
