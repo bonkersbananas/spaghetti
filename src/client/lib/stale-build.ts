@@ -22,15 +22,33 @@ async function isNewBuildOut() {
   }
 }
 
+let attempt: Promise<boolean> | undefined;
+let started = false;
+const onStarts = new Set<() => void>();
+
 /**
- * Reloads into the new version unless it just did or there is no new build; returns whether it is reloading. The old service worker would serve the old shell again, so a new
- * one takes over first: update() resolves when it starts installing, so wait (up to 5 s) until it is installed, tell
- * it to take over, and wait (up to 3 s) for it to become the controller.
+ * Reloads into the new version unless it just did or there is no new build; resolves to whether it is reloading (in
+ * practice, only when it isn't: the page is gone by then). `onStart` is called as soon as a reload is decided on, so
+ * a screen can say so during the waits below. Every caller shares one attempt (the preload listener and the error
+ * screen both ask). The old service worker would serve the old shell again, so a new one takes over first: update()
+ * resolves when it starts installing, so wait (up to 5 s) until it is installed, tell it to take over, and wait (up
+ * to 3 s) for it to become the controller.
  */
-export async function reloadIntoNewBuild(): Promise<boolean> {
+export function reloadIntoNewBuild(onStart?: () => void): Promise<boolean> {
+  if (onStart) {
+    if (started) onStart();
+    else onStarts.add(onStart);
+  }
+  attempt ??= run();
+  return attempt;
+}
+
+async function run(): Promise<boolean> {
   if (Date.now() - Number(sessionStorage.getItem(KEY)) < GAP_MS) return false;
   if (!(await isNewBuildOut())) return false;
   sessionStorage.setItem(KEY, String(Date.now()));
+  started = true;
+  for (const onStart of onStarts) onStart();
   try {
     const registration = await navigator.serviceWorker?.getRegistration();
     await registration?.update();
