@@ -21,9 +21,12 @@ export function parseNotes(value: unknown): WhatsNewEntry[] {
   );
 }
 
-/** The file with one more entry at the end (replacing an earlier one for the same version), the last KEEP_NOTES kept. */
+/** The file with one more entry at the end (replacing an earlier one for the same version, unless the new one has no note), the last KEEP_NOTES kept. */
 export function addNote(existing: unknown, add: WhatsNewEntry): WhatsNewFile {
-  const rest = parseNotes(existing).filter((e) => e.entry !== add.entry);
+  const all = parseNotes(existing);
+  // Shipping the same build again without a note keeps the sentence the first ship recorded.
+  if (!add.note.trim() && all.some((e) => e.entry === add.entry)) return { notes: all };
+  const rest = all.filter((e) => e.entry !== add.entry);
   return { notes: [...rest, add].slice(-KEEP_NOTES) };
 }
 

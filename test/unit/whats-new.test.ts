@@ -52,6 +52,14 @@ describe("addNote", () => {
   });
 });
 
+describe("addNote, same build shipped again", () => {
+  it("keeps the first sentence when the second ship has no note", () => {
+    const file = addNote({ notes: [e(1)] }, e(2, "First."));
+    expect(addNote(file, e(2, "")).notes.at(-1)).toEqual(e(2, "First."));
+    expect(addNote(file, e(2, "Better.")).notes.at(-1)).toEqual(e(2, "Better."));
+  });
+});
+
 describe("entryOfHtml", () => {
   it("finds the module script whatever the attribute order", () => {
     expect(entryOfHtml('<script type="module" crossorigin src="/assets/index-a.js"></script>')).toBe(
