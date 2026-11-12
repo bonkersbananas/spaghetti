@@ -1,3 +1,4 @@
+import { modelOf } from "@shared/model-mark";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
@@ -7,8 +8,9 @@ import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PlusIcon } from "@/components/ui/icons";
+import { CubeIcon, PlusIcon } from "@/components/ui/icons";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
@@ -36,7 +38,12 @@ const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 function Ideas() {
   useListPicker();
-  const { items, isPending, error, refetch } = useIdeas();
+  const { items: all, isPending, error, refetch } = useIdeas();
+  // "Has a model" / "Needs designing": one tap each, tap again to see everything. Only offered once an idea has a model.
+  const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
+  const modelCount = all.filter((item) => modelOf(item)).length;
+  const filter = modelCount > 0 ? modelFilter : null;
+  const items = filter ? all.filter((item) => !!modelOf(item) === (filter === "model")) : all;
   // Ideas that were started stay here, after the rest: they are the builds that began as an idea.
   const { items: builds } = useBuilds();
   const started = startedIdeas(builds);
@@ -108,8 +115,30 @@ function Ideas() {
               <WishlistLink me={me} ideas={items} people={people ?? []} className="mb-8" />
             </Suspense>
           )}
+          {modelCount > 0 && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              <ToggleChip
+                icon={CubeIcon}
+                tone="basil"
+                selected={filter === "model"}
+                onClick={() => setModelFilter(filter === "model" ? null : "model")}
+              >
+                Has a model <span className="text-ink-faint font-medium">{modelCount}</span>
+              </ToggleChip>
+              <ToggleChip
+                selected={filter === "design"}
+                onClick={() => setModelFilter(filter === "design" ? null : "design")}
+              >
+                Needs designing <span className="text-ink-faint font-medium">{all.length - modelCount}</span>
+              </ToggleChip>
+            </div>
+          )}
           {!items.length && (
-            <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
+            <p className="text-body text-ink-soft mb-2">
+              {filter
+                ? "Nothing here. Tap the chip again to see every idea."
+                : "Nothing new in the pot. What you started is below."}
+            </p>
           )}
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">

@@ -50,7 +50,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "alex",
     ago: 3 * DAY + 2 * HOUR,
     title: "Bath tugboat for Mila",
-    note: "Chunky enough for small hands. Print the hull in two halves so it floats upright?",
+    note: "Chunky enough for small hands. Print the hull in two halves so it floats upright?\n\nhttps://www.printables.com/model/512340-bath-tugboat",
     photos: [{ file: "tugboat.svg", color: "#867362" }],
   },
   {
@@ -84,7 +84,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     ago: 2 * DAY + 2 * HOUR,
     title: "Desk tidy-up",
     upNext: 1,
-    note: "Clips for the desk edge, a bin for the drawer of screws, and a phone stand in that blue PETG.\n\nThe bin's grid is from https://makerworld.com/en/models/drawer-bins, scaled to 42 mm.",
+    note: "Clips for the desk edge, a bin for the drawer of screws, and a phone stand in that blue PETG.\n\nThe bin's grid is from https://makerworld.com/en/models/487213-drawer-bins, scaled to 42 mm.",
     photos: [
       { file: "cable-clips.svg", color: "#a5967e" },
       { file: "drawer-organizer.svg", color: "#c1b198" },
@@ -125,7 +125,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "alex",
     ago: 9 * DAY,
     title: "Calibration cube, but useful",
-    note: "A small cube with a hole for a 608 bearing: checks tolerances and ends up a fidget toy.",
+    note: "A small cube with a hole for a 608 bearing: checks tolerances and ends up a fidget toy.\nhttps://files.example.org/bearing-cube.3mf",
     photos: [],
   },
   {

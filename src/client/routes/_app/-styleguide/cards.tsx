@@ -1,3 +1,4 @@
+import { modelMarkOf } from "@shared/model-mark";
 import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
@@ -5,6 +6,7 @@ import { Card, PhotoCountBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
+import { ModelCard, ModelMarkChip } from "@/components/ui/ModelMark";
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, people, Section } from "./shared";
@@ -90,6 +92,53 @@ export function CardSection() {
           <LinkCard url="https://www.example.com/a/model/without-a-title-yet" />
         </div>
       </div>
+      <div className="mt-10">
+        <Label>
+          Model mark: a basil pill with the cube and where the model lives, on the photo's bottom edge (and on a note
+          card). It means a model page on a known site or a link straight to a model file
+        </Label>
+        <div className="grid grid-cols-2 items-start gap-3 md:grid-cols-4 md:gap-5">
+          <Card
+            photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+            title="Articulated dragon"
+            meta="Just now"
+            aspect="portrait"
+            chips={<ModelMarkChip mark={MAKERWORLD} />}
+          />
+          <Card
+            photo={{ src: planterPhoto, alt: "A green planter with a small plant" }}
+            title="Planter with drainage"
+            meta="Yesterday"
+            aspect="portrait"
+            chips={<ModelMarkChip mark={PRINTABLES} />}
+          />
+          <Card
+            note="Calibration cube, but useful"
+            meta="2 days ago"
+            aspect="portrait"
+            chips={<ModelMarkChip mark={FILE} />}
+          />
+          <Card
+            photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+            title="Spiral vase"
+            meta="No model yet: it still needs designing"
+            aspect="portrait"
+          />
+        </div>
+        <div className="mt-8">
+          <Label>The model card on an idea's page: with the draft's picture, and without</Label>
+        </div>
+        <div className="max-w-content grid grid-cols-1 gap-3">
+          <ModelCard mark={MAKERWORLD} picture={{ src: dragonPhoto }} />
+          <ModelCard mark={FILE} />
+        </div>
+      </div>
     </Section>
   );
 }
+
+const MAKERWORLD = modelMarkOf("https://makerworld.com/en/models/487213-drawer-bins") as NonNullable<
+  ReturnType<typeof modelMarkOf>
+>;
+const PRINTABLES = modelMarkOf("https://www.printables.com/model/512340-bath-tugboat") as typeof MAKERWORLD;
+const FILE = modelMarkOf("https://files.example.org/bearing-cube.3mf") as typeof MAKERWORLD;
