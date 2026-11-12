@@ -97,7 +97,10 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             </MenuItem>
           ))}
         </MenuGroup>
-        <MenuGroup className="mt-6">
+        <Overline as="h3" className="mt-6 mb-2 block">
+          Settings
+        </Overline>
+        <MenuGroup>
           <MenuItem to="/agents" icon={AgentIcon} onClick={() => onOpenChange(false)}>
             Agents
           </MenuItem>
@@ -117,7 +120,10 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             Styleguide
           </MenuItem>
         </MenuGroup>
-        <div className="mt-6">
+        <Overline as="h3" className="mt-6 mb-2 block">
+          Signing in
+        </Overline>
+        <div>
           <Suspense fallback={<div className="h-40" />}>
             <SigningInRows size="md" onPick={openSigningIn} />
           </Suspense>

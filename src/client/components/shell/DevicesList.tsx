@@ -61,7 +61,7 @@ export function DevicesList({ enabled }: { enabled: boolean }) {
         ))}
       </ul>
       <Button
-        variant="secondary"
+        variant="danger"
         fullWidth
         disabled={others === 0}
         loading={signOutOthers.isPending}

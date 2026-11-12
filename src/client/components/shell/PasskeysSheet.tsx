@@ -58,45 +58,53 @@ export function PasskeysSheet({
         </Button>
       }
     >
-      <Overline as="h3" className="mb-1 block">
-        Passkeys
-      </Overline>
-      {list.isPending ? (
-        <ul>
-          {[0, 1].map((i) => (
-            <RowSkeleton key={i} />
-          ))}
-        </ul>
-      ) : passkeys.length === 0 ? (
-        <p className="text-body text-ink-soft">
-          None yet. Add one on this device and the sign-in screen will offer it first. Your password keeps working.
-        </p>
-      ) : (
-        <ul>
-          {passkeys.map((passkey) => (
-            <PasskeyRow
-              key={passkey.id}
-              passkey={passkey}
-              renaming={renaming === passkey.id}
-              onRename={() => setRenaming(passkey.id)}
-              onDone={() => setRenaming(null)}
-              onRemove={lastWayIn ? undefined : () => removePasskey(queryClient, passkey)}
-            />
-          ))}
-        </ul>
-      )}
-      <Overline as="h3" className="mt-6 mb-2 block">
-        Password
-      </Overline>
-      <MenuGroup>
-        <MenuItem icon={KeyIcon} onClick={onChangePassword}>
-          Change password
-        </MenuItem>
-      </MenuGroup>
-      <Overline as="h3" className="mt-6 mb-1 block">
-        Signed-in devices
-      </Overline>
-      <DevicesList enabled={open} />
+      <div className="flex flex-col gap-7">
+        <section aria-labelledby="passkeys-heading" className="flex flex-col gap-1">
+          <Overline as="h3" id="passkeys-heading" className="block">
+            Passkeys
+          </Overline>
+          {list.isPending ? (
+            <ul>
+              {[0, 1].map((i) => (
+                <RowSkeleton key={i} />
+              ))}
+            </ul>
+          ) : passkeys.length === 0 ? (
+            <p className="text-body text-ink-soft">
+              None yet. Add one on this device and the sign-in screen will offer it first. Your password keeps working.
+            </p>
+          ) : (
+            <ul>
+              {passkeys.map((passkey) => (
+                <PasskeyRow
+                  key={passkey.id}
+                  passkey={passkey}
+                  renaming={renaming === passkey.id}
+                  onRename={() => setRenaming(passkey.id)}
+                  onDone={() => setRenaming(null)}
+                  onRemove={lastWayIn ? undefined : () => removePasskey(queryClient, passkey)}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+        <section aria-labelledby="password-heading" className="flex flex-col gap-2">
+          <Overline as="h3" id="password-heading" className="block">
+            Password
+          </Overline>
+          <MenuGroup>
+            <MenuItem icon={KeyIcon} onClick={onChangePassword}>
+              Change password
+            </MenuItem>
+          </MenuGroup>
+        </section>
+        <section aria-labelledby="devices-heading" className="flex flex-col gap-1">
+          <Overline as="h3" id="devices-heading" className="block">
+            Signed-in devices
+          </Overline>
+          <DevicesList enabled={open} />
+        </section>
+      </div>
     </Sheet>
   );
 }
