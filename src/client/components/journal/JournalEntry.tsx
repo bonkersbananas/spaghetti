@@ -19,6 +19,7 @@ import {
   IdeasIcon,
   PrintingIcon,
   ShelveIcon,
+  SlicerFileIcon,
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
@@ -126,23 +127,31 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
       )}
     >
       {plate && (
-        <div className="relative size-24 shrink-0 self-start overflow-hidden rounded-md md:aspect-4/3 md:h-auto md:w-2/5 md:self-auto">
-          {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
-          <Photo
-            src={fileThumbSrc(plate.id)}
-            alt=""
-            fit="contain"
-            className="size-full p-1.5 md:p-3"
-            imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
-          />
-          <span className="absolute top-2 left-2 max-md:hidden">
-            <SlicerPreviewBadge />
+        // On a phone the render is a small picture beside the words, with its label under it; from md it is the card's
+        // picture, labeled on its corner.
+        <div className="flex shrink-0 flex-col items-center gap-1 self-start md:w-2/5 md:self-auto">
+          <div className="relative size-24 overflow-hidden rounded-md md:aspect-4/3 md:h-auto md:w-full">
+            {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
+            <Photo
+              src={fileThumbSrc(plate.id)}
+              alt=""
+              fit="contain"
+              className="size-full p-1.5 md:p-3"
+              imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
+            />
+            <span className="absolute top-2 left-2 max-md:hidden">
+              <SlicerPreviewBadge />
+            </span>
+            <OutcomeChip
+              outcome={attempt.outcome}
+              offTheBed={offBed}
+              className="shadow-soft absolute bottom-2 left-2 max-md:hidden"
+            />
+          </div>
+          <span className="text-caption text-ink-faint inline-flex items-center gap-1 md:hidden">
+            <SlicerFileIcon size={12} weight="fill" aria-hidden />
+            Slicer preview
           </span>
-          <OutcomeChip
-            outcome={attempt.outcome}
-            offTheBed={offBed}
-            className="shadow-soft absolute bottom-2 left-2 max-md:hidden"
-          />
         </div>
       )}
       {photo && (
@@ -172,7 +181,6 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         {/* Without a picture, the outcome leads the card (on a phone, a slicer's render is too small to carry it). */}
         {(!picture || plate) && (
           <div className={cn("flex items-center gap-2", plate && "md:hidden")}>
-            {plate && <span className="text-caption text-ink-faint sr-only">Slicer preview</span>}
             <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
             <Meta at={attempt.printedAt} time={time} person={person} via={via} />
           </div>
