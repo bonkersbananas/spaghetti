@@ -20,7 +20,8 @@ export function AuthPage({
 }) {
   return (
     <main className="paper-grain bg-paper pt-safe pb-safe relative flex min-h-dvh flex-col items-center px-5">
-      <div className="flex w-full max-w-sm flex-1 flex-col justify-center py-10">
+      {/* The mark sits at the same height on every one of these pages (centering moved it with the card). */}
+      <div className="flex w-full max-w-sm flex-1 flex-col pt-[clamp(2.5rem,12dvh,7rem)] pb-10">
         <m.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -45,8 +46,8 @@ export function AuthPage({
         >
           {children}
         </m.div>
+        {footer && <p className="text-small text-ink-faint mt-6 text-center text-balance">{footer}</p>}
       </div>
-      {footer && <p className="text-small text-ink-faint pb-6 text-center">{footer}</p>}
     </main>
   );
 }
