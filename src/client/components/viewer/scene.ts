@@ -1,17 +1,12 @@
 import type { Layer } from "@shared/gcode";
 import { FEATURES } from "@shared/gcode";
 import {
-  BufferAttribute,
   CanvasTexture,
   Color,
   ColorManagement,
   DoubleSide,
   ExtrudeGeometry,
   Group,
-  InstancedBufferAttribute,
-  InstancedBufferGeometry,
-  InstancedInterleavedBuffer,
-  InterleavedBufferAttribute,
   LinearSRGBColorSpace,
   Mesh,
   MeshBasicMaterial,
@@ -28,6 +23,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { boxGeometry, chunkGeometry } from "./chunks";
 
 /**
  * The 3D viewer's scene: a build plate that looks like the printer's, and the toolpaths as small extrusions, one
@@ -199,80 +195,6 @@ function shadowTexture(): CanvasTexture {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = LinearSRGBColorSpace;
   return texture;
-}
-
-/** One unit box: x along the move (0–1), y across (±0.5), z from the layer's top down (−1–0), with its normals. */
-function boxGeometry(): InstancedBufferGeometry {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const indices: number[] = [];
-  const face = (n: [number, number, number], corners: [number, number, number][]) => {
-    const base = positions.length / 3;
-    for (const c of corners) {
-      positions.push(...c);
-      normals.push(...n);
-    }
-    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
-  face(
-    [0, 0, 1],
-    [
-      [0, -0.5, 0],
-      [1, -0.5, 0],
-      [1, 0.5, 0],
-      [0, 0.5, 0],
-    ],
-  );
-  face(
-    [0, 0, -1],
-    [
-      [0, -0.5, -1],
-      [0, 0.5, -1],
-      [1, 0.5, -1],
-      [1, -0.5, -1],
-    ],
-  );
-  face(
-    [0, 1, 0],
-    [
-      [0, 0.5, 0],
-      [1, 0.5, 0],
-      [1, 0.5, -1],
-      [0, 0.5, -1],
-    ],
-  );
-  face(
-    [0, -1, 0],
-    [
-      [0, -0.5, 0],
-      [0, -0.5, -1],
-      [1, -0.5, -1],
-      [1, -0.5, 0],
-    ],
-  );
-  face(
-    [1, 0, 0],
-    [
-      [1, -0.5, 0],
-      [1, -0.5, -1],
-      [1, 0.5, -1],
-      [1, 0.5, 0],
-    ],
-  );
-  face(
-    [-1, 0, 0],
-    [
-      [0, -0.5, 0],
-      [0, 0.5, 0],
-      [0, 0.5, -1],
-      [0, -0.5, -1],
-    ],
-  );
-  const geometry = new InstancedBufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(new Float32Array(positions), 3));
-  geometry.setAttribute("normal", new BufferAttribute(new Float32Array(normals), 3));
-  geometry.setIndex(indices);
-  return geometry;
 }
 
 export interface SceneColors {
@@ -459,14 +381,7 @@ export class PrintScene {
       if (l.index === 0 && l.height > 0) this.setLayerHeight(l.height);
       for (let i = 0; i < l.count; i++) this.grow(l.pos, i * 6, l.feature[i] ?? 0);
     }
-    const geometry = new InstancedBufferGeometry();
-    geometry.index = this.box.index;
-    geometry.attributes = this.box.attributes;
-    const buffer = new InstancedInterleavedBuffer(pos, 6, 1);
-    geometry.setAttribute("aStart", new InterleavedBufferAttribute(buffer, 3, 0));
-    geometry.setAttribute("aEnd", new InterleavedBufferAttribute(buffer, 3, 3));
-    geometry.setAttribute("aInfo", new InstancedBufferAttribute(info, 2));
-    geometry.instanceCount = segments;
+    const geometry = chunkGeometry(this.box, pos, info, segments);
     geometry.boundingSphere = new Sphere(new Vector3(PLATE / 2, PLATE / 2, 20), PLATE * 2);
     const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
