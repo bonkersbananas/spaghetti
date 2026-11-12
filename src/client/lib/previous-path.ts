@@ -3,7 +3,16 @@ import type { AnyRouter } from "@tanstack/react-router";
 /** The last move the router made: where it came from and where it landed (for "was the list the page before?"). */
 export const lastMove = { from: "", to: "" };
 
+/** How the router last moved: "BACK" for the back arrow, pull-to-go and the browser's back button. */
+let lastAction = "";
+
+/** Whether the move being made is a step back in history (a page slides away to the right only then). */
+export const isBackMove = () => lastAction === "BACK";
+
 export function trackMoves(router: AnyRouter) {
+  router.history.subscribe(({ action }: { action: { type: string } }) => {
+    lastAction = action.type;
+  });
   router.subscribe("onResolved", (event) => {
     lastMove.from = event.fromLocation?.pathname ?? "";
     lastMove.to = event.toLocation.pathname;
