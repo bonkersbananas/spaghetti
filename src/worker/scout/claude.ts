@@ -3,7 +3,7 @@ import { z } from "zod";
 import { SCOUT_CANDIDATES, SCOUT_DOMAINS, SCOUT_WHY_MAX } from "../../shared/scout.ts";
 import { PRINTER_FACTS } from "../coach/claude.ts";
 
-/** The model that scouts (decision 0039), the same as the drafts, the coach and the week's paragraph. */
+/** The model that scouts (decision 0040), the same as the drafts, the coach and the week's paragraph. */
 export const SCOUT_MODEL = "claude-opus-5-5";
 /** Searching and reading pages takes a while. The cron has far longer than a request after its response. */
 export const SCOUT_TIMEOUT_MS = 280_000;

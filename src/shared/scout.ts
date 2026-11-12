@@ -1,5 +1,5 @@
 /**
- * The idea scout (decision 0039): once a week Claude suggests three models to print. The shapes the page and the API
+ * The idea scout (decision 0040): once a week Claude suggests three models to print. The shapes the page and the API
  * share and the few pure rules both sides need: which links may be suggested and what makes two of them the same
  * model. Pure, so the browser, the Worker and the unit tests agree.
  */

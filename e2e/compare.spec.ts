@@ -2,6 +2,15 @@ import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
+/** The way into a comparison: the attempt card's "…" menu. */
+async function openCompare(page: Page, attemptId: string, name: RegExp | string = /^Compare/) {
+  await page
+    .locator(`[data-attempt-id="${attemptId}"]`)
+    .getByRole("button", { name: /^Options for attempt/ })
+    .click();
+  await page.getByRole("button", { name }).click();
+}
+
 const origin = (page: Page) => new URL(page.url()).origin;
 
 test.beforeEach(async ({ page }) => {
@@ -79,10 +88,7 @@ test("compares two attempts from the changes line and from the keyboard", async 
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
 
   // The changes line is the way in; the dialog names both attempts, older first.
-  await page
-    .locator(`[data-attempt-id="${ids[1]}"]`)
-    .getByRole("button", { name: /Compare$/ })
-    .click();
+  await openCompare(page, ids[1] as string, /Compare$/);
   const sheet = page.getByRole("dialog", { name: "Attempt 1 and attempt 2" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText("Cable chain")).toBeVisible();
@@ -123,7 +129,7 @@ test("compares two attempts from the changes line and from the keyboard", async 
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // Nothing changed since attempt 2: the entry offers the plain comparison.
-  await page.locator(`[data-attempt-id="${ids[2]}"]`).getByRole("button", { name: "Compare with attempt 2" }).click();
+  await openCompare(page, ids[2] as string, "Compare with attempt 2");
   await expect(page.getByRole("dialog", { name: "Attempt 2 and attempt 3" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -145,7 +151,9 @@ test("the first attempt has nothing to compare with", async ({ page }) => {
   const { id, ids } = await buildWithThreeAttempts(page);
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-  await expect(page.locator(`[data-attempt-id="${ids[0]}"]`).getByRole("button", { name: /Compare/ })).toHaveCount(0);
+  await expect(
+    page.locator(`[data-attempt-id="${ids[0]}"]`).getByRole("button", { name: /Options for attempt/ }),
+  ).toHaveCount(0);
 });
 
 test("on a laptop What changed is in the first screen of the compare sheet, photos and all", async ({
@@ -184,10 +192,7 @@ test("on a laptop What changed is in the first screen of the compare sheet, phot
     await page.setViewportSize(size);
     await page.goto(`/builds/${id}`);
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-    await page
-      .locator(`[data-attempt-id="${ids[1]}"]`)
-      .getByRole("button", { name: /Compare$/ })
-      .click();
+    await openCompare(page, ids[1] as string, /Compare$/);
     const sheet = page.getByRole("dialog", { name: "Attempt 1 and attempt 2" });
     await expect(sheet.getByRole("img", { name: "Attempt 2", exact: true })).toBeVisible();
     await page.waitForTimeout(500);

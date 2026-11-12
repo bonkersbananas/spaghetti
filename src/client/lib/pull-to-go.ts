@@ -176,7 +176,7 @@ export function usePullToGo(list: { to: string; label: string }, reduced: boolea
     // phone, a downward pan is excluded from touch-action and stays ours; anywhere lower it is plain scrolling.
     const root = document.documentElement;
     const sync = () => {
-      root.style.touchAction = window.scrollY <= 0 && window.matchMedia(PHONE).matches ? "pan-x pan-up pinch-zoom" : "";
+      root.style.touchAction = window.scrollY <= 0 && window.matchMedia(PHONE).matches ? "pan-x pan-up" : "";
     };
     sync();
     window.addEventListener("scroll", sync, { passive: true });

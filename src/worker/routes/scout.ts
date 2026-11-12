@@ -20,7 +20,7 @@ const keepBody = z.object({ itemId: z.uuid() });
 const gone = "That suggestion isn't here any more.";
 
 /**
- * The idea scout (decision 0039). Reading is for anyone who can read (an agent's token too: it may see the
+ * The idea scout (decision 0040). Reading is for anyone who can read (an agent's token too: it may see the
  * suggestions); keeping, dismissing and their undos are people only (nothing here is a write in auth/scopes.ts), so
  * an agent never acts on a suggestion. Without ANTHROPIC_API_KEY everything answers 404 and the app never offers it.
  */

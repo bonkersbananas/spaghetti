@@ -6,6 +6,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { followTextSize, stopPageZoom } from "./lib/no-page-zoom";
 import { registerServiceWorker } from "./lib/offline";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
 import { trackMoves } from "./lib/previous-path";
@@ -53,6 +54,8 @@ declare module "@tanstack/react-router" {
 addEventListener("vite:preloadError", () => void import("./lib/stale-build").then((m) => m.reloadIntoNewBuild()));
 initTheme();
 trackVisibleViewport();
+stopPageZoom();
+followTextSize();
 registerServiceWorker();
 
 const root = document.getElementById("root");

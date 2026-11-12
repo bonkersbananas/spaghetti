@@ -1113,7 +1113,7 @@ export const shoppingItems = sqliteTable("shopping_items", {
 export type ShoppingItemRow = typeof shoppingItems.$inferSelect;
 
 /**
- * The idea scout's week (decision 0039): one row a week, claimed before Claude is asked, so a week costs one run
+ * The idea scout's week (decision 0040): one row a week, claimed before Claude is asked, so a week costs one run
  * (a claim that went quiet is taken over once more). `monday` is the week's Monday in the workspace's time zone.
  */
 export const scoutRounds = sqliteTable("scout_rounds", {

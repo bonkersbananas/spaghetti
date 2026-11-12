@@ -11,7 +11,7 @@
  * build's title or a print's note) decides the answer: `slow` takes ten seconds, `refused` is refused, `broken` is an
  * API error, `quiet` has nothing to add, anything else is a short paragraph.
  *
- * A request that asks which models to print next is the idea scout (decision 0039): a word in the notebook (a saved
+ * A request that asks which models to print next is the idea scout (decision 0040): a word in the notebook (a saved
  * idea's title) decides the answer: without the word `scout` in the notebook it finds nothing (unless started with
  * `scoutAlways`, as the screenshots are), `scout-slow` takes ten seconds, `scout-refused` is refused, `scout-broken` is an API error, `scout-hollow`
  * suggests only a dead link, anything else is three good models and one dead link (an address with `dead` in it,

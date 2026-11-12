@@ -26,7 +26,7 @@ export interface ScoutCardProps {
 }
 
 /**
- * One model the idea scout found (decision 0039): the picture first and large, the title, one sentence on why it
+ * One model the idea scout found (decision 0040): the picture first and large, the title, one sentence on why it
  * fits, and two answers. Keep makes an idea of it; Not for us puts it away for good. Nothing is decided until a
  * tap, and both can be taken back.
  */

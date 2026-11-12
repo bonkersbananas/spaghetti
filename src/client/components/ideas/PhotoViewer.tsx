@@ -7,7 +7,9 @@ import { cn } from "@/lib/cn";
 import { useHeroName } from "@/lib/hero";
 import type { PhotoView } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
+import type { PhotoZoom } from "@/lib/photo-zoom";
 import { photoSrc } from "@/lib/previews";
+import { useWhenIdle } from "@/lib/when-idle";
 
 interface PhotoViewerProps {
   photos: PhotoView[];
@@ -25,11 +27,57 @@ function frameAspect(photo: PhotoView | undefined): number {
   return Math.min(4 / 3, Math.max(4 / 5, photo.width / photo.height));
 }
 
-/** One photo's frame in the carousel; it takes the hero transition's name when it is the photo that was tapped on a card. */
-function ViewerFigure({ photo, label, children }: { photo: PhotoView; label: string; children: ReactNode }) {
+/**
+ * One photo's frame in the carousel; it takes the hero transition's name when it is the photo that was tapped on a
+ * card. The photo inside zooms in place (lib/photo-zoom.ts, loaded once the screen is idle, separately from the
+ * viewer), and goes back to fitted when another photo is the one shown.
+ */
+function ViewerFigure({
+  photo,
+  label,
+  active,
+  overlay,
+  children,
+}: {
+  photo: PhotoView;
+  label: string;
+  active: boolean;
+  /** Stays put while the photo zooms. */
+  overlay?: ReactNode;
+  children: ReactNode;
+}) {
+  const frame = useRef<HTMLElement>(null);
+  const layer = useRef<HTMLDivElement>(null);
+  const zoom = useRef<PhotoZoom | null>(null);
+  useWhenIdle(() => {
+    const el = frame.current;
+    const inner = layer.current;
+    if (!el || !inner) return;
+    void import("@/lib/photo-zoom").then((module) => {
+      if (frame.current === el && !zoom.current) zoom.current = module.attachPhotoZoom(el, inner);
+    });
+  });
+  useEffect(() => {
+    if (!active) zoom.current?.reset();
+  }, [active]);
+  useEffect(
+    () => () => {
+      zoom.current?.destroy();
+      zoom.current = null;
+    },
+    [],
+  );
   return (
-    <figure aria-label={label} style={useHeroName(photo.id)} className="relative h-full w-full shrink-0 snap-center">
-      {children}
+    <figure
+      ref={frame}
+      aria-label={label}
+      style={useHeroName(photo.id)}
+      className="relative h-full w-full shrink-0 snap-center overflow-hidden"
+    >
+      <div ref={layer} className="size-full will-change-transform">
+        {children}
+      </div>
+      {overlay}
     </figure>
   );
 }
@@ -74,7 +122,21 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, class
           style={{ aspectRatio: frameAspect(photos[0]), scrollbarWidth: "none" }}
         >
           {photos.map((photo, i) => (
-            <ViewerFigure key={photo.id} photo={photo} label={`${i + 1} of ${photos.length}`}>
+            <ViewerFigure
+              key={photo.id}
+              photo={photo}
+              label={`${i + 1} of ${photos.length}`}
+              active={i === index}
+              overlay={
+                photo.upload && (
+                  <UploadBadge
+                    state={photo.upload.status === "queued" ? "queued" : photo.upload.status}
+                    progress={photo.upload.progress}
+                    className="absolute bottom-3 left-3"
+                  />
+                )
+              }
+            >
               <Photo
                 src={photoSrc(photo.id, "large")}
                 alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
@@ -83,13 +145,6 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, class
                 eager={Math.abs(i - index) <= 1}
                 className="bg-paper-deep size-full"
               />
-              {photo.upload && (
-                <UploadBadge
-                  state={photo.upload.status === "queued" ? "queued" : photo.upload.status}
-                  progress={photo.upload.progress}
-                  className="absolute bottom-3 left-3"
-                />
-              )}
             </ViewerFigure>
           ))}
         </div>

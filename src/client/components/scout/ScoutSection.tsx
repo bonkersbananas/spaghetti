@@ -58,7 +58,7 @@ function Cards({ picks, round }: { picks: ScoutPick[]; round: "today" | "week" }
 }
 
 /**
- * The idea scout's three (decision 0039). On Today it is a calm block of the suggestions still waiting, drawn only
+ * The idea scout's three (decision 0040). On Today it is a calm block of the suggestions still waiting, drawn only
  * when there are some; on this week's page it also shows what was kept or put away, with a way back, and says when
  * the scout is looking or hasn't been out yet. Lazy: Today and the week page load it after themselves.
  */
