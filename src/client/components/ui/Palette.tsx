@@ -255,7 +255,7 @@ interface PaletteDialogProps {
 
 /** The palette as an overlay: high on the screen, instant, with the page dimmed behind. */
 export function PaletteDialog({ open, onOpenChange, onClosed, children }: PaletteDialogProps) {
-  const returnFocus = useReturnFocus(open);
+  const returnFocus = useReturnFocus(open, true);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>

@@ -50,6 +50,33 @@ test.describe("on a laptop", () => {
     await expect(account).toBeFocused();
   });
 
+  test("the palette's frame, swapped for the real palette while open, still returns focus", async ({ page }) => {
+    // Hold the palette's code back, so ⌘K opens only its frame and the commands arrive after.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/CommandPalette-[\w-]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto("/ideas");
+    await expect(page.getByRole("heading", { name: "Ideas", level: 1 })).toBeVisible();
+    await page.waitForTimeout(1500); // the page settles (the sidebar can redraw once and drop focus)
+    const account = page.getByRole("button", { name: "Account menu" });
+    await account.focus();
+    await expect(account).toBeFocused();
+    await page.keyboard.press(open);
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    await expect(palette).toBeVisible();
+    await expect(palette.getByRole("option")).toHaveCount(0);
+    release();
+    await expect(palette.getByRole("option").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+    await expect(account).toBeFocused();
+  });
+
   test("opens from anywhere, lists actions and recent items, and closes with Escape", async ({ page }) => {
     const id = await create(page, { title: "Tugboat deck", stage: "building" });
     await page.goto(`/builds/${id}`);
