@@ -63,8 +63,10 @@ function CaptureButton() {
           held.current = false;
           stop();
         }}
+        // Sliding off the button: no click will come, so the hold is over.
         onPointerLeave={() => {
-          if (!held.current) stop();
+          held.current = false;
+          stop();
         }}
         onContextMenu={(event) => event.preventDefault()}
         onClick={() => {
