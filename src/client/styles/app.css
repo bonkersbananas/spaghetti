@@ -256,6 +256,25 @@
   --spool-hub-rim: color-mix(in srgb, var(--sg-ink) 30%, transparent);
 }
 
+/* Worked: a few specks of parmesan fly out from the check (ui Outcome's Sprinkle) and fade. */
+@keyframes sg-speck {
+  0% {
+    transform: rotate(var(--sg-angle)) translateX(6px) scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--sg-angle)) translateX(30px) scale(1);
+    opacity: 0;
+  }
+}
+.sg-speck {
+  animation: sg-speck var(--sg-duration-slow) var(--sg-ease-out) both;
+  opacity: 0;
+}
+
 /* Steam wisps in empty-state illustrations. */
 @keyframes sg-steam {
   0% {

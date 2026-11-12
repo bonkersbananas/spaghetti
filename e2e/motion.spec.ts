@@ -251,3 +251,37 @@ test("only a step back slides the page away: Start building and a tab switch don
   await expect(page).toHaveURL(/\/ideas$/);
   expect(await slides()).toBe(1);
 });
+
+test("Worked throws a pinch of parmesan and spaghetti is met kindly, only for a pick made in the sheet", async ({
+  page,
+}) => {
+  const { id } = await buildWithAttempts(page, 1);
+  await page.goto(`/builds/${id}`);
+  await page
+    .getByRole("button", { name: /^Log attempt/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 2" });
+  const kind = sheet.getByText("Good one to have on record");
+  await expect(kind).toHaveCount(0);
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  await expect(sheet.locator(".sg-speck")).toHaveCount(6);
+  await expect(kind).toHaveCount(0);
+  await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+  await expect(kind).toBeVisible();
+  await expect(sheet.locator(".sg-speck")).toHaveCount(0);
+  await sheet.getByRole("radio", { name: "Partly" }).click();
+  await expect(kind).toHaveCount(0);
+  // Opening an attempt that already was spaghetti says nothing: the line answers a pick, it isn't a label.
+  const headers = { Origin: origin(page) };
+  const failed = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: failed, title: "Hinge", stage: "building" } });
+  await page.request.post(`/api/items/${failed}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: "failed", note: "Off the bed" },
+  });
+  await page.goto(`/builds/${failed}`);
+  await page.getByRole("button", { name: /^Attempt 1: / }).click();
+  await expect(page.getByRole("dialog", { name: "Attempt 1" }).getByRole("radio", { name: "Spaghetti" })).toBeChecked();
+  await expect(page.getByText("Good one to have on record")).toHaveCount(0);
+});
