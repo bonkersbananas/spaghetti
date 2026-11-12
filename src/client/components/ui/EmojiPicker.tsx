@@ -114,6 +114,7 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
               {recent.slice(0, 8).map((emoji) => (
                 <li key={emoji} className="flex basis-1/8">
                   <EmojiButton
+                    recent
                     emoji={emoji}
                     label={emoji}
                     given={given?.has(emoji)}
