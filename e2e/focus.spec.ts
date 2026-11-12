@@ -57,7 +57,8 @@ test("focus lands in the page after moving: opening an idea, going back, a secti
 
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/ideas$/);
-  await expect(page.locator("main")).toBeFocused();
+  // Back on the list, the card that was opened has focus again.
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toBeFocused();
 
   await page.keyboard.press("g");
   await page.keyboard.press("j");
