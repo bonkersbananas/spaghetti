@@ -85,7 +85,7 @@ import { itemName, useRememberItem } from "@/lib/recent";
 import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes";
 import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useStickyColumn } from "@/lib/sticky-column";
-import { twistFromBuild } from "@/lib/twists";
+import { twistFromBuild, useTwists } from "@/lib/twists";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
@@ -169,6 +169,9 @@ function Build({ item }: { item: ItemView }) {
   const { data: user } = useQuery(sessionQuery);
   // A build from someone else's model can be kept as a twist, once (it then says it prints it).
   const model = modelOf({ note: item.note, draft: item.draft });
+  // A twist made from this item while it was an idea has `fromItemId` but not the build's `twistId`: it counts too.
+  const { twists } = useTwists();
+  const hasTwist = !!item.twistId || !!twists?.some((twist) => twist.fromItemId === item.id);
   function saveAsTwist() {
     if (!user || !canEdit(item.pending)) return;
     const id = twistFromBuild(
@@ -487,7 +490,7 @@ function Build({ item }: { item: ItemView }) {
               />
             )
           )}
-          {!item.twistId && model && (
+          {twists && !hasTwist && model && (
             <IconButton icon={TwistIcon} label="Save as twist" disabled={readOnly || !user} onClick={saveAsTwist} />
           )}
           <IconButton

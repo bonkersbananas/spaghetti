@@ -218,6 +218,8 @@ describe("tools, scopes and attribution", () => {
     expect(listed.text).toContain(`twist_id: ${twistId}`);
     expect(listed.text).toContain("Scale 84 % · Fit tolerance +0.2 mm");
     expect(listed.text).toContain("(MakerWorld)");
+    // Search finds it too, in its own group.
+    expect((await callTool(made.token, "search", { query: "drawer" })).text).toContain("Twists:");
     const readOnly = (await makeAgent(["read"], "reader")).token;
     expect((await callTool(readOnly, "add_twist", { name: "x" })).isError).toBe(true);
   });

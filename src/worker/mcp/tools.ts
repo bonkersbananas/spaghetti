@@ -255,6 +255,7 @@ export const tools: Tool[] = [
       if (!result.ok) return failure(result);
       const found = result.json as SearchResponse;
       const sections = [
+        found.twists?.length && `Twists:\n${found.twists.map(twistLine).join("\n")}`,
         found.builds.length && `Builds:\n${found.builds.map(itemLine).join("\n")}`,
         found.ideas.length && `Ideas:\n${found.ideas.map(itemLine).join("\n")}`,
         found.attempts.length && `Attempts:\n${found.attempts.map(attemptLine).join("\n")}`,
