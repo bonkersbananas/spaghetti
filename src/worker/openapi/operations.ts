@@ -477,7 +477,7 @@ export const operations: Record<string, Operation> = {
     response: one("item", Item),
     errors: {
       404: notFound("idea or build"),
-      409: "not_an_idea, not_a_build or has_comments: the idea has comments or reactions, which stay with it.",
+      409: "not_an_idea, not_a_build, too_long (the joined note passes the limit) or has_comments: the idea has comments or reactions, which stay with it.",
     },
   },
   "POST /items/:id/unmove": {

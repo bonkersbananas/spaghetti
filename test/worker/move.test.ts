@@ -121,3 +121,30 @@ describe("moving a capture into a build", () => {
     expect(after.photos).toEqual([]);
   });
 });
+
+describe("the limits of a move", () => {
+  it("won't make a note too long to save, and won't undo a move that didn't happen", async () => {
+    const idea = await make({ note: "x".repeat(15_000) });
+    const build = await make({ note: "y".repeat(10_000), stage: "building" });
+    expect((await move(idea.id, { targetId: build.id })).status).toBe(409);
+    expect((await get(idea.id)).item.note).toHaveLength(15_000);
+
+    const unmove = (json: unknown) => request(`/api/items/${idea.id}/unmove`, { method: "POST", cookie: alex, json });
+    // A live idea is not touched by an undo.
+    expect((await unmove({ targetId: build.id, photos: [], note: "overwritten" })).status).toBe(404);
+    expect((await get(idea.id)).item.note).toHaveLength(15_000);
+  });
+
+  it("undoes only once, and only with an attempt of the build", async () => {
+    const idea = await make({ note: "Warping" });
+    const build = await make({ stage: "building" });
+    const other = await make({ stage: "building" });
+    const elsewhere = await attempt(other.id, "Not this one");
+    await move(idea.id, { targetId: build.id });
+    const unmove = (json: unknown) => request(`/api/items/${idea.id}/unmove`, { method: "POST", cookie: alex, json });
+    expect((await unmove({ targetId: build.id, attemptId: elsewhere, photos: [], note: "Warping" })).status).toBe(404);
+    expect((await unmove({ targetId: build.id, photos: [], note: "Warping" })).status).toBe(200);
+    expect((await unmove({ targetId: build.id, photos: [], note: "again" })).status).toBe(404);
+    expect((await get(idea.id)).item.note).toBe("Warping");
+  });
+});

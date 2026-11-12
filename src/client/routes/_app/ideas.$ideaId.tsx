@@ -162,20 +162,20 @@ function Idea({ item }: { item: ItemView }) {
 
   useScreenActions("This idea", [
     {
-      id: "move",
-      label: "Add to a build…",
-      icon: MoveIntoIcon,
-      shortcut: "ideaMove",
-      keywords: "move tidy photos note attempt build into",
-      run: move,
-    },
-    {
       id: "build",
       label: "Start building",
       icon: BuildsIcon,
       shortcut: "ideaBuild",
       keywords: "build begin print move to builds",
       run: build,
+    },
+    {
+      id: "move",
+      label: "Add to a build…",
+      icon: MoveIntoIcon,
+      shortcut: "ideaMove",
+      keywords: "move tidy photos note attempt build into",
+      run: move,
     },
     {
       id: "comment",

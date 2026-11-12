@@ -2872,7 +2872,10 @@ shots.push(
         await page.getByRole("button", { name: "Start building" }).first().waitFor();
         const sheet = await openMovePicker(page);
         await sheet.getByRole("button", { name: /Towel hook/ }).click();
-        await page.getByRole("dialog").getByRole("button", { name: /Attempt 1/ }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: /Attempt 1/ })
+          .click();
         await page.getByText(/^Moved to Towel hook, attempt/).waitFor();
         await page.waitForTimeout(500);
       },

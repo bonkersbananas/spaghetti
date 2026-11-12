@@ -45,7 +45,8 @@ const title = z
   .max(200)
   .transform((value) => value.trim() || null)
   .nullable();
-const note = z.string().max(20_000);
+const MAX_NOTE = 20_000;
+const note = z.string().max(MAX_NOTE);
 
 const createItem = z.object({
   id,
@@ -678,6 +679,10 @@ export const itemRoutes = new Hono<AppEnv>()
     const base = (last?.value ?? -1) + 1;
     const now = new Date();
     const nextNote = withMoved((attempt ?? target).note, movedText(source));
+    // The note field's own limit: a longer one could never be saved again by the editor.
+    if (nextNote.length > MAX_NOTE) {
+      return apiError(c, 409, "too_long", "That would make the note too long. Shorten one of them first.");
+    }
     const actor = c.var.actor;
     await db.batch([
       ...movingPhotos.map((photo, index) =>
@@ -711,9 +716,17 @@ export const itemRoutes = new Hono<AppEnv>()
     const attemptId = parsed.data.attemptId ?? null;
     const db = c.var.db;
     const source = await db.select().from(items).where(eq(items.id, itemId)).get();
-    if (!source || source.stage !== "idea") return apiError(c, 404, "not_found", goneForGood);
+    // Only an idea that a move put away: a live one (undone twice, or restored from Recently deleted) is left alone.
+    if (!source || source.stage !== "idea" || !source.deletedAt) return apiError(c, 404, "not_found", goneForGood);
     const target = await db.select().from(items).where(eq(items.id, targetId)).get();
-    const attempt = attemptId ? await db.select().from(attempts).where(eq(attempts.id, attemptId)).get() : null;
+    const attempt = attemptId
+      ? await db
+          .select()
+          .from(attempts)
+          .where(and(eq(attempts.id, attemptId), eq(attempts.itemId, targetId)))
+          .get()
+      : null;
+    if (attemptId && !attempt) return apiError(c, 404, "not_found", goneForGood);
     // What the move added is taken off the end of the note again, unless it has been edited since.
     const withoutIt = withoutMoved((attempt ?? target)?.note ?? "", movedText({ title: source.title, note: taken }));
     const now = new Date();

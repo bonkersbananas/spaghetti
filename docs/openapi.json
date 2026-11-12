@@ -5322,7 +5322,7 @@
             }
           },
           "409": {
-            "description": "not_an_idea, not_a_build or has_comments: the idea has comments or reactions, which stay with it.",
+            "description": "not_an_idea, not_a_build, too_long (the joined note passes the limit) or has_comments: the idea has comments or reactions, which stay with it.",
             "content": {
               "application/json": {
                 "schema": {

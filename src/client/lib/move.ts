@@ -87,6 +87,8 @@ export function moveIntoBuild(
     (error) => {
       if (error instanceof ApiError && error.status === 409 && error.code === "has_comments") {
         toast.error("It stays in Ideas", "An idea with comments or reactions can't move.");
+      } else if (error instanceof ApiError && error.code === "too_long") {
+        toast.error("Too much for one note", "Shorten the note it would join, then try again.");
       } else {
         toast.error("Couldn't move that", "It's back where it was.");
       }
