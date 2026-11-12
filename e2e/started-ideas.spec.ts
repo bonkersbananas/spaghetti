@@ -24,6 +24,15 @@ async function makeIdea(page: Page, title: string) {
   return id;
 }
 
+/** A promise to wait on and the function that settles it. */
+function signal() {
+  let resolve = () => {};
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 async function getItem(page: Page, id: string) {
   return (await (await page.request.get(`/api/items/${id}`)).json()).item;
 }
@@ -62,6 +71,16 @@ test("an idea that was started stays in Ideas under Started, and opens its build
   await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
 });
 
+test("undoing Start building takes the open build back to its idea's page", async ({ page }) => {
+  const id = await makeIdea(page, "Second thoughts hook");
+  await page.goto(`/ideas/${id}`);
+  await page.getByRole("button", { name: "Start building" }).click();
+  await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
+  await expect(page.getByRole("button", { name: "Start building" })).toBeVisible();
+});
+
 test("scrapping a build that began as an idea sends it back to Ideas, and Undo brings the build back", async ({
   page,
 }) => {
@@ -72,9 +91,18 @@ test("scrapping a build that began as an idea sends it back to Ideas, and Undo b
     data: { id: crypto.randomUUID(), outcome: null },
   });
 
+  // The Ideas screen's code comes a moment after the tap (held here until then, as on a slow line): the build page is
+  // still on screen when the build turns into an idea, and must not take it to the idea's own page on its way out.
+  const tapped = signal();
+  await page.route(/\/assets\/ideas\.index-[\w-]+\.js$/, async (route) => {
+    await tapped.promise;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.continue().catch(() => undefined);
+  });
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Flexi hummingbird");
   await page.getByRole("button", { name: "Scrap build" }).click();
+  tapped.resolve();
   await expect(page.getByText("Build scrapped")).toBeVisible();
   await expect(page.getByText("Flexi hummingbird is back in Ideas")).toBeVisible();
   await expect.poll(async () => (await getItem(page, id)).stage).toBe("idea");
