@@ -217,26 +217,35 @@ test("a long build folds its earlier attempts, and picking one unfolds them and 
   await expect(story.getByRole("listitem").last()).toBeInViewport();
 });
 
-test("the story column stays reachable in a short window", async ({ page, isMobile }) => {
+test("a story column taller than the window scrolls until its end is in view, then sticks", async ({
+  page,
+  isMobile,
+}) => {
   test.skip(isMobile, "the column only sticks beside the attempts on a laptop");
   const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
   const note = Array.from({ length: 30 }, (_, line) => `Line ${line + 1} of a long plan for this build.`).join("\n");
-  await page.request.post("/api/items", {
-    headers: { Origin: origin(page) },
-    data: { id, title: "Tall notes", note, stage: "building" },
-  });
+  await page.request.post("/api/items", { headers, data: { id, title: "Tall notes", note, stage: "building" } });
+  // Attempts enough that the page is longer than the column.
+  for (let number = 0; number < 8; number++) {
+    await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome: "failed", printedAt: Date.now() - (9 - number) * 3_600_000 },
+    });
+  }
   await page.setViewportSize({ width: 1440, height: 600 });
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Tall notes");
-  // A sticky column taller than the window would leave its end out of reach while the attempts scroll: it fits the
-  // window and scrolls inside itself instead.
   const column = page.locator("article .sticky-column");
-  const box = await column.evaluate((el) => ({
-    height: el.getBoundingClientRect().height,
-    scrolls: el.scrollHeight > el.clientHeight,
-  }));
-  expect(box.height).toBeLessThanOrEqual(600);
-  expect(box.scrolls).toBe(true);
+  const height = await column.evaluate((el) => el.getBoundingClientRect().height);
+  expect(height).toBeGreaterThan(600);
+  // Scrolled to the end of the page, the column's end is in view (not left below the window).
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect
+    .poll(async () => column.evaluate((el) => Math.round(window.innerHeight - el.getBoundingClientRect().bottom)))
+    .toBeGreaterThanOrEqual(24);
+  // And it never scrolls inside itself.
+  expect(await column.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
 });
 
 test("the summary's attempt tiles are touch targets and mark the open attempt", { tag: "@phone" }, async ({

@@ -472,25 +472,14 @@
 }
 
 /*
- * A column that stays in view beside a longer one (the build's story beside its attempts), from md up. It sticks near
- * the top, and when it is taller than the window it scrolls inside itself with a quiet scrollbar and the same fade as
- * scroll-fade, which the padding (matching the fade) keeps off the content at rest; the negative margin keeps the
- * column where it was. Its children keep their size.
+ * A column that stays in view beside a longer one (the build's story beside its attempts), from md up: it sticks at
+ * --sticky-top, which lib/sticky-column.ts sets (1.5 rem, or negative for a column taller than the window so that
+ * its end is what sticks).
  */
 @utility sticky-column {
   @media (min-width: 48rem) {
     position: sticky;
-    top: 1.25rem;
-    margin: -0.75rem;
-    padding: 0.75rem;
-    max-height: calc(100dvh - 2.5rem);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--sg-ink) 25%, transparent) transparent;
-    mask-image: linear-gradient(to bottom, transparent, black 0.75rem, black calc(100% - 0.75rem), transparent);
-    & > * {
-      flex-shrink: 0;
-    }
+    top: var(--sticky-top, 1.5rem);
   }
 }
 

@@ -79,6 +79,7 @@ import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes";
 import { useSlicerDropTarget } from "@/lib/slicer-files";
+import { useStickyColumn } from "@/lib/sticky-column";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
@@ -149,6 +150,7 @@ function BuildDetail() {
 }
 
 function Build({ item }: { item: ItemView }) {
+  const stickyColumn = useStickyColumn<HTMLDivElement>();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
@@ -470,7 +472,7 @@ function Build({ item }: { item: ItemView }) {
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
         {/* The build: its best photo large, its title and notes. */}
-        <div className="sticky-column flex min-w-0 flex-col gap-4 md:flex-2">
+        <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-4 md:flex-2">
           {gallery.length > 0 ? (
             <div className="relative">
               <PhotoViewer

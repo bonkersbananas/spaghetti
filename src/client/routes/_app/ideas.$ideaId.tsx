@@ -33,6 +33,7 @@ import { useScreenActions } from "@/lib/palette";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
+import { useStickyColumn } from "@/lib/sticky-column";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
@@ -89,6 +90,7 @@ function IdeaDetail() {
 const back = { to: "/ideas", label: "Ideas" } as const;
 
 function Idea({ item }: { item: ItemView }) {
+  const stickyColumn = useStickyColumn<HTMLDivElement>();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
@@ -211,7 +213,7 @@ function Idea({ item }: { item: ItemView }) {
         className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}
       >
         {hasPhotos && (
-          <div className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
+          <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
             <PhotoViewer
               photos={photos}
               index={selectedIndex}
