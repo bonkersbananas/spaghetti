@@ -23,13 +23,13 @@ async function isNewBuildOut() {
 }
 
 /**
- * Reloads into the new version unless it just did. The old service worker would serve the old shell again, so a new
+ * Reloads into the new version unless it just did or there is no new build; returns whether it is reloading. The old service worker would serve the old shell again, so a new
  * one takes over first: update() resolves when it starts installing, so wait (up to 5 s) until it is installed, tell
  * it to take over, and wait (up to 3 s) for it to become the controller.
  */
-export async function reloadIntoNewBuild() {
-  if (Date.now() - Number(sessionStorage.getItem(KEY)) < GAP_MS) return;
-  if (!(await isNewBuildOut())) return;
+export async function reloadIntoNewBuild(): Promise<boolean> {
+  if (Date.now() - Number(sessionStorage.getItem(KEY)) < GAP_MS) return false;
+  if (!(await isNewBuildOut())) return false;
   sessionStorage.setItem(KEY, String(Date.now()));
   try {
     const registration = await navigator.serviceWorker?.getRegistration();
@@ -53,4 +53,5 @@ export async function reloadIntoNewBuild() {
     // No service worker, or no network: reload anyway.
   }
   location.reload();
+  return true;
 }

@@ -32,9 +32,12 @@ export default function ErrorScreen({ error, reset, updating: forced = false, cl
   const [copied, setCopied] = useState(false);
   const message = messageOf(error);
   const stale = isChunkError(error);
-  const updating = forced || stale;
+  // Says "a fresh batch" only once a reload has really started: with no new build out (offline, or a guard that has
+  // just spent itself) the plain screen, with Try again, is the honest one.
+  const [reloading, setReloading] = useState(false);
+  const updating = forced || reloading;
   useEffect(() => {
-    if (stale) void reloadIntoNewBuild();
+    if (stale) void reloadIntoNewBuild().then(setReloading);
   }, [stale]);
   return (
     <div
