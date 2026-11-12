@@ -32,7 +32,7 @@ src/
       ideas/              IdeaCard, PhotoViewer, PhotoStrip, AddFirstPhotos
       wishlist/           WishList (yours, draggable; someone else's, read-only), WishPicker (the sheet of ideas to pick), WishlistLink (the way in on phones, atop Ideas)
       viewer/             the 3D view (lazy): ThreeDButton (the control on a plate picture, prefetches), PrintViewer (React: slider, legend, build-up), scene.ts (three.js: plate, instanced toolpaths), intro.ts; the G-code worker is lib/toolpath-worker.ts, loaded by lib/toolpaths.ts
-      builds/             BuildCard, AttemptEntry, AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
+      builds/             BuildCard, AttemptEntry, AttemptMenu (the "…" on an attempt card: Compare, Save as recipe), AttemptSheet (picks log or edit; its parts are in attempt-sheet/: LogAttempt, EditAttempt, AttemptFields, WhenField, SheetSlicerFile), Outcome, TagPicker, SettingsEditor, WhatWorkedSuggestion, SlicerFile, Estimate
       recipes/            RecipeCard, RecipeSheet (edit name and note, delete), SaveRecipe (the form and its sheet), SaveAsRecipe (inline in the attempt sheet), RecipePicker ("Start from a recipe"), RecipeShelf ("Recipes for silk PLA")
       today/              the blocks of /today: InThePrinter, PickUpAgain, Lately, BackBurner (the print on the bed is builds/PrintingCard)
       comments/           CommentThread (lazy) and Thread, EditableBubble: the thread under an idea or build

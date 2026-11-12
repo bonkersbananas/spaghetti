@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import type { AgentScope } from "../../shared/agents.ts";
 import { app } from "../app.ts";
 import { bearerToken, readAgentToken } from "../auth/agent.ts";
+import { scopeList } from "../auth/scopes.ts";
 import { getDb } from "../db/index.ts";
 import { type ApiResult, describeTool, toolByName, tools } from "./tools.ts";
 
@@ -42,6 +44,8 @@ const rpcResult = (id: Message["id"], result: unknown) => ({ jsonrpc: "2.0" as c
 
 interface Caller {
   authorization: string;
+  /** The token's scopes: a tool runs only for a token that has one of the tool's own. */
+  scopes: readonly AgentScope[];
   origin: string;
   env: Env;
   ctx: Parameters<typeof app.fetch>[2];
@@ -93,6 +97,14 @@ async function handle(msg: Message, caller: Caller): Promise<ReturnType<typeof r
     case "tools/call": {
       const entry = typeof params?.name === "string" ? toolByName.get(params.name) : undefined;
       if (!entry) return rpcError(id, -32602, `Unknown tool: ${String(params?.name)}`);
+      // Before anything runs: a tool may do work of its own (capture_idea fetches its photo_url) before the API it
+      // calls would refuse the token, so a token without the tool's scope gets nothing from it, not even that.
+      if (!entry.scopes.some((scope) => caller.scopes.includes(scope))) {
+        return rpcResult(id, {
+          content: [{ type: "text", text: `This token needs the ${scopeList(entry.scopes)} scope for that.` }],
+          isError: true,
+        });
+      }
       const args = entry.input.safeParse(params?.arguments ?? {});
       if (!args.success) {
         const problems = args.error.issues.map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`);
@@ -143,6 +155,7 @@ export const mcpRoutes = new Hono<{ Bindings: Env }>()
     if (body === undefined) return c.json(rpcError(null, -32700, "That wasn't JSON."), 400);
     const caller: Caller = {
       authorization: c.req.header("authorization") as string,
+      scopes: agent.scopes,
       origin: new URL(c.req.url).origin,
       env: c.env,
       ctx: (() => {
