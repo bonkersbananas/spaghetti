@@ -46,7 +46,7 @@ interface FileCardProps {
   onRemove?: () => void;
   /** On a story card: no box of its own and a smaller plate. */
   compact?: boolean;
-  /** A raised card (like a model's link card) with a larger plate; on desktop it hugs its content and Remove shows on hover. */
+  /** A raised card (like a model's link card, the column's width) with a larger plate; on desktop Remove shows on hover. */
   raised?: boolean;
   className?: string;
 }
@@ -71,7 +71,7 @@ export function FileCard({
         compact
           ? "-mr-1.5"
           : raised
-            ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5 md:w-fit md:max-w-full"
+            ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5"
             : "bg-ink/3 rounded-lg p-2.5 pr-1.5",
         className,
       )}
@@ -84,7 +84,7 @@ export function FileCard({
         />
         {plateOverlay}
       </span>
-      <div className={cn("flex min-w-0 flex-col gap-0.5", raised ? "flex-1 md:flex-none md:pr-3" : "flex-1")}>
+      <div className={cn("flex min-w-0 flex-col gap-0.5", "flex-1")}>
         <span className="text-small text-ink truncate font-semibold" title={name}>
           {name}
         </span>
