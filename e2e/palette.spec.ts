@@ -194,6 +194,7 @@ test.describe("on a laptop", () => {
       "Anywhere",
       "On an idea",
       "On a build",
+      "In the attempt sheet",
       "In the journal",
       "In search",
       "In the command palette",

@@ -108,11 +108,7 @@ export function LogAttempt({
       onOpenChange={onOpenChange}
       desktop="panel"
       title={`Attempt ${number}`}
-      description={
-        previous
-          ? `Starts from attempt ${previous.number}'s settings. Change only what you try differently.`
-          : item.title || undefined
-      }
+      description={previous ? undefined : item.title || undefined}
       footer={
         <>
           {isDesktop && (
@@ -145,6 +141,18 @@ export function LogAttempt({
         onKeyDown={(event) => {
           // The note handles its own Enter (and logs from there): don't log twice.
           if (event.defaultPrevented) return;
+          // Enter on an outcome button, once one is picked (a key press may have picked it): log, don't pick again.
+          if (
+            event.key === "Enter" &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            draft.outcome &&
+            (event.target as HTMLElement).getAttribute("role") === "radio"
+          ) {
+            event.preventDefault();
+            save(draft.outcome);
+            return;
+          }
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && draft.outcome) {
             event.preventDefault();
             save(draft.outcome);

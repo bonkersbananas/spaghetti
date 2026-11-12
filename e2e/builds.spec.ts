@@ -23,6 +23,31 @@ test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
 
+test("1, 2, 3 answer the outcome, Enter logs it, and Spaghetti needs no Spaghetti tag", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Keys are for the desktop");
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: { Origin: origin(page) }, data: { id, title: "Hinge" } });
+  await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { stage: "building" } });
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Hinge");
+  await page.keyboard.press("a");
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press("3");
+  await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Bed adhesion" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Spaghetti", exact: true })).toHaveCount(0);
+  await page.keyboard.press("2");
+  await expect(sheet.getByRole("radio", { name: "Partly", checked: true })).toBeVisible();
+  await page.keyboard.press("3");
+  // Focus is still on an outcome button: Enter logs the one picked, it doesn't pick the focused one.
+  await page.keyboard.press("Enter");
+  await expect(sheet).toBeHidden();
+  await expect
+    .poll(async () => (await getItem(page, id)).attempts.map((a: { outcome: string }) => a.outcome))
+    .toEqual(["failed"]);
+});
+
 test("grows an idea into a build, logs a failure and a success, and finishes it", async ({ page, isMobile }) => {
   const id = crypto.randomUUID();
   await page.request.post("/api/items", {
