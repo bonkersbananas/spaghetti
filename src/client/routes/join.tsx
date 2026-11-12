@@ -161,9 +161,12 @@ function JoinPage() {
           error={usernameError}
           hint="What you type to sign in. Lowercase letters and digits."
         />
-        <div className="flex items-center gap-3">
-          <Avatar person={{ name: name || "?", color }} size="lg" decorative />
-          <PersonColorPicker value={color} onChange={setColor} />
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <Avatar person={{ name: name || "?", color }} size="lg" decorative />
+            <span className="text-small text-ink-soft font-semibold">Your color</span>
+          </div>
+          <PersonColorPicker value={color} onChange={setColor} className="justify-between" />
         </div>
         {passkeysSupported() && (
           <SegmentedControl

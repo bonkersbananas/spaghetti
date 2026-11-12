@@ -81,7 +81,10 @@ function LinkPage() {
     <AuthPage
       lead={token ? "Sign in on this device." : "Type the code from your other device."}
       footer={
-        <Link to="/sign-in" className="focus-ring decoration-ink-ghost underline underline-offset-4">
+        <Link
+          to="/sign-in"
+          className="focus-ring decoration-ink-ghost -my-3 inline-block py-3 underline underline-offset-4"
+        >
           Back to sign in
         </Link>
       }
