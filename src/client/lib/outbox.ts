@@ -92,6 +92,8 @@ export interface OutboxEntry {
     createdAt: number;
     createdBy: string;
     stage?: ItemStage;
+    /** The twist a build prints (a build made from a twist). */
+    twistId?: string;
     /** The title came with a share (the page's own), not from the person: a draft may replace it. Typing one clears this. */
     titleShared?: boolean;
   };
@@ -481,6 +483,7 @@ class Outbox {
           createdAt: create.createdAt,
           // A capture is an idea unless it says otherwise; a build finished offline is created as a build.
           stage: (create.stage ?? "idea") === "idea" ? "idea" : "building",
+          ...(create.twistId ? { twistId: create.twistId } : {}),
         },
       }));
     } catch (error) {

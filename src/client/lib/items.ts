@@ -386,6 +386,7 @@ function fromEntry(entry: OutboxEntry, state: OutboxState): ItemView | null {
     coverPhotoId: null,
     upNext: null,
     forWhom: null,
+    twistId: entry.create.twistId ?? null,
     parts: [],
     photos: sortPhotos(pendingPhotos(entry, state, [])),
     attempts: withAttempts(entry.itemId, [], entry),

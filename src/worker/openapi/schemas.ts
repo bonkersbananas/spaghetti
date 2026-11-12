@@ -144,6 +144,7 @@ export const Item = z
     coverPhotoId: id.nullable(),
     upNext: z.number().int().nullable(),
     forWhom: z.string().nullable(),
+    twistId: z.string().nullable(),
     parts: z.array(Part),
     photos: z.array(Photo),
     attempts: z.array(Attempt),

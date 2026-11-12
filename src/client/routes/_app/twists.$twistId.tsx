@@ -5,6 +5,7 @@ import { TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { BuildCard } from "@/components/builds/BuildCard";
 import { Fusilli } from "@/components/illustrations/Fusilli";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { sourceLine } from "@/components/twists/TwistCard";
@@ -12,14 +13,17 @@ import { TwistChanges } from "@/components/twists/TwistChanges";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { ArrowRightIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, BuildsIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { createBuild } from "@/lib/builds";
+import { useBuilds } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
+import { sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { deleteTwist, twistsQuery, updateTwist } from "@/lib/twists";
@@ -78,6 +82,10 @@ function TwistBody({ twist }: { twist: Twist }) {
   const navigate = useNavigate();
   const readOnly = useReadOnly();
   const stickyColumn = useStickyColumn();
+  const { data: user } = useQuery(sessionQuery);
+  const { items: allBuilds } = useBuilds();
+  const printed = // The idea it came from counts once it has grown into a build.
+    allBuilds.filter((build) => build.twistId === twist.id || build.id === twist.fromItemId);
   const [editingLink, setEditingLink] = useState(false);
   const { value, change, saveState } = useLiveFields(
     { name: twist.name, note: twist.note, sourceUrl: twist.source.url ?? "", changes: twist.changes },
@@ -94,6 +102,13 @@ function TwistBody({ twist }: { twist: Twist }) {
   const photo = twist.source.photo;
   const mark = value.sourceUrl ? modelMarkOf(value.sourceUrl) : null;
   const subtitle = sourceLine(twist);
+
+  // "Print it again": a build named for the twist, which remembers it, opens ready for its first attempt.
+  function printIt() {
+    if (!user || !canEdit(false)) return;
+    const id = createBuild(user.id, { title: value.name.trim() || twist.name, twistId: twist.id });
+    void navigate({ to: "/builds/$buildId", params: { buildId: id } });
+  }
 
   function remove() {
     if (!canEdit(false)) return;
@@ -140,9 +155,25 @@ function TwistBody({ twist }: { twist: Twist }) {
             {subtitle && <p className="text-small text-ink-faint">{subtitle}</p>}
           </div>
 
+          <div>
+            <Button variant="primary" icon={BuildsIcon} disabled={readOnly || !user} onClick={printIt}>
+              {printed.length ? "Print it again" : "Print it"}
+            </Button>
+          </div>
+
           <Section id="changes" title="What we changed">
             <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
           </Section>
+
+          {printed.length > 0 && (
+            <Section id="printed" title="Printed" count={printed.length}>
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {printed.map((build) => (
+                  <BuildCard key={build.id} item={build} />
+                ))}
+              </ul>
+            </Section>
+          )}
 
           <NoteField
             label="Note"

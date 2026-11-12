@@ -71,6 +71,7 @@ A twist is a model we print our own way: where it came from, what we changed and
 - `POST /twists` `{ id, name, note?, fromItemId?, sourceUrl?, sourceTitle?, designer?, license?, sourcePhotoId?, recipeId?, changes? }`: with `fromItemId` the idea's model link, title and cover photo fill in what the request leaves out. `changes` is a list of `{ id, kind, label, value, note }` (`kind` is `scale`, `tolerance`, `text`, `material`, `param` or `other`; at most 20). Idempotent on `id`. `capture` scope.
 - `PATCH /twists/:id`: any of `name`, `note`, `sourceUrl`, `sourceTitle`, `designer`, `license`, `recipeId` and `changes` (which replaces the whole list). `capture` scope.
 - `DELETE /twists/:id` and `POST /twists/:id/restore`: soft delete and its undo, people only.
+- A build that prints a twist says so: `twistId` on an item (`POST /items { twistId }` when it is made, `PATCH /items/:id { twistId }` to set it or, with `null`, let it go; `capture` scope). The twist page lists those builds, and the idea it came from once that has grown into a build.
 - A twist carries `source` (`url`, `title`, `designer`, `license`, `place` such as "MakerWorld", and `photo` while the idea still has it) and `fromItemId` while the idea exists.
 
 ## Recipes

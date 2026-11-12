@@ -184,6 +184,7 @@ export function toApiItem(
     coverPhotoId: item.coverPhotoId,
     upNext: item.upNext,
     forWhom: item.forWhom,
+    twistId: item.twistId,
     parts: itemParts.map(toApiPart),
     photos: itemPhotos.map(toApiPhoto),
     attempts: toApiAttempts(itemAttempts, files, reads, coaches),

@@ -79,3 +79,23 @@ test("makes a twist from nothing but a name", async ({ page }) => {
     })
     .toContain("Planter, looser still");
 });
+
+test("Print it makes a build for the twist, which the twist then lists", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/twists");
+  await page
+    .getByRole("button", { name: /New twist|Make a twist/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "A new twist" });
+  await sheet.getByRole("textbox", { name: "Name it" }).fill("Hook, thicker");
+  await sheet.getByRole("button", { name: "Make the twist" }).click();
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("Hook, thicker");
+  const twistUrl = page.url();
+  await page.getByRole("button", { name: "Print it", exact: true }).click();
+  await expect(page).toHaveURL(/\/builds\/[\w-]+$/);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Hook, thicker");
+  await page.goto(twistUrl);
+  await expect(page.getByRole("heading", { name: "Printed" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Print it again" })).toBeVisible();
+});

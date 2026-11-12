@@ -70,6 +70,7 @@ export const item = (id: string, fields: Partial<Item>): Item => ({
   coverPhotoId: null,
   upNext: null,
   forWhom: null,
+  twistId: null,
   parts: [],
   photos: [],
   attempts: [],

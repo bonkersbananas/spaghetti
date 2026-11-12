@@ -191,6 +191,8 @@ export interface Item {
   upNext: number | null;
   /** Who it is for ("Mila"), if anyone. */
   forWhom: string | null;
+  /** The twist this build prints, if it prints one. */
+  twistId: string | null;
   /** What the build is made of, in order; empty for a simple build (and for ideas). */
   parts: Part[];
   /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */
