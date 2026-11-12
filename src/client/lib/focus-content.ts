@@ -18,7 +18,7 @@ export function focusContentAfterMoves(router: AnyRouter) {
     if (!event.fromLocation || event.fromLocation.pathname === pathname || pathname.startsWith("/search")) return;
     requestAnimationFrame(() => {
       const active = document.activeElement;
-      if (!active || active === document.body || !active.isConnected || active.closest("aside, nav")) focusContent();
+      if (!active || active === document.body || !active.isConnected || active.closest("aside")) focusContent();
     });
   });
 }
