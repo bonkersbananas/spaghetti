@@ -16,7 +16,15 @@ function hostOf(url: string): string {
   }
 }
 
-const fileName = (url: string) => decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+const fileName = (url: string) => {
+  const name = new URL(url).pathname.split("/").pop() ?? "";
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    // A stray % isn't an escape: show the name as it is.
+    return name;
+  }
+};
 
 /**
  * A link in a note as a card: the site's first letter on a tile, the page's
