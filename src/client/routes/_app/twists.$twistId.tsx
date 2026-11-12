@@ -5,9 +5,9 @@ import { TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { BuildCard } from "@/components/builds/BuildCard";
 import { Fusilli } from "@/components/illustrations/Fusilli";
 import { DetailBar } from "@/components/shell/DetailBar";
+import { PrintedRow } from "@/components/twists/PrintedRow";
 import { sourceLine } from "@/components/twists/TwistCard";
 import { TwistChanges } from "@/components/twists/TwistChanges";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -28,6 +28,7 @@ import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { deleteTwist, twistsQuery, updateTwist } from "@/lib/twists";
 import { useLiveFields } from "@/lib/use-autosave";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/twists/$twistId")({
   component: TwistPage,
@@ -82,6 +83,7 @@ function TwistBody({ twist }: { twist: Twist }) {
   const navigate = useNavigate();
   const readOnly = useReadOnly();
   const stickyColumn = useStickyColumn();
+  const isDesktop = useIsDesktop();
   const { data: user } = useQuery(sessionQuery);
   const { items: allBuilds } = useBuilds();
   const printed = // The idea it came from counts once it has grown into a build.
@@ -156,7 +158,13 @@ function TwistBody({ twist }: { twist: Twist }) {
           </div>
 
           <div>
-            <Button variant="primary" icon={BuildsIcon} disabled={readOnly || !user} onClick={printIt}>
+            {/* The sidebar's "New idea" is desktop's one primary action. */}
+            <Button
+              variant={isDesktop ? "secondary" : "primary"}
+              icon={BuildsIcon}
+              disabled={readOnly || !user}
+              onClick={printIt}
+            >
               {printed.length ? "Print it again" : "Print it"}
             </Button>
           </div>
@@ -167,9 +175,9 @@ function TwistBody({ twist }: { twist: Twist }) {
 
           {printed.length > 0 && (
             <Section id="printed" title="Printed" count={printed.length}>
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <ul className="flex flex-col gap-2.5">
                 {printed.map((build) => (
-                  <BuildCard key={build.id} item={build} />
+                  <PrintedRow key={build.id} build={build} />
                 ))}
               </ul>
             </Section>
