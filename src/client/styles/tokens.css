@@ -114,8 +114,9 @@
   --sg-shadow-float: 0 2px 6px rgb(80 50 20 / 0.06), 0 16px 48px rgb(80 50 20 / 0.16);
   --sg-shadow-well: inset 0 1px 2px rgb(80 50 20 / 0.07);
   --sg-shadow-bar: 0 -1px 0 rgb(43 36 32 / 0.05), 0 -8px 24px rgb(80 50 20 / 0.06);
-  /* Focus is calm ink, never tomato: tomato means "the action" or "an error". */
-  --sg-ring: 0 0 0 1px rgb(43 36 32 / 0.32), 0 0 0 4px rgb(43 36 32 / 0.08);
+  /* Focus is calm ink, never tomato: tomato means "the action" or "an error". A paper gap keeps the ring apart from
+     a photo or a lifted card it sits on, and the ink reads at 3:1 or more on paper and cream. */
+  --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(43 36 32 / 0.7);
   --sg-ring-error: 0 0 0 1px rgb(168 56 28 / 0.6), 0 0 0 4px rgb(200 70 42 / 0.14);
 
   /* Type sizes: phone first, then desktop below. */
@@ -236,7 +237,7 @@
   --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.3), 0 20px 56px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 236 214 / 0.08);
   --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
   --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
-  --sg-ring: 0 0 0 1px rgb(236 228 217 / 0.42), 0 0 0 4px rgb(236 228 217 / 0.1);
+  --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(236 228 217 / 0.72);
   --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(245 154 124 / 0.16);
 }
 
