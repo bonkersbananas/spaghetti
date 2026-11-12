@@ -1857,6 +1857,24 @@ export const shots: Shot[] = [
     },
   },
   {
+    name: "reactions-idea-picker-full",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const button = page.getByRole("button", { name: "React to this idea" });
+      await button.evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        (el as HTMLElement).click();
+      });
+      await page.getByRole("button", { name: "More emoji" }).click();
+      const search = page.getByRole("searchbox", { name: "Search emoji" });
+      await search.waitFor();
+      await page.getByRole("gridcell").first().waitFor();
+      await search.fill("party");
+      await page.getByRole("gridcell", { name: "party popper" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     name: "reactions-comment",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     prepare: (page) => openCommentMenu(page, commentId(8), /^React to /),

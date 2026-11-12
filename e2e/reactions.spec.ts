@@ -37,7 +37,7 @@ async function asSam(page: Page) {
       return id;
     },
     react: async (path: string, kind: string) =>
-      expect((await request.put(`/api${path}/reactions/${kind}`, { headers })).ok()).toBe(true),
+      expect((await request.put(`/api${path}/reactions/${encodeURIComponent(kind)}`, { headers })).ok()).toBe(true),
   };
 }
 
@@ -58,25 +58,25 @@ test("reacts to your own idea, keeps it, and takes it back with a tap", { tag: "
   await page.getByRole("button", { name: "React to this idea" }).click();
   const picker = page.getByRole("group", { name: "Reactions" });
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("button")).toHaveCount(6);
+  await expect(picker.getByRole("button")).toHaveCount(7);
   // The pill shows at once (optimistic); a reload before the request lands would cancel it.
   const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
-  await picker.getByRole("button", { name: "Chef's kiss" }).click();
+  await picker.getByRole("button", { name: "🤌" }).click();
   await expect(picker).toHaveCount(0);
   expect((await saved).ok()).toBe(true);
 
-  const pill = reactions(page).getByRole("button", { name: /Chef's kiss, from You/ });
+  const pill = reactions(page).getByRole("button", { name: /🤌, from You/ });
   await expect(pill).toHaveAttribute("aria-pressed", "true");
   await page.reload();
   await expect(pill).toBeVisible();
 
   const removed = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "DELETE");
   await pill.click();
-  await expect(reactions(page).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(0);
+  await expect(reactions(page).getByRole("button", { name: /🤌/ })).toHaveCount(0);
   expect((await removed).ok()).toBe(true);
   await page.reload();
   await expect(page.getByRole("button", { name: "React to this idea" })).toBeVisible();
-  await expect(reactions(page).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(0);
+  await expect(reactions(page).getByRole("button", { name: /🤌/ })).toHaveCount(0);
 });
 
 test("reacts to the other person's comment, and both reactions count", { tag: "@phone" }, async ({
@@ -96,16 +96,64 @@ test("reacts to the other person's comment, and both reactions count", { tag: "@
     await page.getByRole("button", { name: /^React to .+'s comment$/ }).click();
   }
   const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
-  await page.getByRole("group", { name: "Reactions" }).getByRole("button", { name: "Bravo" }).click();
-  const pill = page.locator(`#comment-${commentId}`).getByRole("button", { name: /Bravo, from You/ });
+  await page.getByRole("group", { name: "Reactions" }).getByRole("button", { name: "👏" }).click();
+  const pill = page.locator(`#comment-${commentId}`).getByRole("button", { name: /👏, from You/ });
   await expect(pill).toHaveAttribute("aria-pressed", "true");
   expect((await saved).ok()).toBe(true);
 
   // Sam gives the same one: after the feed (or a reload) it reads "2", from both of you.
-  await samSide.react(`/comments/${commentId}`, "bravo");
+  await samSide.react(`/comments/${commentId}`, "👏");
   await page.reload();
-  const both = page.locator(`#comment-${commentId}`).getByRole("button", { name: /Bravo, from .+ and you/ });
+  const both = page.locator(`#comment-${commentId}`).getByRole("button", { name: /👏, from .+ and you/ });
   await expect(both).toBeVisible();
   await expect(both).toContainText("2");
+  await samSide.context.close();
+});
+
+test("any emoji from the full picker, shown on the Ideas list and on the idea", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.setTimeout(60_000);
+  const id = await newIdea(page);
+  await page.goto(`/ideas/${id}`);
+  await page.getByRole("button", { name: "React to this idea" }).click();
+  // Nothing of the picker's data is fetched until "more" is pressed.
+  const dataRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/emoji/")) dataRequests.push(request.url());
+  });
+  expect(dataRequests).toEqual([]);
+  await page.getByRole("button", { name: "More emoji" }).click();
+  const search = page.getByRole("searchbox", { name: "Search emoji" });
+  await expect(search).toBeVisible();
+  if (!isMobile) await expect(search).toBeFocused();
+  await search.fill("party");
+  const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
+  await page.getByRole("gridcell", { name: "party popper" }).first().click();
+  expect((await saved).ok()).toBe(true);
+  expect(dataRequests.every((url) => new URL(url).origin === origin(page))).toBe(true);
+  await expect(reactions(page).getByRole("button", { name: /🎉, from You/ })).toHaveAttribute("aria-pressed", "true");
+
+  // Search finds by keyword too.
+  await page.getByRole("button", { name: "React to this idea" }).click();
+  await page.getByRole("button", { name: "More emoji" }).click();
+  await page.getByRole("searchbox", { name: "Search emoji" }).fill("pasta");
+  await expect(page.getByRole("gridcell", { name: "spaghetti" }).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // The Ideas list shows it on the card.
+  await page.goto("/ideas");
+  await expect(page.getByRole("img", { name: /^Reactions: 🎉/ })).toBeVisible();
+});
+
+test("the other person's emoji shows with a tooltip saying who", async ({ page }) => {
+  const id = await newIdea(page);
+  const samSide = await asSam(page);
+  await samSide.react(`/items/${id}`, "🍝");
+  await page.goto(`/ideas/${id}`);
+  const pill = reactions(page).getByRole("button", { name: /🍝, from Sam/ });
+  await expect(pill).toHaveAttribute("title", /Sam/);
+  await expect(pill).toHaveAttribute("aria-pressed", "false");
   await samSide.context.close();
 });

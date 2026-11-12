@@ -85,6 +85,9 @@
       "name": "push"
     },
     {
+      "name": "reactions"
+    },
+    {
       "name": "recipes"
     },
     {
@@ -7333,10 +7336,69 @@
         "x-scopes": "person"
       }
     },
+    "/api/reactions/used": {
+      "get": {
+        "operationId": "getReactionsUsed",
+        "summary": "The emoji most used on reactions and the ones you used last (the picker's quick row).",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "reactions"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "popular": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The emoji the two of you give most, most used first."
+                    },
+                    "recent": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The ones you gave last, newest first."
+                    }
+                  },
+                  "required": [
+                    "popular",
+                    "recent"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
     "/api/items/{id}/reactions/{kind}": {
       "put": {
         "operationId": "putItemsByIdReactionsByKind",
-        "summary": "Gives your reaction to an idea or build (your own too); kind is one of love, chef, want, hot, bravo, melt.",
+        "summary": "Gives your reaction to an idea or build (your own too); kind is the emoji itself, URL-encoded (one emoji from the Unicode RGI set, such as %F0%9F%94%A5 for fire).",
         "description": "Only a signed-in person, never an agent token.",
         "tags": [
           "items"
@@ -7383,7 +7445,7 @@
             }
           },
           "400": {
-            "description": "invalid: not one of the reactions.",
+            "description": "invalid: a reaction is one emoji.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7469,7 +7531,7 @@
             }
           },
           "400": {
-            "description": "invalid: not one of the reactions.",
+            "description": "invalid: a reaction is one emoji.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7510,7 +7572,7 @@
     "/api/comments/{id}/reactions/{kind}": {
       "put": {
         "operationId": "putCommentsByIdReactionsByKind",
-        "summary": "Gives your reaction to a comment (your own too); kind is one of love, chef, want, hot, bravo, melt.",
+        "summary": "Gives your reaction to a comment (your own too); kind is the emoji itself, URL-encoded (one emoji from the Unicode RGI set, such as %F0%9F%94%A5 for fire).",
         "description": "Only a signed-in person, never an agent token.",
         "tags": [
           "comments"
@@ -7557,7 +7619,7 @@
             }
           },
           "400": {
-            "description": "invalid: not one of the reactions.",
+            "description": "invalid: a reaction is one emoji.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7643,7 +7705,7 @@
             }
           },
           "400": {
-            "description": "invalid: not one of the reactions.",
+            "description": "invalid: a reaction is one emoji.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16480,14 +16542,7 @@
         "properties": {
           "kind": {
             "type": "string",
-            "enum": [
-              "love",
-              "chef",
-              "want",
-              "hot",
-              "bravo",
-              "melt"
-            ]
+            "description": "The emoji."
           },
           "userId": {
             "type": "string",

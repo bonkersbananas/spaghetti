@@ -33,22 +33,17 @@ test("a reaction, a comment, a ticked shopping item and a rename survive an imme
   // A reaction, then a reload with no wait.
   await page.goto(`/ideas/${id}`);
   await page.getByRole("button", { name: "React to this idea" }).click();
-  await page.getByRole("group", { name: "Reactions" }).getByRole("button", { name: "Chef's kiss" }).click();
+  await page.getByRole("group", { name: "Reactions" }).getByRole("button", { name: "🤌" }).click();
   await page.reload();
   await expect(
-    page.getByRole("list", { name: "Reactions" }).getByRole("button", { name: /Chef's kiss, from You/ }),
+    page.getByRole("list", { name: "Reactions" }).getByRole("button", { name: /🤌, from You/ }),
   ).toBeVisible();
 
   // Taking it back, then reload (the race of #508).
-  await page
-    .getByRole("list", { name: "Reactions" })
-    .getByRole("button", { name: /Chef's kiss/ })
-    .click();
+  await page.getByRole("list", { name: "Reactions" }).getByRole("button", { name: /🤌/ }).click();
   await page.reload();
   await expect(page.getByRole("button", { name: "React to this idea" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Reactions" }).getByRole("button", { name: /Chef's kiss/ })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("list", { name: "Reactions" }).getByRole("button", { name: /🤌/ })).toHaveCount(0);
 
   // A comment.
   const field = page.getByRole("textbox", { name: /Say something to/ });

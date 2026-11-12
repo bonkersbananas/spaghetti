@@ -308,6 +308,8 @@
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
   --font-display--font-variation-settings: "SOFT" 100, "WONK" 0;
+  /* Reactions are the system's colour emoji (decision 0042): Apple's on iPhones and Macs. */
+  --font-emoji: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --text-*: initial;

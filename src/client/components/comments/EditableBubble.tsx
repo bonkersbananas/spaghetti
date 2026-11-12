@@ -1,6 +1,6 @@
 import type { Comment } from "@shared/comments";
 import { COMMENT_MAX, splitTrailingLink } from "@shared/comments";
-import { type ReactionKind, summarizeReactions } from "@shared/reactions";
+import { summarizeReactions } from "@shared/reactions";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";
 import { TextArea } from "@/components/ui/Field";
@@ -12,6 +12,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/cn";
 import { deleteComment, editComment, reactToComment } from "@/lib/comments";
 import { linkify } from "@/lib/linkify";
+import { useEmojiUse } from "@/lib/reactions";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 interface EditableBubbleProps {
@@ -45,6 +46,12 @@ export function EditableBubble({
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [more, setMore] = useState(false);
+  const { quick, recent } = useEmojiUse();
+  const changeMenu = (open: boolean) => {
+    setMenuOpen(open);
+    if (!open) setMore(false);
+  };
   const [text, setText] = useState(comment.body);
   const cancelled = useRef(false);
 
@@ -85,23 +92,27 @@ export function EditableBubble({
     );
   }
 
-  const react = (kind: ReactionKind) => me && reactToComment(queryClient, comment, kind, me);
+  const react = (kind: string) => me && reactToComment(queryClient, comment, kind, me);
   const given = new Set((comment.reactions ?? []).filter((r) => r.userId === me).map((r) => r.kind));
   const label = mine ? "Your comment" : `${nameOf(comment.authorId)}'s comment`;
 
   const rows = (close: () => void): ReactNode => (
     <div className="flex flex-col">
       <ReactionPicker
-        compact={isDesktop}
+        layout={isDesktop ? "menu" : "sheet"}
         given={given}
+        quick={quick}
+        recent={recent}
+        more={more}
+        onMore={setMore}
         disabled={!me}
         onPick={(kind) => {
           react(kind);
           close();
         }}
-        className={cn(mine && "mb-1.5", !isDesktop && mine && "mb-3")}
+        className={cn(mine && !more && "mb-1.5", !isDesktop && mine && !more && "mb-3")}
       />
-      {mine && (
+      {mine && !more && (
         <>
           <MenuRow
             icon={<EditIcon size={20} aria-hidden />}
@@ -163,20 +174,20 @@ export function EditableBubble({
       label={label}
       side="bottom"
       align={mine ? "end" : "start"}
-      className="w-auto p-1.5"
+      className={more ? "w-auto p-3" : "w-auto p-1.5"}
       trigger={menuButton}
       open={menuOpen}
-      onOpenChange={setMenuOpen}
+      onOpenChange={changeMenu}
     >
-      {rows(() => setMenuOpen(false))}
+      {rows(() => changeMenu(false))}
     </Popover>
   ) : (
     <>
       {/* On a phone the other person's message has no button beside it: it would stick out past a full-width bubble
           and widen the page. A tap on the bubble opens the sheet; a message that is only a link has its smiley under it. */}
       {mine && menuButton}
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen} title={mine ? "Your comment" : `React to ${label}`}>
-        {rows(() => setMenuOpen(false))}
+      <Sheet open={menuOpen} onOpenChange={changeMenu} tall={more} title={mine ? "Your comment" : `React to ${label}`}>
+        {rows(() => changeMenu(false))}
       </Sheet>
     </>
   );

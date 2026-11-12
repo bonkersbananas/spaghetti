@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemResponse, ItemsResponse } from "../../src/shared/api.ts";
 import type { ChangesResponse } from "../../src/shared/changes.ts";
 import type { CommentsResponse } from "../../src/shared/comments.ts";
-import type { Reaction } from "../../src/shared/reactions.ts";
+import type { EmojiUse, Reaction } from "../../src/shared/reactions.ts";
 import { purgeDeleted } from "../../src/worker/photos.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
 
@@ -20,6 +20,7 @@ beforeEach(async () => {
   sam = await signIn("sam", "battery staple");
 });
 
+const enc = encodeURIComponent;
 const uuid = () => crypto.randomUUID();
 
 async function idea(as = alex) {
@@ -55,22 +56,22 @@ async function feed(after?: number) {
 describe("reacting to an idea", () => {
   it("anyone gives a reaction once, their own idea too, and giving it again is harmless", async () => {
     const itemId = await idea();
-    const own = await react(`/api/items/${itemId}/reactions/love`, true);
+    const own = await react(`/api/items/${itemId}/reactions/${enc("❤️")}`, true);
     expect(own.status).toBe(200);
-    expect(kinds(own.body?.reactions)).toEqual([["love", alexId]]);
-    await react(`/api/items/${itemId}/reactions/love`, true);
-    const theirs = await react(`/api/items/${itemId}/reactions/love`, true, sam);
-    await react(`/api/items/${itemId}/reactions/chef`, true, sam);
+    expect(kinds(own.body?.reactions)).toEqual([["❤️", alexId]]);
+    await react(`/api/items/${itemId}/reactions/${enc("❤️")}`, true);
+    const theirs = await react(`/api/items/${itemId}/reactions/${enc("❤️")}`, true, sam);
+    await react(`/api/items/${itemId}/reactions/${enc("🤌")}`, true, sam);
     expect(kinds(theirs.body?.reactions)).toEqual([
-      ["love", alexId],
-      ["love", samId],
+      ["❤️", alexId],
+      ["❤️", samId],
     ]);
 
     const { item } = await (await request(`/api/items/${itemId}`, { cookie: alex })).json<ItemResponse>();
     expect(kinds(item.reactions)).toEqual([
-      ["love", alexId],
-      ["love", samId],
-      ["chef", samId],
+      ["❤️", alexId],
+      ["❤️", samId],
+      ["🤌", samId],
     ]);
     const { items } = await (await request("/api/items?stage=idea", { cookie: sam })).json<ItemsResponse>();
     expect(kinds(items.find((listed) => listed.id === itemId)?.reactions)).toHaveLength(3);
@@ -78,29 +79,35 @@ describe("reacting to an idea", () => {
 
   it("takes back only your own reaction", async () => {
     const itemId = await idea();
-    await react(`/api/items/${itemId}/reactions/hot`, true);
-    await react(`/api/items/${itemId}/reactions/hot`, true, sam);
-    const back = await react(`/api/items/${itemId}/reactions/hot`, false, sam);
-    expect(kinds(back.body?.reactions)).toEqual([["hot", alexId]]);
+    await react(`/api/items/${itemId}/reactions/${enc("🔥")}`, true);
+    await react(`/api/items/${itemId}/reactions/${enc("🔥")}`, true, sam);
+    const back = await react(`/api/items/${itemId}/reactions/${enc("🔥")}`, false, sam);
+    expect(kinds(back.body?.reactions)).toEqual([["🔥", alexId]]);
     // Taking back one that isn't there changes nothing.
-    expect((await react(`/api/items/${itemId}/reactions/hot`, false, sam)).status).toBe(200);
+    expect((await react(`/api/items/${itemId}/reactions/${enc("🔥")}`, false, sam)).status).toBe(200);
   });
 
   it("refuses a reaction outside the set, and a deleted idea", async () => {
     const itemId = await idea();
-    expect((await react(`/api/items/${itemId}/reactions/thumbsdown`, true)).status).toBe(400);
+    for (const bad of ["thumbsdown", "love", "ab", "👍👍", "👍a", "%20", enc("❤️❤️"), enc("🔥".repeat(30)), enc("❤")]) {
+      expect((await react(`/api/items/${itemId}/reactions/${bad}`, true)).status).toBe(400);
+    }
+    // Skin tones, flags and ZWJ sequences are one emoji each.
+    for (const good of ["👍🏽", "🇸🇪", "👩‍👩‍👧‍👦", "🏳️‍🌈"]) {
+      expect((await react(`/api/items/${itemId}/reactions/${enc(good)}`, true)).status).toBe(200);
+    }
     await request(`/api/items/${itemId}`, { method: "DELETE", cookie: alex });
-    expect((await react(`/api/items/${itemId}/reactions/love`, true)).status).toBe(404);
-    expect((await react(`/api/items/${uuid()}/reactions/love`, true)).status).toBe(404);
+    expect((await react(`/api/items/${itemId}/reactions/${enc("❤️")}`, true)).status).toBe(404);
+    expect((await react(`/api/items/${uuid()}/reactions/${enc("❤️")}`, true)).status).toBe(404);
   });
 
   it("records one item change per real change, none for repeats", async () => {
     const itemId = await idea();
     const start = (await feed()).cursor;
-    await react(`/api/items/${itemId}/reactions/want`, true, sam);
-    await react(`/api/items/${itemId}/reactions/want`, true, sam);
-    await react(`/api/items/${itemId}/reactions/want`, false, sam);
-    await react(`/api/items/${itemId}/reactions/want`, false, sam);
+    await react(`/api/items/${itemId}/reactions/${enc("🤩")}`, true, sam);
+    await react(`/api/items/${itemId}/reactions/${enc("🤩")}`, true, sam);
+    await react(`/api/items/${itemId}/reactions/${enc("🤩")}`, false, sam);
+    await react(`/api/items/${itemId}/reactions/${enc("🤩")}`, false, sam);
     const { changes } = await feed(start);
     expect(changes.map((change) => [change.entity, change.action, change.id, change.itemId, change.actor.id])).toEqual([
       ["item", "updated", itemId, itemId, samId],
@@ -116,7 +123,7 @@ describe("reacting to an idea", () => {
       cookie: alex,
     });
     const { token } = await made.json<{ token: string }>();
-    const response = await request(`/api/items/${itemId}/reactions/love`, {
+    const response = await request(`/api/items/${itemId}/reactions/${enc("❤️")}`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}`, Origin: "http://other.test" },
     });
@@ -129,15 +136,15 @@ describe("reacting to a comment", () => {
     const itemId = await idea();
     const first = await comment(itemId, sam);
     const second = await comment(itemId, alex);
-    await react(`/api/comments/${first}/reactions/bravo`, true);
-    await react(`/api/comments/${second}/reactions/melt`, true);
-    await react(`/api/comments/${second}/reactions/melt`, true, sam);
+    await react(`/api/comments/${first}/reactions/${enc("👏")}`, true);
+    await react(`/api/comments/${second}/reactions/${enc("🫠")}`, true);
+    await react(`/api/comments/${second}/reactions/${enc("🫠")}`, true, sam);
     const thread = await (await request(`/api/items/${itemId}/comments`, { cookie: alex })).json<CommentsResponse>();
     expect(thread.comments.map((c) => kinds(c.reactions))).toEqual([
-      [["bravo", alexId]],
+      [["👏", alexId]],
       [
-        ["melt", alexId],
-        ["melt", samId],
+        ["🫠", alexId],
+        ["🫠", samId],
       ],
     ]);
     // A comment's reactions aren't the idea's.
@@ -149,24 +156,24 @@ describe("reacting to a comment", () => {
     const itemId = await idea();
     const id = await comment(itemId, sam);
     const start = (await feed()).cursor;
-    await react(`/api/comments/${id}/reactions/love`, true);
+    await react(`/api/comments/${id}/reactions/${enc("❤️")}`, true);
     const { changes } = await feed(start);
     expect(changes.map((change) => [change.entity, change.action, change.id, change.itemId])).toEqual([
       ["comment", "updated", id, itemId],
     ]);
     const edited = await request(`/api/comments/${id}`, { method: "PATCH", cookie: sam, json: { body: "Red?" } });
     expect(kinds((await edited.json<{ comment: { reactions: Reaction[] } }>()).comment.reactions)).toEqual([
-      ["love", alexId],
+      ["❤️", alexId],
     ]);
     await request(`/api/comments/${id}`, { method: "DELETE", cookie: sam });
-    expect((await react(`/api/comments/${id}/reactions/hot`, true)).status).toBe(404);
+    expect((await react(`/api/comments/${id}/reactions/${enc("🔥")}`, true)).status).toBe(404);
   });
 
   it("go when what they belong to is purged", async () => {
     const itemId = await idea();
     const id = await comment(itemId);
-    await react(`/api/items/${itemId}/reactions/love`, true);
-    await react(`/api/comments/${id}/reactions/love`, true);
+    await react(`/api/items/${itemId}/reactions/${enc("❤️")}`, true);
+    await react(`/api/comments/${id}/reactions/${enc("❤️")}`, true);
     await request(`/api/comments/${id}`, { method: "DELETE", cookie: alex });
     await purgeDeleted(env, Date.now() + 31 * 24 * 60 * 60 * 1000);
     const left = await env.DB.prepare("SELECT target_id FROM reactions").all<{ target_id: string }>();
@@ -174,5 +181,22 @@ describe("reacting to a comment", () => {
     await request(`/api/items/${itemId}`, { method: "DELETE", cookie: alex });
     await purgeDeleted(env, Date.now() + 31 * 24 * 60 * 60 * 1000);
     expect((await env.DB.prepare("SELECT count(*) AS n FROM reactions").first<{ n: number }>())?.n).toBe(0);
+  });
+
+  it("tells which emoji are used most, and which you gave last", async () => {
+    const itemId = await idea();
+    const other = await idea();
+    for (const [path, emoji, as] of [
+      [itemId, "🔥", alex],
+      [itemId, "🍝", alex],
+      [other, "🔥", sam],
+      [other, "🎉", sam],
+    ] as const) {
+      await react(`/api/items/${path}/reactions/${enc(emoji)}`, true, as);
+    }
+    const mine = await (await request("/api/reactions/used", { cookie: alex })).json<EmojiUse>();
+    expect(mine.popular[0]).toBe("🔥");
+    expect(mine.popular).toHaveLength(3);
+    expect(mine.recent).toEqual(["🍝", "🔥"]);
   });
 });

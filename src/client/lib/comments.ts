@@ -1,6 +1,5 @@
 import type { Comment, CommentsResponse, UnreadCommentsResponse } from "@shared/comments";
 import { isUnread } from "@shared/comments";
-import type { ReactionKind } from "@shared/reactions";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -171,7 +170,7 @@ export function deleteComment(queryClient: QueryClient, comment: Comment) {
 }
 
 /** Gives or takes back your reaction to a comment, at once (lib/reactions.ts). */
-export function reactToComment(queryClient: QueryClient, comment: Comment, kind: ReactionKind, me: string) {
+export function reactToComment(queryClient: QueryClient, comment: Comment, kind: string, me: string) {
   reactTo(
     {
       path: `/comments/${comment.id}`,
@@ -186,6 +185,7 @@ export function reactToComment(queryClient: QueryClient, comment: Comment, kind:
     },
     kind,
     me,
+    queryClient,
   );
 }
 

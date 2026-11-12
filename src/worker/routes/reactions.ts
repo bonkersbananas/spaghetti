@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type Context, Hono } from "hono";
-import { isReactionKind, type Reaction, type ReactionKind } from "../../shared/reactions.ts";
+import { type EmojiUse, isEmoji, type Reaction } from "../../shared/reactions.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { comments, items, type ReactionRow, reactions } from "../db/schema.ts";
@@ -59,7 +59,7 @@ interface Target {
  * changes nothing and records nothing. A change is recorded as an update of what was reacted to (the item, or the
  * comment), since the reactions are part of it.
  */
-async function react(c: Context<AppEnv>, target: Target, kind: ReactionKind, on: boolean) {
+async function react(c: Context<AppEnv>, target: Target, kind: string, on: boolean) {
   const db = c.var.db;
   const me = c.var.user.id;
   const write = on
@@ -109,7 +109,7 @@ async function liveComment(c: Context<AppEnv>): Promise<Target | null> {
 function reactionRoutes(find: (c: Context<AppEnv>) => Promise<Target | null>) {
   const handle = (on: boolean) => async (c: Context<AppEnv>) => {
     const kind = c.req.param("kind") ?? "";
-    if (!isReactionKind(kind)) return apiError(c, 400, "invalid", "That isn't one of the reactions.");
+    if (!isEmoji(kind)) return apiError(c, 400, "invalid", "A reaction is one emoji.");
     const target = await find(c);
     if (!target) return apiError(c, 404, "not_found", notFound);
     return react(c, target, kind, on);
@@ -122,3 +122,27 @@ export const itemReactionRoutes = reactionRoutes(liveItem);
 
 /** /api/comments/:id/reactions/:kind: reacting to a comment (your own too). Person-only. */
 export const commentReactionRoutes = reactionRoutes(liveComment);
+
+/**
+ * GET /api/reactions/used: what the quick row and "recently used" are made of. Popular counts every reaction on a
+ * live thing by both people; recent is the signed-in person's own, newest first. Person-only.
+ */
+export const reactionUseRoutes = new Hono<AppEnv>().get("/used", async (c) => {
+  const db = c.var.db;
+  const [popular, recent] = await Promise.all([
+    db
+      .select({ kind: reactions.kind })
+      .from(reactions)
+      .groupBy(reactions.kind)
+      .orderBy(desc(sql`count(*)`), desc(sql`max(${reactions.createdAt})`))
+      .limit(12),
+    db
+      .select({ kind: reactions.kind })
+      .from(reactions)
+      .where(eq(reactions.userId, c.var.user.id))
+      .groupBy(reactions.kind)
+      .orderBy(desc(sql`max(${reactions.createdAt})`))
+      .limit(24),
+  ]);
+  return c.json<EmojiUse>({ popular: popular.map((row) => row.kind), recent: recent.map((row) => row.kind) });
+});

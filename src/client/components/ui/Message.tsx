@@ -1,20 +1,10 @@
 import type { Person } from "@shared/api";
-import { REACTIONS, type Reaction, type ReactionKind, reactedBy, summarizeReactions } from "@shared/reactions";
+import { type Reaction, reactedBy, summarizeReactions } from "@shared/reactions";
 import { fullTime, relativeTime } from "@shared/time";
-import type { ComponentPropsWithRef, ReactNode } from "react";
+import { type ComponentPropsWithRef, lazy, type ReactNode, Suspense, useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "./Avatar";
-import {
-  type Icon,
-  PlusIcon,
-  ReactBravoIcon,
-  ReactChefIcon,
-  ReactHotIcon,
-  ReactIcon,
-  ReactLoveIcon,
-  ReactMeltIcon,
-  ReactWantIcon,
-} from "./icons";
+import { PlusIcon, ReactIcon } from "./icons";
 
 interface MessageGroupProps {
   person: Pick<Person, "name" | "color"> & { photoUrl?: string | null };
@@ -135,32 +125,12 @@ export function NewDivider() {
   );
 }
 
-// --- Reactions (decision 0038). Kept in this file, not one of their own: a new module in this lazy chunk renames it,
+// --- Reactions (decision 0042). Kept in this file, not one of their own: a new module in this lazy chunk renames it,
 // and the changed name in the entry's preload map costs every screen's first load a few bytes. ---
 
-/** Each reaction's glyph and its color: a little sticker, drawn filled. */
-const glyphs: Record<ReactionKind, { icon: Icon; tone: string }> = {
-  love: { icon: ReactLoveIcon, tone: "text-tomato" },
-  chef: { icon: ReactChefIcon, tone: "text-ink-soft" },
-  want: { icon: ReactWantIcon, tone: "text-ink-soft" },
-  hot: { icon: ReactHotIcon, tone: "text-tomato" },
-  bravo: { icon: ReactBravoIcon, tone: "text-basil" },
-  melt: { icon: ReactMeltIcon, tone: "text-semolina-ink" },
-};
-
-/** A reaction's glyph, in its own color. Decorative: what it means is said beside it. */
-export function ReactionGlyph({
-  kind,
-  size = 18,
-  className,
-}: {
-  kind: ReactionKind;
-  size?: number;
-  className?: string;
-}) {
-  const { icon: Glyph, tone } = glyphs[kind];
-  return <Glyph size={size} weight="fill" aria-hidden className={cn("shrink-0", tone, className)} />;
-}
+// The full picker (and Frimousse under it) arrives when "more" is pressed, or just before, once the quick row shows.
+const loadEmojiPicker = () => import("./EmojiPicker");
+const EmojiPicker = lazy(loadEmojiPicker);
 
 interface ReactionPillsProps {
   reactions: readonly Reaction[] | undefined;
@@ -168,7 +138,7 @@ interface ReactionPillsProps {
   me: string | undefined;
   /** A person's name, for "Sam and you". */
   nameOf: (userId: string) => string;
-  onToggle: (kind: ReactionKind) => void;
+  onToggle: (emoji: string) => void;
   disabled?: boolean;
   /** At the end of the row: the button that adds one (AddReactionButton). */
   children?: ReactNode;
@@ -178,8 +148,9 @@ interface ReactionPillsProps {
 }
 
 /**
- * The reactions given to something, one pill per kind, in the curated order. With two people a pill needs no names:
- * yours is tinted, the other person's is plain, and "2" means both of you. A tap gives the same one or takes yours back.
+ * The reactions given to something, one pill per emoji, in the order they were first given. With two people a pill
+ * needs no names: yours is tinted, the other person's is plain, and "2" means both of you; the tooltip says who.
+ * A tap gives the same one or takes yours back.
  */
 export function ReactionPills({
   reactions,
@@ -201,23 +172,25 @@ export function ReactionPills({
       {summaries.map((summary) => {
         const who = reactedBy(summary.userIds, me, nameOf);
         return (
-          <li key={summary.kind}>
+          <li key={summary.emoji}>
             <button
               type="button"
               aria-pressed={summary.mine}
               disabled={disabled}
-              title={`${summary.label}: ${who}`}
-              onClick={() => onToggle(summary.kind)}
+              title={who}
+              onClick={() => onToggle(summary.emoji)}
               className={cn(
-                "pressable focus-ring touch-target rounded-pill text-small relative inline-flex h-8 items-center gap-1 px-2.5 font-semibold tabular-nums transition-colors disabled:opacity-60",
+                "pressable focus-ring touch-target rounded-pill text-small relative inline-flex h-8 items-center gap-1.5 px-2.5 font-semibold tabular-nums transition-colors disabled:opacity-60",
                 summary.mine
                   ? "bg-tomato-soft text-tomato-ink ring-tomato/30 ring-1 ring-inset"
                   : "bg-cream shadow-soft text-ink-soft",
               )}
             >
-              <ReactionGlyph kind={summary.kind} />
+              <span aria-hidden className="font-emoji text-lead leading-none">
+                {summary.emoji}
+              </span>
               <span className="sr-only">
-                {summary.label}, from {who}
+                {summary.emoji}, from {who}
               </span>
               {summary.userIds.length > 1 && <span aria-hidden>{summary.userIds.length}</span>}
             </button>
@@ -253,44 +226,99 @@ export function AddReactionButton({
 }
 
 interface ReactionPickerProps {
-  /** The kinds you have already given: picked again, they are taken back. */
-  given: ReadonlySet<ReactionKind>;
-  onPick: (kind: ReactionKind) => void;
-  /** Glyphs only, in one row, each named in its tooltip (a desktop menu); otherwise tiles with their names. */
-  compact?: boolean;
+  /** The emoji you have already given: picked again, they are taken back. */
+  given: ReadonlySet<string>;
+  onPick: (emoji: string) => void;
+  /** The quick row (lib/reactions.ts useEmojiUse): the two of you's most used, then the defaults. */
+  quick: readonly string[];
+  /** Your latest picks, for the full picker. */
+  recent?: readonly string[];
+  /** Whether the full picker shows instead of the quick row, and the change to make (the sheet grows for it). */
+  more: boolean;
+  onMore: (more: boolean) => void;
+  /** `menu` is the desktop popover: a tight row, and a picker with the search on top. `sheet` is the phone's. */
+  layout: "menu" | "sheet";
   disabled?: boolean;
   className?: string;
 }
 
-/** The curated set to pick from: big, friendly tiles on a phone, a tight row of glyphs in a desktop menu. */
-export function ReactionPicker({ given, onPick, compact = false, disabled, className }: ReactionPickerProps) {
+/**
+ * What the smiley opens, like Slack's: a quick row of the emoji you use most with a "more" button, which swaps in the
+ * full picker (every emoji, searched by name and keyword). Tiles are large on a phone, a tight row in a desktop menu.
+ */
+export function ReactionPicker({
+  given,
+  onPick,
+  quick,
+  recent,
+  more,
+  onMore,
+  layout,
+  disabled,
+  className,
+}: ReactionPickerProps) {
+  const sheet = layout === "sheet";
+  // Warm the full picker's code while the quick row is up, so "more" is instant.
+  useEffect(() => {
+    void loadEmojiPicker();
+  }, []);
+  if (more) {
+    return (
+      <Suspense
+        fallback={
+          <p className={cn("text-small text-ink-faint flex items-center justify-center", sheet ? "h-72" : "h-64 w-80")}>
+            Loading emoji…
+          </p>
+        }
+      >
+        <EmojiPicker
+          layout={layout}
+          given={given}
+          recent={recent}
+          onPick={onPick}
+          className={cn(!sheet && "w-80", className)}
+        />
+      </Suspense>
+    );
+  }
   return (
-    <fieldset className={cn(compact ? "flex gap-0.5" : "grid grid-cols-3 gap-2 md:grid-cols-6", className)}>
+    <fieldset className={cn(sheet ? "grid grid-cols-7 gap-1.5" : "flex gap-0.5", className)}>
       <legend className="sr-only">Reactions</legend>
-      {REACTIONS.map(({ kind, label }) => {
-        const picked = given.has(kind);
+      {quick.map((emoji) => {
+        const picked = given.has(emoji);
         return (
           <button
-            key={kind}
+            key={emoji}
             type="button"
             aria-pressed={picked}
             disabled={disabled}
-            title={compact ? label : undefined}
-            onClick={() => onPick(kind)}
+            onClick={() => onPick(emoji)}
             className={cn(
-              "pressable focus-ring flex items-center justify-center transition-colors disabled:opacity-60",
-              compact
-                ? "size-9 rounded-md"
-                : "text-small text-ink-soft min-h-20 flex-col gap-1.5 rounded-lg px-1 py-3 font-semibold",
-              picked ? "bg-tomato-soft ring-tomato/30 ring-1 ring-inset" : "hover:bg-ink/5",
-              !compact && !picked && "bg-ink/4",
+              "pressable focus-ring font-emoji flex items-center justify-center rounded-md transition-colors disabled:opacity-60",
+              sheet ? "text-headline h-14" : "text-title size-9",
+              picked ? "bg-tomato-soft ring-tomato/30 ring-1 ring-inset" : sheet ? "bg-ink/4" : "hover:bg-ink/5",
             )}
           >
-            <ReactionGlyph kind={kind} size={compact ? 22 : 30} />
-            {compact ? <span className="sr-only">{label}</span> : label}
+            {emoji}
           </button>
         );
       })}
+      <button
+        type="button"
+        aria-label="More emoji"
+        title="More emoji"
+        disabled={disabled}
+        onClick={() => onMore(true)}
+        className={cn(
+          "pressable focus-ring text-ink-soft hover:text-ink flex items-center justify-center rounded-md transition-colors disabled:opacity-60",
+          sheet ? "bg-ink/4 h-14" : "hover:bg-ink/5 size-9",
+        )}
+      >
+        <span className="relative inline-flex">
+          <ReactIcon size={sheet ? 28 : 22} aria-hidden />
+          <PlusIcon size={10} weight="bold" aria-hidden className="bg-lifted absolute -top-0.5 -right-1 rounded-full" />
+        </span>
+      </button>
     </fieldset>
   );
 }

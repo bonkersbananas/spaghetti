@@ -10,6 +10,7 @@ import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
+import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -119,6 +120,7 @@ export function BuildCard({
             <ActivityLine item={item} />
           </>
         }
+        reactions={<ReactionGlance reactions={item.reactions} />}
         person={person}
         via={via}
         className="h-full"

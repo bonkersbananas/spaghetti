@@ -41,7 +41,7 @@ One short record per settled decision, including the things we decided **not** t
 | [0035](0035-a-landing-page-at-the-root-for-visitors.md) | A landing page at the root for visitors, the app for the two people | Accepted |
 | [0036](0036-the-3d-view-reads-the-slicer-file-in-the-browser.md) | The 3D view reads the slicer file in the browser and loads only when asked for | Accepted |
 | [0037](0037-e2e-tests-what-matters-quickly.md) | The end-to-end tests check what the two people use, quickly: phone width for the core loop and `@phone` tests, no axe, timing on main only | Accepted |
-| [0038](0038-reactions-a-curated-six.md) | Reactions: a curated six on ideas, builds and comments, your own included | Accepted |
+| [0038](0038-reactions-a-curated-six.md) | Reactions: a curated six on ideas, builds and comments, your own included | Superseded by 0042 |
 | [0039](0039-no-page-zoom-photos-zoom-in-place.md) | No page zoom on touch screens, photos zoom in place, text follows the phone's size setting | Accepted |
 | [0040](0040-the-idea-scout-suggests-three-models-a-week.md) | The idea scout suggests three models a week, checked for dead links, and only suggests | Accepted |
 | [0041](0041-shopping-list-reads-the-prisjakt-pages-people-link.md) | The shopping list reads the Prisjakt pages people link (picture, cheapest offers), and nothing more | Accepted |
@@ -61,3 +61,4 @@ Status: Accepted | Open | Superseded by NNNN
 
 **Consequences:** what this rules out or requires of the code, and what would make us revisit it.
 ```
+| [0042](0042-reactions-are-any-emoji.md) | Reactions are any emoji: a quick row, a full searchable picker, and a line of them on the Ideas and Builds cards | Accepted |

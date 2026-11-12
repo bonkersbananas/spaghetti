@@ -1,5 +1,5 @@
-import { hasReacted, type Reaction, type ReactionKind, toggleReaction } from "@shared/reactions";
-import type { QueryClient } from "@tanstack/react-query";
+import { type EmojiUse, hasReacted, quickEmoji, type Reaction, toggleReaction } from "@shared/reactions";
+import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { cachedItem, patchCachedItem } from "./items";
@@ -21,7 +21,7 @@ const inFlight = new Map<string, number>();
  * Gives `kind` from `me`, or takes it back: on screen at once, then sent. The server's answer replaces the list once
  * nothing newer is on its way; a refusal puts it back as it was, with a quiet word.
  */
-export function reactTo({ path, read, write }: ReactionTarget, kind: ReactionKind, me: string) {
+export function reactTo({ path, read, write }: ReactionTarget, kind: string, me: string, queryClient?: QueryClient) {
   if (!canEdit()) return;
   const on = !hasReacted(read(), kind, me);
   write(toggleReaction(read(), kind, me, Date.now()));
@@ -32,9 +32,11 @@ export function reactTo({ path, read, write }: ReactionTarget, kind: ReactionKin
     else inFlight.delete(path);
     return left === 0;
   };
-  api<{ reactions: Reaction[] }>(`${path}/reactions/${kind}`, { method: on ? "PUT" : "DELETE" })
+  api<{ reactions: Reaction[] }>(`${path}/reactions/${encodeURIComponent(kind)}`, { method: on ? "PUT" : "DELETE" })
     .then(({ reactions }) => {
       if (settle()) write(reactions);
+      // The quick row and "recently used" follow what you give.
+      if (on) void queryClient?.invalidateQueries({ queryKey: emojiUseQuery.queryKey });
     })
     .catch(() => {
       settle();
@@ -45,7 +47,7 @@ export function reactTo({ path, read, write }: ReactionTarget, kind: ReactionKin
 }
 
 /** Reacts to an idea or build, wherever it is cached. */
-export function reactToItem(queryClient: QueryClient, itemId: string, kind: ReactionKind, me: string) {
+export function reactToItem(queryClient: QueryClient, itemId: string, kind: string, me: string) {
   reactTo(
     {
       path: `/items/${itemId}`,
@@ -54,5 +56,19 @@ export function reactToItem(queryClient: QueryClient, itemId: string, kind: Reac
     },
     kind,
     me,
+    queryClient,
   );
+}
+
+/** The emoji the two of you use most and the ones you used last: the picker's quick row and recent row. */
+export const emojiUseQuery = queryOptions({
+  queryKey: ["reactions", "used"],
+  queryFn: () => api<EmojiUse>("/reactions/used"),
+  staleTime: 5 * 60_000,
+});
+
+/** What the picker needs: the quick row (filled up with the defaults) and your recent picks. */
+export function useEmojiUse() {
+  const { data } = useQuery(emojiUseQuery);
+  return { quick: quickEmoji(data?.popular), recent: data?.recent ?? [] };
 }
