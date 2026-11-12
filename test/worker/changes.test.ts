@@ -326,6 +326,19 @@ describe("what writes record", () => {
     expect(shape(await recorded(() => post(`/api/recipes/${id}/restore`)))).toEqual([["recipe", "restored", id, null]]);
   });
 
+  it("twists: make, change, delete and restore; repeats are silent", async () => {
+    const id = crypto.randomUUID();
+    const body = { id, name: "42 mm bin" };
+    expect(shape(await recorded(() => post("/api/twists", body)))).toEqual([["twist", "created", id, null]]);
+    expect(await recorded(() => post("/api/twists", body))).toEqual([]);
+    expect(shape(await recorded(() => patch(`/api/twists/${id}`, { note: "Lid snaps at +0.2" })))).toEqual([
+      ["twist", "updated", id, null],
+    ]);
+    expect(shape(await recorded(() => del(`/api/twists/${id}`)))).toEqual([["twist", "deleted", id, null]]);
+    expect(await recorded(() => del(`/api/twists/${id}`), 404)).toEqual([]);
+    expect(shape(await recorded(() => post(`/api/twists/${id}/restore`)))).toEqual([["twist", "restored", id, null]]);
+  });
+
   it("shopping list: add, tick off, sort, delete and restore; repeats are silent", async () => {
     const id = crypto.randomUUID();
     const body = { id, name: "Liquid glue" };

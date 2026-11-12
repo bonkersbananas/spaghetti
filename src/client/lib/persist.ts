@@ -33,6 +33,7 @@ export const PERSISTED_ROOTS = [
   "what-worked",
   "spools",
   "recipes",
+  "twists",
   "printer",
   "upkeep",
   "shopping",
