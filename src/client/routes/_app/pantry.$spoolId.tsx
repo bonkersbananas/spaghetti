@@ -491,6 +491,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
             onChange={(note) => change({ note })}
             placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
           />
+          {/* On phones, right under the note: editing stays close however long the history grows. */}
+          {!isDesktop && details}
 
           {/* The spool's sections, a section's distance apart and from the note above. */}
           <div className="mt-5 flex flex-col gap-12 empty:hidden md:gap-16">
@@ -498,7 +500,6 @@ function SpoolPage({ spool }: { spool: Spool }) {
             <SpoolRecipes material={value.material} finish={value.finish} />
             <PrintedWith spool={spool} />
           </div>
-          {!isDesktop && details}
         </div>
       </div>
 
