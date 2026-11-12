@@ -73,7 +73,7 @@ src/
     db/schema.ts          Drizzle schema: users, sessions, items, photos, attempts, tags, spools, ams_slots, printer, attempt_files
     push/                 web push: webpush.ts (VAPID + aes128gcm on WebCrypto), nudges.ts (the cron's "how did it go?" rules)
     photos.ts             R2 keys (photos and slicer files) and the daily purge (scheduled handler in index.ts)
-  shared/                 code both sides use (API types, the change feed (changes.ts), attempts and tags, spools and printer checks, journal grouping, search terms, keyboard shortcut registry, password hashing, person colors, EXIF, links, times)
+  shared/                 code both sides use (API types, the change feed (changes.ts), attempts and tags, spools and printer checks, journal grouping, search terms, keyboard shortcut registry, password hashing, person colors, EXIF, links, model-mark (which ideas have a model: ui/ModelMark.tsx shows it), times)
     threemf/              the .3mf reader, and prefill.ts: a file's plate as attempt settings
     gcode/                the plate G-code reader: readToolpaths (streams a .gcode.3mf), GcodeReader (parse.ts), the Layer/Toolpaths types; see docs/printer.md
 bridge/                   the optional printer bridge (Node, outside the Worker): `pnpm bridge`; see "The printer bridge" below

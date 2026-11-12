@@ -19,8 +19,8 @@ test("links in a note become cards under it: distinct, in order, three at most, 
 }) => {
   const id = crypto.randomUUID();
   const note = [
-    "Drawer bins: https://www.printables.com/model/42-drawer-bins",
-    "and the same again https://www.printables.com/model/42-drawer-bins,",
+    "Drawer bins: https://www.printables.com/@mila/drawer-bins",
+    "and the same again https://www.printables.com/@mila/drawer-bins,",
     "plus https://makerworld.com/en/models/hook, https://example.org/a/b and https://example.net/fourth.",
   ].join("\n");
   await page.request.post("/api/items", { headers: { Origin: origin(page) }, data: { id, title: "Bins", note } });
@@ -29,15 +29,15 @@ test("links in a note become cards under it: distinct, in order, three at most, 
   // Three of the four distinct addresses, in the order they appear. Without a connection to the page (the
   // test's app can't fetch one) the card keeps showing the address.
   await expect(cards).toHaveCount(3);
-  await expect(cards.nth(0)).toHaveAttribute("href", "https://www.printables.com/model/42-drawer-bins");
+  await expect(cards.nth(0)).toHaveAttribute("href", "https://www.printables.com/@mila/drawer-bins");
   await expect(cards.nth(1)).toHaveAttribute("href", "https://makerworld.com/en/models/hook");
   await expect(cards.nth(2)).toHaveAttribute("href", "https://example.org/a/b");
   await expect(cards.nth(0)).toHaveAttribute("target", "_blank");
   await expect(cards.nth(0)).toHaveAttribute("rel", "noreferrer noopener");
-  await expect(cards.nth(0)).toContainText("printables.com/model/42-drawer-bins");
+  await expect(cards.nth(0)).toContainText("printables.com/@mila/drawer-bins");
   await expect(cards.nth(0)).toContainText("printables.com");
   // The links inside the note are still links (it has the first address twice).
-  await expect(page.getByRole("link", { name: /^printables\.com\/model\/42-drawer-bins$/ })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: /^printables\.com\/@mila\/drawer-bins$/ })).toHaveCount(2);
 });
 
 test("a note without a link has no cards, and the build page shows them too", async ({ page }) => {
@@ -116,12 +116,12 @@ test("typing an address asks for one preview, once the note has settled, not one
   await page.goto(`/ideas/${id}`);
   const note = page.getByRole("textbox", { name: "Note" });
   await note.click();
-  await note.pressSequentially("Model: https://www.printables.com/model/42-drawer-bins", { delay: 40 });
+  await note.pressSequentially("Model: https://www.printables.com/@mila/drawer-bins", { delay: 40 });
   // Still typing (a moment ago): no card yet, nothing asked.
   expect(asked).toEqual([]);
   const cards = page.getByRole("list", { name: "Links in the note" }).getByRole("link");
   await expect(cards).toHaveCount(1, { timeout: 5000 });
-  await expect(cards).toHaveAttribute("href", "https://www.printables.com/model/42-drawer-bins");
+  await expect(cards).toHaveAttribute("href", "https://www.printables.com/@mila/drawer-bins");
   await expect.poll(() => asked.length).toBe(1);
-  expect(decodeURIComponent(asked[0] ?? "")).toContain("https://www.printables.com/model/42-drawer-bins");
+  expect(decodeURIComponent(asked[0] ?? "")).toContain("https://www.printables.com/@mila/drawer-bins");
 });

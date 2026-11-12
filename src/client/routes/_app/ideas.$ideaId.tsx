@@ -1,3 +1,4 @@
+import { modelOf } from "@shared/model-mark";
 import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +20,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
 import { BuildsIcon, CommentIcon, MoveIntoIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
+import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { PullToGo } from "@/components/ui/PullToGo";
@@ -33,12 +35,14 @@ import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
 import { whyNotMove } from "@/lib/move";
 import { useScreenActions } from "@/lib/palette";
+import { photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useSettled } from "@/lib/use-settled";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
 const MoveToBuildSheet = lazy(() =>
@@ -205,6 +209,11 @@ function Idea({ item }: { item: ItemView }) {
 
   const hasPhotos = photos.length > 0;
   const reading = item.draft?.status === "reading";
+  // The model card follows the note once typing pauses (half an address is not a model page yet).
+  const settledNote = useSettled(note);
+  const model = modelOf({ note: settledNote, draft: item.draft });
+  const modelPhoto = item.draft?.applied.includes("photos") ? photos.find((photo) => !photo.attemptId) : undefined;
+  const modelPicture = modelPhoto ? { src: photoSrc(modelPhoto.id, "thumb"), color: modelPhoto.color } : undefined;
   const alt = photoAlt({ title, note });
 
   return (
@@ -324,6 +333,7 @@ function Idea({ item }: { item: ItemView }) {
               </ToggleChip>
               {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
             </div>
+            {model && <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />}
             <NoteField
               value={note}
               onChange={setNote}
@@ -331,7 +341,7 @@ function Idea({ item }: { item: ItemView }) {
               placeholder="Add a note: a link, a measurement, a half-thought…"
             />
             <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
-            <NoteLinks note={note} />
+            <NoteLinks note={note} skip={model?.url} />
 
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
               {person && <Avatar person={person} size="sm" via={via} />}

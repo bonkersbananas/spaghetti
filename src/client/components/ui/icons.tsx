@@ -45,6 +45,7 @@ export {
   Copy as CopyIcon,
   Cube as BuildsIcon,
   Cube as CubeIcon,
+  CubeFocus as ModelIcon,
   DeviceMobile as PhoneIcon,
   Devices as DevicesIcon,
   Disc as SpoolIcon,

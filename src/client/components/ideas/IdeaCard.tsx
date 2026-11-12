@@ -1,9 +1,11 @@
 import type { Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
+import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense } from "react";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
+import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { UploadBadge } from "@/components/ui/UploadBadge";
@@ -76,6 +78,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
   const cover = item.photos[0];
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
+  const model = modelOf(item);
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
@@ -125,6 +128,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           unread={unread}
           badge={item.photos.length > 1 ? <PhotoCountBadge count={item.photos.length} /> : undefined}
           chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
+          mark={model ? <ModelMark mark={model} /> : undefined}
           sub={item.forWhom ? `for ${item.forWhom}` : undefined}
           reactions={<ReactionGlance reactions={item.reactions} />}
           meta={relativeTime(item.createdAt)}

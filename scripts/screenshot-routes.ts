@@ -1853,6 +1853,15 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  // Ideas with a model show it on the card; one tap on "Has a model" keeps only those.
+  {
+    name: "ideas-has-a-model",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Has a model/ }).click();
+      await page.waitForTimeout(500);
+    },
+  },
   // An idea with someone named: the quiet "for the kitchen" line, no chip.
   { name: "idea-for", path: "/ideas/5eed0000-0000-4000-8000-000000000003" },
   // Nobody named yet, "For someone" just tapped: the line opens under the title with the caret in it, no box.
@@ -1869,9 +1878,9 @@ export const shots: Shot[] = [
     name: "idea-links",
     path: `/ideas/${SEED_IDS.deskTidy}`,
     prepare: async (page) => {
-      const links = page.getByRole("list", { name: "Links in the note" });
-      await links.getByText("Drawer bins, 42 mm grid").waitFor();
-      await links.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      const card = page.getByRole("link", { name: /Model on MakerWorld/ });
+      await card.getByText("Drawer bins, 42 mm grid").waitFor();
+      await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
     },
   },
   // The thread under an idea and a build (one comment unread on the idea), the empty one, the composer in use, and the card's unread mark.
@@ -2718,6 +2727,7 @@ export const shots: Shot[] = [
     },
   },
   { name: "styleguide", path: "/styleguide", fullPage: true },
+  { name: "model-mark-options", path: "/styleguide", selector: "#model-mark" },
   {
     // The moment before permission is asked for: the browser says nothing until the switch is turned on.
     name: "notifications-off",
