@@ -601,7 +601,15 @@ type Slice = "all" | "none" | "young";
  */
 async function mockToday(
   page: Page,
-  show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice; late?: boolean; offBed?: boolean },
+  show: {
+    builds: Slice;
+    journal: Slice;
+    spools: Slice;
+    ideas: Slice;
+    late?: boolean;
+    offBed?: boolean;
+    onePrint?: boolean;
+  },
 ) {
   const DAY = 24 * 60 * 60 * 1000;
   // A notebook with nothing in it has nothing for the idea scout to go on either.
@@ -627,6 +635,16 @@ async function mockToday(
       for (const item of json.items)
         for (const attempt of item.attempts ?? [])
           if (attempt.outcome === null) attempt.printedAt -= 4 * 60 * 60 * 1000;
+    }
+    // Only the first print stays on the bed: the others are taken off the list.
+    if (show.onePrint) {
+      let seen = false;
+      json.items = json.items.filter((item) => {
+        if (!item.attempts?.some((attempt) => attempt.outcome === null)) return true;
+        if (seen) return false;
+        seen = true;
+        return true;
+      });
     }
     const isIdeas = route.request().url().includes("stage=idea");
     const mode = isIdeas ? show.ideas : show.builds;
@@ -817,6 +835,27 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.waitForTimeout(1200);
     },
+  },
+  // The phone's Journal opens on what is happening now: every part, and the least (one print, nothing else).
+  {
+    name: "journal-now",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await page.locator("section[aria-label='On the bed']").or(page.locator("#now-bed")).first().waitFor();
+      await page.waitForTimeout(1500);
+    },
+  },
+  {
+    name: "journal-now-one",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", onePrint: true });
+      await page.locator("section[aria-label='On the bed']").waitFor();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: unmockToday,
   },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
   {
@@ -2609,6 +2648,26 @@ export const shots: Shot[] = [
     cleanup: async (page) => {
       await page.unroute("**/api/shopping-items");
     },
+  },
+  { name: "workshop", path: "/workshop", fullPage: true },
+  {
+    // A new notebook: no spools, nothing loaded, nothing due, nothing to buy.
+    name: "workshop-empty",
+    path: "/workshop",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.route(/\/api\/spools$/, (route) => route.fulfill({ json: { spools: [] } }));
+      await page.route(/\/api\/shopping-items$/, (route) => route.fulfill({ json: { shoppingItems: [] } }));
+      await page.route(/\/api\/printer\/upkeep$/, (route) => route.fulfill({ json: { tasks: [], printHours: 0 } }));
+      await page.route(/\/api\/printer$/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as object;
+        await route.fulfill({ response, json: { ...json, slots: {} } });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByText("No spools yet").waitFor();
+    },
+    cleanup: unmockToday,
   },
   // pnpm new route adds its screens above this line.
   {

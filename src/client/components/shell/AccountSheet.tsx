@@ -2,7 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon, TwistIcon } from "@/components/ui/icons";
+import { AgentIcon, BellIcon, PaletteIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
 import { Overline } from "@/components/ui/Overline";
 import { Sheet } from "@/components/ui/Sheet";
@@ -21,7 +21,6 @@ import {
   ThemeSwitch,
 } from "./lazy-account";
 import type { SigningInSheet } from "./SigningInSheets";
-import { workshop } from "./sections";
 
 /** Phone-only: who is signed in, the two people, the styleguide, sign out. */
 export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -77,20 +76,6 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               })
             : [0, 1].map((i) => <RowSkeleton key={i} />)}
         </ul>
-        <Overline as="h3" className="mt-6 mb-2 block">
-          Workshop
-        </Overline>
-        <MenuGroup label="Workshop">
-          {workshop.map(({ to, label, icon }) => (
-            <MenuItem key={to} to={to} icon={icon} onClick={() => onOpenChange(false)}>
-              {label}
-            </MenuItem>
-          ))}
-          {/* Phones have no sidebar: until the Workshop hub, Twists is reached from here. */}
-          <MenuItem to="/twists" icon={TwistIcon} onClick={() => onOpenChange(false)}>
-            Twists
-          </MenuItem>
-        </MenuGroup>
         <Overline as="h3" className="mt-6 mb-2 block">
           Settings
         </Overline>

@@ -104,6 +104,7 @@ export {
   Tag as TagIcon,
   Thermometer as TemperatureIcon,
   Timer as PrintingIcon,
+  Toolbox as WorkshopIcon,
   Trash as TrashIcon,
   UserPlus as InviteIcon,
   WarningCircle as WarningIcon,

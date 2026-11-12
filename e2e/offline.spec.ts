@@ -487,14 +487,16 @@ test("with the worker installed, / is the landing page signed out, the app signe
 
   await signIn(page);
   await page.goto("/");
-  await expect(page).toHaveURL(/\/today$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  // Phones have no Today: it leads to the Journal.
+  await expect(page).toHaveURL(/\/(today|journal)$/);
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
 
   // No connection: / opens the app from the cache, as the person still signed in here.
   await context.setOffline(true);
   await page.goto("/");
-  await expect(page).toHaveURL(/\/today$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  // Phones have no Today: it leads to the Journal.
+  await expect(page).toHaveURL(/\/(today|journal)$/);
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
 });
 
 test("shows the pantry as last seen with no connection, read-only", async ({ page, context }) => {

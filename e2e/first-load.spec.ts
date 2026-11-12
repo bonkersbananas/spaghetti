@@ -23,17 +23,20 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 /**
  * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-12, after #631 (gzip kB):
 
- * Raised by 2 kB for /today, /ideas and /builds with Twists (#722): the sidebar's entry brings Phosphor's Spiral icon
+ * Raised by 2 kB for /today, /ideas and /builds with Twists (#722): the sidebar's entry brings its icon
  * (0.9 kB gzip, all six weights in one file) into every first load, and the two route stubs a little more. Main was
  * then 281.5 / 268.5 / 268.1; with Twists 282.9 / 269.8 / 269.4.
  *   /sign-in 178.1   /today 276.9   /ideas 263.5   /builds 263.4   /journal 263.4   /search 272.4   /pantry 272.2   /printer 272.0
  */
 const CEILING_KB = {
   "/sign-in": 184,
-  "/today": 284,
-  "/ideas": 271,
-  "/builds": 271,
-  "/journal": 269,
+  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB), and the journal's Now block shares the print card with Today, which gives it a chunk of its own (+0.3 kB).
+  // Twists (#722) adds its sidebar icon and two route stubs to every screen (+1.3 to 1.8 kB): today 285, ideas and builds 272.
+  "/today": 285,
+  // 270: the Workshop tab's Toolbox icon is in every screen's tab bar (+0.7 kB).
+  "/ideas": 272,
+  "/builds": 272,
+  "/journal": 270,
   "/search": 278,
   "/pantry": 278,
   "/printer": 278,

@@ -122,7 +122,8 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await screen(page, "/wishlist", "Wishlists");
   await expect(page.getByRole("list", { name: "Your wishlist" })).toBeVisible();
 
-  await screen(page, "/today", "Today");
+  // Phones have no Today: /today leads to the Journal there (e2e/tab-bar.spec.ts).
+  await screen(page, "/today", isMobile ? "Journal" : "Today");
 
   await screen(page, "/builds", "Builds");
 
@@ -166,6 +167,7 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await screen(page, "/printer", /X2D|Printer/);
 
   await screen(page, "/shopping", "Shopping list");
+  await screen(page, "/workshop", "Workshop");
 
   // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
   await screen(page, "/styleguide", "Styleguide");
@@ -239,6 +241,7 @@ const CHECKED_ROUTES = [
   "pantry.$spoolId",
   "printer",
   "shopping",
+  "workshop",
   "agents",
   "year",
   "week.$monday",
@@ -362,7 +365,7 @@ test("every control on a phone has a 44 px target", async ({ page, isMobile }) =
   test.skip(!isMobile, "Touch targets are a phone rule; desktop has a pointer");
   test.setTimeout(180_000);
   const screens: Array<[string, string | RegExp]> = [
-    ["/today", "Today"],
+    ["/workshop", "Workshop"],
     ["/ideas", "Ideas"],
     [`/ideas/${data.ideaId}`, "Bath tugboat"],
     ["/builds", "Builds"],

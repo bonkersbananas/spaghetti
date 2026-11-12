@@ -99,7 +99,7 @@ test("adds a passkey, signs out and signs in with it; remove asks for no confirm
   // With a virtual authenticator the username field's own passkey offer (conditional UI) can sign in by itself,
   // before anything is pressed; otherwise the sign-in screen offers the passkey button. Either way no name or
   // password is typed.
-  const today = page.getByRole("heading", { level: 1, name: "Today" });
+  const today = page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ });
   const passkeyButton = page.getByRole("button", { name: /^Sign in with / });
   await expect(today.or(passkeyButton)).toBeVisible();
   if (await passkeyButton.isVisible()) {
@@ -152,7 +152,7 @@ test("a sign-in link and a code sign in a second browser, once, and the first de
   await phone.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(phone.getByText(/Welcome/)).toBeVisible();
   await phone.getByRole("button", { name: /^Add / }).click();
-  await expect(phone.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(phone.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   expect((await phone.request.get("/api/session")).status()).toBe(200);
 
   // The first device hears about it.
@@ -172,7 +172,7 @@ test("a sign-in link and a code sign in a second browser, once, and the first de
   await tab.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tab.getByText(/Welcome/)).toBeVisible();
   await tab.getByRole("button", { name: "Not now" }).click();
-  await expect(tab.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(tab.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
 
   const again = await browser.newContext({ baseURL: origin() });
   const late = await again.newPage();
@@ -211,7 +211,7 @@ test("an invite adds one person, who is signed in, and can't be used twice", asy
   await tab.getByRole("radio", { name: "Password" }).click();
   await tab.locator("input[name=new-password]").fill("a-long-enough-password");
   await tab.getByRole("button", { name: "Join", exact: true }).click();
-  await expect(tab.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(tab.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   const me = await (await tab.request.get("/api/session")).json();
   expect(me.user).toMatchObject({ username, name: "Mina Park", color: "plum" });
 
@@ -233,7 +233,7 @@ test("an invite can be accepted with a passkey and no password", async ({ page, 
   await tab.getByLabel("Your name").fill("Pia Lind");
   await tab.getByLabel("Username").fill(username);
   await tab.getByRole("button", { name: /^Join with / }).click();
-  await expect(tab.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(tab.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   // They can sign in with it from scratch.
   await guest.clearCookies();
   await tab.goto("/sign-in");
@@ -241,7 +241,7 @@ test("an invite can be accepted with a passkey and no password", async ({ page, 
     .getByRole("button", { name: /^Sign in with / })
     .click({ timeout: 3000 })
     .catch(() => undefined);
-  await expect(tab.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(tab.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   await guest.close();
 });
 
@@ -256,7 +256,7 @@ test("after a password sign-in, a quiet offer for a passkey comes once and never
   await page.getByLabel("Name").fill(SEED_USERS[0].username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   const offer = page.getByText(/^Next time, just /);
   await expect(offer).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: "Not now" }).click();
@@ -267,7 +267,7 @@ test("after a password sign-in, a quiet offer for a passkey comes once and never
   await page.getByLabel("Name").fill(SEED_USERS[0].username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   await page.waitForTimeout(2500);
   await expect(page.getByText(/^Next time, just /)).toHaveCount(0);
 });

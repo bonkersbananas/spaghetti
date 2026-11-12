@@ -142,16 +142,6 @@ test("hides sections with nothing in them, and the sidebar card on Today itself"
   await expect(card).toContainText(/min left|Done around|On the bed/);
 });
 
-test("phones: search is a button in the page header, and the tab bar has Today", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "the tab bar and the header button are for phones");
-  const tabs = page.getByRole("navigation", { name: "Sections" });
-  await expect(tabs.getByRole("link")).toHaveText(["Today", "Ideas", "Builds", "Journal"]);
-  await page.getByRole("link", { name: "Search" }).click();
-  await expect(page.getByRole("searchbox", { name: "Search" })).toBeFocused();
-  // Search itself has no search button.
-  await expect(page.getByRole("link", { name: "Search" })).toHaveCount(0);
-});
-
 test("Snap this print opens the capture sheet aimed at that print, and the photo joins its attempt", async ({
   page,
   isMobile,

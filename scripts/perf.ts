@@ -3,7 +3,7 @@
  *
  * Seeds a throwaway app (the screenshot data), serves the production build on workerd and, at 390 px with touch,
  * 4× CPU throttling and slow 4G, measures
- *   - cold start of Today and Ideas (first screen = the heading, useful = heading with its content and no
+ *   - cold start of the Journal and Ideas (first screen = the heading, useful = heading with its content and no
  *     skeletons) on a first visit, with the service worker's cache but nothing saved, and as the installed app
  *     resumed (service worker and saved data);
  *   - the taps people make most: input to next paint (what INP measures) and tap to result on screen;
@@ -25,7 +25,7 @@ const asJson = argv.includes("--json");
 const PARTS_BUILD = "5eed0000-0000-4000-8000-000000000109";
 
 const READY = {
-  "/today": `document.querySelector('h1')?.textContent === 'Today' && !document.querySelector('.sg-skeleton') && document.querySelectorAll('main a').length > 2`,
+  "/journal": `document.querySelector('h1')?.textContent === 'Journal' && !document.querySelector('.sg-skeleton') && document.querySelectorAll('main a').length > 2`,
   "/ideas": `document.querySelector('h1')?.textContent === 'Ideas' && !document.querySelector('.sg-skeleton') && !!document.querySelector('main a[href^="/ideas/"]')`,
 } as const;
 
@@ -50,7 +50,7 @@ async function signedIn(context: Awaited<ReturnType<typeof browser.newContext>>)
 
 try {
   // ---- Cold start ----
-  for (const path of ["/today", "/ideas"] as const) {
+  for (const path of ["/journal", "/ideas"] as const) {
     const firstScreen: number[] = [];
     const useful: number[] = [];
     const fcp: number[] = [];
@@ -121,7 +121,7 @@ try {
   await signedIn(context);
   await installProbe(context);
   const page = await context.newPage();
-  await page.goto("/today");
+  await page.goto("/journal");
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(2500);
@@ -152,9 +152,9 @@ try {
 
     // Tabs.
     for (const [from, to] of [
-      ["Today", "Ideas"],
+      ["Journal", "Ideas"],
       ["Ideas", "Builds"],
-      ["Builds", "Today"],
+      ["Builds", "Journal"],
     ]) {
       await settle();
       add(

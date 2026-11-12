@@ -18,7 +18,7 @@ export function ModelMark({ mark, className }: { mark: Model; className?: string
       )}
     >
       <ModelIcon weight="fill" aria-hidden className="size-4 md:size-6" />
-      <span className="text-micro -mt-px leading-none font-semibold md:text-caption md:-mt-0.5" aria-hidden>
+      <span className="text-micro md:text-caption -mt-px leading-none font-semibold md:-mt-0.5" aria-hidden>
         {modelLetter(mark)}
       </span>
       <span
