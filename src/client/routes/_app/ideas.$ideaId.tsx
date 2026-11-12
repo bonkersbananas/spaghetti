@@ -90,7 +90,7 @@ function IdeaDetail() {
 const back = { to: "/ideas", label: "Ideas" } as const;
 
 function Idea({ item }: { item: ItemView }) {
-  const stickyColumn = useStickyColumn<HTMLDivElement>();
+  const stickyColumn = useStickyColumn();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();

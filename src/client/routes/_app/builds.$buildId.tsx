@@ -150,7 +150,7 @@ function BuildDetail() {
 }
 
 function Build({ item }: { item: ItemView }) {
-  const stickyColumn = useStickyColumn<HTMLDivElement>();
+  const stickyColumn = useStickyColumn();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
