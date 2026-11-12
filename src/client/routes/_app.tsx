@@ -9,6 +9,7 @@ import { StatusBarCap } from "@/components/shell/StatusBarCap";
 import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
+import { CONTENT_ID, focusContent } from "@/lib/focus-content";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
@@ -132,8 +133,18 @@ function Shell() {
 
   return (
     <div className="bg-paper">
+      <a
+        href={`#${CONTENT_ID}`}
+        onClick={(event) => {
+          event.preventDefault();
+          focusContent();
+        }}
+        className="text-small text-ink bg-lifted shadow-float focus-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-md px-3 py-2 font-medium focus-visible:translate-y-0 max-md:hidden"
+      >
+        Skip to content
+      </a>
       <Sidebar />
-      <main className="pt-safe md:pl-sidebar">
+      <main id={CONTENT_ID} className="pt-safe md:pl-sidebar focus-visible:shadow-none">
         <div className="max-w-wide pb-page mx-auto w-full px-5 md:px-12 md:pb-16">
           <OfflineNotice />
           <Outlet />
