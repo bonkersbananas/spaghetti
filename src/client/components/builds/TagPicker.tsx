@@ -16,6 +16,8 @@ interface TagPickerProps {
   suggested?: string | readonly string[];
   /** Who suggested them, for the line that says so. */
   suggestedBy?: "printer" | "claude";
+  /** Tags that say nothing new here (the "Spaghetti" tag under the Spaghetti outcome): left out unless picked. */
+  hide?: readonly string[];
   /** How many to show before "more". Picked ones always show. */
   visible?: number;
   className?: string;
@@ -33,17 +35,20 @@ export function TagPicker({
   label,
   suggested,
   suggestedBy = "printer",
+  hide = [],
   visible = 8,
   className,
 }: TagPickerProps) {
   const queryClient = useQueryClient();
-  const options = useTagOptions(kind);
+  const allOptions = useTagOptions(kind);
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const suggestions = typeof suggested === "string" ? [suggested] : (suggested ?? []);
   const showing = suggestions.filter((slug) => value.includes(slug));
   const tone = kind === "failure" ? "tomato" : "basil";
+
+  const options = allOptions.filter((option) => value.includes(option.slug) || !hide.includes(option.slug));
 
   // Picked tags someone else added, before the list of tags has them.
   const unknown = value.filter((slug) => !options.some((option) => option.slug === slug));

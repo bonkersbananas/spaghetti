@@ -35,6 +35,7 @@ import {
   patchCachedItem,
   useBuilds,
 } from "./items";
+import { scrollBehavior } from "./motion";
 import { outbox, type PendingAttemptChanges } from "./outbox";
 import { canEdit } from "./read-only";
 
@@ -104,8 +105,7 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   // Other toasts (another item's undo, a waiting update) stay.
   toast.dismiss(`draft-${item.id}`);
   toast.undo("Started building", {
-    description:
-      wasUpNext !== null ? "Off Up next. It stays in Ideas under Started." : "It stays in Ideas under Started.",
+    description: wasUpNext !== null ? "Off Up next." : undefined,
     onUndo: () => void changeStage(queryClient, item.id, "idea", wasUpNext !== null ? { upNext: wasUpNext } : {}),
   });
 }
@@ -157,6 +157,8 @@ export function finishBuild(queryClient: QueryClient, item: ItemView) {
   const previousCover = item.coverPhotoId;
   const final = finalPhotoGuess(item);
   void changeStage(queryClient, item.id, "done", final && !final.upload ? { coverPhotoId: final.id } : {});
+  // "Finish build" sits at the bottom of a long page: show the finished build (its final photo and "Done"), not the foot of it.
+  window.scrollTo({ top: 0, behavior: scrollBehavior() });
   const undo = () => void changeStage(queryClient, item.id, "building", { coverPhotoId: previousCover });
   const failures = item.attempts.filter((attempt) => attempt.outcome === "failed").length;
   if (failures > 0) {
