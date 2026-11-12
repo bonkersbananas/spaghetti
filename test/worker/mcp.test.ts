@@ -137,7 +137,9 @@ describe("the MCP endpoint", () => {
       "search",
       "what_worked",
       "get_build",
+      "get_photo",
       "capture_idea",
+      "add_photo",
       "add_comment",
       "set_parts",
       "start_attempt",
@@ -529,5 +531,196 @@ describe("tools, scopes and attribution", () => {
     expect(refused.isError).toBe(true);
     expect(refused.text).toContain('"printer"');
     expect((await callTool((await makeAgent(["printer"], "p")).token, "list_spools")).text).toContain('"read"');
+  });
+});
+
+describe("photos through MCP", () => {
+  async function full(token: string, name: string, args: Record<string, unknown>) {
+    const { body } = await rpc(token, "tools/call", { name, arguments: args });
+    const content = (body.result?.content ?? []) as Array<{
+      type: string;
+      text?: string;
+      data?: string;
+      mimeType?: string;
+    }>;
+    return {
+      isError: body.result?.isError === true,
+      text: content.find((part) => part.type === "text")?.text ?? "",
+      images: content.filter((part) => part.type === "image"),
+    };
+  }
+
+  async function ideaWithPhoto(token: string) {
+    const made = await callTool(token, "capture_idea", { title: "Tugboat", photo_base64: jpegBase64() });
+    const buildId = field(made.text, "build_id");
+    const { item } = await (await request(`/api/items/${buildId}`, { cookie })).json<ItemResponse>();
+    return { buildId, photoId: item.photos[0]?.id ?? "" };
+  }
+
+  it("get_build lists the photos and get_photo returns them as image content", async () => {
+    const { token } = await makeAgent(["read", "capture", "attempts"]);
+    const { buildId, photoId } = await ideaWithPhoto(token);
+    const attempt = await callTool(token, "log_attempt", {
+      build_id: buildId,
+      outcome: "success",
+      photo_base64: jpegBase64(),
+    });
+    expect(attempt.text).toContain("photo was added");
+    const story = await callTool(token, "get_build", { build_id: buildId });
+    expect(story.text).toContain("## Photos (2)");
+    expect(story.text).toContain(`photo_id: ${photoId} (the idea/build`);
+    expect(story.text).toContain("attempt 1");
+    expect(story.text).toContain("1600×1200");
+
+    const one = await full(token, "get_photo", { build_id: buildId, photo_id: photoId });
+    expect(one.images).toEqual([{ type: "image", data: jpegBase64(), mimeType: "image/jpeg" }]);
+    const byAttempt = await full(token, "get_photo", { build_id: buildId, attempt: 1 });
+    expect(byAttempt.images).toHaveLength(1);
+    expect(byAttempt.text).toContain("attempt 1");
+    const several = await full(token, "get_photo", { build_id: buildId, limit: 4 });
+    expect(several.images).toHaveLength(1);
+    expect((await full(token, "get_photo", { build_id: buildId, attempt: 5 })).isError).toBe(true);
+    // Search names an attempt's photo.
+    const found = await callTool(token, "search", { outcome: "success" });
+    expect(found.text).toContain("photo_id:");
+  });
+
+  it("get_photo needs read, and refuses a photo that isn't the build's, or is deleted", async () => {
+    const { token } = await makeAgent(["read", "capture"]);
+    const first = await ideaWithPhoto(token);
+    const second = await ideaWithPhoto(token);
+    const wrong = await full(token, "get_photo", { build_id: first.buildId, photo_id: second.photoId });
+    expect(wrong).toMatchObject({ isError: true, images: [] });
+    expect(wrong.text).toContain("isn't one of this build's");
+    expect((await full(token, "get_photo", { build_id: first.buildId, photo_id: uuid() })).isError).toBe(true);
+
+    const noRead = await makeAgent(["capture"], "writer");
+    expect((await full(noRead.token, "get_photo", { build_id: first.buildId })).text).toContain('"read"');
+
+    // A removed photo and a removed idea are gone for the agent too.
+    await request(`/api/photos/${first.photoId}`, { method: "DELETE", cookie });
+    expect((await full(token, "get_photo", { build_id: first.buildId, photo_id: first.photoId })).isError).toBe(true);
+    await request(`/api/items/${second.buildId}`, { method: "DELETE", cookie });
+    expect((await full(token, "get_photo", { build_id: second.buildId })).isError).toBe(true);
+  });
+
+  it("get_photo keeps pictures small: a big original is replaced by the thumb, or left out", async () => {
+    const { token } = await makeAgent(["read", "capture"]);
+    const { buildId, photoId } = await ideaWithPhoto(token);
+    const small = Uint8Array.from(atob(jpegBase64()), (c) => c.charCodeAt(0));
+    const big = new Uint8Array(1_000_000);
+    big.set(small);
+    await env.PHOTOS.put(`photos/${photoId}/large`, big, { httpMetadata: { contentType: "image/jpeg" } });
+    const thumb = await full(token, "get_photo", { build_id: buildId });
+    expect(thumb.images).toHaveLength(1);
+    expect(thumb.images[0]?.data).toBe(jpegBase64());
+    await env.PHOTOS.put(`photos/${photoId}/thumb`, big, { httpMetadata: { contentType: "image/jpeg" } });
+    const none = await full(token, "get_photo", { build_id: buildId });
+    expect(none.images).toHaveLength(0);
+    expect(none.text).toContain("too big");
+  });
+
+  it("add_photo adds to an idea or an attempt, after the others, marked via the agent", async () => {
+    const { token } = await makeAgent(["capture", "attempts"], "Claude for Alex");
+    const { buildId } = await ideaWithPhoto(token);
+    const added = await callTool(token, "add_photo", { build_id: buildId, photo_base64: jpegBase64() });
+    expect(added.text).toContain("Photo added");
+    const attempt = field(
+      (await callTool(token, "log_attempt", { build_id: buildId, outcome: "failed" })).text,
+      "attempt_id",
+    );
+    const onAttempt = await callTool(token, "add_photo", {
+      build_id: buildId,
+      attempt_id: attempt,
+      photo_base64: jpegBase64(),
+    });
+    expect(onAttempt.text).toContain("Photo added");
+    const { item } = await (await request(`/api/items/${buildId}`, { cookie })).json<ItemResponse>();
+    expect(item.photos.map((p) => [p.position, p.attemptId])).toEqual([
+      [0, null],
+      [1, null],
+      [2, attempt],
+    ]);
+    expect(item.photos.every((p) => p.needsResize && p.createdBy === alex)).toBe(true);
+    const rows = await env.DB.prepare("SELECT actor_kind FROM changes WHERE entity = 'photo'").all<{
+      actor_kind: string;
+    }>();
+    expect(rows.results.length).toBeGreaterThanOrEqual(3);
+    expect(rows.results.every((row) => row.actor_kind === "agent")).toBe(true);
+
+    // finish_attempt takes a photo as well.
+    const printing = field((await callTool(token, "start_attempt", { build_id: buildId })).text, "attempt_id");
+    const finished = await callTool(token, "finish_attempt", {
+      attempt_id: printing,
+      outcome: "success",
+      photo_base64: jpegBase64(),
+    });
+    expect(finished.text).toContain("photo was added");
+  });
+
+  it("add_photo checks scopes, the build, the attempt and the photo before anything is fetched for a token that can't use them", async () => {
+    const owner = await makeAgent(["capture", "attempts"], "owner");
+    const { buildId } = await ideaWithPhoto(owner.token);
+    const web = stubWeb({ "https://example.com/boat.jpg": () => jpegResponse() });
+    const url = "https://example.com/boat.jpg";
+    try {
+      const readOnly = await makeAgent(["read"], "reader");
+      expect((await callTool(readOnly.token, "add_photo", { build_id: buildId, photo_url: url })).text).toContain(
+        "needs the",
+      );
+      // A capture token can't put a photo on an attempt, and nothing is fetched for it.
+      const capture = await makeAgent(["capture"], "capturer");
+      const refused = await callTool(capture.token, "add_photo", {
+        build_id: buildId,
+        attempt_id: uuid(),
+        photo_url: url,
+      });
+      expect(refused).toEqual({ text: 'This token needs the "attempts" scope for that.', isError: true });
+      // An attempt token can't add to the idea itself.
+      const attemptsOnly = await makeAgent(["attempts"], "attempter");
+      expect((await callTool(attemptsOnly.token, "add_photo", { build_id: buildId, photo_url: url })).isError).toBe(
+        true,
+      );
+      expect(web.pages()).toEqual([]);
+      // A build that isn't there, a deleted one, an attempt that isn't the build's.
+      expect((await callTool(owner.token, "add_photo", { build_id: uuid(), photo_url: url })).isError).toBe(true);
+      expect(
+        (await callTool(owner.token, "add_photo", { build_id: buildId, attempt_id: uuid(), photo_url: url })).text,
+      ).toContain("isn't here");
+      expect((await callTool(owner.token, "add_photo", { build_id: buildId })).isError).toBe(true);
+      const gone = field((await callTool(owner.token, "capture_idea", { title: "Gone" })).text, "build_id");
+      await request(`/api/items/${gone}`, { method: "DELETE", cookie });
+      expect((await callTool(owner.token, "add_photo", { build_id: gone, photo_url: url })).isError).toBe(true);
+
+      // A URL works, and is fetched only from the open internet.
+      const ok = await callTool(owner.token, "add_photo", { build_id: buildId, photo_url: url });
+      expect(ok.text).toContain("Photo added");
+      expect(web.pages().at(-1)).toBe(url);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("add_photo enforces the size cap, the type and URL safety on redirects", async () => {
+    const { token } = await makeAgent(["capture"]);
+    const { buildId } = await ideaWithPhoto(token);
+    const tooBig = btoa(String.fromCharCode(0xff, 0xd8, 0xff).padEnd(13 * 1024 * 1024, "a"));
+    expect((await callTool(token, "add_photo", { build_id: buildId, photo_base64: tooBig })).text).toContain(
+      "too large",
+    );
+    expect((await callTool(token, "add_photo", { build_id: buildId, photo_base64: btoa("nope") })).text).toContain(
+      "JPEG or WebP",
+    );
+    stubWeb({ "https://example.com/moved.jpg": () => Response.redirect("http://192.168.1.20/snapshot.jpg", 302) });
+    try {
+      for (const url of ["https://example.com/moved.jpg", "https://127.0.0.1/a.jpg", "http://example.com/a.jpg"]) {
+        const result = await callTool(token, "add_photo", { build_id: buildId, photo_url: url });
+        expect(result.isError, url).toBe(true);
+      }
+    } finally {
+      vi.restoreAllMocks();
+    }
+    const { item } = await (await request(`/api/items/${buildId}`, { cookie })).json<ItemResponse>();
+    expect(item.photos).toHaveLength(1);
   });
 });

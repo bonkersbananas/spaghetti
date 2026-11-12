@@ -158,3 +158,10 @@ async function readPhoto(response: Response): Promise<Uint8Array> {
   }
   return bytes;
 }
+
+/** Bytes as base64, in slices (a spread of a whole photo would overflow the stack). */
+export function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
