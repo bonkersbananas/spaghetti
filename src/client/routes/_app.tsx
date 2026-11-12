@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { CaptureSheet } from "@/components/shell/CaptureSheet";
 import { DropOverlay } from "@/components/shell/DropOverlay";
+import { LazyCaptureSheet } from "@/components/shell/LazyCaptureSheet";
 import { OfflineNotice } from "@/components/shell/OfflineNotice";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { StatusBarCap } from "@/components/shell/StatusBarCap";
@@ -152,7 +152,7 @@ function Shell() {
       </main>
       <StatusBarCap />
       <TabBar />
-      <CaptureSheet />
+      <LazyCaptureSheet />
       {shared && (
         <Suspense fallback={null}>
           <ShareSheet />

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
-import { EmptyPot } from "@/components/illustrations";
+import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";

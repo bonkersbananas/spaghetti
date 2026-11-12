@@ -5,7 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
 import { sessionQuery } from "@/lib/queries";
-import { AccountSheet } from "./AccountSheet";
+import { LazyAccountSheet } from "./LazyAccountSheet";
 
 interface PageHeaderProps {
   title: string;
@@ -49,7 +49,7 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
         </div>
       </div>
       {subtitle && <p className="max-w-content text-body text-ink-faint mt-1">{subtitle}</p>}
-      {user && <AccountSheet open={accountOpen} onOpenChange={setAccountOpen} />}
+      {user && <LazyAccountSheet open={accountOpen} onOpenChange={setAccountOpen} />}
     </header>
   );
 }

@@ -3,7 +3,7 @@ import { addWeeks, isMonday, mondayOf, mondayOfDay, weekName, weekRangeLabel } f
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo } from "react";
-import { EmptyPot } from "@/components/illustrations";
+import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";

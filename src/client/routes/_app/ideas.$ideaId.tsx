@@ -9,7 +9,7 @@ import { DraftNote } from "@/components/ideas/DraftNote";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
-import { EmptyPot } from "@/components/illustrations";
+import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
