@@ -27,6 +27,29 @@ test.afterEach(async ({ page }) => {
 test.describe("on a laptop", () => {
   test.skip(({ isMobile }) => isMobile, "phones have no palette");
 
+  test("Escape puts focus back on what opened the palette", async ({ page }) => {
+    await page.goto("/ideas");
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    const jump = page.getByRole("button", { name: /Jump to/ });
+
+    // From the sidebar's box, by keyboard.
+    await jump.focus();
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+    await expect(jump).toBeFocused();
+
+    // From a shortcut, while another control has focus.
+    const account = page.getByRole("button", { name: "Account menu" });
+    await account.focus();
+    await page.keyboard.press(open);
+    await expect(palette).toBeVisible();
+    await page.keyboard.press(open);
+    await expect(palette).toBeHidden();
+    await expect(account).toBeFocused();
+  });
+
   test("opens from anywhere, lists actions and recent items, and closes with Escape", async ({ page }) => {
     const id = await create(page, { title: "Tugboat deck", stage: "building" });
     await page.goto(`/builds/${id}`);

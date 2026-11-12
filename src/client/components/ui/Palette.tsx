@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { type ReactNode, type Ref, useEffect, useId, useState } from "react";
 import { cn } from "@/lib/cn";
+import { useReturnFocus } from "@/lib/return-focus";
 import { type Icon, SearchIcon } from "./icons";
 import { Kbd } from "./Kbd";
 import { Photo } from "./Photo";
@@ -254,13 +255,19 @@ interface PaletteDialogProps {
 
 /** The palette as an overlay: high on the screen, instant, with the page dimmed behind. */
 export function PaletteDialog({ open, onOpenChange, onClosed, children }: PaletteDialogProps) {
+  const returnFocus = useReturnFocus(open);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
         <Dialog.Content
           aria-describedby={undefined}
-          onCloseAutoFocus={onClosed}
+          onCloseAutoFocus={(event) => {
+            // An action that started something (a sheet, a page) decides where focus goes; otherwise it goes back to
+            // what had it when the palette opened (the sidebar's button, or the page).
+            onClosed?.(event);
+            if (!event.defaultPrevented) returnFocus(event);
+          }}
           className="sg-dialog bg-lifted shadow-float fixed top-[12vh] left-1/2 z-50 flex max-h-[76vh] w-full max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl focus:outline-none"
         >
           <Dialog.Title className="sr-only">Command palette</Dialog.Title>
