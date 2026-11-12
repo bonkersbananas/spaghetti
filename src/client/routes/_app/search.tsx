@@ -408,6 +408,10 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
+      <EmptyState className="py-6 md:py-10" illustration={<NoodleSearch className="w-32" />} title="Dig up what worked">
+        Type what you remember: a filament, a failure, a name, a setting. One search covers ideas, builds and every
+        attempt.
+      </EmptyState>
     </div>
   );
 }
@@ -419,7 +423,10 @@ function SuggestionGroup({ title, action, children }: { title: string; action?: 
         <Overline as="h2">{title}</Overline>
         {action}
       </div>
-      <ChipRow label={title}>{children}</ChipRow>
+      {/* Wrapped, not scrolled: what is suggested should be seen at once, not found by swiping. */}
+      <ChipRow label={title} wrap>
+        {children}
+      </ChipRow>
     </section>
   );
 }
