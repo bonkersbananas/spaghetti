@@ -176,11 +176,8 @@ test("shopping: a Prisjakt page is suggested for a name, confirmed, and its pict
   await expect(offers.first()).toContainText("7\u00a0699");
   await expect(offers.first()).toHaveAttribute("href", "https://www.prisjakt.nu/produkt.php?p=1");
   await expect(sheet.getByText("checked today").first()).toBeVisible();
-  await sheet
-    .getByRole("button", { name: "Close" })
-    .first()
-    .click()
-    .catch(() => page.keyboard.press("Escape"));
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(row).toContainText("7\u00a0699\u00a0kr");
   // The picture really loads in its slot (also on a phone), and the line under the name is short.
   await expect(row.locator("img")).toBeVisible();
