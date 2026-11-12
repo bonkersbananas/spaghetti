@@ -44,6 +44,14 @@ const credentials = z.object({
  */
 const DUMMY_HASH = "pbkdf2-sha256$100000$c3BhZ2hldHRpLWR1bW15$Zm9yLXRpbWluZy1vbmx5LW5vdC1hLXJlYWwtaGFzaCE=";
 
+/**
+ * The hash a password is checked against: the person's own, or the dummy for an unknown name and for someone who
+ * joined with a passkey only (no hash). The slow check always runs, so how long a wrong password takes never tells
+ * which names exist or whose account has a password; a match against the dummy is still refused.
+ */
+export const hashToCheck = (user: { passwordHash: string } | undefined) =>
+  user?.passwordHash.startsWith("pbkdf2-") ? user.passwordHash : DUMMY_HASH;
+
 /** Wrong passwords before signing in waits: per username, and per address (two people may share one). */
 const PASSWORD_FAILURES_PER_NAME = 10;
 const PASSWORD_FAILURES_PER_IP = 30;
@@ -77,9 +85,7 @@ export const sessionRoutes = new Hono<AppEnv>()
       return tooMany(c);
     }
     const user = await c.var.db.select().from(users).where(eq(users.username, username)).get();
-    // Someone who joined with a passkey only has no password hash: the slow check still runs, so how long a wrong
-    // password takes never tells whose account has a password.
-    const hash = user?.passwordHash.startsWith("pbkdf2-") ? user.passwordHash : DUMMY_HASH;
+    const hash = hashToCheck(user);
     const ok = (await verifyPassword(password, hash)) && hash !== DUMMY_HASH;
     if (!user || !ok) {
       return apiError(c, 401, "wrong_credentials", "That name and password don't match.");
@@ -216,4 +222,4 @@ export const sessionRoutes = new Hono<AppEnv>()
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { credentials, signOutBody };
+export { credentials, DUMMY_HASH, signOutBody };
