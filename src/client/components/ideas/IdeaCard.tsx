@@ -128,7 +128,8 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           unread={unread}
           badge={item.photos.length > 1 ? <PhotoCountBadge count={item.photos.length} /> : undefined}
           chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
-          meta={item.forWhom ? `for ${item.forWhom} · ${relativeTime(item.createdAt)}` : relativeTime(item.createdAt)}
+          sub={item.forWhom ? `for ${item.forWhom}` : undefined}
+          meta={relativeTime(item.createdAt)}
           person={person}
           via={via}
           className="h-full"

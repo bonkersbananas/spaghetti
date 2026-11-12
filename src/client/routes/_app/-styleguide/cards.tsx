@@ -31,6 +31,7 @@ export function CardSection() {
         />
         <Card
           note="Hook for the AMS spool holder, the stock one rattles. Check the clearance to the wall first."
+          sub="for the kitchen"
           meta="Yesterday"
           person={people[1]}
           aspect="portrait"

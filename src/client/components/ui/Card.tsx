@@ -27,6 +27,8 @@ export interface CardProps {
   unread?: number;
   /** Small line under the title: "2 attempts · 3 days ago". */
   meta?: ReactNode;
+  /** One short line between the title and the meta row, the card's full width ("for the kitchen"): too much for the row, which shares its width with the avatar and the menu. */
+  sub?: ReactNode;
   person?: Pick<Person, "name" | "color">;
   /** The agent it was made through: the avatar gets its mark and says "via …". */
   via?: string;
@@ -62,6 +64,7 @@ export function Card({
   badge,
   unread,
   meta,
+  sub,
   person,
   via,
   aspect = "landscape",
@@ -123,6 +126,7 @@ export function Card({
           !noteCard &&
           !photo && <Heading className="text-body text-ink-faint font-sans font-medium italic">Untitled</Heading>
         )}
+        {sub && <p className={cn("text-small text-ink-soft truncate", heading ? "pt-0.5" : "pt-1")}>{sub}</p>}
         {/* The title has the whole width; the time, the avatar and (laid over the card) the menu share one row below it. */}
         {(meta || person || reserveEnd) && (
           <div
