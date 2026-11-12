@@ -23,8 +23,9 @@ test.afterEach(async ({ page }) => {
 async function expectAboveTabBar(page: Page) {
   const tabBar = await page.getByRole("navigation", { name: "Sections" }).boundingBox();
   expect(tabBar).not.toBeNull();
-  // The tab bar reaches the bottom edge and holds the home indicator's room.
-  expect(tabBar!.height).toBeGreaterThan(IPHONE_INSETS.bottom + 48);
+  // The tab bar reaches the bottom edge and holds the home indicator's room: installed (standalone) it keeps the safe area
+  // minus 14 px under its 56 px row (76 px); where the display mode isn't emulated, the whole safe area (90 px).
+  expect(tabBar!.height).toBeGreaterThanOrEqual(IPHONE_INSETS.bottom + 40);
   const bars = page.locator("[data-action-bar]");
   await expect(bars.first()).toBeVisible();
   for (const bar of await bars.all()) {
