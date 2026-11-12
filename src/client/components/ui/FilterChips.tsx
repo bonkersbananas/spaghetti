@@ -6,14 +6,27 @@ import { Overline } from "./Overline";
  * A row of chips: on phones it scrolls sideways under the thumb, edge to
  * edge; on desktop it wraps. For filters and suggestions.
  */
-export function ChipRow({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+export function ChipRow({
+  label,
+  children,
+  className,
+  wrap = false,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+  /** Wrap onto rows on phones too, for a few suggestions to see at once rather than swipe through. */
+  wrap?: boolean;
+}) {
   return (
     // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset.
     <div
       role="group"
       aria-label={label}
       className={cn(
-        "no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0",
+        wrap
+          ? "flex flex-wrap gap-2 py-1"
+          : "no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0",
         className,
       )}
     >
