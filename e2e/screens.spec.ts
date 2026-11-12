@@ -164,6 +164,7 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await screen(page, "/printer", /X2D|Printer/);
 
   await screen(page, "/shopping", "Shopping list");
+  await screen(page, "/workshop", "Workshop");
 
   // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
   await screen(page, "/styleguide", "Styleguide");
@@ -235,6 +236,7 @@ const CHECKED_ROUTES = [
   "pantry.$spoolId",
   "printer",
   "shopping",
+  "workshop",
   "agents",
   "year",
   "week.$monday",

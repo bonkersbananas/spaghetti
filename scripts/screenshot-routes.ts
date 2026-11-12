@@ -2575,6 +2575,7 @@ export const shots: Shot[] = [
       await page.unroute("**/api/shopping-items");
     },
   },
+  { name: "workshop", path: "/workshop", fullPage: true },
   // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.
