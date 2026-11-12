@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { HubTile } from "@/components/ui/HubTile";
-import { ShoppingIcon } from "@/components/ui/icons";
+import { PrinterIcon, ShoppingIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -29,7 +29,8 @@ function Workshop() {
   const { toBuy, isPending: shoppingPending } = useShopping();
 
   // The first AMS unit as the printer has it: all four slots, an empty ring for a free one (slots holds only the loaded).
-  const slots = unitSlots(amsUnitLetters(printer?.setup.amsUnits ?? 1)[0] ?? "A");
+  const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
+  const slots = unit ? unitSlots(unit) : [];
   const pantryLine = spools
     ? spools.length === 0
       ? "No spools yet"
@@ -60,19 +61,23 @@ function Workshop() {
           title="Printer"
           summary={printerLine}
           visual={
-            <span className="flex gap-2.5">
-              {slots.map((slot) => {
-                const spoolId = printer?.slots[slot];
-                return (
-                  <SpoolDisc
-                    key={slot}
-                    size="lg"
-                    color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
-                    empty={!spoolId}
-                  />
-                );
-              })}
-            </span>
+            slots.length ? (
+              <span className="flex gap-2.5">
+                {slots.map((slot) => {
+                  const spoolId = printer?.slots[slot];
+                  return (
+                    <SpoolDisc
+                      key={slot}
+                      size="lg"
+                      color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
+                      empty={!spoolId}
+                    />
+                  );
+                })}
+              </span>
+            ) : (
+              <PrinterIcon size={44} className="text-ink-faint" />
+            )
           }
         />
         <HubTile
