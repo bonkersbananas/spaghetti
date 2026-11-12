@@ -38,8 +38,6 @@ interface PrintingCardProps {
    * the first, so three prints on the bed don't push the rest of Today two screens down. Desktop is unchanged.
    */
   compact?: boolean;
-  /** Phones: the big card's picture is 16:9 instead of 4:3, for a place where it shares the screen (the journal's Now block). */
-  shallow?: boolean;
 }
 
 /** The card's grid on phones, big or compact; from md both are the same row: picture on two fifths, text beside. */
@@ -59,7 +57,7 @@ const layouts = {
  * the build; Finish goes to the build with the attempt's sheet open. When the print should be done, the button
  * gives way to the question people came to answer: how did it go?
  */
-export function PrintingCard({ item, attempt, person, via, compact = false, shallow = false }: PrintingCardProps) {
+export function PrintingCard({ item, attempt, person, via, compact = false }: PrintingCardProps) {
   const layout = layouts[compact ? "compact" : "big"];
   // Each time a compact card becomes the big one on a phone (or back), its content is swapped and fades in; from
   // md both layouts are the same row, so nothing is swapped there, and a change of breakpoint never remounts it.
@@ -112,13 +110,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false, shal
             "relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
             // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
             // print's state down; the slicer's plate picture (a render, not the result) gets a calmer 16:9.
-            !hero && !plate && !compact
-              ? "aspect-5/2"
-              : plate && !compact
-                ? "aspect-video"
-                : shallow && !compact
-                  ? "aspect-video md:aspect-auto"
-                  : layout.picture,
+            !hero && !plate && !compact ? "aspect-5/2" : plate && !compact ? "aspect-video" : layout.picture,
           )}
         >
           {hero ? (
