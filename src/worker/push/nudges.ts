@@ -42,7 +42,11 @@ export async function pushTo(
     // A nudge that arrives hours late is noise: let the push service drop it after a few hours.
     { ttl: message.kind === "test" ? 60 : 4 * 60 * 60, urgency: message.kind === "test" ? "high" : "normal" },
   );
-  if (result === "gone") await getDb(env.DB).delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscription.id));
+  if (result === "gone") {
+    // Worth a line in the logs: the person stops hearing anything on that device until it signs up again.
+    console.warn("push subscription gone, forgotten", { subscription: subscription.id });
+    await getDb(env.DB).delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscription.id));
+  }
   return result;
 }
 
