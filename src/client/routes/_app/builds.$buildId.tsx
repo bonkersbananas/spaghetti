@@ -1,6 +1,7 @@
 import type { Recipe } from "@shared/api";
 import { type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
+import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
@@ -51,6 +52,7 @@ import {
   ShelveIcon,
   SparkleIcon,
   TrashIcon,
+  TwistIcon,
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
@@ -77,12 +79,13 @@ import {
 } from "@/lib/items";
 import { scrollBehavior, spring } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
-import { peopleQuery } from "@/lib/queries";
+import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes";
 import { useSlicerDropTarget } from "@/lib/slicer-files";
 import { useStickyColumn } from "@/lib/sticky-column";
+import { twistFromBuild, useTwists } from "@/lib/twists";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
@@ -163,6 +166,28 @@ function Build({ item }: { item: ItemView }) {
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
+  const { data: user } = useQuery(sessionQuery);
+  // A build from someone else's model can be kept as a twist, once (it then says it prints it).
+  const model = modelOf({ note: item.note, draft: item.draft });
+  // A twist made from this item while it was an idea has `fromItemId` but not the build's `twistId`: it counts too.
+  const { twists } = useTwists();
+  const existingTwistId = item.twistId ?? twists?.find((twist) => twist.fromItemId === item.id)?.id ?? null;
+  function saveAsTwist() {
+    if (!user || !canEdit(item.pending) || !twists) return;
+    if (existingTwistId) return void navigate({ to: "/twists/$twistId", params: { twistId: existingTwistId } });
+    const id = twistFromBuild(
+      queryClient,
+      {
+        id: item.id,
+        title: item.title,
+        note: item.note,
+        photo: heroPhoto(item) ?? null,
+        modelUrl: model && !model.url.startsWith("/api/files/") ? model.url : null,
+      },
+      user.id,
+    );
+    void navigate({ to: "/twists/$twistId", params: { twistId: id } });
+  }
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
   const [askFor, setAskFor] = useState(false);
@@ -577,6 +602,19 @@ function Build({ item }: { item: ItemView }) {
                 className="mt-1"
               />
               <NoteLinks note={note} />
+              {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
+              {(model || existingTwistId) && (
+                <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
+                  <Button
+                    variant="quiet"
+                    icon={TwistIcon}
+                    disabled={readOnly || !user || !twists}
+                    onClick={saveAsTwist}
+                  >
+                    {existingTwistId ? "Twist" : "Save as twist"}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />

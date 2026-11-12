@@ -474,6 +474,8 @@ export interface SearchResponse {
   attempts: AttemptHit[];
   /** Recipes whose name, note or material match; none while an outcome or tag filter is on. */
   recipes: Recipe[];
+  /** Twists whose name, note, source or changes match; none while an outcome or tag filter is on. */
+  twists: Twist[];
   /** Spools on the shelf whose material, brand, colour or finish match (a few); none while a filter is on. */
   spools: Spool[];
   /** The words the answer is for, as the server read the question (filler dropped, typos mended, synonyms added): what to mark. */

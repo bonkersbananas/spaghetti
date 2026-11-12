@@ -13,6 +13,9 @@ import type {
   SearchResponse,
   SpoolResponse,
   SpoolsResponse,
+  Twist,
+  TwistResponse,
+  TwistsResponse,
   UpkeepResponse,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
@@ -22,6 +25,7 @@ import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import type { ScoutResponse } from "../../shared/scout.ts";
 import { SLOT_PATTERN } from "../../shared/spools.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
+import { CHANGE_KINDS, changeChip, TWIST_CHANGES_MAX } from "../../shared/twists.ts";
 import { formatHours, sinceWords } from "../../shared/upkeep.ts";
 import { mondayOf, printsWords, type WeekResponse } from "../../shared/week.ts";
 import { settings as attemptSettings } from "../routes/attempts.ts";
@@ -138,6 +142,17 @@ function recipeLine(recipe: Recipe): string {
     .join("\n");
 }
 
+function twistLine(twist: Twist): string {
+  return [
+    `- Twist "${twist.name}" (twist_id: ${twist.id}${twist.fromItemId ? `, from idea build_id: ${twist.fromItemId}` : ""})`,
+    twist.source.url && `  model: ${twist.source.url}${twist.source.place ? ` (${twist.source.place})` : ""}`,
+    twist.changes.length && `  changes: ${twist.changes.map(changeChip).join(" · ")}`,
+    twist.note.trim() && `  note: ${twist.note.trim()}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function attemptLine(hit: AttemptHit & { sameBuild?: boolean }): string {
   const a = hit.attempt;
   const settings = describeSettings(a.settings);
@@ -240,6 +255,7 @@ export const tools: Tool[] = [
       if (!result.ok) return failure(result);
       const found = result.json as SearchResponse;
       const sections = [
+        found.twists?.length && `Twists:\n${found.twists.map(twistLine).join("\n")}`,
         found.builds.length && `Builds:\n${found.builds.map(itemLine).join("\n")}`,
         found.ideas.length && `Ideas:\n${found.ideas.map(itemLine).join("\n")}`,
         found.attempts.length && `Attempts:\n${found.attempts.map(attemptLine).join("\n")}`,
@@ -660,6 +676,74 @@ export const tools: Tool[] = [
       if (!result.ok) return failure(result);
       const list = (result.json as RecipesResponse).recipes;
       return { text: list.length ? list.map(recipeLine).join("\n") : "No recipes saved yet." };
+    },
+  }),
+
+  tool({
+    name: "list_twists",
+    title: "List the twists",
+    description:
+      'List the twists: other people\'s models the two of them print their own way, each with where the model is, what they changed (scale, fit tolerance, text, material, settings), the note and the idea it came from. Needs the "read" scope.',
+    scopes: ["read"],
+    readOnly: true,
+    input: z.object({}),
+    async run(_args, ctx) {
+      const result = await ctx.call("/api/twists");
+      if (!result.ok) return failure(result);
+      const list = (result.json as TwistsResponse).twists;
+      return { text: list.length ? list.map(twistLine).join("\n") : "No twists yet." };
+    },
+  }),
+
+  tool({
+    name: "add_twist",
+    title: "Make a twist",
+    description:
+      'Keep a model that is printed with changes: a name, optionally the idea it comes from (build_id: its model link, title and cover come along), the model\'s link, and what was changed as a list of kind, value and words ("scale", "84 %", "fits the 42 mm grid"). Shows in the app marked as made via this agent. Needs the "capture" scope.',
+    scopes: ["capture"],
+    readOnly: false,
+    input: z.object({
+      name: z.string().min(1).max(120).describe('What to call it: "Drawer bins, 42 mm grid".'),
+      build_id: z.uuid().optional().describe("The idea it is made from, if there is one."),
+      source_url: z.string().max(2000).optional().describe("An https link to the model's page."),
+      designer: z.string().max(120).optional(),
+      license: z.string().max(120).optional(),
+      note: z.string().max(2000).optional(),
+      changes: z
+        .array(
+          z.object({
+            kind: z.enum(CHANGE_KINDS),
+            value: z.string().max(80).optional().describe('"84 %", "+0.2 mm", "PETG".'),
+            label: z.string().max(80).optional().describe('What a "param" or "other" change is called.'),
+            note: z.string().max(200).optional().describe("Why, or what it fixed."),
+          }),
+        )
+        .max(TWIST_CHANGES_MAX)
+        .optional(),
+    }),
+    async run(args, ctx) {
+      const id = crypto.randomUUID();
+      const created = await ctx.call("/api/twists", {
+        method: "POST",
+        json: {
+          id,
+          name: args.name,
+          ...(args.note ? { note: args.note } : {}),
+          ...(args.build_id ? { fromItemId: args.build_id } : {}),
+          ...(args.source_url ? { sourceUrl: args.source_url } : {}),
+          ...(args.designer ? { designer: args.designer } : {}),
+          ...(args.license ? { license: args.license } : {}),
+          changes: (args.changes ?? []).map((change) => ({
+            id: crypto.randomUUID(),
+            kind: change.kind,
+            value: change.value ?? "",
+            label: change.label ?? "",
+            note: change.note ?? "",
+          })),
+        },
+      });
+      if (!created.ok) return failure(created);
+      return { text: `Made the twist "${(created.json as TwistResponse).twist.name}". twist_id: ${id}.` };
     },
   }),
 

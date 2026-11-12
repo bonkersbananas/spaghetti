@@ -8,6 +8,7 @@ import type {
   Recipe,
   SearchResponse,
   Spool,
+  Twist,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
 import { BUILT_IN_TAGS, byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
@@ -43,6 +44,7 @@ import { apiError, toApiPhoto } from "../http.ts";
 import { gramsFor } from "../ledger.ts";
 import { liveRecipes } from "./recipes.ts";
 import { toApiSpool } from "./spools.ts";
+import { liveTwists } from "./twists.ts";
 
 /** A filament type as people type it: "petg " → "PETG". */
 export const material = z
@@ -258,7 +260,7 @@ const RANK = "bm25(search, 0, 0, 0, 8.0, 3.0, 5.0, 5.0, 2.0)";
 const LIMIT = { items: 12, attempts: 30 };
 
 const hasHits = (r: SearchResponse) =>
-  r.builds.length + r.ideas.length + r.attempts.length + r.recipes.length + r.spools.length > 0;
+  r.builds.length + r.ideas.length + r.attempts.length + r.recipes.length + r.twists.length + r.spools.length > 0;
 
 interface SearchInput {
   terms: SearchTerm[];
@@ -346,7 +348,7 @@ async function searchWith(
     f.outcome ??
     (!terms.length && intent === "worked" ? "success" : !terms.length && intent === "failed" ? "failures" : undefined);
   const narrowsAttempts = !!(outcome || f.material || f.tag);
-  const empty: SearchResponse = { builds: [], ideas: [], attempts: [], recipes: [], spools: [] };
+  const empty: SearchResponse = { builds: [], ideas: [], attempts: [], recipes: [], twists: [], spools: [] };
   const recipeFilters = !outcome && !f.tag;
   const findRecipes = async (): Promise<Recipe[]> => {
     if (!recipeFilters) return [];
@@ -358,6 +360,27 @@ async function searchWith(
           textMatchesTerms(`${recipe.name} ${recipe.note} ${recipe.material} ${recipe.finish ?? ""}`, terms),
         )
       : list;
+  };
+  // Twists are found by a plain match over their words (there are few), and never by a filter that is about prints.
+  const findTwists = async (): Promise<Twist[]> => {
+    if (!terms.length || narrowsAttempts || when) return [];
+    let list = await liveTwists(db);
+    if (f.person) list = list.filter((twist) => twist.createdBy === f.person);
+    return list.filter((twist) =>
+      textMatchesTerms(
+        [
+          twist.name,
+          twist.note,
+          twist.source.title,
+          twist.source.designer,
+          twist.source.place,
+          ...twist.changes.flatMap((change) => [change.label, change.value, change.note]),
+        ]
+          .filter(Boolean)
+          .join(" "),
+        terms,
+      ),
+    );
   };
   const findSpools = async (): Promise<Spool[]> => {
     if (!terms.length || narrowsAttempts || f.person || when) return [];
@@ -471,7 +494,7 @@ async function searchWith(
       comment: { id: row.id, authorId: row.author_id, via: row.via, createdAt: row.created_at },
     });
   }
-  const [attemptList, itemList, recipeList, spoolList] = await Promise.all([
+  const [attemptList, itemList, recipeList, twistList, spoolList] = await Promise.all([
     withCoachIdeas(
       db,
       await attemptHits(
@@ -482,6 +505,7 @@ async function searchWith(
     ),
     itemHits(db, found),
     findRecipes(),
+    findTwists(),
     findSpools(),
   ]);
   return {
@@ -489,6 +513,7 @@ async function searchWith(
     ideas: itemList.filter((hit) => hit.item.stage === "idea").slice(0, LIMIT.items),
     attempts: attemptList,
     recipes: recipeList,
+    twists: twistList,
     spools: spoolList,
   };
 }

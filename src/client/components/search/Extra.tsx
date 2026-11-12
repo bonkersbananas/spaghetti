@@ -1,13 +1,23 @@
-import type { AttemptHit, SearchResponse, Spool } from "@shared/api";
+import type { AttemptHit, SearchResponse, Spool, Twist } from "@shared/api";
 import type { SearchTerm } from "@shared/search";
 import type { Ref } from "react";
 import { SpoolResult } from "./SpoolResult";
 import { StartAgain } from "./StartAgain";
+import { TwistResult } from "./TwistResult";
 import { Understood } from "./Understood";
 
 export type ExtraProps =
   | { part: "understood"; shown: SearchResponse }
   | { part: "start"; hit: AttemptHit; onStart: () => void }
+  | {
+      part: "twist";
+      twist: Twist;
+      terms: readonly SearchTerm[];
+      selected: boolean;
+      onHover: () => void;
+      onOpen: () => void;
+      innerRef: Ref<HTMLAnchorElement>;
+    }
   | {
       part: "spool";
       spool: Spool;
@@ -31,6 +41,10 @@ export default function Extra(props: ExtraProps) {
         <StartAgain hit={props.hit} onStart={props.onStart} />
       </div>
     );
+  }
+  if (props.part === "twist") {
+    const { part: _part, innerRef, ...rest } = props;
+    return <TwistResult ref={innerRef} {...rest} />;
   }
   const { part: _part, innerRef, ...rest } = props;
   return <SpoolResult ref={innerRef} {...rest} />;

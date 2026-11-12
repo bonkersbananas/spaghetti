@@ -4,6 +4,7 @@ import type { TwistChange } from "@shared/twists";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
+import { patchCachedItem } from "./items";
 import { twistsQuery } from "./twists-query";
 
 export { twistsQuery };
@@ -46,7 +47,7 @@ export interface NewTwist {
  * Makes a twist. It shows at once (the list and its page read the cache), the server's copy replaces it, and a failure
  * takes it back out. Returns the new id so the caller can open it.
  */
-export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: string): string {
+export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: string, whenSaved?: () => void): string {
   const id = crypto.randomUUID();
   const url = input.sourceUrl ?? input.from?.modelUrl ?? null;
   const mark = url ? modelMarkOf(url) : null;
@@ -86,6 +87,7 @@ export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: str
       patchTwists(queryClient, (twists) => twists.map((t) => (t.id === id ? twist : t)));
       // Called-off list fetches may have left the cache with only this twist: ask for the whole list again.
       void queryClient.invalidateQueries({ queryKey: twistsQuery.queryKey });
+      whenSaved?.();
     },
     (error) => {
       patchTwists(queryClient, (twists) => twists.filter((t) => t.id !== id));
@@ -147,4 +149,32 @@ export function deleteTwist(queryClient: QueryClient, twist: Twist) {
       }
     },
   });
+}
+
+/**
+ * "Save as twist" on a build that was printed from someone else's model: a twist from the build (its model link, title
+ * and cover come along) that the build is then marked as printing. Returns the twist's id so its page can open.
+ */
+export function twistFromBuild(
+  queryClient: QueryClient,
+  build: { id: string; title: string | null; note: string; photo: Photo | null; modelUrl: string | null },
+  userId: string,
+): string {
+  // The build is linked only once the twist is on the server, and shown linked only once that is saved too: a twist
+  // that failed, or a link that did, leaves nothing dangling.
+  const id: string = makeTwist(
+    queryClient,
+    {
+      name: suggestedTwistName({ title: build.title }, build.modelUrl),
+      from: { id: build.id, photo: build.photo, modelUrl: build.modelUrl, title: build.title },
+    },
+    userId,
+    () => {
+      api(`/items/${build.id}`, { method: "PATCH", json: { twistId: id } }).then(
+        () => patchCachedItem(queryClient, build.id, (item) => ({ ...item, twistId: id })),
+        () => undefined,
+      );
+    },
+  );
+  return id;
 }

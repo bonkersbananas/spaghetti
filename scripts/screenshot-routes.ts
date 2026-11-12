@@ -2292,6 +2292,27 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A build from a model page: "Save as twist" is a quiet action under its model link.
+    name: "build-save-as-twist",
+    fullPage: true,
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      await page.request.patch(`/api/items/${SEED_BUILD_IDS.headphoneStand}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { note: "Charcoal matte PLA.\n\nhttps://makerworld.com/en/models/301122-headphone-stand" },
+      });
+      await page.reload();
+      await page.getByRole("button", { name: "Save as twist" }).waitFor();
+    },
+  },
+  {
+    name: "search-twists",
+    path: "/search?q=drawer",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Twists" }).waitFor();
+    },
+  },
+  {
     // The idea the bins twist came from: the same action now reads "Twist" and opens it.
     name: "twist-from-idea-made",
     path: `/ideas/${SEED_IDS.deskTidy}`,

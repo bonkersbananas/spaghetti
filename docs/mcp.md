@@ -66,6 +66,8 @@ Any client that takes a JSON config:
 | `get_photo` | Look at photos: `build_id` plus a `photo_id`, or an `attempt` number, or neither for the build's own photos (`limit` up to 4). Each comes back as MCP image content (`type: "image"`, base64, `mimeType`) after a line of text saying what it is. `search` names an attempt's photo too | `read` |
 | `add_photo` | Add a JPEG or WebP (`photo_url` or `photo_base64`) to an existing idea or build (`build_id`) or to one of its attempts (also `attempt_id`); it goes after the photos already there. `log_attempt` and `finish_attempt` take the same two arguments for the attempt they write. Removing a photo is for people | `capture` for an idea or build, `attempts` for an attempt |
 | `add_comment` | A `build_id` and the `text` to say in the thread under an idea or build; it shows as the owner's comment, "via" the agent, and counts as new for the other person. Read the thread with `get_build`, which ends with the comments | `capture` or `attempts` |
+| `list_twists` | The twists: models printed with changes, with their source, changes and note | `read` |
+| `add_twist` | A name, optionally the idea (`build_id`), the model's link and a list of changes (kind, value, words) | `capture` |
 | `capture_idea` | A title and/or note, optionally a photo by https URL or base64 (JPEG or WebP) | `capture` |
 | `set_parts` | Add or change a build's parts (name and quantity; give `part_id` to change one). Removing is for people | `attempts` |
 | `start_attempt` | A print has started: an attempt with no outcome yet | `attempts` |
