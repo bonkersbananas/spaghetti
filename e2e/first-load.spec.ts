@@ -26,7 +26,8 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 const CEILING_KB = {
   "/sign-in": 184,
-  "/today": 282,
+  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB); the journal's Now block, in a later change, another 0.3.
+  "/today": 283,
   "/ideas": 269,
   "/builds": 269,
   "/journal": 269,
