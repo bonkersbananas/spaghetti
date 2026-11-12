@@ -68,7 +68,7 @@ export async function claimScoutRound(env: Env, now: number, db: Db): Promise<st
       and(
         eq(scoutRounds.monday, monday),
         eq(scoutRounds.status, "thinking"),
-        lt(scoutRounds.tries, MAX_TRIES + 1),
+        lt(scoutRounds.tries, MAX_TRIES),
         or(isNull(scoutRounds.claimedAt), lt(scoutRounds.claimedAt, new Date(now - SCOUT_CLAIM_STALE_MS))),
       ),
     )
@@ -276,7 +276,11 @@ export async function loadScout(db: Db, now: number): Promise<ScoutRound> {
     .from(scoutPicks)
     .where(eq(scoutPicks.monday, monday))
     .orderBy(asc(scoutPicks.position));
-  const state = round?.status === "thinking" ? "thinking" : picks.length ? "ready" : "none";
+  // A claim nobody can take over any more (it went quiet after its last try) is not "looking": the week stays quiet.
+  const looking =
+    round?.status === "thinking" &&
+    (round.tries < MAX_TRIES || (round.claimedAt?.getTime() ?? 0) > now - SCOUT_CLAIM_STALE_MS);
+  const state = looking ? "thinking" : picks.length ? "ready" : "none";
   return { monday, state, picks: picks.map(toApiPick) };
 }
 

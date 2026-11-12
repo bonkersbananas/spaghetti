@@ -292,6 +292,16 @@ describe("the weekly scout", () => {
     expect(await scoutTick(env, wed + 11 * 60_000)).toBe("done");
   });
 
+  it("gives up on a week whose claim died twice, and stops saying it is looking", async () => {
+    stubWeb(good);
+    await env.DB.prepare(
+      "INSERT INTO scout_rounds (monday, status, claimed_at, tries, created_at) VALUES (?, 'thinking', ?, 2, ?)",
+    )
+      .bind(MONDAY, wed - 60_000, wed - 60_000)
+      .run();
+    expect(await scoutTick(env, wed + 11 * 60_000)).toBe("skipped");
+  });
+
   it("keeps to a cap on runs a day", async () => {
     stubWeb(good);
     for (let week = 0; week < SCOUT_RUNS_PER_DAY; week++) {
