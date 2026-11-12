@@ -5,6 +5,8 @@
  * screenshots exercise the same path a phone does.
  */
 import type { APIRequestContext, Browser } from "@playwright/test";
+import { TUGBOAT_FILE_NAME, tugboatFile } from "../../e2e/fixtures/gcode-tugboat.ts";
+import { readThreeMf, settingsFromFile } from "../../src/shared/threemf/index.ts";
 import { seedPhotoSvg } from "./stand-ins.ts";
 
 interface SeedIdea {
@@ -19,6 +21,8 @@ interface SeedIdea {
   upNext?: number;
   /** Who it is for. */
   forWhom?: string;
+  /** Keeps the tugboat's sliced file (e2e/fixtures/gcode-tugboat.ts) with the idea. */
+  tugboatFile?: boolean;
 }
 
 const MIN = 60_000;
@@ -35,9 +39,19 @@ export const SEED_IDS = {
   lithophane: "5eed0000-0000-4000-8000-000000000009",
   spoolHolder: "5eed0000-0000-4000-8000-000000000010",
   cableChain: "5eed0000-0000-4000-8000-000000000012",
+  bigTugboat: "5eed0000-0000-4000-8000-000000000030",
 };
 
 export const SEED_IDEAS: SeedIdea[] = [
+  {
+    id: SEED_IDS.bigTugboat,
+    by: "alex",
+    ago: 3 * HOUR,
+    title: "Tugboat for the big tub",
+    note: "Sliced for the X2D already: 0.16 mm, brim on. Try it at 130% once the small one floats right.",
+    photos: [{ file: "tugboat.svg", color: "#867362" }],
+    tugboatFile: true,
+  },
   {
     id: "5eed0000-0000-4000-8000-000000000001",
     by: "sam",
@@ -209,6 +223,26 @@ export async function seedIdeas(
     if (!created.ok()) throw new Error(`Seeding ${idea.id} failed: ${created.status()}`);
     if (idea.forWhom) {
       await request.patch(`/api/items/${idea.id}`, { headers: { Origin: origin }, data: { forWhom: idea.forWhom } });
+    }
+    if (idea.tugboatFile) {
+      const bytes = tugboatFile();
+      const read = readThreeMf(bytes);
+      const thumb = read.plates[0]?.thumbnail?.bytes;
+      const kept = await request.put(`/api/items/${idea.id}/files/${crypto.randomUUID()}`, {
+        headers: { Origin: origin },
+        multipart: {
+          name: TUGBOAT_FILE_NAME,
+          size: String(bytes.length),
+          plate: "1",
+          plateCount: String(read.plates.length),
+          slicer: "BambuStudio 02.01.00.00",
+          prefill: JSON.stringify(settingsFromFile(read, 1)),
+          objects: JSON.stringify((read.plates[0]?.objects ?? []).map((object) => object.name)),
+          file: { name: TUGBOAT_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
+          ...(thumb ? { thumb: { name: "plate_1.png", mimeType: "image/png", buffer: Buffer.from(thumb) } } : {}),
+        },
+      });
+      if (!kept.ok()) throw new Error(`Keeping the slicer file with ${idea.id} failed: ${kept.status()}`);
     }
     for (const [position, photo] of idea.photos.entries()) {
       let images = rendered.get(photo.file);

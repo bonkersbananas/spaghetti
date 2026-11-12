@@ -84,17 +84,18 @@ export function modelMarkIn(note: string): ModelMark | null {
   return null;
 }
 
-/** The model an idea has: the first model link in its note, else the page its draft was made from, else a slicer file kept with it. */
+/** The model an idea has: its first model link, else its draft's page, else a kept slicer file (ours, so not a link out). */
 export function modelOf(item: {
   note: string;
   draft?: { url: string } | null;
-  files?: ReadonlyArray<{ id: string; name: string }>;
+  files?: ReadonlyArray<{ id: string }>;
 }): ModelMark | null {
-  const link = modelMarkIn(item.note) ?? (item.draft ? modelMarkOf(item.draft.url) : null);
-  if (link) return link;
   const file = item.files?.[0];
-  // A kept file reads as ".3mf" (a .gcode.3mf is a 3MF too); its address is ours, so the card isn't a link out.
-  return file ? { kind: "file", site: null, name: ".3mf", url: `/api/files/${file.id}` } : null;
+  return (
+    modelMarkIn(item.note) ??
+    (item.draft ? modelMarkOf(item.draft.url) : null) ??
+    (file ? { kind: "file", site: null, name: ".3mf", url: `/api/files/${file.id}` } : null)
+  );
 }
 
 /** "MakerWorld", or "STL file" for a direct link to a model file. */

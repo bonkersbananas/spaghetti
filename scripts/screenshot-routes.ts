@@ -1110,6 +1110,32 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // An idea with a sliced file kept with it: the file's card under the chips, and the sticker on its card.
+  { name: "idea-file", path: `/ideas/${SEED_IDS.bigTugboat}`, fullPage: true },
+  {
+    // A second file added to the idea: it shows at once, with the plate's picture.
+    name: "idea-file-added",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByTestId("idea-file-input").setInputFiles({
+        name: SLICER_FILE_NAME,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(slicerFile()),
+      });
+      await page.getByText(SLICER_FILE_NAME).waitFor();
+    },
+  },
+  {
+    // The 3D view opened from the idea's own file.
+    name: "idea-file-viewer",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    prepare: openViewer,
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
   {
     // The 3D view of the tugboat's sliced file, built up and showing every layer, coloured by filament.
     name: "viewer",
