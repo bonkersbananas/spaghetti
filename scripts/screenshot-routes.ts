@@ -2615,6 +2615,25 @@ export const shots: Shot[] = [
     },
   },
   { name: "workshop", path: "/workshop", fullPage: true },
+  {
+    // A new notebook: no spools, nothing loaded, nothing due, nothing to buy.
+    name: "workshop-empty",
+    path: "/workshop",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.route(/\/api\/spools$/, (route) => route.fulfill({ json: { spools: [] } }));
+      await page.route(/\/api\/shopping-items$/, (route) => route.fulfill({ json: { shoppingItems: [] } }));
+      await page.route(/\/api\/printer\/upkeep$/, (route) => route.fulfill({ json: { tasks: [], printHours: 0 } }));
+      await page.route(/\/api\/printer$/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as object;
+        await route.fulfill({ response, json: { ...json, slots: {} } });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByText("No spools yet").waitFor();
+    },
+    cleanup: unmockToday,
+  },
   // pnpm new route adds its screens above this line.
   {
     // A sliced file dropped on a build: which plate, then the attempt filled in from it.

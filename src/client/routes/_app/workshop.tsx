@@ -17,9 +17,18 @@ export const Route = createFileRoute("/_app/workshop")({
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
+/** What needs attention, in the ink "due" uses on a print's progress. */
+const Attention = ({ children }: { children: string }) => (
+  <span className="text-semolina-ink font-semibold">{children}</span>
+);
+
+/** The most pictures the shopping tile shows; the rest are counted. */
+const PICTURES = 3;
+
 /**
  * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On desktop the
- * sidebar lists the same three, so this page is only a way in for phones.
+ * sidebar lists the same three, so this page is only a way in for phones. The tiles flow to as many columns as fit,
+ * so a fourth place (twists) joins without a new layout.
  */
 function Workshop() {
   const spools = useQuery(spoolsQuery).data;
@@ -28,27 +37,47 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
 
-  // The first AMS unit as the printer has it: all four slots, an empty ring for a free one (slots holds only the loaded).
+  // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
+  // slots hold only the loaded ones). Nothing without an AMS.
   const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
   const slots = unit ? unitSlots(unit) : [];
-  const pantryLine = spools
-    ? spools.length === 0
-      ? "No spools yet"
-      : [plural(spools.length, "spool"), low.length ? `${low.length} running low` : null].filter(Boolean).join(" · ")
-    : null;
-  const printerLine = printer ? (due.length ? `${plural(due.length, "chore")} due` : "All in order") : null;
+  const pictured = toBuy.filter((thing) => thing.picture);
+  const shown = pictured.slice(0, PICTURES);
+
+  const pantryLine = spools ? (
+    spools.length === 0 ? (
+      "No spools yet"
+    ) : (
+      <>
+        {plural(spools.length, "spool")}
+        {low.length > 0 && (
+          <>
+            {" · "}
+            <Attention>{`${low.length} running low`}</Attention>
+          </>
+        )}
+      </>
+    )
+  ) : null;
+  const printerLine = printer ? (
+    due.length ? (
+      <Attention>{`${plural(due.length, "chore")} due`}</Attention>
+    ) : (
+      "All in order"
+    )
+  ) : null;
   const shoppingLine = shoppingPending ? null : toBuy.length ? `${toBuy.length} to buy` : "Nothing to buy";
 
   return (
     <>
       <PageHeader title="Workshop" subtitle="The spools, the printer and what to buy for it." />
-      <div className="flex flex-col gap-4 md:grid md:grid-cols-3 md:gap-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] md:gap-5">
         <HubTile
           to="/pantry"
           title="Pantry"
           summary={pantryLine}
           visual={
-            <span className="flex pl-4">
+            <span className="flex">
               {(spools ?? []).slice(0, 5).map((spool) => (
                 <SpoolDisc key={spool.id} color={spool.colorHex} size="lg" className="-ml-4 first:ml-0" />
               ))}
@@ -61,17 +90,24 @@ function Workshop() {
           title="Printer"
           summary={printerLine}
           visual={
-            slots.length ? (
-              <span className="flex gap-2.5">
+            slots.length > 0 ? (
+              <span className="grid w-full max-w-72 grid-cols-4 gap-2">
                 {slots.map((slot) => {
                   const spoolId = printer?.slots[slot];
                   return (
-                    <SpoolDisc
+                    <span
                       key={slot}
-                      size="lg"
-                      color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
-                      empty={!spoolId}
-                    />
+                      className="bg-cream shadow-soft flex flex-col items-center gap-1 rounded-md px-1 pt-2.5 pb-1.5"
+                    >
+                      <SpoolDisc
+                        size="md"
+                        color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
+                        empty={!spoolId}
+                      />
+                      <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
+                        {slot}
+                      </span>
+                    </span>
                   );
                 })}
               </span>
@@ -85,9 +121,9 @@ function Workshop() {
           title="Shopping list"
           summary={shoppingLine}
           visual={
-            toBuy.length ? (
-              <span className="flex pl-3">
-                {toBuy.slice(0, 4).map((thing) =>
+            shown.length > 0 ? (
+              <span className="flex items-center">
+                {shown.map((thing) =>
                   thing.picture ? (
                     <Photo
                       key={thing.id}
@@ -95,14 +131,12 @@ function Workshop() {
                       alt=""
                       className="ring-cream -ml-3 size-16 rounded-md ring-2 first:ml-0"
                     />
-                  ) : (
-                    <span
-                      key={thing.id}
-                      className="bg-semolina-soft text-semolina-ink ring-cream -ml-3 flex size-16 items-center justify-center rounded-md ring-2 first:ml-0"
-                    >
-                      <ShoppingIcon size={26} />
-                    </span>
-                  ),
+                  ) : null,
+                )}
+                {toBuy.length > shown.length && (
+                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-3 flex size-16 items-center justify-center rounded-md font-semibold ring-2">
+                    +{toBuy.length - shown.length}
+                  </span>
                 )}
               </span>
             ) : (
