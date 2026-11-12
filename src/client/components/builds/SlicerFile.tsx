@@ -44,7 +44,7 @@ interface FileCardProps {
   /** Sits on the plate picture's corner (the "3D" control). */
   plateOverlay?: ReactNode;
   onRemove?: () => void;
-  /** On a story card: no box of its own, a smaller plate, and only what the card's other lines don't say. */
+  /** On a story card: no box of its own and a smaller plate. */
   compact?: boolean;
   className?: string;
 }
