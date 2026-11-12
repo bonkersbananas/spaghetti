@@ -137,7 +137,7 @@
 
   /* Layout */
   /* The tab bar's buttons; the bar itself also holds the home indicator's room below them. */
-  --sg-tabbar-row: 4.25rem;
+  --sg-tabbar-row: 3.25rem;
   /* A screen's own action bar on phones, which sits on the tab bar. */
   --sg-actionbar-height: 4.75rem;
   --sg-sidebar-width: 16rem;
