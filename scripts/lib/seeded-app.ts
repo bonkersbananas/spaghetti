@@ -33,7 +33,7 @@ export async function startSeededApp({
   let server: DevServer | undefined;
   let browser: Browser | undefined;
   // Drafting an idea from a model page asks a stand-in for Anthropic, so those screens can be shot.
-  const claude = await startFakeClaude(port + 100);
+  const claude = await startFakeClaude(port + 100, { scoutAlways: true });
   try {
     server = await (built ? startBuiltServer : startDevServer)({ port, stateDir: state.dir, claudeUrl: claude.url });
     log("seeding ideas, the pantry and builds…");

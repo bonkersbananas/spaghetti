@@ -43,6 +43,8 @@ export async function resetDb() {
     env.DB.prepare("DELETE FROM shopping_items"),
     env.DB.prepare("DELETE FROM upkeep_logs"),
     env.DB.prepare("DELETE FROM upkeep_tasks"),
+    env.DB.prepare("DELETE FROM scout_picks"),
+    env.DB.prepare("DELETE FROM scout_rounds"),
     env.DB.prepare("DELETE FROM week_pushes"),
     env.DB.prepare("DELETE FROM weeks"),
     env.DB.prepare("DELETE FROM push_nudges"),

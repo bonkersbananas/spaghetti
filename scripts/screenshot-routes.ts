@@ -567,6 +567,8 @@ async function mockToday(
   show: { builds: Slice; journal: Slice; spools: Slice; ideas: Slice; late?: boolean; offBed?: boolean },
 ) {
   const DAY = 24 * 60 * 60 * 1000;
+  // A notebook with nothing in it has nothing for the idea scout to go on either.
+  if (show.builds === "none") await mockScout(page, "none");
   await page.route(/\/api\/items\?stage=/, async (route) => {
     const response = await route.fetch();
     const json = (await response.json()) as {
@@ -628,6 +630,27 @@ async function waitUntilEased(page: Page, title: string) {
     for (const animation of document.getAnimations()) animation.finish();
   });
   await page.waitForTimeout(300);
+}
+
+/**
+ * The idea scout's week, answered from here: the Worker's clock is the real one, so what it keeps for "this week"
+ * is a different Monday from the shots'. "none": the scout hasn't been out yet; "answered": one kept, one put away.
+ */
+async function mockScout(page: Page, mode: "none" | "answered" | "one") {
+  await page.route(/\/api\/scout$/, async (route) => {
+    if (mode === "none") {
+      await route.fulfill({ json: { scout: { monday: "2026-10-19", state: "none", picks: [] } } });
+      return;
+    }
+    const response = await route.fetch();
+    const body = (await response.json()) as { scout: { picks: Array<{ status: string; itemId: string | null }> } };
+    const [first, second] = body.scout.picks;
+    if (first) Object.assign(first, { status: "kept", itemId: SEED_IDS.desiccantHook });
+    if (second && mode === "answered") second.status = "dismissed";
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload();
+  await page.getByRole("heading", { level: 1 }).waitFor();
 }
 
 async function unmockToday(page: Page) {
@@ -759,7 +782,38 @@ export const shots: Shot[] = [
     },
   },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
-  { name: "today", path: "/today", fullPage: true },
+  {
+    name: "today",
+    path: "/today",
+    fullPage: true,
+    // The scout's pictures come from the Worker: let them land before the shot.
+    prepare: async (page) => {
+      await page.locator("section[aria-labelledby=today-scout] img").first().waitFor();
+      await page
+        .waitForFunction(() =>
+          Array.from(document.querySelectorAll("section[aria-labelledby=today-scout] img")).every(
+            (img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0,
+          ),
+        )
+        .catch(() => undefined);
+      // The pictures fade in once decoded.
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    // One of the three answered: the block counts what is left.
+    name: "today-scout-answered",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await mockScout(page, "one");
+      await page.getByRole("heading", { name: "Two for you this week" }).waitFor();
+      await page.waitForTimeout(900);
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
   {
     // Both prints started four hours earlier than the seed says: past their estimates, so each asks how it went.
     // (The data is moved, not the browser's clock: jumping the clock back and forth stalls motion's animations.)
@@ -1229,6 +1283,36 @@ export const shots: Shot[] = [
     },
     cleanup: async (page) => {
       await page.unroute(weekApi);
+    },
+  },
+  {
+    // The scout's three, two answered: one kept as an idea, one put away, each with a way back.
+    name: "week-scout-answered",
+    path: "/week/2026-10-19",
+    fullPage: true,
+    prepare: async (page) => {
+      await withWeekMock(page, { waiting: true, note: true });
+      await mockScout(page, "answered");
+      await page.getByText("Not for us", { exact: true }).first().waitFor();
+      // The waiting card slides to the front once the page's own answer is in.
+      await page.waitForTimeout(1200);
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    // This week, before the scout has been out: a quiet line, not a gap.
+    name: "week-scout-empty",
+    path: "/week/2026-10-19",
+    fullPage: true,
+    prepare: async (page) => {
+      await withWeekMock(page, { waiting: false, note: false });
+      await mockScout(page, "none");
+      await page.getByText(/The scout is out shopping/).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
     },
   },
   { name: "week-last", path: "/week/2026-10-12", fullPage: true },

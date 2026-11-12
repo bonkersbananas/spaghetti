@@ -1111,3 +1111,54 @@ export const shoppingItems = sqliteTable("shopping_items", {
 });
 
 export type ShoppingItemRow = typeof shoppingItems.$inferSelect;
+
+/**
+ * The idea scout's week (decision 0040): one row a week, claimed before Claude is asked, so a week costs one run
+ * (a claim that went quiet is taken over once more). `monday` is the week's Monday in the workspace's time zone.
+ */
+export const scoutRounds = sqliteTable("scout_rounds", {
+  monday: text("monday").primaryKey(),
+  /** thinking: claimed, being scouted; done: picks were found; nothing: Claude (or the links) gave nothing worth showing; failed: the call didn't work. */
+  status: text("status").$type<"thinking" | "done" | "nothing" | "failed">().notNull(),
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  tries: integer("tries").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When the call to Claude was made. */
+  ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+  /** "done", or why not: nothing, refusal, api_error, timeout, all_dead… */
+  runOutcome: text("run_outcome"),
+  /** Model, stop reason, HTTP status, how many links were dropped and why; never the prompt. */
+  detail: text("detail"),
+});
+
+export type ScoutRoundRow = typeof scoutRounds.$inferSelect;
+
+/**
+ * One model the scout suggested. `key` (site and model number) is unique over all weeks, so a model that was kept or
+ * dismissed is never suggested again. The picture lives in R2 at `scout/<id>`.
+ */
+export const scoutPicks = sqliteTable(
+  "scout_picks",
+  {
+    id: text("id").primaryKey(),
+    monday: text("monday").notNull(),
+    position: integer("position").notNull(),
+    key: text("key").notNull().unique(),
+    url: text("url").notNull(),
+    site: text("site").$type<"makerworld" | "thingiverse">().notNull(),
+    title: text("title").notNull(),
+    why: text("why").notNull(),
+    pictureType: text("picture_type").$type<"image/jpeg" | "image/webp">(),
+    pictureWidth: integer("picture_width"),
+    pictureHeight: integer("picture_height"),
+    status: text("status").$type<"suggested" | "kept" | "dismissed">().notNull().default("suggested"),
+    /** The idea a kept pick became. */
+    itemId: text("item_id"),
+    decidedBy: text("decided_by"),
+    decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("scout_picks_monday_idx").on(table.monday, table.position)],
+);
+
+export type ScoutPickRow = typeof scoutPicks.$inferSelect;

@@ -21,6 +21,7 @@ export const PUBLIC_CHANGE_ENTITIES = [
   "agent",
   "person",
   "wishlist",
+  "scout",
 ] as const;
 /**
  * Changes about how people sign in (a sign-in link used, an invite made, a passkey added). They show in the app's

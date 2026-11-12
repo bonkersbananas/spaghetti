@@ -2,7 +2,7 @@ import type { Person } from "@shared/api";
 import { addWeeks, isMonday, mondayOf, mondayOfDay, weekName, weekRangeLabel } from "@shared/week";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { EmptyPot } from "@/components/illustrations";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -16,7 +16,10 @@ import { somethingWaiting, WeekWaiting } from "@/components/week/WeekWaiting";
 import { useCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { peopleQuery } from "@/lib/queries";
+import { useScoutEnabled } from "@/lib/scout";
 import { prefetchNeighbours, weekQuery } from "@/lib/week";
+
+const ScoutSection = lazy(() => import("@/components/scout/ScoutSection"));
 
 export const Route = createFileRoute("/_app/week/$monday")({
   component: WeekRoute,
@@ -42,6 +45,7 @@ function WeekPage({ monday }: { monday: string }) {
   const { data: peopleList } = useQuery(peopleQuery);
   const people = useMemo(() => new Map<string, Person>((peopleList ?? []).map((p) => [p.id, p])), [peopleList]);
   const { setOpen: openCapture } = useCapture();
+  const scoutOn = useScoutEnabled();
 
   const previous = addWeeks(monday, -1);
   const next = monday < mondayOf(Date.now()) ? addWeeks(monday, 1) : null;
@@ -94,6 +98,11 @@ function WeekPage({ monday }: { monday: string }) {
                   <WeekLines week={week} people={people} />
                 </div>
               </div>
+            )}
+            {scoutOn && week.current && (
+              <Suspense fallback={null}>
+                <ScoutSection where="week" showEmpty={!week.empty} />
+              </Suspense>
             )}
             {somethingWaiting(week.waiting) && <WeekWaiting waiting={week.waiting} />}
           </>

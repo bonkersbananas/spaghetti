@@ -10,6 +10,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { labelReadsEnabled } from "../label-read/run.ts";
 import { photoReadsEnabled } from "../photo-read/run.ts";
+import { scoutEnabled } from "../scout/run.ts";
 import { secretKeySource } from "../webhooks/secrets.ts";
 
 const body = z.object({ url: z.string().max(2000).optional(), sharedTitle: z.string().max(200).optional() });
@@ -26,6 +27,7 @@ export const draftRoutes = new Hono<AppEnv>()
       photoReads: photoReadsEnabled(c.env),
       labelReads: labelReadsEnabled(c.env),
       coach: coachEnabled(c.env),
+      scout: scoutEnabled(c.env),
       webhooks: Boolean(secretKeySource(c.env)),
     }),
   )

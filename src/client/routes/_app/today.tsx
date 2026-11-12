@@ -30,6 +30,7 @@ import { duration, ease } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { peopleQuery } from "@/lib/queries";
+import { useScout, waitingPicks } from "@/lib/scout";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { useDueUpkeep } from "@/lib/upkeep";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -37,6 +38,7 @@ import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
 const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
+const ScoutSection = lazy(() => import("@/components/scout/ScoutSection"));
 
 export const Route = createFileRoute("/_app/today")({
   component: Today,
@@ -74,6 +76,7 @@ function Today() {
   const printer = useQuery(printerQuery);
   const spools = useQuery(spoolsQuery);
   const hasDueUpkeep = useDueUpkeep().length > 0;
+  const hasScoutPicks = waitingPicks(useScout()).length > 0;
 
   const month = thisMonth(now);
   const journal = useInfiniteQuery(journalQuery(everything));
@@ -122,6 +125,7 @@ function Today() {
     waiting.length === 0 &&
     queued.length === 0 &&
     !burner &&
+    !hasScoutPicks &&
     !hasPrinter &&
     !lately;
 
@@ -248,6 +252,13 @@ function Today() {
               {!loading && (
                 <Suspense fallback={null}>
                   <CommentsLine />
+                </Suspense>
+              )}
+            </div>
+            <div className="order-2 empty:hidden">
+              {!loading && hasScoutPicks && (
+                <Suspense fallback={null}>
+                  <ScoutSection where="today" />
                 </Suspense>
               )}
             </div>

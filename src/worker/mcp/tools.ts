@@ -18,6 +18,7 @@ import type {
 import { FAILURE_TAGS, OUTCOME_LABELS, OUTCOMES, SUCCESS_NOTES } from "../../shared/attempts.ts";
 import { COMMENT_MAX } from "../../shared/comments.ts";
 import { OUTCOME_FILTERS } from "../../shared/journal.ts";
+import type { ScoutResponse } from "../../shared/scout.ts";
 import { SLOT_PATTERN } from "../../shared/spools.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
 import { formatHours, sinceWords } from "../../shared/upkeep.ts";
@@ -471,6 +472,28 @@ export const tools: Tool[] = [
       if (!result.ok) return failure(result);
       const list = (result.json as RecipesResponse).recipes;
       return { text: list.length ? list.map(recipeLine).join("\n") : "No recipes saved yet." };
+    },
+  }),
+
+  tool({
+    name: "list_scout_suggestions",
+    title: "See the idea scout's suggestions",
+    description:
+      'List this week\'s three models the idea scout suggested (from MakerWorld or Thingiverse), each with its link, why it fits and whether the two people kept it as an idea or put it away. Read-only: there is no tool to keep or dismiss one, that is for the people. Needs the "read" scope.',
+    scopes: ["read"],
+    readOnly: true,
+    input: z.object({}),
+    async run(_args, ctx) {
+      const result = await ctx.call("/api/scout");
+      if (result.status === 404) return { text: "The idea scout isn't set up." };
+      if (!result.ok) return failure(result);
+      const { picks } = (result.json as ScoutResponse).scout;
+      if (!picks.length) return { text: "The scout has no suggestions this week." };
+      return {
+        text: picks
+          .map((pick) => `- ${pick.title} (${pick.siteName}, ${pick.status}): ${pick.why} ${pick.url}`)
+          .join("\n"),
+      };
     },
   }),
 

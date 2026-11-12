@@ -206,6 +206,8 @@ export interface FeaturesResponse {
   labelReads: boolean;
   /** Claude can suggest what to try after a failed attempt (decision 0027); the same key. */
   coach: boolean;
+  /** Claude scouts three models a week for the two of them (decision 0040); the same key. */
+  scout: boolean;
   /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
   webhooks: boolean;
 }
