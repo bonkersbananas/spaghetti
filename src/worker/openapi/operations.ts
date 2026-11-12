@@ -722,6 +722,15 @@ export const operations: Record<string, Operation> = {
     response: "empty",
     status: 204,
   },
+  "POST /shopping-items/:id/check-prices": {
+    summary:
+      "Reads its Prisjakt product page again now: the picture and the cheapest offers, as found at that time. A check a moment ago stands.",
+    response: one("shoppingItem", z.looseObject({})),
+  },
+  "GET /shopping-items/:id/picture": {
+    summary: "Its picture (from its Prisjakt page, else its shop's page), when it has one.",
+    response: "binary",
+  },
   "POST /shopping-items/:id/restore": {
     summary: "Puts something taken off the list back.",
     response: one("shoppingItem", z.looseObject({})),

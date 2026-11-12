@@ -49,6 +49,9 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
   const optimistic: ShoppingItem = {
     id,
     ...entry,
+    picture: null,
+    prices: null,
+    pricesTriedAt: null,
     position: topPosition(before),
     boughtAt: null,
     boughtBy: null,

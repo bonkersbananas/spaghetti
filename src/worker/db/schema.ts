@@ -10,6 +10,7 @@ import type { LabelField } from "../../shared/label-read.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
+import type { ShoppingPrices } from "../../shared/prisjakt.ts";
 import type { ReactionKind } from "../../shared/reactions.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
@@ -1097,6 +1098,16 @@ export const shoppingItems = sqliteTable("shopping_items", {
   name: text("name").notNull().default(""),
   link: text("link"),
   priceLink: text("price_link"),
+  /** Where the picture came from ("prisjakt" or "shop"); the bytes are in R2 at `shoppingPictureKey`. Null: none. */
+  pictureSource: text("picture_source").$type<"prisjakt" | "shop">(),
+  /** When the picture was stored (its version in the address). */
+  pictureAt: integer("picture_at", { mode: "timestamp_ms" }),
+  /** The shop link whose picture was last tried, so a page without one isn't asked again and again. */
+  pictureTried: text("picture_tried"),
+  /** The cheapest offers found on the Prisjakt page (decision 0039). */
+  prices: text("prices", { mode: "json" }).$type<ShoppingPrices>(),
+  /** The last try at reading the Prisjakt page, successful or not. */
+  pricesTriedAt: integer("prices_tried_at", { mode: "timestamp_ms" }),
   position: integer("position").notNull(),
   boughtAt: integer("bought_at", { mode: "timestamp_ms" }),
   boughtBy: text("bought_by").references(() => users.id),

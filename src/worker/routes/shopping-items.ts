@@ -15,6 +15,7 @@ import type { Db } from "../db/index.ts";
 import { type ShoppingItemRow, shoppingItems } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { lookupShopping, shoppingPictureKey } from "../shopping/lookup.ts";
 
 const name = z.string().trim().max(SHOPPING_NAME_MAX);
 const link = z
@@ -41,11 +42,18 @@ const shoppingOrder = z.object({ ids: z.array(z.uuid()).max(SHOPPING_ITEMS_MAX) 
 const notFound = "That isn't on the list any more.";
 
 function toApi(row: ShoppingItemRow): ShoppingItem {
+  const picture =
+    row.pictureSource && row.pictureAt
+      ? { url: `/api/shopping-items/${row.id}/picture?v=${row.pictureAt.getTime()}`, source: row.pictureSource }
+      : null;
   return {
     id: row.id,
     name: row.name,
     link: row.link,
     priceLink: row.priceLink,
+    picture,
+    prices: row.prices ?? null,
+    pricesTriedAt: row.pricesTriedAt?.getTime() ?? null,
     position: row.position,
     boughtAt: row.boughtAt?.getTime() ?? null,
     boughtBy: row.boughtBy,
@@ -121,6 +129,8 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     ]);
     const shoppingItem = await loadOne(db, body.id);
     if (!shoppingItem) return apiError(c, 409, "deleted", "That was taken off the list.");
+    // Reading the linked pages never makes the add wait.
+    if (shoppingItem.link || shoppingItem.priceLink) c.executionCtx.waitUntil(lookupShopping(c.env, body.id, { db }));
     return c.json<ShoppingItemResponse>({ shoppingItem }, 201);
   })
 
@@ -176,6 +186,14 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
             boughtAt: sql`coalesce(${shoppingItems.boughtAt}, ${now.getTime()})`,
             boughtBy: sql`coalesce(${shoppingItems.boughtBy}, ${c.var.user.id})`,
           }),
+          // A new Prisjakt page means new prices: what the old one said goes. A picture goes with the link it came from,
+          // and the new link is asked for its own.
+          ...(fields.priceLink !== undefined && { prices: null, pricesTriedAt: null }),
+          ...(fields.link !== undefined && { pictureTried: null }),
+          ...((fields.priceLink !== undefined || fields.link !== undefined) && {
+            pictureSource: sql`CASE WHEN (${sql.raw(fields.priceLink !== undefined ? "1" : "0")} AND ${shoppingItems.pictureSource} = 'prisjakt')
+              OR (${sql.raw(fields.link !== undefined ? "1" : "0")} AND ${shoppingItems.pictureSource} = 'shop') THEN NULL ELSE ${shoppingItems.pictureSource} END`,
+          }),
           // Back on the list, at the top: it's needed again now.
           ...(bought === false && {
             boughtAt: null,
@@ -192,7 +210,36 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     if (!row) return apiError(c, 404, "not_found", notFound);
     const shoppingItem = await loadOne(db, itemId);
     if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
+    if (fields.link || fields.priceLink) c.executionCtx.waitUntil(lookupShopping(c.env, itemId, { db }));
     return c.json<ShoppingItemResponse>({ shoppingItem });
+  })
+
+  /** "Check prices again": reads the Prisjakt page now. A check a moment ago stands. */
+  .post("/:id/check-prices", async (c) => {
+    const itemId = c.req.param("id");
+    if (!(await loadOne(c.var.db, itemId))) return apiError(c, 404, "not_found", notFound);
+    await lookupShopping(c.env, itemId, { force: true, db: c.var.db });
+    const shoppingItem = await loadOne(c.var.db, itemId);
+    if (!shoppingItem) return apiError(c, 404, "not_found", notFound);
+    return c.json<ShoppingItemResponse>({ shoppingItem });
+  })
+
+  /** The thing's picture (the version in its address changes when it does, so browsers may keep it). */
+  .get("/:id/picture", async (c) => {
+    const itemId = c.req.param("id");
+    const row = await c.var.db
+      .select({ source: shoppingItems.pictureSource })
+      .from(shoppingItems)
+      .where(and(eq(shoppingItems.id, itemId), isNull(shoppingItems.deletedAt)))
+      .get();
+    const object = row?.source ? await c.env.PHOTOS.get(shoppingPictureKey(itemId)) : null;
+    if (!object) return apiError(c, 404, "not_found", "No picture.");
+    return new Response(object.body, {
+      headers: {
+        "Content-Type": object.httpMetadata?.contentType ?? "image/jpeg",
+        "Cache-Control": "private, max-age=31536000, immutable",
+      },
+    });
   })
 
   .delete("/:id", async (c) => {

@@ -8,6 +8,7 @@ import type { LabelField, LabelRead } from "./label-read.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
+import type { ShoppingPrices } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 
@@ -832,6 +833,12 @@ export interface ShoppingItem {
   link: string | null;
   /** A price comparison page (Prisjakt). */
   priceLink: string | null;
+  /** The thing's picture: from its Prisjakt page, else its shop's page. `url` includes a version, so it can be cached. */
+  picture: { url: string; source: "prisjakt" | "shop" } | null;
+  /** The cheapest offers found on its Prisjakt page, as found at `checkedAt`; null until it is read. */
+  prices: ShoppingPrices | null;
+  /** The last time reading the Prisjakt page was tried (epoch ms); null if never. A failed try leaves older prices. */
+  pricesTriedAt: number | null;
   /** Its place among what's still to buy, smallest first. */
   position: number;
   /** When it was ticked off, epoch ms; null while it's still to buy. */
