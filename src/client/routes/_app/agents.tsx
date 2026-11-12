@@ -94,7 +94,14 @@ function Agents() {
         <a
           href="/api/openapi.json"
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
+          // An installed (Home Screen) app keeps an in-scope target=_blank link in its own window; window.open
+          // with noopener asks for a separate browsing context instead (it returns null by design). Middle-click and the link's href still work.
+          onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            window.open("/api/openapi.json", "_blank", "noopener,noreferrer");
+          }}
           className="focus-ring text-ink-soft decoration-ink/30 font-semibold underline underline-offset-2"
         >
           API reference
