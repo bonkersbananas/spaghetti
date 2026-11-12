@@ -357,10 +357,11 @@ export const tools: Tool[] = [
       const images: NonNullable<ToolResult["images"]> = [];
       const lines: string[] = [];
       for (const photo of chosen.slice(0, limit)) {
-        // The display copy; for an original that no browser has resized yet it can be big, so the thumb stands in.
+        // The display copy; when it is big, the thumb stands in. An original no browser has resized yet is stored as
+        // both, so asking for the thumb would download the same big file twice: it waits for a browser to resize it.
         let bytes: Uint8Array | undefined;
         let mimeType = "image/webp";
-        for (const variant of ["large", "thumb"]) {
+        for (const variant of photo.needsResize ? ["large"] : ["large", "thumb"]) {
           const fetched = await ctx.call(`/api/photos/${photo.id}/${variant}`, { binary: true });
           if (fetched.ok && fetched.bytes && fetched.bytes.length <= MAX_SHOWN_BYTES) {
             bytes = fetched.bytes;
@@ -370,7 +371,7 @@ export const tools: Tool[] = [
         }
         const line = photoLine(photo, photoPlace(photo, numbers));
         if (!bytes) {
-          lines.push(`${line}: too big to show here.`);
+          lines.push(`${line}: too big to show here${photo.needsResize ? " until the app has resized it" : ""}.`);
           continue;
         }
         images.push({ data: toBase64(bytes), mimeType });

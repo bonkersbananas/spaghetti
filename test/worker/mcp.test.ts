@@ -610,6 +610,10 @@ describe("photos through MCP", () => {
     const small = Uint8Array.from(atob(jpegBase64()), (c) => c.charCodeAt(0));
     const big = new Uint8Array(1_000_000);
     big.set(small);
+    // An original no browser has resized is both sizes in one: the thumb is only asked for after a resize.
+    const unresized = await full(token, "get_photo", { build_id: buildId });
+    expect(unresized.images).toHaveLength(1);
+    await env.DB.prepare("UPDATE photos SET needs_resize = 0 WHERE id = ?").bind(photoId).run();
     await env.PHOTOS.put(`photos/${photoId}/large`, big, { httpMetadata: { contentType: "image/jpeg" } });
     const thumb = await full(token, "get_photo", { build_id: buildId });
     expect(thumb.images).toHaveLength(1);
