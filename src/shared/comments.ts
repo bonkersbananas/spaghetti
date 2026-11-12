@@ -5,6 +5,7 @@
  */
 
 import { findLinks } from "./links.ts";
+import type { Reaction } from "./reactions.ts";
 
 export const COMMENT_MAX = 2000;
 
@@ -20,6 +21,8 @@ export interface Comment {
   createdAt: number;
   /** Epoch ms of the last edit, or null if never edited. */
   editedAt: number | null;
+  /** Who reacted to it, and how (shared/reactions.ts). Absent in a copy saved by an older version. */
+  reactions?: Reaction[];
 }
 
 /** GET /api/items/:id/comments: the live comments, oldest first, and how far the signed-in person has read. */

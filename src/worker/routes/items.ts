@@ -34,6 +34,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey } from "../photos.ts";
+import { reactionsFor } from "./reactions.ts";
 
 const id = z.uuid();
 const title = z
@@ -184,7 +185,13 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       ),
     )
   ).flat();
-  const coaches = await coachesByAttempt(db, [...liveAttempts]);
+  const [coaches, reactionsByItem] = await Promise.all([
+    coachesByAttempt(db, [...liveAttempts]),
+    reactionsFor(
+      db,
+      rows.map((row) => row.id),
+    ),
+  ]);
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
     const read = toApiPhotoRead(rows);
@@ -209,6 +216,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       partsByItem.get(row.id) ?? [],
       reads,
       coaches,
+      reactionsByItem.get(row.id) ?? [],
     );
   });
 }

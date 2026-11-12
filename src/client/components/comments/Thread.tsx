@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "@/components/ui/Composer";
 import { CommentIcon } from "@/components/ui/icons";
-import { Bubble, MessageGroup, NewDivider } from "@/components/ui/Message";
+import { MessageGroup, NewDivider } from "@/components/ui/Message";
 import { Section } from "@/components/ui/Section";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Sheet } from "@/components/ui/Sheet";
@@ -15,6 +15,9 @@ import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { EditableBubble } from "./EditableBubble";
+
+/** The reactions under an idea or build, which load with the thread (ItemReactions in CommentThread.tsx). */
+export { default as ItemReactions } from "../reactions/ItemReactions";
 
 interface ThreadProps {
   itemId: string;
@@ -188,6 +191,8 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
                       onEdit={(on) => setEditing(on ? comment.id : null)}
                       readOnly={readOnly}
                       highlighted={lit === comment.id}
+                      me={me.id}
+                      nameOf={(id) => displayName(person(id), "Someone")}
                     />
                   ))}
                 </MessageGroup>

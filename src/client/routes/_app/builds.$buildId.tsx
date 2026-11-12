@@ -17,7 +17,7 @@ import { OutcomeChip } from "@/components/builds/Outcome";
 import { PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
-import { CommentThread } from "@/components/comments/CommentThread";
+import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
@@ -683,6 +683,15 @@ function Build({ item }: { item: ItemView }) {
                 </p>
               </div>
             </div>
+            {!item.pending && (
+              <ItemReactions
+                itemId={item.id}
+                reactions={item.reactions}
+                noun="build"
+                readOnly={readOnly}
+                className="mt-4"
+              />
+            )}
           </Section>
           {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
           {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}

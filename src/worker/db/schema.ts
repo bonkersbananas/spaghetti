@@ -10,6 +10,7 @@ import type { LabelField } from "../../shared/label-read.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
+import type { ReactionKind } from "../../shared/reactions.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
 
@@ -1056,6 +1057,33 @@ export const webhookDeliveries = sqliteTable(
 
 export type Webhook = typeof webhooks.$inferSelect;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+
+/**
+ * Reactions to an idea or build (`commentId` null) or to one of its comments: one row per person, thing and kind
+ * (`shared/reactions.ts` has the curated kinds). `targetId` is the item's or the comment's id, so the key is the
+ * same for both; they go with the item or the comment when it is purged. Taking one back deletes the row.
+ */
+export const reactions = sqliteTable(
+  "reactions",
+  {
+    targetId: text("target_id").notNull(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    commentId: text("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<ReactionKind>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.targetId, table.userId, table.kind] }),
+    index("reactions_item_idx").on(table.itemId),
+  ],
+);
+
+export type ReactionRow = typeof reactions.$inferSelect;
 
 /**
  * The shopping list: things to buy for the printer (filament, glue, a spare nozzle). People sort what's still to

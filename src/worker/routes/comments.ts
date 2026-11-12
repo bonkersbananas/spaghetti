@@ -7,11 +7,13 @@ import {
   type CommentsResponse,
   type UnreadCommentsResponse,
 } from "../../shared/comments.ts";
+import type { Reaction } from "../../shared/reactions.ts";
 import { recordChange } from "../changes.ts";
 import { type CommentRow, commentReads, comments, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { pushCommentSoon } from "../push/comments.ts";
+import { commentReactions, reactionsFor } from "./reactions.ts";
 
 const body = z.string().trim().min(1).max(COMMENT_MAX);
 const createComment = z.object({ id: z.uuid(), body });
@@ -19,7 +21,7 @@ const updateComment = z.object({ body });
 
 const notFound = "That isn't here any more.";
 
-export function toApiComment(row: CommentRow): Comment {
+export function toApiComment(row: CommentRow, reactions: Reaction[] = []): Comment {
   return {
     id: row.id,
     itemId: row.itemId,
@@ -28,6 +30,7 @@ export function toApiComment(row: CommentRow): Comment {
     body: row.body,
     createdAt: row.createdAt.getTime(),
     editedAt: row.editedAt?.getTime() ?? null,
+    reactions,
   };
 }
 
@@ -42,7 +45,7 @@ export const itemCommentRoutes = new Hono<AppEnv>()
       .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
       .get();
     if (!item) return apiError(c, 404, "not_found", notFound);
-    const [rows, read] = await Promise.all([
+    const [rows, read, reactions] = await Promise.all([
       db
         .select()
         .from(comments)
@@ -53,8 +56,12 @@ export const itemCommentRoutes = new Hono<AppEnv>()
         .from(commentReads)
         .where(and(eq(commentReads.itemId, itemId), eq(commentReads.userId, c.var.user.id)))
         .get(),
+      commentReactions(db, itemId),
     ]);
-    return c.json<CommentsResponse>({ comments: rows.map(toApiComment), readAt: read?.readAt.getTime() ?? null });
+    return c.json<CommentsResponse>({
+      comments: rows.map((row) => toApiComment(row, reactions.get(row.id))),
+      readAt: read?.readAt.getTime() ?? null,
+    });
   })
 
   /** Writes a comment. The id is the client's, so a retry returns the same comment. A person writing counts as having read the thread. */
@@ -170,7 +177,8 @@ export const commentRoutes = new Hono<AppEnv>()
     const found = await ownComment(c, false);
     if (found.error) return found.error;
     const { row } = found;
-    if (row.body === parsed.data.body) return c.json<{ comment: Comment }>({ comment: toApiComment(row) });
+    const reactions = (await reactionsFor(c.var.db, [row.id])).get(row.id);
+    if (row.body === parsed.data.body) return c.json<{ comment: Comment }>({ comment: toApiComment(row, reactions) });
     const db = c.var.db;
     const [[updated]] = await db.batch([
       db
@@ -181,7 +189,7 @@ export const commentRoutes = new Hono<AppEnv>()
       recordChange(db, { entity: "comment", id: row.id, itemId: row.itemId, action: "updated", actor: c.var.actor }),
     ]);
     if (!updated) return apiError(c, 404, "not_found", notFound);
-    return c.json<{ comment: Comment }>({ comment: toApiComment(updated) });
+    return c.json<{ comment: Comment }>({ comment: toApiComment(updated, reactions) });
   })
 
   .delete("/:id", async (c) => {
@@ -219,7 +227,8 @@ export const commentRoutes = new Hono<AppEnv>()
         actor: c.var.actor,
       }),
     ]);
-    return c.json<{ comment: Comment }>({ comment: toApiComment(restored ?? found.row) });
+    const reactions = (await reactionsFor(db, [found.row.id])).get(found.row.id);
+    return c.json<{ comment: Comment }>({ comment: toApiComment(restored ?? found.row, reactions) });
   });
 
 /** For the OpenAPI document (worker/openapi). */

@@ -1,10 +1,12 @@
 import type { Comment, CommentsResponse, UnreadCommentsResponse } from "@shared/comments";
 import { isUnread } from "@shared/comments";
+import type { ReactionKind } from "@shared/reactions";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { isOnline } from "./connection";
+import { reactTo } from "./reactions";
 import { canEdit } from "./read-only";
 import { unreadQuery } from "./unread-comments";
 
@@ -166,6 +168,25 @@ export function deleteComment(queryClient: QueryClient, comment: Comment) {
       }
     },
   });
+}
+
+/** Gives or takes back your reaction to a comment, at once (lib/reactions.ts). */
+export function reactToComment(queryClient: QueryClient, comment: Comment, kind: ReactionKind, me: string) {
+  reactTo(
+    {
+      path: `/comments/${comment.id}`,
+      read: () =>
+        queryClient
+          .getQueryData<CommentsResponse>(commentsQuery(comment.itemId).queryKey)
+          ?.comments.find((c) => c.id === comment.id)?.reactions,
+      write: (reactions) =>
+        withComments(queryClient, comment.itemId, (list) =>
+          list.map((c) => (c.id === comment.id ? { ...c, reactions } : c)),
+        ),
+    },
+    kind,
+    me,
+  );
 }
 
 // --- reading ---------------------------------------------------------------------------------------

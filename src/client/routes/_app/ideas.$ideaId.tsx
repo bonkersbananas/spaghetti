@@ -3,7 +3,7 @@ import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { CommentThread } from "@/components/comments/CommentThread";
+import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { DraftNote } from "@/components/ideas/DraftNote";
 import { photoAlt } from "@/components/ideas/IdeaCard";
@@ -307,6 +307,15 @@ function Idea({ item }: { item: ItemView }) {
               )}
             </p>
           </div>
+          {!item.pending && (
+            <ItemReactions
+              itemId={item.id}
+              reactions={item.reactions}
+              noun="idea"
+              readOnly={readOnly}
+              className="mt-1"
+            />
+          )}
           {/* The conversation follows the words it is about, in the same column (as on a build). */}
           {!item.pending && (
             <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />
