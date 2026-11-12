@@ -32,6 +32,7 @@ export function TickBox({ checked, onChange, label, disabled, className }: TickB
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
+      title={label}
       disabled={disabled}
       onClick={() => {
         if (!checked) {

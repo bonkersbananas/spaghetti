@@ -86,22 +86,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
       search: { attempt: attempt.id, finish: outcome ?? "1" },
     });
 
+  const to = { to: "/builds/$buildId", params: { buildId: item.id }, search: { attempt: attempt.id } } as const;
+
   return (
     // On Today a compact card that becomes the first turns into the big one: Today's AutoHeight grows the box, and
     // the new layout fades in here (the compact one leaves at once), so nothing slides through anything.
-    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative rounded-lg p-1.5 transition-shadow">
-      {/* The whole card leads to the build; what is inside that can be pressed sits above it. */}
-      <Link
-        to="/builds/$buildId"
-        params={{ buildId: item.id }}
-        search={{ attempt: attempt.id }}
-        className="focus-ring absolute inset-0 z-0 rounded-lg"
-      >
-        <span className="sr-only">
-          {name.text}, attempt {attempt.number}
-          {partsLabel ? `, ${partsLabel}` : ""}
-        </span>
-      </Link>
+    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative rounded-lg p-1.5 transition-shadow has-[a:focus-visible]:shadow-[var(--sg-ring)]">
       <m.div
         key={swaps.current}
         initial={swaps.current > 0 && !reduce ? { opacity: 0 } : false}
@@ -110,7 +100,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
       >
         <div
           className={cn(
-            "pointer-events-none relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
+            "relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
             // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
             // print's state down; the slicer's plate picture (a render, not the result) gets a calmer 16:9.
             !hero && !plate && !compact ? "aspect-5/2" : plate && !compact ? "aspect-video" : layout.picture,
@@ -131,11 +121,14 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               <BuildsIcon size={compact ? 28 : 36} />
             </div>
           )}
+          {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
+              nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
+          <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />
           {/* On a compact card the words under it say the same, and a chip would cover the small picture. */}
           <OutcomeChip
             outcome={null}
             offTheBed={offBed}
-            className={cn("shadow-soft absolute bottom-2 left-2", compact && "max-md:hidden")}
+            className={cn("shadow-soft pointer-events-none absolute bottom-2 left-2 z-20", compact && "max-md:hidden")}
           />
         </div>
         <div
@@ -145,6 +138,15 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             layout.head,
           )}
         >
+          <Link
+            {...to}
+            className="pointer-events-auto absolute inset-0 z-0 rounded-lg shadow-none outline-none focus-visible:shadow-none"
+          >
+            <span className="sr-only">
+              {name.text}, attempt {attempt.number}
+              {partsLabel ? `, ${partsLabel}` : ""}
+            </span>
+          </Link>
           <div className="flex items-start gap-3">
             <h3
               className={cn(

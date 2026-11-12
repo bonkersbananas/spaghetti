@@ -109,6 +109,7 @@ export function PhotoThumb({
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${alt}`}
+          title="Remove"
           className="pressable focus-ring touch-target bg-veil text-on-veil hover:bg-veil-strong absolute top-1 right-1 flex size-7 items-center justify-center rounded-full backdrop-blur-md"
         >
           <CloseIcon size={14} weight="bold" aria-hidden />

@@ -191,6 +191,7 @@ function Idea({ item }: { item: ItemView }) {
           <IconButton
             icon={TrashIcon}
             label="Delete idea"
+            title={`Delete idea (${shortcutCaps("ideaDelete").join("")})`}
             onClick={remove}
             disabled={readOnly}
             aria-keyshortcuts="Backspace Delete"
