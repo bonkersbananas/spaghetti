@@ -96,14 +96,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   const matched = !item.priceLink && !bought && item.suggestState === "found";
   const links = (
     <>
-      {item.prices && !bought && (
-        <PriceLine
-          price={item.prices.lowest}
-          shop={cheapest?.shop}
-          checkedAt={item.prices.checkedAt}
-          className="w-full"
-        />
-      )}
+      {item.prices && !bought && <PriceLine price={item.prices.lowest} shop={cheapest?.shop} className="w-full" />}
       {matched && (
         // Claude's guess, not yet anyone's choice: the dashed chip, which opens the sheet to confirm it.
         <button type="button" onClick={onOpen} className="focus-ring touch-target pressable rounded-pill relative">
@@ -115,7 +108,8 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
       {item.priceLink && (
         <LinkChip href={item.priceLink} icon={PriceIcon}>
-          Prisjakt
+          {/* With a price in the line above, the phone keeps just the icon: both chips then fit on one line. */}
+          <span className={cn(item.prices && !bought && "max-md:sr-only")}>Prisjakt</span>
         </LinkChip>
       )}
     </>

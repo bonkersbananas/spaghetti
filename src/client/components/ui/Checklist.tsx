@@ -117,7 +117,7 @@ export function ChecklistRow({
       )}
     >
       {tick}
-      {thumb && <div className="shrink-0 py-1">{thumb}</div>}
+      {thumb && <div className="shrink-0 py-1 pr-1.5">{thumb}</div>}
       <div className="flex min-w-0 flex-1 flex-col gap-1 py-1">
         <div className={cn("min-w-0", done && "text-ink-faint")}>{children}</div>
         {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">{meta}</div>}
