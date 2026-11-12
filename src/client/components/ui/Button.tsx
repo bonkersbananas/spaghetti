@@ -9,7 +9,7 @@ export type ButtonSize = "sm" | "md" | "lg";
 const variants: Record<ButtonVariant, string> = {
   primary:
     "press-tomato bg-tomato text-on-accent shadow-soft hover:bg-tomato-strong disabled:bg-ink-ghost disabled:shadow-none",
-  secondary: "bg-cream text-ink shadow-soft hover:shadow-raised disabled:text-ink-ghost",
+  secondary: "bg-cream text-ink shadow-key hover:shadow-key-hover disabled:text-ink-ghost",
   quiet: "bg-transparent text-ink-soft hover:bg-ink/5 hover:text-ink disabled:text-ink-ghost",
   danger:
     "press-tomato active:text-on-accent data-[pressed]:text-on-accent bg-tomato-soft text-tomato-ink hover:bg-tomato hover:text-on-accent",

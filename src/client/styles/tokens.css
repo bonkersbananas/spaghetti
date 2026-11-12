@@ -107,6 +107,9 @@
   /* Elevation: soft, warm shadows instead of borders. */
   --sg-shadow-soft: 0 1px 1px rgb(80 50 20 / 0.04), 0 2px 6px rgb(80 50 20 / 0.05);
   --sg-shadow-raised: 0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08);
+  /* A button's face on a card: cream on cream needs a hair of edge to read as something to press. */
+  --sg-shadow-key: 0 1px 1px rgb(80 50 20 / 0.06), 0 2px 6px rgb(80 50 20 / 0.06), 0 0 0 1px rgb(80 50 20 / 0.11);
+  --sg-shadow-key-hover: 0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08), 0 0 0 1px rgb(80 50 20 / 0.16);
   --sg-shadow-float: 0 2px 6px rgb(80 50 20 / 0.06), 0 16px 48px rgb(80 50 20 / 0.16);
   --sg-shadow-well: inset 0 1px 2px rgb(80 50 20 / 0.07);
   --sg-shadow-bar: 0 -1px 0 rgb(43 36 32 / 0.05), 0 -8px 24px rgb(80 50 20 / 0.06);
@@ -227,6 +230,8 @@
   --sg-semolina-ink: #eccb7f;
   --sg-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 236 214 / 0.045);
   --sg-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 236 214 / 0.07);
+  --sg-shadow-key: var(--sg-shadow-soft);
+  --sg-shadow-key-hover: var(--sg-shadow-raised);
   --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.3), 0 20px 56px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 236 214 / 0.08);
   --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
   --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
@@ -338,6 +343,8 @@
 
   --shadow-*: initial;
   --shadow-soft: var(--sg-shadow-soft);
+  --shadow-key: var(--sg-shadow-key);
+  --shadow-key-hover: var(--sg-shadow-key-hover);
   --shadow-raised: var(--sg-shadow-raised);
   --shadow-float: var(--sg-shadow-float);
   --shadow-well: var(--sg-shadow-well);
