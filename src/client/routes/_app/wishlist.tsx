@@ -176,6 +176,16 @@ function MyList({
       count={ideas.length || undefined}
       aside={pick}
     >
+      {!isDesktop && ideas.length > 0 && (
+        <Toggle
+          label={shareLabel}
+          hint={shareHint}
+          checked={!list.private}
+          disabled={readOnly || !me}
+          onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
+          className={isDesktop ? "mt-2" : "-mt-1"}
+        />
+      )}
       {loading && !ideas.length ? (
         <ListSkeleton />
       ) : ideas.length ? (
@@ -196,14 +206,16 @@ function MyList({
           {!list.private && other ? ` ${other} sees the list too.` : ""}
         </EmptyState>
       )}
-      <Toggle
-        label={shareLabel}
-        hint={shareHint}
-        checked={!list.private}
-        disabled={readOnly || !me}
-        onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
-        className="mt-2"
-      />
+      {(isDesktop || ideas.length === 0) && (
+        <Toggle
+          label={shareLabel}
+          hint={shareHint}
+          checked={!list.private}
+          disabled={readOnly || !me}
+          onChange={(on) => setWishlistPrivate(queryClient, me, !on)}
+          className={isDesktop ? "mt-2" : "-mt-1"}
+        />
+      )}
       {!isDesktop && ideas.length > 0 && (
         <ActionBar>
           <Button variant="secondary" size="lg" icon={PlusIcon} fullWidth onClick={onPick} disabled={readOnly}>

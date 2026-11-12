@@ -43,7 +43,7 @@ export function RankRow({ rank, photo, note, title, meta, link, actions, handle,
       <Link
         {...link}
         draggable={false}
-        className="pressable focus-ring group/rank flex min-w-0 flex-1 items-center gap-3 rounded-md md:gap-4"
+        className="pressable focus-ring group/rank flex min-w-0 flex-1 items-center gap-2.5 rounded-md md:gap-4"
       >
         <RankMark rank={rank} />
         <span
@@ -108,7 +108,7 @@ export function RankMark({
         "font-display tabular flex shrink-0 items-center justify-center rounded-full font-medium",
         tone === "badge"
           ? "bg-select text-on-select text-body shadow-raised size-7"
-          : cn("text-title size-8", rank === 1 ? "bg-semolina-soft text-semolina-ink" : "text-ink-faint"),
+          : cn("text-title size-7 md:size-8", rank === 1 ? "bg-semolina-soft text-semolina-ink" : "text-ink-faint"),
         className,
       )}
     >
