@@ -1,20 +1,28 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
-import { MoreIcon, MoveDownIcon, MoveUpIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
+import { lazy, type ReactNode, Suspense, useState } from "react";
+import { MoreIcon, MoveDownIcon, MoveIntoIcon, MoveUpIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { Sheet } from "@/components/ui/Sheet";
+import { toast } from "@/components/ui/Toast";
+import type { ItemView } from "@/lib/items";
+import { whyNotMove } from "@/lib/move";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 import type { UpNextMenu } from "./IdeaCard";
 
-/** The card's "…" button: Up next, where it stands in the queue, and your wishlist. A link can't hold a button, so it sits over the card. */
-export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
+const MoveToBuildSheet = lazy(() => import("./MoveToBuildSheet").then((m) => ({ default: m.MoveToBuildSheet })));
+
+/** The card's "…" button: Up next, where it stands in the queue, your wishlist and adding it to a build. A link can't hold a button, so it sits over the card. */
+export function CardMenu({ menu, name, item }: { menu: UpNextMenu; name: string; item: ItemView }) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
   // A closed phone sheet still costs a vaul root with its scroll and resize listeners, and every card has one:
   // mount it with the first tap (it stays mounted afterwards, so closing animates).
   const [asked, setAsked] = useState(false);
+  // The build picker is its own chunk, fetched when the row is first chosen.
+  const [moving, setMoving] = useState<"closed" | "open">("closed");
+  const [moveAsked, setMoveAsked] = useState(false);
   const queryClient = useQueryClient();
   const me = useQuery(sessionQuery).data?.id;
   const wished = useWishlistIds(me).includes(menu.wish?.id ?? "");
@@ -48,7 +56,29 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
           {wished ? "Take off your wishlist" : "Add to your wishlist"}
         </MenuRow>
       )}
+      <MenuRow
+        onSelect={() => {
+          const why = whyNotMove(queryClient, item);
+          if (why) return toast.message("It stays where it is", why);
+          setMoveAsked(true);
+          setMoving("open");
+        }}
+        className={row}
+        close={isDesktop ? undefined : () => setOpen(false)}
+      >
+        <MoveIntoIcon size={20} aria-hidden />
+        Add to a build…
+      </MenuRow>
     </div>
+  );
+  const picker = moveAsked && (
+    <Suspense fallback={null}>
+      <MoveToBuildSheet
+        open={moving === "open"}
+        onOpenChange={(next) => setMoving(next ? "open" : "closed")}
+        idea={item}
+      />
+    </Suspense>
   );
   // Over the card's bottom-right corner, at the end of the avatar's row: the photo and a note's words stay clear.
   const button = (
@@ -83,13 +113,17 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
             {actions}
           </Sheet>
         )}
+        {picker}
       </>
     );
   }
   return (
-    <Popover label={`Options for ${name}`} side="bottom" align="end" className="w-56 p-1.5" trigger={button}>
-      {actions}
-    </Popover>
+    <>
+      <Popover label={`Options for ${name}`} side="bottom" align="end" className="w-56 p-1.5" trigger={button}>
+        {actions}
+      </Popover>
+      {picker}
+    </>
   );
 }
 

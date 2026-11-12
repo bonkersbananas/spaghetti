@@ -2,7 +2,7 @@ import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { DraftNote } from "@/components/ideas/DraftNote";
@@ -18,18 +18,20 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
-import { BuildsIcon, CommentIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
+import { BuildsIcon, CommentIcon, MoveIntoIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { toast } from "@/components/ui/Toast";
 import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
+import { whyNotMove } from "@/lib/move";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -38,6 +40,10 @@ import { useStickyColumn } from "@/lib/sticky-column";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
+
+const MoveToBuildSheet = lazy(() =>
+  import("@/components/ideas/MoveToBuildSheet").then((m) => ({ default: m.MoveToBuildSheet })),
+);
 
 export const Route = createFileRoute("/_app/ideas/$ideaId")({
   component: IdeaDetail,
@@ -138,6 +144,16 @@ function Idea({ item }: { item: ItemView }) {
     void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
   }
 
+  const [moving, setMoving] = useState(false);
+  const [moveAsked, setMoveAsked] = useState(false);
+  function move() {
+    if (!canEdit(item.pending)) return;
+    const why = whyNotMove(queryClient, item);
+    if (why) return toast.message("It stays where it is", why);
+    setMoveAsked(true);
+    setMoving(true);
+  }
+
   // Counts up each time something asks to write a comment: the M key, the palette.
   const [writeAsk, setWriteAsk] = useState(0);
   const comment = () => {
@@ -145,6 +161,14 @@ function Idea({ item }: { item: ItemView }) {
   };
 
   useScreenActions("This idea", [
+    {
+      id: "move",
+      label: "Add to a build…",
+      icon: MoveIntoIcon,
+      shortcut: "ideaMove",
+      keywords: "move tidy photos note attempt build into",
+      run: move,
+    },
     {
       id: "build",
       label: "Start building",
@@ -175,6 +199,7 @@ function Idea({ item }: { item: ItemView }) {
     ideaPhotoNext: () => select(selectedIndex + 1),
     ideaDelete: remove,
     ideaBuild: build,
+    ideaMove: move,
     ideaComment: item.pending ? undefined : comment,
   });
 
@@ -188,6 +213,14 @@ function Idea({ item }: { item: ItemView }) {
         <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
         <DetailBar back={back}>
           <SaveStatus state={saveState} className="mr-2" />
+          <IconButton
+            icon={MoveIntoIcon}
+            label="Add to a build…"
+            title={`Add to a build (${shortcutCaps("ideaMove").join("")})`}
+            onClick={move}
+            disabled={readOnly}
+            aria-keyshortcuts="A"
+          />
           <IconButton
             icon={TrashIcon}
             label="Delete idea"
@@ -327,6 +360,16 @@ function Idea({ item }: { item: ItemView }) {
             )}
           </div>
         </div>
+        {moveAsked && (
+          <Suspense fallback={null}>
+            <MoveToBuildSheet
+              open={moving}
+              onOpenChange={setMoving}
+              idea={item}
+              onMoved={() => void navigate({ to: "/ideas" })}
+            />
+          </Suspense>
+        )}
         {!isDesktop && (
           <ActionBar>
             <Button variant="primary" size="lg" icon={BuildsIcon} fullWidth disabled={readOnly} onClick={build}>

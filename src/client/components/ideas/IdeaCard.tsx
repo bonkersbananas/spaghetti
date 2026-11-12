@@ -134,7 +134,11 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
       {menu && !item.pending && (
         // Its own boundary: the menu's code must never hold the whole list back (the page waited for it, 300 ms, on every first visit).
         <Suspense fallback={null}>
-          <CardMenu menu={menu} name={item.title || item.note.split("\n")[0]?.slice(0, 120) || "this idea"} />
+          <CardMenu
+            menu={menu}
+            item={item}
+            name={item.title || item.note.split("\n")[0]?.slice(0, 120) || "this idea"}
+          />
         </Suspense>
       )}
     </m.li>

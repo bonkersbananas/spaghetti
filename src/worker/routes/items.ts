@@ -10,6 +10,7 @@ import {
   type PhotoResponse,
 } from "../../shared/api.ts";
 import { beganAsIdea } from "../../shared/deleted.ts";
+import { movedText, withMoved, withoutMoved } from "../../shared/move.ts";
 import { cleanPartName, MAX_PART_QUANTITY, MAX_PARTS } from "../../shared/parts.ts";
 import type { PhotoRead } from "../../shared/photo-read.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
@@ -20,6 +21,7 @@ import {
   type Attempt,
   attemptFiles,
   attempts,
+  comments,
   ITEM_STAGES,
   type Item,
   type ItemStage,
@@ -29,6 +31,7 @@ import {
   type Photo,
   parts,
   photos,
+  reactions,
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiItem, toApiPhoto } from "../http.ts";
@@ -85,6 +88,16 @@ const unscrap = z.object({
   finishedAt: z.number().int().positive().nullable(),
   coverPhotoId: id.nullable(),
   attemptIds: z.array(id).max(500),
+});
+/** Moves an idea's photos and note into a build, or into one of its attempts. */
+const moveInto = z.object({ targetId: id, attemptId: id.nullable().optional() });
+/** The undo of a move: the photos' old places, and the note that was taken out of the idea. */
+const unmoveInto = z.object({
+  targetId: id,
+  photos: z.array(z.object({ id, position: z.number().int().min(0).max(10_000) })).max(200),
+  note: note,
+  /** The attempt the note was added to, if it was one. */
+  attemptId: id.nullable().optional(),
 });
 /** `?stage=building,done,shelved`: one stage or several. */
 const listQuery = z.object({
@@ -602,6 +615,128 @@ export const itemRoutes = new Hono<AppEnv>()
     return c.json<ItemResponse>({ item });
   })
 
+  /**
+   * "Tidy up later": an idea's photos and note go into a build (or one of its attempts), and the idea goes away
+   * (deleted, so the undo brings it back). Photos keep their capture time and order and go after the target's own;
+   * the note is added after the target's, never over it. Ideas with comments or reactions stay: they belong to
+   * the idea. People only.
+   */
+  .post("/:id/move", async (c) => {
+    const parsed = moveInto.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    const itemId = c.req.param("id");
+    const { targetId } = parsed.data;
+    const attemptId = parsed.data.attemptId ?? null;
+    const db = c.var.db;
+    const [source, target] = await Promise.all([
+      db
+        .select()
+        .from(items)
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
+        .get(),
+      db
+        .select()
+        .from(items)
+        .where(and(eq(items.id, targetId), isNull(items.deletedAt)))
+        .get(),
+    ]);
+    if (!source || !target) return apiError(c, 404, "not_found", notFound);
+    if (source.stage !== "idea") return apiError(c, 409, "not_an_idea", "Only an idea that hasn't been started moves.");
+    if (target.stage === "idea" || target.id === source.id) {
+      return apiError(c, 409, "not_a_build", "Photos and notes move into a build.");
+    }
+    const attempt = attemptId
+      ? await db
+          .select()
+          .from(attempts)
+          .where(and(eq(attempts.id, attemptId), eq(attempts.itemId, targetId), isNull(attempts.deletedAt)))
+          .get()
+      : null;
+    if (attemptId && !attempt) return apiError(c, 404, "not_found", "That attempt isn't here any more.");
+    const [talk, reacted] = await Promise.all([
+      db
+        .select({ id: comments.id })
+        .from(comments)
+        .where(and(eq(comments.itemId, itemId), isNull(comments.deletedAt)))
+        .limit(1),
+      db.select({ id: reactions.targetId }).from(reactions).where(eq(reactions.itemId, itemId)).limit(1),
+    ]);
+    if (talk.length || reacted.length) {
+      return apiError(c, 409, "has_comments", "It has comments or reactions, which stay with the idea.");
+    }
+
+    const movingPhotos = await db
+      .select()
+      .from(photos)
+      .where(and(eq(photos.itemId, itemId), isNull(photos.deletedAt)))
+      .orderBy(asc(photos.position), asc(photos.createdAt));
+    const last = await db
+      .select({ value: max(photos.position) })
+      .from(photos)
+      .where(eq(photos.itemId, targetId))
+      .get();
+    const base = (last?.value ?? -1) + 1;
+    const now = new Date();
+    const nextNote = withMoved((attempt ?? target).note, movedText(source));
+    const actor = c.var.actor;
+    await db.batch([
+      ...movingPhotos.map((photo, index) =>
+        db
+          .update(photos)
+          .set({ itemId: targetId, attemptId, position: base + index })
+          .where(and(eq(photos.id, photo.id), eq(photos.itemId, itemId))),
+      ),
+      ...(attempt
+        ? [db.update(attempts).set({ note: nextNote, updatedAt: now }).where(eq(attempts.id, attempt.id))]
+        : [db.update(items).set({ note: nextNote }).where(eq(items.id, targetId))]),
+      db.update(items).set({ updatedAt: now }).where(eq(items.id, targetId)),
+      recordChange(db, { entity: "item", id: targetId, itemId: targetId, action: "updated", actor }),
+      db
+        .update(items)
+        .set({ deletedAt: now, note: "" })
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt))),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "deleted", actor }),
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    const moved = await loadItem(db, targetId);
+    if (!moved) return apiError(c, 404, "not_found", notFound);
+    return c.json<ItemResponse>({ item: moved });
+  })
+
+  /** Undo for a move: the idea comes back with its note and photos, and the target loses the note that was added. */
+  .post("/:id/unmove", async (c) => {
+    const parsed = unmoveInto.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    const itemId = c.req.param("id");
+    const { targetId, photos: places, note: taken } = parsed.data;
+    const attemptId = parsed.data.attemptId ?? null;
+    const db = c.var.db;
+    const source = await db.select().from(items).where(eq(items.id, itemId)).get();
+    if (!source || source.stage !== "idea") return apiError(c, 404, "not_found", goneForGood);
+    const target = await db.select().from(items).where(eq(items.id, targetId)).get();
+    const attempt = attemptId ? await db.select().from(attempts).where(eq(attempts.id, attemptId)).get() : null;
+    // What the move added is taken off the end of the note again, unless it has been edited since.
+    const withoutIt = withoutMoved((attempt ?? target)?.note ?? "", movedText({ title: source.title, note: taken }));
+    const now = new Date();
+    await db.batch([
+      ...places.map((place) =>
+        db
+          .update(photos)
+          .set({ itemId, attemptId: null, position: place.position })
+          .where(and(eq(photos.id, place.id), eq(photos.itemId, targetId))),
+      ),
+      ...(attempt
+        ? [db.update(attempts).set({ note: withoutIt, updatedAt: now }).where(eq(attempts.id, attempt.id))]
+        : target
+          ? [db.update(items).set({ note: withoutIt, updatedAt: now }).where(eq(items.id, targetId))]
+          : []),
+      db.update(items).set({ deletedAt: null, note: taken, updatedAt: now }).where(eq(items.id, itemId)),
+      recordChange(db, { entity: "item", id: itemId, itemId, action: "restored", actor: c.var.actor }),
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    const item = await loadItem(db, itemId);
+    if (!item) return apiError(c, 404, "not_found", goneForGood);
+    return c.json<ItemResponse>({ item });
+  })
+
   /** Undo for a delete: the item and its photos come back as they were. */
   .post("/:id/restore", async (c) => {
     const itemId = c.req.param("id");
@@ -814,4 +949,15 @@ export const itemRoutes = new Hono<AppEnv>()
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { createItem, listQuery, photoFields as itemPhotoFields, putParts, reorder, unscrap, updateItem, upNextOrder };
+export {
+  createItem,
+  listQuery,
+  moveInto,
+  photoFields as itemPhotoFields,
+  putParts,
+  reorder,
+  unmoveInto,
+  unscrap,
+  updateItem,
+  upNextOrder,
+};

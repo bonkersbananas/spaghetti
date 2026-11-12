@@ -47,6 +47,8 @@ interface UndoOptions {
   duration?: number;
   /** Lets the next step put this one away (`toast.dismiss(id)`), such as a draft's undo once its idea is built. */
   id?: string;
+  /** A second quiet action beside Undo, such as "View" for where something went. */
+  view?: { label: string; onClick: () => void };
 }
 
 /**
@@ -126,13 +128,14 @@ export const toast = {
         action: { label: "Refresh", onClick: onRefresh },
       }),
     ),
-  undo: (message: string, { onUndo, description, duration = 6000, id }: UndoOptions) =>
+  undo: (message: string, { onUndo, description, duration = 6000, id, view }: UndoOptions) =>
     show((t) =>
       t(message, {
         id,
         description,
         duration,
         action: { label: "Undo", onClick: onUndo },
+        cancel: view,
       }),
     ),
   /** Puts one toast away. Before sonner has loaded there is nothing to put away, so this never loads it. */

@@ -3,6 +3,7 @@ import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
 import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
+import { PickRow } from "@/components/ui/PickRow";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
@@ -33,6 +34,16 @@ export function SheetSection() {
           }
         >
           Delete with undo
+        </Button>
+        <Button
+          onClick={() =>
+            toast.undo("Moved to Towel hook, attempt 2", {
+              view: { label: "View", onClick: () => undefined },
+              onUndo: () => toast.success("Back in Ideas"),
+            })
+          }
+        >
+          Undo with a View
         </Button>
         <Button onClick={() => toast.success("Saved to Ideas")}>Success toast</Button>
         <Button onClick={() => toast.action("Saved to Ideas", { label: "View", onClick: () => undefined })}>
@@ -70,6 +81,14 @@ export function SheetSection() {
             <MenuItem icon={Icons.BellIcon}>Notifications</MenuItem>
             <MenuItem icon={Icons.SignOutIcon}>Sign out</MenuItem>
           </MenuGroup>
+        </Panel>
+      </div>
+      <div className="mt-6">
+        <Panel className="max-w-md">
+          <Label>Pick rows (a list of things to choose from, in a sheet)</Label>
+          <PickRow title="Towel hook" meta="3 attempts" mark="On the bed" onSelect={() => undefined} />
+          <PickRow title="Cable comb" meta="Done" onSelect={() => undefined} />
+          <PickRow title="Attempt 2" meta="Spaghetti · 2 hours ago" mark="Latest" onSelect={() => undefined} />
         </Panel>
       </div>
       <ChangePasswordSheet open={password} onOpenChange={setPassword} />
