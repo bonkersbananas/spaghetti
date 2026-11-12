@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_app/workshop")({
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
 /**
- * The phone's fourth tab (wired into the tab bar in the follow-up PR that retires Today): the places that are not a tab of their own, each drawn with what is in it. On desktop the
+ * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On desktop the
  * sidebar lists the same three, so this page is only a way in for phones.
  */
 function Workshop() {
