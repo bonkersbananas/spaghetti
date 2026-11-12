@@ -53,11 +53,11 @@ export const TwistResult = forwardRef<HTMLAnchorElement, TwistResultProps>(funct
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 py-0.5">
         <span className="flex items-center gap-2">
           <Chip icon={TwistIcon}>Twist</Chip>
-          <span className="text-small text-ink-faint ml-auto shrink-0 truncate">{sourceLine(twist)}</span>
         </span>
         <span className="text-body text-ink min-w-0 truncate font-semibold">
           <Highlight text={twist.name} terms={terms} />
         </span>
+        {sourceLine(twist) && <span className="text-small text-ink-faint min-w-0 truncate">{sourceLine(twist)}</span>}
         {twist.changes.length > 0 && (
           <Highlight text={changesLine(twist)} terms={terms} className="text-small text-ink-soft line-clamp-2" />
         )}

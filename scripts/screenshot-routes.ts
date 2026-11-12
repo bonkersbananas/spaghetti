@@ -2292,8 +2292,9 @@ export const shots: Shot[] = [
     },
   },
   {
-    // A build from a model page: "Save as twist" is in its header, beside the bin.
+    // A build from a model page: "Save as twist" is a quiet action under its model link.
     name: "build-save-as-twist",
+    fullPage: true,
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
       await page.request.patch(`/api/items/${SEED_BUILD_IDS.headphoneStand}`, {

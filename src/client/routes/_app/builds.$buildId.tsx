@@ -171,9 +171,10 @@ function Build({ item }: { item: ItemView }) {
   const model = modelOf({ note: item.note, draft: item.draft });
   // A twist made from this item while it was an idea has `fromItemId` but not the build's `twistId`: it counts too.
   const { twists } = useTwists();
-  const hasTwist = !!item.twistId || !!twists?.some((twist) => twist.fromItemId === item.id);
+  const existingTwistId = item.twistId ?? twists?.find((twist) => twist.fromItemId === item.id)?.id ?? null;
   function saveAsTwist() {
-    if (!user || !canEdit(item.pending)) return;
+    if (!user || !canEdit(item.pending) || !twists) return;
+    if (existingTwistId) return void navigate({ to: "/twists/$twistId", params: { twistId: existingTwistId } });
     const id = twistFromBuild(
       queryClient,
       {
@@ -490,9 +491,6 @@ function Build({ item }: { item: ItemView }) {
               />
             )
           )}
-          {twists && !hasTwist && model && (
-            <IconButton icon={TwistIcon} label="Save as twist" disabled={readOnly || !user} onClick={saveAsTwist} />
-          )}
           <IconButton
             icon={TrashIcon}
             label={scrapsToIdea ? "Scrap build" : "Delete build"}
@@ -604,6 +602,19 @@ function Build({ item }: { item: ItemView }) {
                 className="mt-1"
               />
               <NoteLinks note={note} />
+              {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
+              {(model || existingTwistId) && (
+                <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
+                  <Button
+                    variant="quiet"
+                    icon={TwistIcon}
+                    disabled={readOnly || !user || !twists}
+                    onClick={saveAsTwist}
+                  >
+                    {existingTwistId ? "Twist" : "Save as twist"}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />

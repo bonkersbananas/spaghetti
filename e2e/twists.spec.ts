@@ -123,6 +123,7 @@ test("a build from someone else's model is kept as a twist from its page, and se
   await expect(page.getByRole("heading", { name: "Printed" })).toBeVisible();
   await page.goto(`/builds/${buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await expect(page.getByRole("button", { name: "Twist", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save as twist" })).toHaveCount(0);
 
   // Search finds the twist by its name, in its own group.
