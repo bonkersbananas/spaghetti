@@ -37,7 +37,7 @@ export function RankRow({ rank, photo, note, title, meta, link, actions, handle,
       data-lifted={lifted || undefined}
       className={cn(
         "bg-cream duration-fast flex items-center gap-1 rounded-lg p-2 pr-1 transition-shadow md:gap-2 md:p-2.5 md:pr-1.5",
-        lifted ? "shadow-float" : "shadow-soft",
+        lifted ? "shadow-float" : "shadow-soft hover:bg-lifted",
         className,
       )}
     >

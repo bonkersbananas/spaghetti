@@ -117,6 +117,8 @@
   /* Focus is calm ink, never tomato: tomato means "the action" or "an error". A paper gap keeps the ring apart from
      a photo or a lifted card it sits on, and the ink reads at 3:1 or more on paper and cream. */
   --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(43 36 32 / 0.7);
+  /* The same ring drawn inside, for a control that fills a clipped surface (a row in a card). */
+  --sg-ring-inset: inset 0 0 0 2px rgb(43 36 32 / 0.7), inset 0 0 0 4px var(--sg-paper);
   --sg-ring-error: 0 0 0 1px rgb(168 56 28 / 0.6), 0 0 0 4px rgb(200 70 42 / 0.14);
 
   /* Type sizes: phone first, then desktop below. */
@@ -238,6 +240,7 @@
   --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
   --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
   --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(236 228 217 / 0.72);
+  --sg-ring-inset: inset 0 0 0 2px rgb(236 228 217 / 0.72), inset 0 0 0 4px var(--sg-paper);
   --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(245 154 124 / 0.16);
 }
 
@@ -425,6 +428,14 @@
   outline: none;
   &:focus-visible {
     box-shadow: var(--sg-ring);
+  }
+}
+
+/* The focus ring drawn inside the control: rows that fill an overflow-hidden surface would clip the outer one. */
+@utility focus-ring-inset {
+  outline: none;
+  &:focus-visible {
+    box-shadow: var(--sg-ring-inset);
   }
 }
 

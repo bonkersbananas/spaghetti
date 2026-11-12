@@ -183,7 +183,7 @@ function DesktopSheet({
             <div className="-mt-0.5 -mr-2 flex shrink-0 items-center gap-0.5">
               {headerActions}
               <Dialog.Close asChild>
-                <IconButton icon={CloseIcon} label="Close" size="sm" />
+                <IconButton icon={CloseIcon} label="Close" title="Close (Esc)" size="sm" />
               </Dialog.Close>
             </div>
           </div>
