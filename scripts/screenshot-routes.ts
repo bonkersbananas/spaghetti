@@ -2090,7 +2090,15 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
-  { name: "printer", path: "/printer", fullPage: true },
+  {
+    name: "printer",
+    path: "/printer",
+    fullPage: true,
+    // Upkeep loads once the page is idle: wait for its list, or the shot shows its skeleton.
+    prepare: async (page) => {
+      await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+    },
+  },
   // Upkeep: the list with its meters, and the Done sheet of the most due task.
   { name: "printer-upkeep", path: "/printer", selector: "section[aria-labelledby=printer-upkeep]" },
   {

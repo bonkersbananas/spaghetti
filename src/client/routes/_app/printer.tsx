@@ -6,6 +6,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeCard } from "@/components/printer/BridgeCard";
+import { UpkeepSkeleton } from "@/components/printer/UpkeepSkeleton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -61,20 +62,17 @@ function Printer() {
 function PrinterSection({
   title,
   aside,
-  quiet,
   description,
   children,
 }: {
   title: string;
   aside?: ReactNode;
-  /** A quieter group (a smaller title) under the page's main sections, Upkeep and the AMS. */
-  quiet?: boolean;
   description?: string;
   children: ReactNode;
 }) {
   const id = `printer-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
-    <Section id={id} title={title} aside={aside} size={quiet ? "title" : "headline"} description={description}>
+    <Section id={id} title={title} aside={aside} size="title" description={description}>
       {children}
     </Section>
   );
@@ -185,15 +183,15 @@ function Setup({ initial }: { initial: PrinterSetup }) {
       </div>
 
       {idle ? (
-        <Suspense fallback={<Skeleton className="h-52 w-full rounded-xl" aria-hidden />}>
+        <Suspense fallback={<UpkeepSkeleton />}>
           <Upkeep />
         </Suspense>
       ) : (
-        <Skeleton className="h-52 w-full rounded-xl" aria-hidden />
+        <UpkeepSkeleton />
       )}
 
       <fieldset disabled={readOnly} className="contents">
-        <PrinterSection title="Nozzles" quiet>
+        <PrinterSection title="Nozzles">
           <div className="grid gap-3 md:grid-cols-2">
             {(["main", "auxiliary"] as const).map((nozzle) => {
               const fitted = setup.nozzles[nozzle];
@@ -231,7 +229,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <PrinterSection title="Plates you own" quiet description="Tap the ones you have.">
+        <PrinterSection title="Plates you own" description="Tap the ones you have.">
           {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
           <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
             {[...BED_TYPES, ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate))].map(
@@ -281,7 +279,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <PrinterSection title="Staying dry" quiet>
+        <PrinterSection title="Staying dry">
           <Disclosure
             open={dryingOpen}
             onOpenChange={setDryingOpen}
