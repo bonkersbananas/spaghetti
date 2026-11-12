@@ -107,12 +107,12 @@ function Ideas() {
             <CardSkeleton key={index} aspect="portrait" />
           ))}
         </div>
-      ) : items.length || started.length ? (
+      ) : all.length || started.length ? (
         <>
           {!isDesktop && me && (
             // Its own boundary, holding its place, so the grid never waits for it or jumps when it lands.
             <Suspense fallback={<div className="mb-8 h-16" aria-hidden />}>
-              <WishlistLink me={me} ideas={items} people={people ?? []} className="mb-8" />
+              <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-8" />
             </Suspense>
           )}
           {modelCount > 0 && (

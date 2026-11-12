@@ -62,7 +62,7 @@ export function ModelCard({ mark, picture, className }: ModelCardProps) {
           aria-hidden
           className="bg-basil-soft text-basil-ink flex size-20 shrink-0 items-center justify-center rounded-md md:size-24"
         >
-          <CubeIcon size={32} weight="duotone" />
+          <CubeIcon size={32} weight="light" />
         </span>
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
