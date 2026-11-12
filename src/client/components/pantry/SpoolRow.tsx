@@ -25,7 +25,7 @@ export function SpoolRow({ spool, draggable = true }: { spool: Spool; draggable?
         to="/pantry/$spoolId"
         params={{ spoolId: spool.id }}
         {...(draggable ? spoolDragProps(spool.id, spool.slot) : {})}
-        className="focus-ring hover:bg-ink/4 duration-fast flex h-16 items-center gap-4 px-4 transition-colors"
+        className="focus-ring-inset hover:bg-ink/4 duration-fast flex h-16 items-center gap-4 px-4 transition-colors"
       >
         {/* An empty spool steps back: its disc dims (text stays at full contrast; "Empty" says it in words). */}
         <SpoolDisc color={spool.colorHex} size="md" className={cn(empty && "opacity-60")} />

@@ -196,7 +196,7 @@ export function PantrySection() {
         </Panel>
         <div className="flex flex-col gap-4">
           <Label>A spool in the pantry</Label>
-          <ul className="grid grid-cols-2 gap-3">
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <SpoolCard spool={sampleSpool} draggable={false} />
             <SpoolCard
               spool={{

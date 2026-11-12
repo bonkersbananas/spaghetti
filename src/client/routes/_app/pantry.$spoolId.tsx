@@ -30,10 +30,11 @@ import { AttemptResult } from "@/components/search/Results";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { collapseChips, MoreChip, ToggleChip } from "@/components/ui/Chip";
+import { Disclosure } from "@/components/ui/Disclosure";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { FromLabel } from "@/components/ui/FromLabel";
-import { CameraIcon, DriedIcon, ImageIcon, SparkleIcon, TrashIcon } from "@/components/ui/icons";
+import { CameraIcon, DriedIcon, ImageIcon, SettingsIcon, SparkleIcon, TrashIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
@@ -130,6 +131,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
   const isDesktop = useIsDesktop();
   const [allMaterials, setAllMaterials] = useState(false);
   const [allFinishes, setAllFinishes] = useState(false);
+  // Open beside the photo on desktop, where there is room; closed on a phone.
+  const [detailsOpen, setDetailsOpen] = useState(isDesktop);
   // The fields follow the server's copy (the other person's edit) except the one being typed in, and a
   // save sends only the fields changed here.
   const server = useMemo<Editable>(
@@ -217,6 +220,89 @@ function SpoolPage({ spool }: { spool: Spool }) {
     expanded: allFinishes,
   });
 
+  // What the spool is, as fields: tucked behind "Details" so the page reads as a thing first and a form second.
+  const details = (
+    <Disclosure
+      open={detailsOpen}
+      onOpenChange={setDetailsOpen}
+      title="Details"
+      summary={[value.material, value.finish ? finishLabel(value.finish) : null, value.brand]
+        .filter(Boolean)
+        .join(" · ")}
+      icon={SettingsIcon}
+      className="md:max-w-none"
+    >
+      <fieldset disabled={readOnly} className="flex flex-col gap-7 pt-3">
+        <div className="flex flex-col gap-2.5">
+          <span className="flex items-baseline gap-2 px-0.5">
+            <span className="text-small text-ink-soft font-semibold">Material</span>
+            {fromLabel("material")}
+          </span>
+          {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Material">
+            {materialChips.shown.map((material) => (
+              <ToggleChip key={material} selected={value.material === material} onClick={() => change({ material })}>
+                {material}
+              </ToggleChip>
+            ))}
+            {materialChips.hidden > 0 && (
+              <MoreChip hidden={materialChips.hidden} onClick={() => setAllMaterials(true)} />
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-end gap-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="flex items-baseline gap-2 px-0.5">
+              <span className="text-small text-ink-soft font-semibold">Color</span>
+              {fromLabel("colorName", "colorHex")}
+            </span>
+            <SwatchPicker
+              value={value.colorHex ?? undefined}
+              onChange={(colorHex) => change({ colorHex })}
+              label="Color"
+            />
+          </div>
+          <TextField
+            size="sm"
+            label="Brand"
+            mark={fromLabel("brand")}
+            placeholder={waiting ? "" : "Bambu, Polymaker…"}
+            maxLength={60}
+            value={value.brand ?? ""}
+            onChange={(event) => change({ brand: event.target.value || null })}
+            className={waiting ? "sg-pulse flex-1" : "flex-1"}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          <span className="flex items-baseline gap-2 px-0.5">
+            <span className="text-small text-ink-soft font-semibold">Finish</span>
+            {fromLabel("finish")}
+          </span>
+          {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Finish">
+            {finishChips.shown.map((finish) => (
+              <ToggleChip
+                key={finish}
+                selected={value.finish === finish}
+                onClick={() => change({ finish: value.finish === finish ? null : finish })}
+              >
+                {finishLabel(finish)}
+              </ToggleChip>
+            ))}
+            {finishChips.hidden > 0 && <MoreChip hidden={finishChips.hidden} onClick={() => setAllFinishes(true)} />}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          <span className="text-small text-ink-soft px-0.5 font-semibold">Printing and drying</span>
+          <LabelFacts value={value} onChange={change} mark={fromLabel} />
+        </div>
+      </fieldset>
+    </Disclosure>
+  );
+
   return (
     <article className="pb-6">
       <h1 className="sr-only">{[name.title, name.detail].filter(Boolean).join(", ")}</h1>
@@ -230,7 +316,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
         {/* The spool: its label photo, or the spool itself in its color. */}
         <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-3 md:flex-2">
-          <div className="bg-ink/3 relative -mx-5 aspect-square overflow-hidden md:mx-0 md:rounded-xl">
+          <div className="bg-ink/3 relative -mx-5 aspect-4/3 overflow-hidden md:mx-0 md:aspect-square md:rounded-xl">
             {spool.photo ? (
               <Photo
                 src={photoSrc(spool.photo.id, "large")}
@@ -288,6 +374,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
             )}
           </div>
           <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
+          {isDesktop && details}
         </div>
 
         <div className="flex min-w-0 flex-col gap-7 md:flex-3">
@@ -398,79 +485,6 @@ function SpoolPage({ spool }: { spool: Spool }) {
               </span>
               <DryIt spool={{ ...spool, driedAt: value.driedAt, material: value.material }} />
             </div>
-
-            <div className="flex flex-col gap-2.5">
-              <span className="flex items-baseline gap-2 px-0.5">
-                <span className="text-small text-ink-soft font-semibold">Material</span>
-                {fromLabel("material")}
-              </span>
-              {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Material">
-                {materialChips.shown.map((material) => (
-                  <ToggleChip
-                    key={material}
-                    selected={value.material === material}
-                    onClick={() => change({ material })}
-                  >
-                    {material}
-                  </ToggleChip>
-                ))}
-                {materialChips.hidden > 0 && (
-                  <MoreChip hidden={materialChips.hidden} onClick={() => setAllMaterials(true)} />
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-end gap-3">
-              <div className="flex flex-col gap-1.5">
-                <span className="flex items-baseline gap-2 px-0.5">
-                  <span className="text-small text-ink-soft font-semibold">Color</span>
-                  {fromLabel("colorName", "colorHex")}
-                </span>
-                <SwatchPicker
-                  value={value.colorHex ?? undefined}
-                  onChange={(colorHex) => change({ colorHex })}
-                  label="Color"
-                />
-              </div>
-              <TextField
-                size="sm"
-                label="Brand"
-                mark={fromLabel("brand")}
-                placeholder={waiting ? "" : "Bambu, Polymaker…"}
-                maxLength={60}
-                value={value.brand ?? ""}
-                onChange={(event) => change({ brand: event.target.value || null })}
-                className={waiting ? "sg-pulse flex-1" : "flex-1"}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <span className="flex items-baseline gap-2 px-0.5">
-                <span className="text-small text-ink-soft font-semibold">Finish</span>
-                {fromLabel("finish")}
-              </span>
-              {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Finish">
-                {finishChips.shown.map((finish) => (
-                  <ToggleChip
-                    key={finish}
-                    selected={value.finish === finish}
-                    onClick={() => change({ finish: value.finish === finish ? null : finish })}
-                  >
-                    {finishLabel(finish)}
-                  </ToggleChip>
-                ))}
-                {finishChips.hidden > 0 && (
-                  <MoreChip hidden={finishChips.hidden} onClick={() => setAllFinishes(true)} />
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <span className="text-small text-ink-soft px-0.5 font-semibold">Printing and drying</span>
-              <LabelFacts value={value} onChange={change} mark={fromLabel} />
-            </div>
           </fieldset>
           <NoteField
             value={value.note}
@@ -478,6 +492,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
             onChange={(note) => change({ note })}
             placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
           />
+          {/* On phones, right under the note: editing stays close however long the history grows. */}
+          {!isDesktop && details}
 
           {/* The spool's sections, a section's distance apart and from the note above. */}
           <div className="mt-5 flex flex-col gap-12 empty:hidden md:gap-16">

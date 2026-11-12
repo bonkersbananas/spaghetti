@@ -1902,6 +1902,18 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The phone account sheet scrolled to its end: the signing-in rows, the theme and Sign out.
+    name: "account-end",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Account" }).click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: "Sign out", exact: true }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // Change password, with a wrong current password said under its field and what was typed kept.
     name: "change-password",
     path: "/ideas",

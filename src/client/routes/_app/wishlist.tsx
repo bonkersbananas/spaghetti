@@ -161,8 +161,8 @@ function MyList({
     ? "Only you can see it now."
     : `${other ?? "Everyone who signs in"} can see it. Only you can change it.`;
   const isDesktop = useIsDesktop();
-  // On a phone the switch sits above the list, where it is found; on desktop (and with no list yet) it ends the column.
-  const above = !isDesktop && ideas.length > 0;
+  // The switch sits above the list, where it is found without scrolling; with no list yet it ends the column.
+  const above = ideas.length > 0;
   const share = (
     <Toggle
       label={shareLabel}

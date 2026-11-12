@@ -4,6 +4,7 @@ import { displayName } from "@shared/people";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { AuthPage } from "@/components/shell/AuthPage";
+import { AgentAvatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
@@ -107,12 +108,17 @@ function Authorize() {
       {info ? (
         <>
           <div className="flex items-center gap-3.5">
-            <span
-              aria-hidden
-              className="bg-ink/6 text-ink font-display text-title inline-flex size-12 shrink-0 items-center justify-center rounded-md font-semibold select-none"
-            >
-              {info.app.charAt(0).toUpperCase()}
-            </span>
+            {/* The app in the color of the person it will act for, as on the Agents page. */}
+            {user ? (
+              <AgentAvatar name={info.app} owner={user} />
+            ) : (
+              <span
+                aria-hidden
+                className="bg-ink/6 text-ink font-display text-title inline-flex size-12 shrink-0 items-center justify-center rounded-md font-semibold select-none"
+              >
+                {info.app.charAt(0).toUpperCase()}
+              </span>
+            )}
             <div className="min-w-0">
               <h2 className="text-title text-ink break-words">{info.app} wants to connect</h2>
               <p className="text-small text-ink-faint break-words">Then it returns you to {info.returnsTo}</p>

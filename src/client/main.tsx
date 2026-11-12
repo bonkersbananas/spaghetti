@@ -6,6 +6,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { focusContentAfterMoves } from "./lib/focus-content";
 import { followTextSize, stopPageZoom } from "./lib/no-page-zoom";
 import { registerServiceWorker } from "./lib/offline";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
@@ -42,6 +43,7 @@ const router = createRouter({
 });
 
 trackMoves(router);
+focusContentAfterMoves(router);
 
 declare module "@tanstack/react-router" {
   interface Register {

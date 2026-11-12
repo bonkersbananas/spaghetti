@@ -51,7 +51,10 @@ export function Sidebar() {
 
   return (
     <aside className="paper-grain w-sidebar bg-paper-deep fixed inset-y-0 left-0 hidden flex-col px-3 pt-5 pb-3 md:flex">
-      <Link to="/today" className="focus-ring mb-6 flex items-center gap-2.5 rounded-sm px-2 py-1">
+      <Link
+        to="/today"
+        className="focus-ring hover:bg-ink/5 duration-fast mb-6 flex items-center gap-2.5 rounded-sm px-2 py-1 transition-colors"
+      >
         <Mark className="size-7" />
         <span className="font-display text-title text-ink font-semibold tracking-tight">Spaghetti</span>
       </Link>
