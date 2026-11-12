@@ -448,6 +448,39 @@
   animation-duration: var(--sg-duration-fast);
 }
 
+/*
+ * Going back to a list (the router asks for the "back" type, main.tsx): the page you leave slides out to the right
+ * over the list, which settles in from a little to the left, like a pushed page being popped. The tab bar is its own
+ * layer so it stays put. Browsers without view transition types just crossfade.
+ */
+.sg-tabbar {
+  view-transition-name: tabbar;
+}
+::view-transition-group(tabbar) {
+  animation-duration: 0s;
+}
+:root:active-view-transition-type(back) {
+  &::view-transition-old(root) {
+    z-index: 2;
+    animation: sg-pop-out var(--sg-duration-base) var(--sg-ease-out) both;
+  }
+  &::view-transition-new(root) {
+    animation: sg-pop-in var(--sg-duration-base) var(--sg-ease-out) both;
+  }
+}
+@keyframes sg-pop-out {
+  to {
+    opacity: 0;
+    transform: translateX(32%);
+  }
+}
+@keyframes sg-pop-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(-12%);
+  }
+}
+
 /* biome-ignore-start lint/complexity/noImportantStyles: reduced motion must win over every component's own timing. */
 @media (prefers-reduced-motion: reduce) {
   *,

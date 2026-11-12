@@ -2,12 +2,12 @@ import type { Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
-import { lazy, Suspense } from "react";
+import { lazy, type Ref, Suspense } from "react";
 import { Card, PhotoCountBadge } from "@/components/ui/Card";
+import { useReflow } from "@/components/ui/Reflow";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
-import { spring } from "@/lib/motion";
 import { useOutbox } from "@/lib/outbox";
 import { photoSrc } from "@/lib/previews";
 import { useUnreadCount } from "@/lib/unread-comments";
@@ -67,20 +67,16 @@ interface IdeaCardProps {
   drag?: CardDrag;
   /** 3 when the grid sits under a section heading (Up next). */
   headingLevel?: 2 | 3;
+  /** Lets the list measure the card when it leaves (see Reflow). */
+  ref?: Ref<HTMLLIElement>;
 }
 
-export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2 }: IdeaCardProps) {
+export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2, ref }: IdeaCardProps) {
   const cover = item.photos[0];
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
   return (
-    <m.li
-      layout="position"
-      initial={landing ? { opacity: 0, scale: 0.9, y: -12 } : false}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={spring.gentle}
-      className="group/idea relative list-none"
-    >
+    <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
       <div
         draggable={!!drag}

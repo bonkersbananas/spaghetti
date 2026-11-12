@@ -9,3 +9,10 @@ export function trackMoves(router: AnyRouter) {
     lastMove.to = event.toLocation.pathname;
   });
 }
+
+/** The in-app page this one was opened from (history has an entry for it), with the name to give it; null on a deep link or a fresh open. */
+export function previousPlace(): string | null {
+  const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
+  const { from, to } = lastMove;
+  return index > 0 && from && to === location.pathname && from !== to ? from : null;
+}

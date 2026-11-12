@@ -9,6 +9,7 @@ import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
+import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
@@ -112,21 +113,21 @@ function Ideas() {
           )}
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">
-              <ul data-picks className={grid} aria-label="Up next">
-                {queue.map((item, index) => card(item, index))}
+              <ul data-picks className={`${grid} relative`} aria-label="Up next">
+                <Reflow>{queue.map((item, index) => card(item, index))}</Reflow>
               </ul>
             </Section>
           )}
           {rest.length > 0 &&
             (queue.length > 0 ? (
               <Section id="inbox-heading" title="The rest">
-                <ul data-picks className={grid} aria-label="Ideas">
-                  {rest.map((item) => card(item, -1))}
+                <ul data-picks className={`${grid} relative`} aria-label="Ideas">
+                  <Reflow>{rest.map((item) => card(item, -1))}</Reflow>
                 </ul>
               </Section>
             ) : (
-              <ul data-picks className={grid} aria-label="Ideas">
-                {rest.map((item) => card(item, -1))}
+              <ul data-picks className={`${grid} relative`} aria-label="Ideas">
+                <Reflow>{rest.map((item) => card(item, -1))}</Reflow>
               </ul>
             ))}
           <StartedIdeas builds={builds} />

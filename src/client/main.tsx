@@ -39,6 +39,17 @@ const router = createRouter({
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,
+  // Going from a page (an idea, a build, a spool) back to its list slides it away (app.css); other moves don't animate
+  // unless the link asks for it (a card's photo travelling to its page).
+  defaultViewTransition: {
+    types: ({ fromLocation, toLocation }) =>
+      fromLocation &&
+      /^\/(ideas|builds|pantry)\/[^/]+/.test(fromLocation.pathname) &&
+      toLocation.pathname !== fromLocation.pathname &&
+      !/^\/(ideas|builds|pantry)\/[^/]+/.test(toLocation.pathname)
+        ? ["back"]
+        : false,
+  },
   defaultErrorComponent: RouterError,
 });
 

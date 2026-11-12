@@ -192,3 +192,28 @@ test("a build with one attempt has no arrows", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Next attempt" })).toHaveCount(0);
 });
+
+test("the back arrow goes back in history from the list it came from, not onto a new page", async ({ page }) => {
+  const id = await ideaWithPhoto(page);
+  await page.goto("/ideas");
+  await page.getByRole("link", { name: /Tugboat/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
+  const place = () => page.evaluate(() => (history.state as { __TSR_index?: number }).__TSR_index);
+  const opened = await place();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: /^Ideas/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/ideas$/);
+  // A step back (a pushed page would be one entry further on, and the list's scroll would be lost).
+  expect(await place()).toBe((opened ?? 0) - 1);
+  // Opened by a link from elsewhere (no list before it), the arrow still takes you to the list.
+  await page.goto(`/ideas/${id}`);
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: /^Ideas/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/ideas$/);
+});
