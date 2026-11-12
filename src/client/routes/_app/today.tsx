@@ -30,6 +30,7 @@ import { duration, ease } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { peopleQuery } from "@/lib/queries";
+import { useStickyColumn } from "@/lib/sticky-column";
 import { useDueUpkeep } from "@/lib/upkeep";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
@@ -59,6 +60,7 @@ function thisMonth(now: number) {
  */
 function Today() {
   useListPicker();
+  const stickyColumn = useStickyColumn();
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const isDesktop = useIsDesktop();
@@ -255,7 +257,7 @@ function Today() {
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>
           </div>
-          <div className="contents lg:sticky lg:top-8 lg:flex lg:min-w-0 lg:flex-2 lg:flex-col lg:gap-10">
+          <div ref={stickyColumn} className="sticky-column contents lg:flex lg:min-w-0 lg:flex-2 lg:flex-col lg:gap-10">
             <div className="order-4 empty:hidden">
               {printer.data && spools.data && (
                 <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
