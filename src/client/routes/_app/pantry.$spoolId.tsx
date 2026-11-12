@@ -51,6 +51,7 @@ import { spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useRecipes } from "@/lib/recipes";
+import { useStickyColumn } from "@/lib/sticky-column";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -122,6 +123,7 @@ type Editable = Pick<
 const same = (a: unknown, b: unknown) => a === b;
 
 function SpoolPage({ spool }: { spool: Spool }) {
+  const stickyColumn = useStickyColumn();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
@@ -226,7 +228,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
         {/* The spool: its label photo, or the spool itself in its color. */}
-        <div className="flex min-w-0 flex-col gap-3 md:sticky md:top-8 md:flex-2">
+        <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-3 md:flex-2">
           <div className="bg-ink/3 relative -mx-5 aspect-square overflow-hidden md:mx-0 md:rounded-xl">
             {spool.photo ? (
               <Photo
