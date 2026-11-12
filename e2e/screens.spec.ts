@@ -129,10 +129,8 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await page.goto(`/builds/${data.buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   // The compare sheet (a changes line is the way in; the seeded build changed its bed temperature and brim).
-  await page
-    .getByRole("button", { name: /Compare$/ })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Options for attempt 2" }).click();
+  await page.getByRole("button", { name: /Compare$/ }).click();
   await expect(page.getByRole("dialog", { name: "Attempt 1 and attempt 2" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);

@@ -1,4 +1,6 @@
 import { MAX_PHOTO_BYTES } from "../../shared/api.ts";
+import { checkLinkUrl } from "../../shared/link-safety.ts";
+import { resolvesPublic } from "../link-preview.ts";
 
 const TOO_LARGE = "That photo is too large (over 12 MB).";
 
@@ -97,6 +99,40 @@ export async function fromUrl(
   } catch {
     throw new Error("The photo couldn't be fetched from that URL.");
   }
+  return readPhoto(response);
+}
+
+const NOT_PUBLIC = "The photo URL must be an https address on the open internet.";
+const PHOTO_REDIRECTS = 3;
+
+/**
+ * A photo from any address an agent gives (capture_idea's photo_url): the link-preview rules hold on every hop, the
+ * first and each redirect (https, a public name, no port or credentials, a name that resolves to public addresses
+ * only), so the Worker, or the container on someone's home network, never fetches something local for a token.
+ */
+export async function fromPublicUrl(url: string): Promise<Uint8Array> {
+  const signal = AbortSignal.timeout(10_000);
+  let next = checkLinkUrl(url);
+  for (let hop = 0; hop <= PHOTO_REDIRECTS; hop++) {
+    if (!next) throw new Error(NOT_PUBLIC);
+    let response: Response;
+    try {
+      if (!(await resolvesPublic(next.hostname.replace(/\.$/, ""), signal))) throw new Error(NOT_PUBLIC);
+      response = await fetch(next, { signal, redirect: "manual" });
+    } catch (error) {
+      if (error instanceof Error && error.message === NOT_PUBLIC) throw error;
+      throw new Error("The photo couldn't be fetched from that URL.");
+    }
+    const location = response.headers.get("location");
+    if (response.status < 300 || response.status >= 400 || !location) return readPhoto(response);
+    await response.body?.cancel().catch(() => undefined);
+    next = URL.canParse(location, next.href) ? checkLinkUrl(new URL(location, next).href) : null;
+  }
+  throw new Error("The photo URL redirected too many times.");
+}
+
+/** The body of a photo's answer, cut off at the size cap. */
+async function readPhoto(response: Response): Promise<Uint8Array> {
   if (!response.ok) throw new Error(`The photo URL answered ${response.status}.`);
   if (Number(response.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES) throw new Error(TOO_LARGE);
   // The header can be missing or wrong: the cap is enforced while reading, and the download stops there.

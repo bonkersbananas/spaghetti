@@ -132,6 +132,20 @@ describe("registration", () => {
     ).toBe(201);
   });
 
+  it("lets one address register only so many apps an hour, so nobody can fill the table", async () => {
+    const from = (ip: string) =>
+      request("/oauth/register", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": ip },
+        json: { client_name: "Claude", redirect_uris: [REDIRECT] },
+      });
+    for (let i = 0; i < 20; i++) expect((await from("203.0.113.7")).status).toBe(201);
+    const refused = await from("203.0.113.7");
+    expect(refused.status).toBe(429);
+    expect((await refused.json<Record<string, string>>()).error).toBe("temporarily_unavailable");
+    expect((await from("198.51.100.4")).status).toBe(201);
+  });
+
   it("stores a secret only as a hash, and asks for it at the token endpoint", async () => {
     const { body } = await register({ token_endpoint_auth_method: "client_secret_post" });
     expect(body.client_secret).toMatch(/^sps_/);
@@ -161,6 +175,25 @@ describe("the consent request", () => {
     expect((await request(`/api/oauth/request?${query}`)).status).toBe(401);
     const info = await (await request(`/api/oauth/request?${query}`, { cookie })).json<AuthorizeRequestInfo>();
     expect(info).toEqual({ app: "Claude", returnsTo: "claude.ai", scopes: ["read", "capture"] });
+  });
+
+  it("names an app's own scheme where it returns to, not only the host it puts after it", async () => {
+    const { challenge } = await pkce();
+    const ask = async (uri: string) => {
+      const { body: client } = await register({ redirect_uris: [uri] });
+      const query = new URLSearchParams({
+        response_type: "code",
+        client_id: client.client_id as string,
+        redirect_uri: uri,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+      });
+      return (await (await request(`/api/oauth/request?${query}`, { cookie })).json<AuthorizeRequestInfo>()).returnsTo;
+    };
+    expect(await ask("someapp://claude.ai/callback")).toBe("someapp://claude.ai");
+    expect(await ask("someapp:/callback")).toBe("someapp:");
+    expect(await ask("http://localhost:33418/callback")).toBe("localhost:33418");
+    expect(await ask("https://claude.ai/api/mcp/auth_callback")).toBe("claude.ai");
   });
 
   it("asks for everything when no scope is named", async () => {

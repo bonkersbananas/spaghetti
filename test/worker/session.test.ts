@@ -1,5 +1,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import { hashPassword } from "../../src/shared/password.ts";
+import { NO_PASSWORD } from "../../src/worker/routes/join.ts";
+import { DUMMY_HASH, hashToCheck } from "../../src/worker/routes/session.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
 
 beforeEach(async () => {
@@ -33,6 +36,20 @@ describe("signing in", () => {
     });
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ error: { code: "wrong_credentials" } });
+  });
+
+  it("refuses a password for someone who joined with a passkey only, after the same slow check", async () => {
+    await env.DB.prepare("UPDATE users SET password_hash = ? WHERE username = 'alex'").bind(NO_PASSWORD).run();
+    for (const password of [NO_PASSWORD, "correct horse", "x"]) {
+      const response = await request("/api/session", { method: "POST", json: { username: "alex", password } });
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({ error: { code: "wrong_credentials" } });
+    }
+    // No hash of their own: the check runs against the dummy, as for a name nobody has.
+    expect(hashToCheck({ passwordHash: NO_PASSWORD })).toBe(DUMMY_HASH);
+    expect(hashToCheck(undefined)).toBe(DUMMY_HASH);
+    const own = await hashPassword("correct horse");
+    expect(hashToCheck({ passwordHash: own })).toBe(own);
   });
 
   it("rejects a malformed body", async () => {
@@ -92,6 +109,8 @@ describe("the session", () => {
     const response = await request("/api/session", { method: "DELETE", cookie });
     expect(response.status).toBe(204);
     expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    // The browser drops what it cached for the app (photos are kept for a year otherwise).
+    expect(response.headers.get("Clear-Site-Data")).toBe('"cache"');
     expect((await request("/api/session", { cookie })).status).toBe(401);
   });
 
