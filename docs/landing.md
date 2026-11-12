@@ -58,4 +58,4 @@ At 390 px the whole page, scrolled to the end, is about 0.6 MB (measured on the 
 
 ## Tests
 
-`e2e/landing.spec.ts`: a visitor sees the page and Sign in leads to signing in; signed in, `/` is the app with no landing file loaded; deep links still go to sign-in and back; the page passes axe with motion and without. `e2e/offline.spec.ts` checks the same on the production build with the service worker installed. `e2e/performance.spec.ts` keeps the app's budgets as they were.
+`e2e/landing.spec.ts`: a visitor sees the page and Sign in leads to signing in; signed in, `/` is the app with no landing file loaded; deep links still go to sign-in and back. `e2e/offline.spec.ts` checks the same with the service worker installed. `e2e/first-load.spec.ts` keeps the app's first loads within their ceilings.

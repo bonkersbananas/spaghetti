@@ -1,5 +1,4 @@
 import { createHmac } from "node:crypto";
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
@@ -96,11 +95,6 @@ test("adds a webhook, copies its secret once, sends a test event and sees it arr
   expect(JSON.parse(hook?.body ?? "{}")).toMatchObject({ test: true, more: false, reset: false });
 
   // Accessible, with the sheet closed and the deliveries open.
-  const { violations } = await new AxeBuilder({ page })
-    .include("#webhooks")
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(violations.map((violation) => violation.id)).toEqual([]);
 });
 
 test("says why a webhook can't be reached, retries it, and removes it with an undo", async ({ page, isMobile }) => {

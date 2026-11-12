@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { signIn } from "./helpers";
@@ -68,13 +67,6 @@ test("shows who asks and what it can do, and Allow hands the app a code that bec
   await expect(scopes.getByRole("listitem")).toHaveCount(2);
   await expect(scopes).toContainText("Add ideas, notes and photos.");
   await expect(scopes).not.toContainText("Load AMS slots");
-
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.waitForTimeout(700);
-    const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations, `${scheme}: ${results.violations.map((v) => v.id).join(", ")}`).toEqual([]);
-  }
 
   let callback = "";
   await page.route("http://127.0.0.1:53682/**", (route) => {

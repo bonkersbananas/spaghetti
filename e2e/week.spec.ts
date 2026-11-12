@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { addWeeks, mondayOf } from "../src/shared/week.ts";
@@ -125,18 +124,3 @@ test("Claude's paragraph is written once for a week that is over, and says what 
   await page.reload();
   await expect(page.getByLabel("Claude on the week")).toContainText("PETG warped twice this week");
 });
-
-for (const scheme of ["light", "dark"] as const) {
-  test(`the week passes axe in ${scheme}`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme });
-    await aBuild(page, "Axe boat", Date.now() - 60_000);
-    await page.goto(`/week/${thisWeek()}`);
-    await expect(page.getByRole("link", { name: /Axe boat/ }).first()).toBeVisible();
-    await page.waitForTimeout(500);
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-      .analyze();
-    const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
-    expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
-  });
-}

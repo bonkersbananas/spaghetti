@@ -43,7 +43,7 @@ test.afterEach(async ({ page }) => {
   for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: origin(page) } });
 });
 
-test("finds an attempt by a failure tag plus a material", async ({ page, isMobile }) => {
+test("finds an attempt by a failure tag plus a material", { tag: "@phone" }, async ({ page, isMobile }) => {
   const box = await build(page, "Swatch box", [
     { outcome: "failed", ago: 3 * HOUR, note: "Corners peeled up", failureTags: ["warping"], settings: petg(70) },
   ]);
@@ -116,7 +116,7 @@ test("filters the journal to failures", async ({ page, isMobile }) => {
   }
 });
 
-test("starts an attempt from what worked last time", async ({ page, isMobile }) => {
+test("starts an attempt from what worked last time", { tag: "@phone" }, async ({ page, isMobile }) => {
   await build(page, "Desiccant hook", [
     { outcome: "success", ago: 30 * HOUR, note: "Holds the bag", settings: petg(70, { nozzleTemperature: 250 }) },
   ]);

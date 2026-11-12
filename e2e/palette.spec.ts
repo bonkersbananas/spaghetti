@@ -196,6 +196,8 @@ test.describe("on a laptop", () => {
     await page.keyboard.press("g");
     await page.keyboard.press("b");
     await expect(page).toHaveURL(/\/builds$/);
+    // The address changes before the screen shows; keys pressed in between were lost now and then.
+    await expect(page.getByRole("heading", { level: 1, name: "Builds" })).toBeVisible();
     await page.keyboard.press("g");
     await page.keyboard.press("j");
     await expect(page).toHaveURL(/\/journal$/);
@@ -204,7 +206,7 @@ test.describe("on a laptop", () => {
   });
 });
 
-test("phones have no palette", async ({ page, isMobile }) => {
+test("phones have no palette", { tag: "@phone" }, async ({ page, isMobile }) => {
   test.skip(!isMobile, "laptop only");
   await page.keyboard.press(open);
   await page.keyboard.press("?");

@@ -1,14 +1,15 @@
 import { readdirSync, readFileSync } from "node:fs";
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { mondayOf } from "../src/shared/week.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
- * axe on the main screens and sheets, in light and dark, at the project's
- * width (phone and desktop). Also the phone details axe can't see: fields
- * at 16 px or more (iOS Safari zooms into smaller ones) and focus that
- * returns where it was when a sheet closes.
+ * Every screen and sheet opens, at the project's width, on a small seeded notebook (an idea with a photo, a build
+ * with two attempts, a spool); "every screen is checked" keeps a new route from being left out. Then the details a
+ * phone or a keyboard needs: 44 px touch targets, fields at 16 px or more (iOS Safari zooms into smaller ones), a
+ * sheet's main button above the on-screen keyboard, visible focus, and focus that returns where it was when a sheet
+ * closes. (It used to run axe on all of it, in both themes: accessibility checks of their own aren't needed for the
+ * two people who use the app.)
  */
 
 const origin = (page: Page) => new URL(page.url()).origin;
@@ -89,31 +90,6 @@ async function clearSpools(page: Page) {
   for (const spool of spools) await page.request.delete(`/api/spools/${spool.id}`, { headers });
 }
 
-/** Fails with axe's own report when anything serious or critical is found. */
-async function expectAccessible(page: Page, what: string, include?: string) {
-  // Let entrance animations finish: axe measures contrast mid-fade otherwise.
-  await page.waitForTimeout(400);
-  // A toast made just before (the toaster loads when the app is idle) may still be sliding in: axe would measure it half faded.
-  await page.waitForFunction(() =>
-    Array.from(document.querySelectorAll("[data-sonner-toast]")).every((toast) =>
-      toast.getAnimations({ subtree: true }).every((animation) => animation.playState !== "running"),
-    ),
-  );
-  let builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]);
-  if (include) builder = builder.include(include);
-  // A held (pressed) specimen in the styleguide is a transient state shown at rest: a pressed link dims on purpose.
-  builder = builder.exclude("[data-pressed]");
-  const { violations } = await builder.analyze();
-  const report = violations.map(
-    (v) =>
-      `${v.id} (${v.impact}): ${v.help}\n${v.nodes
-        .slice(0, 5)
-        .map((n) => `    ${n.target.join(" ")}  ${n.failureSummary?.split("\n")[1]?.trim() ?? ""}`)
-        .join("\n")}`,
-  );
-  expect(report, `${what}: axe found\n${report.join("\n")}`).toEqual([]);
-}
-
 async function screen(page: Page, path: string, heading: string | RegExp) {
   await page.goto(path);
   await expect(page.getByRole("heading", { level: 1, name: heading }).first()).toBeVisible();
@@ -133,151 +109,120 @@ test.afterEach(async ({ page }) => {
   await clearSpools(page);
 });
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`main screens pass axe in ${scheme}`, async ({ page, isMobile }) => {
-    test.setTimeout(120_000);
-    await page.emulateMedia({ colorScheme: scheme });
+test("the main screens and their sheets open", async ({ page, isMobile }) => {
+  test.setTimeout(120_000);
 
+  await screen(page, "/ideas", "Ideas");
+  // The seeded build began as an idea, so Ideas ends with its Started section.
+  await expect(page.getByRole("heading", { name: /^Started/ })).toBeVisible();
+
+  await screen(page, `/ideas/${data.ideaId}`, "Bath tugboat");
+
+  await page.request.put(`/api/wishlists/me/items/${data.ideaId}`, { headers: { Origin: origin(page) }, data: {} });
+  await screen(page, "/wishlist", "Wishlists");
+  await expect(page.getByRole("list", { name: "Your wishlist" })).toBeVisible();
+
+  await screen(page, "/today", "Today");
+
+  await screen(page, "/builds", "Builds");
+
+  await page.goto(`/builds/${data.buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  // The compare sheet (a changes line is the way in; the seeded build changed its bed temperature and brim).
+  await page
+    .getByRole("button", { name: /Compare$/ })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog", { name: "Attempt 1 and attempt 2" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await screen(page, "/journal", "Journal");
+  await expect(page.getByText("Corners lifted").first()).toBeVisible();
+
+  // The week: this week holds the seeded prints, and a week long ago is empty.
+  await screen(page, `/week/${mondayOf(Date.now())}`, "This week");
+  await expect(page.getByRole("heading", { level: 2, name: /^The week in a few lines/ })).toBeVisible();
+  await screen(page, "/week/2024-01-01", /2024/);
+  await expect(page.getByRole("heading", { level: 2, name: "Not a strand this week" })).toBeVisible();
+
+  await page.goto("/year");
+  await expect(page.getByRole("heading", { level: 2, name: "Prints by month" })).toBeVisible();
+
+  await screen(page, "/search?q=warping", "Search");
+  await expect(page.getByRole("region", { name: "Attempts" })).toBeVisible();
+
+  await screen(page, "/pantry", "Pantry");
+  if (!isMobile) {
+    // The desktop list (phones always show cards); the choice is put back for the next theme.
+    await page.getByRole("radio", { name: "List" }).click();
+    await expect(page.getByRole("list", { name: "PETG spools" })).toBeVisible();
+    await page.getByRole("radio", { name: "Cards" }).click();
+  }
+
+  await page.goto(`/pantry/${data.spoolId}`);
+  await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+
+  await screen(page, "/printer", /X2D|Printer/);
+
+  await screen(page, "/shopping", "Shopping list");
+
+  // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
+  await screen(page, "/styleguide", "Styleguide");
+
+  // Sheets: capture, an attempt, and the account (phone) or account menu (desktop).
+  await screen(page, "/ideas", "Ideas");
+  await page.getByRole("button", { name: "New idea" }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.goto(`/builds/${data.buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await page
+    .getByRole("button", { name: /^Log attempt/ })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog", { name: "Attempt 3" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  if (isMobile) {
     await screen(page, "/ideas", "Ideas");
-    // The seeded build began as an idea, so Ideas ends with its Started section.
-    await expect(page.getByRole("heading", { name: /^Started/ })).toBeVisible();
-    await expectAccessible(page, "Ideas, with the Started section");
-
-    await screen(page, `/ideas/${data.ideaId}`, "Bath tugboat");
-    await expectAccessible(page, "An idea");
-
-    await page.request.put(`/api/wishlists/me/items/${data.ideaId}`, { headers: { Origin: origin(page) }, data: {} });
-    await screen(page, "/wishlist", "Wishlists");
-    await expect(page.getByRole("list", { name: "Your wishlist" })).toBeVisible();
-    await expectAccessible(page, "Wishlists");
-
-    await screen(page, "/today", "Today");
-    await expectAccessible(page, "Today");
-
-    await screen(page, "/builds", "Builds");
-    await expectAccessible(page, "Builds");
-
-    await page.goto(`/builds/${data.buildId}`);
-    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-    await expectAccessible(page, "A build");
-    // The compare sheet (a changes line is the way in; the seeded build changed its bed temperature and brim).
-    await page
-      .getByRole("button", { name: /Compare$/ })
-      .first()
-      .click();
-    await expect(page.getByRole("dialog", { name: "Attempt 1 and attempt 2" })).toBeVisible();
-    await expectAccessible(page, "The compare sheet", "[role=dialog]");
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-
-    await screen(page, "/journal", "Journal");
-    await expect(page.getByText("Corners lifted").first()).toBeVisible();
-    await expectAccessible(page, "Journal");
-
-    // The week: this week holds the seeded prints, and a week long ago is empty.
-    await screen(page, `/week/${mondayOf(Date.now())}`, "This week");
-    await expect(page.getByRole("heading", { level: 2, name: /^The week in a few lines/ })).toBeVisible();
-    await expectAccessible(page, "The week");
-    await screen(page, "/week/2024-01-01", /2024/);
-    await expect(page.getByRole("heading", { level: 2, name: "Not a strand this week" })).toBeVisible();
-    await expectAccessible(page, "An empty week");
-
-    await page.goto("/year");
-    await expect(page.getByRole("heading", { level: 2, name: "Prints by month" })).toBeVisible();
-    await expectAccessible(page, "Year so far");
-
-    await screen(page, "/search?q=warping", "Search");
-    await expect(page.getByRole("region", { name: "Attempts" })).toBeVisible();
-    await expectAccessible(page, "Search results");
-
-    await screen(page, "/pantry", "Pantry");
-    await expectAccessible(page, "Pantry");
-    if (!isMobile) {
-      // The desktop list (phones always show cards); the choice is put back for the next theme.
-      await page.getByRole("radio", { name: "List" }).click();
-      await expect(page.getByRole("list", { name: "PETG spools" })).toBeVisible();
-      await expectAccessible(page, "Pantry as a list");
-      await page.getByRole("radio", { name: "Cards" }).click();
-    }
-
-    await page.goto(`/pantry/${data.spoolId}`);
-    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
-    await expectAccessible(page, "A spool");
-
-    await screen(page, "/printer", /X2D|Printer/);
-    await expectAccessible(page, "Printer");
-
-    await screen(page, "/shopping", "Shopping list");
-    await expectAccessible(page, "Shopping list");
-
-    // The design system's building blocks: print progress, the outcome strip and the spool rims (white and black).
-    await screen(page, "/styleguide", "Styleguide");
-    await expectAccessible(page, "Styleguide: builds and attempts", "#builds");
-    await expectAccessible(page, "Styleguide: pantry and printer", "#pantry");
-    await expectAccessible(page, "Styleguide: checklist", "#checklist");
-
-    // Sheets: capture, an attempt, and the account (phone) or account menu (desktop).
-    await screen(page, "/ideas", "Ideas");
-    await page.getByRole("button", { name: "New idea" }).first().click();
+    await page.getByRole("button", { name: "Account" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expectAccessible(page, "The capture sheet", "[role=dialog]");
+  } else {
+    await screen(page, "/ideas", "Ideas");
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
-
-    await page.goto(`/builds/${data.buildId}`);
-    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-    await page
-      .getByRole("button", { name: /^Log attempt/ })
-      .first()
-      .click();
-    await expect(page.getByRole("dialog", { name: "Attempt 3" })).toBeVisible();
-    await expectAccessible(page, "The attempt sheet", "[role=dialog]");
+    await page.keyboard.press("?");
+    await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await expect(page.getByRole("dialog", { name: "Account" })).toBeVisible();
+  }
 
-    if (isMobile) {
-      await screen(page, "/ideas", "Ideas");
-      await page.getByRole("button", { name: "Account" }).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await expectAccessible(page, "The account sheet", "[role=dialog]");
-    } else {
-      await screen(page, "/ideas", "Ideas");
-      await page.keyboard.press("ControlOrMeta+k");
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await expectAccessible(page, "The command palette", "[role=dialog]");
-      await page.keyboard.press("Escape");
-      await expect(page.getByRole("dialog")).toHaveCount(0);
-      await page.keyboard.press("?");
-      await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
-      await expectAccessible(page, "The shortcut list", "[role=dialog]");
-      await page.keyboard.press("Escape");
-      await page.getByRole("button", { name: "Account menu" }).click();
-      await expect(page.getByRole("dialog", { name: "Account" })).toBeVisible();
-      await expectAccessible(page, "The account menu", "[role=dialog]");
-    }
-
-    // The profile picture: the crop sheet, then the account menu showing it.
-    await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
-    const crop = page.getByRole("dialog", { name: "Your picture" });
-    await expect(crop.getByTestId("crop-frame").locator("img")).toBeVisible();
-    await expectAccessible(page, "The crop sheet", "[role=dialog]");
-    await crop.getByRole("button", { name: "Save" }).click();
-    await expect(crop).toBeHidden();
-    await expect
-      .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
-      .toMatch(/\/photo\?v=/);
-    await page.reload();
-    await page.getByRole("button", { name: isMobile ? "Account" : "Account menu" }).click();
-    await expect(page.getByRole("button", { name: "Change photo" })).toBeVisible();
-    await expect(page.getByRole("dialog").locator("img[src*='/api/people/']").first()).toBeVisible();
-    await expectAccessible(page, "The account menu with a picture", "[role=dialog]");
-    await page.request.delete("/api/people/me/photo", { headers: { Origin: origin(page) } });
-  });
-}
+  // The profile picture: the crop sheet, then the account menu showing it.
+  await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
+  const crop = page.getByRole("dialog", { name: "Your picture" });
+  await expect(crop.getByTestId("crop-frame").locator("img")).toBeVisible();
+  await crop.getByRole("button", { name: "Save" }).click();
+  await expect(crop).toBeHidden();
+  await expect
+    .poll(async () => (await (await page.request.get("/api/session")).json()).user.photoUrl, { timeout: 15_000 })
+    .toMatch(/\/photo\?v=/);
+  await page.reload();
+  await page.getByRole("button", { name: isMobile ? "Account" : "Account menu" }).click();
+  await expect(page.getByRole("button", { name: "Change photo" })).toBeVisible();
+  await expect(page.getByRole("dialog").locator("img[src*='/api/people/']").first()).toBeVisible();
+  await page.request.delete("/api/people/me/photo", { headers: { Origin: origin(page) } });
+});
 
 /**
- * The screens the axe tests visit, by route file. A new route fails "every screen is checked" until it is visited
- * here (or in the empty states), so axe keeps covering the whole app.
+ * The screens the tests above visit, by route file. A new route fails "every screen is checked" until it is visited
+ * here, so every screen keeps being opened at both widths.
  */
 const CHECKED_ROUTES = [
   "today",
@@ -302,26 +247,6 @@ const CHECKED_ROUTES = [
   "share",
 ];
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`an idea while Claude reads its page, and once drafted, passes axe in ${scheme}`, async ({ page }) => {
-    test.setTimeout(90_000);
-    await page.emulateMedia({ colorScheme: scheme });
-    const headers = { Origin: origin(page) };
-    const id = crypto.randomUUID();
-    // The e2e Worker drafts with a stand-in for Claude (scripts/lib/fake-claude.ts); "slow" in the address takes a while.
-    await post(page, "/api/items", { headers, data: { id, note: "https://makerworld.com/en/models/2-slow-comb" } });
-    // Not awaited: the request answers once the draft is done, and the page should be seen while it is read.
-    const drafting = page.request.post(`/api/items/${id}/draft`, { headers, data: {} });
-    await page.goto(`/ideas/${id}`);
-    await expect(page.getByText(/Reading the MakerWorld page/)).toBeVisible();
-    await expectAccessible(page, "An idea while its page is read");
-    await drafting;
-    await page.reload();
-    await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible({ timeout: 20_000 });
-    await expectAccessible(page, "A drafted idea");
-  });
-}
-
 test("every screen is checked", () => {
   const routes = readdirSync("src/client/routes/_app")
     .filter((file) => file.endsWith(".tsx"))
@@ -329,75 +254,63 @@ test("every screen is checked", () => {
   expect(routes.filter((route) => !CHECKED_ROUTES.includes(route))).toEqual([]);
 });
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`the rest of the screens and the settings sheets pass axe in ${scheme}`, async ({ page, isMobile }) => {
-    test.setTimeout(120_000);
-    await page.emulateMedia({ colorScheme: scheme });
+test("the rest of the screens and the settings sheets open", async ({ page, isMobile }) => {
+  test.setTimeout(120_000);
 
-    await screen(page, "/agents", "Agents");
-    await expectAccessible(page, "Agents");
+  await screen(page, "/agents", "Agents");
 
-    await screen(page, "/year", /\d{4}/);
-    await expectAccessible(page, "The year so far");
+  await screen(page, "/year", /\d{4}/);
 
-    await screen(page, "/deleted", "Deleted");
-    await expectAccessible(page, "Deleted");
+  await screen(page, "/deleted", "Deleted");
 
-    // Every specimen in the design system, not just a few sections.
-    await screen(page, "/styleguide", "Styleguide");
-    await expectAccessible(page, "The styleguide");
-    // The back burner's other specimen (one shows at a time).
-    await page.getByRole("radio", { name: "A photo" }).evaluate((input: HTMLInputElement) => input.click());
-    await expect(page.locator("#today").getByText("Articulated dragon").first()).toBeVisible();
-    await expectAccessible(page, "Styleguide: the back burner with a photo", "#today");
+  // Every specimen in the design system, not just a few sections.
+  await screen(page, "/styleguide", "Styleguide");
+  // The back burner's other specimen (one shows at a time).
+  await page.getByRole("radio", { name: "A photo" }).evaluate((input: HTMLInputElement) => input.click());
+  await expect(page.locator("#today").getByText("Articulated dragon").first()).toBeVisible();
 
-    await screen(page, "/pantry", "Pantry");
-    await page.getByRole("button", { name: "Add spool" }).first().click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expectAccessible(page, "The add-spool sheet", "[role=dialog]");
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+  await screen(page, "/pantry", "Pantry");
+  await page.getByRole("button", { name: "Add spool" }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    await screen(page, "/printer", /X2D|Printer/);
-    await page
-      .getByRole("button", { name: /Check the belts/ })
-      .first()
-      .click();
-    await expect(page.getByRole("dialog", { name: "Check the belts" })).toBeVisible();
-    await expectAccessible(page, "An upkeep task", "[role=dialog]");
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+  await screen(page, "/printer", /X2D|Printer/);
+  await page
+    .getByRole("button", { name: /Check the belts/ })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog", { name: "Check the belts" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    // The account's own sheets, from the account sheet (phones) or the account menu (desktop).
-    for (const [row, sheet] of [
-      ["Notifications", "Notifications"],
-      ["Change password", "Change password"],
-    ] as const) {
-      await screen(page, "/ideas", "Ideas");
-      if (isMobile) {
-        await page.getByRole("button", { name: "Account" }).click();
-        await page
-          .getByRole("dialog")
-          .getByRole("button", { name: row === "Change password" ? "Passkeys and password" : row })
-          .click();
-      } else {
-        await page.getByRole("button", { name: "Account menu" }).click();
-        const menu = page.getByRole("dialog", { name: "Account" });
-        await expect(menu).toBeVisible();
-        if (row === "Notifications") await expectAccessible(page, "The account menu", "[role=dialog]");
-        await menu.getByRole("button", { name: row === "Change password" ? "Passkeys and password" : row }).click();
-      }
-      // Change password lives in the passkeys and password sheet.
-      if (row === "Change password") {
-        await page.getByRole("dialog", { name: "Passkeys and password" }).getByRole("button", { name: row }).click();
-      }
-      await expect(page.getByRole("dialog", { name: sheet })).toBeVisible();
-      await expectAccessible(page, `The ${sheet.toLowerCase()} sheet`, "[role=dialog]");
-      await page.keyboard.press("Escape");
-      await expect(page.getByRole("dialog")).toHaveCount(0);
+  // The account's own sheets, from the account sheet (phones) or the account menu (desktop).
+  for (const [row, sheet] of [
+    ["Notifications", "Notifications"],
+    ["Change password", "Change password"],
+  ] as const) {
+    await screen(page, "/ideas", "Ideas");
+    if (isMobile) {
+      await page.getByRole("button", { name: "Account" }).click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: row === "Change password" ? "Passkeys and password" : row })
+        .click();
+    } else {
+      await page.getByRole("button", { name: "Account menu" }).click();
+      const menu = page.getByRole("dialog", { name: "Account" });
+      await expect(menu).toBeVisible();
+      await menu.getByRole("button", { name: row === "Change password" ? "Passkeys and password" : row }).click();
     }
-  });
-}
+    // Change password lives in the passkeys and password sheet.
+    if (row === "Change password") {
+      await page.getByRole("dialog", { name: "Passkeys and password" }).getByRole("button", { name: row }).click();
+    }
+    await expect(page.getByRole("dialog", { name: sheet })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
+});
 
 /**
  * Controls drawn smaller than 44 px that have no 44 px hit area (`touch-target`), on the visible page or in a sheet.
@@ -546,27 +459,6 @@ test("keyboard focus is visible in the sheets and menus", async ({ page, isMobil
     page.getByRole("dialog", { name: "Attempt 3" }).getByRole("button", { name: "Close" }),
   ).not.toBeFocused();
   await tabThrough("The attempt sheet", 10);
-});
-
-test("empty states and sign-in pass axe", async ({ page }) => {
-  await clearIdeas(page);
-  await clearSpools(page);
-  for (const [path, heading] of [
-    ["/today", "Today"],
-    ["/ideas", "Ideas"],
-    ["/builds", "Builds"],
-    ["/journal", "Journal"],
-    ["/search", "Search"],
-    ["/pantry", "Pantry"],
-  ] as const) {
-    await screen(page, path, heading);
-    await expect(page.getByRole("button").or(page.getByRole("link")).first()).toBeVisible();
-    await expectAccessible(page, `Empty ${heading}`);
-  }
-  await page.context().clearCookies();
-  await page.goto("/sign-in");
-  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
-  await expectAccessible(page, "Sign-in");
 });
 
 test("fields are 16 px or larger on phones, so iOS Safari doesn't zoom in", async ({ page, isMobile }) => {

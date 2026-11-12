@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { clearIdeas } from "./helpers";
 
 const user = SEED_USERS[0];
 
@@ -10,6 +11,11 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
 }
+
+// Leave nothing behind: other specs (the week, the journal) count every build on this server.
+test.afterEach(async ({ page }) => {
+  await clearIdeas(page);
+});
 
 test("opens the year from the journal and says what fixed a failure", async ({ page }) => {
   await signIn(page);

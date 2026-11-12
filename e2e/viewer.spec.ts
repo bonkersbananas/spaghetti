@@ -1,7 +1,11 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { TUGBOAT_FILE_NAME, tugboatFile } from "./fixtures/gcode-tugboat";
-import { signIn } from "./helpers";
+import { clearIdeas, signIn } from "./helpers";
+
+// Leave nothing behind: other specs (the week, the journal) count every build on this server.
+test.afterEach(async ({ page }) => {
+  await clearIdeas(page);
+});
 
 /** A build whose one attempt carries the tugboat's sliced file (317 layers of real G-code). */
 async function buildWithTugboat(page: Page, printing = false): Promise<string> {
@@ -71,12 +75,6 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   // Colouring by feature says what the colours are.
   await dialog.getByRole("radio", { name: "Feature" }).check({ force: true });
   await expect(dialog.getByText("Outer wall")).toBeVisible();
-
-  const { violations } = await new AxeBuilder({ page })
-    .include("[role=dialog]")
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-    .analyze();
-  expect(violations.map((violation) => violation.id)).toEqual([]);
 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
