@@ -139,6 +139,7 @@ export function EditableBubble({
     <button
       type="button"
       aria-label="Options for your comment"
+      title="Options"
       disabled={readOnly}
       onClick={openSheet}
       className={cn(

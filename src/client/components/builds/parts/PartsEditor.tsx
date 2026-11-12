@@ -32,6 +32,7 @@ function PartRow({ itemId, part, photos }: { itemId: string; part: Part; photos:
           <button
             type="button"
             aria-label={photo ? `Photo of ${part.name}` : `Pick a photo of ${part.name}`}
+            title="Pick a photo"
             aria-expanded={picking}
             onClick={() => setPicking((open) => !open)}
             className="bg-ink/4 shadow-well focus-ring text-ink-faint touch-target relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md md:size-9"
@@ -67,6 +68,7 @@ function PartRow({ itemId, part, photos }: { itemId: string; part: Part; photos:
               type="button"
               aria-pressed={(candidate?.id ?? null) === (part.photoId ?? null)}
               aria-label={candidate ? "Use this photo" : "No photo"}
+              title={candidate ? "Use this photo" : "No photo"}
               onClick={() => {
                 void saveParts(queryClient, itemId, [
                   { id: part.id, name: part.name, quantity: part.quantity, photoId: candidate?.id ?? null },

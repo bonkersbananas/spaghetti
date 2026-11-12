@@ -38,6 +38,7 @@ export function DragHandle({ label, onPointerDown, onMove, onRemove, disabled, r
       ref={ref}
       type="button"
       aria-label={label}
+      title={onRemove ? `${label} (↑ ↓, Delete removes)` : `${label} (↑ ↓)`}
       aria-keyshortcuts={onRemove ? "ArrowUp ArrowDown Delete" : "ArrowUp ArrowDown"}
       aria-roledescription="drag handle"
       disabled={disabled}

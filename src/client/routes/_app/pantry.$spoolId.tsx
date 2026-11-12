@@ -46,7 +46,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { SwatchPicker } from "@/components/ui/Swatch";
-import { useHotkeys } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto } from "@/lib/pantry";
 import { spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -308,7 +308,13 @@ function SpoolPage({ spool }: { spool: Spool }) {
       <h1 className="sr-only">{[name.title, name.detail].filter(Boolean).join(", ")}</h1>
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
-        <IconButton icon={TrashIcon} label="Take out of the pantry" disabled={readOnly} onClick={remove} />
+        <IconButton
+          icon={TrashIcon}
+          label="Take out of the pantry"
+          title={`Take out of the pantry (${shortcutCaps("spoolDelete").join("")})`}
+          disabled={readOnly}
+          onClick={remove}
+        />
       </DetailBar>
       {camera.input}
       {library.input}
