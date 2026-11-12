@@ -16,8 +16,8 @@ export function PullHint({ label, ready }: { label: string; ready: boolean }) {
   return (
     <span
       className={cn(
-        "rounded-pill text-small duration-fast flex h-9 items-center gap-1.5 pr-4 pl-2.5 font-semibold transition-colors",
-        ready ? "bg-ink text-cream" : "bg-paper-deep text-ink-soft",
+        "rounded-pill text-small shadow-soft flex h-9 items-center gap-1.5 pr-4 pl-2.5 font-semibold",
+        ready ? "bg-ink text-cream" : "bg-paper-deep text-ink",
       )}
     >
       <ExpandIcon
