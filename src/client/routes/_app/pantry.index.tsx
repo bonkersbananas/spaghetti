@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon, PrinterIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useListPicker } from "@/lib/list-picker";
 import { loadSlot } from "@/lib/pantry";
@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_app/pantry/")({
   component: Pantry,
 });
 
-const grid = "grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5 xl:grid-cols-5";
+const grid = "grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3";
 
 const GroupRecipes = lazy(() => import("@/components/recipes/GroupRecipes").then((m) => ({ default: m.GroupRecipes })));
 
@@ -162,7 +162,7 @@ function Pantry() {
           <div className={grid}>
             {Array.from({ length: 4 }, (_, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity.
-              <CardSkeleton key={index} aspect="square" />
+              <Skeleton key={index} className="h-[4.75rem] rounded-lg" />
             ))}
           </div>
         </div>
