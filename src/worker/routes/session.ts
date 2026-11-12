@@ -77,7 +77,10 @@ export const sessionRoutes = new Hono<AppEnv>()
       return tooMany(c);
     }
     const user = await c.var.db.select().from(users).where(eq(users.username, username)).get();
-    const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
+    // Someone who joined with a passkey only has no password hash: the slow check still runs, so how long a wrong
+    // password takes never tells whose account has a password.
+    const hash = user?.passwordHash.startsWith("pbkdf2-") ? user.passwordHash : DUMMY_HASH;
+    const ok = (await verifyPassword(password, hash)) && hash !== DUMMY_HASH;
     if (!user || !ok) {
       return apiError(c, 401, "wrong_credentials", "That name and password don't match.");
     }
@@ -206,6 +209,9 @@ export const sessionRoutes = new Hono<AppEnv>()
       }
     }
     await endSession(c, c.var.db);
+    // The browser forgets what it cached for this origin (photos are kept a year), so the next person on a shared
+    // device can't read them back. The app clears its own caches and the offline copy itself (lib/offline.ts).
+    c.header("Clear-Site-Data", '"cache"');
     return c.body(null, 204);
   });
 

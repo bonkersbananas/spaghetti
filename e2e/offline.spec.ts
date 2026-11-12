@@ -200,6 +200,39 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   await expect(page.getByRole("heading", { level: 1, name: "Spaghetti" })).toBeVisible();
 });
 
+test("a session ended from another device forgets what this one kept, as signing out does", async ({
+  page,
+  baseURL,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Lamp shade" } });
+  const photoId = await addPhoto(page, id);
+  await page.goto(`/ideas/${id}`);
+  await page.evaluate((photo) => fetch(`/api/photos/${photo}/thumb`).then((r) => r.blob()), photoId);
+  await expect.poll(() => cacheHolds(page, "Lamp shade")).toBe(true);
+  await expect.poll(() => cachedPhotos(page)).toContain(`/api/photos/${photoId}/thumb`);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("sg-recent-items") ?? "")).toContain("Lamp shade");
+  await clearIdeas(page);
+
+  // The same person, on another device, signs this one out ("Sign out everywhere else"); this one never hears of it.
+  const other = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL ?? "" } });
+  expect(
+    (await other.post("/api/session", { data: { username: SEED_USERS[0].username, password: SEED_PASSWORD } })).ok(),
+  ).toBe(true);
+  expect((await other.post("/api/account/devices/sign-out-others")).ok()).toBe(true);
+  await other.dispose();
+
+  // Opened again, it shows sign-in and keeps nothing of the workspace.
+  await page.goto("/ideas");
+  await expect(page).toHaveURL(/\/sign-in/);
+  await expect.poll(() => cacheHolds(page)).toBe(false);
+  await expect.poll(() => cachedPhotos(page)).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem("sg-recent-items"))).toBeNull();
+});
+
 const tugboat = readFileSync("e2e/fixtures/tugboat.jpg");
 
 /** Puts a photo on an item (or one of its attempts) through the API, as the app's own upload does. */

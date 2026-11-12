@@ -92,6 +92,8 @@ describe("the session", () => {
     const response = await request("/api/session", { method: "DELETE", cookie });
     expect(response.status).toBe(204);
     expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    // The browser drops what it cached for the app (photos are kept for a year otherwise).
+    expect(response.headers.get("Clear-Site-Data")).toBe('"cache"');
     expect((await request("/api/session", { cookie })).status).toBe(401);
   });
 
