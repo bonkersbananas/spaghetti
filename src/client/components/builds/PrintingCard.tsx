@@ -35,7 +35,8 @@ interface PrintingCardProps {
   via?: string;
   /**
    * Phones only: a small square picture beside the name instead of the big one on top, for the prints after
-   * the first, so three prints on the bed don't push the rest of Today two screens down. Desktop is unchanged.
+   * the first on Today (so three prints don't push the rest two screens down) and for every print in the Journal's
+   * Now block. Desktop is unchanged.
    */
   compact?: boolean;
 }

@@ -26,7 +26,7 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 const CEILING_KB = {
   "/sign-in": 184,
-  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB); the journal's Now block, in a later change, another 0.3.
+  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB), and the journal's Now block shares the print card with Today, which gives it a chunk of its own (+0.3 kB).
   "/today": 283,
   "/ideas": 269,
   "/builds": 269,

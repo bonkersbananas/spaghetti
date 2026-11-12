@@ -41,3 +41,8 @@ export function patchPick(queryClient: QueryClient, id: string, change: Partial<
 
 export const scoutPictureUrl = (pick: Pick<ScoutPick, "id" | "hasPicture">) =>
   pick.hasPicture ? `/api/scout/${pick.id}/picture` : undefined;
+
+const NUMBER_WORDS = ["No", "One", "Two", "Three"];
+
+/** "Three for you this week", "Two for you this week": what is left to answer. */
+export const scoutHeading = (left: number) => `${NUMBER_WORDS[Math.min(left, 3)] ?? "Some"} for you this week`;
