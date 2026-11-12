@@ -34,7 +34,7 @@ The `/api` routes that answer without credentials, each on purpose (the list in 
 
 ## Photos and files
 
-Photos, profile pictures and slicer files are served by `/api/photos`, `/api/people/:id/photo` and `/api/files`, behind the same check as the rest of `/api`; their ids are random UUIDs. The app reaches the R2 bucket only through the Worker's binding, and it must have no public access: no r2.dev address and no custom domain (Cloudflare dashboard, R2 → spaghetti-photos → Settings; the deploy token can't read that setting, so a person checks it). Even then, an object's key holds its random id. Uploads are stored only as JPEG or WebP (plate pictures PNG too), and slicer files are served as downloads (`Content-Disposition: attachment`), so nothing uploaded can run as a page of the app. Item photos, spool labels and upkeep photos share one key space (`photos/<id>/…`) with an id the browser picks, so an upload under an id that is already another picture's is refused (409, `photoOwner` in `photos.ts`): nothing can overwrite or, by replacing it later, delete a picture that isn't its own.
+Photos, profile pictures and slicer files are served by `/api/photos`, `/api/people/:id/photo` and `/api/files`, behind the same check as the rest of `/api`; their ids are random UUIDs. The app reaches the R2 bucket only through the Worker's binding, and it must have no public access: no r2.dev address and no custom domain (Cloudflare dashboard, R2 → spaghetti-photos → Settings; the deploy token can't read that setting; Carl Oscar checked it on 12 November 2026, see the second pass below). Even then, an object's key holds its random id. Uploads are stored only as JPEG or WebP (plate pictures PNG too), and slicer files are served as downloads (`Content-Disposition: attachment`), so nothing uploaded can run as a page of the app. Item photos, spool labels and upkeep photos share one key space (`photos/<id>/…`) with an id the browser picks, so an upload under an id that is already another picture's is refused (409, `photoOwner` in `photos.ts`): nothing can overwrite or, by replacing it later, delete a picture that isn't its own.
 
 ## On a shared device
 
@@ -86,11 +86,11 @@ An independent pass that started from the code rather than from the first pass's
 | Tokens against scopes: the REST API, the change feed, OpenAPI, MCP tools | **Fixed (#142):** an MCP tool now checks the token's scopes before it runs. Before, `capture_idea` fetched its `photo_url` even for a token the API would then refuse. |
 | The Worker fetching URLs: link previews, drafts, webhooks, MCP photos, push | Link previews, drafts and webhooks held (public names only, every redirect re-checked). **Fixed (#142):** `capture_idea`'s `photo_url` now follows the same rules, so it never reaches a home network from the container. |
 | R2 keys | No path tricks reach another prefix. **Fixed (#143):** item photos, spool labels and upkeep log photos share one key space with ids the browser picks. An upload under an id that is another picture's is now refused, where before it overwrote that picture. |
+| The R2 bucket's public access | Held. Carl Oscar checked in the Cloudflare dashboard on 12 November 2026 that `spaghetti-photos` has no public access (no r2.dev address, no custom domain). The deploy token can't read that setting, so a person must check again if the bucket's settings change. |
 | An ended session's leftovers on a device | **Fixed (#144):** a session ended elsewhere now also empties the browser's HTTP cache of photos, as signing out does. |
 | OAuth registration | **Fixed (#145):** at most 20 registrations per address an hour, so no single caller can fill the 300-client cap. |
 
 Still open, for a person:
 
-- **The R2 bucket's public access** (no r2.dev address, no custom domain) can only be checked in the Cloudflare dashboard.
 - **A refresh token used twice** fails, but nothing revokes the tokens already made from it. This is the usual OAuth 2.1 advice for public clients. Connections can still be ended on the Agents page.
 - **Push subscription addresses** are only checked for https. Only a signed-in person can add one, so it matters only in the container on a home network.
