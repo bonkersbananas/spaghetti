@@ -63,7 +63,7 @@ function Twists() {
             </Button>
           }
         >
-          When you print someone else's model with changes (scaled to fit, a looser fit, a name added), keep it here.
+          When we print someone else's model with changes (scaled to fit, a looser fit, a name added), keep it here.
           Open an idea with a model and tap "Make a twist".
         </EmptyState>
       ) : (
@@ -78,12 +78,12 @@ function Twists() {
       {!empty && !isPending && !isDesktop && (
         <ActionBar>
           <Button
-            size="lg"
             variant="secondary"
+            size="lg"
             icon={PlusIcon}
-            className="min-w-0 flex-1"
             disabled={readOnly}
             onClick={add}
+            className="rounded-pill! shadow-float! bg-lifted! mx-auto px-6"
           >
             New twist
           </Button>

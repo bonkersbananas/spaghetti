@@ -6,6 +6,7 @@ import { HubTile } from "@/components/ui/HubTile";
 import { PrinterIcon, ShoppingIcon, TwistIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { cn } from "@/lib/cn";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
 import { useRunningLow } from "@/lib/running-low";
@@ -69,10 +70,10 @@ function Workshop() {
       "All in order"
     )
   ) : null;
-  const twistPictures = (twists ?? [])
-    .flatMap((twist) => (twist.source.photo ? [twist.source.photo] : []))
-    .slice(0, PICTURES);
-  const twistsLine = twists ? (twists.length ? plural(twists.length, "twist") : "None yet") : null;
+  // The newest twist says how things stand; its picture (and the one before it) lean on each other like prints on a desk.
+  const newest = twists?.[0];
+  const twistPictures = (twists ?? []).flatMap((twist) => (twist.source.photo ? [twist.source.photo] : [])).slice(0, 2);
+  const twistsLine = twists ? (newest ? `Latest: ${newest.name}` : "Nothing twisted yet") : null;
   const shoppingLine = shoppingPending ? null : toBuy.length ? `${toBuy.length} to buy` : "Nothing to buy";
 
   return (
@@ -157,14 +158,17 @@ function Workshop() {
           summary={twistsLine}
           visual={
             twistPictures.length > 0 ? (
-              <span className="flex items-center">
-                {twistPictures.map((photo) => (
+              <span className="flex items-center justify-center">
+                {twistPictures.map((photo, index) => (
                   <Photo
                     key={photo.id}
                     src={photoSrc(photo.id, "thumb")}
                     alt=""
                     color={photo.color || undefined}
-                    className="ring-cream -ml-3 size-16 rounded-md ring-2 first:ml-0"
+                    className={cn(
+                      "ring-cream shadow-raised h-20 w-28 rounded-md ring-4",
+                      index === 0 ? "z-10 -rotate-3" : "-ml-8 rotate-6 opacity-90",
+                    )}
                   />
                 ))}
               </span>

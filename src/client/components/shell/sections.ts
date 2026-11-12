@@ -53,7 +53,7 @@ const workshopTab: Pick<Section, "to" | "label" | "icon"> = { to: "/workshop", l
 const search: Section = { to: "/search", label: "Search", icon: SearchIcon, shortcut: "search" };
 
 /** Every section, in order: the sidebar, the hotkeys and the command palette read this list. */
-export const sections: Section[] = [today, ideas, wishlist, builds, twists, journal, search];
+export const sections: Section[] = [today, ideas, wishlist, builds, journal, search];
 
 /**
  * The phone's tabs, around the capture button: places only. Search is a tool, so it lives in the page
@@ -62,11 +62,12 @@ export const sections: Section[] = [today, ideas, wishlist, builds, twists, jour
 export const tabs = [ideas, builds, journal, workshopTab] as const;
 
 /**
- * The workshop: the spools on hand, the printer and what to buy for it. In the sidebar below the
+ * The workshop: the spools on hand, the printer, what to buy for it and the models we twist. In the sidebar below the
  * sections on desktop; on phones the Workshop tab opens a page with the three (routes/_app/workshop.tsx).
  */
 export const workshop: Section[] = [
   { to: "/pantry", label: "Pantry", icon: PantryIcon, shortcut: "goPantry" },
   { to: "/printer", label: "Printer", icon: PrinterIcon, shortcut: "goPrinter" },
   { to: "/shopping", label: "Shopping list", icon: ShoppingIcon, shortcut: "goShopping" },
+  twists,
 ];

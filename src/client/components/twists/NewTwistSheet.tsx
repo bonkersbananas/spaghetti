@@ -23,7 +23,7 @@ export function NewTwistSheet({ open, onOpenChange }: { open: boolean; onOpenCha
       open={open}
       onOpenChange={onOpenChange}
       title="A new twist"
-      description="Someone else's model, the way you print it."
+      description="Someone else's model, the way we print it."
     >
       <form
         className="flex flex-col gap-4"

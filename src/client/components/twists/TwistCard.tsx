@@ -29,6 +29,8 @@ export function TwistCard({ twist, className }: { twist: Twist; className?: stri
       photo={
         photo ? { src: photoSrc(photo.id, "large"), alt: "", color: photo.color || undefined, id: photo.id } : undefined
       }
+      // Without a picture the card is an index card: the twist's own words, else what we changed, else its name.
+      note={photo ? undefined : twist.note.trim() || changesLine(twist) || twist.name}
       sub={sourceLine(twist) || undefined}
       meta={changesLine(twist) || "No changes written down yet"}
       link={{ to: "/twists/$twistId", params: { twistId: twist.id } }}

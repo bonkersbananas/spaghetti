@@ -12,8 +12,9 @@ import { TwistChanges } from "@/components/twists/TwistChanges";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { ArrowRightIcon, TrashIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
+import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
@@ -29,6 +30,10 @@ export const Route = createFileRoute("/_app/twists/$twistId")({
 });
 
 const back = { to: "/twists", label: "Twists" } as const;
+
+/** The quiet actions under the model: one style for a button and a link. */
+const quietAction =
+  "focus-ring text-small text-ink-soft hover:text-ink inline-flex min-h-11 items-center gap-1.5 rounded-md font-semibold";
 
 function TwistPage() {
   const { twistId } = Route.useParams();
@@ -135,40 +140,27 @@ function TwistBody({ twist }: { twist: Twist }) {
             {subtitle && <p className="text-small text-ink-faint">{subtitle}</p>}
           </div>
 
-          <Section id="changes" title="What we changed" size="overline">
+          <Section id="changes" title="What we changed">
             <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
           </Section>
 
-          <Section id="note" title="Note" size="overline">
-            <TextArea
-              aria-label="Note"
-              minRows={1}
-              maxLength={TWIST_NOTE_MAX}
-              placeholder="Why, what to watch for, what the lid wants…"
-              readOnly={readOnly}
-              value={value.note}
-              onChange={(event) => change({ note: event.target.value })}
-            />
-          </Section>
+          <NoteField
+            label="Note"
+            value={value.note}
+            onChange={(note) => change({ note })}
+            readOnly={readOnly}
+            placeholder="Why, what to watch for, what the lid wants…"
+          />
 
-          <Section id="source" title="The model" size="overline">
+          <div className="flex flex-col gap-2">
             {value.sourceUrl && mark && <LinkCard url={value.sourceUrl} model={mark} className="max-w-content" />}
-            {value.sourceUrl && mark && !readOnly && !editingLink && (
-              <button
-                type="button"
-                onClick={() => setEditingLink(true)}
-                className="focus-ring text-small text-ink-soft hover:text-ink min-h-11 self-start rounded-md font-semibold"
-              >
-                Change the link
-              </button>
-            )}
             {(!value.sourceUrl || !mark || editingLink) && (
               <TextField
-                label="Link"
+                aria-label="Link"
                 value={value.sourceUrl}
                 type="url"
                 inputMode="url"
-                placeholder="https://makerworld.com/…"
+                placeholder="Where the model is: https://makerworld.com/…"
                 readOnly={readOnly}
                 autoComplete="off"
                 error={
@@ -179,17 +171,22 @@ function TwistBody({ twist }: { twist: Twist }) {
                 onChange={(event) => change({ sourceUrl: event.target.value })}
               />
             )}
-            {twist.fromItemId && (
-              <Link
-                to="/ideas/$ideaId"
-                params={{ ideaId: twist.fromItemId }}
-                className="focus-ring text-small text-ink-soft hover:text-ink decoration-ink/20 inline-flex min-h-11 items-center gap-1.5 self-start rounded-md font-semibold underline underline-offset-4"
-              >
-                The idea it came from
-                <ArrowRightIcon size={16} aria-hidden />
-              </Link>
-            )}
-          </Section>
+            {/* One quiet style for the actions under the model. */}
+            <div className="flex flex-wrap items-center gap-x-5">
+              {value.sourceUrl && mark && !readOnly && !editingLink && (
+                <button type="button" onClick={() => setEditingLink(true)} className={quietAction}>
+                  <EditIcon size={16} aria-hidden />
+                  Change the link
+                </button>
+              )}
+              {twist.fromItemId && (
+                <Link to="/ideas/$ideaId" params={{ ideaId: twist.fromItemId }} className={quietAction}>
+                  The idea it came from
+                  <ArrowRightIcon size={16} aria-hidden />
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </article>

@@ -59,7 +59,7 @@ export function TwistsSection() {
           <TwistChanges changes={changes} readOnly={false} onChange={setChanges} />
           <Label>Empty state</Label>
           <EmptyState illustration={<Fusilli />} title="Nothing twisted yet">
-            When you print someone else's model with changes, keep it here.
+            When we print someone else's model with changes, keep it here.
           </EmptyState>
         </Panel>
       </div>

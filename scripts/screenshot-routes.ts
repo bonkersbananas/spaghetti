@@ -2269,6 +2269,32 @@ export const shots: Shot[] = [
       await page.waitForTimeout(400);
     },
   },
+  {
+    // A twist with no picture: its card on the list is an index card, and its page has no photo column.
+    name: "twist-no-photo",
+    path: `/twists/${SEED_TWIST_IDS.lid}`,
+    fullPage: true,
+  },
+  {
+    name: "twists-no-photo",
+    path: "/twists",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("link", { name: /Pen cup/ }).waitFor();
+    },
+  },
+  {
+    name: "twists-empty",
+    path: "/twists",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const { twists } = await (await page.request.get("/api/twists")).json();
+      for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers });
+      await page.reload();
+      await page.getByText("Nothing twisted yet").waitFor();
+      await page.waitForTimeout(600);
+    },
+  },
   { name: "pantry", path: "/pantry", fullPage: true },
   {
     // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
@@ -2296,7 +2322,16 @@ export const shots: Shot[] = [
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
-  { name: "styleguide-twists", path: "/styleguide", selector: "#twists" },
+  {
+    name: "styleguide-twists",
+    path: "/styleguide",
+    selector: "#twists",
+    // The empty state fades in: shoot it once it has.
+    beforeShot: async (page) => {
+      await page.locator("#twists").evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(800);
+    },
+  },
   { name: "styleguide-year", path: "/styleguide", selector: "#year" },
   { name: "styleguide-error", path: "/styleguide", selector: "#error" },
   {

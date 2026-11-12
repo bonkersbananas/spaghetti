@@ -31,6 +31,13 @@ test("makes a twist from an idea with a model, writes what changed, finds it in 
   await page.getByRole("button", { name: "Scale", exact: true }).click();
   await page.keyboard.type("84 %");
   await page.getByRole("textbox", { name: "Why, for scale" }).fill("fits the 42 mm grid");
+  // Leaving the fields turns the change back into a line of text; a tap on it opens the fields again.
+  await page.getByRole("heading", { name: "What we changed" }).click();
+  const line = page.getByRole("button", { name: "Edit scale" });
+  await expect(line).toHaveText("Scale 84 % fits the 42 mm grid");
+  await line.click();
+  await expect(page.getByRole("textbox", { name: "Scale value" })).toHaveValue("84 %");
+  await page.getByRole("heading", { name: "What we changed" }).click();
   await expect(page.getByText("Saved")).toBeVisible();
 
   // The list shows it with its changes in a quiet line, and the idea's chip now opens it.

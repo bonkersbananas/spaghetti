@@ -9,6 +9,7 @@ export const SEED_TWIST_IDS = {
   bins: "5eed0000-0000-4000-8000-0000000e0001",
   tugboat: "5eed0000-0000-4000-8000-0000000e0002",
   hook: "5eed0000-0000-4000-8000-0000000e0003",
+  lid: "5eed0000-0000-4000-8000-0000000e0004",
 };
 
 const change = (n: number, kind: string, value: string, extra: { label?: string; note?: string } = {}) => ({
@@ -20,6 +21,13 @@ const change = (n: number, kind: string, value: string, extra: { label?: string;
 });
 
 const specs = [
+  {
+    id: SEED_TWIST_IDS.lid,
+    name: "Pen cup, a name added",
+    note: "Marie's name on the front in 8 mm letters, debossed.",
+    sourceUrl: "https://makerworld.com/en/models/633117-pen-cup",
+    changes: [change(9, "text", "“Marie”", { note: "8 mm, debossed" })],
+  },
   {
     id: SEED_TWIST_IDS.bins,
     name: "Drawer bins, 42 mm grid",
