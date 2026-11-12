@@ -1,8 +1,9 @@
+import { amsUnitLetters, unitSlots } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { HubTile } from "@/components/ui/HubTile";
-import { PrinterIcon, ShoppingIcon } from "@/components/ui/icons";
+import { ShoppingIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_app/workshop")({
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
 /**
- * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On desktop the
+ * The phone's fourth tab (wired into the tab bar in the follow-up PR that retires Today): the places that are not a tab of their own, each drawn with what is in it. On desktop the
  * sidebar lists the same three, so this page is only a way in for phones.
  */
 function Workshop() {
@@ -27,8 +28,8 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
 
-  // The AMS as the printer sees it: one disc per slot, in slot order, an empty ring for a free one.
-  const slots = printer ? Object.entries(printer.slots).sort(([a], [b]) => a.localeCompare(b)) : [];
+  // The first AMS unit as the printer has it: all four slots, an empty ring for a free one (slots holds only the loaded).
+  const slots = unitSlots(amsUnitLetters(printer?.setup.amsUnits ?? 1)[0] ?? "A");
   const pantryLine = spools
     ? spools.length === 0
       ? "No spools yet"
@@ -59,20 +60,19 @@ function Workshop() {
           title="Printer"
           summary={printerLine}
           visual={
-            slots.length ? (
-              <span className="flex gap-2.5">
-                {slots.slice(0, 4).map(([slot, spoolId]) => (
+            <span className="flex gap-2.5">
+              {slots.map((slot) => {
+                const spoolId = printer?.slots[slot];
+                return (
                   <SpoolDisc
                     key={slot}
                     size="lg"
                     color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
                     empty={!spoolId}
                   />
-                ))}
-              </span>
-            ) : (
-              <PrinterIcon size={44} className="text-ink-faint" />
-            )
+                );
+              })}
+            </span>
           }
         />
         <HubTile
