@@ -119,25 +119,30 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
       onClick={(event) => heroClick(event, photo?.id)}
       aria-current={selected || undefined}
       className={cn(
-        "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring flex flex-col rounded-lg p-1.5 md:flex-row",
+        "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring flex rounded-lg p-1.5 md:flex-row",
+        // A render isn't the result: on a phone it is a small picture beside the words, not the card's lead.
+        plate ? "flex-row" : "flex-col",
         selected && "shadow-ring hover:shadow-ring",
       )}
     >
       {plate && (
-        // A render isn't a photo: on a phone it gets a shorter frame, so it doesn't take more room than the print would.
-        <div className="relative aspect-video shrink-0 overflow-hidden rounded-md md:aspect-4/3 md:w-2/5">
+        <div className="relative size-24 shrink-0 self-start overflow-hidden rounded-md md:aspect-4/3 md:h-auto md:w-2/5 md:self-auto">
           {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
           <Photo
             src={fileThumbSrc(plate.id)}
             alt=""
             fit="contain"
-            className="size-full p-3"
+            className="size-full p-1.5 md:p-3"
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
-          <span className="absolute top-2 left-2">
+          <span className="absolute top-2 left-2 max-md:hidden">
             <SlicerPreviewBadge />
           </span>
-          <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
+          <OutcomeChip
+            outcome={attempt.outcome}
+            offTheBed={offBed}
+            className="shadow-soft absolute bottom-2 left-2 max-md:hidden"
+          />
         </div>
       )}
       {photo && (
@@ -158,10 +163,16 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           )}
         </div>
       )}
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3">
-        {/* Without a picture, the outcome leads the card. */}
-        {!picture && (
-          <div className="flex items-center gap-2">
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3",
+          plate && "max-md:pt-1.5 max-md:pl-3",
+        )}
+      >
+        {/* Without a picture, the outcome leads the card (on a phone, a slicer's render is too small to carry it). */}
+        {(!picture || plate) && (
+          <div className={cn("flex items-center gap-2", plate && "md:hidden")}>
+            {plate && <span className="text-caption text-ink-faint sr-only">Slicer preview</span>}
             <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
             <Meta at={attempt.printedAt} time={time} person={person} via={via} />
           </div>
@@ -173,7 +184,15 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
               <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
             </MetaList>
           </h3>
-          {picture && <Meta at={attempt.printedAt} time={time} person={person} via={via} />}
+          {picture && (
+            <Meta
+              at={attempt.printedAt}
+              time={time}
+              person={person}
+              via={via}
+              className={cn(plate && "max-md:hidden")}
+            />
+          )}
         </div>
         {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
         {attempt.outcome === null && !offBed && (
@@ -219,9 +238,26 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   );
 });
 
-function Meta({ at, time, person, via }: { at: number; time: string; person?: Person; via?: string }) {
+function Meta({
+  at,
+  time,
+  person,
+  via,
+  className,
+}: {
+  at: number;
+  time: string;
+  person?: Person;
+  via?: string;
+  className?: string;
+}) {
   return (
-    <span className="text-small text-ink-faint tabular ml-auto flex shrink-0 items-center gap-2 self-center pl-2">
+    <span
+      className={cn(
+        "text-small text-ink-faint tabular ml-auto flex shrink-0 items-center gap-2 self-center pl-2",
+        className,
+      )}
+    >
       <ViaText name={via} className="hidden md:inline" />
       <time dateTime={new Date(at).toISOString()} title={fullTime(at)}>
         {time}
