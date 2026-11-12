@@ -42,6 +42,7 @@ function CaptureButton() {
   const input = useRef<HTMLInputElement>(null);
   const timer = useRef<number>(undefined);
   const held = useRef(false);
+  const down = useRef(false);
   const [armed, setArmed] = useState(false);
   const stop = () => {
     window.clearTimeout(timer.current);
@@ -52,19 +53,26 @@ function CaptureButton() {
       <button
         type="button"
         onPointerDown={() => {
+          down.current = true;
           held.current = false;
           timer.current = window.setTimeout(() => {
             held.current = true;
             setArmed(true);
           }, HOLD_MS);
         }}
-        onPointerUp={() => window.clearTimeout(timer.current)}
+        onPointerUp={() => {
+          down.current = false;
+          window.clearTimeout(timer.current);
+        }}
         onPointerCancel={() => {
+          down.current = false;
           held.current = false;
           stop();
         }}
-        // Sliding off the button: no click will come, so the hold is over.
+        // Sliding off with the finger still down: no click will come, so the hold is over. (On touch the pointer
+        // also "leaves" after it is lifted, just before the click, and that must not undo the hold.)
         onPointerLeave={() => {
+          if (!down.current) return;
           held.current = false;
           stop();
         }}
