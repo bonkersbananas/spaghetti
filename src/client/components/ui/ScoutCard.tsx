@@ -59,7 +59,8 @@ export function ScoutCard({
       <div className="flex flex-1 flex-col gap-1 px-2 pt-2.5 pb-1.5">
         <h3
           className={cn(
-            "text-small @xs:text-body text-ink line-clamp-2 font-semibold break-words",
+            // The padding and its negative margin give the link's focus ring room inside the clamp's clipping.
+            "text-small @xs:text-body text-ink -m-1 line-clamp-2 p-1 font-semibold break-words",
             state === "dismissed" && "text-ink-faint",
           )}
         >

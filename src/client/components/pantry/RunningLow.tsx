@@ -68,7 +68,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
               <Link
                 to="/pantry/$spoolId"
                 params={{ spoolId: spool.id }}
-                className="focus-ring hover:bg-ink/4 duration-fast flex min-h-16 items-center gap-3.5 px-4 py-2.5 transition-colors"
+                className="focus-ring-inset hover:bg-ink/4 duration-fast flex min-h-16 items-center gap-3.5 px-4 py-2.5 transition-colors"
               >
                 <SpoolDisc color={spool.colorHex} size="md" />
                 <span className="min-w-0 flex-1">

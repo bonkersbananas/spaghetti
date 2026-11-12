@@ -55,6 +55,7 @@ export function CardMenu({ menu, name }: { menu: UpNextMenu; name: string }) {
     <button
       type="button"
       aria-label={`Options for ${name}`}
+      title="Options"
       onClick={
         isDesktop
           ? undefined
