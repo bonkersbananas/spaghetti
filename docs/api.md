@@ -76,7 +76,7 @@ A twist is a model we print our own way: where it came from, what we changed and
 
 ## Recipes
 
-A recipe is the named settings of an attempt that worked (decision [0017](decisions/0017-recipes-are-frozen-attempts.md)). `GET /recipes` lists them newest first (`?material=PLA&finish=silk` narrows to what fits a spool: same material, and the same finish where both have one); `GET /search` also returns `recipes`, `GET /what-worked?item=&material=` returns the material's `recipes`.
+A recipe is the named settings of an attempt that worked (decision [0017](decisions/0017-recipes-are-frozen-attempts.md)). `GET /recipes` lists them newest first (`?material=PLA&finish=silk` narrows to what fits a spool: same material, and the same finish where both have one); `GET /search` also returns `recipes` and `twists` (a plain match over a twist's name, note, source and changes), `GET /what-worked?item=&material=` returns the material's `recipes`.
 
 - `POST /recipes` `{ id, name, note?, sourceAttemptId }` saves an attempt as a recipe: `404` if the attempt is gone, `422 not_worked` unless it worked, `422 no_material` unless it names a filament type. The settings are read from the attempt, never from the request. Idempotent on `id`. `attempts` scope.
 - `PATCH /recipes/:id` `{ name?, note? }`: the only things that change. `attempts` scope.

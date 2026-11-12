@@ -139,6 +139,7 @@ describe("search", () => {
       ideas: [],
       attempts: [],
       recipes: [],
+      twists: [],
       spools: [],
     });
   });
@@ -192,6 +193,7 @@ describe("search", () => {
       ideas: [],
       attempts: [],
       recipes: [],
+      twists: [],
       spools: [],
     });
 
@@ -233,7 +235,14 @@ describe("search", () => {
     expect((await search({ q: "hook", material: "petg" })).builds).toEqual([]);
     // Filters alone list the newest attempts that pass them.
     expect(ids((await search({ outcome: "failures" })).attempts)).toEqual([partial.id, failed.id]);
-    expect(await search({})).toMatchObject({ builds: [], ideas: [], attempts: [], recipes: [], spools: [] });
+    expect(await search({})).toMatchObject({
+      builds: [],
+      ideas: [],
+      attempts: [],
+      recipes: [],
+      twists: [],
+      spools: [],
+    });
   });
 
   it("shows an attempt's own photo, else its build's", async () => {
@@ -378,5 +387,27 @@ describe("search finds what was said in a thread", () => {
     expect((await find("barge")).ideas.map((hit) => hit.item.id)).toEqual([idea.id]);
     await request(`/api/items/${idea.id}`, { method: "DELETE", cookie });
     expect((await find("blue")).ideas).toHaveLength(0);
+  });
+
+  it("finds a twist by its name, a change's value or its source, and not through an outcome filter", async () => {
+    const id = crypto.randomUUID();
+    await request("/api/twists", {
+      method: "POST",
+      cookie,
+      json: {
+        id,
+        name: "Drawer bins, 42 mm grid",
+        sourceUrl: "https://makerworld.com/en/models/487213-drawer-bins",
+        changes: [{ id: crypto.randomUUID(), kind: "material", value: "PETG", label: "", note: "was PLA" }],
+      },
+    });
+    for (const q of ["drawer", "petg", "makerworld"]) {
+      expect(
+        (await search({ q })).twists.map((twist) => twist.id),
+        q,
+      ).toEqual([id]);
+    }
+    expect((await search({ q: "drawer", outcome: "success" })).twists).toEqual([]);
+    expect((await search({ q: "unrelated" })).twists).toEqual([]);
   });
 });

@@ -146,6 +146,8 @@ describe("the MCP endpoint", () => {
       "log_attempt",
       "finish_attempt",
       "list_recipes",
+      "list_twists",
+      "add_twist",
       "list_scout_suggestions",
       "list_spools",
       "weigh_spool",
@@ -198,6 +200,26 @@ describe("tools, scopes and attribution", () => {
     expect(refused.isError).toBe(true);
     expect(refused.text).toContain('"capture"');
     expect((await callTool(made.token, "capture_idea", {})).isError).toBe(true);
+  });
+
+  it("add_twist needs capture, keeps the changes, and list_twists reads them", async () => {
+    const made = await makeAgent(["capture", "read"]);
+    const result = await callTool(made.token, "add_twist", {
+      name: "Drawer bins, 42 mm grid",
+      source_url: "https://makerworld.com/en/models/487213-drawer-bins",
+      changes: [
+        { kind: "scale", value: "84 %", note: "fits the 42 mm grid" },
+        { kind: "tolerance", value: "+0.2 mm" },
+      ],
+    });
+    expect(result.isError).toBe(false);
+    const twistId = field(result.text, "twist_id");
+    const listed = await callTool(made.token, "list_twists", {});
+    expect(listed.text).toContain(`twist_id: ${twistId}`);
+    expect(listed.text).toContain("Scale 84 % · Fit tolerance +0.2 mm");
+    expect(listed.text).toContain("(MakerWorld)");
+    const readOnly = (await makeAgent(["read"], "reader")).token;
+    expect((await callTool(readOnly, "add_twist", { name: "x" })).isError).toBe(true);
   });
 
   it("capture_idea attaches a photo from base64 or an https URL, and refuses the rest", async () => {
@@ -493,6 +515,7 @@ describe("tools, scopes and attribution", () => {
       ["what_worked", { build_id: idea }],
       ["get_build", { build_id: idea }],
       ["list_recipes", {}],
+      ["list_twists", {}],
       ["list_scout_suggestions", {}],
       ["list_spools", {}],
     ] as const) {

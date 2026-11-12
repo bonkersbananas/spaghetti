@@ -1,4 +1,4 @@
-import type { AttemptHit, ItemHit, Recipe, Spool } from "@shared/api";
+import type { AttemptHit, ItemHit, Recipe, Spool, Twist } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
@@ -49,6 +49,7 @@ type Result =
   | { kind: "item"; hit: ItemHit; link: LinkProps }
   | { kind: "attempt"; hit: AttemptHit; link: LinkProps }
   | { kind: "recipe"; hit: Recipe }
+  | { kind: "twist"; hit: Twist; link: LinkProps }
   | { kind: "spool"; hit: Spool; link: LinkProps };
 
 /** An attempt that worked: the answer to "what worked". */
@@ -99,6 +100,11 @@ function Search() {
     const attempts = shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) }));
     return [
       ...shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })),
+      ...(shown.twists ?? []).map((hit) => ({
+        kind: "twist" as const,
+        hit,
+        link: { to: "/twists/$twistId", params: { twistId: hit.id } } as LinkProps,
+      })),
       ...attempts.filter(didWork),
       ...shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
       ...attempts.filter((r) => !didWork(r)),
@@ -169,7 +175,7 @@ function Search() {
         key={
           result.kind === "attempt"
             ? result.hit.attempt.id
-            : result.kind === "recipe" || result.kind === "spool"
+            : result.kind === "recipe" || result.kind === "spool" || result.kind === "twist"
               ? result.hit.id
               : result.hit.item.id
         }
@@ -191,6 +197,18 @@ function Search() {
               part="spool"
               innerRef={common.ref}
               spool={result.hit}
+              terms={common.terms}
+              selected={common.selected}
+              onHover={common.onHover}
+              onOpen={common.onOpen}
+            />
+          </Suspense>
+        ) : result.kind === "twist" ? (
+          <Suspense fallback={<RowSkeleton />}>
+            <Extra
+              part="twist"
+              innerRef={common.ref}
+              twist={result.hit}
               terms={common.terms}
               selected={common.selected}
               onHover={common.onHover}
@@ -220,6 +238,7 @@ function Search() {
   const groups: Array<[string, Result[]]> = shown
     ? [
         ["Recipes", list.filter((r) => r.kind === "recipe")],
+        ["Twists", list.filter((r) => r.kind === "twist")],
         ["What worked", list.filter(didWork)],
         ["Builds", list.filter((r) => r.kind === "item" && r.hit.item.stage !== "idea")],
         ["Attempts", list.filter((r) => r.kind === "attempt" && !didWork(r))],

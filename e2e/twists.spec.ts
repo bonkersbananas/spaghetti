@@ -99,3 +99,34 @@ test("Print it makes a build for the twist, which the twist then lists", async (
   await expect(page.getByRole("heading", { name: "Printed" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Print it again" })).toBeVisible();
 });
+
+test("a build from someone else's model is kept as a twist from its page, and search finds twists", async ({
+  page,
+}) => {
+  await signIn(page);
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: { Origin: origin(page) },
+    data: {
+      id: buildId,
+      title: "Cable chain",
+      stage: "building",
+      note: "https://makerworld.com/en/models/301122-cable-chain",
+    },
+  });
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await page.getByRole("button", { name: "Save as twist" }).click();
+  await expect(page).toHaveURL(/\/twists\/[\w-]+$/);
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("Cable chain");
+  // The build is listed as printed, and the action is gone from it.
+  await expect(page.getByRole("heading", { name: "Printed" })).toBeVisible();
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await expect(page.getByRole("button", { name: "Save as twist" })).toHaveCount(0);
+
+  // Search finds the twist by its name, in its own group.
+  await page.goto("/search?q=cable");
+  const found = page.getByRole("region", { name: "Twists" });
+  await expect(found.getByRole("link", { name: /Cable chain/ })).toBeVisible();
+});

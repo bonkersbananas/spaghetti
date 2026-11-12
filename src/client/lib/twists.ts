@@ -4,6 +4,7 @@ import type { TwistChange } from "@shared/twists";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
+import { patchCachedItem } from "./items";
 import { twistsQuery } from "./twists-query";
 
 export { twistsQuery };
@@ -147,4 +148,26 @@ export function deleteTwist(queryClient: QueryClient, twist: Twist) {
       }
     },
   });
+}
+
+/**
+ * "Save as twist" on a build that was printed from someone else's model: a twist from the build (its model link, title
+ * and cover come along) that the build is then marked as printing. Returns the twist's id so its page can open.
+ */
+export function twistFromBuild(
+  queryClient: QueryClient,
+  build: { id: string; title: string | null; note: string; photo: Photo | null; modelUrl: string | null },
+  userId: string,
+): string {
+  const id = makeTwist(
+    queryClient,
+    {
+      name: suggestedTwistName({ title: build.title }, build.modelUrl),
+      from: { id: build.id, photo: build.photo, modelUrl: build.modelUrl, title: build.title },
+    },
+    userId,
+  );
+  patchCachedItem(queryClient, build.id, (item) => ({ ...item, twistId: id }));
+  void api(`/items/${build.id}`, { method: "PATCH", json: { twistId: id } }).catch(() => undefined);
+  return id;
 }

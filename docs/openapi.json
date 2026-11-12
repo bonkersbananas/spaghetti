@@ -15971,7 +15971,7 @@
     "/api/search": {
       "get": {
         "operationId": "getSearch",
-        "summary": "Searches builds, ideas, attempts and recipes.",
+        "summary": "Searches builds, ideas, attempts, recipes and twists.",
         "description": "Needs the \"read\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "search"
@@ -16069,13 +16069,22 @@
                         "properties": {},
                         "additionalProperties": {}
                       }
+                    },
+                    "twists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": {}
+                      }
                     }
                   },
                   "required": [
                     "builds",
                     "ideas",
                     "attempts",
-                    "recipes"
+                    "recipes",
+                    "twists"
                   ],
                   "additionalProperties": {},
                   "description": "Results by kind."

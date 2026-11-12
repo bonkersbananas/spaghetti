@@ -992,13 +992,14 @@ export const operations: Record<string, Operation> = {
     errors: { 404: notFound("build") },
   },
   "GET /search": {
-    summary: "Searches builds, ideas, attempts and recipes.",
+    summary: "Searches builds, ideas, attempts, recipes and twists.",
     query: searchQuery,
     response: any("Results by kind.", {
       builds: z.array(z.looseObject({})),
       ideas: z.array(z.looseObject({})),
       attempts: z.array(z.looseObject({})),
       recipes: z.array(z.looseObject({})),
+      twists: z.array(z.looseObject({})),
     }),
   },
   "GET /facets": {
