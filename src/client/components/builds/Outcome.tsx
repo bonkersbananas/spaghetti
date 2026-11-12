@@ -129,7 +129,6 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               // icon and the label stay centered in the square, like the other two.
               <>
                 <span
-                  title="Claude's guess"
                   className={cn(
                     "absolute",
                     size === "lg" ? "top-2 right-2" : "top-1.5 right-1.5",
