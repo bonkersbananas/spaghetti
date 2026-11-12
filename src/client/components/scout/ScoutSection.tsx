@@ -8,7 +8,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ScoutCard } from "@/components/ui/ScoutCard";
 import { Section } from "@/components/ui/Section";
 import { duration, ease } from "@/lib/motion";
-import { dismissPick, keepPick, scoutPictureUrl, undoDismiss, undoKeep, useScout, waitingPicks } from "@/lib/scout";
+import { scoutPictureUrl, useScout, waitingPicks } from "@/lib/scout";
+import { dismissPick, keepPick, undoDismiss, undoKeep } from "@/lib/scout-actions";
 
 const NUMBER_WORDS = ["No", "One", "Two", "Three"];
 

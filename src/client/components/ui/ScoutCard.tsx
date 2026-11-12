@@ -45,12 +45,7 @@ export function ScoutCard({
 }: ScoutCardProps) {
   return (
     <article className={cn("bg-cream shadow-soft flex h-full flex-col rounded-lg p-1.5", className)}>
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        tabIndex={-1}
-        aria-hidden
+      <div
         className={cn(
           "duration-base relative block aspect-4/3 w-full overflow-hidden rounded-md transition-opacity",
           state === "dismissed" && "opacity-50",
@@ -60,7 +55,7 @@ export function ScoutCard({
         <span className="bg-veil text-on-veil text-small rounded-pill absolute bottom-2 left-2 inline-flex h-6 items-center px-2.5 font-semibold">
           {siteName}
         </span>
-      </a>
+      </div>
       <div className="flex flex-1 flex-col gap-1 px-2 pt-2.5 pb-1.5">
         <h3
           className={cn(
