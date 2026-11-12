@@ -42,7 +42,7 @@ function RecentlyDeleted() {
           <RowSkeleton />
         </div>
       ) : error ? (
-        <EmptyState className="py-10 md:py-20" illustration={<EmptyPot />} title="Can't look just now">
+        <EmptyState className="py-10 md:py-20" illustration={<EmptyPot />} title="The bin is out of reach">
           The list needs the connection. Nothing is lost.
         </EmptyState>
       ) : empty ? (
