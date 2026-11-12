@@ -4,7 +4,7 @@ import { CameraIcon, PlusIcon } from "@/components/ui/icons";
 import { useCapture } from "@/lib/capture";
 import { type Section, tabs } from "./sections";
 
-function Tab({ to, label, icon: Icon }: Section) {
+function Tab({ to, label, icon: Icon }: Pick<Section, "to" | "label" | "icon">) {
   return (
     <Link
       to={to}
@@ -25,7 +25,7 @@ function Tab({ to, label, icon: Icon }: Section) {
 }
 
 /**
- * Phone navigation, within thumb reach: Today, Ideas, capture, Builds, Journal.
+ * Phone navigation, within thumb reach: Ideas, Builds, capture, Journal, Workshop.
  * The capture button sits in the middle, a little larger, because capturing is
  * the main thing people do. Search is a tool, not a place: it is in the page header.
  */
@@ -117,7 +117,7 @@ function CaptureButton() {
 }
 
 export function TabBar() {
-  const [today, ideas, builds, journal] = tabs;
+  const [ideas, builds, journal, workshop] = tabs;
   return (
     <nav
       aria-label="Sections"
@@ -125,13 +125,13 @@ export function TabBar() {
       className="sg-tabbar bg-cream/92 shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
     >
       <div className="h-tabbar-row mx-auto flex max-w-lg items-stretch px-2">
-        <Tab {...today} />
         <Tab {...ideas} />
         <div className="flex flex-1 items-center justify-center">
           <CaptureButton />
         </div>
         <Tab {...builds} />
         <Tab {...journal} />
+        <Tab {...workshop} />
       </div>
     </nav>
   );

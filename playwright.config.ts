@@ -20,11 +20,11 @@ const ownProject = /(offline|performance|push|share|safe-area)\.spec/;
 
 /**
  * Every spec runs at desktop width. The phone project runs whole only the specs of the core loop, where a phone
- * differs everywhere (signing in and the tab bar, capture, a build and its attempts, Today at the printer, every
+ * differs everywhere (signing in and the tab bar, capture, a build and its attempts, every
  * screen and sheet opening); elsewhere only the tests tagged @phone (a sheet where the desktop has a popover, touch,
  * what happens at the printer). Playwright's grep sees "project file › title @tags".
  */
-const PHONE_SPECS = ["smoke", "ideas", "builds", "today", "screens"];
+const PHONE_SPECS = ["smoke", "ideas", "builds", "screens"];
 const onPhone = [new RegExp(`(^| )(${PHONE_SPECS.join("|")})\\.spec\\.ts `), /@phone\b/];
 
 export default defineConfig({
