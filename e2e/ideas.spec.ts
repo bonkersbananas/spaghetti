@@ -128,3 +128,31 @@ test("deletes an idea at once and brings it back with undo", async ({ page, isMo
   await expect(ideas(page).getByRole("link", { name: /Cable chain/ })).toBeVisible();
   await expect.poll(async () => (await (await page.request.get("/api/items")).json()).items.length).toBe(1);
 });
+
+test("holding the capture button opens the camera, and the photo lands in the sheet", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The capture button is the phone's tab bar");
+  const camera = page.getByTestId("tabbar-camera-input");
+  await expect(camera).toHaveAttribute("capture", "environment");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "New idea" }).click({ delay: 700 });
+  await (await chooser).setFiles("e2e/fixtures/tugboat.jpg");
+  const sheet = page.getByRole("dialog", { name: "New idea" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("img")).toHaveCount(1);
+});
+
+test("a plain tap on the capture button still opens the sheet without the camera", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The capture button is the phone's tab bar");
+  let chosen = false;
+  page.on("filechooser", () => {
+    chosen = true;
+  });
+  await openCapture(page, true);
+  expect(chosen).toBe(false);
+});
