@@ -174,6 +174,8 @@ function Idea({ item }: { item: ItemView }) {
   // A twist is made from the idea with one tap: the idea's model, title and cover come along, and its page opens at once.
   const { twists } = useTwists();
   const existingTwist = twists?.find((twist) => twist.fromItemId === item.id);
+  // The idea's own kept file is not a link out: a twist takes only a model that lives on a site.
+  const twistModelUrl = model && !model.url.startsWith("/api/files/") ? model.url : null;
   function twist() {
     // Until the list has loaded we can't know whether this idea already has one.
     if (!canEdit(item.pending) || !user || !twists) return;
@@ -181,8 +183,8 @@ function Idea({ item }: { item: ItemView }) {
     const id = makeTwist(
       queryClient,
       {
-        name: suggestedTwistName({ title }, model?.url ?? null),
-        from: { id: item.id, photo: photos[0] ?? null, modelUrl: model?.url ?? null, title },
+        name: suggestedTwistName({ title }, twistModelUrl),
+        from: { id: item.id, photo: photos[0] ?? null, modelUrl: twistModelUrl, title },
       },
       user.id,
     );
