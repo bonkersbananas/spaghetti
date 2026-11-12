@@ -12,6 +12,7 @@ import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
+import { clearOfflineData } from "@/lib/offline";
 import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
@@ -59,13 +60,18 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   // The background check of a remembered session found it ended (or this person signed out in another tab).
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: user } = useQuery(sessionQuery);
   useEffect(() => {
-    // Signing out navigates by itself; a session the server ended keeps the page for after signing in again.
+    // Signing out navigates by itself; a session the server ended keeps the page for after signing in again, and
+    // forgets what this device kept of it, as signing out does (signed out from another device, or it lapsed).
     if (user === null && !isSigningOut()) {
-      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } });
+      void clearOfflineData();
+      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } }).then(() =>
+        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" }),
+      );
     }
-  }, [user, navigate]);
+  }, [user, navigate, queryClient]);
   return (
     <CaptureProvider>
       <PaletteProvider>
