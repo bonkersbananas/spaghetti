@@ -27,7 +27,7 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
         className,
       )}
     >
-      <span className="bg-ink/4 flex h-28 items-center overflow-hidden rounded-md px-5" aria-hidden>
+      <span className="bg-ink/4 flex h-28 items-center justify-center overflow-hidden rounded-md px-4" aria-hidden>
         {visual}
       </span>
       <span className="flex items-center gap-3 px-3 pt-3 pb-2.5">
