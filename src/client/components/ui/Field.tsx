@@ -242,6 +242,31 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   // biome-ignore lint/correctness/useExhaustiveDependencies: props.value is the trigger, not an input.
   useLayoutEffect(resize, [resize, props.value]);
 
+  // Re-measure when the web fonts arrive (Safari measures with the fallback font first and kept a
+  // two-line title's height for one line of text) and when the box's width changes (rotation, a sheet).
+  useEffect(() => {
+    let cancelled = false;
+    document.fonts?.ready.then(() => {
+      if (!cancelled) resize();
+    });
+    const el = innerRef.current;
+    if (!el || typeof ResizeObserver === "undefined")
+      return () => {
+        cancelled = true;
+      };
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      resize();
+    });
+    observer.observe(el);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [resize]);
+
   return (
     <FieldFrame id={fieldId} label={label} hint={hint} error={error} saveState={saveState} className={className}>
       <textarea
