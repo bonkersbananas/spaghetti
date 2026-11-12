@@ -1,8 +1,8 @@
-import { and, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { PhotoVariant } from "../shared/api.ts";
 import { CHANGES_KEEP_MS } from "../shared/changes.ts";
 import { PURGE_AFTER_MS } from "../shared/deleted.ts";
-import { getDb } from "./db/index.ts";
+import { type Db, getDb } from "./db/index.ts";
 import {
   attemptFiles,
   attempts,
@@ -13,10 +13,29 @@ import {
   recipes,
   shoppingItems,
   spools,
+  upkeepLogs,
 } from "./db/schema.ts";
 
 export function photoKey(photoId: string, variant: PhotoVariant): string {
   return `photos/${photoId}/${variant}`;
+}
+
+/**
+ * What already stores its picture under photos/<photoId>/: an item's photo, a spool's label or an upkeep log entry
+ * (deleted ones too, until the purge), as "item:<id>", "spool:<id>" or "log:<id>", or null when the id is free. The
+ * three share one key space and the browser picks the id, so an upload under an id that is someone else's must be
+ * refused: it would overwrite that picture, and replacing or purging it later would delete it.
+ */
+export async function photoOwner(db: Db, photoId: string): Promise<string | null> {
+  const [photo, spool, log] = await db.batch([
+    db.select({ itemId: photos.itemId }).from(photos).where(eq(photos.id, photoId)).limit(1),
+    db.select({ id: spools.id }).from(spools).where(eq(spools.photoId, photoId)).limit(1),
+    db.select({ id: upkeepLogs.id }).from(upkeepLogs).where(eq(upkeepLogs.photoId, photoId)).limit(1),
+  ]);
+  if (photo[0]) return `item:${photo[0].itemId}`;
+  if (spool[0]) return `spool:${spool[0].id}`;
+  if (log[0]) return `log:${log[0].id}`;
+  return null;
 }
 
 /** A slicer file's bytes and its plate's picture, in the same bucket as the photos. */
