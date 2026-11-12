@@ -228,6 +228,7 @@ A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with
 
 - Any token or session may read it, whatever its scopes (`x-scopes` on each operation says what it needs). A token is only told about what its scopes allow; a signed-in person sees everything, with the person-only operations marked.
 - Answers are described by schemas written to match the types in `src/shared`; a worker test checks real answers against them. The inside of a few long answers (an attempt's `photoRead`, the printer's `bridge`, the journal's entries) is described loosely: see the types.
+- `docs/openapi.json` is a copy of it as a signed-in person sees it (everything), kept in sync by a test (`UPDATE_OPENAPI=1 pnpm test` rewrites it after an API change). The installed app on an iPhone keeps every spaghetti.day URL inside its window, so there the Agents page links this copy on GitHub, which opens in Safari's sheet.
 - The Agents page links it as "API reference". Anything that reads OpenAPI (a client generator, an agent framework) can use it directly: `curl -H "Authorization: Bearer spg_…" https://spaghetti.day/api/openapi.json`.
 - The webhook request (below) is in the document's `webhooks` section.
 

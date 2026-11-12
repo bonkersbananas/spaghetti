@@ -11,6 +11,7 @@
       "!src/client/routeTree.gen.ts",
       "!worker-configuration.d.ts",
       "!migrations/meta",
+      "!docs/openapi.json",
       "!**/*.md",
       "!test/fixtures/pages"
     ]
