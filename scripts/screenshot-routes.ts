@@ -2375,7 +2375,7 @@ export const shots: Shot[] = [
     path: "/shopping",
     prepare: async (page) => {
       await page.getByRole("button", { name: "Hardened steel nozzle, 0.4 mm", exact: true }).click();
-      await page.getByRole("dialog").getByLabel("Prisjakt").waitFor();
+      await page.getByRole("dialog").getByLabel("Prisjakt", { exact: true }).waitFor();
     },
   },
   {
