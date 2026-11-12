@@ -18,6 +18,7 @@ export {
   ArrowUUpLeft as ReopenIcon,
   Basket as ShoppingIcon,
   Bell as BellIcon,
+  Binoculars as ScoutIcon,
   BookBookmark as RecipeIcon,
   BookOpenText as JournalIcon,
   CalendarBlank as CalendarIcon,

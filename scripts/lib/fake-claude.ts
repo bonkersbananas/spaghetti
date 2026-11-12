@@ -12,7 +12,8 @@
  * API error, `quiet` has nothing to add, anything else is a short paragraph.
  *
  * A request that asks which models to print next is the idea scout (decision 0039): a word in the notebook (a saved
- * idea's title) decides the answer: `slow` takes ten seconds, `refused` is refused, `broken` is an API error, `hollow`
+ * idea's title) decides the answer: without the word `scout` in the notebook it finds nothing (unless started with
+ * `scoutAlways`, as the screenshots are), `scout-slow` takes ten seconds, `scout-refused` is refused, `scout-broken` is an API error, `scout-hollow`
  * suggests only a dead link, anything else is three good models and one dead link (an address with `dead` in it,
  * which the Worker drops because it checks links, as it does for real, against nothing but this stand-in).
  *
@@ -316,22 +317,25 @@ const SCOUT_MODELS = [
   },
 ];
 
-async function answerScout(base: string, body: string, response: import("node:http").ServerResponse) {
+async function answerScout(base: string, always: boolean, body: string, response: import("node:http").ServerResponse) {
   let words = "";
   try {
     words = String(JSON.parse(body).messages?.[0]?.content ?? "").toLowerCase();
   } catch {
     // An unreadable request gets the good answer.
   }
-  if (words.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+  if (words.includes("scout-slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
   response.setHeader("Content-Type", "application/json");
-  if (words.includes("broken")) {
+  if (words.includes("scout-broken")) {
     response.statusCode = 500;
     response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
     return;
   }
-  const refused = words.includes("refused");
-  const models = words.includes("hollow") ? SCOUT_MODELS.slice(3) : SCOUT_MODELS;
+  const refused = words.includes("scout-refused");
+  // Only a notebook that mentions "scout" (or a stand-in started for the screenshots) gets models: the e2e tests' other
+  // specs share the database and must find Today as they left it.
+  const models =
+    !always && !words.includes("scout") ? [] : words.includes("scout-hollow") ? SCOUT_MODELS.slice(3) : SCOUT_MODELS;
   const answer = {
     suggestions: models.map((model, index) => ({ ...model, imageUrl: `${base}/images/${(index % 3) + 1}.jpg` })),
   };
@@ -392,7 +396,10 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
   });
 }
 
-export async function startFakeClaude(port: number): Promise<{ url: string; stop: () => void; server: Server }> {
+export async function startFakeClaude(
+  port: number,
+  { scoutAlways = false }: { scoutAlways?: boolean } = {},
+): Promise<{ url: string; stop: () => void; server: Server }> {
   const base = `http://127.0.0.1:${port}`;
   // The model's pictures, served from here (the Worker allows this one origin for pictures while it talks to a stand-in).
   const pictures = [1, 2, 3].map((n) => readFileSync(join(root, `e2e/fixtures/model-${n}.jpg`)));
@@ -410,7 +417,7 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
     request.on("end", async () => {
       if (body.includes("Read the spool label")) return answerLabel(body, response);
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
-      if (body.includes("Which models should they print next?")) return answerScout(base, body, response);
+      if (body.includes("Which models should they print next?")) return answerScout(base, scoutAlways, body, response);
       if (body.includes("What is the pattern in this week, if there is one?")) return answerWeek(body, response);
       if (body.includes('"type":"image"')) return answerPhoto(body, response);
       const asked = body.match(/https?:\/\/[^"\\\s]+/)?.[0] ?? "";

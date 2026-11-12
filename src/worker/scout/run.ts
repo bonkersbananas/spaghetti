@@ -152,9 +152,13 @@ export async function runScout(
   };
   try {
     const notebook: ScoutNotebook = await scoutNotebook(db);
-    if (!notebook.hasSignal) return await settle("nothing", { runOutcome: "empty" });
     // A stand-in server (the e2e tests, screenshots) isn't counted: the cap is for the bill.
     const standIn = !!env.ANTHROPIC_BASE_URL?.trim();
+    // Nothing to go on yet: no guess, and no round kept for the week (the first idea can still get its scouting).
+    if (!notebook.hasSignal) {
+      await db.delete(scoutRounds).where(eq(scoutRounds.monday, monday));
+      return "nothing";
+    }
     const since = new Date(now - (now % DAY_MS));
     if (!standIn && (await db.$count(scoutRounds, gte(scoutRounds.ranAt, since))) >= SCOUT_RUNS_PER_DAY) {
       return await settle("failed", { runOutcome: "cap" });
@@ -200,8 +204,14 @@ export async function runScout(
         kept: chosen.length,
       }),
     };
-    if (!chosen.length)
+    if (!chosen.length) {
+      // A stand-in that has nothing to say isn't kept as the week's answer, so a test can ask again.
+      if (standIn && !answer.suggestions.length) {
+        await db.delete(scoutRounds).where(eq(scoutRounds.monday, monday));
+        return "nothing";
+      }
       return await settle("nothing", { runOutcome: answer.suggestions.length ? "all_dead" : "nothing", ...record });
+    }
 
     for (const [position, pick] of chosen.entries()) {
       const id = crypto.randomUUID();

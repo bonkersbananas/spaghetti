@@ -220,7 +220,8 @@ describe("the weekly scout", () => {
     const web = stubWeb(good);
     expect(await scoutTick(env, wed)).toBe("nothing");
     expect(web.asked).toEqual([]);
-    expect((await rounds()).results[0]).toMatchObject({ status: "nothing", outcome: "empty" });
+    // No round is kept for the week: the first idea can still be scouted.
+    expect((await rounds()).results).toHaveLength(0);
   });
 
   it("drops a link that is dead, challenged or not a model page, and keeps the rest", async () => {

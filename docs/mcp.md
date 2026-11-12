@@ -69,6 +69,7 @@ Any client that takes a JSON config:
 | `start_attempt` | A print has started: an attempt with no outcome yet | `attempts` |
 | `log_attempt` | A print that is already done, with outcome, tags, note, settings and, for a build with parts, `parts` (`part_id` and good pieces) | `attempts` |
 | `finish_attempt` | Give a printing attempt its outcome (and `parts` counts); a spaghetti counts no pieces unless a number is given | `attempts` |
+| `list_scout_suggestions` | This week's three models the idea scout suggested, with why they fit and whether they were kept or put away. Read-only: keeping or dismissing one is for people ([0039](decisions/0039-the-idea-scout-suggests-three-models-a-week.md)) | `read` |
 | `list_spools` | The pantry, with each spool's slot, level and (where it has gram data) grams left | `read` |
 | `weigh_spool` | A weighing: a fresh baseline for the grams left on a spool (`on_scale` minus its empty weight, or `grams_left`) | `printer` |
 | `get_week` | One week (Monday to Sunday): prints and how they went, builds finished, ideas, comments, filament and Claude's paragraph when there is one | `read` |
