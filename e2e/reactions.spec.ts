@@ -178,3 +178,44 @@ test("the other person's emoji shows with a tooltip saying who", async ({ page }
   await expect(pill).toHaveAttribute("aria-pressed", "false");
   await samSide.context.close();
 });
+
+test("with the keyboard up, the search results are in view above the field", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "Only phones have an on-screen keyboard");
+  const id = await newIdea(page);
+  await page.goto(`/ideas/${id}`);
+  await page.getByRole("button", { name: "React to this idea" }).click();
+  await page.getByRole("button", { name: "More emoji" }).click();
+  const search = page.getByRole("searchbox", { name: "Search emoji" });
+  await expect(search).toBeVisible();
+  // What iOS Safari does when the keyboard comes up: the layout stays, the visual viewport shrinks to what is left.
+  const visible = 470;
+  await page.evaluate((height) => {
+    const viewport = window.visualViewport;
+    if (!viewport) throw new Error("No visualViewport");
+    Object.defineProperty(viewport, "height", { configurable: true, get: () => height });
+    viewport.dispatchEvent(new Event("resize"));
+  }, visible);
+  const dialog = page.getByRole("dialog", { name: "React to this idea" });
+  const title = dialog.getByRole("heading", { name: "React to this idea" });
+  await expect.poll(async () => (await search.boundingBox())?.y ?? 9999).toBeLessThan(visible - 44);
+  const titleY = (await title.boundingBox())?.y;
+
+  await search.click();
+  await search.pressSequentially("rock", { delay: 30 });
+  const rocket = dialog.getByRole("gridcell", { name: /^rocket$/i });
+  await expect(rocket).toBeInViewport({ ratio: 1 });
+  // The results end right above the field, and the sheet's top didn't move while typing.
+  const rocketBox = await rocket.boundingBox();
+  const searchBox = await search.boundingBox();
+  expect((rocketBox?.y ?? 0) + (rocketBox?.height ?? 0)).toBeLessThanOrEqual((searchBox?.y ?? 0) + 1);
+  expect(Math.abs(((await title.boundingBox())?.y ?? 0) - (titleY ?? 0))).toBeLessThan(2);
+  await expect(title).toBeInViewport();
+
+  // Nothing matching keeps the sheet where it is, with its friendly word in view.
+  await search.fill("zzzzq");
+  await expect(dialog.getByText("Nothing like that in the pantry")).toBeInViewport();
+  expect(Math.abs(((await title.boundingBox())?.y ?? 0) - (titleY ?? 0))).toBeLessThan(2);
+});
