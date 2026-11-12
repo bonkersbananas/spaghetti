@@ -139,7 +139,7 @@ function Shell() {
           event.preventDefault();
           focusContent();
         }}
-        className="text-small text-ink bg-lifted shadow-float focus-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-md px-3 py-2 font-medium focus-visible:translate-y-0"
+        className="text-small text-ink bg-lifted shadow-float focus-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-md px-3 py-2 font-medium focus-visible:translate-y-0 max-md:hidden"
       >
         Skip to content
       </a>
