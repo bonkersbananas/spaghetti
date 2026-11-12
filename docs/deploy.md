@@ -30,7 +30,24 @@ One-time setup (the bucket, the domain's `www` record and redirect rule, the zon
 pnpm ship
 ```
 
-(pnpm has its own `deploy` command, as it has `doctor`, so ours is `ship`. It is `scripts/ship.ts`.) It runs `pnpm build`, applies the remote migrations (`wrangler d1 migrations apply DB --remote`) and then `wrangler deploy`. `pnpm ship --help` prints the usage and deploys nothing; `--message "<text>"` sets the version message, and any other argument is refused. Migrations go first, so a schema change must keep the running version working (add, don't rename or drop in one step).
+(pnpm has its own `deploy` command, as it has `doctor`, so ours is `ship`. It is `scripts/ship.ts`.) It runs `pnpm build`, applies the remote migrations (`wrangler d1 migrations apply DB --remote`) and then `wrangler deploy`. `pnpm ship --help` prints the usage and deploys nothing; `--message "<text>"` sets the version message, `--note "<sentence>"` says what changed for the two people (below), and any other argument is refused. Migrations go first, so a schema change must keep the running version working (add, don't rename or drop in one step).
+
+### The note: what changed for the two people
+
+The update toast ("A new version is ready") says in one sentence what is new. The sentence is written when you ship, with `--note`, not per pull request:
+
+```sh
+pnpm ship --note "You can react to comments now."
+```
+
+Write it the same way every time:
+
+- One sentence, at most about 60 characters, in plain words about what the two people can now do or what got better: "You can react to comments now.", "Photos open faster on phones."
+- No jargon (PR, CI, e2e, refactor, bundle), no names, no issue numbers.
+- Leave out what people can't notice (tests, tooling, docs). When nothing visible changed since the last ship, ship without `--note`: no entry is added.
+- Several visible changes: pick the one they will care about most, or join two short ones.
+
+The ship adds the sentence to `whats-new.json` in the build, made from the live site's current file plus the new entry (the last 30 are kept, each named by the build's entry script, `/assets/index-<hash>.js`). A page several versions behind shows the notes newer than its own version (the newest two joined); a page whose version isn't listed (shipped without a note) shows only the newest. If the live file can't be read the ship starts a new one, and if the note can't be written it deploys without it. Without any note (local builds, Docker, a failed fetch) the toast keeps its old words, "Refresh to get it. Nothing you captured is lost."
 
 Check a deploy with `curl https://spaghetti.day/api/health`, which answers `{"ok":true}`.
 

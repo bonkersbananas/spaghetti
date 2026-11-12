@@ -53,6 +53,9 @@ interface UndoOptions {
  * Toasts. Deletes never ask "are you sure?": do the delete optimistically and
  * call `toast.undo("Idea deleted", { onUndo })` so it can be taken back.
  */
+/** The update toast's words when there is no note about what changed. */
+const UPDATE_TEXT = "Refresh to get it. Nothing you captured is lost.";
+
 export const toast = {
   message: (message: string, description?: string) => show((t) => t(message, { description })),
   success: (message: string, description?: string) => show((t) => t.success(message, { description })),
@@ -109,12 +112,15 @@ export const toast = {
         { duration: Number.POSITIVE_INFINITY, dismissible: true },
       ),
     ),
-  /** A new version of the app is installed and waiting: stays until it is taken or dismissed. */
-  update: (onRefresh: () => void) =>
+  /**
+   * A new version of the app is installed and waiting: stays until it is taken or dismissed. `sentence` says what
+   * changed (lib/whats-new.ts); calling this again with the same id swaps the words in place.
+   */
+  update: (onRefresh: () => void, sentence?: string) =>
     show((t) =>
       t("A new version is ready", {
         id: "app-update",
-        description: "Refresh to get it. Nothing you captured is lost.",
+        description: sentence ?? UPDATE_TEXT,
         duration: Number.POSITIVE_INFINITY,
         dismissible: true,
         action: { label: "Refresh", onClick: onRefresh },

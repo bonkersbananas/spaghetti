@@ -17,3 +17,7 @@
 # The picture a shared link to spaghetti.day shows (pnpm landing:shots makes it).
 /og.jpg
   Cache-Control: public, max-age=86400
+
+# What changed in each version (the ship writes it, scripts/ship.ts): the update toast reads it fresh.
+/whats-new.json
+  Cache-Control: no-cache
