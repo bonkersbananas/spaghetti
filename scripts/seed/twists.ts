@@ -22,13 +22,6 @@ const change = (n: number, kind: string, value: string, extra: { label?: string;
 
 const specs = [
   {
-    id: SEED_TWIST_IDS.lid,
-    name: "Pen cup, a name added",
-    note: "Marie's name on the front in 8 mm letters, debossed.",
-    sourceUrl: "https://makerworld.com/en/models/633117-pen-cup",
-    changes: [change(9, "text", "“Marie”", { note: "8 mm, debossed" })],
-  },
-  {
     id: SEED_TWIST_IDS.bins,
     name: "Drawer bins, 42 mm grid",
     note: "The original is 50 mm and our drawers are 42. The lid was tight at +0.1, so +0.2 is right. Don't scale the text on its own.",
@@ -60,10 +53,17 @@ const specs = [
     sourceUrl: "https://www.printables.com/model/611220-spool-holder",
     changes: [change(7, "tolerance", "+0.2 mm"), change(8, "param", "4", { label: "Wall count" })],
   },
+  {
+    id: SEED_TWIST_IDS.lid,
+    name: "Pen cup, a name added",
+    note: "Marie's name on the front in 8 mm letters, debossed.",
+    sourceUrl: "https://makerworld.com/en/models/633117-pen-cup",
+    changes: [change(9, "text", "“Marie”", { note: "8 mm, debossed" })],
+  },
 ];
 
 export async function seedTwists(alex: APIRequestContext, origin: string) {
-  // The list shows the newest first: the one the screens lead with is made last.
+  // The list shows the newest first: the specs are made in reverse, so the first leads the list and the last (no picture) ends it.
   for (const spec of [...specs].reverse()) {
     const saved = await alex.post("/api/twists", { headers: { Origin: origin }, data: spec });
     // screenshots:compare seeds the base with this seed: a base without twists has no such route.

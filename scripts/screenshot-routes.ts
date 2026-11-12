@@ -2283,18 +2283,6 @@ export const shots: Shot[] = [
       await page.getByRole("link", { name: /Pen cup/ }).waitFor();
     },
   },
-  {
-    name: "twists-empty",
-    path: "/twists",
-    prepare: async (page) => {
-      const headers = { Origin: new URL(page.url()).origin };
-      const { twists } = await (await page.request.get("/api/twists")).json();
-      for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers });
-      await page.reload();
-      await page.getByText("Nothing twisted yet").waitFor();
-      await page.waitForTimeout(600);
-    },
-  },
   { name: "pantry", path: "/pantry", fullPage: true },
   {
     // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
@@ -2947,6 +2935,19 @@ export const shots: Shot[] = [
     // The samples' pictures are put in the preview cache once the section has fetched them.
     prepare: async (page) => {
       await page.locator("#journal img").first().waitFor({ state: "attached" });
+    },
+  },
+  // Last: it deletes the seeded twists, which the shots after it (the Workshop hub) would show gone.
+  {
+    name: "twists-empty",
+    path: "/twists",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const { twists } = await (await page.request.get("/api/twists")).json();
+      for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers });
+      await page.reload();
+      await page.getByText("Nothing twisted yet").waitFor();
+      await page.waitForTimeout(600);
     },
   },
 ];

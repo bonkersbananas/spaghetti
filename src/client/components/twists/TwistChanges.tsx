@@ -105,6 +105,13 @@ function ChangeFields({
         icon={TrashIcon}
         label={`Remove ${name.toLowerCase()}`}
         onClick={onRemove}
+        // Safari doesn't focus a button on a click, so the fields' blur would close the row before the click lands:
+        // the press itself removes it (a key press still arrives as the click).
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          onRemove();
+        }}
         className="@lg:col-start-4 @lg:row-start-1"
       />
       <input
@@ -169,7 +176,7 @@ export function TwistChanges({
                       label={`Remove ${changeName(change).toLowerCase()}`}
                       size="sm"
                       onClick={() => remove(change.id)}
-                      className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-focus-within:md:flex group-hover:md:flex"
+                      className="absolute top-1/2 right-0 -translate-y-1/2 max-md:hidden md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
                     />
                   )}
                 </>

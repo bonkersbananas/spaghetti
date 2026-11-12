@@ -146,6 +146,7 @@ function TwistBody({ twist }: { twist: Twist }) {
 
           <NoteField
             label="Note"
+            maxLength={TWIST_NOTE_MAX}
             value={value.note}
             onChange={(note) => change({ note })}
             readOnly={readOnly}
