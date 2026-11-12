@@ -296,6 +296,8 @@ test("the keyboard's inset eases, so a phone sheet rides up with it, and is inst
     });
   await page.goto("/ideas");
   expect((await transition()).property).toContain("--sg-keyboard-inset");
+  // The height above the keyboard moves with it, so a tall sheet's top and bottom ease together.
+  expect((await transition()).property).toContain("--sg-visible-height");
   expect((await transition()).duration).not.toBe("0s");
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(Number.parseFloat((await transition()).duration)).toBeLessThan(0.001);
