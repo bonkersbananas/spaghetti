@@ -46,7 +46,7 @@ export function ShoppingSheet({
       title="On the list"
       footer={item && <ShoppingActions key={item.id} item={item} onClose={() => onOpenChange(false)} />}
     >
-      {item && <ShoppingBody key={item.id} item={item} onClose={() => onOpenChange(false)} />}
+      {item && <ShoppingBody key={item.id} item={item} />}
     </Sheet>
   );
 }
@@ -89,9 +89,8 @@ function ShoppingActions({ item, onClose }: { item: ShoppingItem; onClose: () =>
 const linkError = (value: string) =>
   value.trim() && !isWebLink(value.trim()) ? "A web address, starting with https://" : undefined;
 
-function ShoppingBody({ item, onClose }: { item: ShoppingItem; onClose: () => void }) {
+function ShoppingBody({ item }: { item: ShoppingItem }) {
   const queryClient = useQueryClient();
-  const { data: me } = useQuery(sessionQuery);
   const readOnly = useReadOnly();
   const shown = useShoppingName(item);
   const { value, change, saveState } = useLiveFields(
