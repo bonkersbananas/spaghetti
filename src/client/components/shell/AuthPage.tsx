@@ -21,7 +21,7 @@ export function AuthPage({
   return (
     <main className="paper-grain bg-paper pt-safe pb-safe relative flex min-h-dvh flex-col items-center px-5">
       {/* The mark sits at the same height on every one of these pages (centering moved it with the card). */}
-      <div className="flex w-full max-w-sm flex-1 flex-col pt-[clamp(2.5rem,12dvh,7rem)] pb-10">
+      <div className="flex w-full max-w-sm flex-1 flex-col pt-6 pb-10 md:pt-[clamp(2.5rem,12dvh,7rem)]">
         <m.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
