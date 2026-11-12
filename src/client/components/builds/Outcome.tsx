@@ -1,6 +1,7 @@
 import { OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
 import { m } from "motion/react";
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
+import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Chip, type ChipTone } from "@/components/ui/Chip";
 import {
   FinishIcon,
@@ -84,66 +85,99 @@ interface OutcomePickerProps {
 export function OutcomePicker({ value, onChange, size = "lg", suggested = null, className }: OutcomePickerProps) {
   // The picked icon springs in, but only for a pick made here: opening an attempt that already has an outcome doesn't.
   const [picked, setPicked] = useState(false);
+  const kind = picked && value === "failed";
   return (
-    <div role="radiogroup" aria-label="How did it go?" className={cn("grid grid-cols-3 gap-2.5", className)}>
-      {OUTCOMES.map((outcome) => {
-        const OutcomeIcon = outcomeIcons[outcome];
-        const selected = value === outcome;
-        const hinted = !value && suggested === outcome;
-        return (
-          // biome-ignore lint/a11y/useSemanticElements: big tactile buttons; a radio input can't be styled like this.
-          <button
-            key={outcome}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => {
-              setPicked(true);
-              tap();
-              onChange(outcome);
-            }}
-            className={cn(
-              "pressable focus-ring relative flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
-              size === "lg" ? "text-body h-22 md:h-20" : "text-small h-16 gap-1",
-              selected
-                ? cn(selectedStyles[outcome], "ring-2 ring-inset")
-                : hinted
-                  ? cn(suggestedStyles[outcome], "hover:bg-ink/4")
-                  : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
-            )}
-          >
-            {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
-                Keyed on being picked, so the icon is new when it is, and answers the tap with a small spring. */}
-            <m.span
-              key={selected ? "picked" : "idle"}
-              initial={selected && picked ? { scale: 0.8 } : false}
-              animate={{ scale: 1 }}
-              transition={spring.snappy}
-              className={cn("flex", hinted && suggestedIcons[outcome])}
+    <>
+      <div role="radiogroup" aria-label="How did it go?" className={cn("grid grid-cols-3 gap-2.5", className)}>
+        {OUTCOMES.map((outcome) => {
+          const OutcomeIcon = outcomeIcons[outcome];
+          const selected = value === outcome;
+          const hinted = !value && suggested === outcome;
+          return (
+            // biome-ignore lint/a11y/useSemanticElements: big tactile buttons; a radio input can't be styled like this.
+            <button
+              key={outcome}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => {
+                setPicked(true);
+                tap();
+                onChange(outcome);
+              }}
+              className={cn(
+                "pressable focus-ring relative flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
+                size === "lg" ? "text-body h-22 md:h-20" : "text-small h-16 gap-1",
+                selected
+                  ? cn(selectedStyles[outcome], "ring-2 ring-inset")
+                  : hinted
+                    ? cn(suggestedStyles[outcome], "hover:bg-ink/4")
+                    : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
+              )}
             >
-              <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
-            </m.span>
-            {OUTCOME_LABELS[outcome]}
-            {hinted && (
-              // Claude's sparkle in the corner (as in its lines) and the word for screen readers: nothing in the flow, so the
-              // icon and the label stay centered in the square, like the other two.
-              <>
-                <span
-                  className={cn(
-                    "absolute",
-                    size === "lg" ? "top-2 right-2" : "top-1.5 right-1.5",
-                    suggestedMarks[outcome],
-                  )}
-                >
-                  <SparkleIcon size={14} weight="fill" aria-hidden />
-                </span>
-                <span className="sr-only"> suggested</span>
-              </>
-            )}
-          </button>
-        );
-      })}
-    </div>
+              {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
+                Keyed on being picked, so the icon is new when it is, and answers the tap with a small spring. */}
+              <m.span
+                key={selected ? "picked" : "idle"}
+                // Spaghetti settles and tilts back, gently: no pop for the one that didn't go well.
+                initial={
+                  selected && picked ? (outcome === "failed" ? { scale: 0.9, rotate: -8 } : { scale: 0.8 }) : false
+                }
+                animate={{ scale: 1, rotate: 0 }}
+                transition={outcome === "failed" ? spring.gentle : spring.snappy}
+                className={cn("relative flex", hinted && suggestedIcons[outcome])}
+              >
+                <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
+                {selected && picked && outcome === "success" && <Sprinkle />}
+              </m.span>
+              {OUTCOME_LABELS[outcome]}
+              {hinted && (
+                // Claude's sparkle in the corner (as in its lines) and the word for screen readers: nothing in the flow, so the
+                // icon and the label stay centered in the square, like the other two.
+                <>
+                  <span
+                    className={cn(
+                      "absolute",
+                      size === "lg" ? "top-2 right-2" : "top-1.5 right-1.5",
+                      suggestedMarks[outcome],
+                    )}
+                  >
+                    <SparkleIcon size={14} weight="fill" aria-hidden />
+                  </span>
+                  <span className="sr-only"> suggested</span>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {/* A failure is worth recording: a pick made here is met kindly, in the same quiet voice as the rest. The line grows
+        into place (the -mt-3 takes back the gap its box would add while empty) instead of shoving the form down. */}
+      {size === "lg" && (
+        <AutoHeight trigger={kind} className="-mt-3">
+          {kind && (
+            <p role="status" className="text-small text-ink-soft sg-fade-in px-0.5 pt-3">
+              Good one to have on record. It shows the next try what to change.
+            </p>
+          )}
+        </AutoHeight>
+      )}
+    </>
+  );
+}
+
+/** A pinch of grated parmesan thrown off the check when something worked: six specks fly out and fade (CSS only, once). */
+function Sprinkle() {
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-0">
+      {[0, 60, 120, 180, 240, 300].map((angle) => (
+        <span
+          key={angle}
+          className="sg-speck bg-semolina rounded-pill absolute top-1/2 left-1/2 -mt-0.5 -ml-0.5 size-1.5"
+          style={{ "--sg-angle": `${angle + 20}deg` } as CSSProperties} // design-lint-ignore
+        />
+      ))}
+    </span>
   );
 }
 
