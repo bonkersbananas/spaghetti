@@ -285,3 +285,18 @@ test("Worked throws a pinch of parmesan and spaghetti is met kindly, only for a 
   await expect(page.getByRole("dialog", { name: "Attempt 1" }).getByRole("radio", { name: "Spaghetti" })).toBeChecked();
   await expect(page.getByText("Good one to have on record")).toHaveCount(0);
 });
+
+test("the keyboard's inset eases, so a phone sheet rides up with it, and is instant with reduced motion", async ({
+  page,
+}) => {
+  const transition = () =>
+    page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      return { property: style.transitionProperty, duration: style.transitionDuration };
+    });
+  await page.goto("/ideas");
+  expect((await transition()).property).toContain("--sg-keyboard-inset");
+  expect((await transition()).duration).not.toBe("0s");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(Number.parseFloat((await transition()).duration)).toBeLessThan(0.001);
+});
