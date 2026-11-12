@@ -253,6 +253,13 @@
       "when": 1794453445543,
       "tag": "0035_shopping-prices",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1794453934573,
+      "tag": "0036_shopping-price-suggestions",
+      "breakpoints": true
     }
   ]
 }

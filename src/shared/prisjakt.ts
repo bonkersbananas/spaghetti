@@ -133,3 +133,17 @@ export interface ShoppingPrices {
   count: number | null;
   offers: PriceOffer[];
 }
+
+/** Searches for a Prisjakt page, per day for the whole workspace: a key can't run up a bill. */
+export const SUGGESTIONS_PER_DAY = 20;
+
+/** A Prisjakt page that might be the thing, found through a search engine's results and waiting for a person's yes. */
+export interface PriceSuggestion {
+  /** A canonical product page address (`prisjaktProduct`). */
+  url: string;
+  /** The title the search result gave it. */
+  title: string | null;
+}
+
+/** Where the looking stands: a search is on its way, it found a page to confirm, or it found nothing. */
+export type SuggestState = "searching" | "found" | "none";
