@@ -174,7 +174,16 @@ await pool(playwrightJobs, async (job) => {
   const log = stripVTControlCharacters(await (await get(`actions/jobs/${job.id}/logs`)).text());
   const lines = log.split("\n");
   const started = lines.find((line) => /Running \d+ tests? using \d+ workers?/.test(line));
-  const work = (job.steps ?? []).find((step) => !SETUP.test(step.name) && !TEARDOWN.test(step.name));
+  // The step the tests ran in (others, such as restoring main's first-load sizes, can come before it).
+  const startedAt = started ? Date.parse(started.slice(0, 28)) : Number.NaN;
+  const work =
+    (job.steps ?? []).find(
+      (step) =>
+        step.started_at &&
+        step.completed_at &&
+        Date.parse(step.started_at) - 1000 <= startedAt &&
+        startedAt <= Date.parse(step.completed_at) + 1000,
+    ) ?? (job.steps ?? []).find((step) => !SETUP.test(step.name) && !TEARDOWN.test(step.name));
   const phases = byJob.get(jobKind(job.name))?.find((p) => p.job === job.id);
   if (started && work?.started_at && work.completed_at && phases) {
     const at = started.slice(0, 28);
