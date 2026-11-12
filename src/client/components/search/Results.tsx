@@ -181,6 +181,8 @@ function TagRow({ children }: { children: ReactNode[] }) {
   const inner = useRef<HTMLSpanElement>(null);
   const list = children.flat().filter(Boolean);
   const [fit, setFit] = useState(list.length);
+  // The row's width when chips are left out: just the ones shown, so the "+2" sits right after the last of them.
+  const [shown, setShown] = useState<number>();
   // biome-ignore lint/correctness/useExhaustiveDependencies: measured again when the number of tags changes.
   useLayoutEffect(() => {
     const measure = () => {
@@ -191,6 +193,7 @@ function TagRow({ children }: { children: ReactNode[] }) {
       // Everything fits, or leave room for the "+N" (about 2.5rem).
       if (right(n - 1) > room) for (n = kids.length; n > 1 && right(n - 1) > room - 40; n--);
       setFit(n);
+      setShown(n < kids.length ? right(n - 1) : undefined);
     };
     measure();
     // Again when the row's width changes (turning the phone) or a chip's does (a font arriving).
@@ -202,7 +205,11 @@ function TagRow({ children }: { children: ReactNode[] }) {
   const hidden = desktop ? 0 : list.length - fit;
   return (
     <span ref={outer} className="flex items-center gap-1.5">
-      <span ref={inner} className="flex min-w-0 gap-1.5 overflow-hidden md:flex-wrap">
+      <span
+        ref={inner}
+        style={desktop ? undefined : { maxWidth: shown }}
+        className="relative flex min-w-0 gap-1.5 overflow-hidden md:flex-wrap"
+      >
         {list.map((chip, i) => (
           <span
             key={(chip as { key?: string }).key ?? i}
