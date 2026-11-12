@@ -44,15 +44,27 @@ interface FileCardProps {
   /** Sits on the plate picture's corner (the "3D" control). */
   plateOverlay?: ReactNode;
   onRemove?: () => void;
+  /** On a story card: no box of its own, a smaller plate, and only what the card's other lines don't say. */
+  compact?: boolean;
   className?: string;
 }
 
 /** A slicer file on an attempt: the plate that was meant to print, the file's name, and a way to get it back. */
-export function FileCard({ name, thumbSrc, meta, note, download, plateOverlay, onRemove, className }: FileCardProps) {
+export function FileCard({
+  name,
+  thumbSrc,
+  meta,
+  note,
+  download,
+  plateOverlay,
+  onRemove,
+  compact,
+  className,
+}: FileCardProps) {
   return (
-    <div className={cn("bg-ink/3 flex items-center gap-3 rounded-lg p-2.5 pr-1.5", className)}>
+    <div className={cn("flex items-center gap-3", compact ? "-mr-1.5" : "bg-ink/3 rounded-lg p-2.5 pr-1.5", className)}>
       <span className="relative shrink-0">
-        <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-16" />
+        <PlateThumb src={thumbSrc} alt="The plate, as sliced" className={compact ? "size-12" : "size-16"} />
         {plateOverlay}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -105,9 +117,11 @@ export function SavedFileCard({
   filaments,
   printing,
   onRemove,
+  compact,
   className,
 }: {
   file: AttemptFileView;
+  compact?: boolean;
   /** The attempt, while it prints: the 3D view then follows the printer. */
   printing?: PrintingAttempt;
   /** The attempt's filaments: their colours stand in for any the file doesn't give. */
@@ -129,6 +143,7 @@ export function SavedFileCard({
         ) : undefined
       }
       onRemove={onRemove}
+      compact={compact}
       className={className}
     />
   );
