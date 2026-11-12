@@ -174,12 +174,13 @@ export const searchableName = (name: string) => (name.trim().length >= MIN_NAME 
 /**
  * Looks for the Prisjakt page of a thing that has none, once per name (`force` is the person asking again). Records
  * a suggestion for them to confirm; changes nothing else. Never throws. Returns false when it did nothing: no key,
- * a Prisjakt link already, no name, one already searched or on its way, or the day's cap.
+ * a Prisjakt link already, no name, one already searched or on its way, or the day's cap. `firstOnly` searches only
+ * for a thing never searched for (a name given after a link-only add, not every rename).
  */
 export async function suggestPage(
   env: Env,
   id: string,
-  { force = false, db = getDb(env.DB) }: { force?: boolean; db?: Db } = {},
+  { force = false, firstOnly = false, db = getDb(env.DB) }: { force?: boolean; firstOnly?: boolean; db?: Db } = {},
 ): Promise<boolean> {
   const apiKey = env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return false;
@@ -196,6 +197,7 @@ export async function suggestPage(
       row.suggestionClaimedAt && !row.suggestionDoneAt && now - row.suggestionClaimedAt.getTime() < SEARCH_STALE_MS;
     if (onItsWay) return false;
     if (!force && row.suggestionTried === name) return false;
+    if (firstOnly && row.suggestionTried) return false;
     // Taking the job: only one of several callers goes on.
     const claimed = await db
       .update(shoppingItems)

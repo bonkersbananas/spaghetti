@@ -16,7 +16,12 @@ const jpeg = () =>
   new Uint8Array([
     0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x04, 0xb0, 0x06, 0x40, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1,
   ]);
-const png = () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]);
+const png = () =>
+  new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0, 0, 3, 0x20, 0, 0, 2, 0x58,
+    8, 6, 0, 0, 0,
+  ]);
+const gif = () => new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0]);
 
 type Search = { results?: string[]; answer?: unknown; stopReason?: string; status?: number };
 let searches: Array<Record<string, unknown>> = [];
@@ -26,10 +31,10 @@ const found = (n = 1) => `https://www.prisjakt.nu/produkt.php?p=${n}`;
 interface Web {
   /** Prisjakt's product page. */
   product?: { status?: number; body?: string };
-  /** The shop's robots.txt (a status for a failed one) and page. */
-  robots?: string | number;
+  /** The shop's robots.txt (a status for a failed one, or where it redirects) and page. */
+  robots?: string | number | { redirect: string };
   shopPage?: string;
-  shopImage?: "jpeg" | "png";
+  shopImage?: "jpeg" | "png" | "gif";
 }
 
 let asked: string[] = [];
@@ -41,6 +46,8 @@ function stubWeb(web: Web = {}) {
     const url = new URL(input instanceof Request ? input.url : String(input));
     asked.push(url.href);
     if (url.hostname === "cloudflare-dns.com") {
+      // Bambu Lab's EU store sends its robots.txt to a name with no DNS at all.
+      if (url.searchParams.get("name") === "www.kjell.combots.txt") return Response.json({ Status: 3 });
       return Response.json({
         Status: 0,
         Answer: url.searchParams.get("type") === "A" ? [{ type: 1, data: "93.184.216.34" }] : [],
@@ -88,6 +95,8 @@ function stubWeb(web: Web = {}) {
     if (url.href === PRODUCT_PICTURE) return new Response(jpeg(), { headers: { "Content-Type": "image/jpeg" } });
     if (url.href === "https://www.kjell.com/robots.txt") {
       const robots = web.robots ?? "User-agent: *\nDisallow: /search";
+      if (typeof robots === "object")
+        return new Response(null, { status: 302, headers: { Location: robots.redirect } });
       return typeof robots === "number" ? new Response("", { status: robots }) : new Response(robots);
     }
     if (url.href === SHOP) {
@@ -97,10 +106,10 @@ function stubWeb(web: Web = {}) {
       );
     }
     if (url.href === "https://www.kjell.com/img/pla.jpg") {
-      return new Response(web.shopImage === "png" ? png() : jpeg(), {
-        headers: { "Content-Type": web.shopImage === "png" ? "image/png" : "image/jpeg" },
-      });
+      const kind = web.shopImage ?? "jpeg";
+      return new Response({ jpeg, png, gif }[kind](), { headers: { "Content-Type": `image/${kind}` } });
     }
+    if (url.href === "https://www.kjell.com.example/robots.txt") return new Response("User-agent: *\nDisallow: /");
     return new Response("nope", { status: 404 });
   });
 }
@@ -254,11 +263,20 @@ describe("a shop link's picture", () => {
     expect((await request((await get(added.id)).picture?.url ?? "", { cookie })).status).toBe(200);
   });
 
+  it("reads the page when robots.txt isn't there: a 4xx, or a redirect to a name that doesn't exist", async () => {
+    for (const robots of [404, 403, { redirect: "https://www.kjell.combots.txt/" }] as const) {
+      stubWeb({ robots });
+      const added = await add({ name: "PLA Basic", link: SHOP });
+      await settled(added.id, (item) => item.picture?.source === "shop");
+    }
+  });
+
   it("reads nothing when robots.txt disallows the page, or can't be read", async () => {
     for (const robots of [
       "User-agent: *\nDisallow: /se/",
       "User-agent: SpaghettiPriceCheck\nDisallow: /",
       503,
+      { redirect: "https://www.kjell.com.example/robots.txt" },
     ] as const) {
       stubWeb({ robots });
       const added = await add({ name: "PLA Basic", link: SHOP });
@@ -269,8 +287,16 @@ describe("a shop link's picture", () => {
     }
   });
 
-  it("keeps no picture that isn't a JPEG or WebP, and doesn't ask again for the same link", async () => {
+  it("keeps a PNG picture as a PNG", async () => {
     stubWeb({ shopImage: "png" });
+    const added = await add({ name: "Liquid glue", link: SHOP });
+    await settled(added.id, (item) => item.picture?.source === "shop");
+    const picture = await request((await get(added.id)).picture?.url ?? "", { cookie });
+    expect(picture.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("keeps no picture that isn't a JPEG, PNG or WebP, and doesn't ask again for the same link", async () => {
+    stubWeb({ shopImage: "gif" });
     const added = await add({ name: "PLA Basic", link: SHOP });
     await settled(added.id, () => asked.includes("https://www.kjell.com/img/pla.jpg"));
     await vi.waitFor(async () => expect(await lookupShopping(env, added.id)).toBe(true));
@@ -418,6 +444,19 @@ describe("suggesting a Prisjakt page", () => {
     await add({ name: "PL" });
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(searches).toHaveLength(0);
+  });
+
+  it("searches once a thing added with only a link gets its name, but not on every rename", async () => {
+    const added = await add({ link: SHOP });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(searches).toHaveLength(0);
+    // The app names it from the page's title right after the add.
+    await patch(added.id, { name: "Liquid Glue for Build Plate" });
+    await settled(added.id, (item) => item.suggestState === "found");
+    expect(searches).toHaveLength(1);
+    await patch(added.id, { name: "Liquid glue" });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(searches).toHaveLength(1);
   });
 
   it("is hidden without the key", async () => {
