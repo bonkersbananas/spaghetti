@@ -95,7 +95,7 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               onChange(outcome);
             }}
             className={cn(
-              "pressable focus-ring flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
+              "pressable focus-ring relative flex flex-col items-center justify-center gap-1.5 rounded-lg font-semibold",
               size === "lg" ? "text-body h-22 md:h-20" : cn("text-small gap-1", suggested && !value ? "h-19" : "h-16"),
               selected
                 ? cn(selectedStyles[outcome], "ring-2 ring-inset")
@@ -116,12 +116,9 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
               <OutcomeIcon size={size === "lg" ? 30 : 24} weight={selected ? "bold" : "regular"} aria-hidden />
             </m.span>
             {OUTCOME_LABELS[outcome]}
-            {suggested && !value && (
-              // Every button keeps the caption's line, so the icons and words line up across the row.
-              <span
-                aria-hidden={!hinted}
-                className={cn("text-micro -mt-1 font-normal", hinted ? suggestedCaptions[outcome] : "invisible")}
-              >
+            {hinted && (
+              // At the foot, out of the flow: the icon and the word stay centered in the square, like the other two.
+              <span className={cn("text-micro absolute inset-x-0 bottom-1 font-normal", suggestedCaptions[outcome])}>
                 suggested
               </span>
             )}
