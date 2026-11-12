@@ -120,7 +120,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
         type="button"
         onClick={onOpen}
         className={cn(
-          "focus-ring hover:decoration-ink/25 -mx-1 block max-w-full rounded-xs px-1 py-1.5 text-left break-words hover:underline hover:underline-offset-4",
+          "focus-ring touch-target hover:decoration-ink/25 relative -mx-1 block max-w-full rounded-xs px-1 py-1.5 text-left break-words hover:underline hover:underline-offset-4",
           "text-body",
           bought ? "text-ink-faint decoration-ink/30 line-through" : "text-ink font-semibold",
         )}
