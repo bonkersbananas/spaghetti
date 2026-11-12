@@ -15,6 +15,7 @@ import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanst
 import { useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
+import { type ItemList, itemKeys } from "./item-keys";
 import {
   type OutboxEntry,
   type OutboxState,
@@ -31,15 +32,10 @@ import { forgetItem } from "./recent";
 import { useAutosave, useFollowServer } from "./use-autosave";
 
 /** Ideas live in one list, builds (building, done, shelved) in the other. */
-export type ItemList = "ideas" | "builds";
 export const listOf = (stage: ItemStage): ItemList => (stage === "idea" ? "ideas" : "builds");
 const LISTS: ItemList[] = ["ideas", "builds"];
 
-export const itemKeys = {
-  all: ["items"] as const,
-  list: (list: ItemList) => ["items", "list", list] as const,
-  detail: (id: string) => ["items", "detail", id] as const,
-};
+export { type ItemList, itemKeys };
 
 /** The ideas inbox, newest first. */
 export const ideasQuery = queryOptions({

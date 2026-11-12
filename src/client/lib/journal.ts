@@ -1,5 +1,5 @@
 import type { FacetsResponse, JournalResponse, JournalSummaryResponse } from "@shared/api";
-import { OUTCOME_FILTERS, type OutcomeFilter } from "@shared/journal";
+import { OUTCOME_FILTERS, type OutcomeFilter } from "@shared/outcomes";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "./api";
 

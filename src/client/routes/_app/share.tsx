@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { EmptyPot } from "@/components/illustrations";
+import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
 import { useCapture } from "@/lib/capture";

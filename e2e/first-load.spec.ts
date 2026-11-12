@@ -21,18 +21,18 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 
 /**
- * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-11, after #114 (gzip kB):
- *   /sign-in 193.8   /today 298.9   /ideas 287.7   /builds 286.5   /journal 286.8   /search 292.5   /pantry 296.9   /printer 297.0
+ * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-12, after #631 (gzip kB):
+ *   /sign-in 178.1   /today 276.9   /ideas 263.5   /builds 263.4   /journal 263.4   /search 272.4   /pantry 272.2   /printer 272.0
  */
 const CEILING_KB = {
-  "/sign-in": 199,
-  "/today": 304,
-  "/ideas": 293,
-  "/builds": 292,
-  "/journal": 292,
-  "/search": 298,
-  "/pantry": 302,
-  "/printer": 302,
+  "/sign-in": 184,
+  "/today": 282,
+  "/ideas": 269,
+  "/builds": 269,
+  "/journal": 269,
+  "/search": 278,
+  "/pantry": 278,
+  "/printer": 278,
 } as const;
 
 /** Changes smaller than this don't make a screen heavier: a renamed chunk moves a few bytes in every screen. */

@@ -2,6 +2,14 @@ import type { RouterEvents } from "@tanstack/react-router";
 import { CONTENT_ID, focusContent } from "./focus-content";
 
 /**
+ * Runs `work` once the frame that follows the move has painted: focusing a card scrolls it into view and measures the
+ * page, which inside the frame would hold the first paint of the new page back (the "Start building" budget).
+ */
+function afterPaint(work: () => void) {
+  requestAnimationFrame(() => setTimeout(work, 0));
+}
+
+/**
  * After the router moves to another page, a keyboard starts from the page and not from where the old one's focused
  * control used to be: the control that held focus is gone (`<body>`), or it is the sidebar link that was just used,
  * and either way the next Tab would start at the logo again. Focus that is somewhere real (a field the page
@@ -20,8 +28,8 @@ export function focusAfterMove(event: RouterEvents["onResolved"]) {
     // take a frame or two to draw.
     const card = document.querySelector<HTMLElement>(`main [data-picks] a[href="${from}"]`);
     if (card) card.focus();
-    else if (++frames < 6) requestAnimationFrame(settle);
+    else if (++frames < 6) afterPaint(settle);
     else focusContent();
   };
-  requestAnimationFrame(settle);
+  afterPaint(settle);
 }

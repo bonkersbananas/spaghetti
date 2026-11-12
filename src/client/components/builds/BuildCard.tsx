@@ -3,16 +3,17 @@ import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
+import type { Ref } from "react";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
+import { useReflow } from "@/components/ui/Reflow";
 import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
-import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useUnreadCount } from "@/lib/unread-comments";
@@ -81,23 +82,19 @@ export function BuildCard({
   person,
   via,
   landing,
+  ref,
 }: {
   item: ItemView;
   person?: Person;
   via?: string;
   landing?: boolean;
+  ref?: Ref<HTMLLIElement>;
 }) {
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
   const unread = useUnreadCount(item.id);
   return (
-    <m.li
-      layout="position"
-      initial={landing ? { opacity: 0, scale: 0.9, y: -12 } : false}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={spring.gentle}
-      className="list-none"
-    >
+    <m.li {...useReflow(landing)} ref={ref} className="list-none">
       <Card
         link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
         aspect="portrait"

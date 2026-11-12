@@ -558,13 +558,27 @@ a {
 .lp-snap figcaption {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.25rem 0.5rem;
   padding: 0.625rem 0.25rem 0.75rem;
   font-family: var(--lp-display);
   font-size: 1.0625rem;
   font-weight: 560;
   line-height: 1.25;
+}
+
+/* On a phone the snapshot is narrow: the chip drops under the title when it doesn't fit, and is a size smaller. */
+@media (max-width: 47.99rem) {
+  .lp-snap figcaption {
+    font-size: 1rem;
+  }
+
+  .lp-snap figcaption .lp-chip {
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+  }
 }
 
 /* A strip of tape holding a snapshot to the page. */
@@ -834,6 +848,13 @@ a {
   letter-spacing: -0.045em;
   /* Room for the descenders of the p and the g, inside the printed box. */
   padding: 0 0.04em 0.06em 0;
+}
+
+/* Safari sets the word wider than Chromium does: at 21.5vw it ran past the right edge of a phone. */
+@media (max-width: 30rem) {
+  .lp-word {
+    font-size: 18.4vw;
+  }
 }
 
 .lp-word > span:not(.lp-head):not(.lp-word__verdict) {

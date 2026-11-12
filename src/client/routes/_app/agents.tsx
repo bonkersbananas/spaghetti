@@ -8,7 +8,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { AgentSheet } from "@/components/agents/AgentSheet";
 import { ShareCard } from "@/components/agents/ShareCard";
-import { EmptyPot } from "@/components/illustrations";
+import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AgentAvatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";

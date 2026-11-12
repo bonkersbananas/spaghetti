@@ -3,17 +3,20 @@ import type { UnknownTray } from "@shared/bridge";
 import { amsUnitLetters, EXTERNAL_SLOT, spoolName, unitSlots } from "@shared/spools";
 import { daysAgo } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type DragEvent, useState } from "react";
+import { type DragEvent, lazy, Suspense, useState } from "react";
 import { DryIt } from "@/components/pantry/DryIt";
-import { Button } from "@/components/ui/Button";
-import { DriedIcon, PlusIcon } from "@/components/ui/icons";
+import { DriedIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
-import { Sheet } from "@/components/ui/Sheet";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
 import { loadSlot } from "@/lib/pantry";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
+import { useWarmSoon } from "@/lib/warm-soon";
+
+// The slot sheet (and the sheet library behind it) is fetched just after the first screen, or at the first touch.
+const loadSlotSheet = () => import("./SlotSheet");
+const SlotSheet = lazy(() => loadSlotSheet().then((m) => ({ default: m.SlotSheet })));
 
 /** The drag type for a spool being moved onto a slot. */
 export const SPOOL_DRAG_TYPE = "application/x-spaghetti-spool";
@@ -183,6 +186,9 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
   const spools = useQuery(spoolsQuery);
   const [picking, setPicking] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetAsked, setSheetAsked] = useState(false);
+  if (sheetOpen && !sheetAsked) setSheetAsked(true);
+  useWarmSoon(loadSlotSheet);
   const byId = new Map((spools.data ?? []).map((spool) => [spool.id, spool]));
   const slots = printer.data?.slots ?? {};
   const unknownTray = (slot: string) => printer.data?.bridge?.unknownTrays.find((tray) => tray.slot === slot);
@@ -242,108 +248,29 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
           unknown={unknownTray(EXTERNAL_SLOT)}
         />
       </section>
-      {!onSlot && !readOnly && (
-        <SlotSheet
-          slot={picking}
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          spools={spools.data ?? []}
-          current={picking ? spoolIn(picking) : undefined}
-          onPick={(spoolId) => {
-            if (picking) void loadSlot(queryClient, picking, spoolId);
-            setSheetOpen(false);
-          }}
-          onAddSpool={
-            onAddSpool && picking
-              ? () => {
-                  setSheetOpen(false);
-                  onAddSpool(picking);
-                }
-              : undefined
-          }
-        />
+      {!onSlot && !readOnly && sheetAsked && (
+        <Suspense fallback={null}>
+          <SlotSheet
+            slot={picking}
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+            spools={spools.data ?? []}
+            current={picking ? spoolIn(picking) : undefined}
+            onPick={(spoolId) => {
+              if (picking) void loadSlot(queryClient, picking, spoolId);
+              setSheetOpen(false);
+            }}
+            onAddSpool={
+              onAddSpool && picking
+                ? () => {
+                    setSheetOpen(false);
+                    onAddSpool(picking);
+                  }
+                : undefined
+            }
+          />
+        </Suspense>
       )}
     </div>
-  );
-}
-
-interface SlotSheetProps {
-  slot: string | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  spools: Spool[];
-  current: Spool | undefined;
-  onPick: (spoolId: string | null) => void;
-  onAddSpool?: () => void;
-}
-
-/** What goes in a slot: any spool from the pantry (one loaded elsewhere moves here), or nothing. */
-export function SlotSheet({ slot, open, onOpenChange, spools, current, onPick, onAddSpool }: SlotSheetProps) {
-  const sorted = [...spools]
-    .filter((spool) => spool.remaining !== "empty" || spool.id === current?.id)
-    // What's in it now first, then spools that aren't loaded, then ones in other slots.
-    .sort(
-      (a, b) =>
-        Number(b.id === current?.id) - Number(a.id === current?.id) ||
-        Number(!!a.slot) - Number(!!b.slot) ||
-        a.material.localeCompare(b.material),
-    );
-  return (
-    <Sheet
-      open={open}
-      onOpenChange={onOpenChange}
-      title={slot ? (slot === EXTERNAL_SLOT ? "External spool" : `Slot ${slot}`) : "Slot"}
-      description={current ? "Swap in another spool, or take this one out." : "Pick the spool that's in it."}
-      footer={
-        <>
-          {onAddSpool && (
-            <Button variant="quiet" icon={PlusIcon} onClick={onAddSpool} className="mr-auto">
-              New spool
-            </Button>
-          )}
-          {current && (
-            <Button variant="secondary" onClick={() => onPick(null)}>
-              Take it out
-            </Button>
-          )}
-        </>
-      }
-    >
-      {sorted.length === 0 ? (
-        <p className="text-body text-ink-faint py-4">The pantry is empty. Add a spool first, then load it here.</p>
-      ) : (
-        <ul className="-mx-2 flex flex-col">
-          {sorted.map((spool) => {
-            const name = spoolName(spool);
-            const here = spool.id === current?.id;
-            return (
-              <li key={spool.id}>
-                <button
-                  type="button"
-                  onClick={() => onPick(spool.id)}
-                  aria-current={here || undefined}
-                  className={cn(
-                    "pressable focus-ring flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left",
-                    here ? "bg-semolina-soft/60" : "hover:bg-ink/4",
-                  )}
-                >
-                  <SpoolDisc color={spool.colorHex} size="md" />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-body text-ink truncate font-semibold">{name.title}</span>
-                    {name.detail && <span className="text-small text-ink-faint truncate">{name.detail}</span>}
-                  </span>
-                  {spool.slot && (
-                    <span className="text-small text-ink-faint tabular shrink-0">
-                      {here ? "Here now" : spool.slot === "Ext" ? "External" : `In ${spool.slot}`}
-                    </span>
-                  )}
-                  <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Sheet>
   );
 }

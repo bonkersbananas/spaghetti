@@ -122,7 +122,7 @@ export function TabBar() {
     <nav
       aria-label="Sections"
       style={{ paddingBottom: "var(--sg-tabbar-foot)" }}
-      className="bg-cream/92 shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
+      className="sg-tabbar bg-cream/92 shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
     >
       <div className="h-tabbar-row mx-auto flex max-w-lg items-stretch px-2">
         <Tab {...today} />

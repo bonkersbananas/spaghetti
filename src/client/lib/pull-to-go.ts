@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { sections, workshop } from "@/components/shell/sections";
 import { tick } from "./haptics";
 import { duration, spring } from "./motion";
-import { lastMove } from "./previous-path";
+import { previousPlace } from "./previous-path";
 
 /** How far the page has moved (px) when a release goes back. */
 export const PULL_THRESHOLD = 72;
@@ -32,13 +32,6 @@ function inVerticalScroller(start: Element | null): boolean {
     if ((overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight) return true;
   }
   return false;
-}
-
-/** The in-app page this one was opened from (history has an entry for it), with the name to give it; null on a deep link or a fresh open. */
-function previousPlace(): string | null {
-  const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
-  const { from, to } = lastMove;
-  return index > 0 && from && to === location.pathname && from !== to ? from : null;
 }
 
 /** "Today" for /today; "Back" for a page without a name of its own (an idea, a build). */

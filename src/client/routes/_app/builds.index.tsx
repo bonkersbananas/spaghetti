@@ -2,13 +2,14 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { BuildCard, BuildRow, lastActivity } from "@/components/builds/BuildCard";
-import { SpoolStrand } from "@/components/illustrations";
+import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
+import { Reflow } from "@/components/ui/Reflow";
 import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
@@ -64,16 +65,18 @@ function Builds() {
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
           <Section title="On the bed" count={active.length}>
-            <ul data-picks className={grid} aria-label="On the bed">
-              {active.map((item) => (
-                <BuildCard
-                  key={item.id}
-                  item={item}
-                  person={byId.get(item.createdBy)}
-                  via={via(item.createdVia)}
-                  landing={arrived.has(item.id)}
-                />
-              ))}
+            <ul data-picks className={`${grid} relative`} aria-label="On the bed">
+              <Reflow>
+                {active.map((item) => (
+                  <BuildCard
+                    key={item.id}
+                    item={item}
+                    person={byId.get(item.createdBy)}
+                    via={via(item.createdVia)}
+                    landing={arrived.has(item.id)}
+                  />
+                ))}
+              </Reflow>
               <li className="col-span-2 list-none md:col-span-1">
                 {isDesktop ? (
                   <AddPhotoTile size="card" icon={PlusIcon} label="New build" onClick={newBuild} />

@@ -6,9 +6,9 @@
  * where they overlap, so phase 5 can prefill an attempt from a slicer file.
  */
 
-/** How an attempt went. A printing attempt has no outcome yet (null). */
-export const OUTCOMES = ["success", "partial", "failed"] as const;
-export type Outcome = (typeof OUTCOMES)[number];
+export { OUTCOMES, type Outcome } from "./outcomes.ts";
+
+import type { Outcome } from "./outcomes.ts";
 
 export const OUTCOME_LABELS: Record<Outcome, string> = {
   success: "Worked",
