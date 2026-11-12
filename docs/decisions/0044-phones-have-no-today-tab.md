@@ -1,4 +1,4 @@
-# 0043. Phones have no Today tab: Journal opens on a Now block, and Workshop is the fourth tab
+# 0044. Phones have no Today tab: Journal opens on a Now block, and Workshop is the fourth tab
 
 Status: Accepted
 

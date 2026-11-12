@@ -63,6 +63,15 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 - [x] Native phone feel: no page zoom on touch screens (viewport, `touch-action`, WebKit gesture events), photos zoom in place in the viewer (pinch, pan, double tap), text follows iOS's text size ([0039](decisions/0039-no-page-zoom-photos-zoom-in-place.md))
 - [ ] Slicer folder watcher: uploads each exported .gcode.3mf and starts a "still printing" attempt
 
+## Twists (adapting existing models)
+
+Proposal: [docs/proposals/twists.md](proposals/twists.md); decision [0043](decisions/0043-twists-are-models-we-print-our-own-way.md).
+
+- [x] Stage 1a: the `twists` table and `/api/twists` (data and API)
+- [ ] Stage 1b: the Twists screen and twist page, "Make a twist" from an idea and "Save as twist" from an attempt
+- [ ] Stage 1c: builds that print a twist, "Print it again", MCP tools, search
+- [ ] Stage 2a: STL scale, mirror, rotate and "fit to N mm"; then the 3MF spike
+
 ## Deploy
 
 - [x] Deployed to https://spaghetti.day with D1 and R2; one-step `pnpm ship`. Adding the two people is the last step (see [no CI deploys](decisions/0011-no-ci-deploys.md))

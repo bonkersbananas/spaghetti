@@ -29,7 +29,7 @@ A token carries one or more of four scopes. A request outside them is `403 missi
 | Scope | Allows |
 | --- | --- |
 | `read` | Every `GET`: items, builds, attempts, the journal, search and "what worked", the pantry, the printer, tags, people, photo and file bytes, and the change feed. |
-| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`, `POST /items/:id/comments` and `PATCH /comments/:id` (your agent's own comments; see Comments). |
+| `capture` | `PUT /items/up-next/order`, `PATCH /items/:id` with `upNext` or `forWhom`, `POST /capture` (an idea from a link, text and photos in one call: see [share.md](share.md)), `POST /items` (an idea), `PATCH /items/:id` with `title` / `note`, `PUT /items/:id/photos/:photoId` (a photo that isn't of an attempt), `PUT /items/:id/photos/order`, `POST /items/:id/comments` and `PATCH /comments/:id` (your agent's own comments; see Comments), `POST /twists` and `PATCH /twists/:id` (a twist, [0043](decisions/0043-twists-are-models-we-print-our-own-way.md)). |
 | `attempts` | `POST /recipes` and `PATCH /recipes/:id` (name and note), `POST /items` with `stage: "building"` (a build from scratch), `POST /items/:id/attempts`, `PATCH /attempts/:id` (also `endedAt` and `suggestedFailureTag`, the printer bridge's; `settings` replaces the settings, `settingsMerge: { set, unset }` changes only those and keeps the rest, which is what the attempt sheet sends), `POST /attempts/:id/finish`, `PUT /attempts/:id/file`, photos with an `attemptId`, `PATCH /items/:id` with `stage` or `coverPhotoId`, `PUT /items/:id/parts`, `POST /tags`, `POST /items/:id/comments` and `PATCH /comments/:id` (as with `capture`). |
 | `printer` | `POST /printer/upkeep`, `PATCH /printer/upkeep/:id`, `POST /printer/upkeep/:id/done`, `PUT /printer/upkeep/logs/:logId/photo/:photoId`, `PUT /printer/slots/:slot`, `PUT /printer`, `PUT /printer/bridge` (the printer bridge's heartbeat: progress, unknown trays, its version, system and problems), `POST /spools`, `PATCH /spools/:id`, `PUT /spools/:id/photo/:photoId`, `PUT /spools/:id/weight`, `POST /spools/:id/weighings`. |
 
@@ -63,6 +63,15 @@ A spool can count itself down (decision [0009](decisions/0009-filament-tracked-i
 
 - `PUT /people/me/photo`: your own picture, people only (`403 person_only` for a token). Multipart with one `photo` file, WebP or JPEG (`415 unsupported` otherwise), at most 512 KB (`413 too_large`); the browser sends a 256 px square it cropped itself. Replaces the old one (its bytes are deleted) and answers `{ user }`. A `person` change in the feed lets the other person's screen refresh.
 - `DELETE /people/me/photo`: back to initials, people only. Always `200 { user }`, also when there was none.
+
+## Twists
+
+A twist is a model we print our own way: where it came from, what we changed and the recipe to print it with (decision [0043](decisions/0043-twists-are-models-we-print-our-own-way.md)). `GET /twists` lists them newest first, `GET /twists/:id` reads one.
+
+- `POST /twists` `{ id, name, note?, fromItemId?, sourceUrl?, sourceTitle?, designer?, license?, sourcePhotoId?, recipeId?, changes? }`: with `fromItemId` the idea's model link, title and cover photo fill in what the request leaves out. `changes` is a list of `{ id, kind, label, value, note }` (`kind` is `scale`, `tolerance`, `text`, `material`, `param` or `other`; at most 20). Idempotent on `id`. `capture` scope.
+- `PATCH /twists/:id`: any of `name`, `note`, `sourceUrl`, `sourceTitle`, `designer`, `license`, `recipeId` and `changes` (which replaces the whole list). `capture` scope.
+- `DELETE /twists/:id` and `POST /twists/:id/restore`: soft delete and its undo, people only.
+- A twist carries `source` (`url`, `title`, `designer`, `license`, `place` such as "MakerWorld", and `photo` while the idea still has it) and `fromItemId` while the idea exists.
 
 ## Recipes
 

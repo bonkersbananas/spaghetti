@@ -13,7 +13,8 @@
       "!migrations/meta",
       "!docs/openapi.json",
       "!**/*.md",
-      "!test/fixtures/pages"
+      "!test/fixtures/pages",
+      "!docs/proposals/mocks"
     ]
   },
   "formatter": {
