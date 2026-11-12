@@ -128,3 +128,73 @@ test("deletes an idea at once and brings it back with undo", async ({ page, isMo
   await expect(ideas(page).getByRole("link", { name: /Cable chain/ })).toBeVisible();
   await expect.poll(async () => (await (await page.request.get("/api/items")).json()).items.length).toBe(1);
 });
+
+test("holding the capture button opens the camera, and the photo lands in the sheet", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The capture button is the phone's tab bar");
+  const camera = page.getByTestId("tabbar-camera-input");
+  await expect(camera).toHaveAttribute("capture", "environment");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "New idea" }).click({ delay: 700 });
+  await (await chooser).setFiles("e2e/fixtures/tugboat.jpg");
+  const sheet = page.getByRole("dialog", { name: "New idea" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("img")).toHaveCount(1);
+});
+
+test("a plain tap on the capture button still opens the sheet without the camera", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The capture button is the phone's tab bar");
+  let chosen = false;
+  page.on("filechooser", () => {
+    chosen = true;
+  });
+  await openCapture(page, true);
+  expect(chosen).toBe(false);
+});
+
+test("a real touch hold on the capture button opens the camera too", { tag: "@phone" }, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The capture button is the phone's tab bar");
+  const box = await page.getByRole("button", { name: "New idea" }).boundingBox();
+  if (!box) throw new Error("No capture button");
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2, id: 1 };
+  const session = await page.context().newCDPSession(page);
+  const chooser = page.waitForEvent("filechooser");
+  await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+  await page.waitForTimeout(700);
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await (await chooser).setFiles("e2e/fixtures/tugboat.jpg");
+  await expect(page.getByRole("dialog", { name: "New idea" })).toBeVisible();
+});
+
+test("sliding off the capture button after the hold cancels it", { tag: "@phone" }, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The capture button is the phone's tab bar");
+  const button = page.getByRole("button", { name: "New idea" });
+  const box = await button.boundingBox();
+  if (!box) throw new Error("No capture button");
+  const at = (x: number, y: number) => [{ x, y, id: 1 }];
+  const session = await page.context().newCDPSession(page);
+  let chosen = false;
+  page.on("filechooser", () => {
+    chosen = true;
+  });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: at(box.x + box.width / 2, box.y + box.height / 2),
+  });
+  await page.waitForTimeout(700);
+  await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(20, box.y + box.height / 2) });
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(600);
+  expect(chosen).toBe(false);
+  // Nothing is left armed: the keyboard opens the sheet, not the camera.
+  await expect(page.getByRole("button", { name: "New idea" }).locator("svg:visible")).toHaveCount(1);
+  await button.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "New idea" })).toBeVisible();
+  expect(chosen).toBe(false);
+});

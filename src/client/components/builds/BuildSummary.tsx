@@ -22,12 +22,15 @@ export function BuildSummary({
   attempts,
   open,
   onPick,
+  selected,
 }: {
   /** Oldest first. */
   attempts: AttemptView[];
   /** The build is still going ("So far"); otherwise it is done or shelved ("In all"). */
   open: boolean;
   onPick: (attemptId: string) => void;
+  /** The attempt that is open now. */
+  selected?: string | null;
 }) {
   const summary = useMemo(() => summarizeBuild(attempts), [attempts]);
   if (attempts.length < 2) return null;
@@ -39,7 +42,7 @@ export function BuildSummary({
   return (
     <section aria-label="Summary" className="mt-2 flex flex-col gap-2">
       <Overline as="h2">{open ? "So far" : "In all"}</Overline>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="flex flex-col gap-2.5">
         <OutcomeStrip
           attempts={attempts.map(({ id, number, outcome, endedAt }) => ({
             id,
@@ -48,6 +51,7 @@ export function BuildSummary({
             offBed: isOffTheBed({ outcome, endedAt }),
           }))}
           onPick={onPick}
+          selected={selected}
         />
         <span className="text-small text-ink-soft">{summary.words}</span>
       </div>

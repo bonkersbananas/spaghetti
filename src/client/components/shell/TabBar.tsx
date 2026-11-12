@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { PlusIcon } from "@/components/ui/icons";
+import { useRef, useState } from "react";
+import { CameraIcon, PlusIcon } from "@/components/ui/icons";
 import { useCapture } from "@/lib/capture";
 import { type Section, tabs } from "./sections";
 
@@ -28,8 +29,94 @@ function Tab({ to, label, icon: Icon }: Section) {
  * The capture button sits in the middle, a little larger, because capturing is
  * the main thing people do. Search is a tool, not a place: it is in the page header.
  */
+/** How long a press on the capture button must last to go straight to the camera. */
+const HOLD_MS = 450;
+
+/**
+ * The capture button: a tap opens the capture sheet; holding it opens the camera at once, and the photo lands in
+ * the sheet with the note ready. The camera opens from the release (a real user gesture: iOS Safari only lets a file
+ * input open from one, not from a timer), and the icon turns into a camera once the hold counts, so you know to let go.
+ */
+function CaptureButton() {
+  const { setOpen, openWith } = useCapture();
+  const input = useRef<HTMLInputElement>(null);
+  const timer = useRef<number>(undefined);
+  const held = useRef(false);
+  const down = useRef(false);
+  const [armed, setArmed] = useState(false);
+  const stop = () => {
+    window.clearTimeout(timer.current);
+    setArmed(false);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        onPointerDown={() => {
+          down.current = true;
+          held.current = false;
+          timer.current = window.setTimeout(() => {
+            held.current = true;
+            setArmed(true);
+          }, HOLD_MS);
+        }}
+        onPointerUp={() => {
+          down.current = false;
+          window.clearTimeout(timer.current);
+          // A release on the button is followed by its click, at once. If none comes (the finger slid off and lifted
+          // with nothing cancelling the gesture), the hold is over: don't stay armed.
+          timer.current = window.setTimeout(() => {
+            held.current = false;
+            setArmed(false);
+          }, 300);
+        }}
+        onPointerCancel={() => {
+          down.current = false;
+          held.current = false;
+          stop();
+        }}
+        // Sliding off with the finger still down: no click will come, so the hold is over. (On touch the pointer
+        // also "leaves" after it is lifted, just before the click, and that must not undo the hold.)
+        onPointerLeave={() => {
+          if (!down.current) return;
+          held.current = false;
+          stop();
+        }}
+        onContextMenu={(event) => event.preventDefault()}
+        onClick={() => {
+          const camera = held.current;
+          held.current = false;
+          stop();
+          if (camera) input.current?.click();
+          else setOpen(true);
+        }}
+        aria-label="New idea"
+        aria-description="Hold to take a photo"
+        style={{ WebkitTouchCallout: "none" }}
+        className="pressable press-tomato focus-ring bg-tomato text-on-accent shadow-raised flex size-14 items-center justify-center rounded-lg select-none"
+      >
+        {/* Both stay in the page and one is hidden: swapping the node under the finger would drop the click. */}
+        <PlusIcon size={28} weight="bold" aria-hidden className={armed ? "hidden" : undefined} />
+        <CameraIcon size={28} weight="bold" aria-hidden className={armed ? undefined : "hidden"} />
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        data-testid="tabbar-camera-input"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          if (files.length) openWith({ files });
+        }}
+      />
+    </>
+  );
+}
+
 export function TabBar() {
-  const { setOpen } = useCapture();
   const [today, ideas, builds, journal] = tabs;
   return (
     <nav
@@ -40,14 +127,7 @@ export function TabBar() {
         <Tab {...today} />
         <Tab {...ideas} />
         <div className="flex flex-1 items-center justify-center">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            aria-label="New idea"
-            className="pressable press-tomato focus-ring bg-tomato text-on-accent shadow-raised flex size-14 items-center justify-center rounded-lg"
-          >
-            <PlusIcon size={28} weight="bold" aria-hidden />
-          </button>
+          <CaptureButton />
         </div>
         <Tab {...builds} />
         <Tab {...journal} />
