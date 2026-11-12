@@ -23,6 +23,8 @@ export interface CardProps {
   chips?: ReactNode;
   /** Top right of the photo, such as how many photos there are. */
   badge?: ReactNode;
+  /** Where a model for the idea lives: the bottom right corner of the photo (ModelMark). */
+  mark?: ReactNode;
   /** Comments from the other person you haven't read: a small mark at the top left of the photo. */
   unread?: number;
   /** Small line under the title: "2 attempts · 3 days ago". */
@@ -64,6 +66,7 @@ export function Card({
   note,
   chips,
   badge,
+  mark,
   unread,
   meta,
   sub,
@@ -111,6 +114,7 @@ export function Card({
             <UnreadBadge count={unread} />
           </div>
         )}
+        {mark && <div className="absolute right-0 bottom-0 max-w-[70%]">{mark}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
       <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">

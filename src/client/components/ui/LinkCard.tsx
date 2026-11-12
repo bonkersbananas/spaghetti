@@ -1,9 +1,11 @@
 import { shortUrl } from "@shared/links";
+import { type ModelMark, modelLetter, modelPlace } from "@shared/model-mark";
 import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 import { cn } from "@/lib/cn";
 import { linkPreviewQuery } from "@/lib/queries";
 import { ExternalIcon } from "./icons";
+import { Photo } from "./Photo";
 
 /** "www.printables.com" → "printables.com"; the address itself when it can't be read. */
 function hostOf(url: string): string {
@@ -14,6 +16,8 @@ function hostOf(url: string): string {
   }
 }
 
+const fileName = (url: string) => decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+
 /**
  * A link in a note as a card: the site's first letter on a tile, the page's
  * title and its site name, a small arrow for "leaves the app". It shows at
@@ -22,11 +26,23 @@ function hostOf(url: string): string {
  * pictures: they break offline, tell the other site about the visit and move
  * the layout. Opens in a new tab.
  */
-export function LinkCard({ url, className }: { url: string; className?: string }) {
-  const { data, isPending } = useQuery(linkPreviewQuery(url));
+export function LinkCard({
+  url,
+  model,
+  picture,
+  className,
+}: {
+  url: string;
+  /** The idea's model: the card says "Model on MakerWorld" in basil over the title, and a file has no page to read. */
+  model?: ModelMark;
+  /** The model's own picture (the draft's), in place of the site's letter tile. */
+  picture?: { src: string; color?: string };
+  className?: string;
+}) {
+  const { data, isPending } = useQuery({ ...linkPreviewQuery(url), enabled: model?.kind !== "file" });
   // Only a title that arrives while the card is on screen fades in; one that was already known is just there.
   const waited = useRef(isPending);
-  const title = data?.title || null;
+  const title = data?.title || (model?.kind === "file" ? fileName(url) : null);
   const site = data?.site || hostOf(url);
   return (
     <a
@@ -38,13 +54,22 @@ export function LinkCard({ url, className }: { url: string; className?: string }
         className,
       )}
     >
-      <span
-        aria-hidden
-        className="bg-ink/5 text-ink-soft font-display text-title flex size-10 shrink-0 items-center justify-center rounded-sm"
-      >
-        {site.charAt(0).toUpperCase()}
-      </span>
+      {picture ? (
+        <Photo src={picture.src} alt="" color={picture.color} className="size-16 shrink-0 rounded-sm md:size-20" />
+      ) : (
+        <span
+          aria-hidden
+          className="bg-ink/5 text-ink-soft font-display text-title flex size-10 shrink-0 items-center justify-center rounded-sm"
+        >
+          {model ? modelLetter(model) : site.charAt(0).toUpperCase()}
+        </span>
+      )}
       <span className="flex min-w-0 flex-1 flex-col">
+        {model && (
+          <span className="text-caption text-basil-ink font-semibold tracking-wide uppercase">
+            {model.kind === "page" ? `Model on ${model.name}` : `${modelPlace(model)}, ready to print`}
+          </span>
+        )}
         <span
           key={title ? "titled" : "bare"}
           className={cn(

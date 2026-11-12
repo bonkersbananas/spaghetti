@@ -88,3 +88,11 @@ export function modelMarkIn(note: string): ModelMark | null {
 export function modelOf(item: { note: string; draft?: { url: string } | null }): ModelMark | null {
   return modelMarkIn(item.note) ?? (item.draft ? modelMarkOf(item.draft.url) : null);
 }
+
+/** "MakerWorld", or "STL file" for a direct link to a model file. */
+export const modelPlace = (mark: ModelMark) =>
+  mark.kind === "page" ? mark.name : `${mark.name.slice(1).toUpperCase()} file`;
+
+/** The letter that stands for where the model lives: M for MakerWorld, STL for a .stl file. */
+export const modelLetter = (mark: ModelMark) =>
+  mark.kind === "page" ? mark.name.charAt(0) : mark.name.slice(1).toUpperCase();

@@ -2718,6 +2718,7 @@ export const shots: Shot[] = [
     },
   },
   { name: "styleguide", path: "/styleguide", fullPage: true },
+  { name: "model-mark-options", path: "/styleguide", selector: "#model-mark" },
   {
     // The moment before permission is asked for: the browser says nothing until the switch is turned on.
     name: "notifications-off",

@@ -19,6 +19,7 @@ import { IconSection } from "./-styleguide/icons";
 import { JournalSection } from "./-styleguide/journal";
 import { LayerSliderSection } from "./-styleguide/layer-slider";
 import { LiveStatusSection } from "./-styleguide/live-status";
+import { ModelMarkSection } from "./-styleguide/model-mark";
 import { MotionSection } from "./-styleguide/motion";
 import { NotificationSection } from "./-styleguide/notifications";
 import { PaletteSection } from "./-styleguide/palette";
@@ -71,6 +72,7 @@ const toc = [
   ["journal", "Journal entries"],
   ["today", "Today"],
   ["wishlists", "Wishlists"],
+  ["model-mark", "Ideas with a model"],
   ["scout", "Idea scout"],
   ["sheets", "Sheets & toasts"],
   ["notifications", "Notifications"],
@@ -127,6 +129,7 @@ function Styleguide() {
           <JournalSection />
           <TodaySection />
           <WishlistsSection />
+          <ModelMarkSection />
           <ScoutSectionGuide />
           <PaletteSection />
           <SheetSection />

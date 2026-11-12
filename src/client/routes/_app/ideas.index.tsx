@@ -10,7 +10,7 @@ import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { CubeIcon, PlusIcon } from "@/components/ui/icons";
+import { PlusIcon } from "@/components/ui/icons";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
@@ -118,8 +118,6 @@ function Ideas() {
           {modelCount > 0 && (
             <div className="mb-6 flex flex-wrap gap-2">
               <ToggleChip
-                icon={CubeIcon}
-                tone="basil"
                 selected={filter === "model"}
                 onClick={() => setModelFilter(filter === "model" ? null : "model")}
               >

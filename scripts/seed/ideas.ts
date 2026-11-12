@@ -125,7 +125,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "alex",
     ago: 9 * DAY,
     title: "Calibration cube, but useful",
-    note: "A small cube with a hole for a 608 bearing: checks tolerances and ends up a fidget toy.\nhttps://files.example.org/bearing-cube.3mf",
+    note: "A small cube with a hole for a 608 bearing: checks tolerances and ends up a fidget toy.\nhttps://files.example.org/bearing-cube.stl",
     photos: [],
   },
   {

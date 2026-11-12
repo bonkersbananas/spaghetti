@@ -20,7 +20,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
 import { BuildsIcon, CommentIcon, MoveIntoIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
-import { ModelCard } from "@/components/ui/ModelMark";
+import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { PullToGo } from "@/components/ui/PullToGo";
@@ -333,7 +333,7 @@ function Idea({ item }: { item: ItemView }) {
               </ToggleChip>
               {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
             </div>
-            {model && <ModelCard mark={model} picture={modelPicture} className="my-1" />}
+            {model && <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />}
             <NoteField
               value={note}
               onChange={setNote}
