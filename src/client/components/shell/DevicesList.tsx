@@ -66,7 +66,7 @@ export function DevicesList({ enabled }: { enabled: boolean }) {
         disabled={others === 0}
         loading={signOutOthers.isPending}
         onClick={() => signOutOthers.mutate()}
-        className="mt-3"
+        className="disabled:bg-ink/5 disabled:text-ink-ghost disabled:hover:bg-ink/5 disabled:hover:text-ink-ghost mt-3"
       >
         Sign out everywhere else
       </Button>
