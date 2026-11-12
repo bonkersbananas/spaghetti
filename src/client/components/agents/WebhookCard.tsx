@@ -52,15 +52,26 @@ export function DeliveryRow({
         ? `${delivery.error ?? "Not sent yet"} Trying again ${nextWords(delivery.nextAt, now)}.`
         : (delivery.error ?? when);
   return (
-    <li className="border-ink/6 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-      <Chip tone={tone}>{word}</Chip>
-      <span className="text-small text-ink min-w-0 flex-1 font-semibold">{what}</span>
+    <li className="border-ink/6 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-1.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0 md:grid-cols-[5.5rem_1fr_auto]">
+      <Chip tone={tone} className="justify-self-start">
+        {word}
+      </Chip>
       {delivery.status !== "delivered" && (
-        <Button variant="quiet" size="sm" icon={SameAgainIcon} disabled={readOnly} onClick={onRetry}>
+        <Button
+          variant="quiet"
+          size="sm"
+          icon={SameAgainIcon}
+          disabled={readOnly}
+          onClick={onRetry}
+          className="order-2 -my-1 justify-self-end md:order-3"
+        >
           Retry
         </Button>
       )}
-      <span className="text-small text-ink-faint order-last basis-full">{detail}</span>
+      <span className="order-3 col-span-2 flex min-w-0 flex-col gap-0.5 md:order-2 md:col-span-1">
+        <span className="text-small text-ink font-semibold">{what}</span>
+        <span className="text-small text-ink-faint">{detail}</span>
+      </span>
     </li>
   );
 }
