@@ -73,6 +73,7 @@ export interface FieldsProps {
 export function AttemptFields(props: FieldsProps) {
   const { outcome, previous, settings } = props;
   const isDesktop = useIsDesktop();
+  const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
   // A file was read: show what it filled in.
   useEffect(() => {
@@ -127,10 +128,14 @@ export function AttemptFields(props: FieldsProps) {
           return;
         const target = event.target as HTMLElement;
         if (target.closest("input, textarea, select, [contenteditable]")) return;
-        const picked = OUTCOMES[Number(event.key) - 1];
-        if (!picked) return;
+        const index = Number(event.key) - 1;
+        if (!OUTCOMES[index]) return;
+        // Through the button itself, as a tap: the outcome's own moment plays and focus moves to the picked one.
+        const button = event.currentTarget.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')[index];
+        if (!button) return;
         event.preventDefault();
-        props.onOutcome(picked);
+        button.focus();
+        button.click();
       }}
     >
       <fieldset disabled={props.readOnly === "all"} className="contents">
@@ -141,7 +146,9 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
-      {props.coach}
+      {/* Claude's ideas for the next try sit under the outcome, until a failure's own questions (tags) need the room:
+          then they wait under them, so the photo and the tags stay within reach of the thumb. */}
+      {!withTags && props.coach}
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts
@@ -158,13 +165,8 @@ export function AttemptFields(props: FieldsProps) {
         <TextArea
           aria-label="Note"
           minRows={1}
-          placeholder={
-            outcome === "failed"
-              ? "What went wrong? One line is plenty."
-              : outcome === "success"
-                ? "What made it work? One line is plenty."
-                : "A line about this attempt"
-          }
+          // The tags under it ask "What went wrong?" / "What worked?": the note doesn't repeat the question.
+          placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
           maxLength={500}
           enterKeyHint="done"
           value={props.note}
@@ -203,6 +205,7 @@ export function AttemptFields(props: FieldsProps) {
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>
+      {withTags && props.coach}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>

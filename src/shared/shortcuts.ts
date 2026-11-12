@@ -44,8 +44,8 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
 
 /** How the overlay lays the groups out in three columns of about the same height. */
 export const SHORTCUT_COLUMNS: readonly (readonly ShortcutGroup[])[] = [
-  ["anywhere", "search", "week"],
-  ["build", "attempt", "journal", "pantry"],
+  ["anywhere", "search", "week", "pantry"],
+  ["build", "attempt", "journal"],
   ["lists", "idea", "spool", "shopping", "palette"],
 ];
 

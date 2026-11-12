@@ -15,7 +15,8 @@ export function WhenField({ value, onChange }: { value: number | null; onChange:
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="pressable focus-ring text-small text-ink-soft hover:text-ink rounded-pill inline-flex h-9 items-center gap-1.5 self-start pr-3 pl-2.5 font-semibold md:h-8"
+        // -ml-2.5 takes back its own padding: the icon sits on the edge the label and chips share.
+        className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink rounded-pill relative mb-2 -ml-2.5 inline-flex h-9 items-center gap-1.5 self-start pr-3 pl-2.5 font-semibold md:h-8"
       >
         <CalendarIcon size={16} aria-hidden />
         Printed just now

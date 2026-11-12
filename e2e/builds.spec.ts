@@ -37,8 +37,12 @@ test("1, 2, 3 answer the outcome, Enter logs it, and Spaghetti needs no Spaghett
   await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Bed adhesion" })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Spaghetti", exact: true })).toHaveCount(0);
+  // Focus follows the pick, and a key pick is a tap: the line for a failure is there.
+  await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeFocused();
+  await expect(sheet.getByText("Good one to have on record.")).toBeVisible();
   await page.keyboard.press("2");
   await expect(sheet.getByRole("radio", { name: "Partly", checked: true })).toBeVisible();
+  await expect(sheet.getByRole("radio", { name: "Partly" })).toBeFocused();
   await page.keyboard.press("3");
   // Focus is still on an outcome button: Enter logs the one picked, it doesn't pick the focused one.
   await page.keyboard.press("Enter");

@@ -13,7 +13,7 @@ export function ShortcutList({ className }: { className?: string }) {
   return (
     <div className={cn("grid gap-x-10 md:grid-cols-3", className)}>
       {SHORTCUT_COLUMNS.map((groups) => (
-        <div key={groups.join()} className="flex min-w-0 flex-col gap-7 pb-7 md:pb-0">
+        <div key={groups.join()} className="flex min-w-0 flex-col gap-4 pb-7 md:pb-0">
           {groups.map((group) => (
             <Group key={group} group={group} />
           ))}
@@ -26,7 +26,7 @@ export function ShortcutList({ className }: { className?: string }) {
 function Group({ group }: { group: ShortcutGroup }) {
   return (
     <section aria-labelledby={`shortcuts-${group}`}>
-      <Overline as="h3" id={`shortcuts-${group}`} className="mb-2 block">
+      <Overline as="h3" id={`shortcuts-${group}`} className="mb-1.5 block">
         {GROUP_LABELS[group]}
       </Overline>
       <dl className="flex flex-col">
