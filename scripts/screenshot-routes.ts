@@ -1165,7 +1165,7 @@ export const shots: Shot[] = [
     },
     // Both cards in view, clear of the action bar and the tab bar on a phone.
     beforeShot: async (page) => {
-      await page.getByRole("button", { name: "Add another file" }).evaluate((button) => {
+      await page.getByRole("button", { name: "Add a file" }).evaluate((button) => {
         button.scrollIntoView({ block: "center" });
       });
       await page.waitForTimeout(300);

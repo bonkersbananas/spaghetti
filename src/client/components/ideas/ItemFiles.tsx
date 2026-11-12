@@ -1,8 +1,6 @@
 import type { AttemptFile } from "@shared/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { SavedFileCard } from "@/components/builds/SlicerFile";
-import { Button } from "@/components/ui/Button";
-import { PlusIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { removeItemFile } from "@/lib/item-files";
 
@@ -14,13 +12,10 @@ export default function ItemFiles({
   itemId,
   files,
   readOnly,
-  onAdd,
 }: {
   itemId: string;
   files: AttemptFile[];
   readOnly?: boolean;
-  /** Shows "Add another file" at the end (the idea page; a build adds files through its attempts). */
-  onAdd?: () => void;
 }) {
   const queryClient = useQueryClient();
   if (!files.length) return null;
@@ -44,11 +39,6 @@ export default function ItemFiles({
           </li>
         ))}
       </ul>
-      {onAdd && !readOnly && (
-        <Button variant="quiet" icon={PlusIcon} onClick={onAdd} className="self-start">
-          Add another file
-        </Button>
-      )}
     </section>
   );
 }

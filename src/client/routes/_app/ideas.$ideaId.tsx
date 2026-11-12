@@ -350,15 +350,6 @@ function Idea({ item }: { item: ItemView }) {
               >
                 My wishlist
               </ToggleChip>
-              {files.length === 0 && (
-                <ToggleChip
-                  icon={SlicerFileIcon}
-                  disabled={readOnly || item.pending}
-                  onClick={() => filePicker.current?.click()}
-                >
-                  Add a file
-                </ToggleChip>
-              )}
               <input
                 ref={filePicker}
                 type="file"
@@ -373,9 +364,6 @@ function Idea({ item }: { item: ItemView }) {
               />
               {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
             </div>
-            {model && !model.url.startsWith("/api/files/") && (
-              <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />
-            )}
             <NoteField
               value={note}
               onChange={setNote}
@@ -384,16 +372,26 @@ function Idea({ item }: { item: ItemView }) {
             />
             <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
             <NoteLinks note={note} skip={model?.url} />
+            {/* One model block under the note: the model's card, the files kept with the idea, and the quiet actions
+              (a second one, "Make a twist", joins the row beside "Add a file"). */}
+            {model && !model.url.startsWith("/api/files/") && (
+              <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />
+            )}
             {files.length > 0 && (
               <Suspense fallback={null}>
-                <ItemFiles
-                  itemId={item.id}
-                  files={files}
-                  readOnly={readOnly || item.pending}
-                  onAdd={() => filePicker.current?.click()}
-                />
+                <ItemFiles itemId={item.id} files={files} readOnly={readOnly || item.pending} />
               </Suspense>
             )}
+            <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
+              <Button
+                variant="quiet"
+                icon={SlicerFileIcon}
+                disabled={readOnly || item.pending}
+                onClick={() => filePicker.current?.click()}
+              >
+                Add a file
+              </Button>
+            </div>
 
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
               {person && <Avatar person={person} size="sm" via={via} />}
