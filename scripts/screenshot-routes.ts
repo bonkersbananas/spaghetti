@@ -2260,6 +2260,24 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A thing with a Prisjakt page, open: its picture, the cheapest price found and the offers, as tappable rows.
+    name: "shopping-prices-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Liquid glue for the build plate", exact: true }).click();
+      await page.getByRole("dialog").getByRole("list", { name: "Cheapest offers" }).waitFor({ timeout: 20_000 });
+    },
+  },
+  {
+    // A thing with no Prisjakt page yet: the page a search found, for a person to confirm.
+    name: "shopping-suggestion-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Silica gel for the dry box", exact: true }).click();
+      await page.getByRole("dialog").getByText("Is this it?").waitFor({ timeout: 20_000 });
+    },
+  },
+  {
     // Nothing on the list yet.
     name: "shopping-empty",
     path: "/shopping",

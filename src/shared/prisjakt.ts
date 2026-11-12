@@ -78,7 +78,7 @@ function readOffers(html: string): PriceOffer[] {
   }
   const best = new Map<string, PriceOffer>();
   for (const m of data.matchAll(
-    /"shopId":(\d+),"shopLogoUrl":"[^"]*","shopOfferId":"[^"]*"[^]{0,700}?"price":\{"amount":(\d+(?:\.\d+)?),"currency":"SEK"\}[^]{0,900}?"stockStatus":"(\w+)"/g,
+    /"shopId":(\d+),"shopLogoUrl":"[^"]*","shopOfferId":"[^"]*"[\s\S]{0,700}?"price":\{"amount":(\d+(?:\.\d+)?),"currency":"SEK"\}[\s\S]{0,900}?"stockStatus":"(\w+)"/g,
   )) {
     const shop = names.get(m[1] ?? "");
     const price = num(m[2]);

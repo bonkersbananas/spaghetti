@@ -397,12 +397,15 @@ export async function startFakeClaude(port: number): Promise<{ url: string; stop
   const server = createServer((request, response) => {
     if (request.url?.startsWith("/hooks")) return receiveHook(request, response, received);
     // A Prisjakt product page (the Worker reads the stand-in instead of prisjakt.nu while it talks to this server).
-    const product = /^\/produkt\.php\?p=([12])$/.exec(request.url ?? "");
+    const product = /^\/produkt\.php\?p=(\d+)$/.exec(request.url ?? "");
     if (product) {
       response.setHeader("Content-Type", "text/html");
       response.end(
         productPage
-          .replaceAll("https://cdn.pji.nu/product/standard/800/15633708.jpg", `${base}/images/${product[1]}.jpg`)
+          .replaceAll(
+            "https://cdn.pji.nu/product/standard/800/15633708.jpg",
+            `${base}/images/${(Number(product[1]) % 3) + 1}.jpg`,
+          )
           .replace("Bambu Lab P2S Combo", `Bambu Lab PLA Basic ${product[1]}`),
       );
       return;
