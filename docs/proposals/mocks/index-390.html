@@ -1,0 +1,286 @@
+<!doctype html><meta charset=utf-8><style>/*
+ * Spaghetti design tokens. The single source of truth for color, type, space,
+ * radii, elevation and motion. docs/design.md explains how to use them.
+ *
+ * Raw values live in :root (light) and [data-theme="dark"]. The @theme block
+ * below maps them to Tailwind utilities (bg-paper, text-ink, shadow-raised…)
+ * and removes Tailwind's default palette, type scale, radii and shadows, so
+ * only these tokens can be used.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces: paper is the page, cream is anything raised above it. */
+  --sg-paper: #f6f1e8;
+  --sg-paper-deep: #eee6d9;
+  --sg-cream: #fffcf7;
+  /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
+  --sg-lifted: #fffcf7;
+  --sg-well: #ebe3d5;
+  /* The soft round behind a held tab bar icon. */
+  --sg-pressed: #ece3d3;
+  /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
+  --sg-note: #f6f1e8;
+  /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
+  --sg-plate: #d8c4a0;
+  --sg-plate-edge: #b59f78;
+  --sg-stage: #faf5ea;
+  /* The studio's light on the print: the same warm lamp in both themes (a print under a lamp doesn't dim at night). */
+  --sg-studio-light: #fff2de;
+  --sg-studio-sky: #fffaf0;
+  --sg-studio-ground: #a39078;
+  /* The 3D viewer's data colours: what each kind of move is drawn in when colouring by feature, and a stand-in for filaments nobody coloured. */
+  --sg-feature-0: #9a8f84;
+  --sg-feature-1: #d9573a;
+  --sg-feature-2: #e8a33d;
+  --sg-feature-3: #c2418a;
+  --sg-feature-4: #6fa37a;
+  --sg-feature-5: #3f8f86;
+  --sg-feature-6: #e8d27a;
+  --sg-feature-7: #8f7a62;
+  --sg-feature-8: #4f7fc7;
+  --sg-feature-9: #a77fc2;
+  --sg-feature-10: #8d9aa3;
+  --sg-feature-11: #5e6f8a;
+  --sg-feature-12: #bfae98;
+  --sg-feature-13: #7a5f4a;
+  --sg-feature-14: #f2c6a0;
+  --sg-fil-0: #cfc4b3;
+  --sg-fil-1: #d9573a;
+  --sg-fil-2: #4f7fc7;
+  --sg-fil-3: #6fa37a;
+  --sg-fil-4: #e8a33d;
+  --sg-fil-5: #a77fc2;
+  --sg-fil-6: #8d9aa3;
+  --sg-fil-7: #8f7a62;
+
+  /* Ink */
+  /* A QR code is dark on light in both themes: scanners need the contrast the right way round. */
+  --sg-qr-bg: #fffcf7;
+  --sg-qr-ink: #2b2420;
+  --sg-ink: #2b2420;
+  --sg-ink-soft: #5e544b;
+  --sg-ink-faint: #6f645a;
+  --sg-ink-ghost: #b4a99d;
+  --sg-hairline: rgb(43 36 32 / 0.08);
+  --sg-scrim: rgb(43 30 20 / 0.32);
+  /* Things drawn over photos (badges, remove buttons) are dark glass in both themes: a photo is the same photo at night. */
+  --sg-veil: rgb(32 24 18 / 0.62);
+  --sg-veil-strong: rgb(32 24 18 / 0.8);
+  --sg-on-veil: #fff8ee;
+  /* A selected chip, the inverse of the page. */
+  --sg-select: #2b2420;
+  --sg-on-select: #f6f1e8;
+  /* Toasts are dark chips in light mode and a lifted surface in dark mode. */
+  --sg-toast: #2b2420;
+  --sg-toast-fg: #f6f1e8;
+  /* The ground shadow under illustrations. */
+  --sg-shade: rgb(43 36 32 / 0.06);
+
+  /* Accents: used with restraint. Tomato acts; basil confirms; semolina highlights. */
+  --sg-tomato: #c8462a;
+  --sg-tomato-strong: #b03b20;
+  /* Held: a shade deeper than hover, so a thumb on the primary button feels it. */
+  --sg-tomato-pressed: #8f2f18;
+  --sg-tomato-soft: #f9e1d6;
+  --sg-tomato-ink: #a8381c;
+  --sg-basil: #3f6e3b;
+  --sg-basil-soft: #dfebd6;
+  --sg-basil-ink: #3e6b3a;
+  --sg-semolina: #e3ae45;
+  --sg-semolina-soft: #f6e6c1;
+  --sg-semolina-ink: #7f5b12;
+  --sg-on-accent: #fffaf3;
+  /* The app mark never changes with the theme: it is an icon. */
+  --sg-mark-tile: #c8462a;
+  --sg-mark-stroke: #fffaf3;
+
+  /* People: each person picks one. Text on them uses --sg-on-accent. */
+  --sg-person-tomato: #c8462a;
+  --sg-person-basil: #3f6e3b;
+  --sg-person-semolina: #946d17;
+  --sg-person-plum: #8e5b86;
+  --sg-person-sea: #3c7489;
+  --sg-person-clay: #985c35;
+
+  /* Elevation: soft, warm shadows instead of borders. */
+  --sg-shadow-soft: 0 1px 1px rgb(80 50 20 / 0.04), 0 2px 6px rgb(80 50 20 / 0.05);
+  --sg-shadow-raised: 0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08);
+  /* A button's face on a card: cream on cream needs a hair of edge to read as something to press. */
+  --sg-shadow-key: 0 1px 1px rgb(80 50 20 / 0.06), 0 2px 6px rgb(80 50 20 / 0.06), 0 0 0 1px rgb(80 50 20 / 0.11);
+  --sg-shadow-key-hover:
+    0 1px 2px rgb(80 50 20 / 0.05), 0 6px 20px rgb(80 50 20 / 0.08), 0 0 0 1px rgb(80 50 20 / 0.16);
+  --sg-shadow-float: 0 2px 6px rgb(80 50 20 / 0.06), 0 16px 48px rgb(80 50 20 / 0.16);
+  --sg-shadow-well: inset 0 1px 2px rgb(80 50 20 / 0.07);
+  --sg-shadow-bar: 0 -1px 0 rgb(43 36 32 / 0.05), 0 -8px 24px rgb(80 50 20 / 0.06);
+  /* Focus is calm ink, never tomato: tomato means "the action" or "an error". A paper gap keeps the ring apart from
+     a photo or a lifted card it sits on, and the ink reads at 3:1 or more on paper and cream. */
+  --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(43 36 32 / 0.7);
+  /* The same ring drawn inside, for a control that fills a clipped surface (a row in a card). */
+  --sg-ring-inset: inset 0 0 0 2px rgb(43 36 32 / 0.7), inset 0 0 0 4px var(--sg-paper);
+  --sg-ring-error: 0 0 0 1px rgb(168 56 28 / 0.6), 0 0 0 4px rgb(200 70 42 / 0.14);
+
+  /* Type sizes: phone first, then desktop below. */
+  /* Two initials in the smallest avatar (24 px). */
+  --sg-text-micro: 0.6875rem;
+  --sg-text-micro-lh: 1rem;
+  --sg-text-caption: 0.75rem;
+  --sg-text-caption-lh: 1rem;
+  --sg-text-small: 0.875rem;
+  --sg-text-small-lh: 1.25rem;
+  --sg-text-body: 1rem;
+  --sg-text-body-lh: 1.5rem;
+  --sg-text-lead: 1.125rem;
+  --sg-text-lead-lh: 1.625rem;
+  --sg-text-title: 1.25rem;
+  --sg-text-title-lh: 1.625rem;
+  --sg-text-headline: 1.75rem;
+  --sg-text-headline-lh: 2.125rem;
+  --sg-text-display: 2.25rem;
+  --sg-text-display-lh: 2.5rem;
+  --sg-text-figure: 3.5rem;
+  --sg-text-figure-lh: 3.5rem;
+
+  /* Layout */
+  /* The tab bar's buttons; the bar itself also holds the home indicator's room below them. */
+  --sg-tabbar-row: 3.5rem;
+  /* A screen's own action bar on phones, which sits on the tab bar. */
+  --sg-actionbar-height: 4.75rem;
+  --sg-sidebar-width: 16rem;
+  --sg-content-width: 45rem;
+  --sg-wide-width: 72rem;
+  --sg-safe-top: env(safe-area-inset-top, 0px);
+  --sg-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The room under the tab bar's buttons. In a browser the whole safe area when the toolbar is hidden (the home indicator),
+     and a little air when the toolbar sits below the bar. The row is taller than it was (3.25rem) so the icons have air above them.
+     Installed, the home indicator needs less than the full safe area: the labels sit just above its line (see the media query below). */
+  --sg-tabbar-foot: max(var(--sg-safe-bottom), 0.5rem);
+  /* The whole tab bar, home indicator included: everything that floats above it or clears it uses this one. */
+  --sg-tabbar-height: calc(var(--sg-tabbar-row) + var(--sg-tabbar-foot));
+  /* What the on-screen keyboard covers, and what is left above it (lib/viewport.ts keeps them current). */
+  --sg-keyboard-inset: 0px;
+  --sg-visible-height: 100dvh;
+
+  /* Motion */
+  --sg-duration-instant: 90ms;
+  --sg-duration-fast: 160ms;
+  --sg-duration-base: 240ms;
+  --sg-duration-slow: 420ms;
+  --sg-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --sg-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --sg-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --sg-press-scale: 0.97;
+  --sg-press-veil: color-mix(in srgb, currentColor 8%, transparent);
+  /* What is tappable but not `pressable` (inline links, plain rows) dims to this while held. */
+  --sg-press-dim: 0.6;
+}
+
+/* Installed on an iPhone (the Home Screen app) the bar reaches the screen's edge: the home indicator's line takes the lowest ~21 px of the safe area,
+   so the labels may sit lower than the whole safe area would put them. */
+@media (display-mode: standalone) {
+  :root {
+    --sg-tabbar-foot: max(calc(var(--sg-safe-bottom) - 0.875rem), 0.5rem);
+  }
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --sg-text-small: 0.8125rem;
+    --sg-text-small-lh: 1.125rem;
+    --sg-text-body: 0.9375rem;
+    --sg-text-body-lh: 1.4375rem;
+    --sg-text-lead: 1.0625rem;
+    --sg-text-lead-lh: 1.625rem;
+    --sg-text-title: 1.25rem;
+    --sg-text-title-lh: 1.75rem;
+    --sg-text-headline: 1.875rem;
+    --sg-text-headline-lh: 2.25rem;
+    --sg-text-display: 2.75rem;
+    --sg-text-display-lh: 3rem;
+    --sg-text-figure: 6rem;
+    --sg-text-figure-lh: 6rem;
+  }
+}
+
+/*
+ * Dark theme: the same kitchen notebook with the lights down. Surfaces are
+ * warm browns, never black or grey; ink is soft cream rather than white;
+ * accents keep their hue but sit a little deeper so they read without
+ * glowing. Elevation works by lifting (lighter surfaces and a lit top edge)
+ * instead of by shadow. Applied by lib/theme.ts, which sets data-theme on
+ * <html> from the person's choice or the system setting.
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --sg-paper: #1b1714;
+  --sg-paper-deep: #151210;
+  --sg-cream: #25201c;
+  --sg-lifted: #2e2823;
+  --sg-well: #120f0d;
+  --sg-pressed: #3a332c;
+  --sg-note: #2e2823;
+  --sg-plate: #4f4536;
+  --sg-plate-edge: #382f25;
+  --sg-stage: #2b2520;
+  --sg-ink: #ece4d9;
+  --sg-ink-soft: #c6bab0;
+  --sg-ink-faint: #ab9f93;
+  --sg-ink-ghost: #6b6158;
+  --sg-hairline: rgb(236 228 217 / 0.08);
+  --sg-scrim: rgb(12 8 5 / 0.6);
+  --sg-select: #d8cdc0;
+  --sg-on-select: #1b1714;
+  --sg-toast: #3a322b;
+  --sg-toast-fg: #ece4d9;
+  --sg-shade: rgb(0 0 0 / 0.3);
+  /* Tomato stays the deep tomato of the daytime fills (cream text on it is AA); only text on dark surfaces gets lighter. */
+  --sg-tomato-soft: #3b2219;
+  --sg-tomato-pressed: #8f2f18;
+  --sg-tomato-ink: #f59a7c;
+  --sg-basil: #6f9f69;
+  --sg-basil-soft: #232f20;
+  --sg-basil-ink: #9cc794;
+  --sg-semolina: #dcae4f;
+  --sg-semolina-soft: #3a2f18;
+  --sg-semolina-ink: #eccb7f;
+  --sg-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 236 214 / 0.045);
+  --sg-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 236 214 / 0.07);
+  --sg-shadow-key: var(--sg-shadow-soft);
+  --sg-shadow-key-hover: var(--sg-shadow-raised);
+  --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.3), 0 20px 56px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 236 214 / 0.08);
+  --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
+  --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
+  --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(236 228 217 / 0.72);
+  --sg-ring-inset: inset 0 0 0 2px rgb(236 228 217 / 0.72), inset 0 0 0 4px var(--sg-paper);
+  --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(245 154 124 / 0.16);
+}
+
+@font-face{font-family:'Fraunces';src:url('../../../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-full-normal.woff2');font-weight:100 900}
+@font-face{font-family:'Figtree';src:url('../../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2');font-weight:300 900}
+
+*{box-sizing:border-box;margin:0}
+body{background:var(--sg-paper);color:var(--sg-ink);font-family:Figtree,sans-serif;font-size:15px;line-height:1.45}
+h1,h2,h3,.disp{font-family:Fraunces,serif;font-variation-settings:'SOFT' 100;font-weight:600;letter-spacing:-.01em}
+.eyebrow{font-size:12px;color:var(--sg-ink-faint);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.card{background:var(--sg-cream);border-radius:16px;box-shadow:var(--sg-shadow-soft);overflow:hidden}
+.pic{background:var(--sg-well);display:flex;align-items:center;justify-content:center;aspect-ratio:4/3;position:relative}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 10px;border-radius:999px;background:var(--sg-paper-deep);color:var(--sg-ink-soft);font-weight:500}
+.chip.b{background:var(--sg-basil-soft);color:var(--sg-basil-ink)}
+.chip.s{background:var(--sg-semolina-soft);color:var(--sg-semolina-ink)}
+.chip.t{background:var(--sg-tomato-soft);color:var(--sg-tomato-ink)}
+.meta{font-size:13px;color:var(--sg-ink-faint)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 22px;border-radius:14px;font-weight:600;background:var(--sg-tomato);color:var(--sg-on-accent);box-shadow:var(--sg-shadow-raised)}
+.btn.q{background:var(--sg-cream);color:var(--sg-ink);box-shadow:var(--sg-shadow-key)}
+.row{display:flex;align-items:center;gap:12px}
+.well{background:rgb(43 36 32 / .04);border-radius:12px;padding:12px 14px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.tab{position:fixed;left:0;right:0;bottom:0;height:78px;background:var(--sg-cream);box-shadow:var(--sg-shadow-bar);display:flex;justify-content:space-around;padding-top:10px;font-size:11px;color:var(--sg-ink-faint)}
+.tab b{display:block;width:22px;height:22px;border-radius:7px;background:var(--sg-ink-ghost);margin:0 auto 3px}
+.side{width:256px;background:var(--sg-paper-deep);padding:22px 16px;min-height:100vh;position:fixed;left:0;top:0}
+.side div{padding:9px 12px;border-radius:10px;color:var(--sg-ink-soft);font-weight:500}
+.side .on{background:var(--sg-cream);box-shadow:var(--sg-shadow-soft);color:var(--sg-ink)}
+</style><div style="padding:56px 20px 110px"><div style="display:flex;justify-content:space-between;align-items:end;margin-bottom:6px"><div><h1 style="font-size:32px">Twists</h1><p class="meta" style="margin-top:2px">Other people’s models, the way we print them.</p></div></div><div style="display:flex;gap:8px;margin:14px 0 18px"><span class="chip" style="background:var(--sg-select);color:var(--sg-on-select)">All 3</span><span class="chip">Printed</span><span class="chip">Not yet</span></div><div style="display:grid;gap:14px"><div class="card"><div class="pic"><svg viewBox="0 0 200 150" width="62%"><ellipse cx="100" cy="128" rx="78" ry="10" fill="var(--sg-shade)"/><path d="M38 52 L162 52 L154 118 Q100 134 46 118Z" fill="var(--sg-semolina)"/><path d="M38 52 Q100 70 162 52 L162 60 Q100 80 38 60Z" fill="var(--sg-tomato)"/><rect x="72" y="86" width="56" height="12" rx="6" fill="var(--sg-tomato)" opacity=".75"/></svg><span class="chip b" style="position:absolute;left:10px;top:10px;background:var(--sg-veil);color:var(--sg-on-veil)">printed 3×</span></div>
+<div style="padding:14px 16px 16px"><h3 style="font-size:18px">Gridfinity bin, 42 mm grid</h3><p class="meta" style="margin:2px 0 10px">MakerWorld · Gridfinity base</p><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">scaled 84%</span><span class="chip">+0.2 mm fit</span><span class="chip">text “Marie”</span></div></div></div><div class="card"><div class="pic"><svg viewBox="0 0 200 150" width="55%"><ellipse cx="100" cy="130" rx="60" ry="8" fill="var(--sg-shade)"/><rect x="62" y="24" width="14" height="96" rx="7" fill="var(--sg-tomato)"/><path d="M69 110 Q69 128 100 128 Q132 128 132 96 L120 96 Q120 114 100 114 L69 110Z" fill="var(--sg-semolina)"/></svg><span class="chip s" style="position:absolute;left:10px;top:10px;background:var(--sg-veil);color:var(--sg-on-veil)">printed 1×</span></div>
+<div style="padding:14px 16px 16px"><h3 style="font-size:18px">Cable hook, thicker</h3><p class="meta" style="margin:2px 0 10px">Printables · Desk hook</p><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">wall 2.4 mm</span><span class="chip">PETG</span></div></div></div><div class="card"><div class="pic"><svg viewBox="0 0 200 150" width="60%"><ellipse cx="100" cy="128" rx="70" ry="9" fill="var(--sg-shade)"/><circle cx="100" cy="76" r="46" fill="var(--sg-basil)"/><circle cx="100" cy="76" r="22" fill="var(--sg-well)"/><path d="M100 30 A46 46 0 0 1 146 76" stroke="var(--sg-semolina)" stroke-width="8" fill="none"/></svg><span class="chip " style="position:absolute;left:10px;top:10px;background:var(--sg-veil);color:var(--sg-on-veil)">not yet printed</span></div>
+<div style="padding:14px 16px 16px"><h3 style="font-size:18px">Spool holder, 0.2 looser</h3><p class="meta" style="margin:2px 0 10px">Thingiverse · Spool arm</p><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">+0.2 mm fit</span></div></div></div></div></div><div class="tab"><span><b></b>Today</span><span><b></b>Ideas</span><span><b style="background:var(--sg-tomato);border-radius:50%;width:44px;height:44px;margin-top:-18px"></b></span><span><b></b>Builds</span><span><b></b>Journal</span></div>
