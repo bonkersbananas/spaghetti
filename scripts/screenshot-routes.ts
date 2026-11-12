@@ -103,7 +103,8 @@ async function withWeekMock(page: Page, mock: { waiting?: boolean; note?: boolea
   await page.getByRole("heading", { level: 1 }).waitFor();
 }
 
-const wide = (page: Page): 390 | 1440 => (page.viewportSize()?.width === 390 ? 390 : 1440);
+/** 390 for any phone-sized window (390, 402, 375…), else 1440. */
+const wide = (page: Page): 390 | 1440 => ((page.viewportSize()?.width ?? 1440) < 768 ? 390 : 1440);
 
 /** What the passkeys and devices lists say, in a shot: a real passkey needs a real site (localhost), a shot opens 127.0.0.1. */
 async function mockSigningIn(page: Page) {
@@ -2574,7 +2575,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await withPermission(page, "default");
-      await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await openNotifications(page, wide(page));
     },
   },
   {
@@ -2583,7 +2584,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await withPermission(page, "granted");
       await subscribedDevice(page);
-      await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await openNotifications(page, wide(page));
       await page
         .getByRole("switch", { name: /Notify this device/ })
         .and(page.locator("[aria-checked=true]"))
@@ -2598,7 +2599,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await withPermission(page, "denied");
-      await openNotifications(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await openNotifications(page, wide(page));
     },
   },
   {
@@ -2606,7 +2607,7 @@ export const shots: Shot[] = [
     name: "account-photo",
     path: "/ideas",
     prepare: async (page) => {
-      await openAccount(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await openAccount(page, wide(page));
       await page.locator("[role=dialog] img[src*='/api/people/']").first().waitFor();
       await page.waitForTimeout(500);
     },
@@ -2616,7 +2617,7 @@ export const shots: Shot[] = [
     name: "profile-crop",
     path: "/ideas",
     prepare: async (page) => {
-      await openAccount(page, page.viewportSize()?.width === 390 ? 390 : 1440);
+      await openAccount(page, wide(page));
       await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
       await page.getByTestId("crop-frame").locator("img").waitFor();
       await page.getByRole("slider", { name: "Zoom" }).fill("1.6");
@@ -2628,7 +2629,7 @@ export const shots: Shot[] = [
     name: "toast-over-sheet",
     path: "/ideas",
     prepare: async (page) => {
-      const width = page.viewportSize()?.width === 390 ? 390 : 1440;
+      const width = wide(page);
       await openAccount(page, width);
       await page.getByTestId("profile-photo-input").setInputFiles("e2e/fixtures/portrait.jpg");
       await page.getByTestId("crop-frame").locator("img").waitFor();

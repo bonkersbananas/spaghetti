@@ -23,6 +23,8 @@ export async function simulateIphone(context: BrowserContext, insets = IPHONE_IN
       );
   }, insets);
   const standalone = async (page: Page) => {
+    // CDP is Chromium only: WebKit keeps the browser's own display mode (the insets above still apply).
+    if (context.browser()?.browserType().name() !== "chromium") return;
     const session = await context.newCDPSession(page);
     await session.send("Emulation.setEmulatedMedia", { features: [{ name: "display-mode", value: "standalone" }] });
   };
