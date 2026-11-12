@@ -253,6 +253,13 @@
       "when": 1794451808462,
       "tag": "0035_idea-scout",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1794461272023,
+      "tag": "0036_shopping-prices",
+      "breakpoints": true
     }
   ]
 }

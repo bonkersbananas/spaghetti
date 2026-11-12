@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShoppingItem, ShoppingItemResponse, ShoppingItemsResponse } from "../../src/shared/api.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
 
@@ -6,12 +6,16 @@ let cookie: string;
 let samCookie: string;
 
 beforeEach(async () => {
+  // Adding a link reads its page in the background (shopping-prices.test.ts): here no page answers.
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("", { status: 404 }));
   await resetDb();
   await addUser("alex", "correct horse", "Alex Rivera", "tomato");
   await addUser("sam", "battery staple", "Sam Okafor", "basil");
   cookie = await signIn("alex", "correct horse");
   samCookie = await signIn("sam", "battery staple");
 });
+
+afterEach(() => vi.restoreAllMocks());
 
 const glue = "https://eu.store.bambulab.com/products/liquid-glue-for-build-plate";
 const prisjakt = "https://www.prisjakt.nu/produkt.php?p=12345";

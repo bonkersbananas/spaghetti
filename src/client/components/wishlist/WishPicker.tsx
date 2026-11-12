@@ -42,12 +42,17 @@ export function WishPicker({ open, onOpenChange, me, ideas, picked }: WishPicker
           {choices.map((item) => {
             const cover = item.photos[0];
             const at = picked.indexOf(item.id);
+            const name = itemName(item);
+            const text = item.note.trim();
+            // An untitled idea is named by the note's first line, and the caption holds about two lines of it:
+            // show the note when it says more than the caption can.
+            const more = text && (name.titled || text !== name.text || text.length > 40);
             return (
               <li key={item.id} className="min-w-0">
                 <PickTile
-                  title={itemName(item).text}
+                  title={name.text}
                   photo={cover ? { src: photoSrc(cover.id, "thumb"), color: cover.color || undefined } : undefined}
-                  note={item.note.trim() || undefined}
+                  note={more ? text : undefined}
                   rank={at >= 0 ? at + 1 : null}
                   disabled={readOnly}
                   onToggle={() => toggleWishlist(queryClient, me, item, { quiet: true })}

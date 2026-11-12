@@ -115,6 +115,67 @@ const labels = {
  * `unreadable` finds no label, `partly` reads only a brand, a material and the nozzle range, `two` finds two spools,
  * anything else is a good read of one spool.
  */
+/**
+ * A request to find a thing's Prisjakt page (decision 0041): Claude's web search over a search engine's results. A
+ * word in the thing's name decides: `slow` takes a few seconds, `refused` is refused, `broken` is an API error,
+ * `nomatch` finds no page, `invented` names an address the search never returned, anything else finds product 1 (and
+ * `second` product 2 instead). The product pages themselves are served below, at /produkt.php.
+ */
+async function answerSearch(body: string, response: import("node:http").ServerResponse) {
+  const raw = /Find the Prisjakt page for this thing[^{]*(\{.*\})/.exec(body)?.[1] ?? "";
+  const asked = raw.toLowerCase();
+  // The suggested page is called what the thing is called.
+  const named = /name\\?":\\?"((?:[^"\\]|\\.)*?)\\?"/.exec(raw)?.[1]?.replace(/\\"/g, '"') ?? "";
+  if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (asked.includes("broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = asked.includes("refused");
+  const product = asked.includes("second") ? 2 : 1;
+  const url = `https://www.prisjakt.nu/produkt.php?p=${product}`;
+  const none = asked.includes("nomatch");
+  const answer = asked.includes("invented")
+    ? { url: "https://www.prisjakt.nu/produkt.php?p=999", title: "Made up" }
+    : none
+      ? { url: null, title: null }
+      : { url, title: named || `Bambu Lab PLA Basic ${product}` };
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-5-5",
+      content: refused
+        ? []
+        : [
+            { type: "server_tool_use", id: "srvtoolu_1", name: "web_search", input: { query: "prisjakt.nu produkt" } },
+            {
+              type: "web_search_tool_result",
+              tool_use_id: "srvtoolu_1",
+              content: none
+                ? []
+                : [
+                    {
+                      type: "web_search_result",
+                      url,
+                      title: named || `Bambu Lab PLA Basic ${product}`,
+                      page_age: null,
+                      encrypted_content: "x",
+                    },
+                  ],
+            },
+            { type: "text", text: JSON.stringify(answer) },
+          ],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
+
 async function answerLabel(body: string, response: import("node:http").ServerResponse) {
   const written = (/What they already wrote about this spool:([^"]*)/.exec(body)?.[1] ?? "").toLowerCase();
   if (written.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
@@ -396,16 +457,40 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
   });
 }
 
+/** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
+const PRODUCT_PRICES: Record<string, number> = { 13366548: 149, 12086734: 249, 14402211: 259 };
+
 export async function startFakeClaude(
   port: number,
   { scoutAlways = false }: { scoutAlways?: boolean } = {},
 ): Promise<{ url: string; stop: () => void; server: Server }> {
   const base = `http://127.0.0.1:${port}`;
   // The model's pictures, served from here (the Worker allows this one origin for pictures while it talks to a stand-in).
+  const productPage = readFileSync(join(root, "test/fixtures/pages/prisjakt-product.html"), "utf8");
   const pictures = [1, 2, 3].map((n) => readFileSync(join(root, `e2e/fixtures/model-${n}.jpg`)));
   const received: ReceivedHook[] = [];
   const server = createServer((request, response) => {
     if (request.url?.startsWith("/hooks")) return receiveHook(request, response, received);
+    // A Prisjakt product page (the Worker reads the stand-in instead of prisjakt.nu while it talks to this server).
+    // Believable prices for the seeded products (the fixture is a 7 699 kr printer): glue, a PLA spool, PETG.
+    const product = /^\/produkt\.php\?p=(\d+)$/.exec(request.url ?? "");
+    if (product) {
+      response.setHeader("Content-Type", "text/html");
+      response.end(
+        productPage
+          .replaceAll(
+            "https://cdn.pji.nu/product/standard/800/15633708.jpg",
+            `${base}/images/${(Number(product[1]) % 3) + 1}.jpg`,
+          )
+          .replace("Bambu Lab P2S Combo", `Bambu Lab PLA Basic ${product[1]}`)
+          .replace(
+            /((?:lowPrice|highPrice|amount)\\?":)(\d+)/g,
+            (_, key: string, amount: string) =>
+              key + Math.round((Number(amount) * (PRODUCT_PRICES[product[1] ?? ""] ?? 7699)) / 7699),
+          ),
+      );
+      return;
+    }
     const picture = /^\/images\/(\d)\.jpg$/.exec(request.url ?? "");
     if (picture) {
       response.setHeader("Content-Type", "image/jpeg");
@@ -415,6 +500,7 @@ export async function startFakeClaude(
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
+      if (body.includes("Find the Prisjakt page for this thing")) return answerSearch(body, response);
       if (body.includes("Read the spool label")) return answerLabel(body, response);
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
       if (body.includes("Which models should they print next?")) return answerScout(base, scoutAlways, body, response);

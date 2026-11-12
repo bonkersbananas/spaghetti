@@ -375,6 +375,7 @@ function Suggestions({
   }
   return (
     <div className="flex flex-col gap-6">
+      <p className="text-small text-ink-faint -mb-2">Ideas, builds and every attempt, by any word you remember.</p>
       {recent.length > 0 && (
         <SuggestionGroup
           title="Recent"
@@ -391,7 +392,7 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
-      {(tags.length > 0 || materials.length > 0) && (
+      {tags.length > 0 && (
         <SuggestionGroup title="Often tagged">
           {tags.map((tag) => {
             const label = tagLabel(tag.kind, tag.slug, tag.kind === "failure" ? failureOptions : successOptions);
@@ -401,6 +402,10 @@ function Suggestions({
               </ToggleChip>
             );
           })}
+        </SuggestionGroup>
+      )}
+      {materials.length > 0 && (
+        <SuggestionGroup title="Materials">
           {materials.map((material) => (
             <ToggleChip key={material.value} selected={false} onClick={() => onFilter({ material: material.value })}>
               {material.value}
@@ -419,7 +424,10 @@ function SuggestionGroup({ title, action, children }: { title: string; action?: 
         <Overline as="h2">{title}</Overline>
         {action}
       </div>
-      <ChipRow label={title}>{children}</ChipRow>
+      {/* Wrapped, not scrolled: what is suggested should be seen at once, not found by swiping. */}
+      <ChipRow label={title} wrap>
+        {children}
+      </ChipRow>
     </section>
   );
 }

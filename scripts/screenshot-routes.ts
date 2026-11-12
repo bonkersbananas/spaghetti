@@ -2341,7 +2341,21 @@ export const shots: Shot[] = [
       );
     },
   },
-  { name: "shopping", path: "/shopping", fullPage: true },
+  {
+    name: "shopping",
+    path: "/shopping",
+    fullPage: true,
+    // The pictures come from the Worker's bucket: wait until they have all arrived.
+    prepare: async (page) => {
+      await page.waitForFunction(
+        () => Array.from(document.images).every((img) => img.complete && img.naturalWidth > 0),
+        null,
+        {
+          timeout: 20_000,
+        },
+      );
+    },
+  },
   {
     // A thing on the list, open: its name, the shop and its Prisjakt page.
     name: "shopping-sheet",
@@ -2349,6 +2363,24 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByRole("button", { name: "Hardened steel nozzle, 0.4 mm", exact: true }).click();
       await page.getByRole("dialog").getByLabel("Prisjakt").waitFor();
+    },
+  },
+  {
+    // A thing with a Prisjakt page, open: its picture, the cheapest price found and the offers, as tappable rows.
+    name: "shopping-prices-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Liquid glue for the build plate", exact: true }).click();
+      await page.getByRole("dialog").getByRole("list", { name: "Cheapest offers" }).waitFor({ timeout: 20_000 });
+    },
+  },
+  {
+    // A thing with no Prisjakt page yet: the page a search found, for a person to confirm.
+    name: "shopping-suggestion-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Silica gel for the dry box", exact: true }).click();
+      await page.getByRole("dialog").getByText("Is this it?").waitFor({ timeout: 20_000 });
     },
   },
   {

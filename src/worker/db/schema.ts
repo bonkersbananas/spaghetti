@@ -10,6 +10,7 @@ import type { LabelField } from "../../shared/label-read.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
+import type { PriceSuggestion, ShoppingPrices } from "../../shared/prisjakt.ts";
 import type { ReactionKind } from "../../shared/reactions.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
@@ -1097,6 +1098,25 @@ export const shoppingItems = sqliteTable("shopping_items", {
   name: text("name").notNull().default(""),
   link: text("link"),
   priceLink: text("price_link"),
+  /** Where the picture came from ("prisjakt" or "shop"); the bytes are in R2 at `shoppingPictureKey`. Null: none. */
+  pictureSource: text("picture_source").$type<"prisjakt" | "shop">(),
+  /** When the picture was stored (its version in the address). */
+  pictureAt: integer("picture_at", { mode: "timestamp_ms" }),
+  /** The shop link whose picture was last tried, so a page without one isn't asked again and again. */
+  pictureTried: text("picture_tried"),
+  /** The cheapest offers found on the Prisjakt page (decision 0041). */
+  prices: text("prices", { mode: "json" }).$type<ShoppingPrices>(),
+  /** A Prisjakt page a search found, waiting for a person to confirm it (never used before). */
+  suggestion: text("suggestion", { mode: "json" }).$type<PriceSuggestion>(),
+  /** When a search for it started, and when it ended; started without ended and recent means it's on its way. */
+  suggestionClaimedAt: integer("suggestion_claimed_at", { mode: "timestamp_ms" }),
+  suggestionDoneAt: integer("suggestion_done_at", { mode: "timestamp_ms" }),
+  /** The name the search was made for: a thing is searched for once per name unless asked again. */
+  suggestionTried: text("suggestion_tried"),
+  /** Pages people said "not this one" to, so they aren't suggested again. */
+  suggestionRejected: text("suggestion_rejected", { mode: "json" }).$type<string[]>(),
+  /** The last try at reading the Prisjakt page, successful or not. */
+  pricesTriedAt: integer("prices_tried_at", { mode: "timestamp_ms" }),
   position: integer("position").notNull(),
   boughtAt: integer("bought_at", { mode: "timestamp_ms" }),
   boughtBy: text("bought_by").references(() => users.id),
@@ -1108,6 +1128,17 @@ export const shoppingItems = sqliteTable("shopping_items", {
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+});
+
+/** Claude looking for a Prisjakt page in search results (decision 0041): the record of the run, and what the day's cap counts. */
+export const shoppingSearches = sqliteTable("shopping_searches", {
+  id: text("id").primaryKey(),
+  itemId: text("item_id").notNull(),
+  at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  /** "found", "none", or why not (refusal, api_error, timeout, bad_shape, rejected_url…). Null while it runs. */
+  outcome: text("outcome"),
+  /** The rest of the diagnosis as JSON; never the answer's text. */
+  detail: text("detail"),
 });
 
 export type ShoppingItemRow = typeof shoppingItems.$inferSelect;

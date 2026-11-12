@@ -106,6 +106,22 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* A pointer says "this does something" on every enabled control, not only on links (Tailwind's reset leaves buttons on
+     the arrow). Utilities such as cursor-grab and cursor-text still win. */
+  :where(
+    button,
+    summary,
+    [role="button"],
+    [role="tab"],
+    [role="radio"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="menuitem"],
+    [role="option"]
+  ):not(:disabled, [aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
   /* Pressed state for tappable things that aren't `pressable` (inline links, plain rows): they dim while held. */
   :where(
     a[href],

@@ -2,6 +2,7 @@ import { bookmarklet } from "@shared/shortcut";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CheckIcon, CopyIcon, ShareIcon } from "@/components/ui/icons";
+import { Overline } from "@/components/ui/Overline";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { ShareSetupSheet } from "./ShareSetupSheet";
@@ -36,11 +37,11 @@ export function ShareCard() {
   return (
     <section
       aria-labelledby="share-heading"
-      className="bg-cream shadow-soft max-w-content mb-6 flex flex-col gap-4 rounded-lg p-5"
+      className="bg-cream shadow-soft max-w-content mt-10 flex flex-col gap-4 rounded-lg p-5"
     >
       <div className="flex items-start gap-3.5">
         <span
-          className="bg-ink/6 text-ink-soft flex size-11 shrink-0 items-center justify-center rounded-full"
+          className="bg-ink/6 text-ink-soft hidden size-11 shrink-0 items-center justify-center rounded-full md:flex"
           aria-hidden
         >
           <ShareIcon size={22} />
@@ -56,7 +57,7 @@ export function ShareCard() {
         </div>
       </div>
       <div className="border-ink/6 flex flex-col gap-2.5 border-t pt-4">
-        <h3 className="text-small text-ink-soft font-sans font-semibold">iPhone</h3>
+        <Overline as="h3">iPhone</Overline>
         <p className="text-small text-ink-faint">
           Safari can't share to web apps, so a Shortcut does it. Setting up makes a key that can only add ideas.
         </p>
@@ -72,7 +73,7 @@ export function ShareCard() {
       </div>
       {isDesktop && (
         <div className="border-ink/6 flex flex-col gap-2.5 border-t pt-4">
-          <h3 className="text-small text-ink-soft font-sans font-semibold">Desktop browsers</h3>
+          <Overline as="h3">Desktop browsers</Overline>
           <p className="text-small text-ink-faint">
             Drag this to your bookmarks bar. On any page, it opens a small window with the page's title, address and
             what you selected, already saved.

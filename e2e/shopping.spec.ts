@@ -148,3 +148,55 @@ test("shopping: what's added or ticked while an order is being saved stays", asy
   await expect(names).toHaveText([c, b]);
   await expect(bought(page).getByText(a)).toBeVisible();
 });
+
+test("shopping: a Prisjakt page is suggested for a name, confirmed, and its picture and cheapest offers show", {
+  tag: "@phone",
+}, async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page);
+  await page.goto("/shopping");
+  const name = `PLA Basic black ${tag()}`;
+  await add(page, name);
+  const row = toBuy(page).getByRole("listitem").filter({ hasText: name });
+  // The search runs in the background; the row hints at a match without using it.
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(row.getByRole("button", { name: "Prisjakt match?" })).toBeVisible({ timeout: 20_000 });
+  await expect(row.getByRole("link", { name: /Prisjakt/ })).toHaveCount(0);
+
+  await row.getByRole("button", { name: "Prisjakt match?" }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByText("Is this it?")).toBeVisible();
+  await sheet.getByRole("button", { name: "Use it" }).click();
+
+  // The page is read in the background: the cheapest offers, as found, with a link to the product page.
+  await expect(sheet.getByRole("list", { name: "Cheapest offers" })).toBeVisible({ timeout: 20_000 });
+  const offers = sheet.getByRole("list", { name: "Cheapest offers" }).getByRole("link");
+  await expect(offers).toHaveCount(3);
+  await expect(offers.first()).toContainText("3D Prima");
+  await expect(offers.first()).toContainText("7\u00a0699");
+  await expect(offers.first()).toHaveAttribute("href", "https://www.prisjakt.nu/produkt.php?p=1");
+  await expect(sheet.getByText("checked today").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(row).toContainText("7\u00a0699\u00a0kr");
+  // The picture really loads in its slot (also on a phone), and the line under the name is short.
+  await expect(row.locator("img")).toBeVisible();
+  await expect.poll(() => row.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(row).not.toContainText("checked today");
+});
+
+test("shopping: 'Not this one' drops a suggested page, and a name with no match says so", async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page);
+  await page.goto("/shopping");
+  const name = `Cleaning pad ${tag()}`;
+  await add(page, name);
+  const row = toBuy(page).getByRole("listitem").filter({ hasText: name });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await row.getByRole("button", { name: "Prisjakt match?" }).click({ timeout: 20_000 });
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("button", { name: "Not this one" }).click();
+  await expect(sheet.getByText("Is this it?")).toHaveCount(0);
+  await expect(sheet.getByText("No Prisjakt page found for it.")).toBeVisible();
+  await expect(sheet.getByLabel("Prisjakt")).toHaveValue("");
+});
