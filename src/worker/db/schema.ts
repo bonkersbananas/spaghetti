@@ -701,6 +701,37 @@ export const attemptFiles = sqliteTable(
   (table) => [index("attempt_files_attempt_idx").on(table.attemptId)],
 );
 
+/**
+ * A slicer file (.3mf or .gcode.3mf) kept with an idea or a build, before or beside any attempt. Same fields, R2 keys
+ * (`files/<id>/…`) and serving (`/api/files/:id`) as `attempt_files`; several may be live at once. Soft delete is the
+ * undo; the purge removes the bytes.
+ */
+export const itemFiles = sqliteTable(
+  "item_files",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    size: integer("size").notNull(),
+    stored: integer("stored", { mode: "boolean" }).notNull(),
+    hasThumb: integer("has_thumb", { mode: "boolean" }).notNull(),
+    plate: integer("plate").notNull(),
+    plateCount: integer("plate_count").notNull(),
+    slicer: text("slicer"),
+    prefill: text("prefill", { mode: "json" }).$type<AttemptSettings>().notNull(),
+    objects: text("objects", { mode: "json" }).$type<string[]>().notNull().default([]),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("item_files_item_idx").on(table.itemId)],
+);
+
+export type ItemFileRow = typeof itemFiles.$inferSelect;
 export type Spool = typeof spools.$inferSelect;
 export type AmsSlot = typeof amsSlots.$inferSelect;
 export type Part = typeof parts.$inferSelect;

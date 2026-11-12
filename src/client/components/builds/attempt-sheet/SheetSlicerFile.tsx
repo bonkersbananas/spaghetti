@@ -1,9 +1,11 @@
-import { MAX_SLICER_FILE_BYTES } from "@shared/api";
+import { type AttemptFile, fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { filamentFromSpool, spoolFromFilament } from "@shared/spools";
 import { applyFileSettings } from "@shared/threemf/prefill.ts";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { ToggleChip } from "@/components/ui/Chip";
+import { SlicerFileIcon } from "@/components/ui/icons";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
 import { addSpool } from "@/lib/pantry";
@@ -111,6 +113,7 @@ export function useSlicerFile({
   return {
     state,
     picker,
+    take: receive,
     choosePlate: (plate: number) => state && apply(state.draft, plate),
     clear: () => setState(null),
     addUnknown,
@@ -152,7 +155,12 @@ export function SlicerFileSection({
   onPlate,
   onAddUnknown,
   unknown,
+  ideaFiles = [],
+  onUseIdeaFile,
 }: {
+  /** Files kept with the idea: offered to the first attempt, one tap each. */
+  ideaFiles?: AttemptFile[];
+  onUseIdeaFile?: (file: AttemptFile) => void;
   state: SlicerState | null;
   card: ReactNode;
   onPick: () => void;
@@ -170,5 +178,40 @@ export function SlicerFileSection({
       </div>
     );
   }
-  return <AddSlicerFile onClick={onPick} desktop={isDesktop} />;
+  return (
+    <div className="flex flex-col gap-2">
+      <AddSlicerFile onClick={onPick} desktop={isDesktop} />
+      {ideaFiles.length > 0 && onUseIdeaFile && <IdeaFileOffer files={ideaFiles} onUse={onUseIdeaFile} />}
+    </div>
+  );
+}
+
+/** "From the idea": the files kept with the idea, to print this attempt from (the file's bytes come from the server). */
+function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: AttemptFile) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5 px-0.5">
+      <span className="text-small text-ink-faint">Kept with the idea:</span>
+      <div className="flex flex-wrap gap-2">
+        {files
+          .filter((file) => file.stored)
+          .map((file) => (
+            <ToggleChip key={file.id} icon={SlicerFileIcon} onClick={() => onUse(file)}>
+              <span className="max-w-48 truncate">{file.name}</span>
+            </ToggleChip>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/** Fetches a kept file's bytes as a File, so the sheet reads it like a dropped one. */
+export async function fetchKeptFile(file: AttemptFile): Promise<File | null> {
+  try {
+    const response = await fetch(fileUrl(file.id), { credentials: "same-origin" });
+    if (!response.ok) throw new Error(String(response.status));
+    return new File([await response.blob()], file.name);
+  } catch {
+    toast.error("Couldn't get that file", "It needs a connection.");
+    return null;
+  }
 }

@@ -84,9 +84,18 @@ export function modelMarkIn(note: string): ModelMark | null {
   return null;
 }
 
-/** The model an idea has: the first model link in its note, else the page its draft was made from. */
-export function modelOf(item: { note: string; draft?: { url: string } | null }): ModelMark | null {
-  return modelMarkIn(item.note) ?? (item.draft ? modelMarkOf(item.draft.url) : null);
+/** The model an idea has: its first model link, else its draft's page, else a kept slicer file (ours, so not a link out). */
+export function modelOf(item: {
+  note: string;
+  draft?: { url: string } | null;
+  files?: ReadonlyArray<{ id: string }>;
+}): ModelMark | null {
+  const file = item.files?.[0];
+  return (
+    modelMarkIn(item.note) ??
+    (item.draft ? modelMarkOf(item.draft.url) : null) ??
+    (file ? { kind: "file", site: null, name: ".3mf", url: `/api/files/${file.id}` } : null)
+  );
 }
 
 /** "MakerWorld", or "STL file" for a direct link to a model file. */

@@ -278,7 +278,7 @@ export function tugboatFile(options: TugboatOptions & { colors?: boolean } = {})
     "Metadata/model_settings.config": strToU8(modelSettings),
     "Metadata/slice_info.config": strToU8(sliceInfo),
     "Metadata/project_settings.config": strToU8(settings),
-    "Metadata/plate_1.png": new Uint8Array(readFileSync(join(here, "plate-hook.png"))),
+    "Metadata/plate_1.png": new Uint8Array(readFileSync(join(here, "plate-tugboat.png"))),
     "Metadata/plate_1.gcode": strToU8(tugboatGcode(options)),
   });
 }

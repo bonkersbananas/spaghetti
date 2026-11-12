@@ -40,6 +40,7 @@ import { addToWishlist, updateWishlist, wishlistOrder } from "../routes/wishlist
 import {
   Agent,
   Attempt,
+  AttemptFile,
   ChangesResponse as Changes,
   Delivery,
   Item,
@@ -669,6 +670,26 @@ export const operations: Record<string, Operation> = {
     status: 204,
   },
   "POST /attempts/:id/file/restore": { summary: "Brings the slicer file back.", response: one("attempt", Attempt) },
+  "PUT /items/:id/files/:fileId": {
+    summary:
+      "Keeps a slicer file (.3mf or .gcode.3mf) with an idea or build, with its plate thumbnail. Several may be kept; the same id again changes it.",
+    multipart: {
+      fields: fileFields.omit({ id: true }),
+      files: { file: "The .3mf or .gcode.3mf, kept up to 25 MB.", thumb: "The plate's picture." },
+    },
+    response: one("file", AttemptFile),
+    errors: {
+      404: notFound("idea"),
+      409: "too_many: an idea keeps at most 20 files.",
+      415: "unsupported: not a picture.",
+    },
+  },
+  "DELETE /items/:id/files/:fileId": {
+    summary: "Removes a file kept with an idea or build (it can be restored). People only.",
+    response: "empty",
+    status: 204,
+  },
+  "POST /items/:id/files/:fileId/restore": { summary: "Brings the file back.", response: one("file", AttemptFile) },
   "GET /files/:id/:part?": {
     summary: "A slicer file's bytes, or its plate thumbnail with `/thumb`.",
     response: "binary",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelMarkIn, modelMarkOf } from "../../src/shared/model-mark.ts";
+import { modelLetter, modelMarkIn, modelMarkOf, modelOf, modelPlace } from "../../src/shared/model-mark.ts";
 
 const site = (url: string) => modelMarkOf(url)?.site ?? null;
 
@@ -51,5 +51,14 @@ describe("model marks", () => {
     expect(modelMarkIn("only https://x.org/a.3mf")?.kind).toBe("file");
     expect(modelMarkIn("https://example.com/page")).toBeNull();
     expect(modelMarkIn("")).toBeNull();
+  });
+  it("counts a kept slicer file as a model, after any link", () => {
+    const files = [{ id: "f1", name: "bin.gcode.3mf" }];
+    const mark = modelOf({ note: "just words", files });
+    expect(mark).toMatchObject({ kind: "file", name: ".3mf", url: "/api/files/f1" });
+    expect(mark && modelLetter(mark)).toBe("3MF");
+    expect(mark && modelPlace(mark)).toBe("3MF file");
+    expect(modelOf({ note: "https://www.printables.com/model/9-x", files })?.site).toBe("printables");
+    expect(modelOf({ note: "just words", files: [] })).toBeNull();
   });
 });

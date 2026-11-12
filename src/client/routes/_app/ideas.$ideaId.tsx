@@ -19,7 +19,15 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
-import { BuildsIcon, CommentIcon, MoveIntoIcon, TrashIcon, UpNextIcon, WishIcon } from "@/components/ui/icons";
+import {
+  BuildsIcon,
+  CommentIcon,
+  MoveIntoIcon,
+  SlicerFileIcon,
+  TrashIcon,
+  UpNextIcon,
+  WishIcon,
+} from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -32,6 +40,7 @@ import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
+import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
 import { whyNotMove } from "@/lib/move";
 import { useScreenActions } from "@/lib/palette";
@@ -39,12 +48,14 @@ import { photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
+import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-files";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { setUpNext } from "@/lib/up-next";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
+const ItemFiles = lazy(() => import("@/components/ideas/ItemFiles"));
 const MoveToBuildSheet = lazy(() =>
   import("@/components/ideas/MoveToBuildSheet").then((m) => ({ default: m.MoveToBuildSheet })),
 );
@@ -207,6 +218,14 @@ function Idea({ item }: { item: ItemView }) {
     ideaComment: item.pending ? undefined : comment,
   });
 
+  // A .3mf or .gcode.3mf is kept with the idea: picked here, or dropped anywhere on the page (desktop).
+  const files = item.files ?? [];
+  const filePicker = useRef<HTMLInputElement>(null);
+  const keepFile = (file: File) => {
+    if (canEdit(item.pending)) void addItemFile(queryClient, item.id, file);
+  };
+  useSlicerDropTarget(keepFile);
+
   const hasPhotos = photos.length > 0;
   const reading = item.draft?.status === "reading";
   // The model card follows the note once typing pauses (half an address is not a model page yet).
@@ -331,9 +350,20 @@ function Idea({ item }: { item: ItemView }) {
               >
                 My wishlist
               </ToggleChip>
+              <input
+                ref={filePicker}
+                type="file"
+                accept={SLICER_ACCEPT}
+                multiple
+                hidden
+                data-testid="idea-file-input"
+                onChange={(event) => {
+                  for (const file of event.target.files ?? []) keepFile(file);
+                  event.target.value = "";
+                }}
+              />
               {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
             </div>
-            {model && <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />}
             <NoteField
               value={note}
               onChange={setNote}
@@ -342,6 +372,26 @@ function Idea({ item }: { item: ItemView }) {
             />
             <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
             <NoteLinks note={note} skip={model?.url} />
+            {/* One model block under the note: the model's card, the files kept with the idea, and the quiet actions
+              (a second one, "Make a twist", joins the row beside "Add a file"). */}
+            {model && !model.url.startsWith("/api/files/") && (
+              <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />
+            )}
+            {files.length > 0 && (
+              <Suspense fallback={null}>
+                <ItemFiles itemId={item.id} files={files} readOnly={readOnly || item.pending} />
+              </Suspense>
+            )}
+            <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
+              <Button
+                variant="quiet"
+                icon={SlicerFileIcon}
+                disabled={readOnly || item.pending}
+                onClick={() => filePicker.current?.click()}
+              >
+                Add a file
+              </Button>
+            </div>
 
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
               {person && <Avatar person={person} size="sm" via={via} />}

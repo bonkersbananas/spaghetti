@@ -24,8 +24,10 @@ import {
   comments,
   ITEM_STAGES,
   type Item,
+  type ItemFileRow,
   type ItemStage,
   itemDrafts,
+  itemFiles,
   items,
   type Part,
   type Photo,
@@ -199,7 +201,16 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       ),
     )
   ).flat();
-  const [coaches, reactionsByItem] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem] = await Promise.all([
+    Promise.all(
+      slices.map((ids) =>
+        db
+          .select()
+          .from(itemFiles)
+          .where(and(inArray(itemFiles.itemId, ids), isNull(itemFiles.deletedAt)))
+          .orderBy(asc(itemFiles.createdAt), asc(itemFiles.id)),
+      ),
+    ),
     coachesByAttempt(db, [...liveAttempts]),
     reactionsFor(
       db,
@@ -212,6 +223,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     if (read) reads.set(attemptId, read);
   }
   const partsByItem = groupBy<Part>(partSlices.flat());
+  const filesByItem = groupBy<ItemFileRow>(itemFileSlices.flat());
   const draftsByItem = new Map(draftSlices.flat().map((draft) => [draft.itemId, draft]));
   const files = new Map(fileRows.map((file) => [file.attemptId, file]));
   const photosByItem = groupBy<Photo>(
@@ -231,6 +243,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       reads,
       coaches,
       reactionsByItem.get(row.id) ?? [],
+      filesByItem.get(row.id) ?? [],
     );
   });
 }

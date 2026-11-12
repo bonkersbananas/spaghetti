@@ -155,6 +155,11 @@ export interface AttemptFile {
   createdAt: number;
 }
 
+/** PUT/POST /api/items/:id/files/:fileId (and restore): a file kept with an idea or build. */
+export interface ItemFileResponse {
+  file: AttemptFile;
+}
+
 /** The largest slicer file kept with an attempt. Above it, only what the file said is saved. */
 export const MAX_SLICER_FILE_BYTES = 25 * 1024 * 1024;
 /** Plate thumbnails are small PNGs; this is generous. */
@@ -190,6 +195,8 @@ export interface Item {
   parts: Part[];
   /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */
   photos: Photo[];
+  /** Slicer files kept with the idea (and its build), oldest first; an attempt's own file is on the attempt. Absent in a copy saved by an older version. */
+  files?: AttemptFile[];
   /** Oldest first: the first is attempt 1. Always empty for ideas. */
   attempts: Attempt[];
   /** Claude's draft from a model page, while it is being read or after; null when there is none. */
