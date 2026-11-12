@@ -8,6 +8,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerServiceWorker } from "./lib/offline";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
+import { trackMoves } from "./lib/previous-path";
 import { RouterError } from "./lib/router-error";
 import { initTheme } from "./lib/theme";
 import { trackVisibleViewport } from "./lib/viewport";
@@ -38,6 +39,8 @@ const router = createRouter({
   scrollRestoration: true,
   defaultErrorComponent: RouterError,
 });
+
+trackMoves(router);
 
 declare module "@tanstack/react-router" {
   interface Register {
