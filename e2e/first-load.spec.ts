@@ -26,11 +26,12 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 const CEILING_KB = {
   "/sign-in": 184,
-  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB); the journal's Now block, in a later change, another 0.3.
+  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB), and the journal's Now block shares the print card with Today, which gives it a chunk of its own (+0.3 kB).
   "/today": 283,
-  "/ideas": 269,
-  "/builds": 269,
-  "/journal": 269,
+  // 270: the Workshop tab's Toolbox icon is in every screen's tab bar (+0.7 kB).
+  "/ideas": 270,
+  "/builds": 270,
+  "/journal": 270,
   "/search": 278,
   "/pantry": 278,
   "/printer": 278,

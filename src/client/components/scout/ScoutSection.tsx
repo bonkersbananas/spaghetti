@@ -7,13 +7,8 @@ import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { ScoutCard } from "@/components/ui/ScoutCard";
 import { Section } from "@/components/ui/Section";
 import { duration, ease } from "@/lib/motion";
-import { scoutPictureUrl, useScout, useScoutFetched, waitingPicks } from "@/lib/scout";
+import { scoutHeading, scoutPictureUrl, useScout, useScoutFetched, waitingPicks } from "@/lib/scout";
 import { dismissPick, keepPick, undoDismiss, undoKeep } from "@/lib/scout-actions";
-
-const NUMBER_WORDS = ["No", "One", "Two", "Three"];
-
-/** "Three for you this week", "Two for you this week": what is left to answer. */
-export const scoutHeading = (left: number) => `${NUMBER_WORDS[Math.min(left, 3)] ?? "Some"} for you this week`;
 
 /** The row of cards: a swipeable row with the next card peeking on phones, three columns from md. */
 function Cards({ picks: current, round }: { picks: ScoutPick[]; round: "today" | "week" }) {

@@ -63,4 +63,5 @@ Status: Accepted | Open | Superseded by NNNN
 ```
 | [0042](0042-reactions-are-any-emoji.md) | Reactions are any emoji: a quick row, a full searchable picker, and a line of them on the Ideas and Builds cards | Accepted |
 | [0043](0043-twists-are-models-we-print-our-own-way.md) | A twist is another person's model, changed our way: kept with its source, its changes and a recipe | Accepted |
+| [0044](0044-phones-have-no-today-tab.md) | Phones have no Today tab: the Journal opens on a Now block and Workshop is the fourth tab | Accepted |
 | [0045](0045-ideas-keep-slicer-files.md) | An idea keeps slicer files (.3mf, .gcode.3mf), which stay with it as a build and count as "has a model" | Accepted |

@@ -13,7 +13,7 @@ import { localDay } from "@shared/today";
 import { mondayOfDay, weekRangeLabel } from "@shared/week";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { Filters } from "@/components/journal/Filters";
@@ -37,6 +37,10 @@ import {
 } from "@/lib/journal";
 import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery } from "@/lib/queries";
+import { useIsDesktop } from "@/lib/use-media-query";
+
+// Phones only, and the print card with its motion and sheets is heavy: loaded after the journal, off the first load.
+const Now = lazy(() => import("@/components/journal/Now"));
 
 export const Route = createFileRoute("/_app/journal")({
   validateSearch: (search: Record<string, unknown>): Omit<FilterValues, "tag"> => {
@@ -69,6 +73,7 @@ function Journal() {
   }, [query.data]);
   const months = useMemo(() => groupJournal(entries), [entries]);
   const filtered = hasFilters(filters);
+  const isDesktop = useIsDesktop();
 
   // J and K walk through the entries, Enter opens one (desktop).
   const [selected, setSelected] = useState<string | null>(null);
@@ -127,6 +132,12 @@ function Journal() {
           )
         }
       />
+      {/* Phones: what is happening now, above the notebook (desktop has Today for it). */}
+      {!filtered && !isDesktop && (
+        <Suspense fallback={null}>
+          <Now />
+        </Suspense>
+      )}
       {nothingAtAll ? (
         <EmptyState className="py-10 md:py-20" illustration={<OpenNotebook />} title="A clean notebook">
           Every print lands here, the perfect ones and the spaghetti. Failures are worth writing down too.

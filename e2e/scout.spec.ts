@@ -28,7 +28,8 @@ test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
 
-test("Today offers three models, and Keep makes an idea with an Undo", { tag: "@phone" }, async ({ page }) => {
+test("Today offers three models, and Keep makes an idea with an Undo", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones have no Today: the picks are a row on the Journal (below).");
   await page.goto("/today");
   const block = page.getByRole("region", { name: "Three for you this week" });
   await expect(block).toBeVisible();
@@ -58,7 +59,8 @@ test("Today offers three models, and Keep makes an idea with an Undo", { tag: "@
   await expect(page.getByRole("region", { name: "Two for you this week" })).toBeVisible();
 });
 
-test("Not for us puts it away with an Undo, and it stays away", { tag: "@phone" }, async ({ page }) => {
+test("Not for us puts it away with an Undo, and it stays away", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones have no Today: the picks are a row on the Journal (below).");
   await page.goto("/today");
   const block = page.getByRole("region", { name: "Three for you this week" });
   await expect(block).toBeVisible();
@@ -76,4 +78,23 @@ test("Not for us puts it away with an Undo, and it stays away", { tag: "@phone" 
   await expect(dimmed.getByText("Not for us")).toBeVisible();
   await dimmed.getByRole("button", { name: "Undo" }).click();
   await expect(dimmed.getByRole("button", { name: "Keep" })).toBeVisible();
+});
+
+test("phones: the Journal's Now block has one row for the picks, leading to the week where Keep works", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The row is the phone's; desktop has the cards on Today.");
+  await page.goto("/journal");
+  const row = page.getByRole("link", { name: /Three for you this week/ });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page).toHaveURL(/\/week\//);
+  const block = page.getByRole("region", { name: "This week's three" });
+  await expect(block).toBeVisible();
+  await block
+    .getByRole("article")
+    .filter({ hasText: "Drawer divider set" })
+    .getByRole("button", { name: "Keep" })
+    .click();
+  await expect(page.getByRole("link", { name: "Kept as an idea" })).toBeVisible();
 });

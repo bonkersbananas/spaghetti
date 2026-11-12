@@ -26,8 +26,8 @@ export async function signInWithForm(page: Page) {
   await page.getByLabel("Name").fill(SEED_USERS[0].username);
   await page.getByLabel("Password", { exact: true }).fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  // Signing in lands on Today; these tests start from the inbox.
-  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  // Signing in lands on Today (Journal on phones, which have no Today); these tests start from the inbox.
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
   await page.goto("/ideas");
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
 }
