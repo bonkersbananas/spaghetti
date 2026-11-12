@@ -18,8 +18,8 @@ const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 const ScoutRow = lazy(() => import("@/components/scout/ScoutRow"));
 
 /**
- * What is happening now, at the top of the phone's Journal (it replaces the Today tab): the prints on the bed (the
- * first one big, the rest compact, with the camera and Finish), the other person's new comments, upkeep that is
+ * What is happening now, at the top of the phone's Journal (it replaces the Today tab): under a "Now" label, the prints on the
+ * bed (all compact, with the camera and Finish, so the journal still starts on the first screen), the other person's new comments, upkeep that is
  * due and the scout's picks when they are new. Each part is drawn only when it has something to say, so a quiet
  * day has no block at all and the journal starts at the top.
  */
