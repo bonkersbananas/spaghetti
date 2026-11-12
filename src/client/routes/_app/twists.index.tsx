@@ -79,7 +79,7 @@ function Twists() {
         <ActionBar>
           <Button
             size="lg"
-            variant="primary"
+            variant="secondary"
             icon={PlusIcon}
             className="min-w-0 flex-1"
             disabled={readOnly}

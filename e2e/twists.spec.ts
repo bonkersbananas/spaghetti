@@ -60,4 +60,15 @@ test("makes a twist from nothing but a name", async ({ page }) => {
   await sheet.getByRole("textbox", { name: "Name it" }).fill("Planter, 0.2 looser");
   await sheet.getByRole("button", { name: "Make the twist" }).click();
   await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("Planter, 0.2 looser");
+
+  // A link the server wouldn't keep stays on screen with its message, and doesn't hold back the name beside it.
+  await page.getByRole("textbox", { name: "Link" }).fill("http://nowhere");
+  await expect(page.getByText("That needs to be a full https:// link")).toBeVisible();
+  await page.getByRole("textbox", { name: "Name" }).fill("Planter, looser still");
+  await expect
+    .poll(async () => {
+      const { twists } = await (await page.request.get("/api/twists")).json();
+      return twists.map((twist: { name: string }) => twist.name);
+    })
+    .toContain("Planter, looser still");
 });

@@ -42,7 +42,7 @@ function ChangeRow({
   const named = change.kind === "param" || change.kind === "other";
   const name = CHANGE_LABELS[change.kind];
   return (
-    <li className="bg-cream shadow-soft grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg p-3 @lg:grid-cols-[8rem_9rem_1fr_auto]">
+    <li className="border-ink/8 grid grid-cols-[auto_1fr_auto] items-center gap-2 border-t px-3 py-3 first:border-t-0 @lg:grid-cols-[8rem_9rem_1fr_auto]">
       {named ? (
         <input
           aria-label={`What ${name === "Other" ? "was changed" : "setting"}`}
@@ -114,7 +114,7 @@ export function TwistChanges({
   return (
     <div className="flex flex-col gap-3">
       {changes.length > 0 && (
-        <ul className="@container flex flex-col gap-2.5" aria-label="Changes">
+        <ul className="bg-cream shadow-soft @container flex flex-col overflow-hidden rounded-lg" aria-label="Changes">
           {changes.map((change) => (
             <ChangeRow
               key={change.id}

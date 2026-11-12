@@ -3,8 +3,12 @@ import { changeChip } from "@shared/twists";
 import { Card } from "@/components/ui/Card";
 import { photoSrc } from "@/lib/previews";
 
-/** "Scale 84 % · Fit tolerance +0.2 mm": what we changed, in a quiet line. */
-export const changesLine = (twist: Pick<Twist, "changes">) => twist.changes.map(changeChip).filter(Boolean).join(" · ");
+/** "Scale 84 % · Fit tolerance +0.2 mm · 2 more": what we changed in one quiet line, the first two in full. */
+export const changesLine = (twist: Pick<Twist, "changes">) => {
+  const written = twist.changes.map(changeChip).filter(Boolean);
+  const shown = written.slice(0, 2).join(" · ");
+  return written.length > 2 ? `${shown} · ${written.length - 2} more` : shown;
+};
 
 /** "From MakerWorld", or what the model is called; a twist with no source says it is our own idea. */
 export const sourceLine = (twist: Pick<Twist, "source">) =>

@@ -171,7 +171,8 @@ function Idea({ item }: { item: ItemView }) {
   const { twists } = useTwists();
   const existingTwist = twists?.find((twist) => twist.fromItemId === item.id);
   function twist() {
-    if (!canEdit(item.pending) || !user) return;
+    // Until the list has loaded we can't know whether this idea already has one.
+    if (!canEdit(item.pending) || !user || !twists) return;
     if (existingTwist) return void navigate({ to: "/twists/$twistId", params: { twistId: existingTwist.id } });
     const id = makeTwist(
       queryClient,
@@ -368,7 +369,7 @@ function Idea({ item }: { item: ItemView }) {
                 <ToggleChip
                   selected={!!existingTwist}
                   icon={TwistIcon}
-                  disabled={readOnly || item.pending || !user}
+                  disabled={readOnly || item.pending || !user || !twists}
                   onClick={twist}
                 >
                   {existingTwist ? "Twist" : "Make a twist"}

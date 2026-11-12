@@ -1,8 +1,10 @@
 import type { Twist } from "@shared/api";
+import { checkLinkUrl } from "@shared/link-safety";
 import { modelMarkOf } from "@shared/model-mark";
 import { TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { Fusilli } from "@/components/illustrations/Fusilli";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { sourceLine } from "@/components/twists/TwistCard";
@@ -71,11 +73,15 @@ function TwistBody({ twist }: { twist: Twist }) {
   const navigate = useNavigate();
   const readOnly = useReadOnly();
   const stickyColumn = useStickyColumn();
+  const [editingLink, setEditingLink] = useState(false);
   const { value, change, saveState } = useLiveFields(
     { name: twist.name, note: twist.note, sourceUrl: twist.source.url ?? "", changes: twist.changes },
     async (changes) => {
       // A name can't be blank: that change waits until there is one.
       const { name, ...rest } = changes;
+      // The server keeps only https links to a real host: one that isn't (yet) stays on screen with its message and
+      // is held back, so it can't make the name, note and changes typed beside it fail with it.
+      if (rest.sourceUrl?.trim() && !checkLinkUrl(rest.sourceUrl)) delete rest.sourceUrl;
       const next = { ...rest, ...(name?.trim() ? { name: name.trim() } : {}) };
       if (Object.keys(next).length) await updateTwist(queryClient, twist.id, next);
     },
@@ -133,28 +139,46 @@ function TwistBody({ twist }: { twist: Twist }) {
             <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
           </Section>
 
-          <TextArea
-            label="Note"
-            minRows={2}
-            maxLength={TWIST_NOTE_MAX}
-            placeholder="Why, what to watch for, what the lid wants…"
-            readOnly={readOnly}
-            value={value.note}
-            onChange={(event) => change({ note: event.target.value })}
-          />
+          <Section id="note" title="Note" size="overline">
+            <TextArea
+              aria-label="Note"
+              minRows={1}
+              maxLength={TWIST_NOTE_MAX}
+              placeholder="Why, what to watch for, what the lid wants…"
+              readOnly={readOnly}
+              value={value.note}
+              onChange={(event) => change({ note: event.target.value })}
+            />
+          </Section>
 
           <Section id="source" title="The model" size="overline">
             {value.sourceUrl && mark && <LinkCard url={value.sourceUrl} model={mark} className="max-w-content" />}
-            <TextField
-              label="Link"
-              value={value.sourceUrl}
-              type="url"
-              inputMode="url"
-              placeholder="https://makerworld.com/…"
-              readOnly={readOnly}
-              autoComplete="off"
-              onChange={(event) => change({ sourceUrl: event.target.value })}
-            />
+            {value.sourceUrl && mark && !readOnly && !editingLink && (
+              <button
+                type="button"
+                onClick={() => setEditingLink(true)}
+                className="focus-ring text-small text-ink-soft hover:text-ink min-h-11 self-start rounded-md font-semibold"
+              >
+                Change the link
+              </button>
+            )}
+            {(!value.sourceUrl || !mark || editingLink) && (
+              <TextField
+                label="Link"
+                value={value.sourceUrl}
+                type="url"
+                inputMode="url"
+                placeholder="https://makerworld.com/…"
+                readOnly={readOnly}
+                autoComplete="off"
+                error={
+                  value.sourceUrl.trim() && !checkLinkUrl(value.sourceUrl)
+                    ? "That needs to be a full https:// link. It isn't saved until it is."
+                    : undefined
+                }
+                onChange={(event) => change({ sourceUrl: event.target.value })}
+              />
+            )}
             {twist.fromItemId && (
               <Link
                 to="/ideas/$ideaId"
