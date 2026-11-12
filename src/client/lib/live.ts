@@ -108,6 +108,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "wishlist":
         roots.add("wishlists");
         break;
+      case "scout":
+        roots.add("scout");
+        break;
       case "signin":
         roots.add("sign-in-links").add("devices");
         break;

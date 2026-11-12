@@ -33,6 +33,7 @@ import { printerRoutes } from "./routes/printer.ts";
 import { pushRoutes } from "./routes/push.ts";
 import { commentReactionRoutes, itemReactionRoutes } from "./routes/reactions.ts";
 import { recipeRoutes } from "./routes/recipes.ts";
+import { scoutRoutes } from "./routes/scout.ts";
 import { searchRoutes } from "./routes/search.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { shoppingItemsRoutes } from "./routes/shopping-items.ts";
@@ -128,6 +129,7 @@ export const app = new Hono<AppEnv>()
   .route("/push", pushRoutes)
   .route("/people", peopleRoutes)
   .route("/wishlists", wishlistRoutes)
+  .route("/scout", scoutRoutes)
   .route("/agents", agentRoutes)
   .route("/bridge", bridgeRoutes)
   .route("/oauth", oauthRoutes)
