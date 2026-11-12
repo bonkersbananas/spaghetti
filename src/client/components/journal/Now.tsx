@@ -35,7 +35,7 @@ export default function Now() {
   const onBed = useMemo(() => printingAttempts(builds.items, now, live), [builds.items, now, live]);
 
   return (
-    <div className="mb-8 flex flex-col gap-5 empty:hidden">
+    <div className="flex flex-col gap-5 has-[>*:not(:empty)]:mb-8">
       <AnimatePresence initial={false}>
         {onBed.length > 0 && (
           <m.div

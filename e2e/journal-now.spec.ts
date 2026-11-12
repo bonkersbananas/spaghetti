@@ -55,6 +55,10 @@ test("phones: with nothing printing the journal has no Now block", { tag: "@phon
   await page.goto("/journal");
   await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
   await expect(page.getByRole("region", { name: "On the bed" })).toHaveCount(0);
+  // And it leaves no gap behind: the journal starts where the header ends.
+  const now = page.locator("main header + div");
+  await expect(now).toHaveCount(1);
+  await expect(now).toHaveCSS("margin-bottom", "0px");
 });
 
 test("desktop: the journal has no Now block (Today is in the sidebar)", async ({ page, isMobile }) => {
