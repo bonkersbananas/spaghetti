@@ -1,6 +1,7 @@
 import { useRouter } from "@tanstack/react-router";
 import { animate, type MotionValue, useMotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { sections, workshop } from "@/components/shell/sections";
 import { tick } from "./haptics";
 import { duration, spring } from "./motion";
 import { lastMove } from "./previous-path";
@@ -33,7 +34,21 @@ function inVerticalScroller(start: Element | null): boolean {
   return false;
 }
 
+/** The in-app page this one was opened from (history has an entry for it), with the name to give it; null on a deep link or a fresh open. */
+function previousPlace(): string | null {
+  const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
+  const { from, to } = lastMove;
+  return index > 0 && from && to === location.pathname && from !== to ? from : null;
+}
+
+/** "Today" for /today; "Back" for a page without a name of its own (an idea, a build). */
+function placeLabel(path: string): string {
+  return [...sections, ...workshop].find((section) => section.to === path)?.label ?? "Back";
+}
+
 interface PullState {
+  /** What a release goes back to: the page before, else the list. */
+  label: string;
   /** The offset the page is at, in px (what to translate by). */
   offset: MotionValue<number>;
   /** Whether a release now would go back (drives the affordance's words). */
@@ -49,14 +64,17 @@ interface PullState {
  * (page translate), `leave` (page opacity) and the affordance. Motion values only: React renders when a pull
  * starts, ends or crosses the threshold, never per frame.
  */
-export function usePullToGo(to: string, reduced: boolean): PullState {
+export function usePullToGo(list: { to: string; label: string }, reduced: boolean): PullState {
   const router = useRouter();
   const offset = useMotionValue(0);
   const leave = useMotionValue(1);
   const [ready, setReady] = useState(false);
   const [pulling, setPulling] = useState(false);
-  const target = useRef(to);
-  target.current = to;
+  const [label, setLabel] = useState(list.label);
+  const target = useRef(list);
+  target.current = list;
+  // Chosen when a pull starts: where the person came from if the app has that page in its history.
+  const place = useRef<string | null>(null);
 
   useEffect(() => {
     let startX = 0;
@@ -75,7 +93,6 @@ export function usePullToGo(to: string, reduced: boolean): PullState {
 
     function go() {
       mode = "going";
-      const dest = target.current;
       const leaving = reduced
         ? animate(leave, 0, { duration: duration.fast })
         : Promise.all([
@@ -83,10 +100,10 @@ export function usePullToGo(to: string, reduced: boolean): PullState {
             animate(leave, 0, { duration: duration.base }),
           ]);
       void Promise.resolve(leaving).then(() => {
-        const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
-        // The list was the page before: going back keeps its scroll position and the card you came from.
-        if (index > 0 && lastMove.to === location.pathname && lastMove.from === dest) router.history.back();
-        else void router.navigate({ to: dest });
+        // Going back keeps the page before as it was (its scroll position, the card you came from); with
+        // none in the app's history (a deep link, a fresh open) the page's own list is where it goes.
+        if (place.current) router.history.back();
+        else void router.navigate({ to: target.current.to });
       });
     }
 
@@ -128,6 +145,8 @@ export function usePullToGo(to: string, reduced: boolean): PullState {
         }
         if (dy <= SLOP) return;
         mode = "pulling";
+        place.current = previousPlace();
+        setLabel(place.current ? placeLabel(place.current) : target.current.label);
         setPulling(true);
       }
       if (event.cancelable) event.preventDefault();
@@ -177,5 +196,5 @@ export function usePullToGo(to: string, reduced: boolean): PullState {
     };
   }, [router, offset, leave, reduced]);
 
-  return { offset, ready, pulling, leave };
+  return { offset, ready, pulling, leave, label };
 }

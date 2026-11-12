@@ -114,3 +114,28 @@ test("a sideways swipe on the photos still changes the photo", { tag: "@phone" }
   await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
   await expect.poll(() => viewer.locator("div.overflow-x-auto").evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
 });
+
+test("a pull goes back to the page it came from, and says so", { tag: "@phone" }, async ({ page }) => {
+  await addIdea(page, "Searchable tugboat", 1);
+  await page.goto("/search");
+  await page.getByRole("searchbox").fill("Searchable");
+  await page
+    .getByRole("link", { name: /Searchable tugboat/ })
+    .first()
+    .click();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Searchable tugboat");
+  const session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
+  await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Search");
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page).toHaveURL(/\/search/);
+});
+
+test("with nothing before it in the app, a pull goes to Ideas", { tag: "@phone" }, async ({ page }) => {
+  const id = await addIdea(page, "Deep link", 1);
+  await page.goto(`/ideas/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Deep link");
+  const session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
+  await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Ideas");
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page).toHaveURL(/\/ideas$/);
+});
