@@ -256,6 +256,29 @@
   --spool-hub-rim: color-mix(in srgb, var(--sg-ink) 30%, transparent);
 }
 
+/*
+ * The on-screen keyboard's inset and the height above it (lib/viewport.ts) ease to its new value instead of jumping, so a phone sheet rides up
+ * with the keyboard and settles back when it goes (iOS only tells us where the keyboard ended up). A typed length is
+ * what lets a custom property transition; with reduced motion the global rule below makes it instant.
+ */
+@property --sg-keyboard-inset {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+/* The height left above the keyboard moves with it: a full-height sheet's top and bottom ease together. tokens.css sets
+   its real value (100dvh until lib/viewport.ts measures); the initial value is only what a registration needs. */
+@property --sg-visible-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+:root {
+  transition:
+    --sg-keyboard-inset var(--sg-duration-base) var(--sg-ease-out),
+    --sg-visible-height var(--sg-duration-base) var(--sg-ease-out);
+}
+
 /* Worked: a few specks of parmesan fly out from the check (ui Outcome's Sprinkle) and fade. */
 @keyframes sg-speck {
   0% {
