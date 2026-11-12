@@ -45,17 +45,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
 
   return (
     <>
-      <Sheet
-        open={open}
-        onOpenChange={onOpenChange}
-        title="The kitchen"
-        description="Two cooks, one notebook."
-        footer={
-          <Button variant="secondary" icon={SignOutIcon} fullWidth onClick={signOut}>
-            Sign out
-          </Button>
-        }
-      >
+      <Sheet open={open} onOpenChange={onOpenChange} title="The kitchen" description="Two cooks, one notebook.">
         <ul className="flex flex-col">
           {people.data || people.isError
             ? (people.data ?? (user ? [user] : [])).map((person) => {
@@ -132,6 +122,9 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
         <Suspense fallback={<Skeleton className="mt-6 h-20 w-full rounded-md" />}>
           <ThemeSwitch className="mt-6" />
         </Suspense>
+        <Button variant="secondary" icon={SignOutIcon} fullWidth onClick={signOut} className="mt-6">
+          Sign out
+        </Button>
       </Sheet>
       {/* Mounted once asked for: their code loads then (lazy-account.ts), and a closed sheet that mounts while another is open looped in the production build. */}
       {asked.notifying && <LazyNotificationsSheet open={notifying} onOpenChange={setNotifying} />}

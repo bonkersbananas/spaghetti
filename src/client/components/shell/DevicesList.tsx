@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { InfoRow } from "@/components/ui/InfoRow";
 import { LaptopIcon, PhoneIcon } from "@/components/ui/icons";
+import { Overline } from "@/components/ui/Overline";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
@@ -35,41 +36,43 @@ export function DevicesList({ enabled }: { enabled: boolean }) {
 
   const devices = list.data ?? [];
   const others = devices.filter((d) => !d.current).length;
-  return list.isPending ? (
-    <ul>
-      {[0, 1].map((i) => (
-        <RowSkeleton key={i} />
-      ))}
-    </ul>
-  ) : (
-    <>
-      <ul>
-        {devices.map((device) => (
-          <InfoRow
-            key={device.id}
-            icon={isPhoneLike(device.device) ? PhoneIcon : LaptopIcon}
-            title={device.device}
-            meta={device.current ? "This device" : `Last seen ${inlineTime(device.lastSeenAt)}`}
-            actions={
-              !device.current && (
-                <Button variant="quiet" size="sm" onClick={() => signOut.mutate(device)}>
-                  Sign out
-                </Button>
-              )
-            }
-          />
-        ))}
-      </ul>
-      <Button
-        variant="danger"
-        fullWidth
-        disabled={others === 0}
-        loading={signOutOthers.isPending}
-        onClick={() => signOutOthers.mutate()}
-        className="disabled:bg-ink/5 disabled:text-ink-ghost disabled:hover:bg-ink/5 disabled:hover:text-ink-ghost mt-3"
-      >
-        Sign out everywhere else
-      </Button>
-    </>
+  return (
+    <section aria-labelledby="devices-heading" className="flex flex-col gap-1">
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <Overline as="h3" id="devices-heading">
+          Signed-in devices
+        </Overline>
+        {others > 0 && (
+          <Button variant="danger" size="sm" loading={signOutOthers.isPending} onClick={() => signOutOthers.mutate()}>
+            Sign out everywhere else
+          </Button>
+        )}
+      </div>
+      {list.isPending ? (
+        <ul>
+          {[0, 1].map((i) => (
+            <RowSkeleton key={i} />
+          ))}
+        </ul>
+      ) : (
+        <ul>
+          {devices.map((device) => (
+            <InfoRow
+              key={device.id}
+              icon={isPhoneLike(device.device) ? PhoneIcon : LaptopIcon}
+              title={device.device}
+              meta={device.current ? "This device" : `Last seen ${inlineTime(device.lastSeenAt)}`}
+              actions={
+                !device.current && (
+                  <Button variant="quiet" size="sm" onClick={() => signOut.mutate(device)}>
+                    Sign out
+                  </Button>
+                )
+              }
+            />
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

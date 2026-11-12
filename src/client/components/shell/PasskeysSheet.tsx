@@ -98,12 +98,7 @@ export function PasskeysSheet({
             </MenuItem>
           </MenuGroup>
         </section>
-        <section aria-labelledby="devices-heading" className="flex flex-col gap-1">
-          <Overline as="h3" id="devices-heading" className="block">
-            Signed-in devices
-          </Overline>
-          <DevicesList enabled={open} />
-        </section>
+        <DevicesList enabled={open} />
       </div>
     </Sheet>
   );
