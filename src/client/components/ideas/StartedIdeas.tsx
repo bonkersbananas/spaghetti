@@ -52,7 +52,7 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
       {started.length > MOST && (
         <Link
           to="/builds"
-          className="text-small text-ink-soft hover:text-ink focus-ring -mt-2 inline-flex items-center gap-1.5 self-start rounded-md py-2 font-semibold"
+          className="text-small text-ink-soft hover:text-ink focus-ring touch-target relative -mt-2 inline-flex items-center gap-1.5 self-start rounded-md py-2 font-semibold"
         >
           See all {started.length} in Builds <ArrowRightIcon size={14} weight="bold" aria-hidden />
         </Link>
