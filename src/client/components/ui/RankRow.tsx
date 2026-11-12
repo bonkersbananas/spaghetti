@@ -1,6 +1,7 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { IdeasIcon, NoteIcon } from "./icons";
 import { MetaList } from "./MetaList";
 import { NoteFace } from "./NoteFace";
@@ -60,10 +61,7 @@ export function RankRow({ rank, photo, note, title, meta, link, actions, handle,
             />
           ) : note ? (
             // Too small for the note's words: an index card with its rule and a pencil says "a note" instead.
-            <span className="paper-grain bg-note text-ink-faint relative flex size-full items-center justify-center">
-              <span className="bg-tomato/25 absolute inset-x-2 top-2.5 h-px md:inset-x-3 md:top-3.5" />
-              <NoteIcon size={22} />
-            </span>
+            <NoteCardThumb size={22} />
           ) : (
             <span className="text-ink-faint flex size-full items-center justify-center">
               <IdeasIcon size={22} />
@@ -117,8 +115,19 @@ export function RankMark({
   );
 }
 
+/** A note-only idea's picture at thumbnail size: an index card with its rule and a pencil. Fills its parent. */
+function NoteCardThumb({ size }: { size: number }) {
+  return (
+    <span className="paper-grain bg-note text-ink-faint relative flex size-full items-center justify-center">
+      <span className="bg-tomato/25 absolute inset-x-2 top-2.5 h-px md:inset-x-3 md:top-3.5" />
+      <NoteIcon size={size} />
+    </span>
+  );
+}
+
 interface PickTileProps {
   photo?: { src: string; color?: string };
+  /** The note, when it says more than the name under the tile (otherwise leave it out). */
   note?: string;
   title: string;
   /** Its place on the list when picked; null when it isn't on it. */
@@ -133,6 +142,7 @@ interface PickTileProps {
  */
 export function PickTile({ photo, note, title, rank, onToggle, disabled }: PickTileProps) {
   const picked = rank !== null;
+  const isDesktop = useIsDesktop();
   return (
     <button
       type="button"
@@ -150,7 +160,8 @@ export function PickTile({ photo, note, title, rank, onToggle, disabled }: PickT
         {photo ? (
           <Photo src={photo.src} alt="" color={photo.color} className="size-full" />
         ) : note ? (
-          <NoteFace note={note} />
+          // The note's words, set small on a phone so no word breaks, and clear of the rank badge.
+          <NoteFace note={note} compact={!isDesktop} clearBottom />
         ) : (
           <span className="text-ink-faint flex size-full items-center justify-center">
             <IdeasIcon size={28} />
