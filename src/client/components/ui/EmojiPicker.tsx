@@ -117,8 +117,15 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
       <PickerContext value={context}>
         <RememberTone />
         {!sheet && field}
-        {/* One height for the whole body, so the sheet doesn't grow or shrink as you type or when nothing matches. */}
-        <div className={cn("flex min-h-0 flex-col", sheet ? "h-[min(50dvh,26rem)]" : "h-72")}>
+        {/* One height for the whole body, so the sheet doesn't jump as you type or when nothing matches. On a phone it
+            is what fits above the keyboard (--sg-visible-height, lib/viewport.ts) after the sheet's title, search field
+            and padding, so the results are in view without scrolling the sheet. */}
+        <div
+          className={cn(
+            "flex min-h-0 flex-col",
+            sheet ? "h-[max(9rem,min(50dvh,26rem,calc(var(--sg-visible-height)-var(--sg-safe-top)-12rem)))]" : "h-72",
+          )}
+        >
           {!searching && !!recent?.length && (
             <div className="mb-1 shrink-0">
               <Overline as="h3" className="block py-1.5">
@@ -190,6 +197,11 @@ function SearchResults({
   const [tone] = useSkinTone();
   const found = useMemo(() => (emojis ? find(emojis, query).slice(0, 160) : []), [emojis, query]);
   const shown = (entry: Entry) => (tone !== "none" && entry.skins ? (entry.skins[tone] ?? entry.emoji) : entry.emoji);
+  const rows = useMemo(() => {
+    const chunks: Entry[][] = [];
+    for (let start = 0; start < found.length; start += COLUMNS) chunks.push(found.slice(start, start + COLUMNS));
+    return chunks;
+  }, [found]);
   // The first result is on from the start (the picker remounts this for each query); Up and Down move through the
   // grid and Enter picks, but only from the search field: Tab to a button and Enter uses that button. Left and Right
   // stay the caret's (to fix a typo) until Up or Down has started moving through the grid. Heard on the document, in the
@@ -201,9 +213,12 @@ function SearchResults({
       const target = event.target;
       if (!(target instanceof HTMLInputElement) || target.type !== "search" || !found.length) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const step = { ArrowUp: -COLUMNS, ArrowDown: COLUMNS, ArrowLeft: moving ? -1 : 0, ArrowRight: moving ? 1 : 0 }[
-        event.key
-      ];
+      const step = {
+        ArrowUp: sheet ? COLUMNS : -COLUMNS,
+        ArrowDown: sheet ? -COLUMNS : COLUMNS,
+        ArrowLeft: moving ? -1 : 0,
+        ArrowRight: moving ? 1 : 0,
+      }[event.key];
       if (step) {
         event.preventDefault();
         setMoving(true);
@@ -230,30 +245,39 @@ function SearchResults({
     );
   }
   return (
+    // On a phone the results sit at the bottom, right above the search field and the keyboard, the best match
+    // nearest the thumb (the column reverses, so the first row is the lowest and the scroll starts there).
     // biome-ignore lint/a11y/useSemanticElements: a grid of buttons, like Frimousse's own (role grid, row, gridcell)
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" role="grid" aria-label="Search results">
-      {/* biome-ignore lint/a11y/useSemanticElements: see above */}
-      {/* biome-ignore lint/a11y/useFocusableInteractive: the cells inside take the focus */}
-      <div className="flex flex-wrap" role="row">
-        {found.map((entry, index) => {
-          const emoji = shown(entry);
-          return (
-            <EmojiButton
-              key={entry.emoji}
-              role="gridcell"
-              emoji={emoji}
-              label={entry.label}
-              given={given?.has(emoji)}
-              sheet={sheet}
-              active={index === active}
-              onClick={() => onPick(emoji)}
-              ref={(node) => {
-                if (index === active) node?.scrollIntoView({ block: "nearest" });
-              }}
-            />
-          );
-        })}
-      </div>
+    <div
+      className={cn("flex min-h-0 flex-1 overflow-y-auto overscroll-contain", sheet ? "flex-col-reverse" : "flex-col")}
+      role="grid"
+      aria-label="Search results"
+    >
+      {rows.map((row, rowIndex) => (
+        // biome-ignore lint/a11y/useSemanticElements: see above
+        // biome-ignore lint/a11y/useFocusableInteractive: the cells inside take the focus
+        <div key={row[0]?.emoji ?? rowIndex} className="flex shrink-0" role="row">
+          {row.map((entry) => {
+            const index = found.indexOf(entry);
+            const emoji = shown(entry);
+            return (
+              <EmojiButton
+                key={entry.emoji}
+                role="gridcell"
+                emoji={emoji}
+                label={entry.label}
+                given={given?.has(emoji)}
+                sheet={sheet}
+                active={index === active}
+                onClick={() => onPick(emoji)}
+                ref={(node) => {
+                  if (index === active) node?.scrollIntoView({ block: "nearest" });
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

@@ -566,6 +566,30 @@ async function openFullPicker(page: Page) {
   await page.getByRole("gridcell").first().waitFor();
 }
 
+/**
+ * A phone's picker with the on-screen keyboard up: browsers here have none, so the visual viewport is cut to
+ * 470 px, like iOS Safari does, and a grey block stands where the keys would be.
+ */
+async function openPickerWithKeyboard(page: Page, search?: string) {
+  await openFullPicker(page);
+  const field = page.getByRole("searchbox", { name: "Search emoji" });
+  await page.evaluate(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) throw new Error("No visualViewport");
+    const visible = 470;
+    Object.defineProperty(viewport, "height", { configurable: true, get: () => visible });
+    viewport.dispatchEvent(new Event("resize"));
+    const keys = document.createElement("div");
+    keys.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:${window.innerHeight - visible}px;background:#3a3a3c;z-index:60`;
+    document.body.append(keys);
+  });
+  await page.waitForTimeout(300);
+  if (search) {
+    await field.pressSequentially(search, { delay: 20 });
+    await page.waitForTimeout(400);
+  }
+}
+
 const GOOD_LINK = "https://makerworld.com/en/models/1-cable-comb";
 
 type Slice = "all" | "none" | "young";
@@ -1898,6 +1922,21 @@ export const shots: Shot[] = [
       await page.getByRole("gridcell", { name: "party popper" }).waitFor();
       await page.waitForTimeout(500);
     },
+  },
+  {
+    name: "reactions-picker-keyboard",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: (page) => openPickerWithKeyboard(page),
+  },
+  {
+    name: "reactions-picker-keyboard-rocket",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: (page) => openPickerWithKeyboard(page, "rocket"),
+  },
+  {
+    name: "reactions-picker-keyboard-empty",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: (page) => openPickerWithKeyboard(page, "zzzzq"),
   },
   {
     name: "reactions-picker-empty",
