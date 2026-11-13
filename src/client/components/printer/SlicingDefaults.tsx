@@ -71,7 +71,7 @@ export function SlicingDefaults() {
   useEffect(() => {
     void loadTiles();
   }, []);
-  // Offline, the setup is only for reading (lib/read-only.ts): the defaults still open, to see.
+  // Offline, the setup is only for reading (lib/read-only.ts).
   const readOnly = useReadOnly();
   return (
     <Section id="printer-slicing" title="Slicing" size="title" aside={<SaveStatus state={saveState} />}>

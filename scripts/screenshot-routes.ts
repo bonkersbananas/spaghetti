@@ -3173,7 +3173,18 @@ export const shots: Shot[] = [
       const section = await openSlicingDefaults(page);
       await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
       await section.getByRole("button", { name: "Back to Spaghetti's own" }).waitFor();
-      await section.getByText("Saved").waitFor();
+      // "Saving…" fades out before "Saved" comes in, late under the shots' fixed clock: finish its fades as they come.
+      await section.evaluate(
+        (element) =>
+          new Promise<void>((resolve) => {
+            const done = () => {
+              for (const animation of element.getAnimations({ subtree: true })) animation.finish();
+              if (element.textContent?.includes("Saved")) resolve();
+              else setTimeout(done, 50);
+            };
+            done();
+          }),
+      );
       await settleSection(page, section);
     },
     // The shots after this one slice with Spaghetti's own again.
@@ -3183,17 +3194,16 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Offline the defaults still open, to read: their tiles, More and the way back dimmed (lib/read-only.ts).
+    // The connection gone while they are open: the setup is only for reading (lib/read-only.ts), their tiles,
+    // More and the way back dimmed.
     name: "printer-slicing-offline",
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
-      // Their code, before the connection goes.
-      await openSlicingDefaults(page);
-    },
-    beforeShot: async (page) => {
-      await goOffline(page);
-      await openSlicingDefaults(page);
+      const section = await openSlicingDefaults(page);
+      await page.context().setOffline(true);
+      await section.locator("input[type=radio]:disabled").first().waitFor({ state: "attached" });
+      await settleSection(page, section);
     },
     cleanup: async (page) => {
       await page.context().setOffline(false);
