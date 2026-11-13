@@ -24,9 +24,17 @@ export interface SlicingRecipe {
   slicing?: SlicingSettings | null;
 }
 
-/** What a recipe keeps of a slice's settings: the kind of filament, not the spool (spools run out). */
+/**
+ * What a recipe keeps of a slice's settings: how to print, not that model. The kind of filament, not the spool
+ * (spools run out), and not the way it lay (decision 0050): a direction in that model's own coordinates, which
+ * would turn another model onto whatever face it happened to hit.
+ */
 export function recipeSlicingOf(settings: SlicingSettings): SlicingSettings {
-  return { ...settings, filaments: settings.filaments.map(({ spoolId: _spool, ...filament }) => filament) };
+  return {
+    ...settings,
+    orientation: null,
+    filaments: settings.filaments.map(({ spoolId: _spool, ...filament }) => filament),
+  };
 }
 
 const sameFinish = (a: string | null | undefined, b: string | null | undefined) =>
@@ -78,7 +86,7 @@ function recipeFilaments(recipe: SlicingRecipe): SlicingFilament[] {
 
 /**
  * The settings a model slices with from a recipe: everything the recipe says, over `base` (the model's settings) for
- * what it doesn't, and the model's own size (a recipe is about how to print, not how big this model is).
+ * what it doesn't, and the model's own size and way of lying (a recipe is about how to print, not about this model).
  */
 export function recipeSlicing(
   recipe: SlicingRecipe,
@@ -86,7 +94,9 @@ export function recipeSlicing(
   spools: readonly SpoolLike[] = [],
 ): SlicingSettings {
   const filaments = pantryFilaments(recipeFilaments(recipe), recipe, base.filaments, spools);
-  if (recipe.slicing) return normalizeSlicing({ ...recipe.slicing, filaments, scale: base.scale }, base);
+  if (recipe.slicing) {
+    return normalizeSlicing({ ...recipe.slicing, filaments, scale: base.scale, orientation: base.orientation }, base);
+  }
   const said = recipe.settings;
   return normalizeSlicing(
     {

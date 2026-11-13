@@ -78,10 +78,19 @@ describe("slicing with a recipe", () => {
     ]);
   });
 
-  it("keeps what a recipe saves of a slice: the kind of filament, not the spool", () => {
-    expect(recipeSlicingOf(model).filaments).toEqual([
-      { material: "PLA", colorHex: "#f2754e", colorName: "Orange", finish: "basic" },
-    ]);
+  it("keeps what a recipe saves of a slice: the kind of filament, not the spool, nor the way that model lay", () => {
+    const saved = recipeSlicingOf({ ...model, orientation: [1, 0, 0] });
+    expect(saved.filaments).toEqual([{ material: "PLA", colorHex: "#f2754e", colorName: "Orange", finish: "basic" }]);
+    expect(saved.orientation).toBeNull();
+  });
+
+  it("lays a model the way it lies, not the way the recipe's model did", () => {
+    // A direction in the recipe's model's own coordinates means nothing for another model.
+    const worked: SlicingSettings = { ...DEFAULT_SLICING, layerHeight: 0.12, orientation: [1, 0, 0] };
+    const recipe = { material: "PLA", finish: "basic", settings: {}, slicing: worked };
+    expect(recipeSlicing(recipe, model).orientation).toBeNull();
+    expect(recipeSlicing(recipe, { ...model, orientation: [0, -1, 0] }).orientation).toEqual([0, -1, 0]);
+    expect(recipeSlicing(recipe, { ...model, orientation: [0, -1, 0] }).layerHeight).toBe(0.12);
   });
 
   it("offers the recipes for the model's filament first, then its material's, then the rest, six at most", () => {
