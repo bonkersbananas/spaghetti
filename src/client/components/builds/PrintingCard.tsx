@@ -136,6 +136,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
           <OutcomeChip
             outcome={null}
             offTheBed={offBed}
+            onPhoto
             className={cn("shadow-soft pointer-events-none absolute bottom-2 left-2 z-20", compact && "max-md:hidden")}
           />
         </div>

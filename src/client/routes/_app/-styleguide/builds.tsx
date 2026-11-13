@@ -258,6 +258,7 @@ export function BuildsSection() {
           <div className="flex flex-wrap gap-2">
             <OutcomeChip outcome={null} />
             <OutcomeChip outcome={null} offTheBed />
+            <OutcomeChip outcome={null} offTheBed onPhoto />
             <OutcomeChip outcome="success" />
             <OutcomeChip outcome="partial" />
             <OutcomeChip outcome="failed" />
