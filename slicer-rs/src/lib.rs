@@ -7,6 +7,7 @@ pub mod base_support;
 pub mod bridges;
 pub mod brim;
 pub mod config;
+pub mod filaments;
 pub mod fill;
 pub mod gcode;
 pub mod geom;
@@ -33,6 +34,7 @@ pub mod template;
 pub mod threemf;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+pub mod wipe_tower;
 pub mod zip;
 
 pub use config::Settings;
