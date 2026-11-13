@@ -1,13 +1,13 @@
 /**
  * Slicing settings: what people change when Spaghetti slices a model, in one shape (decision 0047). The app shows
  * them and keeps them per model, the Worker stores them with the model's slice, MCP reports them, and a slicer takes
- * them: OrcaSlicer's engine through orca.ts (the one place that knows its presets and keys), and later the Rust
- * slicer (slicer-rs). Plain JSON: millimetres and percents as numbers, choices as short words; once normalized every
- * field is there. Pure and small, so the cards and sheets can import it.
+ * them: OrcaSlicer's engine, and Spaghetti's own (slicer-rs, decision 0055), both through orca.ts (the one place that
+ * knows Orca's presets and keys). Plain JSON: millimetres and percents as numbers, choices as short words; once
+ * normalized every field is there. Pure and small, so the cards and sheets can import it.
  */
 import { BED_TYPES, NOZZLE_DIAMETERS } from "../attempts.ts";
 import { finishLabel } from "../spools.ts";
-import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
+import { DEFAULT_SLICER, DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 
 /**
  * Off, only under what would otherwise fall (floating parts, long ledges), under every steep overhang, or fins:
@@ -23,6 +23,12 @@ export type SupportStyle = "tree" | "tree-slim" | "tree-strong" | "tree-hybrid" 
 export const SUPPORT_STYLE_IDS = ["tree", "tree-slim", "tree-strong", "tree-hybrid", "normal", "snug"] as const;
 /** A brim where a small footprint needs one (the slicer decides), always, or never. */
 export type Brim = "auto" | "on" | "off";
+/**
+ * Which slicer slices it (decision 0055): Spaghetti's own (slicer-rs, in WebAssembly), with OrcaSlicer's engine
+ * stepping in for what ours can't slice yet, or OrcaSlicer's engine.
+ */
+export type SlicerId = "spaghetti" | "orca";
+export const SLICER_IDS = ["spaghetti", "orca"] as const;
 
 /**
  * The sparse infill patterns a slicer may be asked for, as OrcaSlicer's configs name them ("zig-zag" is Orca's
@@ -92,6 +98,8 @@ export interface SlicingSettings {
    * lays it as the file does. The original file stays as it is; only the slice is turned (`layMeshDown`).
    */
   orientation: Orientation | null;
+  /** Which slicer slices it (decision 0055): `DEFAULT_SLICER` (defaults.ts) unless someone picked one. */
+  slicer: SlicerId;
 }
 
 /** A direction in the model's own axes: [x, y, z], unit length. */
@@ -151,6 +159,16 @@ export const SUPPORT_STYLES: readonly Choice<SupportStyle>[] = [
   { id: "tree-strong", label: "Strong tree", effect: "thicker branches, for heavy parts" },
   { id: "tree-hybrid", label: "Hybrid", effect: "branches, and columns under big flat parts" },
   { id: "snug", label: "Snug", effect: "hugs the model, less to print" },
+];
+
+/** The slicers, ours first (decision 0055). */
+export const SLICERS: readonly Choice<SlicerId>[] = [
+  {
+    id: "spaghetti",
+    label: "Spaghetti's own",
+    effect: "quicker to slice; OrcaSlicer steps in for what it can't do yet",
+  },
+  { id: "orca", label: "OrcaSlicer", effect: "slower to slice, and slices everything" },
 ];
 
 export const BRIMS: readonly Choice<Brim>[] = [
@@ -291,6 +309,8 @@ export function slicingProblems(value: unknown): string[] {
   if (value.orientation !== undefined && orientationOf(value.orientation) === undefined) {
     problems.push("orientation is null, or [x, y, z]: the direction in the model that points down.");
   }
+  // Left out by a page from before there was a choice: the default's.
+  if (value.slicer !== undefined && !oneOf(SLICER_IDS, value.slicer)) problems.push("slicer is spaghetti or orca.");
   const known = new Set<string>(Object.keys(DEFAULT_SLICING));
   for (const key of Object.keys(value)) if (!known.has(key)) problems.push(`${key} isn't a slicing setting.`);
   return problems;
@@ -331,6 +351,7 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     scale: whole("scale"),
     orientation:
       orientationOf(given.orientation) === undefined ? base.orientation : (orientationOf(given.orientation) ?? null),
+    slicer: oneOf(SLICER_IDS, given.slicer) ?? base.slicer,
   };
 }
 
@@ -395,6 +416,9 @@ export function filamentWords(filament: SlicingFilament): string {
 export const patternWords = (pattern: InfillPattern) =>
   (PATTERNS.find((choice) => choice.id === pattern)?.label ?? pattern).toLowerCase();
 
+/** "Spaghetti's own slicer", "OrcaSlicer": a slicer's name, as a line says it. */
+export const slicerWords = (slicer: SlicerId) => (slicer === "spaghetti" ? "Spaghetti's own slicer" : "OrcaSlicer");
+
 /** "slim tree": a support style's name, lowercase, as a line says it. */
 export const supportStyleWords = (style: SupportStyle) =>
   (SUPPORT_STYLES.find((choice) => choice.id === style)?.label ?? style).toLowerCase();
@@ -432,7 +456,8 @@ export function slicingLine(settings: SlicingSettings): string[] {
 /**
  * What a model is sliced with, in a line a person can read at a glance: "Standard · Everyday strength · No supports ·
  * PLA Basic jade white", with the way it lies and its size when they aren't the usual. The settings row on the card
- * says it; the Printer page's folded defaults use the same words without the filament.
+ * says it; the Printer page's folded defaults use the same words without the filament. The slicer isn't in it: the
+ * card's line above says who sliced the model, and More's summary which slicer it asks for.
  */
 export function slicingSummary(settings: SlicingSettings): string[] {
   const [first, ...others] = settings.filaments;
@@ -486,12 +511,31 @@ export function slicingFromRecord(record: {
  * The settings a workspace sets for models nobody set up (the Printer page, decision 0051): how a model prints, not
  * with what. The filament comes from the Pantry, the plate and the nozzle from the Printer page.
  */
-export const DEFAULT_KEYS = ["layerHeight", "walls", "infill", "pattern", "supports", "supportStyle", "brim"] as const;
-export type SlicingDefaults = Pick<SlicingSettings, (typeof DEFAULT_KEYS)[number]>;
+export const DEFAULT_KEYS = [
+  "layerHeight",
+  "walls",
+  "infill",
+  "pattern",
+  "supports",
+  "supportStyle",
+  "brim",
+  "slicer",
+] as const;
+/**
+ * A workspace's defaults. The slicer is kept only when it isn't Spaghetti's default (decision 0055), so a workspace
+ * that never picked one follows `DEFAULT_SLICER` when it changes.
+ */
+export type SlicingDefaults = Pick<SlicingSettings, Exclude<(typeof DEFAULT_KEYS)[number], "slicer">> & {
+  slicer?: SlicerId;
+};
 
 /** The part of a whole set of settings a workspace keeps as its defaults. */
 export function slicingDefaultsOf(settings: SlicingSettings): SlicingDefaults {
-  return Object.fromEntries(DEFAULT_KEYS.map((key) => [key, settings[key]])) as SlicingDefaults;
+  const { slicer, ...rest } = Object.fromEntries(DEFAULT_KEYS.map((key) => [key, settings[key]])) as Pick<
+    SlicingSettings,
+    (typeof DEFAULT_KEYS)[number]
+  >;
+  return slicer === DEFAULT_SLICER ? rest : { ...rest, slicer };
 }
 
 /** The whole settings for what was chosen, with the defaults for the rest. */

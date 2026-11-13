@@ -6,21 +6,32 @@ import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate 
 import { MissingPreset, mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
+import { hasFloatingPart } from "@shared/slicing/floating.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
-import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
-import type { FileSlice, SliceOptions, SliceProblem, SliceSettings } from "@shared/slicing/types.ts";
+import { type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
+import { rustEstimateMs } from "@shared/slicing/slicers.ts";
+import type {
+  FileSlice,
+  SliceCaution,
+  SliceFallback,
+  SliceOptions,
+  SliceProblem,
+  SliceSettings,
+} from "@shared/slicing/types.ts";
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
 import { withFins } from "./fins";
+import { type OursAnswer, sliceOurs } from "./ours";
 
 /**
  * Slices one model off the main thread: reads the .stl or .3mf, puts its objects on the X2D's plate, draws the plate
- * picture, slices it with OrcaSlicer's engine (its host is a worker of its own, started here by URL, docs/slicer.md),
- * and packs the G-code into a .gcode.3mf. Everything it says comes back as messages; `sliceModel` (slice-model.ts)
- * is the way in.
+ * picture, and slices it with the slicer asked for (decision 0055): Spaghetti's own (its WebAssembly module, run here,
+ * ours.ts), which packs its own .gcode.3mf, or OrcaSlicer's engine (its host is a worker of its own, started here by
+ * URL, docs/slicer.md), whose G-code is packed here. What ours can't slice yet, the engine slices. Everything it says
+ * comes back as messages; `sliceModel` (slice-model.ts) is the way in.
  */
 
 export interface SliceRequest {
@@ -32,12 +43,15 @@ export interface SliceRequest {
   defaults: SlicingSettings;
   /** Where the engine is (absolute `base`, the host's file name in it) and its release. */
   engine: { base: string; host: string; version: string };
+  /** Where Spaghetti's own slicer is (absolute `base`, its module's file in it) and its release; null where it isn't served. */
+  rust: { base: string; wasm: string; version: string } | null;
 }
 
 export type SlicePhase = "reading" | "engine" | "slicing" | "packing";
 
 export type SliceMessage =
-  | { type: "progress"; phase: SlicePhase; fraction: number }
+  /** `expectMs`: a step that can't say how far it is takes about this long (our slicer's one call). */
+  | { type: "progress"; phase: SlicePhase; fraction: number; expectMs?: number }
   | { type: "picture"; png: Blob }
   | {
       type: "done";
@@ -105,9 +119,21 @@ async function run(request: SliceRequest) {
   let settings: Omit<SliceSettings, "scale" | "engine" | "orca"> = presetRecord(slicing);
   let orca = "";
   let png: Blob | null = null;
+  // The slicer that made it, once one has; why the engine stepped in for ours, when it did.
+  let by: SlicerId | null = null;
+  let fallback: SliceFallback | undefined;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
-    settings: { ...settings, scale, engine: engine.version, orca, slicing },
+    ...(fallback ? { fallback } : {}),
+    settings: {
+      ...settings,
+      scale,
+      engine: engine.version,
+      orca,
+      slicing,
+      ...(by ? { slicer: by } : {}),
+      ...(by === "spaghetti" && request.rust ? { rust: request.rust.version } : {}),
+    },
     at: Date.now(),
   });
   try {
@@ -163,32 +189,44 @@ async function run(request: SliceRequest) {
       setup.process.wipe_tower_x = [String(Math.round(tower.x))];
       setup.process.wipe_tower_y = [String(Math.round(tower.y))];
     }
-    const result = await sliceWithEngine(engine, setup, objects);
-    // Orca can't see fins as supports (they are separate solids under a gap), so it warns of a floating part that the
-    // fins hold up: the caution is for a model with no supports at all.
-    const cautions =
-      slicing.supports === "off" && result.warnings.some((warning) => warning.kind === "need_support_on")
-        ? (["floating"] as const)
-        : [];
-
-    progress("packing", 0);
-    const summary = summarizeGcode(result.gcode);
-    const sliced = packGcode3mf({
-      gcode: result.gcode,
-      ...(png ? { thumbnail: new Uint8Array(await png.arrayBuffer()) } : {}),
-      seconds: result.stats.printTimeSeconds ?? summary.seconds,
-      grams: result.stats.filamentG ?? null,
-      objects: objects.map((object) => ({ name: object.name, box: boundsOf(object.positions) })),
-      settings: mergedSettings(setup),
-      filaments: setup.filaments.map((filament, index) => ({
-        type: first(filament.filament_type) ?? "PLA",
-        colour: setup.colours[index] ?? FALLBACK_COLOUR,
-        ...(summary.grams[index] !== undefined ? { usedGrams: summary.grams[index] } : {}),
-        ...(summary.millimetres[index] !== undefined ? { usedMeters: (summary.millimetres[index] ?? 0) / 1000 } : {}),
-      })),
-      slicer: { name: "OrcaSlicer", version: orca },
-      title: request.name,
-    });
+    // Spaghetti's own slicer when it is asked for; OrcaSlicer's engine for what ours can't slice yet (decision 0055).
+    const ours = slicing.slicer === "spaghetti" ? await withOurs(request, setup, objects, slicing) : null;
+    if (ours && !ours.ok) fallback = ours.fallback;
+    let sliced: Uint8Array;
+    let ms: number;
+    let cautions: SliceCaution[] = [];
+    if (ours?.ok) {
+      ({ sliced, ms } = ours);
+      by = "spaghetti";
+    } else {
+      const result = await sliceWithEngine(engine, setup, objects);
+      by = "orca";
+      // Orca can't see fins as supports (they are separate solids under a gap), so it warns of a floating part that
+      // the fins hold up: the caution is for a model with no supports at all.
+      if (slicing.supports === "off" && result.warnings.some((warning) => warning.kind === "need_support_on")) {
+        cautions = ["floating"];
+      }
+      progress("packing", 0);
+      const packing = performance.now();
+      const summary = summarizeGcode(result.gcode);
+      sliced = packGcode3mf({
+        gcode: result.gcode,
+        ...(png ? { thumbnail: new Uint8Array(await png.arrayBuffer()) } : {}),
+        seconds: result.stats.printTimeSeconds ?? summary.seconds,
+        grams: result.stats.filamentG ?? null,
+        objects: objects.map((object) => ({ name: object.name, box: boundsOf(object.positions) })),
+        settings: mergedSettings(setup),
+        filaments: setup.filaments.map((filament, index) => ({
+          type: first(filament.filament_type) ?? "PLA",
+          colour: setup.colours[index] ?? FALLBACK_COLOUR,
+          ...(summary.grams[index] !== undefined ? { usedGrams: summary.grams[index] } : {}),
+          ...(summary.millimetres[index] !== undefined ? { usedMeters: (summary.millimetres[index] ?? 0) / 1000 } : {}),
+        })),
+        slicer: { name: "OrcaSlicer", version: orca },
+        title: request.name,
+      });
+      ms = result.ms + (performance.now() - packing);
+    }
     if (sliced.byteLength > MAX_SLICER_FILE_BYTES) throw new Problem("too-large");
     // What the app's own reader makes of it: the same settings a dropped .gcode.3mf would give.
     const reading = readThreeMf(sliced);
@@ -201,7 +239,9 @@ async function run(request: SliceRequest) {
         slice: slice({
           status: "sliced",
           bytes: sliced.byteLength,
-          ...(cautions.length ? { cautions: [...cautions] } : {}),
+          ...(cautions.length ? { cautions } : {}),
+          ...(ours?.ok && ours.notes.length ? { notes: ours.notes } : {}),
+          ms: Math.round(ms),
         }),
         prefill: withoutStandIns(settingsFromFile(reading, 1), setup.chosen),
         objects: objects.map((object) => object.name),
@@ -238,6 +278,43 @@ async function fetchJson<T>(url: URL): Promise<T> {
   }
   if (!response.ok) throw new Problem("engine");
   return (await response.json()) as T;
+}
+
+/**
+ * Slices the placed objects with Spaghetti's own slicer, or says why the engine should (decision 0055): a model
+ * without supports that may have a part starting in the air goes to the engine, which warns of it (ours can't yet;
+ * shared/slicing/floating.ts), and so does what ours refuses or fails on. Ours keeps the objects where they were put
+ * and at the size they are (the setup's scale is 100: they are scaled already).
+ */
+async function withOurs(
+  request: SliceRequest,
+  setup: SliceSetup,
+  objects: Placed[],
+  slicing: SlicingSettings,
+): Promise<OursAnswer> {
+  const rust = request.rust;
+  if (!rust) return { ok: false, fallback: { why: "unloaded" } };
+  if (slicing.supports === "off") {
+    const firstLayer = Number(first(setup.process.initial_layer_print_height)) || 0.2;
+    const positions = objects.map((object) => object.positions);
+    if (hasFloatingPart(positions, { above: firstLayer / 2, layer: slicing.layerHeight })) {
+      return { ok: false, fallback: { why: "floating" } };
+    }
+  }
+  progress("engine", 0);
+  const json = JSON.stringify({
+    machine: setup.machine,
+    process: setup.process,
+    filaments: setup.filaments,
+    colours: setup.colours,
+    slicing: { ...setup.slicing, scale: 100 },
+  });
+  return sliceOurs(new URL(rust.wasm, rust.base), json, objects, () => {
+    // Its one call can't say how far it is: the page paces the ring by about how long it takes.
+    const layers = objects.reduce((sum, object) => sum + boundsOf(object.positions).max[2] / slicing.layerHeight, 0);
+    const triangles = objects.reduce((sum, object) => sum + object.positions.length / 9, 0);
+    post({ type: "progress", phase: "slicing", fraction: 0, expectMs: rustEstimateMs({ layers, triangles }) });
+  });
 }
 
 /** The objects of an .stl or a .3mf, each with its filament. */
@@ -394,6 +471,8 @@ interface EngineResult {
   gcode: Uint8Array;
   stats: { printTimeSeconds?: number; filamentG?: number };
   warnings: EngineWarning[];
+  /** How long the engine took to slice, in ms (its loading not counted). */
+  ms: number;
 }
 
 function engineProblem(error: EngineError): Pick<FileSlice, "problem" | "message"> {
@@ -461,6 +540,7 @@ async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup
   await call("load", { variant: "st" });
   progress("slicing", 0);
   const multi = setup.filaments.length > 1;
+  const started = performance.now();
   const result = (await call(
     "slice",
     {
@@ -476,6 +556,6 @@ async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup
       const percent = (value as { percent?: number })?.percent;
       if (typeof percent === "number") progress("slicing", percent / 100);
     },
-  )) as EngineResult;
-  return result;
+  )) as Omit<EngineResult, "ms">;
+  return { ...result, ms: performance.now() - started };
 }

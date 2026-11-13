@@ -86,7 +86,8 @@ function recipeFilaments(recipe: SlicingRecipe): SlicingFilament[] {
 
 /**
  * The settings a model slices with from a recipe: everything the recipe says, over `base` (the model's settings) for
- * what it doesn't, and the model's own size and way of lying (a recipe is about how to print, not about this model).
+ * what it doesn't, and the model's own size, way of lying and slicer (a recipe is about how to print, not about this
+ * model, nor which slicer people chose for it: decision 0055).
  */
 export function recipeSlicing(
   recipe: SlicingRecipe,
@@ -95,7 +96,10 @@ export function recipeSlicing(
 ): SlicingSettings {
   const filaments = pantryFilaments(recipeFilaments(recipe), recipe, base.filaments, spools);
   if (recipe.slicing) {
-    return normalizeSlicing({ ...recipe.slicing, filaments, scale: base.scale, orientation: base.orientation }, base);
+    return normalizeSlicing(
+      { ...recipe.slicing, filaments, scale: base.scale, orientation: base.orientation, slicer: base.slicer },
+      base,
+    );
   }
   const said = recipe.settings;
   return normalizeSlicing(

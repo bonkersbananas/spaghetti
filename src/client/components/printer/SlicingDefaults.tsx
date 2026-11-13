@@ -1,8 +1,9 @@
-import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
+import { DEFAULT_SLICER, DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import {
   type SlicingDefaults as Defaults,
   patternWords,
   qualityWords,
+  slicerWords,
   slicingFor,
   strengthOf,
   strengthWords,
@@ -25,7 +26,10 @@ import { useLiveFields } from "@/lib/use-autosave";
 const loadTiles = () => import("@/components/builds/SliceSettings");
 const WorkspaceSlicing = lazy(() => loadTiles().then((m) => ({ default: m.WorkspaceSlicing })));
 
-/** "Standard quality · Everyday strength · no supports": the defaults in the model card's words, while folded. */
+/**
+ * "Standard quality · Everyday strength · no supports": the defaults in the model card's words, while folded, with
+ * the slicer when it isn't the usual one ("Spaghetti's own slicer", decision 0055).
+ */
 function defaultsWords(value: Defaults | null): string[] {
   const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
   const strength = strengthOf(settings);
@@ -35,6 +39,7 @@ function defaultsWords(value: Defaults | null): string[] {
       ? strengthWords(strength)
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
     supportWords(settings) || "no supports",
+    ...(settings.slicer !== DEFAULT_SLICER ? [slicerWords(settings.slicer)] : []),
   ];
 }
 

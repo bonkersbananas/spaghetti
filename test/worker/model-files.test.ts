@@ -304,6 +304,67 @@ describe("a model's slicing settings", () => {
   });
 });
 
+describe("which slicer made a slice (decision 0055)", () => {
+  it("is kept with it: Spaghetti's own with its release, its notes and how long it took", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const ours = { ...fine, slicer: "spaghetti" as const };
+    const response = await putSliced(
+      id,
+      slicedForm({
+        settings: { ...settings, slicing: ours, slicer: "spaghetti", rust: "1" },
+        notes: ["Auto Lift printed as spiral lifts"],
+        ms: 2531,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json<ItemFileResponse>()).file.slice).toMatchObject({
+      settings: { slicer: "spaghetti", rust: "1", slicing: ours },
+      notes: ["Auto Lift printed as spiral lifts"],
+      ms: 2531,
+    });
+    const story = await (await request(`/api/builds/${item.id}/story.md`, { cookie })).text();
+    expect(story).toContain("Benchy.stl (a model, sliced by Spaghetti's own slicer for the X2D: Fine (0.12 mm layers)");
+  });
+
+  it("is OrcaSlicer's engine where it stepped in for ours, with why", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const fallback = { why: "unsupported", what: "tree supports" } as const;
+    const response = await putSliced(
+      id,
+      slicedForm({ settings: { ...settings, slicing: { ...fine, slicer: "spaghetti" }, slicer: "orca" }, fallback }),
+    );
+    expect((await response.json<ItemFileResponse>()).file.slice?.fallback).toEqual(fallback);
+    const story = await (await request(`/api/builds/${item.id}/story.md`, { cookie })).text();
+    expect(story).toContain(
+      "sliced by Spaghetti with OrcaSlicer 2.5.0-dev (our own slicer can't do tree supports yet) for the X2D",
+    );
+    // A slicer it doesn't know, or a reason it doesn't, is refused.
+    for (const slice of [
+      { settings: { ...settings, slicer: "cura" } },
+      { fallback: { why: "tired" } },
+      { ms: -1 },
+    ] as Partial<FileSlice>[]) {
+      expect((await putSliced(id, slicedForm(slice))).status).toBe(400);
+    }
+  });
+
+  it("is a setting people choose for a model, and one a model's settings from before it existed lack", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    expect((await patchFile(id, { slicing: { ...fine, slicer: "spaghetti" } })).status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slicing?.slicer).toBe("spaghetti");
+    const { slicer: _, ...older } = fine;
+    expect((await patchFile(id, { slicing: older })).status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slicing?.slicer).toBe("orca");
+    expect((await patchFile(id, { slicing: { ...fine, slicer: "cura" } })).status).toBe(400);
+  });
+});
+
 describe("a model in the build's story (MCP's get_build)", () => {
   it("says what it was sliced with, in full, and a change it isn't sliced with yet", async () => {
     const item = await idea();

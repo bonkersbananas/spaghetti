@@ -1,0 +1,105 @@
+name: Rust slicer release
+
+# Builds Spaghetti's own slicer (slicer-rs/, docs/proposals/rust-slicer.md) to WebAssembly, slices a model with it,
+# packs it (scripts/slicer-rs/pack.ts) and publishes it as a GitHub release with its source (docs/slicer.md). Tag a
+# commit on main `slicer-rs-vN` to release (a tag elsewhere fails, so a release always matches merged code); pull
+# requests that change how it is packed, and "Run workflow", build and test without publishing. The app pins the
+# release's zip by sha256 in scripts/slicer-rs/release.json; normal CI never compiles it.
+
+on:
+  push:
+    tags: ["slicer-rs-v*"]
+  pull_request:
+    paths:
+      - "scripts/slicer-rs/**"
+      - "!scripts/slicer-rs/release.json"
+      - ".github/workflows/slicer-rs-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test the module
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # A release is cut from main only: the tagged commit has to be merged already.
+      - name: Released from main
+        if: github.ref_type == 'tag'
+        run: |
+          git fetch --no-tags --unshallow origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::$GITHUB_REF_NAME tags ${GITHUB_SHA::10}, which isn't on main: merge it first, then tag the commit on main."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Rust (stable, with the WebAssembly target)
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+      - name: Work out the version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then v="${GITHUB_REF_NAME#slicer-rs-v}"; else v="0-${GITHUB_SHA::7}"; fi
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+      - name: Build the module
+        working-directory: slicer-rs
+        run: cargo rustc --release --locked --lib --crate-type cdylib --target wasm32-unknown-unknown --no-default-features
+      - name: Slice a model with it, plain and with normal supports
+        run: |
+          wasm=slicer-rs/target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm
+          node slicer-rs/bench/wasm-node.mjs "$wasm" /tmp/bridge.gcode.3mf slicer-rs/tests/models/bridge.stl
+          echo '{"process": {"enable_support": "1", "support_type": "normal(auto)"}}' > /tmp/supports.json
+          node slicer-rs/bench/wasm-node.mjs "$wasm" /tmp/supports.gcode.3mf --setup /tmp/supports.json slicer-rs/tests/models/bridge.stl
+      - name: Pack it
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          node scripts/slicer-rs/pack.ts slicer-rs/target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm dist/slicer-rs-release ${{ steps.version.outputs.value }}
+      # The Corresponding Source: the crate as it was built (slicer-rs and its packing at this commit) and the crates it
+      # is built from, vendored, so it builds again without the registry.
+      - name: The source
+        run: |
+          set -euo pipefail
+          v=${{ steps.version.outputs.value }}
+          src=$(mktemp -d)/spaghetti-slicer-rs-$v-source
+          mkdir -p "$src"
+          git archive HEAD slicer-rs scripts/slicer-rs .github/workflows/slicer-rs-release.yml | tar -x -C "$src"
+          (cd "$src/slicer-rs" && cargo vendor --locked --versioned-dirs crates > /dev/null)
+          tar -czf "dist/slicer-rs-release/spaghetti-slicer-rs-$v-source.tar.gz" -C "$(dirname "$src")" "$(basename "$src")"
+          (cd dist/slicer-rs-release && sha256sum -- *.zip *.tar.gz > SHA256SUMS && cat SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slicer-rs
+          path: dist/slicer-rs-release/
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: slicer-rs
+          path: assets
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#slicer-rs-v}"
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --latest=false \
+            --title "Spaghetti's own slicer $version" \
+            --notes "Spaghetti's own slicer (slicer-rs) in WebAssembly, for slicing .stl and .3mf files in the browser beside OrcaSlicer's engine (docs/slicer.md), built by CI from ${GITHUB_SHA::10}. It follows OrcaSlicer's algorithms, so it is shipped under the AGPL-3.0, as OrcaSlicer is: its source and the crates it is built from are attached. The app pins spaghetti-slicer-rs-$version.zip by sha256 in scripts/slicer-rs/release.json; check a download with \`sha256sum -c SHA256SUMS\`."
