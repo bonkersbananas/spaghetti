@@ -11,4 +11,4 @@ Status: Accepted
 - The settings name nothing of Orca's. A setting is added in `settings.ts` (its words, its check) and mapped in `orca.ts` (its keys both ways); `readSlicing(applySlicing(x))` stays `x`, which the tests hold.
 - Writing settings onto Orca's configs changes only what differs, so what the settings can't tell apart survives a re-slice (a project's brim ears are a brim that is on).
 - A project made for another printer at 0.16 mm now starts from Orca's own 0.16 mm process, with its walls and infill, where it took the 0.20 mm one squeezed to 0.16.
-- The engine's release has presets for the 0.4 mm nozzle only: the shape takes 0.2, 0.6 and 0.8 mm, and slicing for them waits for a release with their presets (`MissingPreset`).
+- The engine's release has presets for the 0.4 mm nozzle only: the shape takes 0.2, 0.6 and 0.8 mm, and slicing for them waits for a release with their presets (`MissingPreset`). Since `slicer-v2` it has them all, and each nozzle has its own qualities ([0055](0055-each-nozzle-slices-with-its-own-presets-and-qualities.md)).

@@ -248,10 +248,10 @@ export function SlicingChoices({
       </p>
     </div>
   );
-  // Which nozzle, when the two fitted differ (or the settings name one that isn't fitted): after the filament, so
-  // Quality, Strength and Supports keep the phone's first screen.
+  // Which nozzle, when the two fitted differ (or the settings name one that isn't fitted): on a phone after the
+  // filament, so Quality, Strength and Supports keep its first screen; in a desktop panel under the strength.
   const nozzleGroup = nozzleOptions.length > 1 && (
-    <NozzleChoice value={settings.nozzle} options={nozzleOptions} onChange={setNozzle} />
+    <NozzleChoice value={settings.nozzle} options={nozzleOptions} onChange={setNozzle} wide={!model} />
   );
   const more = (
     <MoreSettings
@@ -275,8 +275,11 @@ export function SlicingChoices({
             {recipeGroup}
             {qualityGroup}
             {strengthGroup}
+            {/* On desktop the nozzle sits under the quality it changes; the licence and the files then close the
+                second column, so the first still fits without scrolling. */}
+            {nozzleGroup}
             {/* The licence, the files and More fill the room under the strength, so nothing scrolls. */}
-            {after}
+            {!nozzleGroup && after}
             {more}
           </div>
           <div className="flex min-w-0 flex-col gap-7">
@@ -284,7 +287,7 @@ export function SlicingChoices({
             {layGroup}
             {filamentGroup}
             {filamentRule}
-            {nozzleGroup}
+            {nozzleGroup && after}
           </div>
         </div>
       </div>
@@ -458,9 +461,17 @@ function offeredNozzles(current: number, fitted: readonly FittedNozzle[]): Offer
 }
 
 const NOZZLE_PLACES = {
-  main: { detail: "Main · left", effect: "the main nozzle, direct drive, on the left" },
-  auxiliary: { detail: "Auxiliary · right", effect: "the auxiliary nozzle, Bowden, on the right" },
+  main: { detail: "Main · left", side: "left" },
+  auxiliary: { detail: "Auxiliary · right", side: "right" },
 } as const;
+
+/** What a nozzle size does to a print, in a few words. */
+const NOZZLE_EFFECTS: Readonly<Record<string, string>> = {
+  "0.2": "fine detail, slower",
+  "0.4": "the usual balance",
+  "0.6": "quicker, stronger lines",
+  "0.8": "quickest, chunky lines",
+};
 
 /**
  * Which nozzle to slice for, when the X2D's two are different sizes: each as a tile with the two nozzles drawn side
@@ -470,21 +481,30 @@ function NozzleChoice({
   value,
   options,
   onChange,
+  wide,
 }: {
   value: number;
   options: readonly OfferedNozzle[];
   onChange: (nozzle: number) => void;
+  /** Across a page (the Printer page's defaults): tiles as wide as the quality's, not half the page each. */
+  wide?: boolean;
 }) {
   return (
     <ChoiceTiles
       label="Nozzle"
       columns={options.length >= 3 ? 3 : 2}
+      {...(wide ? { wideColumns: 4 as const } : {})}
       dense
       options={options.map((option) => ({
         value: String(option.diameter),
         label: `${option.diameter} mm`,
         detail: option.nozzle ? NOZZLE_PLACES[option.nozzle].detail : "Not fitted",
-        effect: option.nozzle ? NOZZLE_PLACES[option.nozzle].effect : "not on the printer now",
+        effect: [
+          NOZZLE_EFFECTS[String(option.diameter)] ?? "",
+          option.nozzle ? `on the ${NOZZLE_PLACES[option.nozzle].side}` : "not on the printer now",
+        ]
+          .filter(Boolean)
+          .join(", "),
         glyph: (
           <NozzleGlyph
             diameter={option.diameter}
@@ -732,23 +752,21 @@ function MoreSettings({
           />
         </SettingRow>
         {model && (
-          <>
-            <SettingRow label="Plate" wide>
-              <ChipRow label="Plate" wrap>
-                {offeredPlates.map((plate) => (
-                  <ToggleChip
-                    key={plate}
-                    tone="semolina"
-                    selected={plate === settings.plate}
-                    onClick={() => set({ plate })}
-                  >
-                    {plateName(plate)}
-                  </ToggleChip>
-                ))}
-              </ChipRow>
-              <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
-            </SettingRow>
-          </>
+          <SettingRow label="Plate" wide>
+            <ChipRow label="Plate" wrap>
+              {offeredPlates.map((plate) => (
+                <ToggleChip
+                  key={plate}
+                  tone="semolina"
+                  selected={plate === settings.plate}
+                  onClick={() => set({ plate })}
+                >
+                  {plateName(plate)}
+                </ToggleChip>
+              ))}
+            </ChipRow>
+            <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
+          </SettingRow>
         )}
         {nozzleSize && (
           <SettingRow label="Nozzle" wide>

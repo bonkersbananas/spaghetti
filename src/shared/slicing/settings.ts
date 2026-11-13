@@ -485,11 +485,12 @@ export function slicingSummary(settings: SlicingSettings): string[] {
   const supports = supportWords(settings);
   return [
     qualityOf(settings.layerHeight, settings.nozzle)?.label ?? `${Number(settings.layerHeight.toFixed(2))} mm layers`,
-    nozzleWords(settings),
     strength
       ? strengthWords(strength)
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
     supports ? `${supports.charAt(0).toUpperCase()}${supports.slice(1)}` : "No supports",
+    // What prints it: the nozzle (when it isn't the 0.4 mm), then the filament.
+    nozzleWords(settings),
     first ? filamentWords(first) : "",
     others.length ? `+${others.length} more` : "",
     orientationWords(settings),

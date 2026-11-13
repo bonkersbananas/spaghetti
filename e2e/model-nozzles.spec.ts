@@ -61,7 +61,7 @@ test("a model is sliced for the 0.2 mm nozzle when it is picked, at that nozzle'
   await page.keyboard.press("Escape");
 
   // Sliced again for it: the row names the nozzle, and the file is Bambu's 0.2 mm Standard.
-  const row = files.getByRole("button", { name: /^Slice with… Standard, 0\.2 mm nozzle, Everyday strength/ });
+  const row = files.getByRole("button", { name: /^Slice with… Standard, Everyday strength, No supports, 0\.2 mm nozzle/ });
   await expect(row).toBeVisible();
   const href = (await files.getByRole("link", { name: "Download tiny.gcode.3mf" }).getAttribute("href")) ?? "";
   const keys = ["layer_height", "line_width", "outer_wall_line_width", "nozzle_diameter"];

@@ -364,7 +364,7 @@ describe("another nozzle", () => {
 
   it("is named on the card's row and line, unless it is the 0.4 mm", () => {
     const fine = withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.12 }, 0.2);
-    expect(slicingSummary(fine).slice(0, 2)).toEqual(["Fine", "0.2 mm nozzle"]);
+    expect(slicingSummary(fine)).toEqual(["Fine", "Everyday strength", "No supports", "0.2 mm nozzle", "PLA"]);
     expect(slicingLine(fine).slice(0, 2)).toEqual(["Fine", "0.2 mm nozzle"]);
     expect(slicingSummary(DEFAULT_SLICING).join(" ")).not.toMatch(/nozzle/);
   });

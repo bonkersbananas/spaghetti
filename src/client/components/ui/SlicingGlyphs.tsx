@@ -138,11 +138,23 @@ export function NozzleGlyph({
   className?: string;
 }) {
   const tip = 0.5 + diameter * 2.5;
+  // The line it lays: wider for a wider nozzle (7 units for the 0.2 mm, 12 for the 0.4, 17 for the 0.6, 22 for the 0.8).
+  const bead = 2 + diameter * 25;
   const nozzle = (x: number, on: boolean) => (
-    <g key={x} opacity={on ? 1 : 0.28}>
+    <g key={x} opacity={on ? 1 : 0.35}>
       <rect x={x - 3.5} y={1} width={7} height={9} rx={1.5} />
-      <path d={`M${x - 3} 10.5 L${x + 3} 10.5 L${x + tip} 15.5 L${x - tip} 15.5 Z`} />
-      {on && <rect x={x - 6} y={19} width={12} height={1 + diameter * 4} rx={(1 + diameter * 4) / 2} opacity={0.7} />}
+      <path d={`M${x - 3} 10.5 L${x + 3} 10.5 L${x + tip} 16 L${x - tip} 16 Z`} />
+      {on && (
+        // Under its nozzle, kept within the picture.
+        <rect
+          x={Math.min(Math.max(x - bead / 2, 0.5), 27.5 - bead)}
+          y={19.5}
+          width={bead}
+          height={2.5}
+          rx={1.25}
+          opacity={0.7}
+        />
+      )}
     </g>
   );
   return (

@@ -554,6 +554,17 @@ async function settleSliceSettings(page: Page) {
   await page.waitForTimeout(400);
 }
 
+/** The settings scrolled back to their top (picking a tile lower down scrolls it into view). */
+async function scrollSheetToTop(settings: Locator) {
+  await settings.evaluate((dialog) => {
+    for (const element of Array.from(dialog.querySelectorAll<HTMLElement>("*"))) {
+      if (element.scrollHeight > element.clientHeight + 4 && getComputedStyle(element).overflowY !== "visible") {
+        element.scrollTop = 0;
+      }
+    }
+  });
+}
+
 async function closeSliceSettings(page: Page) {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
@@ -562,6 +573,24 @@ async function closeSliceSettings(page: Page) {
 
 /** The Printer page's slicing defaults (decision 0051). */
 const slicingDefaults = (page: Page) => page.locator("section[aria-labelledby=printer-slicing]");
+
+/** The X2D's nozzles as the seed has them: two 0.4 mm. */
+const STOCK_NOZZLES = { main: { diameter: 0.4, hardened: true }, auxiliary: { diameter: 0.4, hardened: true } };
+
+/**
+ * Fits a nozzle of another size (decision 0055): the 0.2 mm on the right (auxiliary) by default, or in the main one.
+ * `fitStockNozzles` puts the seed's back, with Spaghetti's own slicing defaults.
+ */
+async function fitSmallNozzle(page: Page, where: "main" | "auxiliary" = "auxiliary") {
+  const headers = { Origin: new URL(page.url()).origin };
+  const nozzles = { ...STOCK_NOZZLES, [where]: { diameter: 0.2, hardened: false } };
+  await page.request.put("/api/printer", { headers, data: { nozzles } });
+}
+
+async function fitStockNozzles(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.put("/api/printer", { headers, data: { nozzles: STOCK_NOZZLES, slicing: null } });
+}
 
 /** The slicing defaults, unfolded, their tiles in place. Returns the section. */
 async function openSlicingDefaults(page: Page) {
@@ -1757,6 +1786,72 @@ export const shots: Shot[] = [
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
+  },
+  {
+    // A 0.2 mm nozzle fitted on the right (decision 0055): "Slice with…" offers the nozzle after the filament, and
+    // the 0.2 mm is picked: the quality tiles' heights are its own (Standard 0.10 mm). A phone's sheet is scrolled to
+    // the nozzle; a desktop panel has it under the strength.
+    name: "slice-settings-nozzle",
+    path: "/ideas",
+    prepare: async (page) => {
+      await fitSmallNozzle(page);
+      const settings = await openSliceSettings(page);
+      const nozzle = settings.getByRole("group", { name: "Nozzle" });
+      await nozzle.getByRole("radio", { name: /^0\.2 mm/ }).check();
+      await settings
+        .getByRole("group", { name: "Quality" })
+        .getByRole("radio", { name: /^Standard 0\.10 mm/ })
+        .waitFor();
+      // A phone's sheet scrolls to it; a desktop panel shows it under the strength as it opens.
+      if ((page.viewportSize()?.width ?? 0) < 768) {
+        await nozzle.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
+      } else await scrollSheetToTop(settings);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: async (page) => {
+      await closeSliceSettings(page);
+      await fitStockNozzles(page);
+    },
+  },
+  {
+    // The same, at the top of a phone's sheet: Quality, Strength and Supports first, the qualities the 0.2 mm's.
+    name: "slice-settings-nozzle-qualities",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await fitSmallNozzle(page);
+      const settings = await openSliceSettings(page);
+      await settings
+        .getByRole("group", { name: "Nozzle" })
+        .getByRole("radio", { name: /^0\.2 mm/ })
+        .check();
+      const quality = settings.getByRole("group", { name: "Quality" });
+      await quality.getByRole("radio", { name: /^Standard 0\.10 mm/ }).waitFor();
+      await quality.evaluate((group) => group.scrollIntoView({ block: "end", behavior: "instant" }));
+      await scrollSheetToTop(settings);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: async (page) => {
+      await closeSliceSettings(page);
+      await fitStockNozzles(page);
+    },
+  },
+  {
+    // A model sliced for the 0.2 mm nozzle (fitted as the main one): the card's row names the nozzle, and leads with
+    // the print's time and weight at 0.10 mm layers.
+    name: "idea-model-small-nozzle",
+    path: "/ideas",
+    prepare: async (page) => {
+      await fitSmallNozzle(page, "main");
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      await page.getByRole("button", { name: /^Slice with… Standard, Everyday strength, No supports, 0\.2 mm nozzle/ }).waitFor();
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await removeModelItems(page);
+      await fitStockNozzles(page);
+    },
   },
   {
     // The rest of More for a model too long for the plate: the plates, the nozzle, and its size with "Fit the plate".
@@ -3425,6 +3520,44 @@ export const shots: Shot[] = [
       const headers = { Origin: new URL(page.url()).origin };
       await page.request.put("/api/printer", { headers, data: { slicing: null } });
     },
+  },
+  {
+    // A 0.2 mm nozzle fitted on the right (decision 0055): the Printer page's nozzles, and its slicing defaults say
+    // what new models are sliced for.
+    name: "printer-small-nozzle",
+    path: "/printer",
+    fullPage: true,
+    prepare: async (page) => {
+      await fitSmallNozzle(page);
+      await page.reload();
+      await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+      await slicingDefaults(page)
+        .getByRole("button", { name: /^How new models are sliced/ })
+        .waitFor();
+    },
+    cleanup: fitStockNozzles,
+  },
+  {
+    // Open, with the two nozzles different: the defaults offer which one new models are sliced for, the 0.2 mm picked
+    // and the quality tiles its own.
+    name: "printer-slicing-nozzle",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      await fitSmallNozzle(page);
+      await page.reload();
+      const section = await openSlicingDefaults(page);
+      await section
+        .getByRole("group", { name: "Nozzle" })
+        .getByRole("radio", { name: /^0\.2 mm/ })
+        .check();
+      await section
+        .getByRole("group", { name: "Quality" })
+        .getByRole("radio", { name: /^Standard 0\.10 mm/ })
+        .waitFor();
+      await settleSection(page, section);
+    },
+    cleanup: fitStockNozzles,
   },
   {
     // The connection gone while they are open: the setup is only for reading (lib/read-only.ts), their tiles,
