@@ -170,7 +170,8 @@ const SettingsButton = (props: ComponentPropsWithRef<"button">) => (
 /** A slice under way, as a progressbar that says where it is (not a live region that reads out every percent). */
 function SliceProgress({ fraction, words }: { fraction: number | null; words: string }) {
   const percent = fraction === null ? null : Math.round(fraction * 100);
-  const text = percent === null ? words : `${words} ${percent}%`;
+  // "Slicing 42%", "Slicing with Fine · 42%".
+  const text = percent === null ? words : `${words}${words === "Slicing" ? " " : " · "}${percent}%`;
   return (
     <span
       className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
@@ -431,9 +432,10 @@ export function SliceResult({
   const figures = change ? changeFigures(change) : [];
   const lead = state.kind === "sliced" ? sliceLead(prefill) : [];
   return (
-    <div className="flex items-start gap-3">
-      <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-14" />
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5 pt-0.5">
+    // A tray of its own, apart from the choices: what they give.
+    <div className="bg-ink/4 flex items-start gap-3 rounded-lg p-2.5">
+      <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-12" />
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1 self-center">
         {figures.length > 0 ? (
           <BeforeAfter changes={figures} size="md" />
         ) : lead.length > 0 ? (
@@ -471,7 +473,9 @@ export default function ModelFileCard({
   const setup = printer?.setup ?? DEFAULT_PRINTER;
   const defaults = useMemo(() => workshopDefaults({ spools, setup }), [spools, setup]);
   const state = modelState(file, job, change);
-  const settings = modelSlicing(file, defaults);
+  // While a slice runs here, the settings it slices with: what the card was asked for, whatever a refetch says.
+  const kept = modelSlicing(file, defaults);
+  const settings = job && Object.keys(job.chosen).length ? slicingFor(job.chosen, kept) : kept;
   const target = owner && !file.pending ? owner : undefined;
   useWarmSoon(() => (target ? loadSettings() : Promise.resolve()));
 
@@ -524,13 +528,7 @@ export default function ModelFileCard({
     : isDesktop
       ? {
           wrap: (trigger: ReactNode) => (
-            <Popover
-              trigger={trigger}
-              label="How to slice it"
-              side="bottom"
-              align="start"
-              className="max-h-(--radix-popover-content-available-height) w-md overflow-y-auto overscroll-contain"
-            >
+            <Popover trigger={trigger} label="How to slice it" side="bottom" align="start" className="w-md">
               <Suspense fallback={<div className="h-96" />}>
                 <SliceSettingsPanel {...panel} />
               </Suspense>

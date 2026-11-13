@@ -289,7 +289,7 @@ function MoreSettings({
       summary={<MetaList>{summary}</MetaList>}
     >
       <div className="flex flex-col gap-5 pt-1">
-        <SettingRow label="Supports are" wide>
+        <SettingRow label="Kind of supports" wide>
           <ChipRow label="How supports are built" wrap>
             {SUPPORT_STYLES.map((choice) => (
               <ToggleChip
@@ -462,13 +462,18 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
   sliced?: string;
 }
 
-/** On desktop, in a popover beside the card: the result on top, then the choices, then where it comes from. */
+/**
+ * On desktop, in a popover beside the card: the choices, as tall as the window lets them be, and under them, always
+ * in view, the result. The popover's own padding is the scroller's, so the fade at its edges reaches the corners.
+ */
 export function SliceSettingsPanel({ file, result, sliced, ...choices }: SliceSettingsProps) {
   return (
-    <div className="flex flex-col gap-6">
-      {result}
-      <SlicingChoices {...choices} />
-      <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
+    <div className="-m-4 flex max-h-(--radix-popover-content-available-height) flex-col">
+      <div className="scroll-fade flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto overscroll-contain p-4 pb-5">
+        <SlicingChoices {...choices} />
+        <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
+      </div>
+      {result && <div className="shrink-0 px-3 pb-3">{result}</div>}
     </div>
   );
 }

@@ -440,6 +440,37 @@ async function modelInView(page: Page) {
   await page.waitForTimeout(300);
 }
 
+/**
+ * An idea with the fusilli knob sliced, its settings open ("Slice with…"): the popover on desktop, the sheet on a
+ * phone. Returns them.
+ */
+async function openSliceSettings(page: Page) {
+  const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+  await sliceSaved(page);
+  await modelInView(page);
+  await files.getByRole("button", { name: "Slice with…" }).click();
+  const settings = page.getByRole("dialog", { name: "How to slice it" });
+  await settings.getByRole("group", { name: "Quality" }).waitFor();
+  return settings;
+}
+
+/** The settings' sheet or popover has finished opening (the shots' fixed clock starts its fade late: finish it). */
+async function settleSliceSettings(page: Page) {
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) return false;
+    for (const animation of dialog.getAnimations({ subtree: true })) animation.finish();
+    return getComputedStyle(dialog).opacity === "1";
+  });
+  await page.waitForTimeout(400);
+}
+
+async function closeSliceSettings(page: Page) {
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  await removeModelItems(page);
+}
+
 /** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
 const modelItems: string[] = [];
 
@@ -1366,22 +1397,71 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
-    // How it was sliced: a popover on desktop, a sheet on phones, with the engine's source and the original.
-    name: "idea-model-details",
+    // How to slice it (decision 0047): a popover beside the card on desktop, a tall sheet on phones, with the four big
+    // choices, More, and the engine's source and the files; on a phone the result sits at the thumb.
+    name: "slice-settings",
     path: "/ideas",
     prepare: async (page) => {
-      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
-      await modelInView(page);
-      await files.getByRole("button", { name: /Sliced by Spaghetti/ }).click();
-      await page.getByRole("dialog").getByText("Download the original").waitFor();
+      await openSliceSettings(page);
     },
-    beforeShot: async (page) => {
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Quality changed to Fine: the model slices again in the background, the slice there (its plate, its figures)
+    // kept in view until the new one is ready, with Stop.
+    name: "slice-settings-reslicing",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("radio", { name: /^Fine/ }).click();
+      await settings
+        .getByText(/Slicing with Fine · [1-9]\d?%/)
+        .first()
+        .waitFor({ timeout: 90_000 });
+    },
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Sliced Fine: what the change did, before → after, and its undo.
+    name: "slice-settings-changed",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("radio", { name: /^Fine/ }).click();
+      await settings.getByRole("button", { name: "Undo" }).waitFor({ timeout: 90_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The card after the change, its settings closed: it leads with what the change did, and offers the undo.
+    name: "idea-model-changed",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("radio", { name: /^Fine/ }).click();
+      await settings.getByRole("button", { name: "Undo" }).waitFor({ timeout: 90_000 });
+      await page.keyboard.press("Escape");
+      await settings.waitFor({ state: "hidden" });
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // More, open: how supports are built, the brim, walls and infill by number, the pattern, plate, nozzle and size.
+    name: "slice-settings-more",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      const more = settings.getByRole("button", { name: /^More/ });
+      await more.click();
+      await settings.getByRole("group", { name: "How supports are built" }).waitFor();
       await page.waitForTimeout(400);
+      await more.evaluate((button) => button.scrollIntoView({ block: "start", behavior: "instant" }));
     },
-    cleanup: async (page) => {
-      await closeDialog(page);
-      await removeModelItems(page);
-    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
   },
   {
     // The sliced model in the 3D view: the G-code Spaghetti made, layer by layer.

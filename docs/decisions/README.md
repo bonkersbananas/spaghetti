@@ -67,3 +67,4 @@ Status: Accepted | Open | Superseded by NNNN
 | [0045](0045-ideas-keep-slicer-files.md) | An idea keeps slicer files (.3mf, .gcode.3mf), which stay with it as a build and count as "has a model" | Accepted |
 | [0046](0046-models-are-sliced-in-the-browser.md) | An .stl or plain .3mf is kept as it is and sliced in the browser with OrcaSlicer's own engine, its .gcode.3mf kept beside it | Accepted |
 | [0047](0047-slicing-settings-in-one-shape.md) | Slicing settings are one shape in people's words (quality, strength, supports, brim, filament, plate, nozzle, scale), mapped to OrcaSlicer in one place | Accepted |
+| [0048](0048-a-model-keeps-its-settings-and-one-slice-to-undo.md) | A model keeps its slicing settings, is sliced again in the background with the slice there kept in view, and keeps one slice to undo | Accepted |

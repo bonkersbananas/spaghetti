@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "../api";
+import { itemKeys } from "../item-keys";
 import { patchCachedItem } from "../items";
 import { printerQuery, spoolsQuery } from "../pantry-queries";
 import { dropPreview, setPreview } from "../previews";
@@ -376,6 +377,9 @@ export function changeSlicing(
   { target, file, next }: { target: SliceTarget; file: AttemptFile; next: SlicingSettings },
 ) {
   const before = file.slicing ?? null;
+  // A refetch already on its way would land after this and put the old settings back: it is dropped (the feed
+  // fetches again on its next change).
+  void queryClient.cancelQueries({ queryKey: itemKeys.detail(target.itemId) });
   patchFile(queryClient, target, file.id, { slicing: next });
   forgetChange(file.id);
   clearTimeout(pending.get(file.id));

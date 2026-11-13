@@ -279,7 +279,8 @@ export function SlicingSection() {
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
         <div className="flex flex-col gap-4">
           <Label>How to slice it (live): a popover beside the card on desktop, a tall sheet on phones</Label>
-          <Panel className="max-w-md">
+          {/* As the popover draws it: lifted, floating, its padding the panel's own. */}
+          <div className="bg-lifted shadow-float w-full max-w-md rounded-lg p-4">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "fusilli-knob.stl", url: "#" }}
               settings={settings}
@@ -291,7 +292,7 @@ export function SlicingSection() {
               sliced="#"
               result={<SliceResult state={sliced()} prefill={PREFILL} phone={false} />}
             />
-          </Panel>
+          </div>
         </div>
         <div className="flex flex-col gap-4">
           <Label>Its result: slicing again, what the change did with its undo, and a change it couldn't slice</Label>
@@ -311,7 +312,7 @@ export function SlicingSection() {
             />
           </Panel>
           <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
-          <Panel className="max-w-md">
+          <div className="bg-lifted shadow-float w-full max-w-md rounded-lg p-4">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#" }}
               settings={{ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }}
@@ -323,7 +324,7 @@ export function SlicingSection() {
               moreOpen
               result={null}
             />
-          </Panel>
+          </div>
         </div>
       </div>
     </Section>
