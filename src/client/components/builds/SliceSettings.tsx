@@ -78,11 +78,11 @@ export interface SlicingChoicesProps {
   /** More open from the start (the styleguide). */
   moreOpen?: boolean;
   /**
-   * A model's settings, or the workspace's defaults (the Printer page, decision 0052): how a model prints, without
+   * A model's settings, or the workspace's defaults (the Printer page, decision 0051): how a model prints, without
    * the filament, plate, nozzle, size or the way it lies, which are each model's.
    */
   scope?: "model" | "workspace";
-  /** Recipes to slice with (decision 0052), those for its filament (`fits`) first. */
+  /** Recipes to slice with (decision 0051), those for its filament (`fits`) first. */
   recipes?: readonly OfferedRecipe[];
   /** How the model can lie (lib/slicing/orientations.ts): the "Lay it down" tiles show when it can lie more than one way. */
   lying?: LyingState;
@@ -198,7 +198,7 @@ export function SlicingChoices({
 }
 
 /**
- * Slicing with a recipe (decision 0052): what worked before, in one tap, over the model's settings. Those for the
+ * Slicing with a recipe (decision 0051): what worked before, in one tap, over the model's settings. Those for the
  * model's filament come first, set apart on a phone; the one it is sliced with now is picked, and its note says why
  * it is the way it is (the chip already says its name), with the filament when the recipe brought another.
  */
@@ -710,7 +710,7 @@ export default function SliceSettingsSheet({
 }
 
 /**
- * The workspace's defaults, on the Printer page (decision 0052): how a model nobody set up is sliced here. The same
+ * The workspace's defaults, on the Printer page (decision 0051): how a model nobody set up is sliced here. The same
  * choices as a model's, without the filament (the Pantry's first loaded spool) and what is each model's own.
  */
 export function WorkspaceSlicing({

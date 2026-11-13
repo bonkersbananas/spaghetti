@@ -1731,7 +1731,7 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
-    // Fins (decision 0051): the fourth Supports tile, picked for the drying rack, whose arm starts in the air. It
+    // Fins (decision 0052): the fourth Supports tile, picked for the drying rack, whose arm starts in the air. It
     // slices again in the background, with the fins built into the model.
     name: "slice-settings-fins",
     path: "/ideas",

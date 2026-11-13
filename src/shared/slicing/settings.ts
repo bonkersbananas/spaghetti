@@ -11,7 +11,7 @@ import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 
 /**
  * Off, only under what would otherwise fall (floating parts, long ledges), under every steep overhang, or fins:
- * breakaway walls built into the model itself (Support Fins, decision 0051), with the slicer's own supports off.
+ * breakaway walls built into the model itself (Support Fins, decision 0052), with the slicer's own supports off.
  */
 export type SupportPlacement = "off" | "where-needed" | "everywhere" | "fins";
 export const SUPPORT_PLACEMENT_IDS = ["off", "where-needed", "everywhere", "fins"] as const;
