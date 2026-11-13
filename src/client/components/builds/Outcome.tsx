@@ -112,7 +112,7 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
                   ? cn(selectedStyles[outcome], "ring-2 ring-inset")
                   : hinted
                     ? cn(suggestedStyles[outcome], "hover:bg-ink/4")
-                    : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
+                    : "bg-tile text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
               )}
             >
               {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.
@@ -186,14 +186,16 @@ interface OutcomeChipProps {
   outcome: Outcome | null;
   /** The print stopped on the printer and nobody has said how it went yet (see `isOffTheBed`). */
   offTheBed?: boolean;
+  /** On a photo, where "Off the bed" needs a solid face. */
+  onPhoto?: boolean;
   className?: string;
 }
 
 /** How an attempt went, as a chip; "Printing" with a gentle pulse while it runs, "Off the bed" once it stopped. */
-export function OutcomeChip({ outcome, offTheBed, className }: OutcomeChipProps) {
+export function OutcomeChip({ outcome, offTheBed, onPhoto, className }: OutcomeChipProps) {
   if (!outcome && offTheBed) {
     return (
-      <Chip tone="neutral" icon={FinishIcon} className={className}>
+      <Chip tone="neutral" icon={FinishIcon} onPhoto={onPhoto} className={className}>
         Off the bed
       </Chip>
     );

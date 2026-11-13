@@ -1,8 +1,9 @@
 import { fileUrl } from "@shared/api";
-import { type ComponentType, useEffect, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CubeIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
+import { tooBigForPhone } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 
@@ -50,6 +51,8 @@ function LoadedViewer(props: import("./PrintViewer").PrintViewerProps) {
 /** A sliced file (one with G-code) that the server kept can be opened in 3D: a model once it is sliced. */
 export function canView3d(file: AttemptFileView | undefined): file is AttemptFileView {
   if (!file?.stored || file.pending) return false;
+  // Kept, but too big to draw on a phone (SlicerFileCard says so).
+  if (tooBigForPhone(file.kind === "model" ? (file.slice?.bytes ?? 0) : file.size)) return false;
   if (file.kind === "model") return file.slice?.status === "sliced";
   return /\.gcode\.3mf$/i.test(file.name) || file.prefill.estimatedMinutes !== undefined;
 }
@@ -59,23 +62,32 @@ export interface PrintingAttempt {
   id: string;
 }
 
+/** What opens a file in 3D, given to a card whose plate picture can show it (`FileCard`'s `view3d`). */
+export interface View3d {
+  file: AttemptFileView;
+  fallbackColors?: (string | null | undefined)[];
+  /** Set while the attempt is printing: the viewer shows the layers printed so far solid and the rest as a ghost. */
+  printing?: PrintingAttempt;
+}
+
 /**
- * A quiet "3D" pill on the plate picture, or on a small picture (a story card's) only its cube, a corner glyph on the
- * veil that leaves the model in view. Opens the viewer; its code is fetched as a finger or the pointer nears it.
+ * A plate picture that opens the 3D view: the whole picture is the button ("See benchy.stl in 3D"), and it gives way
+ * under the finger like any tile. A quiet "3D" pill on its corner says so, or on a small picture (a story card's)
+ * only its cube, a corner glyph on the veil that leaves the model in view. The viewer's code is fetched as a finger
+ * or the pointer nears it.
  */
 export function ThreeDButton({
   file,
   fallbackColors,
   printing,
   glyph,
+  children,
   className,
-}: {
-  file: AttemptFileView;
-  fallbackColors?: (string | null | undefined)[];
-  /** Set while the attempt is printing: the viewer shows the layers printed so far solid and the rest as a ghost. */
-  printing?: PrintingAttempt;
+}: View3d & {
   /** Only the cube, in the corner: for a picture too small for the pill. */
   glyph?: boolean;
+  /** The plate picture. */
+  children: ReactNode;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -88,16 +100,21 @@ export function ThreeDButton({
         onFocus={() => void importViewer()}
         onClick={() => setOpen(true)}
         aria-label={`See ${file.name} in 3D`}
-        className={cn(
-          "pressable focus-ring bg-veil text-on-veil touch-target absolute flex items-center rounded-full",
-          glyph
-            ? "right-0.5 bottom-0.5 size-5 justify-center backdrop-blur-sm"
-            : "text-caption right-1 bottom-1 gap-1 py-0.5 pr-2 pl-1.5 font-semibold",
-          className,
-        )}
+        className={cn("pressable focus-ring group/plate relative block rounded-md", className)}
       >
-        <CubeIcon size={glyph ? 11 : 12} weight="bold" aria-hidden />
-        {!glyph && "3D"}
+        {children}
+        <span
+          aria-hidden
+          className={cn(
+            "bg-veil text-on-veil group-hover/plate:bg-veil-strong duration-fast pointer-events-none absolute flex items-center rounded-full transition-colors",
+            glyph
+              ? "right-0.5 bottom-0.5 size-5 justify-center backdrop-blur-sm"
+              : "text-caption right-1 bottom-1 gap-1 py-0.5 pr-2 pl-1.5 font-semibold",
+          )}
+        >
+          <CubeIcon size={glyph ? 11 : 12} weight="bold" />
+          {!glyph && "3D"}
+        </span>
       </button>
       {open && (
         <ViewerSheet

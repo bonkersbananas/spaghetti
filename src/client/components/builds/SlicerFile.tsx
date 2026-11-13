@@ -2,10 +2,13 @@ import { fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptFilament } from "@shared/attempts";
 import type { Plate } from "@shared/threemf/types.ts";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
-import { IconButton } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Caution } from "@/components/ui/Caution";
 import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { ProgressRing } from "@/components/ui/ProgressRing";
 import { Swatch } from "@/components/ui/Swatch";
+import { tooBigForPhone, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import { useOnline } from "@/lib/connection";
 import type { AttemptFileView } from "@/lib/items";
@@ -13,7 +16,7 @@ import { fileThumbSrc } from "@/lib/previews";
 import { formatBytes, plateThumb, type SlicerFileDraft } from "@/lib/slicer-files";
 import type { SliceTarget } from "@/lib/slicing/jobs";
 import { useObjectUrl } from "@/lib/use-object-url";
-import { canView3d, type PrintingAttempt, ThreeDButton } from "../viewer/ThreeDButton";
+import { canView3d, type PrintingAttempt, ThreeDButton, type View3d } from "../viewer/ThreeDButton";
 import { formatMinutes } from "./settings";
 
 /** A plate's picture on a quiet well (slicers render them on transparent ground). */
@@ -44,8 +47,15 @@ interface FileCardProps {
   lead?: string[];
   /** A lead of its own, in the same place: what a change did to a sliced model ("1 h 12 min → 48 min"). */
   leadNode?: ReactNode;
+  /** The lead is the slice being replaced (sliced again with other settings): quieter, so it isn't read as the new one's. */
+  leadStale?: boolean;
   /** Short pieces: "plate 2 of 3", "est. 1 h 30 min", "4.2 MB"; or a line of its own (a story card's "Sliced by Spaghetti"). */
   meta: ReactNode[];
+  /**
+   * A control under the name, on a line of its own (a story card's "Sliced by Spaghetti", which opens the model's
+   * settings): apart from the meta line, whose frame would clip its touch target and focus ring.
+   */
+  opener?: ReactNode;
   /** A line under it, such as "Too big to keep". */
   note?: string;
   /** Lines under the meta in place of the note: a model's slicing, with its actions (ModelFile.tsx). */
@@ -53,8 +63,8 @@ interface FileCardProps {
   download?: string;
   /** The download's file name, when it isn't the card's name (a model's sliced file). */
   downloadName?: string;
-  /** Sits on the plate picture's corner (the "3D" control). */
-  plateOverlay?: ReactNode;
+  /** Where the file can be shown in 3D: the whole plate picture opens the view, a "3D" pill on its corner. */
+  view3d?: View3d;
   onRemove?: () => void;
   /** On a story card: no box of its own and a smaller plate, its download in line with the attempt's menu above it. */
   compact?: boolean;
@@ -72,12 +82,14 @@ export function FileCard({
   thumbSrc,
   lead,
   leadNode,
+  leadStale,
   meta,
+  opener,
   note,
   status,
   download,
   downloadName,
-  plateOverlay,
+  view3d,
   onRemove,
   compact,
   raised,
@@ -88,15 +100,23 @@ export function FileCard({
     : raised
       ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5"
       : "bg-ink/3 rounded-lg p-2.5 pr-1.5";
+  // A story card's plate is small: the well's padding keeps the whole model clear of its rounded edge.
+  const picture = (
+    <PlateThumb
+      src={thumbSrc}
+      alt="The plate, as sliced"
+      className={compact ? "size-12 p-1" : raised ? "size-24" : "size-16"}
+    />
+  );
   const thumb = (
     <span className={cn("relative shrink-0", !!status && "md:row-span-2 md:self-start")}>
-      {/* A story card's plate is small: the well's padding keeps the whole model clear of its rounded edge. */}
-      <PlateThumb
-        src={thumbSrc}
-        alt="The plate, as sliced"
-        className={compact ? "size-12 p-1" : raised ? "size-24" : "size-16"}
-      />
-      {plateOverlay}
+      {view3d ? (
+        <ThreeDButton {...view3d} glyph={compact}>
+          {picture}
+        </ThreeDButton>
+      ) : (
+        picture
+      )}
     </span>
   );
   const named = !!leadNode || !!lead?.length;
@@ -105,7 +125,7 @@ export function FileCard({
       {named ? (
         <>
           {leadNode ?? (
-            <MetaList className="text-body text-ink tabular font-semibold">
+            <MetaList className={cn("text-body tabular font-semibold", leadStale ? "text-ink-faint" : "text-ink")}>
               {lead?.map((piece) => (
                 <span key={piece} className="whitespace-nowrap">
                   {piece}
@@ -132,6 +152,7 @@ export function FileCard({
           ))}
         </MetaList>
       )}
+      {opener}
       {note && <span className="text-caption text-ink-faint">{note}</span>}
     </div>
   );
@@ -208,7 +229,9 @@ export function savedFileMeta(file: AttemptFileView, compact?: boolean): { meta:
     ? `Over ${formatBytes(MAX_SLICER_FILE_BYTES)}, so only what it said is kept.`
     : file.pending
       ? "Saving the file…"
-      : undefined;
+      : file.kind !== "model" && tooBigForPhone(file.size)
+        ? "Too big for the 3D view on a phone. A laptop will show it."
+        : undefined;
   return { meta, ...(note ? { note } : {}) };
 }
 
@@ -253,25 +276,50 @@ export function SavedFileCard(props: SavedFileCardProps) {
   return <SlicerFileCard {...props} />;
 }
 
+/** A big file's upload on its card: the percent as it goes, or that it stopped, with one tap to send it again. */
+function UploadLine({ upload }: { upload: NonNullable<ReturnType<typeof useUpload>> }) {
+  if (upload.failed) {
+    return (
+      <>
+        <Caution className="px-0">Didn't finish saving. Your file is still here.</Caution>
+        {upload.retry && (
+          <Button variant="secondary" size="sm" onClick={upload.retry}>
+            Try again
+          </Button>
+        )}
+      </>
+    );
+  }
+  const percent = Math.round(upload.fraction * 100);
+  return (
+    <span
+      className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
+      role="progressbar"
+      aria-label="Saving the file"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      aria-valuetext={`Saving ${percent}%`}
+    >
+      <ProgressRing value={upload.fraction} className="text-semolina" />
+      Saving {percent}%
+    </span>
+  );
+}
+
 function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, className }: SavedFileCardProps) {
   const { meta, note } = savedFileMeta(file, compact);
+  const upload = useUpload(file.id);
+  const going = file.pending && upload ? upload : undefined;
   return (
     <FileCard
       name={file.name}
       thumbSrc={file.hasThumb ? fileThumbSrc(file.id) : undefined}
       meta={meta}
-      note={note}
+      note={going ? undefined : note}
+      status={going ? <UploadLine upload={going} /> : undefined}
       download={file.stored && !file.pending ? fileUrl(file.id) : undefined}
-      plateOverlay={
-        canView3d(file) ? (
-          <ThreeDButton
-            file={file}
-            fallbackColors={filaments?.map((f) => f.colorHex)}
-            printing={printing}
-            glyph={compact}
-          />
-        ) : undefined
-      }
+      view3d={canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined}
       onRemove={onRemove}
       compact={compact}
       raised={raised}

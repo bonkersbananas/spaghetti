@@ -112,6 +112,9 @@
       "name": "twists"
     },
     {
+      "name": "uploads"
+    },
+    {
       "name": "webhooks"
     },
     {
@@ -8984,11 +8987,15 @@
                       "model"
                     ]
                   },
+                  "uploaded": {
+                    "type": "string",
+                    "const": "1"
+                  },
                   "file": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB."
+                    "description": "The .3mf or .gcode.3mf, kept up to 32 MB in this request (a bigger one, up to 250 MB, goes in parts first: POST /uploads, then `uploaded`); a model's .stl or .3mf is required, one way or the other."
                   },
                   "thumb": {
                     "type": "string",
@@ -9282,11 +9289,15 @@
                       "model"
                     ]
                   },
+                  "uploaded": {
+                    "type": "string",
+                    "const": "1"
+                  },
                   "file": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB."
+                    "description": "The .3mf or .gcode.3mf, kept up to 32 MB in this request (a bigger one, up to 250 MB, goes in parts first: POST /uploads, then `uploaded`); a model's .stl or .3mf is required, one way or the other."
                   },
                   "thumb": {
                     "type": "string",
@@ -9846,11 +9857,15 @@
                       "previous"
                     ]
                   },
+                  "uploaded": {
+                    "type": "string",
+                    "const": "1"
+                  },
                   "sliced": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The .gcode.3mf, up to 25 MB: required when slice.status is sliced."
+                    "description": "The .gcode.3mf, up to 32 MB in this request (a bigger one, up to 250 MB, goes in parts first: POST /uploads, then `uploaded`): required one way or the other when slice.status is sliced."
                   },
                   "thumb": {
                     "type": "string",
@@ -10020,6 +10035,592 @@
           }
         ],
         "x-scopes": "person"
+      }
+    },
+    "/api/uploads": {
+      "post": {
+        "operationId": "postUploads",
+        "summary": "Starts sending a big file (over 32 MB, up to 250 MB) in parts: answers an uploadId and the part size. Send each part with PUT /uploads/{id}/{part}/{uploadId}/{n}, then complete it, then save the file's row with `uploaded` in place of its bytes. part sliced is a model's sliced file (people only).",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "uploads"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "part": {
+                    "type": "string",
+                    "enum": [
+                      "file",
+                      "sliced"
+                    ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "slicer",
+                      "model"
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "id",
+                  "part",
+                  "kind",
+                  "name",
+                  "size"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadId": {
+                      "type": "string"
+                    },
+                    "partSize": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "uploadId",
+                    "partSize"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid: the request couldn't be read; the message says what is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "too_large: over 250 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
+      }
+    },
+    "/api/uploads/{id}/{part}/{uploadId}/{n}": {
+      "put": {
+        "operationId": "putUploadsByIdByPartByUploadIdByN",
+        "summary": "One part of a big upload: the raw bytes as the body (content-length required), numbered from 1, each exactly the part size but the last. The same part again replaces it. Answers the part's etag.",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "uploads"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "n": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "etag": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "n",
+                    "etag"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: the upload isn't open any more.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "too_large: more than a part.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
+      }
+    },
+    "/api/uploads/{id}/{part}/{uploadId}/complete": {
+      "post": {
+        "operationId": "postUploadsByIdByPartByUploadIdComplete",
+        "summary": "Puts the parts together once all are sent. Safe to ask again. The size must be the file's whole size, or the file is removed again.",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "uploads"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "parts": {
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "n": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 8
+                        },
+                        "etag": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "n",
+                        "etag"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "size",
+                  "parts"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "size": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "size"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid: the request couldn't be read; the message says what is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict: the parts didn't make a file of that size.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
+      }
+    },
+    "/api/uploads/{id}/file": {
+      "delete": {
+        "operationId": "deleteUploadsByIdFile",
+        "summary": "Removes the bytes of a finished upload whose file row was refused. Does nothing for a file that has a row.",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "uploads"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done; nothing comes back."
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
+      }
+    },
+    "/api/uploads/{id}/{part}/{uploadId}": {
+      "delete": {
+        "operationId": "deleteUploadsByIdByPartByUploadId",
+        "summary": "Drops an upload that failed or was given up. Harmless when it is already gone.",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "uploads"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done; nothing comes back."
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
       }
     },
     "/api/spools": {
@@ -17553,7 +18154,7 @@
                   "bytes": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 26214400
+                    "maximum": 262144000
                   },
                   "cautions": {
                     "maxItems": 4,
@@ -17766,7 +18367,7 @@
                       "bytes": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 26214400
+                        "maximum": 262144000
                       },
                       "cautions": {
                         "maxItems": 4,

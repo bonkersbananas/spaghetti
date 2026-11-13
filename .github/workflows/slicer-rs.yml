@@ -55,3 +55,8 @@ jobs:
           unzip -l /tmp/bridge.gcode.3mf
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/bridge-wasm.gcode.3mf tests/models/bridge.stl
           cmp /tmp/bridge.gcode.3mf /tmp/bridge-wasm.gcode.3mf
+      - name: The same, with a slice setup made from the app's slicing settings
+        run: |
+          ./target/release/spaghetti-slicer --setup tests/setups/abs-fine-strong.json tests/models/bridge.stl -o /tmp/abs.gcode.3mf
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/abs-wasm.gcode.3mf --setup tests/setups/abs-fine-strong.json tests/models/bridge.stl
+          cmp /tmp/abs.gcode.3mf /tmp/abs-wasm.gcode.3mf

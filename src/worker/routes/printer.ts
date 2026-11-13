@@ -30,7 +30,7 @@ const setupSchema = z.object({
   amsUnits: z.number().int().min(0).max(X2D.maxAmsUnits).optional(),
   /** Days each material stays dry, whole: a material left out goes back to its starting value. */
   dryingDays: z.record(z.string().trim().toUpperCase().min(1).max(20), z.number().int().min(1).max(365)).optional(),
-  /** How a model nobody set up is sliced here (decision 0049), whole; null goes back to Spaghetti's own. */
+  /** How a model nobody set up is sliced here (decision 0050), whole; null goes back to Spaghetti's own. */
   slicing: slicingDefaults.nullable().optional(),
 });
 

@@ -81,7 +81,7 @@ export const slicingSettings = slicingSettingsShape
   .transform((value): SlicingSettings => normalizeSlicing(value));
 
 /**
- * A workspace's defaults (the Printer page, decision 0049): how a model nobody set up prints. The filament, plate
+ * A workspace's defaults (the Printer page, decision 0050): how a model nobody set up prints. The filament, plate
  * and nozzle aren't among them: they come from the Pantry and the setup.
  */
 export const slicingDefaults = slicingSettingsShape

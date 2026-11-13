@@ -9,15 +9,27 @@ import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import { finishesOnComputer, problemSentence, sliceSummary, worthRetrying } from "@shared/slicing/words.ts";
 import { DEFAULT_PRINTER } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ComponentPropsWithRef, lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import {
+  type ComponentPropsWithRef,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { BeforeAfter, type Change } from "@/components/ui/BeforeAfter";
 import { Button } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
 import { SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { Popover } from "@/components/ui/Popover";
+import { PopoverAnchor, PopoverPanel, PopoverRoot, PopoverTrigger } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { PulseDot } from "@/components/ui/PulseDot";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { type UploadState, useUpload } from "@/lib/big-upload";
+import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { fileThumbSrc } from "@/lib/previews";
@@ -38,7 +50,7 @@ import {
 } from "@/lib/slicing/jobs";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useWarmSoon } from "@/lib/warm-soon";
-import { canView3d, ThreeDButton } from "../viewer/ThreeDButton";
+import { canView3d, type View3d } from "../viewer/ThreeDButton";
 import { FileCard, PlateThumb, type SavedFileCardProps } from "./SlicerFile";
 import { formatMinutes } from "./settings";
 
@@ -62,7 +74,10 @@ export interface Reslicing {
 
 /** Where a model's slicing is, from its row and this device's job. */
 export type ModelState =
-  | { kind: "saving" }
+  /** On its way to the server; a big file shows how far (`fraction`, 0-1). */
+  | { kind: "saving"; fraction?: number }
+  /** A big file stopped on the way: one tap sends it again. */
+  | { kind: "notSaved"; retry: () => void }
   | { kind: "waiting" }
   | { kind: "slicing"; fraction: number }
   | {
@@ -79,7 +94,18 @@ export type ModelState =
   | { kind: "failed"; slice: FileSlice; change?: SliceChange }
   | { kind: "unsliced" };
 
-export function modelState(file: AttemptFileView, job: SliceJob | undefined, change?: SliceChange): ModelState {
+export function modelState(
+  file: AttemptFileView,
+  job: SliceJob | undefined,
+  change?: SliceChange,
+  upload?: UploadState,
+): ModelState {
+  // A big file still on its way, in parts (decision 0048): how far it is, or that it stopped.
+  if (file.pending && upload) {
+    return upload.failed && upload.retry
+      ? { kind: "notSaved", retry: upload.retry }
+      : { kind: "saving", fraction: upload.fraction };
+  }
   const kept = file.slice;
   if (job?.again && kept?.status === "sliced") {
     const made = slicingOfSlice(kept);
@@ -149,17 +175,21 @@ export function changeFigures(change: SliceChange): Change[] {
 const slicedPieces = (slice: FileSlice, short?: boolean) =>
   short ? ["Sliced by Spaghetti"] : ["Sliced by Spaghetti", ...sliceSummary(slice.settings)];
 
-/** A story card's "Sliced by Spaghetti", in its meta line, that opens the settings (44 px to tap on touch screens). */
+/**
+ * A story card's "Sliced by Spaghetti", under the file's name, that opens the settings: a quiet button, its glyph in
+ * line with the name, taking a text line's height (and 44 px to tap on touch screens).
+ */
 const SlicedOpener = (props: ComponentPropsWithRef<"button">) => (
-  <button
-    type="button"
+  <Button
+    variant="quiet"
+    size="sm"
+    icon={SettingsIcon}
     aria-label="Sliced by Spaghetti: how to slice it"
+    className="-my-1.5 -ml-3 self-start"
     {...props}
-    className="focus-ring pressable hover:text-ink duration-fast touch-target relative -mx-1 inline-flex items-center gap-1 rounded-sm px-1 transition-colors"
   >
-    <SettingsIcon size={14} className="shrink-0" aria-hidden />
     Sliced by Spaghetti
-  </button>
+  </Button>
 );
 
 /** "Slice with…": opens a model's settings. */
@@ -230,7 +260,6 @@ export function ModelStatus({
   /** Only where it stands and its undo: the settings below it say the rest (their sheet's result). */
   quiet?: boolean;
 }) {
-  if (state.kind === "saving") return <span className="text-small text-ink-faint">Saving the model…</span>;
   const { lines, actions } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
   // The lines change with the state; the row of actions stays in its place, "Slice with…" first in it, so the
   // button keeps its place, and its popover stays open, while the card changes under it.
@@ -247,7 +276,7 @@ export function ModelStatus({
 
 /** What a model's status says in each state, and what helps there (after "Slice with…"). */
 function statusOf(
-  state: Exclude<ModelState, { kind: "saving" }>,
+  state: ModelState,
   {
     phone,
     line,
@@ -267,6 +296,35 @@ function statusOf(
     </Button>
   );
   switch (state.kind) {
+    case "saving": {
+      if (state.fraction === undefined) {
+        return { lines: <span className="text-small text-ink-faint">Saving the model…</span>, actions: null };
+      }
+      // A big file in parts (decision 0048): how far it is.
+      const percent = Math.round(state.fraction * 100);
+      return {
+        lines: (
+          <span
+            className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
+            role="progressbar"
+            aria-label="Saving the model"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            aria-valuetext={`Saving ${percent}%`}
+          >
+            <ProgressRing value={state.fraction} className="text-semolina" />
+            Saving {percent}%
+          </span>
+        ),
+        actions: null,
+      };
+    }
+    case "notSaved":
+      return {
+        lines: <Caution className="px-0">Didn't finish saving. Your file is still here.</Caution>,
+        actions: button("Try again", state.retry),
+      };
     case "waiting":
       return { lines: <SliceProgress fraction={null} words="Waiting to slice" />, actions: null };
     case "slicing":
@@ -277,21 +335,29 @@ function statusOf(
       return {
         lines: (
           <>
-            {/* Slicing again, where it says how it was sliced: the card keeps its height. */}
+            {/* Slicing again, over the line that says how it was sliced, which keeps its room (one line or two): the
+                card keeps its height, and "Slice with…" and a popover hanging from the card stay where they are. */}
             {again ? (
-              <span className="flex flex-wrap items-center gap-x-2">
-                <SliceProgress fraction={again.fraction} words={`Slicing with ${again.words}`} />
-                {onStop && (
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    onClick={onStop}
-                    aria-label="Stop, and keep the slice there"
-                    className="-my-1.5"
-                  >
-                    Stop
-                  </Button>
+              <span className="grid min-w-0 self-stretch">
+                {line && (
+                  <span className="invisible col-start-1 row-start-1 min-w-0" aria-hidden>
+                    {line}
+                  </span>
                 )}
+                <span className="col-start-1 row-start-1 flex flex-wrap items-center gap-x-2 self-center">
+                  <SliceProgress fraction={again.fraction} words={`Slicing with ${again.words}`} />
+                  {onStop && (
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      onClick={onStop}
+                      aria-label="Stop, and keep the slice there"
+                      className="-my-1.5 md:-my-2"
+                    >
+                      Stop
+                    </Button>
+                  )}
+                </span>
               </span>
             ) : (
               line
@@ -358,7 +424,7 @@ export function ModelCard({
   thumbSrc,
   prefill,
   download,
-  plateOverlay,
+  view3d,
   onRemove,
   details,
   phone,
@@ -374,7 +440,8 @@ export function ModelCard({
   prefill?: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams">;
   /** The sliced file's address, once it is saved. */
   download?: string;
-  plateOverlay?: ReactNode;
+  /** Once sliced and saved: the plate picture opens the 3D view. */
+  view3d?: View3d;
   onRemove?: () => void;
   /** How the settings open; without it they don't, and the line is only words. */
   details?: SettingsOpener;
@@ -386,18 +453,10 @@ export function ModelCard({
   const slice = state.kind === "sliced" ? state.slice : null;
   const change = state.kind === "sliced" ? state.change : undefined;
   const figures = change ? changeFigures(change) : [];
-  const busy = state.kind === "sliced" && (!!state.again || !!state.ahead);
-  const line = slice ? (
-    compact ? (
-      details ? (
-        opener(details, true)
-      ) : (
-        "Sliced by Spaghetti"
-      )
-    ) : (
-      <MetaList className="text-small text-ink-faint">{slicedPieces(slice)}</MetaList>
-    )
-  ) : null;
+  const again = state.kind === "sliced" && !!state.again;
+  const busy = state.kind === "sliced" && (again || !!state.ahead);
+  const line =
+    slice && !compact ? <MetaList className="text-small text-ink-faint">{slicedPieces(slice)}</MetaList> : null;
   const quiet = !!slice && compact && !busy && !change && !slice.cautions?.includes("floating");
   return (
     <FileCard
@@ -405,7 +464,11 @@ export function ModelCard({
       thumbSrc={thumbSrc}
       lead={slice && !compact && !figures.length ? sliceLead(prefill) : undefined}
       leadNode={slice && !compact && figures.length ? <BeforeAfter changes={figures} size="md" /> : undefined}
-      meta={compact && line ? [line] : []}
+      leadStale={again}
+      // A story card says only who sliced it (its attempt's line says the rest): a button that opens the settings, on
+      // its own line under the name, or the words where they don't open.
+      meta={slice && compact && !details ? ["Sliced by Spaghetti"] : []}
+      opener={slice && compact ? opener(details, true) : null}
       status={
         quiet ? undefined : (
           <>
@@ -422,7 +485,7 @@ export function ModelCard({
       }
       download={download}
       downloadName={slicedName(name)}
-      plateOverlay={plateOverlay}
+      view3d={view3d}
       onRemove={onRemove}
       compact={compact}
       raised={raised}
@@ -450,6 +513,8 @@ export function SliceResult({
   const change = state.kind === "sliced" ? state.change : undefined;
   const figures = change ? changeFigures(change) : [];
   const lead = state.kind === "sliced" ? sliceLead(prefill) : [];
+  // Sliced again, the figures are the slice being replaced: quieter, so they don't read as the new settings'.
+  const stale = state.kind === "sliced" && !!state.again;
   return (
     // A tray of its own, apart from the choices: what they give.
     <div className="bg-ink/4 flex items-start gap-3 rounded-lg p-2.5">
@@ -458,7 +523,9 @@ export function SliceResult({
         {figures.length > 0 ? (
           <BeforeAfter changes={figures} size="md" />
         ) : lead.length > 0 ? (
-          <MetaList className="text-body text-ink tabular font-semibold">{lead}</MetaList>
+          <MetaList className={cn("text-body tabular font-semibold", stale ? "text-ink-faint" : "text-ink")}>
+            {lead}
+          </MetaList>
         ) : null}
         <ModelStatus state={state} phone={phone} quiet {...actions} />
       </div>
@@ -468,6 +535,24 @@ export function SliceResult({
 
 /** The settings, loaded the first time they open: a popover's panel, or a phone's sheet. */
 const loadSettings = () => import("./SliceSettings");
+
+/** The settings' shape while their code arrives (it is fetched soon after the card shows, so rarely seen). */
+function SliceSettingsLoading() {
+  return (
+    <div className="flex flex-col gap-7" aria-busy="true">
+      {(["Quality", "Strength", "Supports"] as const).map((group) => (
+        <div key={group} className="flex flex-col gap-2.5">
+          <Skeleton className="h-3 w-20 rounded-xs" />
+          <div className={cn("grid gap-2", group === "Quality" ? "grid-cols-4" : "grid-cols-3")}>
+            {(group === "Quality" ? ["a", "b", "c", "d"] : ["a", "b", "c"]).map((tile) => (
+              <Skeleton key={tile} className="h-20 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 const SliceSettingsPanel = lazy(() => loadSettings().then((module) => ({ default: module.SliceSettingsPanel })));
 const SliceSettingsSheet = lazy(loadSettings);
 
@@ -487,13 +572,15 @@ export default function ModelFileCard({
   const change = useSliceChange(file.id);
   const isDesktop = useIsDesktop();
   const [sheet, setSheet] = useState(false);
+  const anchor = useRef<HTMLDivElement>(null);
   const { data: spools = [] } = useQuery(spoolsQuery);
   const { data: printer } = useQuery(printerQuery);
-  // Recipes to slice with, once the settings can open (decision 0049).
+  // Recipes to slice with, once the settings can open (decision 0050).
   const { data: recipes = [] } = useQuery({ ...recipesQuery, enabled: !!owner });
   const setup = printer?.setup ?? DEFAULT_PRINTER;
   const defaults = useMemo(() => workshopDefaults({ spools, setup }), [spools, setup]);
-  const state = modelState(file, job, change);
+  const upload = useUpload(file.id);
+  const state = modelState(file, job, change, upload);
   // While a slice runs here, the settings it slices with: what the card was asked for, whatever a refetch says.
   const kept = modelSlicing(file, defaults);
   const settings = job && Object.keys(job.chosen).length ? slicingFor(job.chosen, kept) : kept;
@@ -542,55 +629,62 @@ export default function ModelFileCard({
     scalable: isStlName(file.name),
     recipes: recipesFor(recipes, settings.filaments[0] ?? { material: "" }),
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
-    result: <SliceResult state={state} thumbSrc={thumbSrc} prefill={prefill} phone={!isDesktop} {...actions} />,
   };
-  // Its settings: a popover beside the card on desktop, a sheet on phones (but not over the attempt's sheet).
+  // Its settings: on desktop a popover hanging below the card, which stays in view, on phones a sheet (but not over
+  // the attempt's sheet).
+  const popover = isDesktop && !!panel;
   const details: SettingsOpener | undefined = !panel
     ? undefined
-    : isDesktop
-      ? {
-          wrap: (trigger: ReactNode) => (
-            <Popover trigger={trigger} label="How to slice it" side="bottom" align="start" className="w-md">
-              <Suspense fallback={<div className="h-96" />}>
-                <SliceSettingsPanel {...panel} />
-              </Suspense>
-            </Popover>
-          ),
-        }
+    : popover
+      ? { wrap: (trigger: ReactNode) => <PopoverTrigger asChild>{trigger}</PopoverTrigger> }
       : inSheet
         ? undefined
         : { open: () => setSheet(true) };
+  const card = (
+    <ModelCard
+      name={file.name}
+      state={state}
+      thumbSrc={thumbSrc}
+      // Until the server has the slice, what this device's job said.
+      prefill={prefill}
+      // On a phone an idea's card keeps its width for "About 36 min · 10.6 g": the sliced file is in its settings.
+      download={saved && (isDesktop || !raised) ? fileUrl(file.id, "sliced") : undefined}
+      view3d={
+        saved && canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined
+      }
+      onRemove={onRemove}
+      details={details}
+      phone={!isDesktop}
+      compact={compact}
+      raised={raised}
+      className={className}
+      {...actions}
+    />
+  );
   return (
     <>
-      <ModelCard
-        name={file.name}
-        state={state}
-        thumbSrc={thumbSrc}
-        // Until the server has the slice, what this device's job said.
-        prefill={prefill}
-        // On a phone an idea's card keeps its width for "About 36 min · 10.6 g": the sliced file is in its settings.
-        download={saved && (isDesktop || !raised) ? fileUrl(file.id, "sliced") : undefined}
-        plateOverlay={
-          saved && canView3d(file) ? (
-            <ThreeDButton
-              file={file}
-              fallbackColors={filaments?.map((f) => f.colorHex)}
-              printing={printing}
-              glyph={compact}
-            />
-          ) : undefined
-        }
-        onRemove={onRemove}
-        details={details}
-        phone={!isDesktop}
-        compact={compact}
-        raised={raised}
-        className={className}
-        {...actions}
-      />
+      {popover && panel ? (
+        <PopoverRoot>
+          <PopoverAnchor ref={anchor}>{card}</PopoverAnchor>
+          <PopoverPanel label="How to slice it" side="bottom" align="start" size="panel" keepOpenIn={anchor}>
+            <Suspense fallback={<SliceSettingsLoading />}>
+              <SliceSettingsPanel {...panel} />
+            </Suspense>
+          </PopoverPanel>
+        </PopoverRoot>
+      ) : (
+        card
+      )}
       {sheet && panel && (
         <Suspense fallback={null}>
-          <SliceSettingsSheet open={sheet} onOpenChange={setSheet} {...panel} />
+          <SliceSettingsSheet
+            open={sheet}
+            onOpenChange={setSheet}
+            {...panel}
+            // The sheet covers the card: the result is its foot, under the thumb. (On desktop the card above the
+            // popover says it, with its Undo and Stop.)
+            result={<SliceResult state={state} thumbSrc={thumbSrc} prefill={prefill} phone {...actions} />}
+          />
         </Suspense>
       )}
     </>

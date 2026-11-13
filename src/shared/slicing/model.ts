@@ -7,10 +7,11 @@ import type { AttemptFile } from "../api.ts";
 import {
   changedSlicing,
   filamentWords,
-  qualityOf,
+  qualityWords,
   type SlicingSettings,
   slicingFromRecord,
   strengthOf,
+  strengthWords,
   supportWords,
 } from "./settings.ts";
 import type { FileSlice } from "./types.ts";
@@ -38,11 +39,14 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
   const changed = changedSlicing(before, after);
   const strength = ["walls", "infill", "pattern"] as const;
   const onlyStrength = changed.length > 0 && changed.every((key) => (strength as readonly string[]).includes(key));
-  if (onlyStrength) return strengthOf(after)?.label ?? "other walls and infill";
+  if (onlyStrength) {
+    const strength = strengthOf(after);
+    return strength ? strengthWords(strength) : "other walls and infill";
+  }
   if (changed.length !== 1) return "the new settings";
   switch (changed[0]) {
     case "layerHeight":
-      return qualityOf(after.layerHeight)?.label ?? `${after.layerHeight} mm layers`;
+      return qualityWords(after.layerHeight);
     case "supports":
       return supportWords(after) || "no supports";
     case "supportStyle":

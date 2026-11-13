@@ -133,7 +133,7 @@ export const recipeRoutes = new Hono<AppEnv>()
       ? await db.select({ finish: spools.finish }).from(spools).where(eq(spools.id, spoolId)).get()
       : null;
 
-    // A model Spaghetti sliced keeps the slicing settings that worked, whole (decision 0049).
+    // A model Spaghetti sliced keeps the slicing settings that worked, whole (decision 0050).
     const file = await db
       .select({ kind: attemptFiles.kind, slice: attemptFiles.slice })
       .from(attemptFiles)

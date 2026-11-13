@@ -177,12 +177,38 @@ export interface ItemFileResponse {
   file: AttemptFile;
 }
 
-/** The largest slicer file kept with an attempt. Above it, only what the file said is saved. */
-export const MAX_SLICER_FILE_BYTES = 25 * 1024 * 1024;
+/** The largest slicer file kept (and a model's sliced .gcode.3mf). Above it, only what the file said is saved. */
+export const MAX_SLICER_FILE_BYTES = 250 * 1024 * 1024;
 /** Plate thumbnails are small PNGs; this is generous. */
 export const MAX_FILE_THUMB_BYTES = 4 * 1024 * 1024;
 /** The largest model (.stl or plain .3mf) kept to be sliced: the original is the point, so it is refused above it. */
-export const MAX_MODEL_FILE_BYTES = 50 * 1024 * 1024;
+export const MAX_MODEL_FILE_BYTES = 250 * 1024 * 1024;
+/**
+ * A file up to this size goes in one request (the form that carries its details). A bigger one is sent in parts of
+ * UPLOAD_PART_BYTES (POST /api/uploads), because one request body may hold 100 MB at most.
+ */
+export const ONE_REQUEST_FILE_BYTES = 32 * 1024 * 1024;
+/** The size of each part of a big upload: every part but the last is exactly this (R2 needs equal parts, 5 MiB or more). */
+export const UPLOAD_PART_BYTES = 32 * 1024 * 1024;
+
+/** POST /api/uploads: starts a big file's upload. */
+export interface StartUploadBody {
+  /** The file's id (the one its row will have). */
+  id: string;
+  /** "file" is the original's bytes; "sliced" a model's sliced .gcode.3mf. */
+  part: "file" | "sliced";
+  kind: FileKind;
+  name: string;
+  size: number;
+}
+export interface StartUploadResponse {
+  uploadId: string;
+  partSize: number;
+}
+export interface UploadedPart {
+  n: number;
+  etag: string;
+}
 
 /** A file's bytes (a model's original), its plate picture, or a model's sliced .gcode.3mf. */
 export function fileUrl(id: string, part: "file" | "thumb" | "sliced" = "file"): string {
@@ -534,7 +560,7 @@ export interface Recipe {
   finish: string | null;
   settings: AttemptSettings;
   /**
-   * The slicing settings that worked, when the attempt's model was sliced by Spaghetti (decision 0049): what "Slice
+   * The slicing settings that worked, when the attempt's model was sliced by Spaghetti (decision 0050): what "Slice
    * with a recipe" uses whole. Null for a recipe from a slicer's own file.
    */
   slicing: SlicingSettings | null;
@@ -736,7 +762,7 @@ export interface UpdatePrinterRequest {
   amsUnits?: number;
   /** Days each material stays dry; sent whole, and a material not listed goes back to its starting value. */
   dryingDays?: Record<string, number>;
-  /** How a model nobody set up is sliced here (decision 0049), sent whole; null goes back to Spaghetti's own. */
+  /** How a model nobody set up is sliced here (decision 0050), sent whole; null goes back to Spaghetti's own. */
   slicing?: SlicingDefaults | null;
 }
 

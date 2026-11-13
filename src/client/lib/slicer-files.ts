@@ -8,6 +8,7 @@ import type { Plate, ThreeMfResult } from "@shared/threemf/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
+import { tooBigForPhone } from "./big-upload";
 import { type AttemptView, patchCachedItem } from "./items";
 import { outbox } from "./outbox";
 
@@ -49,6 +50,12 @@ export async function readSlicerFile(file: File): Promise<SlicerFileDraft | null
   if (head[0] !== 0x50 || head[1] !== 0x4b || head[2] !== 0x03 || head[3] !== 0x04) {
     toast.error("Couldn't read that file", "Spaghetti reads .stl and .3mf files, and sliced .gcode.3mf files.");
     return null;
+  }
+  // A phone can't hold a file this big twice over to read it (the file, then its unzipped parts): it is kept as it
+  // is, and its card says what waits for a laptop. A .gcode.3mf is a slicer file; any other 3MF is a model.
+  if (tooBigForPhone(file.size)) {
+    if (!/\.gcode\.3mf$/i.test(file.name)) return model();
+    return { id: crypto.randomUUID(), file, result: NOTHING_READ, plates: [], kind: "slicer" };
   }
   // The reader (and its unzip) loads the first time someone drops a file, not with the app.
   const { readThreeMfFile } = await import("@shared/threemf/read.ts");

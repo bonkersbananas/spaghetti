@@ -46,9 +46,9 @@ const layouts = {
   big: { card: "grid-cols-1", picture: "aspect-4/3", head: "px-2 pt-2.5", body: "px-2 pt-2.5 pb-2" },
   compact: {
     card: "grid-cols-[auto_minmax(0,1fr)]",
-    picture: "size-24 self-start",
-    head: "pt-1 pr-2 pl-3",
-    body: "col-span-2 px-2 pt-3 pb-2",
+    picture: "size-20 self-start",
+    head: "pr-2 pl-3",
+    body: "col-span-2 px-2 pt-2.5 pb-2",
   },
 } as const;
 
@@ -136,6 +136,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
           <OutcomeChip
             outcome={null}
             offTheBed={offBed}
+            onPhoto
             className={cn("shadow-soft pointer-events-none absolute bottom-2 left-2 z-20", compact && "max-md:hidden")}
           />
         </div>

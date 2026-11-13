@@ -44,8 +44,8 @@ struct Soup<'a> {
 }
 
 /// Cuts the meshes at every layer's plane; returns each layer's region (outlines with holes), simplified to
-/// `resolution` mm.
-pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> Vec<Shapes> {
+/// `resolution` mm, and for each of its shapes the mesh (object) it is a slice of.
+pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> (Vec<Shapes>, Vec<Vec<u32>>) {
     let planes = layers.slice_z();
     let n_layers = planes.len();
     let mut vertex_base = Vec::with_capacity(meshes.len());
@@ -88,6 +88,8 @@ pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> Vec<Shapes> {
         let triangles = &items[starts[l]..starts[l + 1]];
         cut_layer(&soup, triangles, planes[l], tolerance)
     })
+    .into_iter()
+    .unzip()
 }
 
 /// The layers (half-open index range) whose cutting plane crosses the triangle: below the plane means z < plane.
@@ -115,7 +117,7 @@ struct Segment {
 
 type EdgeMap = HashMap<u64, u32, BuildHasherDefault<FastHasher>>;
 
-fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) -> Shapes {
+fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) -> (Shapes, Vec<u32>) {
     let mut segments: Vec<Segment> = Vec::with_capacity(triangles.len());
     for &(mi, ti) in triangles {
         let mesh = &soup.meshes[mi as usize];
@@ -165,8 +167,10 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) 
         segments.push(Segment { from: start.0, to: end.0, a: start.1, b: end.1 });
     }
     if segments.is_empty() {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
+    // The mesh a segment is cut from, by the shared vertex numbering of the edge it starts on.
+    let mesh_of = |edge: u64| (soup.vertex_base.partition_point(|&b| b as u64 <= edge >> 32) - 1) as u32;
 
     // Chain: each segment continues with the one that starts on the edge it ends on.
     let mut by_start: EdgeMap = HashMap::with_capacity_and_hasher(segments.len() * 2, Default::default());
@@ -174,8 +178,9 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) 
         by_start.insert(s.from, i as u32);
     }
     let mut used = vec![false; segments.len()];
-    let mut closed: Vec<Contour> = Vec::new();
-    let mut open: Vec<Contour> = Vec::new();
+    // Each loop with the mesh it is cut from.
+    let mut closed: Vec<(Contour, u32)> = Vec::new();
+    let mut open: Vec<(Contour, u32)> = Vec::new();
     for first in 0..segments.len() {
         if used[first] {
             continue;
@@ -198,20 +203,59 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) 
                 }
             }
         };
+        let mesh = mesh_of(start_edge);
         if closes {
             if loop_points.len() >= 3 {
-                closed.push(loop_points);
+                closed.push((loop_points, mesh));
             }
         } else {
-            open.push(loop_points);
+            open.push((loop_points, mesh));
         }
     }
     if !open.is_empty() {
         close_open_chains(open, &mut closed, (2.0 * SCALE) as i64);
     }
-    let simplified: Vec<Contour> =
-        closed.iter().map(|c| geom::simplify_contour(c, tolerance)).filter(|c| c.len() >= 3).collect();
-    geom::union_contours(&simplified)
+    let (loops, meshes): (Vec<Contour>, Vec<u32>) = closed
+        .iter()
+        .map(|(c, mesh)| (geom::simplify_contour(c, tolerance), *mesh))
+        .filter(|(c, _)| c.len() >= 3)
+        .unzip();
+    let shapes = geom::union_contours(&loops);
+    let owners = owners(&shapes, &loops, &meshes);
+    (shapes, owners)
+}
+
+/// The mesh each of a layer's shapes is a slice of: the one whose outline passes through the shape's lowest-left
+/// corner. A union's lowest-left corner is always a corner of one of the outlines it merged, so this holds even
+/// where objects touch or stand in each other's openings (where their bounding boxes say nothing).
+fn owners(shapes: &Shapes, loops: &[Contour], meshes: &[u32]) -> Vec<u32> {
+    let first = meshes.first().copied().unwrap_or(0);
+    if meshes.iter().all(|&m| m == first) {
+        return vec![first; shapes.len()];
+    }
+    // Outer outlines (counter-clockwise) by their lowest-left corner.
+    let mut corners: Vec<((i32, i32), u32)> =
+        loops.iter().zip(meshes).filter(|(c, _)| geom::area2(c) > 0).map(|(c, &m)| (lowest_left(c), m)).collect();
+    corners.sort_unstable();
+    shapes
+        .iter()
+        .map(|shape| {
+            let Some(outer) = shape.first().filter(|c| !c.is_empty()) else { return first };
+            let p = lowest_left(outer);
+            match corners.binary_search_by(|(q, _)| q.cmp(&p)) {
+                Ok(k) => corners[k].1,
+                // Not expected: the nearest outline's corner.
+                Err(_) => corners
+                    .iter()
+                    .min_by_key(|(q, _)| d2(geom::pt(q.0, q.1), geom::pt(p.0, p.1)))
+                    .map_or(first, |&(_, m)| m),
+            }
+        })
+        .collect()
+}
+
+fn lowest_left(contour: &[Pt]) -> (i32, i32) {
+    contour.iter().map(|p| (p.x, p.y)).min().unwrap_or((0, 0))
 }
 
 #[inline]
@@ -221,7 +265,7 @@ fn pt0() -> Pt {
 
 /// A mesh with holes or broken edges leaves chains that don't close: join each chain's end to the nearest start
 /// (within `max_gap`), and keep the loops that close. What can't be closed is dropped.
-fn close_open_chains(mut open: Vec<Contour>, closed: &mut Vec<Contour>, max_gap: i64) {
+fn close_open_chains(mut open: Vec<(Contour, u32)>, closed: &mut Vec<(Contour, u32)>, max_gap: i64) {
     let max2 = (max_gap as i128) * (max_gap as i128);
     let mut done = vec![false; open.len()];
     for first in 0..open.len() {
@@ -229,11 +273,12 @@ fn close_open_chains(mut open: Vec<Contour>, closed: &mut Vec<Contour>, max_gap:
             continue;
         }
         done[first] = true;
-        let mut chain = std::mem::take(&mut open[first]);
+        let mesh = open[first].1;
+        let mut chain = std::mem::take(&mut open[first].0);
         while let (Some(&end), Some(&head)) = (chain.last(), chain.first()) {
             // Close the chain on itself when its own start is the nearest.
             let mut best: Option<(usize, i128)> = None;
-            for (j, other) in open.iter().enumerate() {
+            for (j, (other, _)) in open.iter().enumerate() {
                 if done[j] || other.is_empty() {
                     continue;
                 }
@@ -246,12 +291,12 @@ fn close_open_chains(mut open: Vec<Contour>, closed: &mut Vec<Contour>, max_gap:
             match best {
                 Some((j, d)) if d < self_d => {
                     done[j] = true;
-                    let next = std::mem::take(&mut open[j]);
+                    let next = std::mem::take(&mut open[j].0);
                     chain.extend(next);
                 }
                 _ => {
                     if self_d <= max2 && chain.len() >= 3 {
-                        closed.push(chain);
+                        closed.push((chain, mesh));
                     }
                     break;
                 }
