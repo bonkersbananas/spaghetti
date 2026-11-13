@@ -165,7 +165,13 @@ function DesktopSheet({
             first.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={returnFocus}
-          onInteractOutside={keepOpenForToast}
+          onInteractOutside={(event) => {
+            keepOpenForToast(event);
+            // A modeless panel stays open for the control that opens it (data-keeps-panel): pressing it again is not
+            // "outside", which would close the panel and open it anew.
+            if (modeless && event.target instanceof Element && event.target.closest("[data-keeps-panel]"))
+              event.preventDefault();
+          }}
           className={cn(
             "sg-lifted-surface bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel

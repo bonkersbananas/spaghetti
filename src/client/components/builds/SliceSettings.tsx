@@ -59,7 +59,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
  * Strength, Supports, Filament), and the rest under More. A tap changes the model's settings at once, and the card
  * slices it again in the background (lib/slicing/jobs.ts). On phones a tall sheet, its result at the thumb; on
- * desktop a popover hanging below the card, which shows the result. Loaded the first time it opens.
+ * desktop a panel beside the page, in two columns, its foot the result. Loaded the first time it opens.
  */
 
 /** The spools offered as tiles, at most: a pantry is rarely bigger, and the rest are a pick under the Pantry. */

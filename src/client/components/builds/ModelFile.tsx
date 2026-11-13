@@ -216,8 +216,8 @@ const SlicedOpener = (props: ComponentPropsWithRef<"button">) => (
 
 /**
  * What a model is sliced with, in one tappable row across its card ("Standard · Everyday strength · No supports ·
- * Jade white"), which opens its settings: tall enough for a thumb, and the same in every state, so a popover hanging
- * from the card keeps its trigger.
+ * Jade white"), which opens its settings: tall enough for a thumb, and the same in every state, so it keeps its place
+ * while the card changes under it.
  */
 function SettingsRow({
   summary,
@@ -230,6 +230,7 @@ function SettingsRow({
       type="button"
       aria-label={`Slice with… ${summary.join(", ")}`}
       aria-haspopup="dialog"
+      data-keeps-panel
       {...props}
       className={cn(
         "pressable focus-ring bg-ink/4 hover:bg-ink/6 text-small text-ink-soft flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2.5 pl-3 text-left md:flex-none",
@@ -307,8 +308,8 @@ export function ModelStatus({
 }) {
   const { lines, primary, quiet: aside } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
   // The lines change with the state; the actions keep their places. What helps (the filled buttons) sits above the
-  // settings row, which every state renders, with a quiet Undo beside it, so the row keeps its place, and its popover
-  // stays open, while the card changes under it.
+  // settings row, which every state renders, with a quiet Undo beside it, so the row keeps its place while the card
+  // changes under it.
   return (
     <>
       {lines}
@@ -397,7 +398,7 @@ function statusOf(
         lines: (
           <>
             {/* Slicing again, over the line that says how it was sliced, which keeps its room (one line or two): the
-                card keeps its height, and "Slice with…" and a popover hanging from the card stay where they are. */}
+                card keeps its height, and the settings row stays where it is. */}
             {again ? (
               <span className="grid min-w-0 self-stretch">
                 {line && (
@@ -707,8 +708,9 @@ export default function ModelFileCard({
           open: () => setSheet(true),
           ...(isDesktop ? { shortcut: shortcutCaps("sliceSettings") } : {}),
         };
-  // "S" opens them on desktop (the first model on the page takes it).
-  useHotkeys({ sliceSettings: details?.open && isDesktop ? details.open : undefined });
+  // "S" opens them on desktop, on an idea and on a twist (the first model on the page takes it).
+  const openSettings = details?.open && isDesktop ? details.open : undefined;
+  useHotkeys({ sliceSettings: openSettings, sliceSettingsTwist: openSettings });
   // What the last change was, to say what it did ("Fine: 26 min longer"): from the slice it replaced.
   const changed =
     change && file.previous && file.slice?.status === "sliced"
