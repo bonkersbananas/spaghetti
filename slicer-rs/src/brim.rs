@@ -182,40 +182,45 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], s: &Settings) -> B
     if bands.iter().all(Vec::is_empty) {
         return out;
     }
-    // Where no brim may go: every object's islands grown by the gap, and a line's width in from the edge of each of
-    // their holes.
-    let grown_islands = geom::union_all(&[&geom::offset_round(first, gap, RESOLUTION)]);
-    let mut keep_out = grown_islands.clone();
-    for hole in first.iter().flat_map(|island| &island[1..]) {
-        let mut ring = hole.clone();
-        if geom::area2(&ring) < 0 {
-            ring.reverse();
-        }
-        let area: Shapes = vec![vec![ring]];
-        keep_out.extend(geom::difference(&area, &geom::offset(&area, -spacing)));
-    }
-    let keep_out = geom::union_all(&[&keep_out]);
-    // Nothing off the plate.
+    // Near each band: every object's islands grown by the gap, where no brim may go nor one need reach to stay, and
+    // a line's width in from the edge of each of their holes, where no brim may go either. What lies further off
+    // can't change a boolean with the band (`geom::local`), so only the islands near it are grown.
+    let reach = 2.0 * spacing;
     let (bx, by) = (geom::sc(s.bed[0]), geom::sc(s.bed[1]));
     let bed: Shapes = vec![vec![vec![geom::pt(0, 0), geom::pt(bx, 0), geom::pt(bx, by), geom::pt(0, by)]]];
-    for band in &mut bands {
-        if !band.is_empty() {
-            *band = geom::intersection(&geom::difference(&geom::union_all(&[&*band]), &keep_out), &bed);
+    let mut grown: Vec<Shapes> = vec![Vec::new(); objects];
+    for (band, grown) in bands.iter_mut().zip(&mut grown) {
+        let Some(b) = geom::bbox(band) else { continue };
+        let near = geom::local(first, geom::inflate(b, reach + gap + spacing));
+        *grown = geom::union_all(&[&geom::offset_round(&near, gap, RESOLUTION)]);
+        let mut keep_out = grown.clone();
+        for hole in near.iter().flat_map(|island| &island[1..]) {
+            let mut ring = hole.clone();
+            if geom::area2(&ring) < 0 {
+                ring.reverse();
+            }
+            let area: Shapes = vec![vec![ring]];
+            keep_out.extend(geom::difference(&area, &geom::offset(&area, -spacing)));
         }
+        // Nothing where another island or a hole's edge is, nor off the plate.
+        *band = geom::intersection(&geom::difference(&geom::union_all(&[&*band]), &keep_out), &bed);
     }
-    // A piece of brim stays where it touches its object, more of its brim or another's.
-    let reach = 2.0 * spacing;
+    // A piece of brim stays where it touches an object, more of its brim or another's.
     let kept: Vec<Shapes> = (0..objects)
         .map(|o| {
-            let others: Shapes = (0..objects).filter(|&k| k != o).flat_map(|k| bands[k].iter().cloned()).collect();
             bands[o]
                 .iter()
                 .enumerate()
                 .filter(|&(i, piece)| {
                     let near = geom::offset_round(&vec![piece.clone()], reach, RESOLUTION);
+                    let Some(b) = geom::bbox(&near) else { return false };
                     let rest: Shapes =
                         bands[o].iter().enumerate().filter(|&(j, _)| j != i).map(|(_, p)| p.clone()).collect();
-                    [&grown_islands, &rest, &others].iter().any(|set| !geom::intersection(&near, set).is_empty())
+                    let others: Shapes =
+                        (0..objects).filter(|&k| k != o).flat_map(|k| geom::near(&bands[k], b)).collect();
+                    [geom::local(&grown[o], b), geom::near(&rest, b), others]
+                        .iter()
+                        .any(|set| !set.is_empty() && !geom::intersection(&near, set).is_empty())
                 })
                 .map(|(_, piece)| piece.clone())
                 .collect()
