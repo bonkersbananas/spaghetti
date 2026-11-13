@@ -62,7 +62,7 @@ export interface LiveProgress {
 export const LIVE_FRESH_MS = 3 * MINUTE;
 
 /**
- * The printer's own progress, as the same shape `printProgress` gives: "Layer 112 of 240 · about 38 min left".
+ * The printer's own progress, as the same shape `printProgress` gives: "Layer 112 of 240 · 38 min left".
  * Null once the report is old (the bridge went quiet), so the slicer's estimate takes over again without a fuss.
  */
 export function livePrintProgress(live: LiveProgress | null | undefined, now: number): PrintProgressResult | null {
@@ -73,7 +73,7 @@ export function livePrintProgress(live: LiveProgress | null | undefined, now: nu
   }
   if (live.remainingMinutes !== null) {
     parts.push(
-      live.remainingMinutes > 0 ? `about ${formatDuration(Math.max(1, live.remainingMinutes))} left` : "nearly done",
+      live.remainingMinutes > 0 ? `${formatDuration(Math.max(1, live.remainingMinutes))} left` : "nearly done",
     );
   }
   const text = parts.join(" · ");
