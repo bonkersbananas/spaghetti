@@ -4,7 +4,7 @@
 
 use crate::bridges;
 use crate::config::Settings;
-use crate::geom::{self, Contour, Shapes};
+use crate::geom::{self, Contour, Pt, Shapes};
 use crate::par;
 use crate::plan;
 use crate::section::Layers;
@@ -67,6 +67,8 @@ pub struct Island {
     pub gaps: Shapes,
     /// Which of the plate's objects it is a slice of (an index into them).
     pub object: u32,
+    /// The middle of its outline (by area), where Orca tours the layer's islands from.
+    pub centroid: Pt,
 }
 
 /// The infill areas of one island, by kind.
@@ -87,6 +89,9 @@ pub struct Fills {
 pub struct LayerRegions {
     pub islands: Vec<Island>,
     pub fills: Vec<Fills>,
+    /// The slice but its top and bottom surfaces, walls included (Orca's internal surfaces): a travel to infill that
+    /// stays within one of these shapes needs no retraction.
+    pub internal: Shapes,
 }
 
 /// Walls and fills for every layer, from its slice and the object each of the slice's shapes belongs to.
@@ -145,6 +150,13 @@ pub fn regions(
     let exposed: Vec<(Shapes, Shapes)> =
         par::map_range(n, |i| one_kind(&tops[i], &bottoms[i], i > 0, 1.5 * outer_width(i)));
     drop((tops, bottoms));
+    let internal_slices: Vec<Shapes> = par::map_range(n, |i| {
+        let (top, bottom) = &exposed[i];
+        if top.is_empty() && bottom.is_empty() {
+            return slices[i].clone();
+        }
+        geom::difference(&slices[i], &[top.as_slice(), bottom.as_slice()].concat())
+    });
 
     // Solid shells (Orca's `discover_vertical_shells`, ensuring the shells' thickness everywhere): solid infill
     // under a top surface and over a bottom, as many layers as the shells take, and wherever a layer within that
@@ -286,7 +298,12 @@ pub fn regions(
     };
     let fills = bridges::bridge_over_infill(&islands, fills, layers, &lines, s);
 
-    islands.into_iter().zip(fills).map(|(islands, fills)| LayerRegions { islands, fills }).collect()
+    islands
+        .into_iter()
+        .zip(fills)
+        .zip(internal_slices)
+        .map(|((islands, fills), internal)| LayerRegions { islands, fills, internal })
+        .collect()
 }
 
 /// A layer's top and bottom surfaces with no part in both (Orca's crack rule): a part both is a bottom, unless it
@@ -520,7 +537,13 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
         }
         found
     };
-    let mut out: Vec<Island> = slice.iter().map(|_| Island::default()).collect();
+    let mut out: Vec<Island> = slice
+        .iter()
+        .map(|shape| Island {
+            centroid: shape.first().map_or(geom::pt(0, 0), |c| geom::centroid(c)),
+            ..Island::default()
+        })
+        .collect();
     for (k, shapes) in depths.iter().enumerate() {
         for shape in shapes {
             if let Some(i) = island_of(shape) {

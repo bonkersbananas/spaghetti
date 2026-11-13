@@ -9,7 +9,7 @@
 use crate::Object;
 use crate::bambu::Frame;
 use crate::config::{Settings, trim};
-use crate::geom::{self, Pt};
+use crate::geom::{self, Pt, Shapes};
 use crate::plan::{LayerPlan, Path};
 use crate::region::{LayerRegions, Role};
 use crate::template::format_g;
@@ -562,10 +562,39 @@ fn route_length<'p>(from: (f64, f64), route: impl Iterator<Item = &'p Pt>, most:
     total
 }
 
-/// Infill inside the walls: travelling between these, within the area inside the walls, needs no retraction
-/// (Orca's "reduce infill retraction").
-fn internal(role: Role) -> bool {
-    matches!(role, Role::SparseInfill | Role::SolidInfill | Role::InternalBridge)
+/// Whether a travel from the end of a `from` path to the start of a `to` path, `d` mm long, retracts, as Orca's
+/// `needs_retraction` decides: not when it is shorter than the retraction's minimum travel; always when it leaves an
+/// outer wall; not when it goes to anything but a wall and stays within one of the layer's internal shapes (the slice
+/// but its top and bottom surfaces), with "reduce infill retraction" on and some sparse infill; else it does.
+fn retracts(from: Role, to: Role, d: f64, a: Pt, b: Pt, internal: &Internal, s: &Settings) -> bool {
+    if d < s.retract_min_travel {
+        return false;
+    }
+    if from == Role::OuterWall {
+        return true;
+    }
+    let wall = matches!(to, Role::InnerWall | Role::OuterWall);
+    !(!wall && s.reduce_infill_retraction && s.sparse_density > 0.0 && internal.holds(a, b))
+}
+
+/// A layer's internal shapes, each with its bounding box, for testing travels against.
+struct Internal<'a> {
+    shapes: &'a Shapes,
+    boxes: Vec<[i32; 4]>,
+}
+
+impl<'a> Internal<'a> {
+    fn new(shapes: &'a Shapes) -> Self {
+        Internal { shapes, boxes: shapes.iter().map(geom::bbox_of).collect() }
+    }
+
+    /// Whether the segment a–b lies within one of the shapes.
+    fn holds(&self, a: Pt, b: Pt) -> bool {
+        let in_box = |bb: &[i32; 4], p: Pt| p.x >= bb[0] && p.x <= bb[2] && p.y >= bb[1] && p.y <= bb[3];
+        self.shapes.iter().zip(&self.boxes).any(|(shape, bb)| {
+            in_box(bb, a) && in_box(bb, b) && geom::segment_inside(std::slice::from_ref(shape), a, b)
+        })
+    }
 }
 
 /// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
@@ -621,6 +650,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         }
     }
     let labels = job.labels();
+    let internal = Internal::new(&regions.internal);
     let mut last: Option<&Path> = None;
     for path in &plan.paths {
         let to = path.points[0];
@@ -648,14 +678,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
                 if d > 1e-6 {
                     b.set_accel(b.travel_accel(path, d));
                     let here = geom::pt(geom::sc(b.x), geom::sc(b.y));
-                    let stay = d < s.retract_min_travel
-                        || (prev.island == path.island
-                            && internal(prev.role)
-                            && internal(path.role)
-                            && regions
-                                .islands
-                                .get(path.island as usize)
-                                .is_some_and(|island| geom::segment_inside(&island.inner, here, to)));
+                    let stay = !retracts(prev.role, path.role, d, here, to, &internal, s);
                     if !stay {
                         b.retract();
                     }
