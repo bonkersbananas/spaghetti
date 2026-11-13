@@ -208,6 +208,50 @@ pub fn simplify_shapes(shapes: &Shapes, tolerance: f64) -> Shapes {
         .collect()
 }
 
+/// An open line (or a loop that repeats its first point) with the points dropped that lie within `tolerance` mm of
+/// the segment between the points kept around them, its ends kept: Orca's `_douglas_peucker`, which measures to the
+/// segment, so a line that doubles back keeps its turn.
+pub fn simplify_line(points: &[Pt], tolerance: f64) -> Vec<Pt> {
+    let n = points.len();
+    if n <= 2 || tolerance <= 0.0 {
+        return points.to_vec();
+    }
+    let tol2 = (tolerance * SCALE).powi(2);
+    let mut out = Vec::with_capacity(n);
+    out.push(points[0]);
+    let mut anchor = 0;
+    let mut stack = vec![n - 1];
+    while let Some(&floater) = stack.last() {
+        let (a, b) = (points[anchor], points[floater]);
+        let (mut far, mut far_d2) = (anchor, 0.0);
+        for (k, &p) in points.iter().enumerate().take(floater).skip(anchor + 1) {
+            let d2 = segment_dist2(p, a, b);
+            if d2 > far_d2 {
+                far = k;
+                far_d2 = d2;
+            }
+        }
+        if far_d2 <= tol2 {
+            out.push(b);
+            anchor = floater;
+            stack.pop();
+        } else {
+            stack.push(far);
+        }
+    }
+    out
+}
+
+/// Squared distance (units²) from p to the segment a–b.
+fn segment_dist2(p: Pt, a: Pt, b: Pt) -> f64 {
+    let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+    let (px, py) = ((p.x - a.x) as f64, (p.y - a.y) as f64);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 == 0.0 { 0.0 } else { ((px * dx + py * dy) / len2).clamp(0.0, 1.0) };
+    let (ex, ey) = (px - t * dx, py - t * dy);
+    ex * ex + ey * ey
+}
+
 fn rdp(points: &[Pt], from: usize, to: usize, tol2: f64, keep: &mut [bool]) {
     let mut stack = vec![(from, to)];
     while let Some((a, b)) = stack.pop() {
@@ -532,4 +576,34 @@ pub fn bbox(shapes: &Shapes) -> Option<[i32; 4]> {
         }
     }
     any.then_some(b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mm(x: f64, y: f64) -> Pt {
+        pt((x * SCALE).round() as i32, (y * SCALE).round() as i32)
+    }
+
+    #[test]
+    fn a_line_keeps_its_ends_and_turns_and_drops_what_strays_less_than_the_tolerance() {
+        // Points a hundredth of a millimetre off a straight line go; a corner stays.
+        let line = [mm(0.0, 0.0), mm(1.0, 0.01), mm(2.0, -0.01), mm(3.0, 0.0), mm(3.0, 2.0), mm(3.005, 4.0)];
+        assert_eq!(simplify_line(&line, 0.012), vec![mm(0.0, 0.0), mm(3.0, 0.0), mm(3.005, 4.0)]);
+        // A loop that repeats its first point keeps both ends.
+        let square = [mm(0.0, 0.0), mm(2.0, 0.0), mm(2.0, 2.0), mm(1.0, 2.001), mm(0.0, 2.0), mm(0.0, 0.0)];
+        assert_eq!(
+            simplify_line(&square, 0.012),
+            vec![mm(0.0, 0.0), mm(2.0, 0.0), mm(2.0, 2.0), mm(0.0, 2.0), mm(0.0, 0.0)]
+        );
+    }
+
+    #[test]
+    fn a_line_that_doubles_back_keeps_its_turn() {
+        // Every point lies on one straight line, but the line runs past its end and back: measured to the segment,
+        // as Orca measures, the far end stays.
+        let line = [mm(0.0, 0.0), mm(5.0, 0.0), mm(2.0, 0.0)];
+        assert_eq!(simplify_line(&line, 0.04), line.to_vec());
+    }
 }
