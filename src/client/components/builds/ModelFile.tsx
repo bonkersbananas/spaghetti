@@ -239,7 +239,7 @@ function SettingsRow({
       data-keeps-panel
       {...props}
       className={cn(
-        "pressable focus-ring bg-ink/4 hover:bg-ink/6 text-small text-ink-soft flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2.5 pl-3 text-left md:flex-initial",
+        "pressable focus-ring bg-ink/4 hover:bg-ink/6 text-small text-ink-soft flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2.5 pl-3 text-left md:max-w-full md:flex-none",
         className,
       )}
     >
