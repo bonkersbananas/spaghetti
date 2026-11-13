@@ -1,7 +1,7 @@
-//! Each layer's extrusions in print order: island by island (nearest first), inner walls, then the outer wall, then
-//! the infill (bridges, bottom, solid, sparse, top), every group nearest first. Walls are counter-clockwise loops
-//! that start at the island's rear (a seam that lines up layer to layer). Widths, flows, speeds and accelerations
-//! are Orca's for the role; speeds are capped by the filament's volumetric limit.
+//! Each layer's extrusions in print order: object by object and island by island (nearest first), inner walls,
+//! then the outer wall, then the infill (bridges, bottom, solid, sparse, top), every group nearest first. Walls are
+//! counter-clockwise loops that start at the island's rear (a seam that lines up layer to layer). Widths, flows,
+//! speeds and accelerations are Orca's for the role; speeds are capped by the filament's volumetric limit.
 
 use crate::config::Settings;
 use crate::geom::{self, Contour, Pt};
@@ -22,6 +22,8 @@ pub struct Path {
     pub speed: f64,
     pub accel: f64,
     pub island: u32,
+    /// Which of the plate's objects it belongs to (an index into them).
+    pub object: u32,
 }
 
 pub struct LayerPlan {
@@ -35,8 +37,9 @@ pub struct LayerPlan {
 const FILL_ORDER: [Role; 6] =
     [Role::Bridge, Role::InternalBridge, Role::BottomSurface, Role::SolidInfill, Role::SparseInfill, Role::TopSurface];
 
-/// Layer `i`'s extrusions in print order.
-pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, s: &Settings) -> LayerPlan {
+/// Layer `i`'s extrusions in print order: object by object, the nearest island first and the rest of its object's
+/// islands nearest first, so each object's moves come together (the printer can skip an object only so).
+pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, objects: &[crate::Object], s: &Settings) -> LayerPlan {
     let z = layers.top[i];
     let h = layers.height[i];
     // Alternate the corner each layer starts from, so a layer begins near where the last one likely ended.
@@ -48,33 +51,64 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, s: &Settings) -> 
         .enumerate()
         .map(|(k, (island, fills))| island_paths(k as u32, island, fills, i, h, s))
         .collect();
-    // Islands nearest first.
+    let owner: Vec<u32> = per_island.iter().map(|paths| island_object(paths, objects)).collect();
     let mut order = Vec::with_capacity(per_island.len());
     let mut done = vec![false; per_island.len()];
     let mut at = start;
+    let mut object: Option<u32> = None;
     for _ in 0..per_island.len() {
-        let mut best: Option<(usize, f64)> = None;
-        for (k, paths) in per_island.iter().enumerate() {
-            if done[k] || paths.is_empty() {
-                continue;
+        // The nearest island of the object being printed, else the nearest of any.
+        let nearest = |of: Option<u32>| {
+            let mut best: Option<(usize, f64)> = None;
+            for (k, paths) in per_island.iter().enumerate() {
+                if done[k] || paths.is_empty() || of.is_some_and(|o| owner[k] != o) {
+                    continue;
+                }
+                let d = geom::dist(at, paths[0].points[0]);
+                if best.is_none_or(|(_, bd)| d < bd) {
+                    best = Some((k, d));
+                }
             }
-            let d = geom::dist(at, paths[0].points[0]);
-            if best.is_none_or(|(_, bd)| d < bd) {
-                best = Some((k, d));
-            }
-        }
-        let Some((k, _)) = best else { break };
+            best
+        };
+        let Some((k, _)) = nearest(object).or_else(|| nearest(None)) else { break };
         done[k] = true;
         order.push(k);
+        object = Some(owner[k]);
         if let Some(last) = per_island[k].last() {
             at = *last.points.last().unwrap();
         }
     }
     let mut paths = Vec::new();
     for k in order {
+        for p in &mut per_island[k] {
+            p.object = owner[k];
+        }
         paths.append(&mut per_island[k]);
     }
     LayerPlan { index: i, z, height: h, paths }
+}
+
+/// The object an island belongs to: the one whose footprint holds the middle of the island's paths, else the
+/// nearest one.
+fn island_object(paths: &[Path], objects: &[crate::Object]) -> u32 {
+    if objects.len() <= 1 || paths.is_empty() {
+        return 0;
+    }
+    let mut b = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
+    for q in paths.iter().flat_map(|p| &p.points) {
+        b = [b[0].min(q.x), b[1].min(q.y), b[2].max(q.x), b[3].max(q.y)];
+    }
+    let (x, y) = ((geom::unsc(b[0]) + geom::unsc(b[2])) / 2.0, (geom::unsc(b[1]) + geom::unsc(b[3])) / 2.0);
+    let mut best = (0, f64::INFINITY);
+    for (k, o) in objects.iter().enumerate() {
+        let dx = (o.min[0] - x).max(x - o.max[0]).max(0.0);
+        let dy = (o.min[1] - y).max(y - o.max[1]).max(0.0);
+        if dx.hypot(dy) < best.1 {
+            best = (k, dx.hypot(dy));
+        }
+    }
+    best.0 as u32
 }
 
 fn island_paths(index: u32, island: &Island, fills: &Fills, layer: usize, h: f64, s: &Settings) -> Vec<Path> {
@@ -172,6 +206,7 @@ fn gap_fill(line: medial::ThickLine, island: u32, first: bool, h: f64, s: &Setti
             speed: speed.min(s.speed_cap(mm3_per_mm)),
             accel: if first { s.first_layer_accel } else { s.default_accel },
             island,
+            object: 0,
         });
         start = end;
     }
@@ -246,7 +281,7 @@ fn accel(role: Role, first: bool, s: &Settings) -> f64 {
 fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: f64, s: &Settings) -> Path {
     let (width, mm3_per_mm, speed) = flow(role, first, h, s);
     let speed = speed.min(s.speed_cap(mm3_per_mm));
-    Path { role, points, closed, width, mm3_per_mm, speed, accel: accel(role, first, s), island }
+    Path { role, points, closed, width, mm3_per_mm, speed, accel: accel(role, first, s), island, object: 0 }
 }
 
 /// A wall loop as printed: counter-clockwise, from the rearmost point (largest y, then smallest x), closed.

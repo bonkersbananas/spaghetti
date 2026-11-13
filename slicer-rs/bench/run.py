@@ -10,6 +10,8 @@ glasses.stl, uobf.stl and plate/benchy-1…12.stl. Runners whose tools are missi
 - orca-wasm-node, orca-wasm-chromium: the OrcaSlicer engine Spaghetti runs today, from $ORCA_SPIKE (a folder with
   slice-node.mjs, run-browsers.mjs, serve.mjs, engine-0.6.1/ and presets-pin.json)
 - orca-native: OrcaSlicer 2.5.0's command line from $ORCA_NATIVE (an extracted AppImage), with the same presets
+  ($ORCA_PRESETS, default $ORCA_SPIKE: machine.json, process.json, filament.json; the machine's curr_bed_type picks
+  the plate) and the models left where the files put them (--arrange 0), as ours are (--keep-placement)
 Native runs are pinned to 4 cores (taskset), the sandbox's share. Results go to out/results.json."""
 
 import json
@@ -26,6 +28,7 @@ CRATE = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "out")
 MODELS_DIR = os.environ.get("BENCH_MODELS", "/home/agent/build/bench-in")
 SPIKE = os.environ.get("ORCA_SPIKE", "/home/agent/build/spike")
+PRESETS = os.environ.get("ORCA_PRESETS", SPIKE)
 NATIVE = os.environ.get("ORCA_NATIVE", "/home/agent/build/orca-native")
 BIN = os.path.join(CRATE, "target/release/spaghetti-slicer")
 WASM = os.path.join(CRATE, "target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm")
@@ -185,10 +188,12 @@ def orca_native(model, files, run):
         CORES
         + [
             f"{root}/bin/orca-slicer",
+            "--arrange",
+            "0",
             "--load-settings",
-            f"{SPIKE}/machine.json;{SPIKE}/process.json",
+            f"{PRESETS}/machine.json;{PRESETS}/process.json",
             "--load-filaments",
-            f"{SPIKE}/filament.json",
+            f"{PRESETS}/filament.json",
             "--slice",
             "0",
             "--outputdir",

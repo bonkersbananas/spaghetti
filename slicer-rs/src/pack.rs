@@ -3,17 +3,11 @@
 //! `model_settings.config`, `plate_1.json` and the plate picture, so the app's reader and 3D view, Bambu Studio and
 //! Orca read it as a sliced file. It carries no meshes (the app keeps the original file beside it).
 
+use crate::Object;
 use crate::config::{Settings, Value};
 use crate::gcode::{NAME, Stats, VERSION};
 use crate::zip;
 use md5::{Digest, Md5};
-
-/// An object as placed on the plate.
-pub struct Object {
-    pub name: String,
-    /// min x, min y, max x, max y (mm).
-    pub bbox: [f64; 4],
-}
 
 /// The Bambu Studio file version Orca 2.5 writes into its sliced files for the printers' sake.
 const BBL_CLIENT_VERSION: &str = "02.08.01.55";
@@ -62,7 +56,7 @@ pub fn gcode_3mf(
         [0.0; 4]
     } else {
         objects.iter().fold([f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY], |b, o| {
-            [b[0].min(o.bbox[0]), b[1].min(o.bbox[1]), b[2].max(o.bbox[2]), b[3].max(o.bbox[3])]
+            [b[0].min(o.min[0]), b[1].min(o.min[1]), b[2].max(o.max[0]), b[3].max(o.max[1])]
         })
     };
     let grams = round(stats.weight, 2);
@@ -154,10 +148,10 @@ pub fn gcode_3mf(
         format!(r#"    <metadata key="weight" value="{grams}"/>"#),
         r#"    <metadata key="outside" value="false"/>"#.into(),
         r#"    <metadata key="support_used" value="false"/>"#.into(),
-        r#"    <metadata key="label_object_enabled" value="true"/>"#.into(),
+        format!(r#"    <metadata key="label_object_enabled" value="{}"/>"#, objects.len() < 64),
     ];
-    for (i, o) in objects.iter().enumerate() {
-        slice_info.push(format!(r#"    <object identify_id="{}" name="{}" skipped="false"/>"#, i + 1, xml(&o.name)));
+    for o in objects {
+        slice_info.push(format!(r#"    <object identify_id="{}" name="{}" skipped="false"/>"#, o.label, xml(&o.name)));
     }
     slice_info.push(format!(
         r#"    <filament id="1" type="{}" color="{}" used_m="{metres}" used_g="{grams}"/>"#,
@@ -168,16 +162,15 @@ pub fn gcode_3mf(
     files.push(("Metadata/slice_info.config", slice_info.join("\n").into_bytes()));
     let objects_json: Vec<String> = objects
         .iter()
-        .enumerate()
-        .map(|(i, o)| {
+        .map(|o| {
             format!(
                 r#"{{"id":{},"name":{},"bbox":[{},{},{},{}],"layer_height":{}}}"#,
-                i + 1,
+                o.label,
                 json(&o.name),
-                o.bbox[0],
-                o.bbox[1],
-                o.bbox[2],
-                o.bbox[3],
+                o.min[0],
+                o.min[1],
+                o.max[0],
+                o.max[1],
                 s.layer_height
             )
         })

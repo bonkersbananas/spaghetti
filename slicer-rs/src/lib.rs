@@ -12,8 +12,8 @@ pub mod medial;
 pub mod mesh;
 pub mod pack;
 pub mod plan;
-pub mod profile;
 pub mod png;
+pub mod profile;
 pub mod region;
 pub mod section;
 pub mod template;
@@ -30,6 +30,25 @@ use mesh::Mesh;
 pub struct Input<'a> {
     pub name: &'a str,
     pub bytes: &'a [u8],
+}
+
+/// A model as placed on the plate, as the G-code and the plate's object list name it.
+#[derive(Clone, Debug)]
+pub struct Object {
+    pub name: String,
+    /// The id the printer knows it by: in the header's label list, the M624/M625 labels around its moves and the
+    /// plate's object list (1, 2, 3…; Orca uses its own internal ids).
+    pub label: u32,
+    /// mm on the plate: the lowest corner of its bounding box, then the highest.
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+}
+
+impl Object {
+    fn from_mesh(index: usize, m: &Mesh) -> Object {
+        let b = m.bounds();
+        Object { name: m.name.clone(), label: index as u32 + 1, min: b.min, max: b.max }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -148,30 +167,29 @@ impl Plate {
         let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
         let slices = section::slice(&meshes, &layers, settings.resolution);
         let t2 = now();
+        let facts = first_layer_facts(&slices, &layers, settings);
         let regions = region::regions(&slices, &layers, settings);
         drop(slices);
         let t3 = now();
+        let objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
+        let frame = bambu::Frame::new(profile::x2d(), &facts);
+        let photos = timelapse_spots(&objects, &layers, settings);
+        let job =
+            gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
         // Each layer from its regions to its G-code in one go, so only the text stays.
         let texts = par::map_range(regions.len(), |i| {
-            let plan = plan::plan_layer(&regions[i], i, &layers, settings);
-            gcode::layer(&plan, &regions[i], settings, gcode::travel_z(&layers, i, settings))
+            let plan = plan::plan_layer(&regions[i], i, &layers, &objects, settings);
+            gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))
         });
         drop(regions);
         let t4 = now();
-        let g = gcode::assemble(texts, settings);
+        let g = gcode::assemble(texts, &job);
         let t5 = now();
         let thumbnail = options.thumbnail.then(|| {
             let size = 512;
             png::encode(&png::render(&meshes, size, settings.filament_colour), size, size)
         });
         let t6 = now();
-        let objects: Vec<pack::Object> = meshes
-            .iter()
-            .map(|m| {
-                let b = m.bounds();
-                pack::Object { name: m.name.clone(), bbox: [b.min[0], b.min[1], b.max[0], b.max[1]] }
-            })
-            .collect();
         let title = title.as_deref().unwrap_or("Model");
         let file = pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title);
         let t7 = now();
@@ -192,6 +210,40 @@ impl Plate {
             triangles: meshes.iter().map(|m| m.triangles.len()).sum(),
         })
     }
+}
+
+/// What the printer's start G-code needs to know about the first layer, as Orca works it out: the extent of its
+/// outline grown by the skirt distance (Orca's first-layer hull takes in the skirt's, which it draws that far out
+/// even with no skirt loops), its area, the print's height and the plate.
+fn first_layer_facts(slices: &[geom::Shapes], layers: &section::Layers, s: &Settings) -> bambu::Facts {
+    let Some(first) = slices.first() else { return bambu::Facts::default() };
+    let margin = s.skirt_distance;
+    let b = geom::bbox(first).map(|b| b.map(geom::unsc)).unwrap_or([0.0; 4]);
+    bambu::Facts {
+        first_layer_min: [b[0] - margin, b[1] - margin],
+        first_layer_max: [b[2] + margin, b[3] + margin],
+        first_layer_area: geom::area_mm2(first),
+        top: layers.top.last().copied().unwrap_or(0.0),
+        bed_type: s.bed_type.to_string(),
+    }
+}
+
+/// Where the timelapse photo is taken after each layer: Orca's pick, which changes only when the objects standing at
+/// the layer's height (in whole millimetres) do.
+fn timelapse_spots(objects: &[Object], layers: &section::Layers, s: &Settings) -> Vec<Option<[i64; 2]>> {
+    let mut spots = Vec::with_capacity(layers.top.len());
+    let mut last: Option<(Vec<bool>, Option<[i64; 2]>)> = None;
+    for &z in &layers.top {
+        let at = z as i64;
+        let standing: Vec<bool> = objects.iter().map(|o| (o.min[2] as i64) <= at && at <= (o.max[2] as i64)).collect();
+        let spot = match &last {
+            Some((before, spot)) if *before == standing => *spot,
+            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius),
+        };
+        spots.push(spot);
+        last = Some((standing, spot));
+    }
+    spots
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -106,7 +106,9 @@ impl Parser<'_> {
             b'n' => self.word("null").then_some(Json::Null),
             _ => {
                 let start = self.at;
-                while self.at < self.bytes.len() && matches!(self.bytes[self.at], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9') {
+                while self.at < self.bytes.len()
+                    && matches!(self.bytes[self.at], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9')
+                {
                     self.at += 1;
                 }
                 std::str::from_utf8(&self.bytes[start..self.at]).ok()?.parse().ok().map(Json::Number)
@@ -165,7 +167,8 @@ mod tests {
 
     #[test]
     fn reads_what_presets_hold() {
-        let j = parse(r#" {"a": "1", "b": ["x\n", "é\"q"], "c": [], "d": {"e": true, "f": null, "g": -2.5e1}} "#).unwrap();
+        let j =
+            parse(r#" {"a": "1", "b": ["x\n", "é\"q"], "c": [], "d": {"e": true, "f": null, "g": -2.5e1}} "#).unwrap();
         let Json::Object(o) = j else { panic!() };
         assert_eq!(o["a"], Json::String("1".into()));
         assert_eq!(o["b"], Json::Array(vec![Json::String("x\n".into()), Json::String("é\"q".into())]));

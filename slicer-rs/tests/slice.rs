@@ -175,3 +175,160 @@ fn an_inside_out_model_slices_as_if_right_way_out() {
         b.stats.volume
     );
 }
+
+/// The value after `letter` in a G-code line's words, if it has one.
+fn word(line: &str, letter: char) -> Option<f64> {
+    line.split(';').next()?.split_whitespace().skip(1).find(|w| w.starts_with(letter)).and_then(|w| w[1..].parse().ok())
+}
+
+/// Walks every move between the printer's start and end G-code and checks what keeps a print safe: the nozzle
+/// prints only at its layer's height and never travels below it, stays on the plate, retracts and pushes back the
+/// filament in pairs, lifts by the z-hop in a spiral that stays on the plate, and every object's moves sit inside its
+/// skip labels. Returns the labels each layer printed.
+fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
+    let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).expect("the start G-code's end");
+    let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
+    let (mut x, mut y, mut z) = (f64::NAN, f64::NAN, 1.0);
+    let mut layer_z = f64::NAN;
+    let mut pulled: f64 = 0.0;
+    let mut label: Option<u32> = None;
+    let mut layers: Vec<Vec<u32>> = Vec::new();
+    let mut in_photo = false;
+    let r = s.z_hop / (2.0 * std::f64::consts::PI * s.travel_slope.to_radians().atan());
+    for (n, line) in body.lines().enumerate() {
+        let at = || format!("line {} of the body: {line}", n + 1);
+        if line.starts_with("; SKIPPABLE_START") {
+            in_photo = true;
+        }
+        if line.starts_with("; SKIPPABLE_END") {
+            in_photo = false;
+        }
+        if in_photo {
+            continue;
+        }
+        if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            let h: f64 = h.parse().unwrap();
+            assert!(layer_z.is_nan() || h > layer_z, "layers go up: {}", at());
+            layer_z = h;
+            layers.push(Vec::new());
+            assert_eq!(label, None, "a layer starts outside every label: {}", at());
+        }
+        if let Some(id) = line.strip_prefix("M624 ") {
+            assert_eq!(label, None, "labels don't nest: {}", at());
+            let mask = id.trim();
+            // The one object of the mask is its bit; layer-wide masks (around a photo) don't come here.
+            label = Some(mask.len() as u32);
+            continue;
+        }
+        if line.starts_with("; start printing object, unique label id: ") {
+            let id: u32 = line.rsplit(' ').next().unwrap().parse().unwrap();
+            layers.last_mut().expect("a layer").push(id);
+        }
+        if line == "M625" {
+            assert!(label.is_some(), "M625 closes a label: {}", at());
+            label = None;
+            continue;
+        }
+        let code = line.split(';').next().unwrap().trim();
+        if code.starts_with("G1 ") || code.starts_with("G0 ") {
+            let (nx, ny, nz) =
+                (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y), word(code, 'Z').unwrap_or(z));
+            let e = word(code, 'E').unwrap_or(0.0);
+            let moves_xy = (word(code, 'X').is_some() || word(code, 'Y').is_some()) && (nx != x || ny != y);
+            if moves_xy {
+                assert!((0.0..=s.bed[0]).contains(&nx) && (0.0..=s.bed[1]).contains(&ny), "on the plate: {}", at());
+                assert!(nz >= layer_z - 1e-6, "never below the layer while moving: {}", at());
+            }
+            if e > 0.0 && moves_xy {
+                assert!((nz - layer_z).abs() < 1e-6, "prints at the layer's height: {}", at());
+                assert!(pulled.abs() < 1e-4, "prints only with the filament pushed back: {}", at());
+                assert!(label.is_some(), "prints only inside an object's label: {}", at());
+            } else if e != 0.0 {
+                pulled -= e;
+                assert!(pulled > -1e-4 && pulled < s.retract_length + 1e-4, "{pulled} mm pulled back: {}", at());
+            }
+            (x, y, z) = (nx, ny, nz);
+        } else if code.starts_with("G3 ") {
+            let (i, j) = (word(code, 'I').unwrap(), word(code, 'J').unwrap());
+            let nz = word(code, 'Z').unwrap();
+            assert!((i.hypot(j) - r).abs() < 0.002, "a spiral of the z-hop's radius: {}", at());
+            assert!((nz - (layer_z + s.z_hop)).abs() < 1e-6, "lifts by the z-hop: {}", at());
+            let (cx, cy) = (x + i, y + j);
+            assert!(
+                cx - r >= 0.0 && cy - r >= 0.0 && cx + r <= s.bed[0] && cy + r <= s.bed[1],
+                "on the plate: {}",
+                at()
+            );
+            assert!(code.ends_with(" P1  F60000"), "one turn at the travel speed: {}", at());
+            z = nz;
+        } else if code.starts_with("G2 ") || code.starts_with("G91") || code.starts_with("G92") {
+            panic!("no {code} between the start and the end: {}", at());
+        }
+    }
+    assert_eq!(label, None, "every label closed");
+    layers
+}
+
+#[test]
+fn the_x2d_gets_orcas_start_and_end_and_moves_it_can_print_safely() {
+    let settings = Settings::default();
+    let stl = cube_stl(20.0);
+    let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    // The X2D's own start and end, in Orca's order, before and after the layers.
+    let order = [
+        "; HEADER_BLOCK_START\n",
+        "; model label id: 1\n",
+        "; EXECUTABLE_BLOCK_START\n",
+        "M204 P20000 R30000 T20000\n",
+        "; FEATURE: Custom\n",
+        ";======== X2D start gcode==========\n",
+        "; MACHINE_START_GCODE_END\n",
+        "M981 S1 P20000 ;open spaghetti detector\n",
+        "; CHANGE_LAYER\n",
+        ";======== X2D layer_change gcode ==========\n",
+        "M624 AQAAAAAAAAA=\n",
+        ";======== X2D timelapse gcode ========\n",
+        "M981 S0 P20000 ; close spaghetti detector\n",
+        "; MACHINE_END_GCODE_START\n",
+        "M73 P100 R0\n; EXECUTABLE_BLOCK_END\n",
+    ];
+    let mut from = 0;
+    for part in order {
+        let at = gcode[from..].find(part).unwrap_or_else(|| panic!("{part:?} after byte {from}"));
+        from += at + part.len();
+    }
+    // The bed is levelled around the first layer, as Orca works the area out: its outline (the cube's 20 mm, less
+    // nothing as the outline isn't pulled in) and the skirt distance on each side.
+    let levelling = gcode.lines().find(|l| l.trim_start().starts_with("G29 A1 ")).unwrap();
+    assert!(levelling.contains(" I24 J24 R"), "{levelling}");
+    let layers = check_moves(&gcode, &settings);
+    assert_eq!(layers.len(), 100);
+    assert!(layers.iter().all(|l| l == &[1]));
+    assert_eq!(gcode.matches(";======== X2D timelapse gcode ========").count(), 100);
+}
+
+#[test]
+fn each_object_on_a_plate_has_its_own_label() {
+    let settings = Settings::default();
+    let small = cube_stl(10.0);
+    let tall = String::from_utf8(cube_stl(10.0)).unwrap().replace(" 10\n", " 20\n").into_bytes();
+    let inputs = [Input { name: "small.stl", bytes: &small }, Input { name: "tall.stl", bytes: &tall }];
+    let out = slice(&inputs, &settings, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    assert!(gcode.contains("; model label id: 1,2\n"));
+    let layers = check_moves(&gcode, &settings);
+    assert_eq!(layers.len(), 100);
+    // Both cubes up to 10 mm, then only the tall one; each object once a layer.
+    for (i, labels) in layers.iter().enumerate() {
+        let mut sorted = labels.clone();
+        sorted.sort();
+        assert_eq!(sorted, if i < 50 { vec![1, 2] } else { vec![2] }, "layer {}", i + 1);
+    }
+    // The photo is skippable with the layer's objects: both bits, then the tall cube's alone.
+    assert!(gcode.contains("; object ids of layer 1 start: 1,2\nM624 AwAAAAAAAAA=\n"));
+    assert!(gcode.contains("; object ids of layer 100 start: 2\nM624 AgAAAAAAAAA=\n"));
+    let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+    assert!(info.contains(r#"<object identify_id="1" name="small.stl" skipped="false"/>"#));
+    assert!(info.contains(r#"<object identify_id="2" name="tall.stl" skipped="false"/>"#));
+}

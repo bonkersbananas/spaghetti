@@ -102,7 +102,13 @@ pub fn format_g(v: f64) -> String {
         return if v.is_sign_negative() { "-0".into() } else { "0".into() };
     }
     if !v.is_finite() {
-        return if v.is_nan() { "nan".into() } else if v > 0.0 { "inf".into() } else { "-inf".into() };
+        return if v.is_nan() {
+            "nan".into()
+        } else if v > 0.0 {
+            "inf".into()
+        } else {
+            "-inf".into()
+        };
     }
     // Six significant digits, rounded as printf rounds (to the nearest, from the exact binary value).
     let sci = format!("{:.5e}", v);
@@ -239,7 +245,9 @@ impl Parser<'_> {
                         self.at += 1;
                     }
                     if active {
-                        out.push_str(std::str::from_utf8(&self.s[start..self.at]).map_err(|_| self.error("not UTF-8"))?);
+                        out.push_str(
+                            std::str::from_utf8(&self.s[start..self.at]).map_err(|_| self.error("not UTF-8"))?,
+                        );
                     }
                 }
             }
@@ -341,7 +349,13 @@ impl Parser<'_> {
         let a = self.conditional(active && c)?;
         self.expect(":")?;
         let b = self.conditional(active && !c)?;
-        Ok(if !active { Value::Empty } else if c { a } else { b })
+        Ok(if !active {
+            Value::Empty
+        } else if c {
+            a
+        } else {
+            b
+        })
     }
 
     fn logical_or(&mut self, active: bool) -> Result<Value, String> {
@@ -574,7 +588,13 @@ impl Parser<'_> {
                 }
                 let pick_a = if name == "min" { a.as_f() <= b.as_f() } else { a.as_f() >= b.as_f() };
                 return Ok(match (&a, &b) {
-                    (Value::Int(_), Value::Int(_)) => if pick_a { a } else { b },
+                    (Value::Int(_), Value::Int(_)) => {
+                        if pick_a {
+                            a
+                        } else {
+                            b
+                        }
+                    }
                     _ if a.numeric() && b.numeric() => Value::Float(if pick_a { a.as_f() } else { b.as_f() }),
                     _ => return Err(self.error("min and max take numbers")),
                 });
@@ -726,14 +746,22 @@ mod tests {
     #[test]
     fn fills_variables_and_expressions_as_orca() {
         assert_eq!(fill("M140 S[bed] ; heat"), "M140 S55 ; heat");
-        assert_eq!(fill("M104 S{nozzle_temperature_initial_layer[initial_no_support_filament_id]-40} A"), "M104 S180 A");
+        assert_eq!(
+            fill("M104 S{nozzle_temperature_initial_layer[initial_no_support_filament_id]-40} A"),
+            "M104 S180 A"
+        );
         assert_eq!(fill("F{flush_volumetric_speeds[0]/2.4053*60}"), "F523.843");
         assert_eq!(fill("G29.1 Z{+0.0} ; x"), "G29.1 Z0 ; x");
         assert_eq!(fill("G29.1 Z{-0.003}"), "G29.1 Z-0.003");
         assert_eq!(fill("M620 D[initial_no_support_hotend]"), "M620 D-1");
         assert_eq!(fill("G1 Z{max_layer_z + 80.0 - max_layer_z/2} F600"), "G1 Z104 F600");
         assert_eq!(fill("S{first_x_layer_fan_speed[0]*255.0/100.0}"), "S102");
-        assert_eq!(fill("L{(first_non_support_filaments[1] != -1 ? first_non_support_filaments[1] : (first_filaments[1] != -1 ? first_filaments[1] : 0))}"), "L0");
+        assert_eq!(
+            fill(
+                "L{(first_non_support_filaments[1] != -1 ? first_non_support_filaments[1] : (first_filaments[1] != -1 ? first_filaments[1] : 0))}"
+            ),
+            "L0"
+        );
         assert_eq!(fill("M9711 M{timelapse_type}"), "M9711 M0");
         assert_eq!(fill("{7/2} {7.0/2} {7%3}"), "3 3.5 1");
         assert_eq!(fill("{max(3, 1)} {min(2.5, 4)}"), "3 2.5");
