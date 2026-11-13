@@ -2,12 +2,18 @@ name: Slicer release
 
 # Builds Spaghetti's slicing engine (OrcaSlicer's core in WebAssembly, the Muon3D Slicer Engine, single-threaded) from
 # the source pinned in scripts/slicer/pin.env, smoke-tests it, and publishes it as a GitHub release with its
-# Corresponding Source (docs/slicer.md). Tag a commit `slicer-v1` to release; "Run workflow" builds and tests without
-# publishing. The app pins the release's zip by sha256 in scripts/slicer/engine.json; normal CI never compiles it.
+# Corresponding Source (docs/slicer.md). Tag a commit `slicer-vN` to release; pull requests that change the build, and
+# "Run workflow", build and test without publishing. The app pins the release's zip by sha256 in scripts/slicer/engine.json; normal CI never compiles it.
 
 on:
   push:
     tags: ["slicer-v*"]
+  # A pull request that changes how the engine is built builds and tests it (it publishes nothing).
+  pull_request:
+    paths:
+      - "scripts/slicer/**"
+      - "!scripts/slicer/engine.json"
+      - ".github/workflows/slicer-release.yml"
   workflow_dispatch:
 
 permissions:

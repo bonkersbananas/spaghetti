@@ -33,6 +33,9 @@ export ORCA_WASM_ROOT=${ORCA_WASM_ROOT:-$WORK/toolchain}
 export JOBS=${JOBS:-$(nproc)}
 ENGINE=$WORK/engine
 mkdir -p "$WORK" "$OUT" "$ORCA_WASM_ROOT/tools/bin"
+# The repository's package.json says "type": "module", so Node would read the plain .js programs Emscripten builds
+# under this folder (the dependencies' smoke test) as modules, and they are CommonJS: the folder gets its own.
+[[ -f $WORK/package.json ]] || echo '{ "private": true, "type": "commonjs" }' > "$WORK/package.json"
 
 step() { echo "==== $(date -u +%H:%M:%S) $*"; }
 fail() { echo "slicer build: $*" >&2; exit 1; }
