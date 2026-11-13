@@ -215,6 +215,15 @@ export function fileUrl(id: string, part: "file" | "thumb" | "sliced" = "file"):
   return part === "file" ? `/api/files/${id}` : `/api/files/${id}/${part}`;
 }
 
+/**
+ * A file's plate picture on the server, at an address of its slice (`?v=` its time): a model sliced again, or its
+ * re-slice undone, gets a new one, so a device that only hears of it through the change feed shows the new picture.
+ */
+export function fileThumbUrl(file: { id: string; slice?: { at: number } | null }): string {
+  const at = file.slice?.at;
+  return `${fileUrl(file.id, "thumb")}${at ? `?v=${at}` : ""}`;
+}
+
 /** An idea, and the build it grows into: one record that moves through stages. Titles are optional. */
 export interface Item {
   id: string;
