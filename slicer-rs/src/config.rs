@@ -454,7 +454,10 @@ impl Settings {
     /// What this prints otherwise than the presets ask, in a few words each (empty when it prints what they ask).
     pub fn fallbacks(&self) -> Vec<String> {
         let mut out = Vec::new();
-        if !matches!(self.sparse_infill_pattern.as_str(), "zig-zag" | "rectilinear" | "crosshatch" | "gyroid" | "") {
+        if !matches!(
+            self.sparse_infill_pattern.as_str(),
+            "zig-zag" | "rectilinear" | "crosshatch" | "gyroid" | "grid" | "cubic" | "honeycomb" | ""
+        ) {
             out.push(format!("{} sparse infill printed as straight lines", self.sparse_infill_pattern));
         }
         for (what, pattern) in [

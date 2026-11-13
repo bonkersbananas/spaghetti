@@ -1,6 +1,6 @@
-//! Sparse infill as OrcaSlicer 2.5 draws it (`libslic3r/Fill/`): the crosshatch and gyroid patterns, laid out in
-//! the object's own frame (centred on its bounding box, turned by the infill direction), cut to the area, short bits
-//! dropped, then joined along the area's edge as Orca's `connect_infill` joins them: two lines whose ends are close
+//! Sparse infill as OrcaSlicer 2.5 draws it (`libslic3r/Fill/`): the crosshatch, gyroid, grid, cubic and honeycomb
+//! patterns, laid out in the object's own frame (centred on its bounding box, turned by the infill direction), cut to
+//! the area (crosshatch's and gyroid's short bits dropped), then joined along the area's edge as Orca's `connect_infill` joins them: two lines whose ends are close
 //! along the edge become one path, and an end that joins nothing hooks a short anchor onto the edge. Lines whose ends
 //! lie within two spacings of each other then print as one path (`join_close_ends`).
 //!
@@ -21,6 +21,12 @@ const NONE: usize = usize::MAX;
 pub enum Pattern {
     Crosshatch,
     Gyroid,
+    /// Lines two ways, a quarter turn apart, the same on every layer (`FillGrid`).
+    Grid,
+    /// Lines three ways, 60° apart, shifted with the height so they build cubes standing on a corner (`FillCubic`).
+    Cubic,
+    /// Hexagons, turned by 60° from layer to layer (`FillHoneycomb`).
+    Honeycomb,
 }
 
 impl Pattern {
@@ -28,6 +34,9 @@ impl Pattern {
         match name {
             "crosshatch" => Some(Pattern::Crosshatch),
             "gyroid" => Some(Pattern::Gyroid),
+            "grid" => Some(Pattern::Grid),
+            "cubic" => Some(Pattern::Cubic),
+            "honeycomb" => Some(Pattern::Honeycomb),
             _ => None,
         }
     }
@@ -41,6 +50,8 @@ pub struct Sparse {
     pub origin: (f64, f64),
     /// The layer's top, mm.
     pub z: f64,
+    /// The layer's number, from 0 (honeycomb turns with it, grid's lines run the other way on odd layers).
+    pub layer: usize,
     /// The infill direction, degrees.
     pub angle: f64,
     /// Centre to centre of two touching infill lines at the object's layer height, mm.
@@ -73,10 +84,41 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
     if part.first().is_none_or(|outer| outer.len() < 3) || p.density <= 0.0 || p.spacing <= 0.0 {
         return Vec::new();
     }
+    let lines: Vec<Vec<(f64, f64)>> = match p.pattern {
+        Pattern::Crosshatch | Pattern::Gyroid => return waves(part, p),
+        Pattern::Grid | Pattern::Cubic => multilines(part, p),
+        Pattern::Honeycomb => honeycomb(part, p),
+    };
+    let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
+    let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
+    let mut joined = if pieces.is_empty() {
+        Vec::new()
+    } else if p.anchor_max < 0.05 {
+        pieces.into_iter().map(|c| c.points).collect()
+    } else {
+        connect(
+            pieces,
+            part,
+            p.spacing * geom::SCALE,
+            p.anchor.min(p.anchor_max) * geom::SCALE,
+            p.anchor_max * geom::SCALE,
+        )
+    };
+    // Orca's grid runs its lines the other way on odd layers.
+    if p.pattern == Pattern::Grid && p.layer % 2 == 1 {
+        for line in &mut joined {
+            line.reverse();
+        }
+    }
+    joined
+}
+
+/// Crosshatch and gyroid: their pattern in the object's frame, cut to the part, short bits dropped, joined.
+fn waves(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
     // Orca turns the area by minus the angle (a float) about the object's centre; the gyroid by 45° less.
     let angle = match p.pattern {
-        Pattern::Crosshatch => p.angle.to_radians() as f32 as f64,
         Pattern::Gyroid => (p.angle.to_radians() as f32 as f64 + (-45f64).to_radians()) as f32 as f64,
+        _ => p.angle.to_radians() as f32 as f64,
     };
     let frame = Frame::new(p.origin, if angle.abs() < 1e-4 { 0.0 } else { angle });
     // The outer contour's bounding box in the frame, nm.
@@ -87,8 +129,8 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         bb = [bb[0].min(x), bb[1].min(y), bb[2].max(x), bb[3].max(y)];
     }
     let pattern = match p.pattern {
-        Pattern::Crosshatch => crosshatch(bb, p.z, p.spacing, p.density),
         Pattern::Gyroid => gyroid(bb, p.z, p.spacing, p.density),
+        _ => crosshatch(bb, p.z, p.spacing, p.density),
     };
     let lines: Vec<Vec<(f64, f64)>> =
         pattern.into_iter().map(|l| l.into_iter().map(|q| frame.from(q)).collect()).collect();
@@ -133,6 +175,135 @@ impl Frame {
 /// `v` rounded down to a multiple of `step` (Orca's `align_to_grid`).
 fn align(v: i64, step: i64) -> i64 {
     v.div_euclid(step) * step
+}
+
+// ---- Grid and cubic (FillRectilinear.cpp, `fill_surface_by_multilines`) ----
+
+/// Grid's and cubic's lines on the plate (units), uncut: for each of the pattern's directions, Orca's `make_fill_lines`
+/// in the object's frame turned that way, lines across the part's box as far apart as the density shared between
+/// the directions asks, on a grid from the object's centre shifted by the direction's pattern shift.
+fn multilines(part: &Shape, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
+    // Orca's `_infill_direction` (floats): the infill angle and a quarter turn; neither pattern turns layer by layer.
+    let base = p.angle.to_radians() as f32 + std::f32::consts::FRAC_PI_2;
+    let sweeps: Vec<(f32, f32)> = match p.pattern {
+        Pattern::Cubic => {
+            let dx = ((0.5f64).sqrt() * p.z) as f32;
+            vec![(0.0, dx), (std::f32::consts::FRAC_PI_3, -dx), ((std::f64::consts::PI * 2.0 / 3.0) as f32, dx)]
+        }
+        _ => vec![(0.0, 0.0), (std::f32::consts::FRAC_PI_2, 0.0)],
+    };
+    let density = p.density / sweeps.len() as f64;
+    let line_spacing = (p.spacing * 1e6 / density) as i64;
+    if line_spacing <= 0 {
+        return Vec::new();
+    }
+    // Orca's lines run as far as the area before it is drawn in by half a spacing, less a spacing and a hair.
+    let margin = (p.spacing * 1e6) as i64 + 100;
+    let half = (0.5 * p.spacing * 1e6).round() as i64;
+    let mut out = Vec::new();
+    for (angle_base, shift) in sweeps {
+        let angle = (base + angle_base) as f64;
+        let frame = Frame::new(p.origin, angle);
+        let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+        for &q in &part[0] {
+            let (x, y) = frame.to(q);
+            let (x, y) = (x.round() as i64, y.round() as i64);
+            bb = [bb[0].min(x - half), bb[1].min(y - half), bb[2].max(x + half), bb[3].max(y + half)];
+        }
+        let (x_min, x_max) = (bb[0] + margin, bb[2] - margin);
+        // The grid's reference: the object's centre, less the pattern's shift (Orca's `align_to_grid`).
+        let shifted = ((shift as f64) * 1e6) as i64 % line_spacing;
+        let reference = -(if shifted >= 0 { shifted } else { line_spacing + shifted });
+        let x0 = reference + (bb[0] - reference).div_euclid(line_spacing) * line_spacing;
+        let n = (bb[2] - x0 + line_spacing - 1) / line_spacing;
+        for k in 0..n.max(0) {
+            let x = x0 + k * line_spacing;
+            if x < x_min {
+                continue;
+            }
+            if x > x_max {
+                break;
+            }
+            let (x, y0, y1) = (x as f64, (bb[1] - 1) as f64, (bb[3] + 1) as f64);
+            out.push(vec![frame.from((x, y0)), frame.from((x, y1))]);
+        }
+    }
+    out
+}
+
+// ---- Honeycomb (FillHoneycomb.cpp) ----
+
+/// Orca's honeycomb on the plate (units), uncut: columns of half hexagons drawn as zig-zags, in a frame turned by the
+/// infill angle, 60° more each layer and a quarter turn, about the first hexagon's centre, on a grid from the
+/// object's centre.
+fn honeycomb(part: &Shape, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
+    // Orca's `_infill_direction` (floats), with honeycomb's turn of 60° a layer.
+    let layer_angle = (std::f64::consts::PI / 3.0) as f32 * (p.layer % 3) as f32;
+    let angle = (p.angle.to_radians() as f32 + layer_angle + std::f32::consts::FRAC_PI_2) as f64;
+    let min_spacing = (p.spacing * 1e6) as i64;
+    let distance = (min_spacing as f64 / p.density) as i64;
+    if distance <= 0 {
+        return Vec::new();
+    }
+    let s3 = 3f64.sqrt();
+    let hex_side = (distance as f64 / (s3 / 2.0)) as i64;
+    let hex_width = distance * 2;
+    let pattern_height = hex_side * 2 + hex_side;
+    let y_short = (distance as f64 * s3 / 3.0) as i64;
+    let x_offset = min_spacing / 2;
+    let y_offset = (x_offset as f64 * s3 / 3.0) as i64;
+    let centre = ((hex_width / 2) as f64, hex_side as f64);
+    // Orca's `Point::rotate` about the centre, rounded to the nanometre.
+    let rotate = |(x, y): (f64, f64), a: f64| -> (f64, f64) {
+        let (s, c) = a.sin_cos();
+        let (dx, dy) = (x - centre.0, y - centre.1);
+        ((centre.0 + c * dx - s * dy).round(), (centre.1 + c * dy + s * dx).round())
+    };
+    // The object's frame, in nanometres from its centre.
+    let to_nm = |q: Pt| ((q.x as f64 - p.origin.0) / UNITS_PER_NM, (q.y as f64 - p.origin.1) / UNITS_PER_NM);
+    let from_nm = |(x, y): (f64, f64)| (p.origin.0 + x * UNITS_PER_NM, p.origin.1 + y * UNITS_PER_NM);
+    // The part's box, turned the other way about the centre, on the pattern's grid.
+    let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+    for &q in &part[0] {
+        let (x, y) = to_nm(q);
+        let (x, y) = (x.round() as i64, y.round() as i64);
+        bb = [bb[0].min(x), bb[1].min(y), bb[2].max(x), bb[3].max(y)];
+    }
+    let corners = [(bb[0], bb[1]), (bb[2], bb[1]), (bb[2], bb[3]), (bb[0], bb[3])];
+    let mut turned = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+    for (x, y) in corners {
+        let (x, y) = rotate((x as f64, y as f64), angle);
+        let (x, y) = (x as i64, y as i64);
+        turned = [turned[0].min(x), turned[1].min(y), turned[2].max(x), turned[3].max(y)];
+    }
+    turned[0] = turned[0].min(align(turned[0], hex_width));
+    turned[1] = turned[1].min(align(turned[1], pattern_height));
+    let step = y_short + hex_side + y_short + hex_side;
+    if step <= 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut x = turned[0];
+    while x <= turned[2] {
+        let mut line: Vec<(i64, i64)> = Vec::new();
+        let mut ax = [x + x_offset, x + distance - x_offset];
+        for _ in 0..2 {
+            line.reverse();
+            let mut y = turned[1];
+            while y <= turned[3] {
+                line.push((ax[1], y + y_offset));
+                line.push((ax[0], y + y_short - y_offset));
+                line.push((ax[0], y + y_short + hex_side + y_offset));
+                line.push((ax[1], y + y_short + hex_side + y_short - y_offset));
+                line.push((ax[1], y + y_short + hex_side + y_short + hex_side + y_offset));
+                y += step;
+            }
+            ax = [ax[1] + distance, ax[0] + distance];
+            x += distance;
+        }
+        out.push(line.into_iter().map(|(x, y)| from_nm(rotate((x as f64, y as f64), -angle))).collect());
+    }
+    out
 }
 
 // ---- Crosshatch (FillCrossHatch.cpp) ----
@@ -1671,6 +1842,7 @@ mod tests {
             pattern,
             origin: (sc(10.0) as f64, sc(10.0) as f64),
             z,
+            layer: 0,
             angle: 45.0,
             spacing: 0.407,
             density: 0.15,
@@ -1737,6 +1909,62 @@ mod tests {
     }
 
     #[test]
+    fn grid_lines_lie_both_ways_on_the_objects_grid() {
+        // Grid: lines at the infill direction's quarter turns (45° and 135°), the density shared between the two
+        // ways (0.407 / 0.075 apart), on a grid from the object's centre, the same on every layer.
+        let area = square(20.0);
+        let spacing = (0.407e6 / 0.075) as i64 as f64 / 1e6;
+        let (cx, cy) = (10.0, 10.0);
+        let mut lines = [0, 0];
+        for z in [0.2, 0.4, 3.0] {
+            for path in sparse(&area, -0.2, &params(Pattern::Grid, z)) {
+                for w in path.windows(2) {
+                    let (a, b) = ((geom::unsc(w[0].x), geom::unsc(w[0].y)), (geom::unsc(w[1].x), geom::unsc(w[1].y)));
+                    let heading = (b.1 - a.1).atan2(b.0 - a.0).to_degrees().rem_euclid(180.0);
+                    let way = [45.0, 135.0].iter().position(|h: &f64| (heading - h).abs() < 0.1);
+                    let Some(way) = way.filter(|_| (b.0 - a.0).hypot(b.1 - a.1) >= 3.0) else { continue };
+                    let normal = (heading + 90.0).to_radians();
+                    let across = (a.0 - cx) * normal.cos() + (a.1 - cy) * normal.sin();
+                    let off = across.rem_euclid(spacing);
+                    assert!(off.min(spacing - off) < 0.001, "a line {off} mm off the grid at {z}");
+                    lines[way] += 1;
+                }
+            }
+        }
+        assert!(lines[0] >= 6 && lines[1] >= 6, "{lines:?}");
+    }
+
+    #[test]
+    fn cubic_lines_run_three_ways_and_honeycomb_turns_every_layer() {
+        let area = square(20.0);
+        let headings = |paths: &[Contour]| {
+            let mut out: Vec<i64> = Vec::new();
+            for path in paths {
+                for w in path.windows(2) {
+                    if geom::dist(w[0], w[1]) >= sc(3.0) as f64 {
+                        let h = ((w[1].y - w[0].y) as f64).atan2((w[1].x - w[0].x) as f64).to_degrees();
+                        out.push(h.rem_euclid(180.0).round() as i64 % 180);
+                    }
+                }
+            }
+            // Not the joins along the square's sides.
+            out.retain(|&h| h != 0 && h != 90);
+            out.sort_unstable();
+            out.dedup();
+            out
+        };
+        // Cubic: lines across Orca's frames, turned by the infill direction and a quarter turn, then a third and two
+        // thirds of a turn more: at 45°, 105° and 165°.
+        assert_eq!(headings(&sparse(&area, -0.2, &params(Pattern::Cubic, 1.0))), vec![45, 105, 165]);
+        // Honeycomb: a different lattice on each of three layers, then the first again.
+        let layer =
+            |n: usize| sparse(&area, -0.2, &Sparse { layer: n, ..params(Pattern::Honeycomb, 0.2 * (n + 1) as f64) });
+        let (l0, l1, l2, l3) = (layer(0), layer(1), layer(2), layer(3));
+        assert!(l0 != l1 && l1 != l2 && l0 != l2);
+        assert_eq!(l0, l3);
+    }
+
+    #[test]
     fn a_hole_is_never_crossed() {
         let s = sc(20.0);
         let (h0, h1) = (sc(7.0), sc(13.0));
@@ -1744,7 +1972,7 @@ mod tests {
             vec![pt(0, 0), pt(s, 0), pt(s, s), pt(0, s)],
             vec![pt(h0, h0), pt(h0, h1), pt(h1, h1), pt(h1, h0)],
         ]];
-        for pattern in [Pattern::Crosshatch, Pattern::Gyroid] {
+        for pattern in [Pattern::Crosshatch, Pattern::Gyroid, Pattern::Grid, Pattern::Cubic, Pattern::Honeycomb] {
             for z in [1.0, 2.2, 4.0] {
                 let paths = sparse(&area, -0.2, &params(pattern, z));
                 assert!(!paths.is_empty());
