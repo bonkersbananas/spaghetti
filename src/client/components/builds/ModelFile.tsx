@@ -228,88 +228,105 @@ export function ModelStatus({
   /** Only where it stands and its undo: the settings below it say the rest (their sheet's result). */
   quiet?: boolean;
 }) {
+  if (state.kind === "saving") return <span className="text-small text-ink-faint">Saving the model…</span>;
+  const { lines, actions } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
+  // The lines change with the state; the row of actions stays in its place, "Slice with…" first in it, so the
+  // button keeps its place, and its popover stays open, while the card changes under it.
+  return (
+    <>
+      {lines}
+      <Actions>
+        {settings}
+        {actions}
+      </Actions>
+    </>
+  );
+}
+
+/** What a model's status says in each state, and what helps there (after "Slice with…"). */
+function statusOf(
+  state: Exclude<ModelState, { kind: "saving" }>,
+  {
+    phone,
+    line,
+    quiet,
+    onSlice,
+    onUndo,
+    onStop,
+  }: Omit<ModelActions, "settings"> & {
+    phone: boolean;
+    line?: ReactNode;
+    quiet?: boolean;
+  },
+): { lines: ReactNode; actions: ReactNode } {
+  const button = (label: ReactNode, onClick: () => void, icon?: typeof UndoIcon) => (
+    <Button variant="secondary" size="sm" icon={icon} onClick={onClick}>
+      {label}
+    </Button>
+  );
   switch (state.kind) {
-    case "saving":
-      return <span className="text-small text-ink-faint">Saving the model…</span>;
     case "waiting":
-      return <SliceProgress fraction={null} words="Waiting to slice" />;
+      return { lines: <SliceProgress fraction={null} words="Waiting to slice" />, actions: null };
     case "slicing":
-      return <SliceProgress fraction={state.fraction} words="Slicing" />;
+      return { lines: <SliceProgress fraction={state.fraction} words="Slicing" />, actions: null };
     case "sliced": {
       const { again, change, ahead } = state;
       const floating = !quiet && !again && !!state.slice.cautions?.includes("floating");
-      return (
-        <>
-          {line}
-          {again ? (
-            <SliceProgress fraction={again.fraction} words={`Slicing with ${again.words}`} />
-          ) : ahead ? (
-            <span className="text-small text-ink-soft">Not sliced with its new settings yet.</span>
-          ) : quiet && !change ? (
-            <span className="text-small text-ink-faint">Sliced with these settings.</span>
-          ) : null}
-          {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
-          <Actions>
-            {again && onStop && (
-              <Button variant="quiet" size="sm" onClick={onStop} aria-label="Stop, and keep the slice there">
-                Stop
-              </Button>
+      return {
+        lines: (
+          <>
+            {/* Slicing again, where it says how it was sliced: the card keeps its height. */}
+            {again ? (
+              <span className="flex flex-wrap items-center gap-x-2">
+                <SliceProgress fraction={again.fraction} words={`Slicing with ${again.words}`} />
+                {onStop && (
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    onClick={onStop}
+                    aria-label="Stop, and keep the slice there"
+                    className="-my-1.5"
+                  >
+                    Stop
+                  </Button>
+                )}
+              </span>
+            ) : (
+              line
             )}
-            {change && !again && onUndo && (
-              <Button variant="secondary" size="sm" icon={UndoIcon} onClick={onUndo}>
-                Undo
-              </Button>
+            {!again && ahead && <span className="text-small text-ink-soft">Not sliced with its new settings yet.</span>}
+            {!again && !ahead && quiet && !change && (
+              <span className="text-small text-ink-faint">Sliced with these settings.</span>
             )}
-            {floating && onSlice && (
-              <Button variant="secondary" size="sm" onClick={() => onSlice({ supports: "where-needed" })}>
-                Supports where needed
-              </Button>
-            )}
-            {ahead && !again && onSlice && (
-              <Button variant="secondary" size="sm" onClick={() => onSlice({})}>
-                Slice it
-              </Button>
-            )}
-            {settings}
-          </Actions>
-        </>
-      );
+            {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
+          </>
+        ),
+        actions: (
+          <>
+            {change && !again && onUndo && button("Undo", onUndo, UndoIcon)}
+            {floating && onSlice && button("Supports where needed", () => onSlice({ supports: "where-needed" }))}
+            {ahead && !again && onSlice && button("Slice it", () => onSlice({}))}
+          </>
+        ),
+      };
     }
     case "failed": {
       const help = remedy(state.slice, phone);
-      return (
-        <>
-          <Caution className="px-0">{problemSentence(state.slice, { phone })}</Caution>
-          <Actions>
-            {onSlice && help && (
-              <Button variant="secondary" size="sm" onClick={() => onSlice(help.change)}>
-                {help.label}
-              </Button>
-            )}
-            {state.change?.failed && onUndo && (
-              <Button variant="secondary" size="sm" icon={UndoIcon} onClick={onUndo}>
-                Back to the last slice
-              </Button>
-            )}
-            {settings}
-          </Actions>
-        </>
-      );
+      return {
+        lines: <Caution className="px-0">{problemSentence(state.slice, { phone })}</Caution>,
+        actions: (
+          <>
+            {onSlice && help && button(help.label, () => onSlice(help.change))}
+            {state.change?.failed && onUndo && button("Back to the last slice", onUndo, UndoIcon)}
+          </>
+        ),
+      };
     }
     case "unsliced":
-      return (
-        <>
-          <span className="text-small text-ink-faint">Not sliced yet</span>
-          <Actions>
-            {onSlice && (
-              <Button variant="secondary" size="sm" onClick={() => onSlice({})}>
-                Slice it
-              </Button>
-            )}
-            {settings}
-          </Actions>
-        </>
-      );
+      return {
+        lines: <span className="text-small text-ink-faint">Not sliced yet</span>,
+        actions: onSlice && button("Slice it", () => onSlice({})),
+      };
   }
 }
 

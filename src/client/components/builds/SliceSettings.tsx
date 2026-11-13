@@ -434,10 +434,10 @@ export function SliceAbout({
             href={engine.source}
             target="_blank"
             rel="noreferrer"
-            className="focus-ring text-ink-soft hover:text-ink inline-flex items-center gap-0.5 rounded-sm underline underline-offset-2"
+            className="focus-ring text-ink-soft hover:text-ink rounded-sm underline underline-offset-2"
           >
             Its source
-            <ExternalIcon size={12} aria-hidden />
+            <ExternalIcon size={12} className="ml-0.5 inline align-baseline" aria-hidden />
           </a>
         )}
       </p>
