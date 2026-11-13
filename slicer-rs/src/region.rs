@@ -208,7 +208,6 @@ pub fn regions(
         if !anchor.is_empty() {
             shell.push(&anchor);
         }
-        let shell = if shell.is_empty() { Vec::new() } else { geom::union_all(&shell) };
         reach.retain(|&j| run[j] != run[i]);
         let (top, bottom) = &exposed[i];
         // Solid infill's spacing, with Orca's allowance: what the shells are regularised by.
@@ -218,12 +217,18 @@ pub fn regions(
             .iter()
             .map(|island| {
                 let Some(b) = geom::bbox(&island.inner) else { return Fills::default() };
-                let (shell, top, bottom) = (geom::near(&shell, b), geom::near(top, b), geom::near(bottom, b));
+                let (top, bottom) = (geom::near(top, b), geom::near(bottom, b));
                 let own_top = geom::intersection(&island.inner, &top);
                 let own_bottom = geom::intersection(&island.inner, &bottom);
                 let internal = geom::difference(&geom::difference(&island.inner, &own_top), &own_bottom);
-                // Solid under the tops and over the bottoms within reach…
-                let shelled = if shell.is_empty() { Vec::new() } else { geom::intersection(&internal, &shell) };
+                // Solid under the tops and over the bottoms within reach (only theirs near this island)…
+                let near: Vec<Shapes> =
+                    shell.iter().map(|part| geom::near(part, b)).filter(|p| !p.is_empty()).collect();
+                let shelled = match near.len() {
+                    0 => Vec::new(),
+                    1 => geom::intersection(&internal, &near[0]),
+                    _ => geom::intersection(&internal, &geom::union_all(&near.iter().collect::<Vec<_>>())),
+                };
                 // …and where a layer within reach has no infill area over or under this one's.
                 let mut kept = internal.clone();
                 for &j in &reach {
@@ -298,25 +303,37 @@ fn one_kind(top: &Shapes, bottom: &Shapes, cracks_allowed: bool, margin: f64) ->
     let mut bottom = bottom.clone();
     if cracks_allowed {
         for crack in cracks {
+            // A crack wider than twice the margin both ways may be a part, not a crack.
+            let cb = geom::bbox_of(&crack);
+            let wide = geom::unsc(cb[2] - cb[0]) > 2.0 * margin && geom::unsc(cb[3] - cb[1]) > 2.0 * margin;
             let one = vec![crack];
-            if !geom::offset(&one, -margin).is_empty() {
+            if wide && !geom::offset(&one, -margin).is_empty() {
                 continue;
             }
-            let cb = geom::bbox_of(&one[0]);
             let crack_area = geom::shape_area_mm2(&one[0]);
             let held = bottom.iter().any(|b| {
                 let bb = geom::bbox_of(b);
+                if !(bb[0] <= cb[0] + 1 && bb[1] <= cb[1] + 1 && bb[2] >= cb[2] - 1 && bb[3] >= cb[3] - 1) {
+                    return false;
+                }
                 let it = vec![b.clone()];
-                bb[0] <= cb[0] + 1
-                    && bb[1] <= cb[1] + 1
-                    && bb[2] >= cb[2] - 1
-                    && bb[3] >= cb[3] - 1
+                geom::shape_area_mm2(b) > 2.0 * crack_area
                     && geom::difference(&one, &it).is_empty()
-                    && geom::shape_area_mm2(b) > 2.0 * crack_area
                     && !geom::offset(&geom::difference(&it, &one), -margin).is_empty()
             });
-            if !held {
-                bottom = geom::difference(&bottom, &geom::offset(&one, margin));
+            if held {
+                continue;
+            }
+            // The bottom gives way round the crack: only its shapes near the crack change.
+            let grown = geom::offset(&one, margin);
+            let Some(gb) = geom::bbox(&grown) else { continue };
+            let (near, far): (Shapes, Shapes) = bottom.into_iter().partition(|b| {
+                let bb = geom::bbox_of(b);
+                bb[0] <= gb[2] && gb[0] <= bb[2] && bb[1] <= gb[3] && gb[1] <= bb[3]
+            });
+            bottom = far;
+            if !near.is_empty() {
+                bottom.extend(geom::difference(&near, &grown));
             }
         }
     }
