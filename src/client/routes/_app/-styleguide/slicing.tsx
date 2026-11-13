@@ -193,6 +193,7 @@ const RECIPES = [
 ];
 const CHANGE = { before: { minutes: 72, grams: 14 }, after: { minutes: 48, grams: 11.2 } };
 const noop = () => undefined;
+const SUMMARY = ["Standard", "Everyday strength", "No supports", "PLA Basic jade white"];
 const PREFILL = { estimatedMinutes: 48, weightGrams: 11.2 };
 
 /** The sliced model the specimens' 3D control would open (there is no such file: the view says it can't read it). */
@@ -293,7 +294,7 @@ export function SlicingSection() {
             state={sliced()}
             prefill={PREFILL}
             download="#"
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <ModelCard
@@ -302,21 +303,21 @@ export function SlicingSection() {
             prefill={{ estimatedMinutes: 76, weightGrams: 7.7 }}
             download="#"
             onSlice={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <ModelCard
             name="lasagne-sheet.stl"
             state={{ kind: "failed", slice: TOO_BIG }}
             onSlice={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <ModelCard
             name="fusilli-knob.stl"
             state={{ kind: "unsliced" }}
             onSlice={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
         </div>
@@ -332,7 +333,7 @@ export function SlicingSection() {
             prefill={{ estimatedMinutes: 72, weightGrams: 14 }}
             download="#"
             onStop={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <ModelCard
@@ -341,7 +342,7 @@ export function SlicingSection() {
             prefill={PREFILL}
             download="#"
             onUndo={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <ModelCard
@@ -350,7 +351,7 @@ export function SlicingSection() {
             prefill={PREFILL}
             download="#"
             onSlice={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <ModelCard
@@ -358,7 +359,7 @@ export function SlicingSection() {
             state={{ kind: "failed", slice: TOO_BIG, change: { ...CHANGE, after: {}, failed: true } }}
             onSlice={noop}
             onUndo={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
           />
           <Label>
@@ -373,7 +374,7 @@ export function SlicingSection() {
             download="#"
             view3d={{ file: SAMPLE_MODEL }}
             onRemove={noop}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
             raised
           />
@@ -383,7 +384,7 @@ export function SlicingSection() {
             prefill={PREFILL}
             download="#"
             view3d={{ file: SAMPLE_MODEL }}
-            details={{ open: noop }}
+            details={{ open: noop, summary: SUMMARY }}
             phone={false}
             compact
           />

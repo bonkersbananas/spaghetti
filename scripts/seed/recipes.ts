@@ -33,7 +33,7 @@ const specs = [
     id: SEED_RECIPE_IDS.bins,
     build: BUILD(5),
     name: "PLA bins, fast and square",
-    note: "0.24 mm and a brim: six at once.",
+    note: "Draft layers and a brim: quick, and they sit square.",
     finish: null,
   },
 ];

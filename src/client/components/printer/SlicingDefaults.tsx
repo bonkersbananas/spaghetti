@@ -25,7 +25,7 @@ import { useLiveFields } from "@/lib/use-autosave";
 const loadTiles = () => import("@/components/builds/SliceSettings");
 const WorkspaceSlicing = lazy(() => loadTiles().then((m) => ({ default: m.WorkspaceSlicing })));
 
-/** "Standard quality · Standard strength · no supports": the defaults in the model card's words, while folded. */
+/** "Standard quality · Everyday strength · no supports": the defaults in the model card's words, while folded. */
 function defaultsWords(value: Defaults | null): string[] {
   const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
   const strength = strengthOf(settings);

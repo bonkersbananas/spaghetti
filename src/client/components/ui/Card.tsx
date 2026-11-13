@@ -307,12 +307,12 @@ export function PhotoCountBadge({ count }: { count: number }) {
   );
 }
 
-/** "Slicer preview" with the file glyph: a plate's picture where a photo would be, so nobody takes it for the result. */
+/** "Not a photo" with the file glyph: a plate's picture where a photo would be, so nobody takes it for the result. */
 export function SlicerPreviewBadge() {
   return (
     <span className="rounded-pill bg-veil text-caption text-on-veil inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
       <SlicerFileIcon size={13} weight="fill" aria-hidden />
-      Slicer preview
+      Not a photo
     </span>
   );
 }

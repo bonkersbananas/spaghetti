@@ -29,6 +29,8 @@ interface ChoiceTilesProps<T extends string> {
   layout?: "grid" | "scroll";
   columns?: 2 | 3 | 4;
   wideColumns?: 2 | 3 | 4;
+  /** Closer tiles for a row of four on a phone: less padding, so "Extra draft" and "Where needed" fit two lines wide. */
+  dense?: boolean;
   /** What is said under the tiles: by default the picked one's "Fine · slower, smoother". */
   caption?: ReactNode;
   disabled?: boolean;
@@ -52,6 +54,7 @@ export function ChoiceTiles<T extends string>({
   layout = "grid",
   columns = 3,
   wideColumns = columns,
+  dense,
   caption,
   disabled,
   className,
@@ -87,7 +90,8 @@ export function ChoiceTiles<T extends string>({
             <label
               key={option.value}
               className={cn(
-                "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-2 py-2.5 text-center",
+                "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg text-center",
+                dense ? "px-1 py-2 md:px-2 md:py-2.5" : "px-2 py-2.5",
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
@@ -115,7 +119,14 @@ export function ChoiceTiles<T extends string>({
                   {option.glyph}
                 </span>
               )}
-              <span className="text-small line-clamp-2 w-full font-semibold text-balance">{option.label}</span>
+              <span
+                className={cn(
+                  "line-clamp-2 w-full font-semibold text-balance",
+                  dense ? "text-caption md:text-small" : "text-small",
+                )}
+              >
+                {option.label}
+              </span>
               {option.detail && (
                 <span className={cn("text-caption tabular w-full truncate", !selected && "text-ink-faint")}>
                   {option.detail}

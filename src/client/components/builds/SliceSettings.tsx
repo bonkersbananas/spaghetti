@@ -119,8 +119,8 @@ export function SlicingChoices({
       )}
       <ChoiceTiles<QualityId>
         label="Quality"
-        columns={2}
-        wideColumns={4}
+        columns={4}
+        dense
         options={QUALITIES.map((choice) => ({
           value: choice.id,
           label: choice.label,
@@ -137,22 +137,37 @@ export function SlicingChoices({
         caption={
           quality ? undefined : (
             <>
-              {strong(`${layerMillimetres(settings.layerHeight)} layers`)}
+              {strong("Custom")} · {layerMillimetres(settings.layerHeight)} layers
               {slice?.settings.project ? " · as the file has them" : ""}
             </>
           )
         }
       />
-      <ChoiceTiles<StrengthId>
+      <ChoiceTiles<StrengthId | "custom">
         label="Strength"
-        options={STRENGTHS.map((choice) => ({
-          value: choice.id,
-          label: choice.label,
-          detail: `${choice.walls} walls · ${choice.infill}%`,
-          effect: choice.effect,
-          glyph: <StrengthGlyph strength={choice.id} />,
-        }))}
-        value={strength?.id ?? null}
+        columns={strength ? 3 : 4}
+        dense={!strength}
+        options={[
+          ...STRENGTHS.map((choice) => ({
+            value: choice.id,
+            label: choice.label,
+            detail: `${choice.walls} walls · ${choice.infill}%`,
+            effect: choice.effect,
+            glyph: <StrengthGlyph strength={choice.id} />,
+          })),
+          // Walls and infill that no tile says (a recipe's, a project's): shown as its own, picked, with its numbers.
+          ...(strength
+            ? []
+            : [
+                {
+                  value: "custom" as const,
+                  label: "Custom",
+                  detail: `${settings.walls} walls · ${settings.infill}%`,
+                  glyph: <SettingsIcon size={24} aria-hidden />,
+                },
+              ]),
+        ]}
+        value={strength?.id ?? "custom"}
         onChange={(id) => {
           const choice = STRENGTHS.find((candidate) => candidate.id === id);
           if (choice) set({ walls: choice.walls, infill: choice.infill, pattern: choice.pattern });
@@ -160,16 +175,16 @@ export function SlicingChoices({
         caption={
           strength ? undefined : (
             <>
-              {strong(`${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`)} · set under
-              More
+              {strong("Custom")} · {settings.walls} walls, {settings.infill}% {patternWords(settings.pattern)}, set
+              under More
             </>
           )
         }
       />
       <ChoiceTiles
         label="Supports"
-        columns={2}
-        wideColumns={4}
+        columns={4}
+        dense
         options={SUPPORT_PLACEMENTS.map((choice) => ({
           value: choice.id,
           label: choice.label,
@@ -181,7 +196,10 @@ export function SlicingChoices({
         caption={floating ? <>Parts of it float in the air: {strong("Where needed")} holds them up.</> : undefined}
       />
       {model && lying && lying.status !== "none" && (
-        <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
+        // Turning the model is about what it needs held up: it sits with the supports, a little closer than the groups.
+        <div className="-mt-3">
+          <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
+        </div>
       )}
       {model && <FilamentChoice settings={settings} spools={spools} onChange={(filaments) => set({ filaments })} />}
       <MoreSettings
@@ -215,29 +233,35 @@ function RecipeChoice({
 }) {
   const picked = recipes.find((recipe) => sameSlicing(settings, recipeSlicing(recipe, settings, spools)));
   const [first] = settings.filaments;
+  const [open, setOpen] = useState(false);
+  // One row until it is wanted: the choices below are what most slices change, and they come first on a phone.
   return (
-    <div className="flex flex-col gap-2.5">
-      <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">
-        From a recipe
-      </span>
-      <ChipRow label="Slice with a recipe">
-        {recipes.map((recipe, index) => (
-          <Fragment key={recipe.id}>
-            {index > 0 && recipes[index - 1]?.fits && !recipe.fits && <ChipDivider />}
-            <ToggleChip
-              icon={RecipeIcon}
-              tone="semolina"
-              selected={recipe === picked}
-              onClick={() => onChange(recipeSlicing(recipe, settings, spools))}
-            >
-              {recipe.name}
-            </ToggleChip>
-          </Fragment>
-        ))}
-      </ChipRow>
-      <p className="text-small text-ink-soft text-pretty">
-        {picked ? (
-          <>
+    <Disclosure
+      open={open}
+      onOpenChange={setOpen}
+      title="From a recipe"
+      icon={RecipeIcon}
+      summary={picked ? picked.name : "What worked before, in one tap"}
+      appearance="plain"
+    >
+      <div className="flex flex-col gap-2.5 pt-1">
+        <ChipRow label="Slice with a recipe">
+          {recipes.map((recipe, index) => (
+            <Fragment key={recipe.id}>
+              {index > 0 && recipes[index - 1]?.fits && !recipe.fits && <ChipDivider />}
+              <ToggleChip
+                icon={RecipeIcon}
+                tone="semolina"
+                selected={recipe === picked}
+                onClick={() => onChange(recipeSlicing(recipe, settings, spools))}
+              >
+                {recipe.name}
+              </ToggleChip>
+            </Fragment>
+          ))}
+        </ChipRow>
+        {picked && (
+          <p className="text-small text-ink-soft text-pretty">
             {picked.note || "What worked before."}
             {picked.fits === false && first && (
               <>
@@ -245,12 +269,10 @@ function RecipeChoice({
                 In <span className="text-ink font-semibold">{filamentWords(first)}</span>.
               </>
             )}
-          </>
-        ) : (
-          "What worked before, in one tap."
+          </p>
         )}
-      </p>
-    </div>
+      </div>
+    </Disclosure>
   );
 }
 
@@ -310,9 +332,8 @@ function LayItDown({
   return (
     <ChoiceTiles
       label="Lay it down"
-      // Four make a square of two by two, not three and one left over.
-      columns={options.length === 4 ? 2 : 3}
-      wideColumns={options.length === 4 ? 2 : 3}
+      columns={options.length >= 4 ? 4 : 3}
+      dense
       options={options}
       value={picked < 0 ? null : (options[picked]?.value ?? null)}
       onChange={(id) => {
@@ -450,7 +471,7 @@ function MoreSettings({
     slice?.status === "failed" && slice.fitScale && ["too-big", "too-tall", "too-many"].includes(slice.problem ?? "")
       ? slice.fitScale
       : null;
-  // The kind of supports means nothing while they are off: none is shown picked, and picking one turns them on.
+  // The kind of supports means nothing while they are off.
   const supportsOn = settings.supports === "where-needed" || settings.supports === "everywhere";
   // Room in each stepper for the widest value of the column (the size's, where there is one), so they line up.
   const room = scalable ? `${LIMITS.scale.max}%` : `${LIMITS.infill.max}%`;
@@ -473,31 +494,24 @@ function MoreSettings({
       appearance="plain"
     >
       <div className="flex flex-col gap-5 pt-1">
-        <SettingRow label="Kind of supports" wide>
-          <ChipRow label="How supports are built" wrap>
-            {SUPPORT_STYLES.map((choice) => (
-              <ToggleChip
-                key={choice.id}
-                tone="semolina"
-                selected={supportsOn && choice.id === settings.supportStyle}
-                onClick={() =>
-                  set({ supportStyle: choice.id as SupportStyle, ...(supportsOn ? {} : { supports: "where-needed" }) })
-                }
-              >
-                {choice.label}
-              </ToggleChip>
-            ))}
-          </ChipRow>
-          {supportsOn ? (
-            style && <Effect name={style.label} effect={style.effect} />
-          ) : (
-            <p className="text-small text-ink-faint">
-              {settings.supports === "fins"
-                ? "Fins are on: the model carries its own. Pick a kind to have the slicer's supports where needed instead."
-                : "Supports are off. Pick a kind to have them where needed."}
-            </p>
-          )}
-        </SettingRow>
+        {/* How supports are built means nothing while they are off (or the model carries fins): the Supports tiles above turn them on. */}
+        {supportsOn && (
+          <SettingRow label="Kind of supports" wide>
+            <ChipRow label="How supports are built" wrap>
+              {SUPPORT_STYLES.map((choice) => (
+                <ToggleChip
+                  key={choice.id}
+                  tone="semolina"
+                  selected={choice.id === settings.supportStyle}
+                  onClick={() => set({ supportStyle: choice.id as SupportStyle })}
+                >
+                  {choice.label}
+                </ToggleChip>
+              ))}
+            </ChipRow>
+            {style && <Effect name={style.label} effect={style.effect} />}
+          </SettingRow>
+        )}
         <SettingRow label="Brim" wide>
           <SegmentedControl<Brim>
             label="Brim"
