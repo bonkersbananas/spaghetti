@@ -1,13 +1,16 @@
 import type { Person } from "@shared/api";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { type ReactNode, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { scrollBehavior } from "@/lib/motion";
 import { Avatar } from "./Avatar";
-import { CommentIcon, ImageIcon, NextIcon, PreviousIcon, SlicerFileIcon } from "./icons";
+import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
+
+// The arrows (and their icons) arrive after the first screen: they only matter once a mouse hovers a card.
+const CardArrows = lazy(() => import("./CardArrows").then((m) => ({ default: m.CardArrows })));
 
 export interface CardPhoto {
   src: string;
@@ -234,32 +237,9 @@ export function Card({
       {card}
       {/* Mouse only (a finger swipes, a trackpad scrolls): laid over the photo beside the card's link, not inside it,
         so the link stays one control. Keyboards see every photo on the page the card opens. */}
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-1.5 top-1.5 hidden items-center justify-between px-2 pointer-fine:flex",
-          aspects[aspect],
-        )}
-      >
-        {[
-          { label: "Previous photo", Icon: PreviousIcon, to: index - 1 },
-          { label: "Next photo", Icon: NextIcon, to: index + 1 },
-        ].map(({ label, Icon, to }) => (
-          <button
-            key={label}
-            type="button"
-            tabIndex={-1}
-            aria-hidden
-            title={label}
-            onClick={() => go(to)}
-            className={cn(
-              "pressable bg-veil text-on-veil shadow-raised duration-fast flex size-8 items-center justify-center rounded-full opacity-0 backdrop-blur-md transition-opacity",
-              to >= 0 && to < slides.length ? "pointer-events-auto group-hover/photos:opacity-100" : "invisible",
-            )}
-          >
-            <Icon size={15} weight="bold" />
-          </button>
-        ))}
-      </div>
+      <Suspense fallback={null}>
+        <CardArrows index={index} count={slides.length} onGo={go} className={aspects[aspect]} />
+      </Suspense>
     </div>
   );
 }
