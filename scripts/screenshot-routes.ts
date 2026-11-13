@@ -6,6 +6,7 @@ import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
+import { gridfinityBin } from "./seed/stl-bin.ts";
 import { SEED_TWIST_IDS } from "./seed/twists.ts";
 
 /** The spool that sat in A4 before the unknown-tray shot emptied it. */
@@ -2328,13 +2329,10 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByRole("button", { name: "Adapt an STL" }).click();
       const sheet = page.getByRole("dialog", { name: "Adapt an STL" });
-      const face = (a: string, b: string, c: string) =>
-        `facet normal 0 0 0\nouter loop\nvertex ${a}\nvertex ${b}\nvertex ${c}\nendloop\nendfacet\n`;
-      const stl = `solid bin\n${face("0 0 0", "0 50 0", "50 0 0")}${face("0 0 0", "50 0 0", "0 0 30")}${face("0 0 0", "0 0 30", "0 50 0")}${face("50 0 0", "0 50 0", "0 0 30")}endsolid bin`;
       await sheet
         .getByTestId("adapt-file-input")
-        .setInputFiles({ name: "gridfinity-bin.stl", mimeType: "model/stl", buffer: Buffer.from(stl) });
-      await sheet.getByRole("textbox", { name: "Fit to length" }).fill("42");
+        .setInputFiles({ name: "gridfinity-bin.stl", mimeType: "model/stl", buffer: gridfinityBin() });
+      await sheet.getByRole("textbox", { name: "Fit to length" }).fill("63");
       await sheet.getByRole("button", { name: "Fit", exact: true }).click();
       await sheet.getByRole("button", { name: "X", exact: true }).first().click();
       await page.waitForTimeout(500);

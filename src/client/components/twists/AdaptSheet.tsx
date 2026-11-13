@@ -12,7 +12,7 @@ import {
   triangleCount,
   writeStl,
 } from "@shared/mesh";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { TextField } from "@/components/ui/Field";
@@ -20,6 +20,7 @@ import { DownloadIcon, SlicerFileIcon, UndoIcon } from "@/components/ui/icons";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
+import { MeshPreview } from "./MeshPreview";
 
 /** What the sheet hands back when the adapted file is made: the changes, in the twist's words. */
 export type AdaptedChange = ReturnType<typeof describeAdaptation>[number];
@@ -78,7 +79,11 @@ export default function AdaptSheet({
   const adaptation: Adaptation = { scale: Number.isFinite(factor) && factor > 0 ? factor : 1, mirror, turns };
   const validScale = Number.isFinite(factor) && factor > 0 && factor <= 100;
   const before = file ? boundsOf(file.mesh).size : null;
-  const after = file && validScale ? boundsOf(adaptMesh(file.mesh, adaptation)).size : null;
+  const adapted = useMemo(
+    () => (file && validScale ? adaptMesh(file.mesh, { scale: factor, mirror, turns }) : null),
+    [file, validScale, factor, mirror, turns],
+  );
+  const after = adapted ? boundsOf(adapted).size : null;
 
   function fit() {
     if (!file) return;
@@ -138,23 +143,26 @@ export default function AdaptSheet({
       title="Adapt an STL"
       footer={
         file ? (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              icon={DownloadIcon}
-              className="flex-1"
-              disabled={!validScale || isUnchanged(adaptation)}
-              onClick={download}
-            >
-              Download the STL
-            </Button>
-            <Button variant="quiet" icon={UndoIcon} onClick={reset} disabled={isUnchanged(adaptation)}>
-              Reset
-            </Button>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                icon={DownloadIcon}
+                className="flex-1"
+                disabled={!validScale || isUnchanged(adaptation)}
+                onClick={download}
+              >
+                Download the STL
+              </Button>
+              <Button variant="quiet" icon={UndoIcon} onClick={reset} disabled={isUnchanged(adaptation)}>
+                Reset
+              </Button>
+            </div>
+            <p className="text-caption text-ink-faint text-center">Made on this device</p>
           </div>
         ) : undefined
       }
-      description="Scale it, mirror it, turn it. The model stays on this device; we make a new file."
+      description="Scale it, mirror it, turn it. You get a new STL."
     >
       <div className="flex flex-col gap-6">
         <input
@@ -184,9 +192,9 @@ export default function AdaptSheet({
               </p>
             </div>
 
-            <div className="bg-ink/4 flex flex-col gap-1 rounded-lg p-4">
-              <p className="text-small text-ink-faint">It will be</p>
-              <p className="text-title text-ink font-semibold">{after ? size(after) : "—"}</p>
+            <div className="bg-lifted sticky top-0 z-10 -mx-1 flex flex-col gap-2 px-1 pb-2">
+              <MeshPreview mesh={adapted ?? file.mesh} />
+              <p className="text-body text-ink tabular text-center font-semibold">{after ? size(after) : "—"}</p>
             </div>
 
             <div className="flex flex-col gap-3">

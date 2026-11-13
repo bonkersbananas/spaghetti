@@ -189,6 +189,8 @@ endsolid tetra`;
   await adapt.getByRole("button", { name: "Fit", exact: true }).click();
   await expect(adapt.getByRole("textbox", { name: "Scale" })).toHaveValue("140");
   await expect(adapt.getByText("14 × 28 × 42 mm")).toBeVisible();
+  await expect(adapt.getByRole("img", { name: "The model as it will be" })).toBeVisible();
+  await expect(adapt.getByText("Made on this device")).toBeVisible();
   await adapt.getByRole("button", { name: "X", exact: true }).first().click();
 
   const download = page.waitForEvent("download");
