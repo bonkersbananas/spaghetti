@@ -1,0 +1,55 @@
+name: Rust slicer
+
+# The experimental Rust slicer (slicer-rs/, docs/proposals/rust-slicer.md): formatting, lints, tests, the native
+# build, the WebAssembly build and one model sliced end to end, in one job. It runs only when the crate or this
+# file changes: nothing else uses the crate yet, and runners are scarce (docs/ci.md).
+on:
+  pull_request:
+    paths:
+      - slicer-rs/**
+      - .github/workflows/slicer-rs.yml
+  push:
+    branches: [main]
+    paths:
+      - slicer-rs/**
+      - .github/workflows/slicer-rs.yml
+
+concurrency:
+  group: slicer-rs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  slicer:
+    name: Rust slicer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: slicer-rs
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust (stable, with the WebAssembly target)
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy --target wasm32-unknown-unknown
+          rustup default stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            slicer-rs/target
+          key: slicer-rs-${{ runner.os }}-${{ hashFiles('slicer-rs/Cargo.lock') }}
+          restore-keys: slicer-rs-${{ runner.os }}-
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --release
+      - name: WebAssembly
+        run: |
+          cargo clippy --lib --target wasm32-unknown-unknown --no-default-features -- -D warnings
+          cargo rustc --release --lib --crate-type cdylib --target wasm32-unknown-unknown --no-default-features
+          ls -l target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm
+      - name: The command line slices a model end to end
+        run: |
+          cargo build --release
+          ./target/release/spaghetti-slicer --timings tests/models/bridge.stl -o /tmp/bridge.gcode.3mf --stats /tmp/bridge.json
+          unzip -l /tmp/bridge.gcode.3mf

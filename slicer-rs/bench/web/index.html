@@ -1,0 +1,57 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Slicer benchmark</title>
+<script type="module">
+  // Runs the WebAssembly slicer on the page's main thread, as the benchmark asks: window.runSlice(paths, keep).
+  let instance;
+  async function load() {
+    if (instance) return 0;
+    const t0 = performance.now();
+    ({ instance } = await WebAssembly.instantiateStreaming(fetch("/wasm/spaghetti_slicer.wasm"), {
+      env: { now_ms: () => performance.now() },
+    }));
+    return performance.now() - t0;
+  }
+  window.runSlice = async (paths, keep) => {
+    const instantiateMs = await load();
+    const e = instance.exports;
+    const files = await Promise.all(
+      paths.map(async (p) => ({
+        name: new TextEncoder().encode(p.split("/").pop()),
+        data: new Uint8Array(await (await fetch(p)).arrayBuffer()),
+      })),
+    );
+    const size = 4 + files.reduce((sum, f) => sum + 8 + f.name.length + f.data.length, 0);
+    const t1 = performance.now();
+    const ptr = e.alloc(size);
+    const bytes = new Uint8Array(e.memory.buffer, ptr, size);
+    const view = new DataView(e.memory.buffer, ptr, size);
+    let at = 0;
+    view.setUint32(at, files.length, true);
+    at += 4;
+    for (const f of files) {
+      view.setUint32(at, f.name.length, true);
+      bytes.set(f.name, at + 4);
+      at += 4 + f.name.length;
+      view.setUint32(at, f.data.length, true);
+      bytes.set(f.data, at + 4);
+      at += 4 + f.data.length;
+    }
+    const code = e.slice(ptr, size, keep ? 1 : 0);
+    const sliceMs = performance.now() - t1;
+    e.dealloc(ptr, size);
+    if (code !== 0) return { error: code };
+    const memory = e.memory.buffer;
+    const summary = JSON.parse(new TextDecoder().decode(new Uint8Array(memory, e.summary_ptr(), e.summary_len())));
+    const fileBytes = e.output_len();
+    e.clear();
+    return {
+      instantiateMs,
+      sliceMs,
+      wasmMemoryMB: Math.round(memory.byteLength / 1048576),
+      fileBytes,
+      timings: summary.timings,
+      stats: summary.stats.summary,
+    };
+  };
+</script>
