@@ -906,6 +906,8 @@ struct Planner<'a> {
     prev_cruise: f64,
     prev_axis: [f64; 4],
     prev_safe: f64,
+    /// The way the last move went (a unit vector; none for one that only moved the filament).
+    prev_dir: [f64; 3],
 }
 
 impl Planner<'_> {
@@ -924,7 +926,24 @@ impl Planner<'_> {
             return;
         }
         let inv = 1.0 / dist;
+        let dir = if xyz > 1e-9 { [delta[0] / xyz, delta[1] / xyz, delta[2] / xyz] } else { [0.0; 3] };
+        let set = if m.accel.is_finite() { m.accel } else { s.travel_accel };
         let mut cruise = m.f;
+        // Bambu's limit on curves (Orca's estimator, "limit the cruise according to centripetal acceleration"): where
+        // the path turns by less than about 29° from the last move, no faster than the print acceleration allows round
+        // the circle the turn implies.
+        if (self.prev_dir[0] != 0.0 || self.prev_dir[1] != 0.0) && (dir[0] != 0.0 || dir[1] != 0.0) {
+            let (l1, l2) = (self.prev_dir[0].hypot(self.prev_dir[1]), dir[0].hypot(dir[1]));
+            let v1 = (self.prev_dir[0] / l1, self.prev_dir[1] / l1);
+            let v2 = (dir[0] / l2, dir[1] / l2);
+            let norm_diff = (v2.0 - v1.0).hypot(v2.1 - v1.1);
+            if norm_diff < 0.5 && norm_diff > 0.00001 {
+                let angle = (v1.0 * v2.1 - v1.1 * v2.0).atan2(v1.0 * v2.0 + v1.1 * v2.1);
+                let sin_half = ((1.0 - angle.cos()) * 0.5).sqrt();
+                let r = delta[0].hypot(delta[1]) * 0.5 / sin_half;
+                cruise = cruise.min((set.min(s.max_accel_extruding) * r).sqrt());
+            }
+        }
         let mut axis = [0.0f64; 4];
         let mut factor = 1.0f64;
         for a in 0..4 {
@@ -938,7 +957,6 @@ impl Planner<'_> {
         for v in &mut axis {
             *v *= factor;
         }
-        let set = if m.accel.is_finite() { m.accel } else { s.travel_accel };
         let mut accel = match m.kind {
             Kind::Travel | Kind::TravelZ | Kind::Lift | Kind::Spiral { .. } => set.min(s.max_accel_travel),
             Kind::Retract => s.max_accel_retract,
@@ -963,9 +981,26 @@ impl Planner<'_> {
             junction = if prev_larger { cruise } else { self.prev_cruise };
             let mut v_factor = 1.0;
             let mut limited = false;
-            for a in 0..4 {
-                let mut v_exit = self.prev_axis[a];
-                let mut v_entry = axis[a];
+            // X, Y and Z together, as Bambu's estimator has it: the change of velocity on each, scaled down by
+            // everything found so far wherever one is too much.
+            let exit_scale = self.prev_cruise * if prev_larger { smaller } else { 1.0 };
+            let mut change = [0.0f64; 3];
+            for a in 0..3 {
+                change[a] = (cruise * dir[a] - exit_scale * self.prev_dir[a]).abs();
+            }
+            for a in 0..3 {
+                if change[a] > jerk[a] {
+                    v_factor *= jerk[a] / change[a];
+                    for c in &mut change {
+                        *c *= v_factor;
+                    }
+                    limited = true;
+                }
+            }
+            // The filament as Marlin's classic jerk has it: coasting or reversing.
+            {
+                let mut v_exit = self.prev_axis[3];
+                let mut v_entry = axis[3];
                 if prev_larger {
                     v_exit *= smaller;
                 }
@@ -980,8 +1015,8 @@ impl Planner<'_> {
                 } else {
                     (-v_exit).max(v_entry)
                 };
-                if j > jerk[a] {
-                    v_factor *= jerk[a] / j;
+                if j > jerk[3] {
+                    v_factor *= jerk[3] / j;
                     limited = true;
                 }
             }
@@ -1007,11 +1042,13 @@ impl Planner<'_> {
         self.prev_cruise = cruise;
         self.prev_axis = axis;
         self.prev_safe = safe;
+        self.prev_dir = dir;
     }
 }
 
-/// Each move's seconds: the printer's planner, as Orca's G-code processor models it (Marlin's classic jerk). A
-/// spiral lift is timed as the straight pieces the processor splits it into.
+/// Each move's seconds: the printer's planner, as Orca's G-code processor models it (Marlin's classic jerk, with
+/// Bambu's limit on curves and its jerk on X, Y and Z together). A spiral lift is timed as the straight pieces the
+/// processor splits it into.
 fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
     let mut p = Planner {
         s,
@@ -1021,6 +1058,7 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
         prev_cruise: 0.0,
         prev_axis: [0.0; 4],
         prev_safe: 0.0,
+        prev_dir: [0.0; 3],
     };
     for (i, m) in moves.iter().enumerate() {
         if let Kind::Spiral { i: ci, j: cj } = m.kind {
@@ -1729,6 +1767,140 @@ mod tests {
         assert_eq!(duration(5.9), "5s");
         assert_eq!(duration(0.5), "0.500000s");
         assert_eq!(duration(90061.0), "1d 1h 1m 1s");
+    }
+
+    /// A circle of radius `r` mm in `n` chords, printed at 200 mm/s and 5,000 mm/s², timed by the planner.
+    fn circle_time(r: f64, n: usize) -> f64 {
+        let s = Settings::default();
+        let moves: Vec<Move> = (1..=n)
+            .map(|k| {
+                let a = 2.0 * PI * k as f64 / n as f64;
+                Move {
+                    x: r * a.cos(),
+                    y: r * a.sin(),
+                    z: 0.2,
+                    e: 0.01,
+                    f: 200.0,
+                    accel: 5000.0,
+                    kind: Kind::Extrude(Role::OuterWall),
+                    width: 0.42,
+                }
+            })
+            .collect();
+        timing(&moves, [r, 0.0, 0.2], &s).iter().sum()
+    }
+
+    #[test]
+    fn curves_slow_down_as_bambus_estimator_has_them() {
+        // A tight curve: chords 5° apart round a 2 mm circle go no faster than √(5,000 · 2) = 100 mm/s (starting and
+        // stopping take a little more).
+        let (r, n) = (2.0, 72);
+        let length = n as f64 * 2.0 * r * (PI / n as f64).sin();
+        let t = circle_time(r, n);
+        assert!(t > length / 100.0 && t < length / 100.0 * 1.2, "{t} for {length} mm");
+        // A gentle one (√(5,000 · 20) is over 200 mm/s) at the speed asked for.
+        let (r, n) = (20.0, 360);
+        let length = n as f64 * 2.0 * r * (PI / n as f64).sin();
+        let t = circle_time(r, n);
+        assert!(t > length / 200.0 && t < length / 200.0 * 1.1, "{t} for {length} mm");
+    }
+
+    /// Times a G-code file (Orca's, say) with this planner, layer by layer and feature by feature, to hold it to
+    /// Orca's own estimate: `SPAGHETTI_TIME_GCODE=plate_1.gcode cargo test --release time_a_gcode_file -- --ignored
+    /// --nocapture`. Arcs are split as Orca's estimator splits them.
+    #[test]
+    #[ignore]
+    fn time_a_gcode_file() {
+        let path = std::env::var("SPAGHETTI_TIME_GCODE").expect("SPAGHETTI_TIME_GCODE: the G-code to time");
+        let text = std::fs::read_to_string(path).unwrap();
+        let s = Settings::default();
+        let mut role = Role::OuterWall;
+        let (mut x, mut y, mut z, mut f, mut accel) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, f64::NAN);
+        let mut moves: Vec<Move> = Vec::new();
+        let mut start = [0.0; 3];
+        let mut totals: std::collections::BTreeMap<&str, f64> = Default::default();
+        let mut started = false;
+        let flush = |moves: &mut Vec<Move>, start: [f64; 3], totals: &mut std::collections::BTreeMap<&str, f64>| {
+            for (m, t) in moves.iter().zip(timing(moves, start, &s)) {
+                let key = if let Kind::Extrude(r) = m.kind { r.feature() } else { "Travel, retractions and lifts" };
+                *totals.entry(key).or_default() += t;
+            }
+            moves.clear();
+        };
+        for line in text.lines() {
+            if line.starts_with("; CHANGE_LAYER") {
+                if started {
+                    flush(&mut moves, start, &mut totals);
+                }
+                (started, start) = (true, [x, y, z]);
+                continue;
+            }
+            if let Some(name) = line.strip_prefix("; FEATURE: ") {
+                role = Role::ALL.into_iter().find(|r| r.feature() == name.trim()).unwrap_or(Role::SparseInfill);
+                continue;
+            }
+            let code = line.split(';').next().unwrap_or("").trim();
+            if let Some(v) = code.strip_prefix("M204 S") {
+                accel = v.trim().parse().unwrap_or(accel);
+                continue;
+            }
+            let mut words = code.split_whitespace();
+            let Some(g @ ("G0" | "G1" | "G2" | "G3")) = words.next() else { continue };
+            let (mut nx, mut ny, mut nz, mut e, mut i, mut j) = (x, y, z, 0.0, 0.0, 0.0);
+            for w in words {
+                let v: f64 = w[1..].parse().unwrap_or(0.0);
+                match &w[..1] {
+                    "X" => nx = v,
+                    "Y" => ny = v,
+                    "Z" => nz = v,
+                    "E" => e = v,
+                    "I" => i = v,
+                    "J" => j = v,
+                    "F" => f = v / 60.0,
+                    _ => {}
+                }
+            }
+            if !started {
+                (x, y, z) = (nx, ny, nz);
+                continue;
+            }
+            let mv = |x: f64, y: f64, z: f64, e: f64, kind: Kind| Move { x, y, z, e, f, accel, kind, width: 0.4 };
+            let moved = (nx - x).abs() > 1e-9 || (ny - y).abs() > 1e-9;
+            if g == "G0" || g == "G1" {
+                let kind = match (moved, e > 0.0) {
+                    (true, true) => Kind::Extrude(role),
+                    (true, false) => Kind::Travel,
+                    _ if (nz - z).abs() > 1e-9 => Kind::Lift,
+                    _ if e != 0.0 => Kind::Retract,
+                    _ => continue,
+                };
+                moves.push(mv(nx, ny, nz, e, kind));
+            } else if !moved {
+                moves.push(mv(nx, ny, nz, 0.0, Kind::Spiral { i, j }));
+            } else {
+                let (cx, cy, r) = (x + i, y + j, i.hypot(j));
+                let a0 = (y - cy).atan2(x - cx);
+                let mut d = (ny - cy).atan2(nx - cx) - a0;
+                if g == "G3" && d <= 0.0 {
+                    d += 2.0 * PI;
+                }
+                if g == "G2" && d >= 0.0 {
+                    d -= 2.0 * PI;
+                }
+                let n = arc_steps(r, d.abs());
+                let kind = if e > 0.0 { Kind::Extrude(role) } else { Kind::Travel };
+                for k in 1..=n {
+                    let a = a0 + d * k as f64 / n as f64;
+                    let (px, py) = if k == n { (nx, ny) } else { (cx + r * a.cos(), cy + r * a.sin()) };
+                    moves.push(mv(px, py, nz, e / n as f64, kind));
+                }
+            }
+            (x, y, z) = (nx, ny, nz);
+        }
+        flush(&mut moves, start, &mut totals);
+        for (feature, t) in &totals {
+            println!("{feature}: {t:.1} s");
+        }
     }
 
     #[test]

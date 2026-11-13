@@ -53,6 +53,12 @@ To compare what the two write around the toolpaths, diff the head (everything be
 python3 -I bench/headtail.py bench/out/rust-native-4t-benchy/out.gcode bench/out/orca-native-benchy/plate_1.gcode
 ```
 
+To hold the estimate's planner to Orca's, time Orca's own G-code with it, feature by feature, and compare with Orca's estimate (`results.json`, the `orca-native` runs' features):
+
+```sh
+SPAGHETTI_TIME_GCODE=bench/out/orca-native-plate/plate_1.gcode cargo test --release time_a_gcode_file -- --ignored --nocapture
+```
+
 To look at one layer of any G-code (Orca's or ours), coloured by feature, Orca's arcs drawn as arcs:
 
 ```sh
