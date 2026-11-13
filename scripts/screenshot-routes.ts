@@ -1845,7 +1845,9 @@ export const shots: Shot[] = [
       await fitSmallNozzle(page, "main");
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
       await sliceSaved(page);
-      await page.getByRole("button", { name: /^Slice with… Standard, Everyday strength, No supports, 0\.2 mm nozzle/ }).waitFor();
+      await page
+        .getByRole("button", { name: /^Slice with… Standard, Everyday strength, No supports, 0\.2 mm nozzle/ })
+        .waitFor();
     },
     beforeShot: modelInView,
     cleanup: async (page) => {
