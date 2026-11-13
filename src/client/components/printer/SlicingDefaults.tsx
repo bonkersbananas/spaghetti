@@ -82,6 +82,12 @@ export function SlicingDefaults() {
         summary={<MetaList>{defaultsWords(value.slicing)}</MetaList>}
       >
         <fieldset disabled={readOnly} className="min-w-0 pt-3">
+          {/* Why the tiles are dimmed: offline the setup is for reading only. */}
+          {readOnly && (
+            <p className="text-small text-ink-soft mb-5 text-pretty">
+              Offline: you can read these, and change them once you're back online.
+            </p>
+          )}
           <Suspense fallback={<TilesSkeleton />}>
             <WorkspaceSlicing value={value.slicing ?? undefined} onChange={setDefaults} />
           </Suspense>

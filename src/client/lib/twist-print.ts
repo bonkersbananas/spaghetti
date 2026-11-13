@@ -2,7 +2,10 @@ import { fileUrl, type Twist } from "@shared/api";
 import { carryOver } from "@shared/attempts";
 import { keepOwnFilaments } from "@shared/slicing/filaments.ts";
 import { slicedName } from "@shared/slicing/files.ts";
+import { slicingOfSlice } from "@shared/slicing/model.ts";
+import { slicingSummary } from "@shared/slicing/settings.ts";
 import { applyFileSettings } from "@shared/threemf/prefill.ts";
+import { formatDuration } from "@shared/time.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { createBuild, logAttempt } from "./builds";
@@ -13,6 +16,16 @@ export const slicedModelOf = (twist: Pick<Twist, "model">) => {
   const model = twist.model;
   return model && !("pending" in model) && model.kind === "model" && model.slice?.status === "sliced" ? model : null;
 };
+
+/** What was sliced into the attempt, in one line: "Sliced in Spaghetti: Standard · Everyday strength · No supports · PLA Basic jade white · 42 min". */
+export function slicedLine(model: NonNullable<ReturnType<typeof slicedModelOf>>): string {
+  const minutes = model.prefill.estimatedMinutes;
+  const pieces = [
+    ...(model.slice ? slicingSummary(slicingOfSlice(model.slice)) : []),
+    ...(minutes !== undefined ? [formatDuration(minutes)] : []),
+  ];
+  return pieces.length ? `Sliced in Spaghetti: ${pieces.join(" · ")}` : "";
+}
 
 /**
  * "Print it" on a twist: a build named for it (as before) and, when the twist's model is sliced, a first attempt that is
@@ -53,7 +66,8 @@ async function attachModel(
       {
         outcome: null,
         printedAt: Date.now(),
-        note: "",
+        // One line on what the file was sliced with, in the attempt's own words, to edit or keep.
+        note: slicedLine(model),
         failureTags: [],
         successNotes: [],
         settings,

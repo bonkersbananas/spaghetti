@@ -634,6 +634,9 @@ impl Settings {
             && let Some(what) = self.support.unsupported(self)
         {
             Some(what)
+        } else if self.support.raft_layers > 0 {
+            // Orca prints a raft under the objects whether or not supports are on.
+            Some("a raft")
         } else if self.spiral_mode {
             Some("spiral vase mode")
         } else if self.print_sequence == "by object" {

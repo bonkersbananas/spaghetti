@@ -142,6 +142,20 @@ In order of what matters for a good print with the default profile. A small item
 
 The estimate will follow once the features above are in: the planner already models the X2D. A rough guess at parity with Orca for single-filament prints without supports: three to four weeks of sessions, each item measured against Orca as in this proposal.
 
+### What keeps it from being the app's slicer
+
+What the app's "Slice with…" can ask for (`src/shared/slicing/settings.ts`), tried on Nov 13 with a Benchy and the setup the app makes (`bench/setup.mts`). The app hands a slicer the meshes it has laid down, scaled, arranged and given fins itself, so those already work with any slicer. The Rust slicer slices every layer height a 0.4 mm nozzle takes (0.08 to 0.28 mm, measured against Orca at 0.20 mm so far), 1 to 12 walls, 0 to 100 % infill, the six patterns people pick and zig-zag, normal supports where needed or everywhere, auto, on and off brims, all seven plates, and one filament of any kind. What stops it, in the order of the work: a refusal makes the app fall back to Orca's engine; a note means it slices, but otherwise than asked.
+
+1. **Tree supports**, the app's support style unless people pick another: refused. Orca's organic trees are being ported (large).
+2. **Nozzles other than 0.4 mm**: 0.2 first, then 0.6 and 0.8. Neither engine has their presets yet; ours needs Orca's X2D presets for each, checked against Orca at their own layer heights (a Benchy at 0.10 mm on the 0.2).
+3. **Filaments other than PLA**: they slice with a note. Orca lifts the nozzle along a slope between moves for the X2D's generic filaments ("Auto Lift"); ours lifts in Bambu PLA's spiral (small).
+4. **Several filaments**: AMS colours, the second nozzle, the prime tower and flushing. A model in colour is refused (large).
+5. **The other supports**: slim, strong and hybrid trees (Orca's older tree code) and snug normal supports, refused (medium each).
+6. **The patterns only a project asks for**, 13 of them from adaptive cubic to TPMS-D: straight lines, with a note (small to medium each).
+7. **The rest of what a project's settings can ask for**: Arachne walls, ironing and fuzzy skin (notes); spiral vase, one object after another, brim ears and inner brims, and rafts (refused; a raft with supports off sliced without it until Nov 13).
+
+Before any of it, a watched print (section 5's first row). For the module in the app: hand it the app's placed meshes with their placement kept (`slice` with flag 1) and a setup whose `slicing.scale` is 100, since otherwise it scales the models by that and arranges the plate again.
+
 ## 6. Where it could run
 
 - **On a bridge-like host, as an offline slicing proxy.** A 2.6 MB program, slicing a Benchy in under half a second and a full plate in about 5 s, in 250 MB. It needs nothing installed, and nothing from Bambu or the internet.

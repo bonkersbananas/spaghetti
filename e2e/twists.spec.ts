@@ -273,6 +273,8 @@ test("keeps an adapted STL as the twist's model, slices it, slices it again, and
   await expect(page.getByRole("button", { name: /^See fusilli-knob, 110 %\.gcode\.3mf in 3D$/ })).toBeVisible({
     timeout: SLICED,
   });
+  // One line on what it was sliced with, in the attempt's note.
+  await expect(page.getByText(/Sliced in Spaghetti: .*Standard/)).toBeVisible();
 });
 
 test("adapting again says it replaced the model, and Undo brings the old one back", async ({ page }) => {

@@ -79,16 +79,22 @@ function useBracketLying(colour: string): LyingState {
     };
     const options = [
       { down: null, area: 0, mesh: layMeshDown(BRACKET, [0, 0, -1]) },
-      ...restingFaces(BRACKET, 6)
-        .filter((face) => face.down[2] > -0.99)
-        .slice(0, 3)
-        .map((face) => ({ down: face.down, area: face.area, mesh: layMeshDown(BRACKET, face.down) })),
+      // Two with a flat face, then the one it only stands on at its edges (the slanted face across the hollow).
+      ...[
+        ...restingFaces(BRACKET, 6)
+          .filter((face) => face.down[2] > -0.99)
+          .reduce<ReturnType<typeof restingFaces>>((kept, face) => {
+            if (face.spots ? kept.some((k) => k.spots) : kept.filter((k) => !k.spots).length >= 2) return kept;
+            return [...kept, face];
+          }, []),
+      ].map((face) => ({ down: face.down, area: face.area, spots: face.spots, mesh: layMeshDown(BRACKET, face.down) })),
     ];
     setState({
       status: "ready",
       options: options.map((option) => ({
         down: option.down,
         area: option.area,
+        spots: "spots" in option ? option.spots : undefined,
         height: height(option.mesh),
         src: draw(option.mesh),
       })),
@@ -392,11 +398,14 @@ export function SlicingSection() {
         </div>
       </div>
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-2">
+      <div className="mt-10 flex flex-col gap-10">
         <div className="flex min-w-0 flex-col gap-4">
-          <Label>How to slice it (live): a popover hanging below the card on desktop, a tall sheet on phones</Label>
-          {/* As the popover draws it: lifted, floating, its padding the panel's own. */}
-          <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">
+          <Label>
+            How to slice it (live): a panel beside the page on desktop, two columns that need no scrolling at 1440×900;
+            a tall sheet on phones, one column in the same order
+          </Label>
+          {/* As the panel draws it: lifted, floating. */}
+          <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "fusilli-knob.stl", url: "#", size: 1 }}
               lying={lying}
@@ -410,7 +419,25 @@ export function SlicingSection() {
               sliced="#"
             />
           </div>
+
+          <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
+          <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
+            <SliceSettingsPanel
+              file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#", size: 1 }}
+              lying={{ status: "none" }}
+              settings={{ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }}
+              onChange={setSettings}
+              spools={[]}
+              plates={["Textured PEI Plate"]}
+              slice={TOO_BIG}
+              scalable
+              moreOpen
+            />
+          </div>
         </div>
+      </div>
+
+      <div className="mt-10 grid gap-10 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
           <Label>
             Its result at a phone's sheet's foot: slicing again, what the change did with its undo, and a change it
@@ -438,20 +465,6 @@ export function SlicingSection() {
           <Panel className="max-w-md">
             <WorkspaceSlicing value={defaults} onChange={(next) => setDefaults(next ?? undefined)} />
           </Panel>
-          <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
-          <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">
-            <SliceSettingsPanel
-              file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#", size: 1 }}
-              lying={{ status: "none" }}
-              settings={{ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }}
-              onChange={setSettings}
-              spools={[]}
-              plates={["Textured PEI Plate"]}
-              slice={TOO_BIG}
-              scalable
-              moreOpen
-            />
-          </div>
         </div>
       </div>
     </Section>
