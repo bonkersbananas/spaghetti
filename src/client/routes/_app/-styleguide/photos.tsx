@@ -1,6 +1,7 @@
 import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
+import { ConfirmRemove } from "@/components/ui/ConfirmRemove";
 import * as Icons from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
@@ -46,10 +47,20 @@ export function PhotoSection() {
           <Label>Thumbnails and add tiles</Label>
           <div className="flex flex-wrap items-center gap-2.5">
             <PhotoThumb src={planterPhoto} alt="Planter" onRemove={() => toast.message("Removed")} />
+            <PhotoThumb src={dragonPhoto} alt="Dragon" confirmRemove onRemove={() => toast.message("Removed")} />
             <PhotoThumb src={vasePhoto} alt="Vase" busy />
             <AddPhotoTile size="md" icon={Icons.CameraIcon} label="Camera" />
             <PhotoThumb size="sm" src={dragonPhoto} alt="Dragon" />
             <AddPhotoTile size="sm" icon={Icons.PlusIcon} label="Add photos" />
+          </div>
+          <Label>Remove a saved photo: two taps in place</Label>
+          <div className="relative">
+            <Photo src={vasePhoto} alt="A vase" className="aspect-4/3 rounded-md" />
+            <ConfirmRemove
+              what="this photo"
+              onRemove={() => toast.message("Removed")}
+              className="absolute top-3 right-3"
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <AddPhotoTile icon={Icons.CameraIcon} label="Take photo" />
