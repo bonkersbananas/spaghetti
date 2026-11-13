@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_app/ideas/")({
 });
 
 /** Up next is the featured row: fewer, wider cards than the inbox below it. */
-const upNextGrid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-6 2xl:grid-cols-3";
+const upNextGrid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-5 lg:grid-cols-3";
 /** The inbox's grid: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
