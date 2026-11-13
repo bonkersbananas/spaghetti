@@ -14,3 +14,9 @@ The faces come from `restingFaces` in `shared/mesh.ts`: the faces of the model's
 - slicer-rs needs no change: it takes the turned mesh the worker gives it. `slicer-rs/bench/setup.mts` writes a setup from the app's settings without turning anything, so a comparison of a turned model turns the mesh first.
 - The face search is on the convex hull, not the model: a model with a hollow or a stepped underside rests on its hull's faces, which it may touch only at a few points. Choosing among the pictures is how people see that.
 - The plate picture of each choice is drawn in the first filament's colour.
+
+## Update (Nov 13): faces it stands on at a few spots
+
+Carl Oscar's steampunk glasses had no flat side, so they were offered none (the hull's faces were all dropped for touching the plate over under 4 % of the hull's surface), though they print fine lying on one. A hull face that fails the flat-contact test is now still offered when the corners that reach its plane (within 0.5 % of the model's longest side) span, as a convex hull seen along the face's normal, at least 6 % of the hull's surface and the centre of mass, dropped onto the plane, lands inside that span (`footprint` in `shared/mesh.ts`). Such a face has `spots: true`, and the tile's line says "touches the plate in a few spots: a brim helps"; flat faces come first, so the five tiles are filled by them before any spot face. Faces with a flat contact are unchanged, and nothing new warns: a slice that floats keeps its existing "Parts of it float in the air" caution.
+
+Measured on the real glasses file (21 × 123 × 51 mm): no faces before, one after (on its side, 21 mm tall); sliced so, 1 h 03 min and 7.6 g against 1 h 17 min and 7.7 g upright, and the floating caution is gone. A box (6), the fusilli (2) and the Benchy-sized shapes with flat sides keep their faces; an L bracket goes from four faces to five, the extra one the slanted face across its hollow, offered as "a few spots".
