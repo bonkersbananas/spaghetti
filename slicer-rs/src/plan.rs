@@ -4,7 +4,8 @@
 //! speeds and accelerations are Orca's for the role; speeds are capped by the filament's volumetric limit.
 
 use crate::config::Settings;
-use crate::geom::{self, Contour, Pt};
+use crate::fill;
+use crate::geom::{self, Contour, Pt, Shapes};
 use crate::infill;
 use crate::medial;
 use crate::region::{self, Fills, Island, LayerRegions, Role};
@@ -38,8 +39,9 @@ const FILL_ORDER: [Role; 6] =
     [Role::Bridge, Role::InternalBridge, Role::BottomSurface, Role::SolidInfill, Role::SparseInfill, Role::TopSurface];
 
 /// Layer `i`'s extrusions in print order: object by object, the nearest island first and the rest of its object's
-/// islands nearest first, so each object's moves come together (the printer can skip an object only so).
-pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, s: &Settings) -> LayerPlan {
+/// islands nearest first, so each object's moves come together (the printer can skip an object only so). `centres`
+/// are the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored.
+pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, centres: &[(f64, f64)], s: &Settings) -> LayerPlan {
     let z = layers.top[i];
     let h = layers.height[i];
     // Alternate the corner each layer starts from, so a layer begins near where the last one likely ended.
@@ -49,7 +51,10 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, s: &Settings) -> 
         .iter()
         .zip(&r.fills)
         .enumerate()
-        .map(|(k, (island, fills))| island_paths(k as u32, island, fills, i, h, s))
+        .map(|(k, (island, fills))| {
+            let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
+            island_paths(k as u32, island, fills, i, (z, h), centre, s)
+        })
         .collect();
     let owner: Vec<u32> = r.islands.iter().map(|island| island.object).collect();
     let mut order = Vec::with_capacity(per_island.len());
@@ -89,7 +94,15 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, s: &Settings) -> 
     LayerPlan { index: i, z, height: h, paths }
 }
 
-fn island_paths(index: u32, island: &Island, fills: &Fills, layer: usize, h: f64, s: &Settings) -> Vec<Path> {
+fn island_paths(
+    index: u32,
+    island: &Island,
+    fills: &Fills,
+    layer: usize,
+    (z, h): (f64, f64),
+    centre: (f64, f64),
+    s: &Settings,
+) -> Vec<Path> {
     let first = layer == 0;
     let (walls, gaps) = (&island.walls, &island.gaps);
     let mut out: Vec<Path> = Vec::new();
@@ -128,6 +141,14 @@ fn island_paths(index: u32, island: &Island, fills: &Fills, layer: usize, h: f64
         if region.is_empty() {
             continue;
         }
+        if let (Role::SparseInfill, Some(pattern)) = (role, fill::Pattern::of(&s.sparse_infill_pattern)) {
+            let mut runs = sparse_runs(region, pattern, z, h, centre, s);
+            order_runs(&mut runs, &mut at);
+            for points in runs {
+                out.push(path(role, points, false, island, first, h, s));
+            }
+            continue;
+        }
         let (width, _, _) = flow(role, first, h, s);
         let grown = geom::offset(region, overlap * width);
         let solid_angle =
@@ -149,6 +170,41 @@ fn island_paths(index: u32, island: &Island, fills: &Fills, layer: usize, h: f64
         }
     }
     out
+}
+
+/// Sparse infill in Orca's pattern (`fill.rs`), where Orca puts its lines' middles: into the walls by Orca's
+/// overlap (a share of half the last wall's and half a solid line's spacing), less half the infill's spacing.
+fn sparse_runs(
+    region: &Shapes,
+    pattern: fill::Pattern,
+    z: f64,
+    h: f64,
+    centre: (f64, f64),
+    s: &Settings,
+) -> Vec<Vec<Pt>> {
+    let inset = match s.wall_loops {
+        0 => 0.0,
+        1 => Settings::spacing(s.outer_wall_width, h) / 2.0,
+        _ => Settings::spacing(s.inner_wall_width, h) / 2.0,
+    };
+    let overlap = if inset > 0.0 {
+        s.infill_wall_overlap * (inset + Settings::spacing(s.solid_infill_width, h) / 2.0)
+    } else {
+        0.0
+    };
+    // Orca spaces sparse lines for the object's layer height, so they line up from layer to layer.
+    let spacing = Settings::spacing(s.sparse_infill_width, s.layer_height);
+    let params = fill::Sparse {
+        pattern,
+        origin: centre,
+        z,
+        angle: s.infill_direction,
+        spacing,
+        density: s.sparse_density,
+        anchor: s.infill_anchor,
+        anchor_max: s.infill_anchor_max,
+    };
+    fill::sparse(region, overlap - spacing / 2.0, &params)
 }
 
 /// A gap's line as paths, each a stretch of about the same width (within 15 %), flow to match.

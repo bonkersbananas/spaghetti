@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import {
   type AttemptResponse,
@@ -8,6 +8,7 @@ import {
   MAX_FILE_THUMB_BYTES,
   MAX_MODEL_FILE_BYTES,
   MAX_SLICER_FILE_BYTES,
+  ONE_REQUEST_FILE_BYTES,
 } from "../../shared/api.ts";
 import { isStlName, slicedName } from "../../shared/slicing/files.ts";
 import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
@@ -20,10 +21,10 @@ import { loadAttempt, settings } from "./attempts.ts";
 const THUMB_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 /** The 3MF package type: a slicer file, or a model's sliced .gcode.3mf. */
-const THREEMF_TYPE = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
+export const THREEMF_TYPE = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
 /** The most a file upload's body may hold before it is read: a model, its picture and the fields. */
-const MAX_UPLOAD = MAX_MODEL_FILE_BYTES + MAX_FILE_THUMB_BYTES + 256 * 1024;
+const MAX_UPLOAD = ONE_REQUEST_FILE_BYTES + MAX_FILE_THUMB_BYTES + 256 * 1024;
 
 /** A JSON form field, checked by `schema`. */
 const jsonField = <T extends z.ZodType>(schema: T) =>
@@ -84,6 +85,8 @@ const slicedFields = z.object({
   prefill: jsonField(settings).optional(),
   objects: jsonField(z.array(z.string().trim().min(1).max(200)).max(500)).optional(),
   slicer: z.string().trim().max(80).optional(),
+  /** "1" when the sliced file was sent in parts first (POST /api/uploads). */
+  uploaded: z.literal("1").optional(),
 });
 
 const fileFields = z.object({
@@ -122,6 +125,8 @@ const fileFields = z.object({
     .pipe(z.array(z.string().trim().min(1).max(200)).max(500)),
   /** "model" for an .stl or plain .3mf Spaghetti slices (its bytes are required, up to MAX_MODEL_FILE_BYTES). */
   kind: z.enum(["slicer", "model"]).default("slicer"),
+  /** "1" when the bytes were sent in parts first (POST /api/uploads) and are in the bucket already. */
+  uploaded: z.literal("1").optional(),
 });
 
 /**
@@ -155,8 +160,10 @@ function uploadValues(
  * Why a file's upload can't be kept, or null: a slicer file is kept up to MAX_SLICER_FILE_BYTES (only what it said,
  * above), a model only with its bytes, up to MAX_MODEL_FILE_BYTES; the plate's picture is a small image.
  */
-function uploadProblem(kind: "slicer" | "model", file: unknown, thumb: unknown) {
-  if (kind === "model" && !(file instanceof File)) return { status: 400 as const, message: "A model needs its file." };
+function uploadProblem(kind: "slicer" | "model", file: unknown, thumb: unknown, uploaded?: boolean) {
+  if (kind === "model" && !uploaded && !(file instanceof File)) {
+    return { status: 400 as const, message: "A model needs its file." };
+  }
   const cap = kind === "model" ? MAX_MODEL_FILE_BYTES : MAX_SLICER_FILE_BYTES;
   if (file instanceof File && file.size > cap)
     return { status: 413 as const, message: "That file is too large to keep." };
@@ -172,6 +179,23 @@ function fileMetadata(kind: "slicer" | "model", name: string) {
     contentType: kind === "model" ? (isStlName(name) ? "model/stl" : "model/3mf") : THREEMF_TYPE,
     contentDisposition: disposition(name),
   };
+}
+
+/**
+ * The answer for a file said to be uploaded in parts whose bytes aren't in the bucket whole (or aren't the size it
+ * said), or null. The browser sends the upload again.
+ */
+async function unfinishedUpload(
+  c: Context<AppEnv>,
+  fields: { id: string; size: number; uploaded?: "1" | undefined; kind: "slicer" | "model" },
+) {
+  if (!fields.uploaded) return null;
+  const cap = fields.kind === "model" ? MAX_MODEL_FILE_BYTES : MAX_SLICER_FILE_BYTES;
+  const object = await c.env.PHOTOS.head(fileKey(fields.id, "file"));
+  if (!object || object.size !== fields.size || object.size > cap) {
+    return apiError(c, 409, "upload_incomplete", "That file didn't arrive whole. Send it again.");
+  }
+  return null;
 }
 
 /** An attempt that isn't deleted, of an item that isn't. */
@@ -211,18 +235,20 @@ export const attemptFileRoutes = new Hono<AppEnv>()
     const fields = parsed.data;
     const file = form?.get("file");
     const thumb = form?.get("thumb");
-    const refused = uploadProblem(fields.kind, file, thumb);
+    const refused = uploadProblem(fields.kind, file, thumb, !!fields.uploaded);
     if (refused) return refuse(c, refused);
+    const incomplete = await unfinishedUpload(c, fields);
+    if (incomplete) return incomplete;
     const db = c.var.db;
     const existing = await db.select().from(attemptFiles).where(eq(attemptFiles.id, fields.id)).get();
     if (existing && existing.attemptId !== attemptId) {
       return apiError(c, 409, "conflict", "That file belongs to another attempt.");
     }
 
-    const stored = file instanceof File;
+    const stored = file instanceof File || !!fields.uploaded;
     const hasThumb = thumb instanceof File;
     await Promise.all([
-      stored
+      file instanceof File
         ? c.env.PHOTOS.put(fileKey(fields.id, "file"), file.stream(), {
             httpMetadata: fileMetadata(fields.kind, fields.name),
           })
@@ -353,8 +379,10 @@ export const itemFileRoutes = new Hono<AppEnv>()
     const fields = parsed.data;
     const file = form?.get("file");
     const thumb = form?.get("thumb");
-    const refused = uploadProblem(fields.kind, file, thumb);
+    const refused = uploadProblem(fields.kind, file, thumb, !!fields.uploaded);
     if (refused) return refuse(c, refused);
+    const incomplete = await unfinishedUpload(c, fields);
+    if (incomplete) return incomplete;
     const db = c.var.db;
     const existing = await db.select().from(itemFiles).where(eq(itemFiles.id, fileId)).get();
     if (existing && existing.itemId !== itemId) {
@@ -364,10 +392,10 @@ export const itemFileRoutes = new Hono<AppEnv>()
     if ((!existing || existing.deletedAt) && (await liveFileCount(c, itemId)) >= MAX_ITEM_FILES) {
       return apiError(c, 409, "too_many", `An idea keeps at most ${MAX_ITEM_FILES} files.`);
     }
-    const stored = file instanceof File;
+    const stored = file instanceof File || !!fields.uploaded;
     const hasThumb = thumb instanceof File;
     await Promise.all([
-      stored
+      file instanceof File
         ? c.env.PHOTOS.put(fileKey(fileId, "file"), file.stream(), {
             httpMetadata: fileMetadata(fields.kind, fields.name),
           })
@@ -442,7 +470,7 @@ function refuse(c: Parameters<typeof apiError>[0], refused: NonNullable<ReturnTy
 }
 
 /** "bracket v2.gcode.3mf" as a download name, safe in a header. */
-function disposition(name: string): string {
+export function disposition(name: string): string {
   const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
@@ -454,7 +482,7 @@ const IMMUTABLE = "private, max-age=31536000, immutable";
  * A file that is there to be served or sliced: kept on a live attempt of a live item, or on a live item. Says which
  * table it is in and its item, for the change feed.
  */
-async function liveFile(
+export async function liveFile(
   c: { var: AppEnv["Variables"] },
   id: string,
 ): Promise<{ row: AttemptFileRow | ItemFileRow; table: "attempt" | "item"; itemId: string } | undefined> {
@@ -526,7 +554,7 @@ export const fileRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
     const length = Number(c.req.header("content-length") ?? 0);
-    if (length > MAX_SLICER_FILE_BYTES + MAX_FILE_THUMB_BYTES + 256 * 1024) {
+    if (length > MAX_UPLOAD) {
       return apiError(c, 413, "too_large", "That sliced file is too large to keep.");
     }
     const found = await liveFile(c, id);
@@ -542,7 +570,14 @@ export const fileRoutes = new Hono<AppEnv>()
     const sliced = form?.get("sliced");
     const thumb = form?.get("thumb");
     const done = fields.slice.status === "sliced";
-    if (done && !(sliced instanceof File)) return apiError(c, 400, "invalid", "A sliced model needs its file.");
+    // A big sliced file came in parts first: it is in the bucket already.
+    const early = done && fields.uploaded ? await c.env.PHOTOS.head(fileKey(id, "sliced")) : null;
+    if (fields.uploaded && done && (!early || early.size > MAX_SLICER_FILE_BYTES)) {
+      return apiError(c, 409, "upload_incomplete", "That sliced file didn't arrive whole. Send it again.");
+    }
+    if (done && !(sliced instanceof File) && !early) {
+      return apiError(c, 400, "invalid", "A sliced model needs its file.");
+    }
     if (sliced instanceof File && sliced.size > MAX_SLICER_FILE_BYTES) {
       return apiError(c, 413, "too_large", "That sliced file is too large to keep.");
     }
@@ -555,13 +590,18 @@ export const fileRoutes = new Hono<AppEnv>()
         ? c.env.PHOTOS.put(fileKey(id, "sliced"), sliced.stream(), {
             httpMetadata: { contentType: THREEMF_TYPE, contentDisposition: disposition(slicedName(row.name)) },
           })
-        : c.env.PHOTOS.delete(fileKey(id, "sliced")),
+        : done && early
+          ? null
+          : c.env.PHOTOS.delete(fileKey(id, "sliced")),
       thumb instanceof File
         ? c.env.PHOTOS.put(fileKey(id, "thumb"), thumb.stream(), { httpMetadata: { contentType: thumb.type } })
         : null,
     ]);
     const values = {
-      slice: { ...fields.slice, ...(done && sliced instanceof File ? { bytes: sliced.size } : {}) },
+      slice: {
+        ...fields.slice,
+        ...(done && sliced instanceof File ? { bytes: sliced.size } : done && early ? { bytes: early.size } : {}),
+      },
       hasThumb: row.hasThumb || thumb instanceof File,
       // What the sliced file says replaces what the model said (nothing); a failure leaves it.
       ...(done ? { prefill: fields.prefill ?? {}, objects: fields.objects ?? [], slicer: fields.slicer || null } : {}),
