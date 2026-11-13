@@ -142,20 +142,30 @@ export function slicerEngine(): Plugin {
     },
     configureServer(server) {
       const prefix = `/slicer/${pin.version}/`;
+      // Only the engine's own files are served: a name the folder lists (never `.`, `..` or `.complete`).
+      let served: Set<string> | null = null;
+      const servedFiles = (folder: string) => {
+        served ??= new Set(
+          readdirSync(folder).filter((name) => !name.startsWith(".") && statSync(join(folder, name)).isFile()),
+        );
+        return served;
+      };
       server.middlewares.use((request, response, next) => {
         const path = (request.url ?? "").split("?")[0] ?? "";
         if (!path.startsWith("/slicer/")) return next();
-        const name = path.slice(prefix.length);
-        const file = dir && path.startsWith(prefix) && /^[\w.-]+$/.test(name) ? join(dir, name) : null;
-        if (!file || !existsSync(file)) {
+        const name = path.startsWith(prefix) ? path.slice(prefix.length) : "";
+        if (!dir || !servedFiles(dir).has(name)) {
           response.statusCode = 404;
           response.end("Not found");
           return;
         }
+        const file = join(dir, name);
         response.setHeader("Content-Type", TYPES[extname(file)] ?? "application/octet-stream");
         response.setHeader("Content-Length", String(statSync(file).size));
         response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        createReadStream(file).pipe(response);
+        createReadStream(file)
+          .on("error", () => response.destroy())
+          .pipe(response);
       });
     },
     async writeBundle(options) {

@@ -1,6 +1,6 @@
 # The slicing engine
 
-Spaghetti slices `.stl` and plain `.3mf` files in the browser with OrcaSlicer's own slicing core, compiled to WebAssembly (the proposal with the measurements: [proposals/slicing.md](proposals/slicing.md)). This page is about the engine: what it is, where it comes from, how it is built and released, and how the app gets it.
+Spaghetti slices `.stl` and plain `.3mf` files in the browser with OrcaSlicer's own slicing core, compiled to WebAssembly (the proposal with the measurements is [pull request #205](https://github.com/bonkersbananas/spaghetti/pull/205), which keeps them in `docs/proposals/slicing.md`). This page is about the engine: what it is, where it comes from, how it is built and released, and how the app gets it.
 
 ## What it is
 
