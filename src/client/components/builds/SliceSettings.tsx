@@ -64,8 +64,6 @@ import { useIsDesktop } from "@/lib/use-media-query";
 
 /** The spools offered as tiles, at most: a pantry is rarely bigger, and the rest are a pick under the Pantry. */
 const MAX_SPOOLS = 12;
-/** In a desktop panel, where the spools wrap in rows of four: two rows. */
-const WRAPPED_SPOOLS = 8;
 
 export interface SlicingChoicesProps {
   settings: SlicingSettings;
@@ -439,14 +437,13 @@ function FilamentChoice({
   settings: SlicingSettings;
   spools: readonly SpoolLike[];
   onChange: (filaments: SlicingFilament[]) => void;
-  /** In a panel's column: the spools wrap in rows of four, none clipped, instead of a row that scrolls sideways. */
+  /** In a panel's column: the spools wrap in rows of four, none clipped, instead of a row that scrolls sideways (a big pantry makes the panel scroll). */
   wrapped: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const slot = Math.min(index, settings.filaments.length - 1);
   const filament = settings.filaments[slot] ?? settings.filaments[0];
-  // A panel's column shows two rows of four (the loaded ones come first), so the panel needn't scroll.
-  const offered = slicingSpools(spools).slice(0, wrapped ? WRAPPED_SPOOLS : MAX_SPOOLS);
+  const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
   const picked = filament?.spoolId ? offered.find((spool) => spool.id === filament.spoolId) : undefined;
   const own: ChoiceTile<string> | null =
     filament && !picked
