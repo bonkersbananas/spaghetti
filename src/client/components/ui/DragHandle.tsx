@@ -45,7 +45,7 @@ export function DragHandle({ label, onPointerDown, onMove, onRemove, disabled, r
       onPointerDown={disabled ? undefined : onPointerDown}
       onKeyDown={disabled ? undefined : onKeyDown}
       className={cn(
-        "focus-ring text-ink-faint hover:text-ink-soft hover:bg-ink/5 active:bg-ink/8 disabled:text-ink-ghost flex shrink-0 cursor-grab touch-none items-center justify-center rounded-md transition-colors select-none active:cursor-grabbing disabled:cursor-not-allowed",
+        "focus-ring text-ink-faint hover:text-ink-soft hover:bg-ink/5 pointer-fine:active:bg-ink/8 disabled:text-ink-ghost flex shrink-0 cursor-grab touch-none items-center justify-center rounded-md transition-colors select-none active:cursor-grabbing disabled:cursor-not-allowed",
         size === "row" ? "h-14 w-11 md:h-16 md:w-9" : "size-11",
       )}
     >

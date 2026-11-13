@@ -424,8 +424,9 @@
 }
 
 /*
- * Tactile press: anything tappable shrinks a touch while held, within one frame of the touch (90 ms, `instant`).
- * `data-pressed` shows the held state at rest, for the styleguide. Tappable things without `pressable` get the dim in
+ * Tactile press: anything tappable shrinks a touch while held, within one frame of the press (90 ms, `instant`).
+ * With a fine pointer that is :active; on a phone lib/touch-press.ts sets `data-pressed` once a touch has stayed put
+ * (so a scroll or swipe never shows it). `data-pressed` also shows the held state at rest, for the styleguide. Tappable things without `pressable` get the dim in
  * app.css, so nothing answers a tap late.
  */
 @utility pressable {
@@ -433,7 +434,6 @@
   transition-duration: var(--sg-duration-fast);
   transition-timing-function: var(--sg-ease-out);
   -webkit-tap-highlight-color: transparent;
-  &:active:not(:disabled),
   &[data-pressed] {
     transform: scale(var(--sg-press-scale));
     /* The tint: a veil of the control's own text color over whatever surface it has, so a selected or toned control
@@ -441,27 +441,48 @@
     background-image: linear-gradient(var(--sg-press-veil), var(--sg-press-veil));
     transition-duration: var(--sg-duration-instant);
   }
-  /* A press that starts on a strip that swipes inside it (a card's photos) leaves the control where it is: on iOS a
-     transform starting on an ancestor of a scroller rebuilds the scroller's layer mid-touch, which ends the swipe.
-     The veil still answers the touch. */
-  &:has([data-swipe]:active) {
+  @media (pointer: fine) {
+    &:active:not(:disabled) {
+      transform: scale(var(--sg-press-scale));
+      background-image: linear-gradient(var(--sg-press-veil), var(--sg-press-veil));
+      transition-duration: var(--sg-duration-instant);
+    }
+    /* A press that starts on a strip that swipes inside it (a card's photos) leaves the control where it is: on iOS a
+       transform starting on an ancestor of a scroller rebuilds the scroller's layer mid-touch, which ends the swipe.
+       The veil still answers the touch. */
+    &:has([data-swipe]:active) {
+      transform: none;
+    }
+  }
+  /* The same on a phone, where touch-press.ts marks a press on a swipe strip data-pressed="still". */
+  &[data-pressed="still"] {
     transform: none;
   }
 }
 /* A filled tomato control (the primary and capture buttons) deepens to the pressed tomato instead of taking the veil. */
 @utility press-tomato {
-  &:active:not(:disabled),
   &[data-pressed] {
     background-color: var(--sg-tomato-pressed);
     background-image: none;
   }
+  @media (pointer: fine) {
+    &:active:not(:disabled) {
+      background-color: var(--sg-tomato-pressed);
+      background-image: none;
+    }
+  }
 }
 /* The held highlight is drawn by something else (the tab bar's round highlight behind its icon). */
 @utility press-none {
-  &:active:not(:disabled),
   &[data-pressed] {
     transform: none;
     background-image: none;
+  }
+  @media (pointer: fine) {
+    &:active:not(:disabled) {
+      transform: none;
+      background-image: none;
+    }
   }
 }
 
