@@ -30,9 +30,11 @@ impl Layers {
         Layers { top, height: heights }
     }
 
-    /// Where each layer is cut: halfway up the layer.
+    /// Where each layer is cut: halfway up the layer, as a float, as Orca cuts (its meshes are floats too). A face
+    /// at a round height then lies exactly on a plane rather than a hair below it, and belongs to what is under it:
+    /// a deck at 8.5 mm is part of the layer cut at 8.5 (the sum of the layers comes to 8.500000000000002).
     pub fn slice_z(&self) -> Vec<f64> {
-        self.top.iter().zip(&self.height).map(|(t, h)| t - h / 2.0).collect()
+        self.top.iter().zip(&self.height).map(|(t, h)| (t - h / 2.0) as f32 as f64).collect()
     }
 }
 

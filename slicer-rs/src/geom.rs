@@ -115,9 +115,24 @@ pub fn offset_mitred(shapes: &Shapes, delta: f64, min_angle: f64) -> Shapes {
     shapes.outline(&style).unwrap_or_default()
 }
 
+/// `offset` with every corner bevelled: what Clipper's round joins come to at the coarse arc tolerance Orca grows
+/// regions with (a turn under about 120° gets a single chord).
+pub fn offset_bevel(shapes: &Shapes, delta: f64) -> Shapes {
+    let d = sc(delta);
+    if shapes.is_empty() || d == 0 {
+        return shapes.clone();
+    }
+    shapes.outline(&IntOutlineStyle::new(d).line_join(IntLineJoin::Bevel)).unwrap_or_default()
+}
+
 /// Shrinks then grows back: drops every part thinner than `2 × d`.
 pub fn opening(shapes: &Shapes, d: f64) -> Shapes {
     offset(&offset(shapes, -d), d)
+}
+
+/// Grows then shrinks back: closes every gap and notch narrower than `2 × d`.
+pub fn closing(shapes: &Shapes, d: f64) -> Shapes {
+    offset(&offset(shapes, d), -d)
 }
 
 /// Twice the signed area of a closed contour, in units² (positive when counter-clockwise).
@@ -361,6 +376,98 @@ pub fn near(shapes: &Shapes, bbox: [i32; 4]) -> Shapes {
         })
         .cloned()
         .collect()
+}
+
+/// The shapes as far as anything inside `bbox` can tell: those whose outline meets it, each with only the holes
+/// that meet it. A boolean with something inside `bbox` gives the same with these as with the whole shapes, at the
+/// cost of what is near (a layer's solid infill can have hundreds of holes).
+pub fn local(shapes: &Shapes, bbox: [i32; 4]) -> Shapes {
+    let meets = |c: &Contour| {
+        let mut b = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
+        for p in c {
+            b[0] = b[0].min(p.x);
+            b[1] = b[1].min(p.y);
+            b[2] = b[2].max(p.x);
+            b[3] = b[3].max(p.y);
+        }
+        b[0] <= bbox[2] && bbox[0] <= b[2] && b[1] <= bbox[3] && bbox[1] <= b[3]
+    };
+    shapes
+        .iter()
+        .filter(|shape| shape.first().is_some_and(meets))
+        .map(|shape| {
+            let mut out = vec![shape[0].clone()];
+            out.extend(shape[1..].iter().filter(|hole| meets(hole)).cloned());
+            out
+        })
+        .collect()
+}
+
+/// The shapes cut to a box, contour by contour (Sutherland–Hodgman, as Orca's
+/// `clip_clipper_polygons_with_subject_bbox`): cheap, and exact inside the box, though a contour cut by it may run
+/// along its edge both ways; fit only as an operand of a boolean that keeps to the box.
+pub fn clip_box(shapes: &Shapes, b: [i32; 4]) -> Shapes {
+    let clip = |contour: &Contour| -> Contour {
+        let mut out: Vec<Pt> = contour.clone();
+        // Each edge of the box: keep what is on its inner side.
+        for side in 0..4 {
+            if out.is_empty() {
+                break;
+            }
+            let inside = |p: Pt| match side {
+                0 => p.x >= b[0],
+                1 => p.x <= b[2],
+                2 => p.y >= b[1],
+                _ => p.y <= b[3],
+            };
+            let cut = |p: Pt, q: Pt| -> Pt {
+                let (px, py, qx, qy) = (p.x as f64, p.y as f64, q.x as f64, q.y as f64);
+                match side {
+                    0 | 1 => {
+                        let x = if side == 0 { b[0] } else { b[2] } as f64;
+                        pt(x as i32, (py + (qy - py) * (x - px) / (qx - px)).round() as i32)
+                    }
+                    _ => {
+                        let y = if side == 2 { b[1] } else { b[3] } as f64;
+                        pt((px + (qx - px) * (y - py) / (qy - py)).round() as i32, y as i32)
+                    }
+                }
+            };
+            let input = std::mem::take(&mut out);
+            let n = input.len();
+            for i in 0..n {
+                let (p, q) = (input[(i + n - 1) % n], input[i]);
+                match (inside(p), inside(q)) {
+                    (true, true) => out.push(q),
+                    (true, false) => out.push(cut(p, q)),
+                    (false, true) => {
+                        out.push(cut(p, q));
+                        out.push(q);
+                    }
+                    (false, false) => {}
+                }
+            }
+        }
+        out
+    };
+    shapes
+        .iter()
+        .filter_map(|shape| {
+            let outer = clip(shape.first()?);
+            if outer.len() < 3 {
+                return None;
+            }
+            let mut out = vec![outer];
+            out.extend(shape[1..].iter().map(clip).filter(|c| c.len() >= 3));
+            Some(out)
+        })
+        .collect()
+}
+
+/// A bounding box grown by `d` mm on every side.
+pub fn inflate(b: [i32; 4], d: f64) -> [i32; 4] {
+    let d = sc(d);
+    [b[0].saturating_sub(d), b[1].saturating_sub(d), b[2].saturating_add(d), b[3].saturating_add(d)]
 }
 
 /// Bounding box of one shape's outer contour: min x, min y, max x, max y (units).
