@@ -1,15 +1,18 @@
-//! The command line: slices STL and 3MF files into a `.gcode.3mf` with the app's default settings.
+//! The command line: slices STL and 3MF files into a `.gcode.3mf` with the app's default settings, or with a slice
+//! setup the app made from people's slicing settings.
 
-use spaghetti_slicer::{Input, Options, Plate, Settings, gcode};
+use spaghetti_slicer::{Input, Options, Plate, gcode, setup};
 use std::process::ExitCode;
 
 const USAGE: &str = "Usage: spaghetti-slicer [options] <model.stl|model.3mf>...
 
 Slices the models with Spaghetti's defaults (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, PLA on the Textured
-PEI plate) into a .gcode.3mf for looking at in Spaghetti's 3D view. Not for printing yet: the start G-code is not
-the X2D's.
+PEI plate), or with a slice setup, into a .gcode.3mf for Spaghetti's 3D view and the printer: its start and end
+G-code are the X2D's own, filled as OrcaSlicer fills them. It is new: watch its first prints.
 
 Options:
+      --setup <file>    Slice with a slice setup (JSON): the configs the app's sliceSetup makes from its slicing
+                        settings, as it hands them to Orca's engine (bench/setup.mts writes one)
   -o, --output <file>   The .gcode.3mf to write (default: the first model's name with .gcode.3mf)
       --gcode <file>    Also write the plain G-code
       --stats <file>    Write the statistics as JSON (time, filament, per feature, per layer)
@@ -20,6 +23,7 @@ Options:
 
 struct Args {
     inputs: Vec<String>,
+    setup: Option<String>,
     output: Option<String>,
     gcode: Option<String>,
     stats: Option<String>,
@@ -31,6 +35,7 @@ struct Args {
 fn parse(args: Vec<String>) -> Result<Args, String> {
     let mut out = Args {
         inputs: vec![],
+        setup: None,
         output: None,
         gcode: None,
         stats: None,
@@ -42,6 +47,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
     while let Some(arg) = it.next() {
         let mut value = |name: &str| it.next().ok_or_else(|| format!("{name} needs a file"));
         match arg.as_str() {
+            "--setup" => out.setup = Some(value(&arg)?),
             "-o" | "--output" => out.output = Some(value(&arg)?),
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
@@ -71,8 +77,24 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let settings = Settings::default();
-    let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail };
+    let setup = match &args.setup {
+        None => setup::Setup::default(),
+        Some(path) => match std::fs::read_to_string(path).map_err(|e| e.to_string()) {
+            Err(e) => {
+                eprintln!("can't read {path}: {e}");
+                return ExitCode::FAILURE;
+            }
+            Ok(text) => match setup::read(&text) {
+                Ok(setup) => setup,
+                Err(e) => {
+                    eprintln!("{path}: {e}");
+                    return ExitCode::FAILURE;
+                }
+            },
+        },
+    };
+    let settings = setup.settings;
+    let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail, scale: setup.scale };
     // One file at a time: each file's bytes go once it is read.
     let mut plate = Plate::default();
     for path in &args.inputs {
@@ -124,6 +146,9 @@ fn main() -> ExitCode {
         s.filament_mm / 1000.0,
         out.file.len()
     );
+    for fallback in &out.fallbacks {
+        eprintln!("note: {fallback}");
+    }
     if args.timings {
         let t = &out.timings;
         eprintln!(

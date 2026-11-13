@@ -3,6 +3,7 @@ import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CubeIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
+import { tooBigForPhone } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 
@@ -50,6 +51,8 @@ function LoadedViewer(props: import("./PrintViewer").PrintViewerProps) {
 /** A sliced file (one with G-code) that the server kept can be opened in 3D: a model once it is sliced. */
 export function canView3d(file: AttemptFileView | undefined): file is AttemptFileView {
   if (!file?.stored || file.pending) return false;
+  // Kept, but too big to draw on a phone (SlicerFileCard says so).
+  if (tooBigForPhone(file.kind === "model" ? (file.slice?.bytes ?? 0) : file.size)) return false;
   if (file.kind === "model") return file.slice?.status === "sliced";
   return /\.gcode\.3mf$/i.test(file.name) || file.prefill.estimatedMinutes !== undefined;
 }

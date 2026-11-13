@@ -25,6 +25,12 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["PUT", new RegExp(`^/items/${id}/photos/${id}$`), ["capture", "attempts"]],
   // A slicer file kept with an idea: added like a photo. Removing and restoring are for people.
   ["PUT", new RegExp(`^/items/${id}/files/${id}$`), ["capture", "attempts"]],
+  // A big file is sent in parts first (the route lets only people send a model's sliced file).
+  ["POST", /^\/uploads$/, ["capture", "attempts"]],
+  ["PUT", new RegExp(`^/uploads/${id}/${id}/${id}/${id}$`), ["capture", "attempts"]],
+  ["POST", new RegExp(`^/uploads/${id}/${id}/${id}/complete$`), ["capture", "attempts"]],
+  ["DELETE", new RegExp(`^/uploads/${id}/${id}/${id}$`), ["capture", "attempts"]],
+  ["DELETE", new RegExp(`^/uploads/${id}/file$`), ["capture", "attempts"]],
   ["POST", new RegExp(`^/items/${id}/attempts$`), ["attempts"]],
   // Comments: agents write and edit their own (through their owner's name); deleting is for people.
   ["POST", new RegExp(`^/items/${id}/comments$`), ["capture", "attempts"]],

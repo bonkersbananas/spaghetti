@@ -1,12 +1,10 @@
 import type { Spool } from "@shared/api";
 import type { SearchTerm } from "@shared/search";
-import { Link } from "@tanstack/react-router";
 import { forwardRef } from "react";
 import { Highlight } from "@/components/ui/Highlight";
-import { Photo } from "@/components/ui/Photo";
+import { PhotoRow } from "@/components/ui/PhotoRow";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
-import { cn } from "@/lib/cn";
 import { photoSrc } from "@/lib/previews";
 
 interface SpoolResultProps {
@@ -25,30 +23,14 @@ export const SpoolResult = forwardRef<HTMLAnchorElement, SpoolResultProps>(funct
   const name = [spool.colorName, spool.brand].filter(Boolean).join(" · ") || spool.material;
   const kind = [spool.finish, spool.material].filter(Boolean).join(" ");
   return (
-    <Link
+    <PhotoRow
       ref={ref}
-      to="/pantry/$spoolId"
-      params={{ spoolId: spool.id }}
-      aria-current={selected || undefined}
-      onPointerEnter={onHover}
-      onClick={onOpen}
-      className={cn(
-        "pressable focus-ring flex items-center gap-3.5 rounded-lg p-2 md:gap-4",
-        selected ? "bg-cream shadow-ring" : "hover:bg-ink/4",
-      )}
+      link={{ to: "/pantry/$spoolId", params: { spoolId: spool.id }, onPointerEnter: onHover, onClick: onOpen }}
+      photo={spool.photo ? { src: photoSrc(spool.photo.id, "thumb"), color: spool.photo.color || undefined } : null}
+      tile={<SpoolDisc color={spool.colorHex} size="lg" />}
+      size="lg"
+      selected={selected}
     >
-      {spool.photo ? (
-        <Photo
-          src={photoSrc(spool.photo.id, "thumb")}
-          alt=""
-          color={spool.photo.color || undefined}
-          className="size-20 shrink-0 rounded-md md:size-24"
-        />
-      ) : (
-        <span className="bg-well flex size-20 shrink-0 items-center justify-center rounded-md md:size-24">
-          <SpoolDisc color={spool.colorHex} size="lg" />
-        </span>
-      )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-body text-ink min-w-0 truncate font-semibold">
           <Highlight text={name} terms={terms} />
@@ -59,6 +41,6 @@ export const SpoolResult = forwardRef<HTMLAnchorElement, SpoolResultProps>(funct
         </span>
         <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel />
       </span>
-    </Link>
+    </PhotoRow>
   );
 });

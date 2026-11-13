@@ -17,6 +17,7 @@ import { PhotoReadNote } from "@/components/builds/PhotoReadNote";
 import { PartLine } from "@/components/builds/parts/PartsSection";
 import { TagPicker } from "@/components/builds/TagPicker";
 import * as Icons from "@/components/ui/icons";
+import { PhotoRow } from "@/components/ui/PhotoRow";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { PrintProgress, PrintProgressView } from "@/components/ui/PrintProgress";
 import { Stepper } from "@/components/ui/Stepper";
@@ -258,6 +259,7 @@ export function BuildsSection() {
           <div className="flex flex-wrap gap-2">
             <OutcomeChip outcome={null} />
             <OutcomeChip outcome={null} offTheBed />
+            <OutcomeChip outcome={null} offTheBed onPhoto />
             <OutcomeChip outcome="success" />
             <OutcomeChip outcome="partial" />
             <OutcomeChip outcome="failed" />
@@ -293,8 +295,8 @@ export function BuildsSection() {
             }
           />
           <p className="text-small text-ink-faint">
-            "Layer 112 of 240 · about 38 min left" replaces the slicer's estimate while the bridge's last report is
-            under three minutes old, and quietly gives way to it again when the bridge goes silent.
+            "Layer 112 of 240 · 38 min left" replaces the slicer's estimate while the bridge's last report is under
+            three minutes old, and quietly gives way to it again when the bridge goes silent.
           </p>
           <Label>Off the bed: stopped, no verdict yet</Label>
           <OffTheBed endedAt={Date.now() - 20 * MINUTE} onPick={(picked) => toast.message(`Opens with ${picked}`)} />
@@ -336,6 +338,34 @@ export function BuildsSection() {
               onCompare={() => toast.message("Opens the comparison")}
             />
           </ol>
+          <Label>PhotoRow: the compact row (sm, md, lg; no photo shows a tile)</Label>
+          <div className="flex flex-col">
+            <PhotoRow link={{ to: "/styleguide" }} photo={null} tile={<Icons.BuildsIcon size={24} />} size="md">
+              <span className="min-w-0 flex-1">
+                <span className="text-body text-ink block truncate font-semibold">Drawer divider</span>
+                <span className="text-small text-ink-faint block truncate">Done 2 days ago · 3 attempts</span>
+              </span>
+            </PhotoRow>
+            <PhotoRow
+              link={{ to: "/styleguide" }}
+              photo={null}
+              tile={<Icons.FinishIcon size={22} />}
+              tileClassName="bg-ink/5 text-ink-faint"
+              size="sm"
+            >
+              <span className="text-small text-ink-faint min-w-0 flex-1">Started a build · 9:41</span>
+            </PhotoRow>
+            <PhotoRow
+              link={{ to: "/styleguide" }}
+              photo={null}
+              tile={<Icons.BuildsIcon size={26} />}
+              size="lg"
+              align="start"
+              selected
+            >
+              <span className="text-body text-ink min-w-0 flex-1 font-semibold">A result the keyboard is on</span>
+            </PhotoRow>
+          </div>
           <Label>New build tiles</Label>
           <div className="grid grid-cols-2 gap-3">
             <AddPhotoTile size="card" icon={Icons.PlusIcon} label="New build" />

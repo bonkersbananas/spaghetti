@@ -2,10 +2,13 @@ import { fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptFilament } from "@shared/attempts";
 import type { Plate } from "@shared/threemf/types.ts";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
-import { IconButton } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Caution } from "@/components/ui/Caution";
 import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { ProgressRing } from "@/components/ui/ProgressRing";
 import { Swatch } from "@/components/ui/Swatch";
+import { tooBigForPhone, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import { useOnline } from "@/lib/connection";
 import type { AttemptFileView } from "@/lib/items";
@@ -226,7 +229,9 @@ export function savedFileMeta(file: AttemptFileView, compact?: boolean): { meta:
     ? `Over ${formatBytes(MAX_SLICER_FILE_BYTES)}, so only what it said is kept.`
     : file.pending
       ? "Saving the file…"
-      : undefined;
+      : file.kind !== "model" && tooBigForPhone(file.size)
+        ? "Too big for the 3D view on a phone. A laptop will show it."
+        : undefined;
   return { meta, ...(note ? { note } : {}) };
 }
 
@@ -271,14 +276,48 @@ export function SavedFileCard(props: SavedFileCardProps) {
   return <SlicerFileCard {...props} />;
 }
 
+/** A big file's upload on its card: the percent as it goes, or that it stopped, with one tap to send it again. */
+function UploadLine({ upload }: { upload: NonNullable<ReturnType<typeof useUpload>> }) {
+  if (upload.failed) {
+    return (
+      <>
+        <Caution className="px-0">Didn't finish saving. Your file is still here.</Caution>
+        {upload.retry && (
+          <Button variant="secondary" size="sm" onClick={upload.retry}>
+            Try again
+          </Button>
+        )}
+      </>
+    );
+  }
+  const percent = Math.round(upload.fraction * 100);
+  return (
+    <span
+      className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
+      role="progressbar"
+      aria-label="Saving the file"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      aria-valuetext={`Saving ${percent}%`}
+    >
+      <ProgressRing value={upload.fraction} className="text-semolina" />
+      Saving {percent}%
+    </span>
+  );
+}
+
 function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, className }: SavedFileCardProps) {
   const { meta, note } = savedFileMeta(file, compact);
+  const upload = useUpload(file.id);
+  const going = file.pending && upload ? upload : undefined;
   return (
     <FileCard
       name={file.name}
       thumbSrc={file.hasThumb ? fileThumbSrc(file.id) : undefined}
       meta={meta}
-      note={note}
+      note={going ? undefined : note}
+      status={going ? <UploadLine upload={going} /> : undefined}
       download={file.stored && !file.pending ? fileUrl(file.id) : undefined}
       view3d={canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined}
       onRemove={onRemove}

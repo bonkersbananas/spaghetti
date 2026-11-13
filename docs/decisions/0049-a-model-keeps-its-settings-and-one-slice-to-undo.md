@@ -1,4 +1,4 @@
-# 0048. A model keeps its slicing settings, is sliced again in the background, and keeps one slice to undo
+# 0049. A model keeps its slicing settings, is sliced again in the background, and keeps one slice to undo
 
 Status: Accepted
 
@@ -9,6 +9,7 @@ Status: Accepted
 **Consequences:**
 
 - R2 holds up to two more parts per model (`previous`, `previous-thumb`); the purge removes them with the file, and a slice saved without `keep` removes them at once.
+- A re-slice whose sliced file goes in parts (over 32 MB, [0048](0048-big-files-go-in-parts.md)) lands in the bucket over the slice it replaces before it is saved, so that slice can't be kept: it is saved without `keep` (the server ignores `keep` with `uploaded`), and the card shows what changed without an Undo. A staging part for the upload would lift this if big re-slices turn out to need an undo.
 - The device where a setting was changed does the slicing. Another device sees the new settings through the change feed and the new slice once it is saved; a tab closed mid-slice leaves the card saying "Not sliced with its new settings yet", with "Slice it". The story (MCP's `get_build`) says what a model was sliced with, in full, and what it will be sliced with next.
 - Agents read a model's settings (`file.slicing`, `slice.settings.slicing`, `file.previous`) but can't change them or undo, as they can't slice.
 - The before → after and its Undo live on the device that made the change, until the next change or a reload; the server's kept slice is what makes the undo work, not a promise to offer it everywhere.

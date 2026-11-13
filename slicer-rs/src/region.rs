@@ -62,6 +62,8 @@ pub struct Island {
     pub inner: Shapes,
     /// Between walls, too narrow for another wall or infill: gap fill goes along their middles.
     pub gaps: Shapes,
+    /// Which of the plate's objects it is a slice of (an index into them).
+    pub object: u32,
 }
 
 /// The infill areas of one island, by kind.
@@ -80,17 +82,24 @@ pub struct LayerRegions {
     pub fills: Vec<Fills>,
 }
 
-/// Walls and fills for every layer.
-pub fn regions(slices: &[Shapes], layers: &Layers, s: &Settings) -> Vec<LayerRegions> {
+/// Walls and fills for every layer, from its slice and the object each of the slice's shapes belongs to.
+pub fn regions(slices: &[Shapes], owners: &[Vec<u32>], layers: &Layers, s: &Settings) -> Vec<LayerRegions> {
     let n = slices.len();
-    // The first layer is pulled in a little against elephant's foot.
+    // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
+    // came from, and belongs to its object.
     let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
-        let slice = if i == 0 && s.elephant_foot > 0.0 {
-            geom::offset(&slices[0], -s.elephant_foot)
+        let (slice, objects) = if i == 0 && s.elephant_foot > 0.0 {
+            let pulled = geom::offset(&slices[0], -s.elephant_foot);
+            let objects = pulled.iter().map(|shape| owner_within(shape, &slices[0], &owners[0])).collect();
+            (pulled, objects)
         } else {
-            slices[i].clone()
+            (slices[i].clone(), owners[i].clone())
         };
-        walls(&slice, i, layers.height[i], s)
+        let mut islands = walls(&slice, i, layers.height[i], s);
+        for (island, object) in islands.iter_mut().zip(objects) {
+            island.object = object;
+        }
+        islands
     });
 
     // Exposed surfaces, from the whole slices (under and over the walls too): what the layer above doesn't cover
@@ -181,6 +190,20 @@ pub fn regions(slices: &[Shapes], layers: &Layers, s: &Settings) -> Vec<LayerReg
     });
 
     islands.into_iter().zip(fills).map(|(islands, fills)| LayerRegions { islands, fills }).collect()
+}
+
+/// The object of the shape in `slice` that holds `shape` (which lies inside one of them).
+fn owner_within(shape: &geom::Shape, slice: &Shapes, owners: &[u32]) -> u32 {
+    let fallback = owners.first().copied().unwrap_or(0);
+    let Some(&p) = shape.first().and_then(|c| c.first()) else { return fallback };
+    slice
+        .iter()
+        .position(|outer| {
+            let b = geom::bbox_of(outer);
+            p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3] && geom::shape_contains(outer, p)
+        })
+        .and_then(|k| owners.get(k).copied())
+        .unwrap_or(fallback)
 }
 
 /// How far a wall's or an infill region's outline may stray from the exact offset (mm): offsets round corners with

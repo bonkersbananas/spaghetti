@@ -167,6 +167,7 @@ function MyList({
     <Toggle
       label={shareLabel}
       hint={shareHint}
+      oneLine={!isDesktop}
       checked={!list.private}
       disabled={readOnly || !me}
       onChange={(on) => setWishlistPrivate(queryClient, me, !on)}

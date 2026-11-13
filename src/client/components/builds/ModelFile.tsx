@@ -27,6 +27,7 @@ import { PopoverAnchor, PopoverPanel, PopoverRoot, PopoverTrigger } from "@/comp
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -71,7 +72,10 @@ export interface Reslicing {
 
 /** Where a model's slicing is, from its row and this device's job. */
 export type ModelState =
-  | { kind: "saving" }
+  /** On its way to the server; a big file shows how far (`fraction`, 0-1). */
+  | { kind: "saving"; fraction?: number }
+  /** A big file stopped on the way: one tap sends it again. */
+  | { kind: "notSaved"; retry: () => void }
   | { kind: "waiting" }
   | { kind: "slicing"; fraction: number }
   | {
@@ -88,7 +92,18 @@ export type ModelState =
   | { kind: "failed"; slice: FileSlice; change?: SliceChange }
   | { kind: "unsliced" };
 
-export function modelState(file: AttemptFileView, job: SliceJob | undefined, change?: SliceChange): ModelState {
+export function modelState(
+  file: AttemptFileView,
+  job: SliceJob | undefined,
+  change?: SliceChange,
+  upload?: UploadState,
+): ModelState {
+  // A big file still on its way, in parts (decision 0048): how far it is, or that it stopped.
+  if (file.pending && upload) {
+    return upload.failed && upload.retry
+      ? { kind: "notSaved", retry: upload.retry }
+      : { kind: "saving", fraction: upload.fraction };
+  }
   const kept = file.slice;
   if (job?.again && kept?.status === "sliced") {
     const made = slicingOfSlice(kept);
@@ -243,7 +258,6 @@ export function ModelStatus({
   /** Only where it stands and its undo: the settings below it say the rest (their sheet's result). */
   quiet?: boolean;
 }) {
-  if (state.kind === "saving") return <span className="text-small text-ink-faint">Saving the model…</span>;
   const { lines, actions } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
   // The lines change with the state; the row of actions stays in its place, "Slice with…" first in it, so the
   // button keeps its place, and its popover stays open, while the card changes under it.
@@ -260,7 +274,7 @@ export function ModelStatus({
 
 /** What a model's status says in each state, and what helps there (after "Slice with…"). */
 function statusOf(
-  state: Exclude<ModelState, { kind: "saving" }>,
+  state: ModelState,
   {
     phone,
     line,
@@ -280,6 +294,35 @@ function statusOf(
     </Button>
   );
   switch (state.kind) {
+    case "saving": {
+      if (state.fraction === undefined) {
+        return { lines: <span className="text-small text-ink-faint">Saving the model…</span>, actions: null };
+      }
+      // A big file in parts (decision 0048): how far it is.
+      const percent = Math.round(state.fraction * 100);
+      return {
+        lines: (
+          <span
+            className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
+            role="progressbar"
+            aria-label="Saving the model"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            aria-valuetext={`Saving ${percent}%`}
+          >
+            <ProgressRing value={state.fraction} className="text-semolina" />
+            Saving {percent}%
+          </span>
+        ),
+        actions: null,
+      };
+    }
+    case "notSaved":
+      return {
+        lines: <Caution className="px-0">Didn't finish saving. Your file is still here.</Caution>,
+        actions: button("Try again", state.retry),
+      };
     case "waiting":
       return { lines: <SliceProgress fraction={null} words="Waiting to slice" />, actions: null };
     case "slicing":
@@ -532,7 +575,8 @@ export default function ModelFileCard({
   const { data: printer } = useQuery(printerQuery);
   const setup = printer?.setup ?? DEFAULT_PRINTER;
   const defaults = useMemo(() => workshopDefaults({ spools, setup }), [spools, setup]);
-  const state = modelState(file, job, change);
+  const upload = useUpload(file.id);
+  const state = modelState(file, job, change, upload);
   // While a slice runs here, the settings it slices with: what the card was asked for, whatever a refetch says.
   const kept = modelSlicing(file, defaults);
   const settings = job && Object.keys(job.chosen).length ? slicingFor(job.chosen, kept) : kept;

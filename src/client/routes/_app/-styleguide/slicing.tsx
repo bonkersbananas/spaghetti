@@ -166,10 +166,13 @@ export function SlicingSection() {
           />
 
           <Label>
-            A model Spaghetti slices: saving, waiting (a pulse), slicing, sliced (led by the print, the name quieter,
-            and how it was sliced), a caution and its one tap, why it couldn't be, and not sliced yet
+            A model Spaghetti slices: saving (a big file in parts says how far, or that it stopped, with one tap),
+            waiting (a pulse), slicing, sliced (led by the print, the name quieter, and how it was sliced), a caution
+            and its one tap, why it couldn't be, and not sliced yet
           </Label>
           <ModelCard name="fusilli-knob.stl" state={{ kind: "saving" }} phone={false} />
+          <ModelCard name="dragon-scale-armour.stl" state={{ kind: "saving", fraction: 0.42 }} phone={false} />
+          <ModelCard name="dragon-scale-armour.stl" state={{ kind: "notSaved", retry: noop }} phone={false} />
           <ModelCard name="fusilli-knob.stl" state={{ kind: "waiting" }} phone={false} />
           <ModelCard name="fusilli-knob.stl" state={{ kind: "slicing", fraction: 0.05 }} phone={false} />
           <ModelCard

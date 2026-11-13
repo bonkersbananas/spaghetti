@@ -69,7 +69,7 @@ export function RankRow({ rank, photo, note, title, meta, link, actions, handle,
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
-          <span className="text-body text-ink group-hover/rank:decoration-ink/20 line-clamp-2 font-semibold break-words group-hover/rank:underline group-hover/rank:underline-offset-4">
+          <span className="text-body text-ink group-hover/rank:decoration-ink/20 line-clamp-3 font-semibold break-words group-hover/rank:underline group-hover/rank:underline-offset-4 md:line-clamp-2">
             {title}
           </span>
           {meta && meta.length > 0 && (

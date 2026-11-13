@@ -186,14 +186,16 @@ interface OutcomeChipProps {
   outcome: Outcome | null;
   /** The print stopped on the printer and nobody has said how it went yet (see `isOffTheBed`). */
   offTheBed?: boolean;
+  /** On a photo, where "Off the bed" needs a solid face. */
+  onPhoto?: boolean;
   className?: string;
 }
 
 /** How an attempt went, as a chip; "Printing" with a gentle pulse while it runs, "Off the bed" once it stopped. */
-export function OutcomeChip({ outcome, offTheBed, className }: OutcomeChipProps) {
+export function OutcomeChip({ outcome, offTheBed, onPhoto, className }: OutcomeChipProps) {
   if (!outcome && offTheBed) {
     return (
-      <Chip tone="neutral" icon={FinishIcon} className={className}>
+      <Chip tone="neutral" icon={FinishIcon} onPhoto={onPhoto} className={className}>
         Off the bed
       </Chip>
     );

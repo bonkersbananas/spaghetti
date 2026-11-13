@@ -14,7 +14,9 @@
       "!docs/openapi.json",
       "!**/*.md",
       "!test/fixtures/pages",
-      "!docs/proposals/mocks"
+      "!docs/proposals/mocks",
+      "!slicer-rs/profiles",
+      "!slicer-rs/tests/setups"
     ]
   },
   "formatter": {

@@ -6,6 +6,7 @@ import {
   type Item,
   type ItemResponse,
   MAX_SLICER_FILE_BYTES,
+  ONE_REQUEST_FILE_BYTES,
   type PrinterResponse,
   type Spool,
   type SpoolAttemptsResponse,
@@ -332,7 +333,7 @@ describe("slicer files", () => {
     expect((await request(`/api/files/${file?.id}/thumb`, { cookie })).status).toBe(200);
 
     // ...and the Worker refuses bytes over it.
-    const tooBig = await putFile(attempt.id, { bytes: new Uint8Array(MAX_SLICER_FILE_BYTES + 1) });
+    const tooBig = await putFile(attempt.id, { bytes: new Uint8Array(ONE_REQUEST_FILE_BYTES + 8 * 1024 * 1024) });
     expect(tooBig.status).toBe(413);
   });
 

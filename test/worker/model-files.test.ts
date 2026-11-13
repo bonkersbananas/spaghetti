@@ -397,6 +397,27 @@ describe("slicing a model again", () => {
     expect((await restore(id)).status).toBe(409);
   });
 
+  it("keeps no slice for an undo when the new sliced file came in parts, over the one it replaces", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    await putSliced(id, slicedForm({}, { keep: true }));
+    await putSliced(id, slicedForm({}, { keep: true, bytes: new Uint8Array([5, 5]) }));
+    // A big one is in the bucket already (POST /api/uploads), over the slice that was there.
+    const big = new Uint8Array([9, 9, 9]);
+    await env.PHOTOS.put(`files/${id}/sliced`, big);
+    const body = slicedForm({}, { keep: true, sliced: false });
+    body.set("uploaded", "1");
+    body.set("prefill", JSON.stringify({ estimatedMinutes: 90, layerHeight: 0.2, weightGrams: 30 }));
+    const saved = await putSliced(id, body);
+    expect(saved.status).toBe(200);
+    const { file } = await saved.json<ItemFileResponse>();
+    expect(file).toMatchObject({ prefill: { estimatedMinutes: 90 }, previous: null });
+    expect(file.slice).toMatchObject({ status: "sliced", bytes: 3 });
+    expect(await env.PHOTOS.get(`files/${id}/previous`)).toBeNull();
+    expect((await restore(id)).status).toBe(409);
+  });
+
   it("is for people: an agent can't change settings or undo", async () => {
     const item = await idea();
     const id = uuid();

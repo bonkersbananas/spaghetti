@@ -66,7 +66,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
 ## Slicing
 
 - [x] Models sliced in the browser: an .stl or plain .3mf kept as it is and sliced with OrcaSlicer's own engine, its .gcode.3mf beside it ([0046](decisions/0046-models-are-sliced-in-the-browser.md), [docs/slicer.md](slicer.md))
-- [ ] Slicing settings people set easily ([0047](decisions/0047-slicing-settings-in-one-shape.md)): ~~one settings shape in people's words, mapped to Orca's presets in one place~~ (done: `shared/slicing/settings.ts`, `orca.ts`), ~~"Slice with…" on a model's card with a background re-slice and its before → after, the settings kept per model, one undo~~ (done, [0048](decisions/0048-a-model-keeps-its-settings-and-one-slice-to-undo.md)), workspace defaults and recipes, fin supports
+- [ ] Slicing settings people set easily ([0047](decisions/0047-slicing-settings-in-one-shape.md)): ~~one settings shape in people's words, mapped to Orca's presets in one place~~ (done: `shared/slicing/settings.ts`, `orca.ts`), ~~"Slice with…" on a model's card with a background re-slice and its before → after, the settings kept per model, one undo~~ (done, [0049](decisions/0049-a-model-keeps-its-settings-and-one-slice-to-undo.md)), workspace defaults and recipes, fin supports
 
 ## Twists (adapting existing models)
 
