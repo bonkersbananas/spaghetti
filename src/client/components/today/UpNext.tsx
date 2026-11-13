@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { IdeasIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { Section } from "@/components/ui/Section";
 import { cn } from "@/lib/cn";
+import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { splitQueue } from "@/lib/up-next";
