@@ -243,7 +243,7 @@ pub fn simplify_line(points: &[Pt], tolerance: f64) -> Vec<Pt> {
 }
 
 /// Squared distance (units²) from p to the segment a–b.
-fn segment_dist2(p: Pt, a: Pt, b: Pt) -> f64 {
+pub(crate) fn segment_dist2(p: Pt, a: Pt, b: Pt) -> f64 {
     let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
     let (px, py) = ((p.x - a.x) as f64, (p.y - a.y) as f64);
     let len2 = dx * dx + dy * dy;

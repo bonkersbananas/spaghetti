@@ -469,10 +469,12 @@ const PATH_RESOLUTION: f64 = 0.0125;
 /// Orca's allowance for walls overlapping where a region narrows (`INSET_OVERLAP_TOLERANCE`).
 const INSET_OVERLAP_TOLERANCE: f64 = 0.4;
 
-/// How narrow and how wide gap fill's lines may be on a layer (mm), as Orca's.
+/// How narrow and how wide gap fill's lines may be on a layer (mm), as Orca's: a fifth of the narrower wall's
+/// width less the overlap allowance, and two inner walls' spacing.
 pub fn gap_widths(layer: usize, height: f64, s: &Settings) -> (f64, f64) {
-    let w_inner = if layer == 0 { s.first_layer_width } else { s.inner_wall_width };
-    (0.2 * w_inner * (1.0 - INSET_OVERLAP_TOLERANCE), 2.0 * Settings::spacing(w_inner, height))
+    let (w_outer, w_inner) =
+        if layer == 0 { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    (0.2 * w_outer.min(w_inner) * (1.0 - INSET_OVERLAP_TOLERANCE), 2.0 * Settings::spacing(w_inner, height))
 }
 
 /// mm²: a gap smaller than this gets no gap fill (a 0.05 mm line 0.1 mm long).
@@ -524,12 +526,13 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
         }
     }
     // Gaps: neither slivers thinner than gap fill's narrowest line nor parts wide enough for anything else,
-    // simplified as Orca does before its medial axis (the Voronoi diagram costs by the edge).
+    // simplified as Orca simplifies them before its medial axis: to a fifth of the resolution, as Orca does when it
+    // fits arcs (the profile's default).
     let gaps = if gaps.is_empty() {
         Vec::new()
     } else {
         let wide = geom::offset(&geom::offset(&gaps, -gap_max / 2.0), gap_max / 2.0 + safety);
-        geom::simplify_shapes(&geom::difference(&geom::opening(&gaps, gap_min / 2.0), &wide), 0.025)
+        geom::simplify_shapes(&geom::difference(&geom::opening(&gaps, gap_min / 2.0), &wide), 0.2 * s.resolution)
     };
     // Infill goes inside the last wall, but not where gap fill already goes (as Orca: the gaps come out of the
     // area first), nor in parts too narrow for its lines.
