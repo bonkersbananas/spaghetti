@@ -4,7 +4,6 @@ import { inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
-import { itemName } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -14,6 +13,7 @@ import { Photo } from "@/components/ui/Photo";
 import { Section } from "@/components/ui/Section";
 import { RowSkeleton } from "@/components/ui/Skeleton";
 import { deletedQuery, restoreDeletedAttempt, restoreDeletedItem } from "@/lib/deleted";
+import { itemName } from "@/lib/item-name";
 import { photoSrc } from "@/lib/previews";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 

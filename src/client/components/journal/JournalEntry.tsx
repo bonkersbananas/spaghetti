@@ -28,6 +28,7 @@ import { PrintProgress } from "@/components/ui/PrintProgress";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
+import { itemName } from "@/lib/item-name";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
@@ -37,14 +38,6 @@ export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
   }
   if (item.stage === "idea") return { to: "/ideas/$ideaId", params: { ideaId: item.id } } as const;
   return { to: "/builds/$buildId", params: { buildId: item.id } } as const;
-}
-
-/** A build's or idea's name: its title, else the first line of its note. */
-export function itemName(item: Pick<Item, "title" | "note" | "stage">): { text: string; titled: boolean } {
-  if (item.title?.trim()) return { text: item.title.trim(), titled: true };
-  const line = item.note.split("\n").find((l) => l.trim());
-  if (line) return { text: line.trim(), titled: false };
-  return { text: item.stage === "idea" ? "An idea without words" : "Untitled build", titled: false };
 }
 
 const newest = (photos: PhotoData[]) =>

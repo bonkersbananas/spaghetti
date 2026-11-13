@@ -7,6 +7,7 @@ import { BuildsIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { heroPhoto, printingAttempts } from "@/lib/builds";
+import { itemName } from "@/lib/item-name";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { printerQuery } from "@/lib/pantry-queries";
@@ -14,7 +15,6 @@ import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
-import { itemName } from "../journal/JournalEntry";
 
 /** "45 min left", "Done by now", "On the bed": the progress sentence, short enough for a sidebar. */
 function shortLabel(progress: { state: string; label: string }): string {

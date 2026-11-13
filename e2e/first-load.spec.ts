@@ -21,26 +21,20 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 
 /**
- * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-12, after #631 (gzip kB):
-
- * Raised by 2 kB for /today, /ideas and /builds with Twists (#722): the sidebar's entry brings its icon
- * (0.9 kB gzip, all six weights in one file) into every first load, and the two route stubs a little more. Main was
- * then 281.5 / 268.5 / 268.1; with Twists 282.9 / 269.8 / 269.4.
- *   /sign-in 178.1   /today 276.9   /ideas 263.5   /builds 263.4   /journal 263.4   /search 272.4   /pantry 272.2   /printer 272.0
+ * Main's size plus 5 kB of room, rounded up. Measured on main on 2026-11-13, after the first-load win-back (the shell's
+ * itemName no longer pulls the journal's cards into every screen, big uploads load when the first one goes), in gzip kB:
+ *   /sign-in 179.8   /today 286.8   /ideas 253.5   /builds 261.4   /journal 270.4   /search 269.7   /pantry 252.0   /printer 253.8
+ * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
  */
 const CEILING_KB = {
-  "/sign-in": 184,
-  // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB), and the journal's Now block shares the print card with Today, which gives it a chunk of its own (+0.3 kB).
-  // Twists (#722) adds its sidebar icon and two route stubs to every screen (+1.3 to 1.8 kB): today 286, ideas and builds 272.
-  // 288, 275, 275, 272, 280, 280, 280: main grew ~1.1 kB in every screen with the swipe between a card's photos (#220) and the floating Button variant (#223); the heavier Ideas route of this branch adds nothing to the others.
-  "/today": 288,
-  // 270: the Workshop tab's Toolbox icon is in every screen's tab bar (+0.7 kB).
-  "/ideas": 275,
-  "/builds": 275,
-  "/journal": 272,
-  "/search": 280,
-  "/pantry": 280,
-  "/printer": 280,
+  "/sign-in": 185,
+  "/today": 292,
+  "/ideas": 259,
+  "/builds": 267,
+  "/journal": 276,
+  "/search": 275,
+  "/pantry": 257,
+  "/printer": 259,
 } as const;
 
 /** Changes smaller than this don't make a screen heavier: a renamed chunk moves a few bytes in every screen. */

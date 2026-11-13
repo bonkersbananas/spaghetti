@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { itemName } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
 import { PickTile } from "@/components/ui/RankRow";
 import { Sheet } from "@/components/ui/Sheet";
+import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
