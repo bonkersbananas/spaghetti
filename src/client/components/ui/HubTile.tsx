@@ -27,15 +27,18 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
         className,
       )}
     >
-      <span className="bg-ink/4 flex h-28 items-center justify-center overflow-hidden rounded-md px-4" aria-hidden>
+      <span
+        className="bg-ink/4 flex h-[6.5rem] items-center justify-center overflow-hidden rounded-md px-2 md:h-28 md:px-4"
+        aria-hidden
+      >
         {visual}
       </span>
-      <span className="flex items-center gap-3 px-3 pt-3 pb-2.5">
+      <span className="flex items-center gap-3 px-2 pt-2.5 pb-2 md:px-3 md:pt-3 md:pb-2.5">
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-title text-ink font-display font-semibold">{title}</span>
-          <span className="text-small text-ink-faint min-h-[1.5em] truncate">{summary}</span>
+          <span className="text-small text-ink-faint min-h-[1.5em] md:truncate">{summary}</span>
         </span>
-        <NextIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
+        <NextIcon size={18} className="text-ink-faint shrink-0 max-md:hidden" aria-hidden />
       </span>
     </Link>
   );

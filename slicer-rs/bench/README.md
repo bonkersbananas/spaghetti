@@ -53,7 +53,7 @@ To compare what the two write around the toolpaths, diff the head (everything be
 python3 -I bench/headtail.py bench/out/rust-native-4t-benchy/out.gcode bench/out/orca-native-benchy/plate_1.gcode
 ```
 
-To look at one layer of any G-code (Orca's or ours), coloured by feature:
+To look at one layer of any G-code (Orca's or ours), coloured by feature, Orca's arcs drawn as arcs:
 
 ```sh
 python3 -I bench/layer-mvg.py out.gcode 120 layer.mvg && convert mvg:layer.mvg layer.png

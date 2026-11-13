@@ -60,6 +60,11 @@ pub struct Settings {
     pub top_bottom_infill_wall_overlap: f64,
     /// mm²: sparse infill regions smaller than this are printed solid.
     pub min_sparse_infill_area: f64,
+    /// mm: how far the end of a sparse infill line that joins no other follows the wall (Orca's `infill_anchor`,
+    /// in % of the line spacing).
+    pub infill_anchor: f64,
+    /// mm: the longest stretch of wall that joins two sparse infill lines into one (`infill_anchor_max`).
+    pub infill_anchor_max: f64,
     pub elephant_foot: f64,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
@@ -201,6 +206,10 @@ impl Settings {
             })
             .collect();
         let bed = area.iter().fold([0.0f64, 0.0f64], |b, c| [b[0].max(c[0]), b[1].max(c[1])]);
+        // Anchors in % are of the sparse infill's spacing at the object's layer height.
+        let sparse_spacing = Settings::spacing(width("sparse_infill_line_width"), p.float("layer_height"));
+        let infill_anchor_max = p.float_of("infill_anchor_max", sparse_spacing);
+        let infill_anchor = p.float_of("infill_anchor", sparse_spacing).min(infill_anchor_max);
         let bed_type = match p.text("curr_bed_type") {
             "" => DEFAULT_PLATE.to_string(),
             plate => plate.to_string(),
@@ -259,6 +268,8 @@ impl Settings {
             infill_wall_overlap: share("infill_wall_overlap"),
             top_bottom_infill_wall_overlap: share("top_bottom_infill_wall_overlap"),
             min_sparse_infill_area: p.float("minimum_sparse_infill_area"),
+            infill_anchor,
+            infill_anchor_max,
             elephant_foot: p.float("elefant_foot_compensation"),
             resolution: p.float("resolution"),
             skirt_distance: p.float("skirt_distance"),
@@ -361,7 +372,7 @@ impl Settings {
     /// What this prints otherwise than the presets ask, in a few words each (empty when it prints what they ask).
     pub fn fallbacks(&self) -> Vec<String> {
         let mut out = Vec::new();
-        if !matches!(self.sparse_infill_pattern.as_str(), "zig-zag" | "rectilinear" | "") {
+        if !matches!(self.sparse_infill_pattern.as_str(), "zig-zag" | "rectilinear" | "crosshatch" | "gyroid" | "") {
             out.push(format!("{} sparse infill printed as straight lines", self.sparse_infill_pattern));
         }
         for (what, pattern) in [

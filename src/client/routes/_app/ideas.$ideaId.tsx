@@ -64,6 +64,9 @@ const MoveToBuildSheet = lazy(() =>
 );
 
 export const Route = createFileRoute("/_app/ideas/$ideaId")({
+  // The photo to open on: the one a card in the list was swiped to.
+  validateSearch: (search: Record<string, unknown>): { photo?: string } =>
+    typeof search.photo === "string" ? { photo: search.photo } : {},
   component: IdeaDetail,
 });
 
@@ -140,7 +143,9 @@ function Idea({ item }: { item: ItemView }) {
   }, [item, queryClient]);
 
   const photos = item.photos.filter((photo) => !photo.attemptId);
-  const [selectedId, setSelectedId] = useState(photos[0]?.id);
+  // Opens on the photo its card in the list was swiped to, else the first.
+  const opensOn = Route.useSearch().photo;
+  const [selectedId, setSelectedId] = useState(photos.some((photo) => photo.id === opensOn) ? opensOn : photos[0]?.id);
   const selectedIndex = Math.max(
     0,
     photos.findIndex((photo) => photo.id === selectedId),
