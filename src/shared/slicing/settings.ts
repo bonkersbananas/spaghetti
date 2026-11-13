@@ -455,8 +455,9 @@ export function slicingLine(settings: SlicingSettings): string[] {
 
 /**
  * What a model is sliced with, in a line a person can read at a glance: "Standard · Everyday strength · No supports ·
- * PLA Basic jade white", with the way it lies, its size and the slicer when they aren't the usual. The settings row on
- * the card says it; the Printer page's folded defaults use the same words without the filament.
+ * PLA Basic jade white", with the way it lies and its size when they aren't the usual. The settings row on the card
+ * says it; the Printer page's folded defaults use the same words without the filament. The slicer isn't in it: the
+ * card's line above says who sliced the model, and More's summary which slicer it asks for.
  */
 export function slicingSummary(settings: SlicingSettings): string[] {
   const [first, ...others] = settings.filaments;
@@ -472,7 +473,6 @@ export function slicingSummary(settings: SlicingSettings): string[] {
     others.length ? `+${others.length} more` : "",
     orientationWords(settings),
     settings.scale !== 100 ? `${settings.scale}%` : "",
-    settings.slicer !== DEFAULT_SLICER ? slicerWords(settings.slicer) : "",
   ].filter(Boolean);
 }
 
