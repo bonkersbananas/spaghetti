@@ -143,7 +143,7 @@ export function SlicingSection() {
       note="Models Spaghetti slices in the browser, and how people set them up: a few big choices that say what they do, the rest under More (decision 0047)."
     >
       <div className="grid gap-10 lg:grid-cols-2">
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Label>Choice tiles: a picture, a name, a figure, and what the picked one does</Label>
           <Panel>
             <ChoiceTiles<QualityId>
@@ -230,7 +230,7 @@ export function SlicingSection() {
           />
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Label>
             Changed: slicing again with the slice there kept in view (Stop keeps it), then what the change did, with its
             undo; settings changed elsewhere and not sliced yet; a change it couldn't slice
@@ -301,7 +301,7 @@ export function SlicingSection() {
       </div>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Label>How to slice it (live): a popover beside the card on desktop, a tall sheet on phones</Label>
           {/* As the popover draws it: lifted, floating, its padding the panel's own. */}
           <div className="bg-lifted shadow-float w-full max-w-md rounded-lg p-4">
@@ -319,7 +319,7 @@ export function SlicingSection() {
             />
           </div>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Label>Its result: slicing again, what the change did with its undo, and a change it couldn't slice</Label>
           <Panel className="flex max-w-md flex-col gap-5">
             <SliceResult

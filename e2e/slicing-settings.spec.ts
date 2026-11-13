@@ -25,7 +25,8 @@ async function slicedCube(page: Page) {
     buffer: Buffer.from(boxStl(20)),
   });
   const files = page.getByRole("region", { name: /^Files/ });
-  await expect(files.getByRole("button", { name: "Slice with…" })).toBeVisible({ timeout: SLICED });
+  // Sliced: the card says how ("Slice with…" is there while it slices too).
+  await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
   return { id, files };
 }
 
