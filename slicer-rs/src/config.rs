@@ -22,6 +22,8 @@ pub struct Settings {
     pub max_accel_travel: f64,
     pub max_accel_z: f64,
     pub max_accel_e: f64,
+    /// The most a print acceleration (`M204 S`) can ask for (`machine_max_acceleration_extruding`).
+    pub max_accel_extruding: f64,
     pub max_accel_retract: f64,
     pub max_speed_xy: f64,
     pub max_speed_z: f64,
@@ -298,6 +300,7 @@ impl Settings {
             max_accel_travel: at("machine_max_acceleration_travel"),
             max_accel_z: at("machine_max_acceleration_z"),
             max_accel_e: at("machine_max_acceleration_e"),
+            max_accel_extruding: at("machine_max_acceleration_extruding"),
             max_accel_retract: at("machine_max_acceleration_retracting"),
             max_speed_xy: at("machine_max_speed_x"),
             max_speed_z: at("machine_max_speed_z"),
