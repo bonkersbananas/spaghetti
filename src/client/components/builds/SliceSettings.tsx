@@ -168,6 +168,8 @@ export function SlicingChoices({
       />
       <ChoiceTiles
         label="Supports"
+        columns={2}
+        wideColumns={4}
         options={SUPPORT_PLACEMENTS.map((choice) => ({
           value: choice.id,
           label: choice.label,
@@ -449,7 +451,7 @@ function MoreSettings({
       ? slice.fitScale
       : null;
   // The kind of supports means nothing while they are off: none is shown picked, and picking one turns them on.
-  const supportsOn = settings.supports !== "off";
+  const supportsOn = settings.supports === "where-needed" || settings.supports === "everywhere";
   // Room in each stepper for the widest value of the column (the size's, where there is one), so they line up.
   const room = scalable ? `${LIMITS.scale.max}%` : `${LIMITS.infill.max}%`;
   const summary = [
@@ -489,7 +491,11 @@ function MoreSettings({
           {supportsOn ? (
             style && <Effect name={style.label} effect={style.effect} />
           ) : (
-            <p className="text-small text-ink-faint">Supports are off. Pick a kind to have them where needed.</p>
+            <p className="text-small text-ink-faint">
+              {settings.supports === "fins"
+                ? "Fins are on: the model carries its own. Pick a kind to have the slicer's supports where needed instead."
+                : "Supports are off. Pick a kind to have them where needed."}
+            </p>
           )}
         </SettingRow>
         <SettingRow label="Brim" wide>

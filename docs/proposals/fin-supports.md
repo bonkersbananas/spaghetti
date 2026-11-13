@@ -1,6 +1,6 @@
 # Proposal: fin supports for models Spaghetti slices
 
-Status: proposal (Nov 13). Carl Oscar asked to look into fin supports beside the other support types, with [Support Fins](https://github.com/gittrahan/support-fins) as a lead.
+Status: accepted (Nov 13): lay it down is [0050](../decisions/0050-a-model-can-be-sliced-lying-on-another-face.md), fins [0052](../decisions/0052-fins-are-built-into-the-model-when-it-is-sliced.md). Carl Oscar asked to look into fin supports beside the other support types, with [Support Fins](https://github.com/gittrahan/support-fins) as a lead.
 
 ## What the other support types are, and where they stand
 

@@ -9,8 +9,12 @@ import { BED_TYPES, NOZZLE_DIAMETERS } from "../attempts.ts";
 import { finishLabel } from "../spools.ts";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 
-/** Off, only under what would otherwise fall (floating parts, long ledges), or under every steep overhang. */
-export type SupportPlacement = "off" | "where-needed" | "everywhere";
+/**
+ * Off, only under what would otherwise fall (floating parts, long ledges), under every steep overhang, or fins:
+ * breakaway walls built into the model itself (Support Fins, decision 0052), with the slicer's own supports off.
+ */
+export type SupportPlacement = "off" | "where-needed" | "everywhere" | "fins";
+export const SUPPORT_PLACEMENT_IDS = ["off", "where-needed", "everywhere", "fins"] as const;
 /**
  * How supports are built, as OrcaSlicer offers them: trees (organic branches, its default, or its slim, strong and
  * hybrid trees) or normal supports (straight columns on a grid, or snug ones that follow the model's outline).
@@ -136,6 +140,7 @@ export const SUPPORT_PLACEMENTS: readonly Choice<SupportPlacement>[] = [
   { id: "off", label: "Off", effect: "for models that stand on their own" },
   { id: "where-needed", label: "Where needed", effect: "only under parts that would fall" },
   { id: "everywhere", label: "Everywhere", effect: "under every steep overhang" },
+  { id: "fins", label: "Fins", effect: "breakaway fins built into the model" },
 ];
 
 /** Tree and Normal first: the two most people choose between. */
@@ -269,8 +274,8 @@ export function slicingProblems(value: unknown): string[] {
     }
   }
   if (!oneOf(INFILL_PATTERNS, value.pattern)) problems.push(`pattern is one of ${INFILL_PATTERNS.join(", ")}.`);
-  if (!oneOf(["off", "where-needed", "everywhere"], value.supports)) {
-    problems.push("supports is off, where-needed or everywhere.");
+  if (!oneOf(SUPPORT_PLACEMENT_IDS, value.supports)) {
+    problems.push("supports is off, where-needed, everywhere or fins.");
   }
   if (!oneOf(SUPPORT_STYLE_IDS, value.supportStyle)) {
     problems.push(`supportStyle is one of ${SUPPORT_STYLE_IDS.join(", ")}.`);
@@ -317,7 +322,7 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     walls: whole("walls"),
     infill: whole("infill"),
     pattern: oneOf(INFILL_PATTERNS, given.pattern) ?? base.pattern,
-    supports: oneOf(["off", "where-needed", "everywhere"] as const, given.supports) ?? base.supports,
+    supports: oneOf(SUPPORT_PLACEMENT_IDS, given.supports) ?? base.supports,
     supportStyle: oneOf(SUPPORT_STYLE_IDS, given.supportStyle) ?? base.supportStyle,
     brim: oneOf(["auto", "on", "off"] as const, given.brim) ?? base.brim,
     filaments: filaments.length ? filaments : base.filaments,
@@ -397,6 +402,7 @@ export const supportStyleWords = (style: SupportStyle) =>
 /** "supports where needed", or with `style` "slim tree supports everywhere"; empty when off. */
 export function supportWords(settings: Pick<SlicingSettings, "supports" | "supportStyle">, style = false): string {
   if (settings.supports === "off") return "";
+  if (settings.supports === "fins") return "fins";
   const where = settings.supports === "where-needed" ? "where needed" : "everywhere";
   return `${style ? `${supportStyleWords(settings.supportStyle)} ` : ""}supports ${where}`;
 }

@@ -16,6 +16,7 @@
       "!test/fixtures/pages",
       "!docs/proposals/mocks",
       "!slicer-rs/profiles",
+      "!vendor",
       "!slicer-rs/tests/setups"
     ]
   },
