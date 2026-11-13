@@ -2322,6 +2322,25 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Adapting an STL: a file chosen, fitted to a length and mirrored, before the new file is made.
+    name: "twist-adapt",
+    path: `/twists/${SEED_TWIST_IDS.bins}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Adapt an STL" }).click();
+      const sheet = page.getByRole("dialog", { name: "Adapt an STL" });
+      const face = (a: string, b: string, c: string) =>
+        `facet normal 0 0 0\nouter loop\nvertex ${a}\nvertex ${b}\nvertex ${c}\nendloop\nendfacet\n`;
+      const stl = `solid bin\n${face("0 0 0", "0 50 0", "50 0 0")}${face("0 0 0", "50 0 0", "0 0 30")}${face("0 0 0", "0 0 30", "0 50 0")}${face("50 0 0", "0 50 0", "0 0 30")}endsolid bin`;
+      await sheet
+        .getByTestId("adapt-file-input")
+        .setInputFiles({ name: "gridfinity-bin.stl", mimeType: "model/stl", buffer: Buffer.from(stl) });
+      await sheet.getByRole("textbox", { name: "Fit to length" }).fill("42");
+      await sheet.getByRole("button", { name: "Fit", exact: true }).click();
+      await sheet.getByRole("button", { name: "X", exact: true }).first().click();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     name: "twist-new",
     path: "/twists",
     prepare: async (page) => {

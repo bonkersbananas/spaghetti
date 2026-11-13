@@ -1,10 +1,10 @@
 import type { Twist } from "@shared/api";
 import { checkLinkUrl } from "@shared/link-safety";
 import { modelMarkOf } from "@shared/model-mark";
-import { TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
+import { TWIST_CHANGES_MAX, TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Fusilli } from "@/components/illustrations/Fusilli";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { PrintedRow } from "@/components/twists/PrintedRow";
@@ -14,7 +14,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { ArrowRightIcon, BuildsIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, BuildsIcon, EditIcon, SlicerFileIcon, TrashIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
@@ -35,6 +35,8 @@ import { useIsDesktop } from "@/lib/use-media-query";
 export const Route = createFileRoute("/_app/twists/$twistId")({
   component: TwistPage,
 });
+
+const AdaptSheet = lazy(() => import("@/components/twists/AdaptSheet"));
 
 const back = { to: "/twists", label: "Twists" } as const;
 
@@ -91,6 +93,8 @@ function TwistBody({ twist }: { twist: Twist }) {
   const printed = // The idea it came from counts once it has grown into a build.
     allBuilds.filter((build) => build.twistId === twist.id || build.id === twist.fromItemId);
   const [editingLink, setEditingLink] = useState(false);
+  const [adapting, setAdapting] = useState(false);
+  const [adaptAsked, setAdaptAsked] = useState(false);
   const { value, change, saveState } = useLiveFields(
     { name: twist.name, note: twist.note, sourceUrl: twist.source.url ?? "", changes: twist.changes },
     async (changes) => {
@@ -179,6 +183,44 @@ function TwistBody({ twist }: { twist: Twist }) {
 
           <Section id="changes" title="What we changed">
             <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
+            {!readOnly && (
+              // Adapting is rare: its code (the STL reader, the sheet) is fetched when it is first asked for.
+              <div className="-mx-3 -mt-2 flex">
+                <Button
+                  variant="quiet"
+                  icon={SlicerFileIcon}
+                  onClick={() => {
+                    setAdaptAsked(true);
+                    setAdapting(true);
+                  }}
+                >
+                  Adapt an STL
+                </Button>
+              </div>
+            )}
+            {adaptAsked && (
+              <Suspense fallback={null}>
+                <AdaptSheet
+                  open={adapting}
+                  onOpenChange={setAdapting}
+                  twistName={value.name}
+                  onAdapted={(made) =>
+                    change((current) => ({
+                      changes: [
+                        ...current.changes,
+                        ...made.map((line) => ({
+                          id: crypto.randomUUID(),
+                          kind: line.kind,
+                          label: line.label,
+                          value: line.value,
+                          note: "adapted in the app",
+                        })),
+                      ].slice(0, TWIST_CHANGES_MAX),
+                    }))
+                  }
+                />
+              </Suspense>
+            )}
           </Section>
 
           <NoteField
