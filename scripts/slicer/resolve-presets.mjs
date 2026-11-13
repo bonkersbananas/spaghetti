@@ -3,15 +3,18 @@
 // engine, so they can't drift apart. Run by scripts/slicer/build.sh.
 //
 //   node scripts/slicer/resolve-presets.mjs <engine dist/> <orca resources/profiles/> <out presets.json>
-//
-// The defaults (src/shared/slicing/defaults.ts) name one of each; the others are here for 3MF projects (a filament
-// per material) and for settings later (the other layer heights).
 import fs from "node:fs";
 import path from "node:path";
 import { startHost } from "./host-client.mjs";
 
-const MACHINES = ["Bambu Lab X2D 0.4 nozzle"];
+// The defaults (src/shared/slicing/defaults.ts) name one of each; the others are here for 3MF projects (a filament
+// per material), for the other qualities, and for the X2D's other nozzle sizes (src/shared/slicing/orca.ts says which
+// preset each nozzle, quality and filament slices with). Every name is one of Bambu's own X2D presets in Orca's
+// profiles: the build stops when one isn't there.
+const NOZZLES = ["0.2", "0.4", "0.6", "0.8"];
+const MACHINES = NOZZLES.map((nozzle) => `Bambu Lab X2D ${nozzle} nozzle`);
 const PROCESSES = [
+  // 0.4 mm: the X2D's own names carry no nozzle.
   "0.20mm Standard @BBL X2D",
   "0.08mm High Quality @BBL X2D",
   "0.12mm High Quality @BBL X2D",
@@ -19,24 +22,55 @@ const PROCESSES = [
   "0.16mm Standard @BBL X2D",
   "0.20mm High Quality @BBL X2D",
   "0.24mm Standard @BBL X2D",
+  // The other nozzles: every process Bambu has for them.
+  "0.08mm High Quality @BBL X2D 0.2 nozzle",
+  "0.10mm Standard @BBL X2D 0.2 nozzle",
+  "0.12mm Balanced Quality @BBL X2D 0.2 nozzle",
+  "0.18mm Balanced Quality @BBL X2D 0.6 nozzle",
+  "0.24mm Balanced Quality @BBL X2D 0.6 nozzle",
+  "0.30mm Standard @BBL X2D 0.6 nozzle",
+  "0.24mm Balanced Quality @BBL X2D 0.8 nozzle",
+  "0.32mm Balanced Quality @BBL X2D 0.8 nozzle",
+  "0.40mm Standard @BBL X2D 0.8 nozzle",
+];
+/** A filament per material, as Bambu names them for the 0.4 mm nozzle, and for the 0.6 and 0.8 mm (one set for both). */
+const MATERIALS = [
+  "Bambu PLA Basic",
+  "Generic PLA",
+  "Generic PLA Silk",
+  "Generic PLA-CF",
+  "Generic PETG",
+  "Generic PETG-CF",
+  "Generic PCTG",
+  "Generic ABS",
+  "Generic ASA",
+  "Generic TPU",
+  "Generic PA",
+  "Generic PA-CF",
+  "Generic PC",
+  "Generic PVA",
+  "Generic HIPS",
+  "Generic PP",
+];
+/**
+ * The 0.2 mm nozzle has fewer: no carbon fibre (it clogs one so fine), no TPU, PA, PP or PCTG, and silk only as
+ * Bambu's own. orca.ts slices the others with their nearest kin and says so.
+ */
+const MATERIALS_0_2 = [
+  "Bambu PLA Basic",
+  "Generic PLA",
+  "Bambu PLA Silk",
+  "Generic PETG",
+  "Generic ABS",
+  "Generic ASA",
+  "Generic PC",
+  "Generic PVA",
+  "Generic HIPS",
 ];
 const FILAMENTS = [
-  "Bambu PLA Basic @BBL X2D 0.4 nozzle",
-  "Generic PLA @BBL X2D 0.4 nozzle",
-  "Generic PLA Silk @BBL X2D 0.4 nozzle",
-  "Generic PLA-CF @BBL X2D 0.4 nozzle",
-  "Generic PETG @BBL X2D 0.4 nozzle",
-  "Generic PETG-CF @BBL X2D 0.4 nozzle",
-  "Generic PCTG @BBL X2D 0.4 nozzle",
-  "Generic ABS @BBL X2D 0.4 nozzle",
-  "Generic ASA @BBL X2D 0.4 nozzle",
-  "Generic TPU @BBL X2D 0.4 nozzle",
-  "Generic PA @BBL X2D 0.4 nozzle",
-  "Generic PA-CF @BBL X2D 0.4 nozzle",
-  "Generic PC @BBL X2D 0.4 nozzle",
-  "Generic PVA @BBL X2D 0.4 nozzle",
-  "Generic HIPS @BBL X2D 0.4 nozzle",
-  "Generic PP @BBL X2D 0.4 nozzle",
+  ...MATERIALS.map((name) => `${name} @BBL X2D 0.4 nozzle`),
+  ...MATERIALS.map((name) => `${name} @BBL X2D`),
+  ...MATERIALS_0_2.map((name) => `${name} @BBL X2D 0.2 nozzle`),
 ];
 
 const [dist, profiles, out] = process.argv.slice(2);
