@@ -6,6 +6,7 @@ import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
+import { gridfinityBin } from "./seed/stl-bin.ts";
 import { SEED_TWIST_IDS } from "./seed/twists.ts";
 
 /** The spool that sat in A4 before the unknown-tray shot emptied it. */
@@ -2319,6 +2320,22 @@ export const shots: Shot[] = [
     fullPage: true,
     prepare: async (page) => {
       await page.getByRole("button", { name: "Twist", exact: true }).waitFor();
+    },
+  },
+  {
+    // Adapting an STL: a file chosen, fitted to a length and mirrored, before the new file is made.
+    name: "twist-adapt",
+    path: `/twists/${SEED_TWIST_IDS.bins}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Adapt an STL" }).click();
+      const sheet = page.getByRole("dialog", { name: "Adapt an STL" });
+      await sheet
+        .getByTestId("adapt-file-input")
+        .setInputFiles({ name: "gridfinity-bin.stl", mimeType: "model/stl", buffer: gridfinityBin() });
+      await sheet.getByRole("textbox", { name: "Fit to length" }).fill("63");
+      await sheet.getByRole("button", { name: "Fit", exact: true }).click();
+      await sheet.getByRole("button", { name: "X", exact: true }).first().click();
+      await page.waitForTimeout(500);
     },
   },
   {

@@ -131,3 +131,81 @@ test("a build from someone else's model is kept as a twist from its page, and se
   const found = page.getByRole("region", { name: "Twists" });
   await expect(found.getByRole("link", { name: /Cable chain/ })).toBeVisible();
 });
+
+test("adapts an STL in the browser: fit to a length, mirror, download, and the changes land in the twist", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/twists");
+  await page
+    .getByRole("button", { name: /New twist|Make a twist/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "A new twist" });
+  await sheet.getByRole("textbox", { name: "Name it" }).fill("Tetra, fitted");
+  await sheet.getByRole("button", { name: "Make the twist" }).click();
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("Tetra, fitted");
+
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  const adapt = page.getByRole("dialog", { name: "Adapt an STL" });
+  // An ASCII tetrahedron, 10 × 20 × 30 mm.
+  const stl = `solid tetra
+facet normal 0 0 0
+outer loop
+vertex 0 0 0
+vertex 0 20 0
+vertex 10 0 0
+endloop
+endfacet
+facet normal 0 0 0
+outer loop
+vertex 0 0 0
+vertex 10 0 0
+vertex 0 0 30
+endloop
+endfacet
+facet normal 0 0 0
+outer loop
+vertex 0 0 0
+vertex 0 0 30
+vertex 0 20 0
+endloop
+endfacet
+facet normal 0 0 0
+outer loop
+vertex 10 0 0
+vertex 0 20 0
+vertex 0 0 30
+endloop
+endfacet
+endsolid tetra`;
+  await adapt
+    .getByTestId("adapt-file-input")
+    .setInputFiles({ name: "tetra.stl", mimeType: "model/stl", buffer: Buffer.from(stl) });
+  await expect(adapt.getByText("4 triangles · 10 × 20 × 30 mm")).toBeVisible();
+
+  // Fit the longest side to 42 mm: 140 %, and what it will be is shown before anything is made.
+  await adapt.getByRole("textbox", { name: "Fit to length" }).fill("42");
+  await adapt.getByRole("button", { name: "Fit", exact: true }).click();
+  await expect(adapt.getByRole("textbox", { name: "Scale" })).toHaveValue("140");
+  await expect(adapt.getByText("14 × 28 × 42 mm")).toBeVisible();
+  await expect(adapt.getByRole("img", { name: "The model as it will be" })).toBeVisible();
+  await expect(adapt.getByText("Made on this device")).toBeVisible();
+  await adapt.getByRole("button", { name: "X", exact: true }).first().click();
+
+  const download = page.waitForEvent("download");
+  await adapt.getByRole("button", { name: "Download the STL" }).click();
+  expect((await download).suggestedFilename()).toBe("tetra-140pct-adapted.stl");
+  await expect(adapt).toBeHidden();
+
+  // What was done is written into the twist's changes.
+  await expect(page.getByRole("button", { name: "Edit scale" })).toContainText("140 %");
+  await expect(page.getByRole("button", { name: "Edit mirrored" })).toContainText("X");
+
+  // A file that isn't an STL says so.
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  await page
+    .getByTestId("adapt-file-input")
+    .setInputFiles({ name: "notes.stl", mimeType: "model/stl", buffer: Buffer.from("not a model at all, sorry") });
+  await expect(page.getByText("That isn't an STL file.")).toBeVisible();
+});
