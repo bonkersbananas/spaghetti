@@ -357,6 +357,25 @@ pub fn near(shapes: &Shapes, bbox: [i32; 4]) -> Shapes {
         .collect()
 }
 
+/// Bounding box of one shape's outer contour: min x, min y, max x, max y (units).
+pub fn bbox_of(shape: &Shape) -> [i32; 4] {
+    let mut b = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
+    if let Some(outer) = shape.first() {
+        for p in outer {
+            b[0] = b[0].min(p.x);
+            b[1] = b[1].min(p.y);
+            b[2] = b[2].max(p.x);
+            b[3] = b[3].max(p.y);
+        }
+    }
+    b
+}
+
+/// Whether a point is inside one shape (its outline, not in its holes).
+pub fn shape_contains(shape: &Shape, p: Pt) -> bool {
+    shape.iter().map(|c| winding_number(c, p)).sum::<i32>() != 0
+}
+
 /// Bounding box of shapes: min x, min y, max x, max y (units).
 pub fn bbox(shapes: &Shapes) -> Option<[i32; 4]> {
     let mut b = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];

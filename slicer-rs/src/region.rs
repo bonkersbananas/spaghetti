@@ -12,6 +12,7 @@ use crate::section::Layers;
 pub enum Role {
     InnerWall,
     OuterWall,
+    GapFill,
     Bridge,
     InternalBridge,
     BottomSurface,
@@ -21,9 +22,10 @@ pub enum Role {
 }
 
 impl Role {
-    pub const ALL: [Role; 8] = [
+    pub const ALL: [Role; 9] = [
         Role::InnerWall,
         Role::OuterWall,
+        Role::GapFill,
         Role::Bridge,
         Role::InternalBridge,
         Role::BottomSurface,
@@ -36,6 +38,7 @@ impl Role {
         match self {
             Role::InnerWall => "Inner wall",
             Role::OuterWall => "Outer wall",
+            Role::GapFill => "Gap infill",
             Role::Bridge => "Bridge",
             Role::InternalBridge => "Internal Bridge",
             Role::BottomSurface => "Bottom surface",
@@ -57,6 +60,8 @@ pub struct Island {
     pub walls: Vec<Vec<Contour>>,
     /// Inside the innermost wall: where infill goes.
     pub inner: Shapes,
+    /// Between walls, too narrow for another wall or infill: gap fill goes along their middles.
+    pub gaps: Shapes,
 }
 
 /// The infill areas of one island, by kind.
@@ -182,43 +187,120 @@ pub fn regions(slices: &[Shapes], layers: &Layers, s: &Settings) -> Vec<LayerReg
 /// many tiny segments that the printer gains nothing from.
 const PATH_RESOLUTION: f64 = 0.0125;
 
-/// The wall loops of a layer's islands (Orca's classic walls: the outer one half a line in from the outline, each
-/// next one a line's spacing further in) and the area inside them.
+/// Orca's allowance for walls overlapping where a region narrows (`INSET_OVERLAP_TOLERANCE`).
+const INSET_OVERLAP_TOLERANCE: f64 = 0.4;
+
+/// How narrow and how wide gap fill's lines may be on a layer (mm), as Orca's.
+pub fn gap_widths(layer: usize, height: f64, s: &Settings) -> (f64, f64) {
+    let w_inner = if layer == 0 { s.first_layer_width } else { s.inner_wall_width };
+    (0.2 * w_inner * (1.0 - INSET_OVERLAP_TOLERANCE), 2.0 * Settings::spacing(w_inner, height))
+}
+
+/// mm²: a gap smaller than this gets no gap fill (a 0.05 mm line 0.1 mm long).
+const MIN_GAP_AREA: f64 = 0.005;
+
+/// The wall loops of a layer's islands, as Orca's classic walls: the outer one half a line in from the outline,
+/// each next one a line's spacing further in, but only where it fits (an opening drops the slivers that would
+/// print as a loop going there and back). Where a wall doesn't fit, the narrow leftover is a gap, filled along its
+/// middle; the area inside the last wall, less the gaps and parts too narrow for its lines, is for infill. Each
+/// step works on the whole layer at once (a boolean costs much the same for one island as for ten), and the
+/// results are then shared out to the islands they lie in.
 fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island> {
     let first = layer == 0;
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    let w_solid = if first { s.first_layer_width } else { s.solid_infill_width };
     let sp_outer = Settings::spacing(w_outer, height);
     let sp_inner = Settings::spacing(w_inner, height);
-    let mut out = Vec::with_capacity(slice.len());
-    for shape in slice {
-        let island_shapes: Shapes = vec![shape.clone()];
-        let mut region = geom::simplify_shapes(&geom::offset(&island_shapes, -w_outer / 2.0), PATH_RESOLUTION);
-        let mut walls = Vec::new();
-        let mut last_spacing = sp_outer;
-        if !region.is_empty() {
-            walls.push(contours(&region));
-            for k in 1..s.wall_loops {
-                let d = if k == 1 { (sp_outer + sp_inner) / 2.0 } else { sp_inner };
-                let next = geom::simplify_shapes(&geom::offset(&region, -d), PATH_RESOLUTION);
-                if next.is_empty() {
-                    break;
+    let min_spacing = sp_inner * (1.0 - INSET_OVERLAP_TOLERANCE);
+    let min_infill_spacing = Settings::spacing(w_solid, height) * (1.0 - INSET_OVERLAP_TOLERANCE);
+    let (gap_min, gap_max) = gap_widths(layer, height, s);
+    // A hair more than nothing: keeps touching edges from counting as gaps (Orca's safety offset).
+    let safety = 1.0 / geom::SCALE;
+
+    let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), PATH_RESOLUTION);
+    let mut depths: Vec<Shapes> = Vec::new();
+    let mut gaps: Shapes = Vec::new();
+    let mut last_spacing = sp_outer;
+    if !region.is_empty() {
+        depths.push(region.clone());
+        // Each inner wall, and one more past the last to find the gaps the last one leaves.
+        for k in 1..=s.wall_loops {
+            // Orca's precise outer wall: the first inner wall a whole line width from the outer one (no overlap,
+            // so the outer wall keeps to the model's outline).
+            let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };
+            let next = geom::simplify_shapes(
+                &geom::offset(&geom::offset(&region, -(d + min_spacing / 2.0)), min_spacing / 2.0),
+                PATH_RESOLUTION,
+            );
+            let gap = geom::difference(&geom::offset(&region, -d / 2.0), &geom::offset(&next, d / 2.0 + safety));
+            // Most of what this finds is the crumbs offsets leave in corners: too small to fill.
+            gaps.extend(gap.into_iter().filter(|shape| geom::shape_area_mm2(shape) >= MIN_GAP_AREA));
+            if k == s.wall_loops || next.is_empty() {
+                break;
+            }
+            region = next;
+            depths.push(region.clone());
+            last_spacing = sp_inner;
+        }
+    }
+    // Gaps: neither slivers thinner than gap fill's narrowest line nor parts wide enough for anything else,
+    // simplified as Orca does before its medial axis (the Voronoi diagram costs by the edge).
+    let gaps = if gaps.is_empty() {
+        Vec::new()
+    } else {
+        let wide = geom::offset(&geom::offset(&gaps, -gap_max / 2.0), gap_max / 2.0 + safety);
+        geom::simplify_shapes(&geom::difference(&geom::opening(&gaps, gap_min / 2.0), &wide), 0.025)
+    };
+    // Infill goes inside the last wall, but not where gap fill already goes (as Orca: the gaps come out of the
+    // area first), nor in parts too narrow for its lines.
+    let inner = if region.is_empty() {
+        Vec::new()
+    } else {
+        let inset = last_spacing / 2.0;
+        let room = if gaps.is_empty() { region } else { geom::difference(&region, &gaps) };
+        geom::simplify_shapes(
+            &geom::offset(&geom::offset(&room, -(inset + min_infill_spacing / 2.0)), min_infill_spacing / 2.0),
+            PATH_RESOLUTION,
+        )
+    };
+
+    // Share everything out to the islands of the slice it lies in.
+    let boxes: Vec<[i32; 4]> = slice.iter().map(geom::bbox_of).collect();
+    let island_of = |shape: &geom::Shape| -> Option<usize> {
+        let p = *shape.first()?.first()?;
+        let mut found = None;
+        for (i, b) in boxes.iter().enumerate() {
+            if p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3] {
+                if geom::shape_contains(&slice[i], p) {
+                    return Some(i);
                 }
-                region = next;
-                walls.push(contours(&region));
-                last_spacing = sp_inner;
+                found.get_or_insert(i);
             }
         }
-        let inner = if region.is_empty() {
-            Vec::new()
-        } else {
-            geom::simplify_shapes(&geom::offset(&region, -last_spacing / 2.0), PATH_RESOLUTION)
-        };
-        out.push(Island { walls, inner });
+        found
+    };
+    let mut out: Vec<Island> = slice.iter().map(|_| Island::default()).collect();
+    for (k, shapes) in depths.iter().enumerate() {
+        for shape in shapes {
+            if let Some(i) = island_of(shape) {
+                let island = &mut out[i];
+                while island.walls.len() <= k {
+                    island.walls.push(Vec::new());
+                }
+                island.walls[k].extend(shape.iter().filter(|c| c.len() >= 3).cloned());
+            }
+        }
+    }
+    for shape in inner {
+        if let Some(i) = island_of(&shape) {
+            out[i].inner.push(shape);
+        }
+    }
+    for shape in gaps {
+        if let Some(i) = island_of(&shape) {
+            out[i].gaps.push(shape);
+        }
     }
     out
-}
-
-fn contours(shapes: &Shapes) -> Vec<Contour> {
-    shapes.iter().flat_map(|shape| shape.iter().cloned()).filter(|c| c.len() >= 3).collect()
 }

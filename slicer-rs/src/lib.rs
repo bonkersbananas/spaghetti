@@ -6,6 +6,7 @@ pub mod config;
 pub mod gcode;
 pub mod geom;
 pub mod infill;
+pub mod medial;
 pub mod mesh;
 pub mod pack;
 pub mod plan;

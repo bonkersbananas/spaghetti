@@ -1,6 +1,7 @@
 //! The whole job, from model files to a `.gcode.3mf`, on small models.
 
 use md5::{Digest, Md5};
+use spaghetti_slicer::region::Role;
 use spaghetti_slicer::{Error, Input, Options, Settings, slice, zip};
 
 /// A cube as a text STL, corners from 0 to `size`.
@@ -114,7 +115,7 @@ fn a_beam_between_two_pillars_is_bridged() {
     // The beam's first layer (z 10.2) prints its span over the gap as a bridge.
     let layer = gcode.split("; CHANGE_LAYER\n").find(|l| l.starts_with("; Z_HEIGHT: 10.2\n")).expect("layer at 10.2");
     assert!(layer.contains("; FEATURE: Bridge\n"));
-    let bridge = out.stats.features[2];
+    let bridge = out.stats.features[Role::ALL.iter().position(|&r| r == Role::Bridge).unwrap()];
     assert!(bridge.volume > 20.0, "{} mm³ of bridge", bridge.volume);
 }
 

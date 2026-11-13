@@ -18,6 +18,28 @@ pub fn now() -> f64 {
     unsafe { now_ms() }
 }
 
+/// getrandom's source in WebAssembly (see `.cargo/config.toml`): a fixed xorshift sequence. Only boostvoronoi's
+/// skip list draws on it, to balance itself, so any numbers do, and the same ones keep the output the same.
+///
+/// # Safety
+/// `dest` must point at `len` writable bytes (getrandom's contract).
+#[unsafe(no_mangle)]
+unsafe extern "Rust" fn __getrandom_v03_custom(dest: *mut u8, len: usize) -> Result<(), getrandom::Error> {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    static STATE: AtomicU64 = AtomicU64::new(0x9E37_79B9_7F4A_7C15);
+    // SAFETY: getrandom hands over `len` writable bytes at `dest`.
+    let out = unsafe { std::slice::from_raw_parts_mut(dest, len) };
+    for chunk in out.chunks_mut(8) {
+        let mut x = STATE.load(Relaxed);
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        STATE.store(x, Relaxed);
+        chunk.copy_from_slice(&x.to_le_bytes()[..chunk.len()]);
+    }
+    Ok(())
+}
+
 thread_local! {
     static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static SUMMARY: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
