@@ -80,6 +80,8 @@ export function toApiFile(file: Omit<AttemptFileRow, "attemptId">): ApiAttemptFi
     slicer: file.slicer,
     prefill: file.prefill,
     objects: file.objects,
+    kind: file.kind,
+    slice: file.slice ?? null,
     createdAt: file.createdAt.getTime(),
   };
 }

@@ -11,6 +11,7 @@ import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PriceSuggestion, ShoppingPrices } from "../../shared/prisjakt.ts";
+import type { FileKind, FileSlice } from "../../shared/slicing/types.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 import type { TwistChange } from "../../shared/twists.ts";
 import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
@@ -694,6 +695,10 @@ export const attemptFiles = sqliteTable(
     prefill: text("prefill", { mode: "json" }).$type<AttemptSettings>().notNull(),
     /** The object names on that plate, as the file spells them: where a build's parts can come from. */
     objects: text("objects", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** "slicer", or "model": an .stl or plain .3mf Spaghetti slices (the bytes are the original; decision 0046). */
+    kind: text("kind").$type<FileKind>().notNull().default("slicer"),
+    /** A model's slicing, once it is sliced or failed; the sliced .gcode.3mf is in R2 at `files/<id>/sliced`. */
+    slice: text("slice", { mode: "json" }).$type<FileSlice>(),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -724,6 +729,8 @@ export const itemFiles = sqliteTable(
     slicer: text("slicer"),
     prefill: text("prefill", { mode: "json" }).$type<AttemptSettings>().notNull(),
     objects: text("objects", { mode: "json" }).$type<string[]>().notNull().default([]),
+    kind: text("kind").$type<FileKind>().notNull().default("slicer"),
+    slice: text("slice", { mode: "json" }).$type<FileSlice>(),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),

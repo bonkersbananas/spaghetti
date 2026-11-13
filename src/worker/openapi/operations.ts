@@ -8,7 +8,7 @@ import { captureFields } from "../routes/capture.ts";
 import { changesQuery } from "../routes/changes.ts";
 import { createComment, updateComment } from "../routes/comments.ts";
 import { draftBody } from "../routes/drafts.ts";
-import { fileFields } from "../routes/files.ts";
+import { fileFields, slicedFields } from "../routes/files.ts";
 import { insightsQuery } from "../routes/insights.ts";
 import {
   createItem,
@@ -656,10 +656,14 @@ export const operations: Record<string, Operation> = {
   "DELETE /attempts/:id": { summary: "Deletes an attempt (it can be restored).", response: "empty", status: 204 },
   "POST /attempts/:id/restore": { summary: "Restores a deleted attempt.", response: one("attempt", Attempt) },
   "PUT /attempts/:id/file": {
-    summary: "Attaches the slicer file an attempt was printed from, with its plate thumbnail.",
+    summary:
+      "Attaches the file an attempt was printed from, with its plate thumbnail: a slicer file, or a model (kind model: an .stl or plain .3mf the app slices).",
     multipart: {
       fields: fileFields,
-      files: { file: "The .3mf or .gcode.3mf, kept up to 25 MB.", thumb: "The plate's picture." },
+      files: {
+        file: "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB.",
+        thumb: "The plate's picture.",
+      },
     },
     response: one("attempt", Attempt),
     errors: { 404: notFound("attempt"), 415: "unsupported: not a slicer file." },
@@ -672,10 +676,13 @@ export const operations: Record<string, Operation> = {
   "POST /attempts/:id/file/restore": { summary: "Brings the slicer file back.", response: one("attempt", Attempt) },
   "PUT /items/:id/files/:fileId": {
     summary:
-      "Keeps a slicer file (.3mf or .gcode.3mf) with an idea or build, with its plate thumbnail. Several may be kept; the same id again changes it.",
+      "Keeps a file with an idea or build, with its plate thumbnail: a slicer file (.3mf or .gcode.3mf), or a model (kind model: an .stl or plain .3mf the app slices). Several may be kept; the same id again changes it.",
     multipart: {
       fields: fileFields.omit({ id: true }),
-      files: { file: "The .3mf or .gcode.3mf, kept up to 25 MB.", thumb: "The plate's picture." },
+      files: {
+        file: "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB.",
+        thumb: "The plate's picture.",
+      },
     },
     response: one("file", AttemptFile),
     errors: {
@@ -691,9 +698,27 @@ export const operations: Record<string, Operation> = {
   },
   "POST /items/:id/files/:fileId/restore": { summary: "Brings the file back.", response: one("file", AttemptFile) },
   "GET /files/:id/:part?": {
-    summary: "A slicer file's bytes, or its plate thumbnail with `/thumb`.",
+    summary:
+      "A file's bytes (a model's original), its plate thumbnail with `/thumb`, or a model's sliced .gcode.3mf with `/sliced`.",
     response: "binary",
     errors: { 404: notFound("file") },
+  },
+  "PUT /files/:id/sliced": {
+    summary:
+      "Keeps how a model was sliced (or why it couldn't be), with the sliced .gcode.3mf and its plate picture. The app slices in the browser; slicing again replaces it.",
+    multipart: {
+      fields: slicedFields,
+      files: {
+        sliced: "The .gcode.3mf, up to 25 MB: required when slice.status is sliced.",
+        thumb: "The plate's picture.",
+      },
+    },
+    response: one("file", AttemptFile),
+    errors: {
+      404: notFound("file"),
+      409: "conflict: only a model is sliced.",
+      415: "unsupported: not a picture.",
+    },
   },
 
   // Spools.

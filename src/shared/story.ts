@@ -1,4 +1,4 @@
-import type { Item, Person } from "./api.ts";
+import type { AttemptFile, Item, Person } from "./api.ts";
 import {
   type AttemptSettings,
   OUTCOME_LABELS,
@@ -10,7 +10,37 @@ import {
 import { liveCoachItems } from "./coach.ts";
 import type { Comment } from "./comments.ts";
 import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
+import { printerName, problemSentence, sliceSummary } from "./slicing/words.ts";
 import { formatDuration } from "./time.ts";
+
+/** A kept file in a line: a slicer file with what it said, a model with how Spaghetti sliced it (or why it didn't). */
+function fileLine(file: AttemptFile): string {
+  const estimate =
+    file.prefill.estimatedMinutes !== undefined ? `est. ${formatDuration(file.prefill.estimatedMinutes)}` : "";
+  if (file.kind === "model") {
+    const slice = file.slice;
+    const how = !slice
+      ? "not sliced yet"
+      : slice.status === "failed"
+        ? `couldn't be sliced: ${problemSentence(slice)}`
+        : [
+            `sliced by Spaghetti with OrcaSlicer ${slice.settings.orca} for the ${printerName(slice.settings.machine)}`,
+            ...sliceSummary(slice.settings),
+            estimate,
+            slice.cautions?.includes("floating") ? "parts of it float in the air (it needs supports)" : "",
+          ]
+            .filter(Boolean)
+            .join(", ");
+    return `${file.name} (a model, ${how})`;
+  }
+  const bits = [
+    file.plateCount > 1 ? `plate ${file.plate} of ${file.plateCount}` : "",
+    estimate,
+    file.slicer ?? "",
+    file.stored ? "" : "too big to keep, only what it said",
+  ].filter(Boolean);
+  return `${file.name}${bits.length ? ` (${bits.join(", ")})` : ""}`;
+}
 
 /** What the story needs to name people and agents. */
 export interface StoryContext {
@@ -94,16 +124,13 @@ export function buildStory(item: Item, context: StoryContext): string {
   if (photos) lines.push(`${photos} ${photos === 1 ? "photo" : "photos"} of the idea.`, "");
 
   if (item.files?.length) {
-    lines.push(`## Files (${item.files.length})`, "", "Slicer files kept with the idea, to download in the app.", "");
-    for (const file of item.files) {
-      const bits = [
-        file.plateCount > 1 ? `plate ${file.plate} of ${file.plateCount}` : "",
-        file.prefill.estimatedMinutes !== undefined ? `est. ${formatDuration(file.prefill.estimatedMinutes)}` : "",
-        file.slicer ?? "",
-        file.stored ? "" : "too big to keep, only what it said",
-      ].filter(Boolean);
-      lines.push(`- ${file.name}${bits.length ? ` (${bits.join(", ")})` : ""}`);
-    }
+    lines.push(
+      `## Files (${item.files.length})`,
+      "",
+      "Files kept with the idea, to download in the app: slicer files, and models (.stl, .3mf) that Spaghetti slices.",
+      "",
+    );
+    for (const file of item.files) lines.push(`- ${fileLine(file)}`);
     lines.push("");
   }
 
@@ -153,8 +180,14 @@ export function buildStory(item: Item, context: StoryContext): string {
       );
     const attemptPhotos = item.photos.filter((photo) => photo.attemptId === attempt.id).length;
     if (attemptPhotos) lines.push(`${attemptPhotos} ${attemptPhotos === 1 ? "photo" : "photos"}.`, "");
-    if (attempt.file)
-      lines.push(`Slicer file: ${attempt.file.name} (plate ${attempt.file.plate} of ${attempt.file.plateCount}).`, "");
+    if (attempt.file) {
+      lines.push(
+        attempt.file.kind === "model"
+          ? `Model: ${fileLine(attempt.file)}.`
+          : `Slicer file: ${attempt.file.name} (plate ${attempt.file.plate} of ${attempt.file.plateCount}).`,
+        "",
+      );
+    }
   });
 
   const worked = [...item.attempts]

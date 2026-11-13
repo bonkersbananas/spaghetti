@@ -5,6 +5,7 @@ import { CHANGE_ACTIONS, CHANGE_ACTOR_KINDS, CHANGE_ENTITIES } from "../../share
 import { LABEL_FIELDS } from "../../shared/label-read.ts";
 import { DELIVERY_STATUSES, WEBHOOK_KINDS } from "../../shared/webhooks.ts";
 import { settings } from "../routes/attempts.ts";
+import { fileSlice } from "../routes/files.ts";
 
 /**
  * What the API answers, as zod schemas, for the OpenAPI document. The requests are described by the schemas the
@@ -88,6 +89,16 @@ export const AttemptFile = z
     slicer: z.string().nullable(),
     prefill: settings,
     objects: z.array(z.string()),
+    kind: z
+      .enum(["slicer", "model"])
+      .describe(
+        "slicer: a slicer's own .3mf or .gcode.3mf. model: an .stl or plain .3mf that the app slices in the browser; the file is the original, and the sliced .gcode.3mf is GET /files/{id}/sliced once slice.status is sliced.",
+      ),
+    slice: fileSlice
+      .nullable()
+      .describe(
+        "A model's slicing: how it was sliced (printer, process and filament presets, layer height, supports, scale, the engine's release and OrcaSlicer's version) or why it couldn't be (problem). Null until it is sliced or fails.",
+      ),
     createdAt: epoch,
   })
   .meta({ id: "AttemptFile" });

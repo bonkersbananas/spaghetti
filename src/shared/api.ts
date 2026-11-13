@@ -10,6 +10,7 @@ import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
 import type { PriceSuggestion, ShoppingPrices, SuggestState } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
+import type { FileKind, FileSlice } from "./slicing/types.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 import type { TwistChange, TwistSourceFields } from "./twists.ts";
 
@@ -152,6 +153,14 @@ export interface AttemptFile {
   prefill: AttemptSettings;
   /** The names of the objects on that plate, as the file spells them (for parts). */
   objects: string[];
+  /**
+   * "slicer" (a slicer's own file) or "model" (an .stl or plain .3mf Spaghetti slices: the file is the original, and
+   * the sliced .gcode.3mf is at /api/files/<id>/sliced once `slice.status` is "sliced"). Absent in a copy saved by
+   * an older version: a slicer file.
+   */
+  kind?: FileKind;
+  /** A model's slicing: null until it is sliced, or until slicing fails (shared/slicing/types.ts). */
+  slice?: FileSlice | null;
   createdAt: number;
 }
 
@@ -164,9 +173,12 @@ export interface ItemFileResponse {
 export const MAX_SLICER_FILE_BYTES = 25 * 1024 * 1024;
 /** Plate thumbnails are small PNGs; this is generous. */
 export const MAX_FILE_THUMB_BYTES = 4 * 1024 * 1024;
+/** The largest model (.stl or plain .3mf) kept to be sliced: the original is the point, so it is refused above it. */
+export const MAX_MODEL_FILE_BYTES = 50 * 1024 * 1024;
 
-export function fileUrl(id: string, part: "file" | "thumb" = "file"): string {
-  return part === "file" ? `/api/files/${id}` : `/api/files/${id}/thumb`;
+/** A file's bytes (a model's original), its plate picture, or a model's sliced .gcode.3mf. */
+export function fileUrl(id: string, part: "file" | "thumb" | "sliced" = "file"): string {
+  return part === "file" ? `/api/files/${id}` : `/api/files/${id}/${part}`;
 }
 
 /** An idea, and the build it grows into: one record that moves through stages. Titles are optional. */
