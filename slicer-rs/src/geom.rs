@@ -94,6 +94,12 @@ pub fn intersection(a: &Shapes, b: &Shapes) -> Shapes {
 /// Grows (positive) or shrinks (negative) shapes by `delta` mm, with mitred corners clipped at sharp angles (as
 /// slicers offset walls).
 pub fn offset(shapes: &Shapes, delta: f64) -> Shapes {
+    offset_mitred(shapes, delta, 0.6)
+}
+
+/// `offset` with corners sharper than `min_angle` (radians) bevelled instead of mitred. Clipper's default miter
+/// limit of 3, which Orca uses, mitres corners down to 2·asin(1/3) ≈ 0.68 rad.
+pub fn offset_mitred(shapes: &Shapes, delta: f64, min_angle: f64) -> Shapes {
     let d = sc(delta);
     if shapes.is_empty() {
         return Vec::new();
@@ -101,7 +107,7 @@ pub fn offset(shapes: &Shapes, delta: f64) -> Shapes {
     if d == 0 {
         return shapes.clone();
     }
-    let join = match i_overlay::i_float::int::angle::Angle::from_radians(0.6f64) {
+    let join = match i_overlay::i_float::int::angle::Angle::from_radians(min_angle) {
         Some(angle) => IntLineJoin::Miter(angle),
         None => IntLineJoin::Bevel,
     };

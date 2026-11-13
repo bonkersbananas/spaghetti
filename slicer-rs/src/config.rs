@@ -23,9 +23,11 @@ pub struct Settings {
     pub max_jerk_xy: f64,
     pub max_jerk_z: f64,
     pub max_jerk_e: f64,
-    /// Seconds the printer spends on its start sequence (heating, levelling, purging), which Orca adds to its
-    /// estimate (`machine_prepare_compensation_time`).
-    pub prepare_time: f64,
+    /// Seconds the printer takes to load a filament (`machine_load_filament_time`): Orca's estimate counts one load
+    /// for the start G-code's first tool select.
+    pub filament_load_time: f64,
+    /// mm: how far around the nozzle the toolhead reaches (where the timelapse photo may not be taken).
+    pub extruder_clearance_radius: f64,
 
     // The process.
     pub process: &'static str,
@@ -53,6 +55,9 @@ pub struct Settings {
     pub elephant_foot: f64,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
+    /// mm between the first layer and a skirt (there is none, but Orca levels the bed that far around the first
+    /// layer all the same).
+    pub skirt_distance: f64,
     pub only_one_wall_top: bool,
 
     // Speeds, mm/s.
@@ -86,12 +91,16 @@ pub struct Settings {
     pub deretract_speed: f64,
     pub retract_min_travel: f64,
     pub z_hop: f64,
+    /// Degrees: how steeply a spiral lift climbs (its turn's radius is the z-hop over 2π·atan of it).
+    pub travel_slope: f64,
     pub wipe_distance: f64,
 
     // The filament.
     pub filament: &'static str,
     pub filament_type: &'static str,
     pub filament_colour: &'static str,
+    /// Bambu's id for the filament (`tray_info_idx`), which the printer matches against what its trays hold.
+    pub filament_tray: &'static str,
     pub filament_diameter: f64,
     pub filament_density: f64,
     pub flow_ratio: f64,
@@ -103,11 +112,11 @@ pub struct Settings {
     pub filament_cost: f64,
     pub slow_down_layer_time: f64,
     pub slow_down_min_speed: f64,
-    /// The part fan is off for this many layers, then at `fan_speed`.
+    /// The part fan is off for this many layers, then at `fan_speed`, and the auxiliary fan with it at
+    /// `aux_fan_speed` (as Orca's cooling sets them; the printer's layer change G-code then sets the auxiliary fan
+    /// lower for the first layers itself).
     pub fan_off_layers: usize,
     pub fan_speed: f64,
-    /// The auxiliary fan: off for this many layers, then at `aux_fan_speed`.
-    pub aux_fan_off_layers: usize,
     pub aux_fan_speed: f64,
 }
 
@@ -129,7 +138,8 @@ impl Default for Settings {
             max_jerk_xy: 9.0,
             max_jerk_z: 3.0,
             max_jerk_e: 2.5,
-            prepare_time: 260.0,
+            filament_load_time: 29.0,
+            extruder_clearance_radius: 60.0,
 
             process: "0.20mm Standard @BBL X2D",
             layer_height: 0.2,
@@ -152,6 +162,7 @@ impl Default for Settings {
             min_sparse_infill_area: 15.0,
             elephant_foot: 0.15,
             resolution: 0.012,
+            skirt_distance: 2.0,
             only_one_wall_top: true,
 
             outer_wall_speed: 200.0,
@@ -182,11 +193,13 @@ impl Default for Settings {
             deretract_speed: 30.0,
             retract_min_travel: 1.0,
             z_hop: 0.4,
+            travel_slope: 3.0,
             wipe_distance: 1.0,
 
             filament: "Bambu PLA Basic @BBL X2D 0.4 nozzle",
             filament_type: "PLA",
             filament_colour: "#F2754E",
+            filament_tray: "GFA00",
             filament_diameter: 1.75,
             filament_density: 1.26,
             flow_ratio: 0.98,
@@ -199,7 +212,6 @@ impl Default for Settings {
             slow_down_min_speed: 20.0,
             fan_off_layers: 1,
             fan_speed: 1.0,
-            aux_fan_off_layers: 3,
             aux_fan_speed: 0.7,
         }
     }

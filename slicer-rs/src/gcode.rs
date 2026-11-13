@@ -1,13 +1,19 @@
-//! G-code: every layer's paths as printer moves, Bambu flavoured (absolute XYZ, relative E, and the
-//! `; CHANGE_LAYER`, `; Z_HEIGHT:`, `; LAYER_HEIGHT:` and `; FEATURE:` markers Orca writes, which the app's 3D view
-//! reads), timed the way Orca's estimator times them (trapezoids, per-axis jerk at junctions, the machine's limits),
-//! with the statistics Orca reports. Layers are built and timed in parallel; each starts and ends at a safe speed,
-//! so their times add up.
+//! G-code: every layer's paths as printer moves, written the way OrcaSlicer writes them for a Bambu Lab printer.
+//! Absolute XYZ and relative E; the printer's own G-code at the start, at each layer change, for each timelapse
+//! photo and at the end (`bambu`); the `; CHANGE_LAYER`, `; Z_HEIGHT:`, `; LAYER_HEIGHT:` and `; FEATURE:` markers
+//! the app's 3D view reads; labels around each object's moves (M624/M625) so the printer can skip one; retractions
+//! that wipe as they pull back, and spiral lifts. The moves are timed the way Orca's estimator times them
+//! (trapezoids, per-axis jerk at junctions, the machine's limits), with the statistics Orca reports. Layers are
+//! built and timed in parallel; each starts and ends at a safe speed, so their times add up.
 
+use crate::Object;
+use crate::bambu::Frame;
 use crate::config::{Settings, trim};
 use crate::geom::{self, Pt};
 use crate::plan::{LayerPlan, Path};
 use crate::region::{LayerRegions, Role};
+use crate::template::format_g;
+use std::f64::consts::PI;
 
 pub const NAME: &str = "Spaghetti slicer";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -54,12 +60,19 @@ pub struct Gcode {
 enum Kind {
     Extrude(Role),
     Travel,
+    /// A travel that names its height too (`G1 X Y Z`), as Orca writes the travel after a lift.
+    TravelZ,
     /// Moving back over what was just printed while retracting.
     Wipe,
     /// The filament only.
     Retract,
     /// Up or down only.
     Lift,
+    /// A spiral lift: one turn around the point (`i`, `j`) mm away while rising to `z` (`G17`, `G3 … P1`).
+    Spiral {
+        i: f64,
+        j: f64,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -71,20 +84,57 @@ struct Move {
     e: f64,
     /// mm/s.
     f: f64,
+    /// mm/s², or NaN where none is set yet.
     accel: f64,
     kind: Kind,
     width: f64,
 }
 
-/// Where the start G-code leaves the nozzle.
-const START_XY: (f64, f64) = (0.0, 0.0);
+/// What the G-code says between two moves.
+#[derive(Clone, Debug)]
+enum Note {
+    /// The acceleration from here on (`M204 S`), written when it changes.
+    Accel(f64),
+    /// Orca's comments where an object's moves begin and end in a layer (`; printing object …`).
+    Printing(u32),
+    Stopped(u32),
+    /// The printer's labels around an object's moves (`M624` … `M625`), which let it skip the object.
+    LabelStart(u32),
+    LabelEnd(u32),
+    /// The printer's own G-code: the layer change, the timelapse photo.
+    Text(String),
+}
+
+/// What every layer's G-code shares.
+pub struct Job<'a> {
+    pub settings: &'a Settings,
+    pub frame: &'a Frame,
+    pub objects: &'a [Object],
+    /// Where the printer takes the timelapse photo after each layer (None: it picks its own spot).
+    pub photos: &'a [Option<[i64; 2]>],
+    /// Where the start G-code leaves the nozzle.
+    pub start: [f64; 3],
+}
+
+impl Job<'_> {
+    /// Whether the objects get labels: Orca's label mask has room for 63.
+    fn labels(&self) -> bool {
+        self.objects.len() < 64
+    }
+}
 
 /// One layer's G-code and what it costs. The travel onto the layer (from wherever the last one ended) is in the
 /// text but not yet in the time: `assemble` adds it, once it knows where the layer before ended.
 pub struct LayerGcode {
     text: Vec<u8>,
+    /// Where the layer's progress line (`M73 P… R…`) goes, once the time before the layer is known.
+    progress_at: usize,
+    /// The layer's first `M204` line (its bytes in the text) and its acceleration: left out when the layer before
+    /// ended at that acceleration already, as Orca's writer leaves it out.
+    first_accel: Option<(usize, usize, f64)>,
+    /// The acceleration the layer ends at (NaN when it sets none).
+    last_accel: f64,
     z: f64,
-    height: f64,
     /// Where the layer's first travel goes, and where the layer ends.
     first: Option<[f64; 2]>,
     end: Option<[f64; 3]>,
@@ -96,24 +146,46 @@ pub struct LayerGcode {
     features: [Feature; Role::ALL.len()],
 }
 
-/// The height the nozzle travels at onto layer `i` (the layer before's top, lifted).
-pub fn travel_z(layers: &crate::section::Layers, i: usize, s: &Settings) -> f64 {
-    if i == 0 { layers.top[0] + s.z_hop } else { layers.top[i - 1] + s.z_hop }
+/// The height the nozzle travels at onto layer `i`: the layer before's top, lifted (the first layer comes from where
+/// the start G-code leaves the nozzle).
+pub fn travel_z(layers: &crate::section::Layers, i: usize, s: &Settings, start_z: f64) -> f64 {
+    if i == 0 { start_z } else { layers.top[i - 1] + s.z_hop }
 }
 
 /// One layer, from its plan to its G-code: moves, slowing down if it is too quick, timing and text.
-pub fn layer(plan: &LayerPlan, regions: &LayerRegions, s: &Settings, from_z: f64) -> LayerGcode {
-    let mut moves = build_layer(plan, regions, s, from_z);
-    let first = moves.first().map(|m| [m.x, m.y]);
-    let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([0.0, 0.0, from_z]);
+pub fn layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64) -> LayerGcode {
+    let s = job.settings;
+    let (mut moves, notes) = build_layer(plan, regions, job, from_z);
+    let first = plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)]);
+    let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]);
     if let Some(k) = slowdown_factor(&moves, start, s) {
         slow_down(&mut moves, k, s);
     }
-    let out = finish_layer(&moves, start, s);
+    // The layer's markers, then its moves.
+    let i = plan.index;
+    let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
+    if i == 0 {
+        // Orca's cooling turns both fans off for the first layers…
+        text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
+    } else if i == s.fan_off_layers {
+        // … and on together after them.
+        text.extend_from_slice(
+            format!("M106 S{}\nM106 P2 S{}\n", (s.fan_speed * 255.0) as i64, (s.aux_fan_speed * 255.0) as i64)
+                .as_bytes(),
+        );
+    }
+    text.extend_from_slice(
+        format!("; CHANGE_LAYER\n; Z_HEIGHT: {}\n; LAYER_HEIGHT: {}\n", format_g(plan.z), format_g(plan.height))
+            .as_bytes(),
+    );
+    let progress_at = text.len();
+    let out = finish_layer(&moves, &notes, start, job, text);
     LayerGcode {
         text: out.text,
+        progress_at,
+        first_accel: out.first_accel,
+        last_accel: out.last_accel,
         z: plan.z,
-        height: plan.height,
         first,
         end: moves.last().map(|m| [m.x, m.y, m.z]),
         time: out.time,
@@ -137,12 +209,13 @@ fn travel_time(d: f64, first_layer: bool, s: &Settings) -> f64 {
     trapezoid(&b, safe)
 }
 
-/// The whole file from its layers: header, start, the layers with the printer's progress, end and the totals.
-pub fn assemble(layers: Vec<LayerGcode>, s: &Settings) -> Gcode {
+/// The whole file from its layers: header, the printer's start, the layers with the printer's progress, its end and
+/// the totals.
+pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
+    let s = job.settings;
     let n = layers.len();
-    let start_z = layers.first().map(|l| l.z).unwrap_or(0.0) + s.z_hop;
     let mut stats = Stats { layers: n, max_z: layers.last().map(|l| l.z).unwrap_or(0.0), ..Default::default() };
-    let mut at = [START_XY.0, START_XY.1];
+    let mut at = [job.start[0], job.start[1]];
     let mut times = Vec::with_capacity(n);
     for (i, l) in layers.iter().enumerate() {
         // The travel onto the layer, from where the one before ended.
@@ -172,41 +245,56 @@ pub fn assemble(layers: Vec<LayerGcode>, s: &Settings) -> Gcode {
     stats.volume = stats.filament_mm * s.filament_area();
     stats.weight = stats.volume * s.filament_density / 1000.0;
     stats.cost = stats.weight / 1000.0 * s.filament_cost;
-    stats.prepare_time = s.prepare_time;
+    let start = job.frame.start();
+    let prepare = time_custom(&start, s);
+    stats.prepare_time = prepare;
     stats.total_time = stats.prepare_time + stats.model_time;
 
     let body: usize = layers.iter().map(|l| l.text.len()).sum();
-    let mut text = Vec::with_capacity(body + 16 * 1024 + n * 160);
-    header(&mut text, &stats, s);
-    start_gcode(&mut text, &stats, s, start_z);
+    let mut text = Vec::with_capacity(body + 64 * 1024 + n * 64);
+    header(&mut text, &stats, job);
+    text.extend_from_slice(b"; EXECUTABLE_BLOCK_START\n");
+    m73(&mut text, 0.0, stats.total_time);
+    text.extend_from_slice(job.frame.envelope().as_bytes());
+    text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
+    text.extend_from_slice(start.as_bytes());
     let mut elapsed = stats.prepare_time;
+    let mut accel = f64::NAN;
+    let (mut last_index, mut last_z) = (0, 0.0);
     for (i, l) in layers.into_iter().enumerate() {
-        text.extend_from_slice(
-            format!("; CHANGE_LAYER\n; Z_HEIGHT: {}\n; LAYER_HEIGHT: {}\n", trim(l.z), trim(l.height)).as_bytes(),
-        );
+        let (cut_from, cut_to) = match l.first_accel {
+            Some((from, to, value)) if value == accel => (from, to),
+            _ => (l.text.len(), l.text.len()),
+        };
+        text.extend_from_slice(&l.text[..l.progress_at]);
         m73(&mut text, elapsed, stats.total_time);
-        text.extend_from_slice(b"M73 L");
-        int(&mut text, i as u64 + 1);
-        text.extend_from_slice(b"\nM991 S0 P");
-        int(&mut text, i as u64);
-        text.extend_from_slice(b" ;notify layer change\n");
-        if i == 0 {
-            text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
+        text.extend_from_slice(&l.text[l.progress_at..cut_from]);
+        text.extend_from_slice(&l.text[cut_to..]);
+        if l.last_accel.is_finite() {
+            accel = l.last_accel;
         }
-        if i == s.fan_off_layers {
-            text.extend_from_slice(b"M106 S");
-            int(&mut text, (s.fan_speed * 255.0).round() as u64);
-            text.push(b'\n');
-        }
-        if i == s.aux_fan_off_layers {
-            text.extend_from_slice(b"M106 P2 S");
-            int(&mut text, (s.aux_fan_speed * 255.0).round() as u64);
-            text.push(b'\n');
-        }
-        text.extend_from_slice(&l.text);
         elapsed += stats.layer_times[i];
+        (last_index, last_z) = (i, l.z);
     }
-    end_gcode(&mut text, &stats, s);
+    text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
+    text.extend_from_slice(job.frame.end(last_index, last_z).as_bytes());
+    text.extend_from_slice(
+        format!(
+            "M73 P100 R0\n\
+             ; EXECUTABLE_BLOCK_END\n\
+             \n\
+             ; filament used [mm] = {mm:.2}\n\
+             ; filament used [cm3] = {cm3:.2}\n\
+             ; filament used [g] = {g:.2}\n\
+             ; filament cost = {cost:.2}\n\
+             \n",
+            mm = stats.filament_mm,
+            cm3 = stats.volume / 1000.0,
+            g = stats.weight,
+            cost = stats.cost,
+        )
+        .as_bytes(),
+    );
     Gcode { text, stats }
 }
 
@@ -215,16 +303,21 @@ pub fn assemble(layers: Vec<LayerGcode>, s: &Settings) -> Gcode {
 struct Builder<'a> {
     s: &'a Settings,
     moves: Vec<Move>,
+    notes: Vec<(usize, Note)>,
     x: f64,
     y: f64,
     z: f64,
     layer_z: f64,
     retracted: bool,
     lifted: bool,
-    travel_accel: f64,
+    /// The acceleration the printer has, as Orca's writer tracks it: moves that set none keep it.
+    accel: f64,
+    first_layer: bool,
+    /// The last extrusion, until a wipe goes back over it.
+    wipe: Option<&'a Path>,
 }
 
-impl Builder<'_> {
+impl<'a> Builder<'a> {
     fn push(&mut self, m: Move) {
         self.x = m.x;
         self.y = m.y;
@@ -232,106 +325,135 @@ impl Builder<'_> {
         self.moves.push(m);
     }
 
-    fn travel(&mut self, x: f64, y: f64) {
-        let m = Move {
-            x,
-            y,
-            z: self.z,
-            e: 0.0,
-            f: self.s.travel_speed,
-            accel: self.travel_accel,
-            kind: Kind::Travel,
-            width: 0.0,
-        };
+    fn note(&mut self, note: Note) {
+        self.notes.push((self.moves.len(), note));
+    }
+
+    fn set_accel(&mut self, accel: f64) {
+        if accel != self.accel {
+            self.note(Note::Accel(accel));
+            self.accel = accel;
+        }
+    }
+
+    fn line(&mut self, x: f64, y: f64, z: f64, e: f64, f: f64, kind: Kind) {
+        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0 };
         self.push(m);
+    }
+
+    /// Orca's travel acceleration: the first layer's own, an outer wall's for a hop of under the minimum travel
+    /// onto one, else the travel acceleration.
+    fn travel_accel(&self, next: &Path, d: f64) -> f64 {
+        let s = self.s;
+        if self.first_layer {
+            s.first_layer_travel_accel
+        } else if next.role == Role::OuterWall && d < s.retract_min_travel {
+            s.outer_wall_accel
+        } else {
+            s.travel_accel
+        }
+    }
+
+    fn travel(&mut self, x: f64, y: f64, with_z: bool) {
+        let kind = if with_z { Kind::TravelZ } else { Kind::Travel };
+        self.line(x, y, self.z, 0.0, self.s.travel_speed, kind);
     }
 
     fn lift_to(&mut self, z: f64) {
-        if (z - self.z).abs() < 1e-9 {
+        if (z - self.z).abs() > 1e-9 {
+            self.line(self.x, self.y, z, 0.0, self.s.travel_speed, Kind::Lift);
+        }
+    }
+
+    /// Pulls the filament back as Orca does: wiping back over the last extrusion (on along a loop, back along a
+    /// line) for the wipe distance, retracting during the wipe as much as the retraction speed allows in the time it
+    /// takes and the rest just before it.
+    fn retract(&mut self) {
+        if self.retracted {
             return;
         }
-        let m = Move {
-            x: self.x,
-            y: self.y,
-            z,
-            e: 0.0,
-            f: self.s.travel_speed,
-            accel: self.travel_accel,
-            kind: Kind::Lift,
-            width: 0.0,
-        };
-        self.push(m);
-    }
-
-    /// Pulls the filament back, wiping over the path just printed while doing so (a loop wipes on along its
-    /// start, an open line goes back the way it came), then lifts the nozzle.
-    fn retract(&mut self, last: Option<&Path>) {
-        if !self.retracted {
-            let s = self.s;
-            let mut left = s.retract_length;
-            if let Some(path) = last
-                && s.wipe_distance > 0.0
-                && path.points.len() >= 2
-            {
-                left -= if path.closed {
-                    self.wipe(path.points.iter().skip(1).copied(), path.speed)
-                } else {
-                    self.wipe(path.points.iter().rev().skip(1).copied(), path.speed)
-                };
-            }
-            if left > 1e-9 {
-                let m = Move {
-                    x: self.x,
-                    y: self.y,
-                    z: self.z,
-                    e: -left,
-                    f: s.retract_speed,
-                    accel: self.travel_accel,
-                    kind: Kind::Retract,
-                    width: 0.0,
-                };
-                self.push(m);
-            }
-            self.retracted = true;
-        }
-        if !self.lifted {
-            self.lift_to(self.layer_z + self.s.z_hop);
-            self.lifted = true;
-        }
-    }
-
-    /// Wipes along `route` for the wipe distance, retracting as it goes; returns how much it retracted.
-    fn wipe(&mut self, route: impl Iterator<Item = Pt>, speed: f64) -> f64 {
         let s = self.s;
-        let mut budget = s.wipe_distance;
-        let mut retracted = 0.0;
+        let mut left = s.retract_length;
+        if let Some(path) = self.wipe.take()
+            && s.wipe_distance > 0.0
+            && path.points.len() >= 2
+        {
+            let from = (self.x, self.y);
+            let length = if path.closed {
+                route_length(from, path.points[1..].iter(), s.wipe_distance)
+            } else {
+                route_length(from, path.points.iter().rev().skip(1), s.wipe_distance)
+            };
+            // Orca wipes at the speed the path was printed at (before any slowing down for cooling).
+            let speed = path.speed.max(10.0);
+            // In the G-code's hundred-thousandths of a millimetre, so that what is written adds up to the whole
+            // retraction exactly (Orca's rounding lets a few microns drift over a long print).
+            let during = e_units((s.retract_speed * length / speed).min(left));
+            if length > 1e-9 && during > 0 {
+                let before = e_units(left) - during;
+                if before > 0 {
+                    self.line(self.x, self.y, self.z, -from_units(before), s.retract_speed, Kind::Retract);
+                }
+                if path.closed {
+                    self.wipe_along(path.points[1..].iter(), length, during, speed);
+                } else {
+                    self.wipe_along(path.points.iter().rev().skip(1), length, during, speed);
+                }
+                left = 0.0;
+            }
+        }
+        if left > 1e-9 {
+            self.line(self.x, self.y, self.z, -left, s.retract_speed, Kind::Retract);
+        }
+        self.retracted = true;
+    }
+
+    /// Wipes `length` mm along `route`, retracting `units` hundred-thousandths of a millimetre over it.
+    fn wipe_along<'p>(&mut self, route: impl Iterator<Item = &'p Pt>, length: f64, units: i64, speed: f64) {
+        let mut done = 0.0;
+        let mut written = 0;
         for q in route {
             let (qx, qy) = (geom::unsc(q.x), geom::unsc(q.y));
             let seg = (qx - self.x).hypot(qy - self.y);
             if seg < 1e-9 {
                 continue;
             }
-            let take = seg.min(budget);
+            let take = seg.min(length - done);
             let t = take / seg;
-            let e = s.retract_length * take / s.wipe_distance;
-            let m = Move {
-                x: self.x + (qx - self.x) * t,
-                y: self.y + (qy - self.y) * t,
-                z: self.z,
-                e: -e,
-                f: speed,
-                accel: self.travel_accel,
-                kind: Kind::Wipe,
-                width: 0.0,
-            };
-            self.push(m);
-            retracted += e;
-            budget -= take;
-            if budget <= 1e-9 {
+            let (x, y) = (self.x + (qx - self.x) * t, self.y + (qy - self.y) * t);
+            done += take;
+            let last = length - done <= 1e-9;
+            let upto = if last { units } else { (units as f64 * done / length).round() as i64 };
+            self.line(x, y, self.z, -from_units(upto - written), speed, Kind::Wipe);
+            written = upto;
+            if last {
                 break;
             }
         }
-        retracted
+    }
+
+    /// Lifts the nozzle by the z-hop as Orca's spiral lift does: one turn around a point beside the nozzle (to the
+    /// left of `toward`, the way the travel goes, or to the right when it goes nowhere), rising as it turns, or
+    /// straight up where the turn wouldn't stay on the plate.
+    fn lift(&mut self, toward: Option<(f64, f64)>) {
+        if self.lifted {
+            return;
+        }
+        let s = self.s;
+        let z = self.layer_z + s.z_hop;
+        let r = s.z_hop / (2.0 * PI * (s.travel_slope.to_radians()).atan());
+        let (i, j) = match toward {
+            Some((x, y)) if (x - self.x).hypot(y - self.y) > 0.0 => {
+                let d = (x - self.x).hypot(y - self.y);
+                (-(y - self.y) / d * r, (x - self.x) / d * r)
+            }
+            _ => (r, 0.0),
+        };
+        let (cx, cy) = (self.x + i, self.y + j);
+        let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
+        let kind = if fits { Kind::Spiral { i, j } } else { Kind::Lift };
+        self.line(self.x, self.y, z, 0.0, s.travel_speed, kind);
+        self.lifted = true;
     }
 
     /// Lowers the nozzle and pushes the filament back, ready to print.
@@ -341,30 +463,24 @@ impl Builder<'_> {
             self.lifted = false;
         }
         if self.retracted {
-            let m = Move {
-                x: self.x,
-                y: self.y,
-                z: self.z,
-                e: self.s.retract_length,
-                f: self.s.deretract_speed,
-                accel: self.travel_accel,
-                kind: Kind::Retract,
-                width: 0.0,
-            };
-            self.push(m);
+            self.line(self.x, self.y, self.z, self.s.retract_length, self.s.deretract_speed, Kind::Retract);
             self.retracted = false;
         }
     }
 
-    fn extrude(&mut self, path: &Path) {
+    fn extrude(&mut self, path: &'a Path) {
         self.ready();
+        self.accel = path.accel;
         let e_per_mm = path.mm3_per_mm * self.s.e_per_mm3();
         for q in &path.points[1..] {
             let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
-            let length = (x - self.x).hypot(y - self.y);
-            if length < 1e-9 {
+            // A point the G-code would write as the one before (to its thousandth of a millimetre) waits for the
+            // next one, which then covers both.
+            let same = |a: f64, b: f64| (a * 1000.0).round() == (b * 1000.0).round();
+            if same(x, self.x) && same(y, self.y) {
                 continue;
             }
+            let length = (x - self.x).hypot(y - self.y);
             let m = Move {
                 x,
                 y,
@@ -377,7 +493,32 @@ impl Builder<'_> {
             };
             self.push(m);
         }
+        self.wipe = Some(path);
     }
+}
+
+/// mm of filament in the hundred-thousandths of a millimetre the G-code writes.
+fn e_units(mm: f64) -> i64 {
+    (mm * 100_000.0).round() as i64
+}
+
+fn from_units(units: i64) -> f64 {
+    units as f64 / 100_000.0
+}
+
+/// How far a wipe from `from` along `route` can go, up to `most` mm.
+fn route_length<'p>(from: (f64, f64), route: impl Iterator<Item = &'p Pt>, most: f64) -> f64 {
+    let (mut x, mut y) = from;
+    let mut total = 0.0;
+    for q in route {
+        let (qx, qy) = (geom::unsc(q.x), geom::unsc(q.y));
+        total += (qx - x).hypot(qy - y);
+        if total >= most {
+            return most;
+        }
+        (x, y) = (qx, qy);
+    }
+    total
 }
 
 /// Infill inside the walls: travelling between these, within the area inside the walls, needs no retraction
@@ -386,31 +527,73 @@ fn internal(role: Role) -> bool {
     matches!(role, Role::SparseInfill | Role::SolidInfill | Role::InternalBridge)
 }
 
-fn build_layer(plan: &LayerPlan, regions: &LayerRegions, s: &Settings, from_z: f64) -> Vec<Move> {
-    let first = plan.index == 0;
+/// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
+/// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
+/// a lift and the timelapse photo.
+fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64) -> (Vec<Move>, Vec<(usize, Note)>) {
+    let s = job.settings;
+    let i = plan.index;
+    let first_layer = i == 0;
     let points: usize = plan.paths.iter().map(|p| p.points.len()).sum();
-    let (x0, y0) =
-        plan.paths.first().map(|p| (geom::unsc(p.points[0].x), geom::unsc(p.points[0].y))).unwrap_or((0.0, 0.0));
+    let (x0, y0) = plan
+        .paths
+        .first()
+        .map(|p| (geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)))
+        .unwrap_or((job.start[0], job.start[1]));
     let mut b = Builder {
         s,
-        moves: Vec::with_capacity(points + plan.paths.len() * 4 + 8),
+        moves: Vec::with_capacity(points + plan.paths.len() * 8 + 8),
+        notes: Vec::with_capacity(16),
         x: x0,
         y: y0,
         z: from_z,
         layer_z: plan.z,
         retracted: true,
         lifted: true,
-        travel_accel: if first { s.first_layer_travel_accel } else { s.travel_accel },
+        accel: f64::NAN,
+        first_layer,
+        wipe: None,
     };
+    if first_layer {
+        // Orca retracts at the first layer change, where the start G-code left the nozzle.
+        b.line(x0, y0, from_z, -s.retract_length, s.retract_speed, Kind::Retract);
+    }
+    let mut change = job.frame.layer_change(i, plan.z, plan.z);
+    change.push_str(";_SET_FAN_SPEED_CHANGING_LAYER\n");
+    b.note(Note::Text(change));
+    // The first layer's acceleration, and the usual one from the second layer on.
+    if first_layer {
+        b.set_accel(s.first_layer_accel);
+    } else if i == 1 {
+        b.set_accel(s.default_accel);
+    }
+    let labels = job.labels();
     let mut last: Option<&Path> = None;
     for path in &plan.paths {
         let to = path.points[0];
         let (x, y) = (geom::unsc(to.x), geom::unsc(to.y));
         match last {
-            None => b.travel(x, y),
+            None => {
+                b.note(Note::Printing(path.object));
+                b.set_accel(b.travel_accel(path, f64::INFINITY));
+                if labels {
+                    b.note(Note::LabelStart(path.object));
+                }
+                b.travel(x, y, false);
+                if first_layer {
+                    // Down to the first layer's travel height first.
+                    b.lift_to(plan.z + s.z_hop);
+                }
+            }
             Some(prev) => {
+                let other = prev.object != path.object;
+                if other {
+                    b.note(Note::Stopped(prev.object));
+                    b.note(Note::Printing(path.object));
+                }
                 let d = (x - b.x).hypot(y - b.y);
                 if d > 1e-6 {
+                    b.set_accel(b.travel_accel(path, d));
                     let here = geom::pt(geom::sc(b.x), geom::sc(b.y));
                     let stay = d < s.retract_min_travel
                         || (prev.island == path.island
@@ -421,26 +604,88 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, s: &Settings, from_z: f
                                 .get(path.island as usize)
                                 .is_some_and(|island| geom::segment_inside(&island.inner, here, to)));
                     if !stay {
-                        b.retract(Some(prev));
+                        b.retract();
                     }
-                    b.travel(x, y);
+                    if other && labels {
+                        b.note(Note::LabelEnd(prev.object));
+                        b.note(Note::LabelStart(path.object));
+                    }
+                    if stay {
+                        b.travel(x, y, false);
+                    } else {
+                        b.lift(Some((x, y)));
+                        b.travel(x, y, true);
+                    }
+                } else if other && labels {
+                    b.note(Note::LabelEnd(prev.object));
+                    b.note(Note::LabelStart(path.object));
                 }
             }
         }
         b.extrude(path);
         last = Some(path);
     }
-    if last.is_some() {
-        b.retract(last);
+    if let Some(prev) = last {
+        b.note(Note::Stopped(prev.object));
+        b.retract();
+        b.lift(None);
+        if labels {
+            b.note(Note::LabelEnd(prev.object));
+        }
     }
-    b.moves
+    // The timelapse photo, which the printer skips with the layer's objects when all of them are skipped.
+    let mut photo = job.frame.timelapse(i, plan.z, plan.z, job.photos.get(i).copied().flatten());
+    let mut printed: Vec<u32> =
+        plan.paths.iter().map(|p| job.objects.get(p.object as usize).map_or(0, |o| o.label)).collect();
+    printed.sort_unstable();
+    printed.dedup();
+    if labels && job.objects.len() > 1 && !printed.is_empty() {
+        let ids: Vec<String> = printed.iter().map(u32::to_string).collect();
+        let mask = printed.iter().fold(0u64, |m, &label| m | label_bit(job, label));
+        photo = format!(
+            "; object ids of layer {n} start: {ids}\nM624 {mask}\n{photo}; object ids of this layer{n} end: {ids}\nM625\n",
+            n = i + 1,
+            ids = ids.join(","),
+            mask = base64_u64(mask),
+        );
+    }
+    b.note(Note::Text(photo));
+    (b.moves, b.notes)
+}
+
+/// An object's bit in the printer's label mask: its place among the plate's labels, smallest first.
+fn label_bit(job: &Job, label: u32) -> u64 {
+    let rank = job.objects.iter().filter(|o| o.label < label).count();
+    1u64 << rank.min(63)
+}
+
+/// Eight bytes, least significant first, in base64 (Orca's `encodeBase64` of a label mask).
+fn base64_u64(value: u64) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = value.to_le_bytes();
+    let mut out = String::with_capacity(12);
+    for chunk in bytes.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
+        for k in 0..4 {
+            if k <= chunk.len() {
+                out.push(ABC[(n >> (18 - 6 * k) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 // ---- Slowing down short layers, as Orca's cooling does: the extrusions slow so the layer takes at least
 // `slow_down_layer_time`, none below `slow_down_min_speed`. Like Orca, this works on plain length / speed times.
 
 fn simple_time(m: &Move, from: [f64; 3]) -> f64 {
-    let d = ((m.x - from[0]).powi(2) + (m.y - from[1]).powi(2) + (m.z - from[2]).powi(2)).sqrt();
+    let d = match m.kind {
+        Kind::Spiral { i, j } => (2.0 * PI * i.hypot(j)).hypot(m.z - from[2]),
+        _ => ((m.x - from[0]).powi(2) + (m.y - from[1]).powi(2) + (m.z - from[2]).powi(2)).sqrt(),
+    };
     let d = if d > 1e-9 { d } else { m.e.abs() };
     if m.f > 0.0 { d / m.f } else { 0.0 }
 }
@@ -480,10 +725,11 @@ fn slowdown_factor(moves: &[Move], start: [f64; 3], s: &Settings) -> Option<f64>
     Some(hi)
 }
 
+/// Slows the layer's extrusions by `k`; like Orca's cooling, a slowed speed is a whole number of mm/min.
 fn slow_down(moves: &mut [Move], k: f64, s: &Settings) {
     for m in moves {
         if matches!(m.kind, Kind::Extrude(_)) && m.f > s.slow_down_min_speed {
-            m.f = (m.f / k).max(s.slow_down_min_speed);
+            m.f = ((m.f / k).max(s.slow_down_min_speed) * 60.0).round() / 60.0;
         }
     }
 }
@@ -500,24 +746,43 @@ struct Block {
     nominal_length: bool,
 }
 
-/// Each move's seconds: the printer's planner, as Orca's G-code processor models it (Marlin's classic jerk).
-fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
-    let max_speed = [s.max_speed_xy, s.max_speed_xy, s.max_speed_z, s.max_speed_e];
-    let max_accel = [s.max_accel_xy, s.max_accel_xy, s.max_accel_z, s.max_accel_e];
-    let jerk = [s.max_jerk_xy, s.max_jerk_xy, s.max_jerk_z, s.max_jerk_e];
-    let mut blocks: Vec<Block> = Vec::with_capacity(moves.len());
-    let mut index: Vec<usize> = Vec::with_capacity(moves.len());
-    let mut at = start;
-    let mut prev_cruise = 0.0;
-    let mut prev_axis = [0.0f64; 4];
-    let mut prev_safe = 0.0;
-    for (i, m) in moves.iter().enumerate() {
-        let delta = [m.x - at[0], m.y - at[1], m.z - at[2], m.e];
-        at = [m.x, m.y, m.z];
+/// How many straight pieces Orca's estimator splits an arc of radius `r` and `angle` radians into (to within
+/// 0.0125 mm, `ArcWelder::arc_discretization_steps`).
+fn arc_steps(r: f64, angle: f64) -> usize {
+    const DEVIATION: f64 = 0.0125;
+    let d = r - DEVIATION;
+    if d < 1e-4 {
+        return if angle < PI || r * (1.0 + (PI - 0.5 * angle).cos()) < DEVIATION { 1 } else { 2 };
+    }
+    ((angle / (2.0 * (d / r).acos())).ceil() as usize).max(1)
+}
+
+/// The planner's blocks as moves are added, with what the junction to the next block needs to know.
+struct Planner<'a> {
+    s: &'a Settings,
+    blocks: Vec<Block>,
+    /// The move each block belongs to.
+    index: Vec<usize>,
+    at: [f64; 3],
+    prev_cruise: f64,
+    prev_axis: [f64; 4],
+    prev_safe: f64,
+}
+
+impl Planner<'_> {
+    /// A straight move to `to` with `e` mm of filament, as move `i` (`m`) asks: its speed, acceleration and the
+    /// junction from the block before.
+    fn add(&mut self, to: [f64; 3], e: f64, m: &Move, i: usize) {
+        let s = self.s;
+        let max_speed = [s.max_speed_xy, s.max_speed_xy, s.max_speed_z, s.max_speed_e];
+        let max_accel = [s.max_accel_xy, s.max_accel_xy, s.max_accel_z, s.max_accel_e];
+        let jerk = [s.max_jerk_xy, s.max_jerk_xy, s.max_jerk_z, s.max_jerk_e];
+        let delta = [to[0] - self.at[0], to[1] - self.at[1], to[2] - self.at[2], e];
+        self.at = to;
         let xyz = (delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]).sqrt();
         let dist = if xyz > 1e-9 { xyz } else { delta[3].abs() };
         if dist < 1e-9 || m.f <= 0.0 {
-            continue;
+            return;
         }
         let inv = 1.0 / dist;
         let mut cruise = m.f;
@@ -534,10 +799,11 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
         for v in &mut axis {
             *v *= factor;
         }
+        let set = if m.accel.is_finite() { m.accel } else { s.travel_accel };
         let mut accel = match m.kind {
-            Kind::Travel | Kind::Lift => m.accel.min(s.max_accel_travel),
+            Kind::Travel | Kind::TravelZ | Kind::Lift | Kind::Spiral { .. } => set.min(s.max_accel_travel),
             Kind::Retract => s.max_accel_retract,
-            _ => m.accel.min(s.max_accel_xy),
+            _ => set.min(s.max_accel_xy),
         };
         for a in 0..4 {
             let share = delta[a].abs() * inv;
@@ -552,14 +818,14 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
             }
         }
         let mut junction = safe;
-        if prev_cruise > 0.0001 {
-            let prev_larger = prev_cruise > cruise;
-            let smaller = if prev_larger { cruise / prev_cruise } else { prev_cruise / cruise };
-            junction = if prev_larger { cruise } else { prev_cruise };
+        if self.prev_cruise > 0.0001 {
+            let prev_larger = self.prev_cruise > cruise;
+            let smaller = if prev_larger { cruise / self.prev_cruise } else { self.prev_cruise / cruise };
+            junction = if prev_larger { cruise } else { self.prev_cruise };
             let mut v_factor = 1.0;
             let mut limited = false;
             for a in 0..4 {
-                let mut v_exit = prev_axis[a];
+                let mut v_exit = self.prev_axis[a];
                 let mut v_entry = axis[a];
                 if prev_larger {
                     v_exit *= smaller;
@@ -584,12 +850,12 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
                 junction *= v_factor;
             }
             let threshold = junction * 0.99;
-            if prev_safe > threshold && safe > threshold {
+            if self.prev_safe > threshold && safe > threshold {
                 junction = safe;
             }
         }
         let allowable = (safe * safe + 2.0 * accel * dist).sqrt();
-        blocks.push(Block {
+        self.blocks.push(Block {
             dist,
             cruise,
             accel,
@@ -598,11 +864,43 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
             entry: junction.min(allowable),
             nominal_length: cruise <= allowable,
         });
-        index.push(i);
-        prev_cruise = cruise;
-        prev_axis = axis;
-        prev_safe = safe;
+        self.index.push(i);
+        self.prev_cruise = cruise;
+        self.prev_axis = axis;
+        self.prev_safe = safe;
     }
+}
+
+/// Each move's seconds: the printer's planner, as Orca's G-code processor models it (Marlin's classic jerk). A
+/// spiral lift is timed as the straight pieces the processor splits it into.
+fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
+    let mut p = Planner {
+        s,
+        blocks: Vec::with_capacity(moves.len()),
+        index: Vec::with_capacity(moves.len()),
+        at: start,
+        prev_cruise: 0.0,
+        prev_axis: [0.0; 4],
+        prev_safe: 0.0,
+    };
+    for (i, m) in moves.iter().enumerate() {
+        if let Kind::Spiral { i: ci, j: cj } = m.kind {
+            let r = ci.hypot(cj);
+            let (cx, cy, z0) = (p.at[0] + ci, p.at[1] + cj, p.at[2]);
+            let a0 = (-cj).atan2(-ci);
+            let n = arc_steps(r, 2.0 * PI);
+            for k in 1..=n {
+                let t = k as f64 / n as f64;
+                let a = a0 + 2.0 * PI * t;
+                let to =
+                    if k == n { [m.x, m.y, m.z] } else { [cx + r * a.cos(), cy + r * a.sin(), z0 + (m.z - z0) * t] };
+                p.add(to, 0.0, m, i);
+            }
+        } else {
+            p.add([m.x, m.y, m.z], m.e, m, i);
+        }
+    }
+    let Planner { mut blocks, index, .. } = p;
 
     // Backwards: every block can slow down to the next one's entry.
     for i in (0..blocks.len().saturating_sub(1)).rev() {
@@ -629,7 +927,7 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
     let mut times = vec![0.0; moves.len()];
     for k in 0..blocks.len() {
         let exit = if k + 1 < blocks.len() { blocks[k + 1].entry } else { blocks[k].safe };
-        times[index[k]] = trapezoid(&blocks[k], exit);
+        times[index[k]] += trapezoid(&blocks[k], exit);
     }
     times
 }
@@ -656,6 +954,8 @@ fn trapezoid(b: &Block, exit: f64) -> f64 {
 
 struct LayerOut {
     text: Vec<u8>,
+    first_accel: Option<(usize, usize, f64)>,
+    last_accel: f64,
     time: f64,
     travel_time: f64,
     travel_distance: f64,
@@ -668,10 +968,53 @@ fn role_index(role: Role) -> usize {
     Role::ALL.iter().position(|&r| r == role).unwrap_or(0)
 }
 
-fn finish_layer(moves: &[Move], start: [f64; 3], s: &Settings) -> LayerOut {
+/// What the text writer knows of the printer's state, to write only what changes as Orca does.
+struct Writer {
+    feature: Option<Role>,
+    width: f64,
+    accel: f64,
+    /// The feed rate in whole mm/min, as Orca's cooling compares them.
+    feed: i64,
+    first_accel: Option<(usize, usize, f64)>,
+}
+
+impl Writer {
+    fn accel(&mut self, t: &mut Vec<u8>, accel: f64) {
+        if !accel.is_finite() || accel == self.accel {
+            return;
+        }
+        let from = t.len();
+        t.extend_from_slice(b"M204 S");
+        num(t, accel, 0);
+        t.push(b'\n');
+        if self.first_accel.is_none() {
+            self.first_accel = Some((from, t.len(), accel));
+        }
+        self.accel = accel;
+    }
+
+    /// ` F…` (or a line of its own) when the feed rate changes: three decimals as Orca's writer gives it.
+    fn feed(&mut self, t: &mut Vec<u8>, f: f64, own_line: bool) {
+        let mm_min = f * 60.0;
+        if mm_min as i64 == self.feed {
+            return;
+        }
+        t.extend_from_slice(if own_line { b"G1 F" } else { b" F" });
+        num(t, mm_min, 3);
+        if own_line {
+            t.push(b'\n');
+        }
+        self.feed = mm_min as i64;
+    }
+}
+
+fn finish_layer(moves: &[Move], notes: &[(usize, Note)], start: [f64; 3], job: &Job, text: Vec<u8>) -> LayerOut {
+    let s = job.settings;
     let times = timing(moves, start, s);
     let mut out = LayerOut {
-        text: Vec::with_capacity(moves.len() * 28 + 64),
+        text,
+        first_accel: None,
+        last_accel: f64::NAN,
         time: 0.0,
         travel_time: 0.0,
         travel_distance: 0.0,
@@ -680,20 +1023,23 @@ fn finish_layer(moves: &[Move], start: [f64; 3], s: &Settings) -> LayerOut {
         features: Default::default(),
     };
     let area = s.filament_area();
-    let mut feature: Option<Role> = None;
-    let mut width = f64::NAN;
-    let mut accel = f64::NAN;
-    let mut feed = f64::NAN;
+    let mut w = Writer { feature: None, width: f64::NAN, accel: f64::NAN, feed: -1, first_accel: None };
     let mut wiping = false;
     let mut at = start;
-    let mut prev_kind = Kind::Travel;
+    let mut next_note = 0;
     let t = &mut out.text;
-    for (m, &secs) in moves.iter().zip(&times) {
-        // A retraction starts with a wipe, or with pulling back right away.
-        if (m.kind == Kind::Wipe || (m.kind == Kind::Retract && m.e < 0.0)) && prev_kind != Kind::Wipe {
-            out.retractions += 1;
+    // Each move with what is said before it, then what is said after the last one.
+    for (k, m) in moves.iter().map(Some).chain([None]).enumerate() {
+        if wiping && m.is_none_or(|m| m.kind != Kind::Wipe) {
+            t.extend_from_slice(b"; WIPE_END\n");
+            wiping = false;
         }
-        prev_kind = m.kind;
+        while next_note < notes.len() && notes[next_note].0 == k {
+            write_note(t, &notes[next_note].1, job, &mut w);
+            next_note += 1;
+        }
+        let Some(m) = m else { break };
+        let secs = times[k];
         out.time += secs;
         match m.kind {
             Kind::Extrude(role) => {
@@ -702,36 +1048,32 @@ fn finish_layer(moves: &[Move], start: [f64; 3], s: &Settings) -> LayerOut {
                 f.volume += m.e * area;
                 out.filament_mm += m.e;
             }
-            Kind::Travel => {
+            Kind::Travel | Kind::TravelZ => {
                 out.travel_time += secs;
                 out.travel_distance += (m.x - at[0]).hypot(m.y - at[1]);
             }
-            Kind::Retract | Kind::Wipe | Kind::Lift => out.travel_time += secs,
+            Kind::Retract | Kind::Wipe | Kind::Lift | Kind::Spiral { .. } => out.travel_time += secs,
         }
-        if wiping && m.kind != Kind::Wipe {
-            t.extend_from_slice(b"; WIPE_END\n");
-            wiping = false;
+        // Each retraction is undone once before printing again: count those.
+        if m.kind == Kind::Retract && m.e > 0.0 {
+            out.retractions += 1;
         }
         match m.kind {
             Kind::Extrude(role) => {
-                if feature != Some(role) {
+                w.accel(t, m.accel);
+                if w.feature != Some(role) {
                     t.extend_from_slice(b"; FEATURE: ");
                     t.extend_from_slice(role.feature().as_bytes());
                     t.push(b'\n');
-                    feature = Some(role);
+                    w.feature = Some(role);
                 }
-                if m.width != width {
+                if m.width != w.width {
                     t.extend_from_slice(b"; LINE_WIDTH: ");
-                    num(t, m.width, 4);
+                    t.extend_from_slice(format_g(m.width).as_bytes());
                     t.push(b'\n');
-                    width = m.width;
+                    w.width = m.width;
                 }
-                if m.accel != accel {
-                    t.extend_from_slice(b"M204 S");
-                    num(t, m.accel, 0);
-                    t.push(b'\n');
-                    accel = m.accel;
-                }
+                w.feed(t, m.f, true);
                 t.extend_from_slice(b"G1 X");
                 num(t, m.x, 3);
                 t.extend_from_slice(b" Y");
@@ -739,50 +1081,93 @@ fn finish_layer(moves: &[Move], start: [f64; 3], s: &Settings) -> LayerOut {
                 t.extend_from_slice(b" E");
                 num(t, m.e, 5);
             }
-            Kind::Travel | Kind::Wipe => {
-                if m.kind == Kind::Wipe && !wiping {
-                    t.extend_from_slice(b"; WIPE_START\n");
-                    wiping = true;
-                }
-                if m.accel != accel {
-                    t.extend_from_slice(b"M204 S");
-                    num(t, m.accel, 0);
-                    t.push(b'\n');
-                    accel = m.accel;
-                }
+            Kind::Travel | Kind::TravelZ => {
+                w.accel(t, m.accel);
                 t.extend_from_slice(b"G1 X");
                 num(t, m.x, 3);
                 t.extend_from_slice(b" Y");
                 num(t, m.y, 3);
-                if m.kind == Kind::Wipe {
-                    t.extend_from_slice(b" E");
-                    num(t, m.e, 5);
+                if m.kind == Kind::TravelZ {
+                    t.extend_from_slice(b" Z");
+                    num(t, m.z, 3);
                 }
+                w.feed(t, m.f, false);
+            }
+            Kind::Wipe => {
+                w.accel(t, m.accel);
+                if !wiping {
+                    t.extend_from_slice(b"; WIPE_START\n");
+                    wiping = true;
+                }
+                w.feed(t, m.f, true);
+                t.extend_from_slice(b"G1 X");
+                num(t, m.x, 3);
+                t.extend_from_slice(b" Y");
+                num(t, m.y, 3);
+                t.extend_from_slice(b" E");
+                num(t, m.e, 5);
+            }
+            Kind::Retract => {
+                w.accel(t, m.accel);
+                t.extend_from_slice(b"G1 E");
+                num(t, m.e, 5);
+                w.feed(t, m.f, false);
             }
             Kind::Lift => {
                 t.extend_from_slice(b"G1 Z");
                 num(t, m.z, 3);
+                w.feed(t, m.f, false);
             }
-            Kind::Retract => {
-                t.extend_from_slice(b"G1 E");
-                num(t, m.e, 5);
+            Kind::Spiral { i, j } => {
+                t.extend_from_slice(b"G17\nG3 Z");
+                num(t, m.z, 3);
+                t.extend_from_slice(b" I");
+                num(t, i, 3);
+                t.extend_from_slice(b" J");
+                num(t, j, 3);
+                // Orca writes the speed into every spiral.
+                t.extend_from_slice(b" P1  F");
+                num(t, m.f * 60.0, 3);
+                w.feed = (m.f * 60.0) as i64;
             }
-        }
-        if m.f != feed {
-            t.extend_from_slice(b" F");
-            num(t, m.f * 60.0, 0);
-            feed = m.f;
         }
         t.push(b'\n');
         at = [m.x, m.y, m.z];
     }
-    if wiping {
-        t.extend_from_slice(b"; WIPE_END\n");
-    }
+    out.first_accel = w.first_accel;
+    out.last_accel = w.accel;
     out
 }
 
-fn header(t: &mut Vec<u8>, stats: &Stats, s: &Settings) {
+fn write_note(t: &mut Vec<u8>, note: &Note, job: &Job, w: &mut Writer) {
+    let object = |k: u32| job.objects.get(k as usize);
+    match note {
+        Note::Accel(a) => w.accel(t, *a),
+        Note::Printing(k) | Note::Stopped(k) => {
+            let verb = if matches!(note, Note::Printing(_)) { "printing" } else { "stop printing" };
+            let name = object(*k).map_or("", |o| o.name.as_str());
+            t.extend_from_slice(format!("; {verb} object {name} id:{k} copy 0\n").as_bytes());
+        }
+        Note::LabelStart(k) => {
+            let label = object(*k).map_or(0, |o| o.label);
+            t.extend_from_slice(
+                format!(
+                    "; start printing object, unique label id: {label}\nM624 {}\n",
+                    base64_u64(label_bit(job, label))
+                )
+                .as_bytes(),
+            );
+        }
+        Note::LabelEnd(k) => {
+            let label = object(*k).map_or(0, |o| o.label);
+            t.extend_from_slice(format!("; stop printing object, unique label id: {label}\nM625\n").as_bytes());
+        }
+        Note::Text(text) => t.extend_from_slice(text.as_bytes()),
+    }
+}
+
+fn header(t: &mut Vec<u8>, stats: &Stats, job: &Job) {
+    let s = job.settings;
     let line = |t: &mut Vec<u8>, text: &str| {
         t.extend_from_slice(text.as_bytes());
         t.push(b'\n');
@@ -797,9 +1182,16 @@ fn header(t: &mut Vec<u8>, stats: &Stats, s: &Settings) {
             duration(stats.total_time)
         ),
     );
-    let first = stats.layer_times.first().copied().unwrap_or(0.0);
-    line(t, &format!("; estimated first layer printing time (normal mode) = {}", duration(first)));
+    // Orca's estimate counts the start G-code as the first layer and the first layer as the second, so what it calls
+    // the first layer's time is the start's.
+    line(t, &format!("; estimated first layer printing time (normal mode) = {}", duration(stats.prepare_time)));
     line(t, &format!("; total layer number: {}", stats.layers));
+    if job.labels() {
+        let mut labels: Vec<u32> = job.objects.iter().map(|o| o.label).collect();
+        labels.sort_unstable();
+        let labels: Vec<String> = labels.iter().map(u32::to_string).collect();
+        line(t, &format!("; model label id: {}", labels.join(",")));
+    }
     line(t, &format!("; filament_density: {}", trim(s.filament_density)));
     line(t, &format!("; filament_diameter: {}", trim(s.filament_diameter)));
     line(t, &format!("; max_z_height: {:.2}", stats.max_z));
@@ -816,106 +1208,131 @@ fn header(t: &mut Vec<u8>, stats: &Stats, s: &Settings) {
     }
     line(t, "; CONFIG_BLOCK_END");
     line(t, "");
+    // Orca writes the widths once for each print region, which here is once for each object.
+    for _ in 0..job.objects.len().max(1) {
+        for (what, width) in [
+            ("external perimeters", s.outer_wall_width),
+            ("perimeters", s.inner_wall_width),
+            ("infill", s.sparse_infill_width),
+            ("solid infill", s.solid_infill_width),
+            ("top infill", s.top_surface_width),
+            ("first layer", s.first_layer_width),
+        ] {
+            line(t, &format!("; {what} extrusion width = {width:.2}mm"));
+        }
+        line(t, "");
+    }
 }
 
-fn start_gcode(t: &mut Vec<u8>, stats: &Stats, s: &Settings, start_z: f64) {
-    let bed = trim(s.bed_temperature);
-    let nozzle = trim(s.nozzle_temperature);
-    t.extend_from_slice(b"; EXECUTABLE_BLOCK_START\n");
-    m73(t, 0.0, stats.total_time);
-    t.extend_from_slice(
-        format!(
-            "M201 X{a} Y{a} Z{az} E{ae}\nM203 X{v} Y{v} Z{vz} E{ve}\nM204 P{a} R{ar} T{a}\nM205 X{j:.2} Y{j:.2} Z{jz:.2} E{je:.2} ; sets the jerk limits, mm/sec\n",
-            a = trim(s.max_accel_xy),
-            az = trim(s.max_accel_z),
-            ae = trim(s.max_accel_e),
-            ar = trim(s.max_accel_retract),
-            v = trim(s.max_speed_xy),
-            vz = trim(s.max_speed_z),
-            ve = trim(s.max_speed_e),
-            j = s.max_jerk_xy,
-            jz = s.max_jerk_z,
-            je = s.max_jerk_e,
-        )
-        .as_bytes(),
-    );
-    t.extend_from_slice(
-        format!(
-            "; FEATURE: Custom\n\
-             ; {NAME}'s own start: heat, home and wait. It is not the X2D's start sequence (no calibration, no\n\
-             ; filament loading, no purge): this file is for looking at, not for printing yet.\n\
-             M140 S{bed}\n\
-             M104 S{nozzle}\n\
-             G28\n\
-             M190 S{bed}\n\
-             M109 S{nozzle}\n\
-             G90\n\
-             G21\n\
-             M83 ; use relative distances for extrusion\n\
-             G1 Z{z} F600\n\
-             G1 X{x} Y{y} F30000\n\
-             ; MACHINE_START_GCODE_END\n",
-            z = trim(start_z),
-            x = trim(START_XY.0),
-            y = trim(START_XY.1),
-        )
-        .as_bytes(),
-    );
-}
-
-fn end_gcode(t: &mut Vec<u8>, stats: &Stats, s: &Settings) {
-    let park = (stats.max_z + 2.0).min(s.max_height);
-    t.extend_from_slice(
-        format!(
-            "; FEATURE: Custom\n\
-             ; {NAME}'s own end: lift, heaters and fans off.\n\
-             G1 Z{park} F600\n\
-             M104 S0\n\
-             M140 S0\n\
-             M106 S0\n\
-             M106 P2 S0\n\
-             M400\n\
-             M18\n\
-             M73 P100 R0\n\
-             ; EXECUTABLE_BLOCK_END\n\
-             \n\
-             ; filament used [mm] = {mm:.2}\n\
-             ; filament used [cm3] = {cm3:.2}\n\
-             ; filament used [g] = {g:.2}\n\
-             ; filament cost = {cost:.2}\n",
-            park = trim(park),
-            mm = stats.filament_mm,
-            cm3 = stats.volume / 1000.0,
-            g = stats.weight,
-            cost = stats.cost,
-        )
-        .as_bytes(),
-    );
+/// The percentage done and the whole minutes left, `elapsed` seconds into `total`, rounded as Orca's estimator
+/// rounds them.
+fn progress(elapsed: f64, total: f64) -> (u64, u64) {
+    let percent = if total > 0.0 { (100.0 * elapsed / total).floor().clamp(0.0, 100.0) } else { 0.0 };
+    let left = (((total - elapsed).max(0.0) + 0.5) / 60.0).floor();
+    (percent as u64, left as u64)
 }
 
 /// `M73 P<percent> R<minutes left>`: the printer's progress, and the app's per-layer times.
 fn m73(t: &mut Vec<u8>, elapsed: f64, total: f64) {
-    let percent = if total > 0.0 { (100.0 * elapsed / total).floor().clamp(0.0, 100.0) } else { 0.0 };
-    let left = ((total - elapsed).max(0.0) / 60.0).floor();
+    let (percent, left) = progress(elapsed, total);
     t.extend_from_slice(b"M73 P");
-    int(t, percent as u64);
+    int(t, percent);
     t.extend_from_slice(b" R");
-    int(t, left as u64);
+    int(t, left);
     t.push(b'\n');
 }
 
-/// "1h 2m 3s", "32m 36s", "5s": durations as Orca writes them.
+/// The printer's start G-code timed as Orca's estimator times it: its moves through the planner (at the
+/// accelerations it sets; `G28` as a move to 0 on the axes it homes), its pauses (`G4`, `M400` with `S` or `P`), the
+/// bed levelling (`G29`, a fixed 260 s, once), heating the chamber (`M191` over 40 °C, 720 s) and loading the first
+/// filament (the first `T0`…`T254`). Commands it doesn't know (the X2D's own `G130`, `G150`, `G380`, …) take no time.
+fn time_custom(text: &str, s: &Settings) -> f64 {
+    let mut moves: Vec<Move> = Vec::new();
+    let mut at = [0.0f64; 3];
+    let mut start = at;
+    let mut absolute = true;
+    let mut feed = s.travel_speed;
+    let mut accel = s.default_accel;
+    let mut seconds = 0.0;
+    let (mut levelled, mut loaded) = (false, false);
+    for line in text.lines() {
+        let code = line.split(';').next().unwrap_or("").trim();
+        let words: Vec<&str> = code.split_whitespace().collect();
+        let Some(&cmd) = words.first() else { continue };
+        let value = |letter: u8| -> Option<f64> {
+            words[1..].iter().find(|w| w.as_bytes().first() == Some(&letter)).and_then(|w| w[1..].parse().ok())
+        };
+        let mut pause = 0.0;
+        match cmd {
+            "G90" => absolute = true,
+            "G91" => absolute = false,
+            "M204" => accel = value(b'S').unwrap_or(accel),
+            "G0" | "G1" | "G28" => {
+                let mut to = at;
+                let mut e = 0.0;
+                if cmd == "G28" {
+                    let homed: Vec<usize> = (0..3).filter(|&a| words[1..].contains(&["X", "Y", "Z"][a])).collect();
+                    for a in if homed.is_empty() { vec![0, 1, 2] } else { homed } {
+                        to[a] = 0.0;
+                    }
+                } else {
+                    for (a, letter) in b"XYZ".iter().copied().enumerate() {
+                        if let Some(v) = value(letter) {
+                            to[a] = if absolute { v } else { at[a] + v };
+                        }
+                    }
+                    e = value(b'E').unwrap_or(0.0);
+                    feed = value(b'F').map_or(feed, |f| f / 60.0);
+                }
+                let kind = if to[0] != at[0] || to[1] != at[1] {
+                    if e > 0.0 { Kind::Extrude(Role::InnerWall) } else { Kind::Travel }
+                } else if to[2] != at[2] {
+                    Kind::Lift
+                } else {
+                    Kind::Retract
+                };
+                if to != at || e != 0.0 {
+                    moves.push(Move { x: to[0], y: to[1], z: to[2], e, f: feed, accel, kind, width: 0.0 });
+                }
+                at = to;
+            }
+            "G4" | "M400" => pause = value(b'S').unwrap_or(0.0) + value(b'P').unwrap_or(0.0) / 1000.0,
+            "G29" if !levelled => {
+                levelled = true;
+                pause = 260.0;
+            }
+            "M191" if value(b'S').is_some_and(|t| t > 40.0) => pause = 720.0,
+            _ if !loaded && cmd.len() > 1 && cmd.starts_with('T') && cmd[1..].parse::<u32>().is_ok_and(|n| n < 255) => {
+                loaded = true;
+                pause = s.filament_load_time;
+            }
+            _ => {}
+        }
+        // A pause waits for the moves before it: they start and end at rest.
+        if pause > 0.0 {
+            seconds += timing(&moves, start, s).iter().sum::<f64>() + pause;
+            moves.clear();
+            start = at;
+        }
+    }
+    seconds + timing(&moves, start, s).iter().sum::<f64>()
+}
+
+/// "1h 2m 3s", "32m 36s", "5s": durations as Orca writes them (whole seconds, cut off rather than rounded).
 pub fn duration(seconds: f64) -> String {
-    let total = seconds.max(0.0).round() as u64;
-    let (d, h, m, s) = (total / 86400, total / 3600 % 24, total / 60 % 60, total % 60);
+    let total = seconds.max(0.0);
+    let whole = total as u64;
+    let (d, h, m, s) = (whole / 86400, whole / 3600 % 24, whole / 60 % 60, whole % 60);
     if d > 0 {
         format!("{d}d {h}h {m}m {s}s")
     } else if h > 0 {
         format!("{h}h {m}m {s}s")
     } else if m > 0 {
         format!("{m}m {s}s")
-    } else {
+    } else if total > 1.0 {
         format!("{s}s")
+    } else {
+        format!("{total:.6}s")
     }
 }
 
@@ -1033,9 +1450,10 @@ mod tests {
 
     #[test]
     fn durations_are_written_like_orca() {
-        assert_eq!(duration(1956.0), "32m 36s");
+        assert_eq!(duration(1956.806), "32m 36s");
         assert_eq!(duration(3723.4), "1h 2m 3s");
-        assert_eq!(duration(5.0), "5s");
+        assert_eq!(duration(5.9), "5s");
+        assert_eq!(duration(0.5), "0.500000s");
         assert_eq!(duration(90061.0), "1d 1h 1m 1s");
     }
 

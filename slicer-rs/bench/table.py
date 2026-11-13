@@ -50,16 +50,32 @@ def retractions(path):
 
 
 print()
-print("| Model | Layers, Rust / Orca | Filament, Rust / Orca | Printing time, Rust / Orca | Retractions, Rust / Orca |")
-print("| --- | --- | --- | --- | --- |")
+print(
+    "| Model | Layers, Rust / Orca | Filament, Rust / Orca | Estimate, Rust / Orca | Extruding, Rust / Orca "
+    "| Travel, retractions and lifts, Rust / Orca | Retractions, Rust / Orca |"
+)
+print("| --- | --- | --- | --- | --- | --- | --- |")
+
+
+def pct(a, b):
+    return f"{(a - b) / b * 100:+.1f} %".replace("-", "−")
+
+
 for m, label, _ in MODELS:
     r = results[m]["rust-native"]["runs"][0]
     o = results[m]["orca-native"]["runs"][0]
     rs, os_ = r["stats"], o["stats"]
-    o_model = os_["time"] - os_["prepare_time"]
-    dt = (rs["model_time"] - o_model) / o_model * 100
-    dg = (rs["weight"] - os_["weight"]) / os_["weight"] * 100
+    # The same split for both: the time spent extruding (every feature's time), and the rest of the print after its
+    # start (travel, retractions, wipes and lifts). Orca's own travel time also counts most of the start's moves.
+    r_extruding = sum(f["time"] for f in rs["features"].values())
+    o_extruding = sum(f["time"] for f in os_["features"].values())
+    r_moving = rs["model_time"] - r_extruding
+    o_moving = os_["time"] - os_["prepare_time"] - o_extruding
     print(
-        f"| {label} | {rs['layer_count']} / {os_['layer_count']} | {rs['weight']:.2f} g / {os_['weight']:.2f} g ({dg:+.1f} %) | "
-        f"{rs['model_time'] / 60:.1f} / {o_model / 60:.1f} min ({dt:+.1f} %) | {retractions(r['gcode'])} / {retractions(o['gcode'])} |"
+        f"| {label} | {rs['layer_count']} / {os_['layer_count']} "
+        f"| {rs['weight']:.2f} g / {os_['weight']:.2f} g ({pct(rs['weight'], os_['weight'])}) "
+        f"| {rs['time'] / 60:.1f} / {os_['time'] / 60:.1f} min ({pct(rs['time'], os_['time'])}) "
+        f"| {r_extruding / 60:.1f} / {o_extruding / 60:.1f} min ({pct(r_extruding, o_extruding)}) "
+        f"| {r_moving / 60:.1f} / {o_moving / 60:.1f} min ({pct(r_moving, o_moving)}) "
+        f"| {retractions(r['gcode']):,} / {retractions(o['gcode']):,} |"
     )
