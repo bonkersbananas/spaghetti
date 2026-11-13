@@ -75,6 +75,8 @@ describe("saving a recipe", () => {
       note: "Outer wall at 60 mm/s",
       material: "PLA",
       finish: null,
+      // No model Spaghetti sliced: no slicing settings of its own.
+      slicing: null,
       source: { attemptId: worked.id, itemId: item.id, title: "Tugboat", number: 1 },
     });
     expect(recipe.settings).toEqual({

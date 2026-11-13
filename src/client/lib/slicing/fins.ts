@@ -1,5 +1,5 @@
 /**
- * Fins: breakaway walls built into the model (Support Fins, vendor/support-fins, decision 0051). The engine is
+ * Fins: breakaway walls built into the model (Support Fins, vendor/support-fins, decision 0052). The engine is
  * plain mesh math: it takes a part's triangles as they sit on the plate and returns the fin triangles to add under
  * it, which the slicer prints with the part (it unions the overlapping closed solids). Loaded here with a dynamic
  * import, so it is its own chunk of the slice worker and nobody downloads it before a model is sliced with Fins.

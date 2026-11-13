@@ -212,6 +212,31 @@ describe("printer and slots", () => {
     expect((await put({ nozzles: { main: { diameter: 5, hardened: true } } })).status).toBe(400);
   });
 
+  it("keeps the workspace's slicing defaults, whole, until they are put back to Spaghetti's own", async () => {
+    const put = (json: unknown) => request("/api/printer", { method: "PUT", cookie, json });
+    const fine = {
+      layerHeight: 0.12,
+      walls: 3,
+      infill: 20,
+      pattern: "gyroid",
+      supports: "where-needed",
+      supportStyle: "tree",
+      brim: "auto",
+    };
+    const saved = await put({ slicing: fine });
+    expect(saved.status).toBe(200);
+    expect((await saved.json<PrinterResponse>()).setup.slicing).toEqual(fine);
+    // Another part of the setup leaves them be.
+    await put({ amsUnits: 2 });
+    expect((await getPrinter()).setup.slicing).toEqual(fine);
+    // Only how a model prints: no filament or plate, and nothing the nozzle can't print.
+    expect((await put({ slicing: { ...fine, plate: "Cool Plate" } })).status).toBe(400);
+    expect((await put({ slicing: { ...fine, layerHeight: 0.4 } })).status).toBe(400);
+    expect((await put({ slicing: { layerHeight: 0.12 } })).status).toBe(400);
+    expect((await put({ slicing: null })).status).toBe(200);
+    expect((await getPrinter()).setup.slicing).toBeUndefined();
+  });
+
   it("loads a spool into one slot at a time, and empties slots", async () => {
     const white = await addSpool({ colorName: "White" });
     const black = await addSpool({ colorName: "Black" });

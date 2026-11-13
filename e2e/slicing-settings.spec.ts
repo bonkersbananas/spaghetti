@@ -193,6 +193,87 @@ test("lay it down: a block can be sliced on another face, the card says so, and 
   await expect.poll(async () => (await fileOf(page, id))?.slicing?.orientation).toBeNull();
 });
 
+test("the Printer page's defaults are how a model nobody set up is sliced, until they go back to Spaghetti's own", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const defaults = async () => (await (await page.request.get("/api/printer")).json()).setup.slicing;
+  try {
+    await page.goto("/printer");
+    const section = page.locator("section[aria-labelledby=printer-slicing]");
+    // Folded, they say what they are in the model card's words.
+    const fold = section.getByRole("button", { name: /^How new models are sliced/ });
+    await expect(fold).toContainText("Standard quality");
+    await fold.click();
+    const quality = section.getByRole("group", { name: "Quality" });
+    await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
+    await quality.getByRole("radio", { name: /^Fine/ }).click();
+    await expect.poll(async () => (await defaults())?.layerHeight).toBe(0.12);
+
+    // A new model slices Fine.
+    const { id, files } = await slicedCube(page);
+    await expect(files.getByText(/Fine$/)).toBeVisible();
+    expect((await fileOf(page, id)).slice.settings.slicing.layerHeight).toBe(0.12);
+
+    await page.goto("/printer");
+    await expect(fold).toContainText("Fine");
+    await fold.click();
+    await section.getByRole("button", { name: "Back to Spaghetti's own" }).click();
+    await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
+    await expect.poll(defaults).toBeUndefined();
+    // Going back throws away what was set: the toast's Undo brings it back.
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(quality.getByRole("radio", { name: /^Fine/ })).toBeChecked();
+    await expect.poll(async () => (await defaults())?.layerHeight).toBe(0.12);
+  } finally {
+    // The worker's database is shared with the specs after this one.
+    await page.request.put("/api/printer", { headers, data: { slicing: null } });
+  }
+});
+
+test("a recipe slices a model the way it worked, in one tap", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  // A recipe from a slicer's own file: Draft, three walls, no brim.
+  const buildId = crypto.randomUUID();
+  const attemptId = crypto.randomUUID();
+  const recipeId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Bins", stage: "building" } });
+  await page.request.post(`/api/items/${buildId}/attempts`, {
+    headers,
+    data: {
+      id: attemptId,
+      outcome: "success",
+      settings: { filaments: [{ type: "PLA" }], layerHeight: 0.24, wallLoops: 3, brim: false },
+    },
+  });
+  const made = await page.request.post("/api/recipes", {
+    headers,
+    data: { id: recipeId, name: "Quick bins", sourceAttemptId: attemptId },
+  });
+  expect(made.ok()).toBe(true);
+  try {
+    const { id, files } = await slicedCube(page);
+    await files.getByRole("button", { name: "Slice with…" }).click();
+    const settings = page.getByRole("dialog", { name: "How to slice it" });
+    const recipe = settings.getByRole("button", { name: "Quick bins" });
+    await expect(recipe).toHaveAttribute("aria-pressed", "false");
+    await recipe.click();
+    await expect(recipe).toHaveAttribute("aria-pressed", "true");
+    await expect(settings.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Draft/ })).toBeChecked();
+    // On desktop the result (and its Undo) is on the card below the popover.
+    await expect(files.getByRole("button", { name: "Undo" })).toBeVisible({ timeout: SLICED });
+    const sliced = (await fileOf(page, id)).slice.settings.slicing;
+    expect([sliced.layerHeight, sliced.walls, sliced.brim]).toEqual([0.24, 3, "off"]);
+  } finally {
+    await page.request.delete(`/api/recipes/${recipeId}`, { headers });
+    await page.request.delete(`/api/items/${buildId}`, { headers });
+  }
+});
+
 test("fins: the drying rack is sliced with breakaway fins built into it, and nothing floats any more", async ({
   page,
 }) => {

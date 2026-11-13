@@ -92,7 +92,8 @@ export function ChoiceTiles<T extends string>({
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
                   : "bg-tile text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
-                (option.disabled || disabled) && "hover:shadow-soft cursor-default opacity-50",
+                // Its radio is disabled by the option, these tiles, or a fieldset around them (offline, read only).
+                "has-disabled:hover:shadow-soft has-disabled:cursor-default has-disabled:opacity-50",
               )}
             >
               <input

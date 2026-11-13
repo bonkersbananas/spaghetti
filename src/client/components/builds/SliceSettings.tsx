@@ -1,8 +1,10 @@
 import engine from "virtual:slicer-engine";
 import { plateName } from "@shared/attempts";
+import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { slicedName } from "@shared/slicing/files.ts";
 import { STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { engineSlices, filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
+import { recipeSlicing, type SlicingRecipe } from "@shared/slicing/recipe.ts";
 import {
   BRIMS,
   type Brim,
@@ -18,6 +20,7 @@ import {
   type QualityId,
   qualityOf,
   SLICING_NOZZLES,
+  type SlicingDefaults,
   type SlicingFilament,
   type SlicingSettings,
   STRENGTHS,
@@ -25,19 +28,21 @@ import {
   SUPPORT_PLACEMENTS,
   SUPPORT_STYLES,
   type SupportStyle,
+  sameSlicing,
+  slicingDefaultsOf,
   slicingFor,
   strengthOf,
   supportStyleWords,
 } from "@shared/slicing/settings.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { type SpoolLike, slotPlace } from "@shared/spools";
-import { type ReactNode, useState } from "react";
-import { ButtonLink } from "@/components/ui/Button";
+import { Fragment, type ReactNode, useState } from "react";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { ChipRow } from "@/components/ui/FilterChips";
-import { DownloadIcon, ExternalIcon, SettingsIcon } from "@/components/ui/icons";
+import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
+import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
@@ -45,6 +50,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { LayersGlyph, PlatePicture, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Stepper } from "@/components/ui/Stepper";
+import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
 
@@ -71,11 +77,21 @@ export interface SlicingChoicesProps {
   scalable: boolean;
   /** More open from the start (the styleguide). */
   moreOpen?: boolean;
+  /**
+   * A model's settings, or the workspace's defaults (the Printer page, decision 0052): how a model prints, without
+   * the filament, plate, nozzle, size or the way it lies, which are each model's.
+   */
+  scope?: "model" | "workspace";
+  /** Recipes to slice with (decision 0052), those for its filament (`fits`) first. */
+  recipes?: readonly OfferedRecipe[];
   /** How the model can lie (lib/slicing/orientations.ts): the "Lay it down" tiles show when it can lie more than one way. */
   lying?: LyingState;
 }
 
-/** The choices themselves, for a model's settings (and the styleguide). */
+/** A recipe as a model's settings offer it: `fits` when it is for the filament the model had (recipesFor). */
+type OfferedRecipe = SlicingRecipe & { id: string; name: string; note?: string; fits?: boolean };
+
+/** The choices themselves, for a model's settings or the workspace's defaults (and the styleguide). */
 export function SlicingChoices({
   settings,
   onChange,
@@ -84,9 +100,12 @@ export function SlicingChoices({
   slice,
   scalable,
   moreOpen,
+  scope = "model",
+  recipes = [],
   lying,
 }: SlicingChoicesProps) {
   const set = (change: Partial<SlicingSettings>) => onChange(slicingFor(change, settings));
+  const model = scope === "model";
   const range = layerRange(settings.nozzle);
   const quality = qualityOf(settings.layerHeight);
   const strength = strengthOf(settings);
@@ -95,6 +114,9 @@ export function SlicingChoices({
 
   return (
     <div className="flex flex-col gap-7">
+      {model && recipes.length > 0 && (
+        <RecipeChoice settings={settings} spools={spools} recipes={recipes} onChange={onChange} />
+      )}
       <ChoiceTiles<QualityId>
         label="Quality"
         columns={2}
@@ -158,18 +180,76 @@ export function SlicingChoices({
         onChange={(supports) => set({ supports })}
         caption={floating ? <>Parts of it float in the air: {strong("Where needed")} holds them up.</> : undefined}
       />
-      {lying && lying.status !== "none" && (
+      {model && lying && lying.status !== "none" && (
         <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
       )}
-      <FilamentChoice settings={settings} spools={spools} onChange={(filaments) => set({ filaments })} />
+      {model && <FilamentChoice settings={settings} spools={spools} onChange={(filaments) => set({ filaments })} />}
       <MoreSettings
         settings={settings}
         set={set}
         plates={plates}
         slice={slice}
-        scalable={scalable}
+        scalable={model && scalable}
+        model={model}
         defaultOpen={moreOpen}
       />
+    </div>
+  );
+}
+
+/**
+ * Slicing with a recipe (decision 0052): what worked before, in one tap, over the model's settings. Those for the
+ * model's filament come first, set apart on a phone; the one it is sliced with now is picked, and its note says why
+ * it is the way it is (the chip already says its name), with the filament when the recipe brought another.
+ */
+function RecipeChoice({
+  settings,
+  spools,
+  recipes,
+  onChange,
+}: {
+  settings: SlicingSettings;
+  spools: readonly SpoolLike[];
+  recipes: readonly OfferedRecipe[];
+  onChange: (next: SlicingSettings) => void;
+}) {
+  const picked = recipes.find((recipe) => sameSlicing(settings, recipeSlicing(recipe, settings, spools)));
+  const [first] = settings.filaments;
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">
+        From a recipe
+      </span>
+      <ChipRow label="Slice with a recipe">
+        {recipes.map((recipe, index) => (
+          <Fragment key={recipe.id}>
+            {index > 0 && recipes[index - 1]?.fits && !recipe.fits && <ChipDivider />}
+            <ToggleChip
+              icon={RecipeIcon}
+              tone="semolina"
+              selected={recipe === picked}
+              onClick={() => onChange(recipeSlicing(recipe, settings, spools))}
+            >
+              {recipe.name}
+            </ToggleChip>
+          </Fragment>
+        ))}
+      </ChipRow>
+      <p className="text-small text-ink-soft text-pretty">
+        {picked ? (
+          <>
+            {picked.note || "What worked before."}
+            {picked.fits === false && first && (
+              <>
+                {" "}
+                In <span className="text-ink font-semibold">{filamentWords(first)}</span>.
+              </>
+            )}
+          </>
+        ) : (
+          "What worked before, in one tap."
+        )}
+      </p>
     </div>
   );
 }
@@ -347,6 +427,7 @@ function MoreSettings({
   plates,
   slice,
   scalable,
+  model,
   defaultOpen,
 }: {
   settings: SlicingSettings;
@@ -354,6 +435,8 @@ function MoreSettings({
   plates: readonly string[];
   slice?: FileSlice | null;
   scalable: boolean;
+  /** A model's: its plate and nozzle too (a workspace's are on the Printer page). */
+  model: boolean;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
@@ -376,9 +459,9 @@ function MoreSettings({
     settings.brim === "auto" ? "brim where needed" : settings.brim === "on" ? "brim" : "no brim",
     `${settings.walls} walls`,
     `${settings.infill}% ${patternWords(settings.pattern)}`,
-    plateName(settings.plate),
-    `${settings.nozzle} mm nozzle`,
-    settings.scale !== 100 ? `${settings.scale}%` : "",
+    model ? plateName(settings.plate) : "",
+    model ? `${settings.nozzle} mm nozzle` : "",
+    model && settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);
   return (
     <Disclosure
@@ -465,33 +548,37 @@ function MoreSettings({
             effect={patterns.find((choice) => choice.id === settings.pattern)?.effect ?? ""}
           />
         </SettingRow>
-        <SettingRow label="Plate" wide>
-          <ChipRow label="Plate" wrap>
-            {offeredPlates.map((plate) => (
-              <ToggleChip
-                key={plate}
-                tone="semolina"
-                selected={plate === settings.plate}
-                onClick={() => set({ plate })}
-              >
-                {plateName(plate)}
-              </ToggleChip>
-            ))}
-          </ChipRow>
-          <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
-        </SettingRow>
-        <SettingRow label="Nozzle" wide>
-          <SegmentedControl
-            label="Nozzle"
-            labelHidden
-            options={SLICING_NOZZLES.map((nozzle) => ({ value: String(nozzle), label: `${nozzle} mm` }))}
-            value={String(settings.nozzle)}
-            onChange={(value) => set({ nozzle: Number(value) })}
-          />
-          {!engineSlices(settings.nozzle) && (
-            <p className="text-caption text-ink-faint">Spaghetti slices for the 0.4 mm nozzle only, for now.</p>
-          )}
-        </SettingRow>
+        {model && (
+          <>
+            <SettingRow label="Plate" wide>
+              <ChipRow label="Plate" wrap>
+                {offeredPlates.map((plate) => (
+                  <ToggleChip
+                    key={plate}
+                    tone="semolina"
+                    selected={plate === settings.plate}
+                    onClick={() => set({ plate })}
+                  >
+                    {plateName(plate)}
+                  </ToggleChip>
+                ))}
+              </ChipRow>
+              <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
+            </SettingRow>
+            <SettingRow label="Nozzle" wide>
+              <SegmentedControl
+                label="Nozzle"
+                labelHidden
+                options={SLICING_NOZZLES.map((nozzle) => ({ value: String(nozzle), label: `${nozzle} mm` }))}
+                value={String(settings.nozzle)}
+                onChange={(value) => set({ nozzle: Number(value) })}
+              />
+              {!engineSlices(settings.nozzle) && (
+                <p className="text-caption text-ink-faint">Spaghetti slices for the 0.4 mm nozzle only, for now.</p>
+              )}
+            </SettingRow>
+          </>
+        )}
         {scalable && (
           <SettingRow label="Size">
             <span className="flex items-center gap-2">
@@ -619,5 +706,51 @@ export default function SliceSettingsSheet({
         <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * The workspace's defaults, on the Printer page (decision 0052): how a model nobody set up is sliced here. The same
+ * choices as a model's, without the filament (the Pantry's first loaded spool) and what is each model's own.
+ */
+export function WorkspaceSlicing({
+  value,
+  onChange,
+}: {
+  /** The workspace's own, or none: Spaghetti's. */
+  value: SlicingDefaults | undefined;
+  /** Null goes back to Spaghetti's own. */
+  onChange: (next: SlicingDefaults | null) => void;
+}) {
+  const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
+  const own = !!value && !sameSlicing(settings, DEFAULT_SLICING);
+  // Going back throws away what was set here: the toast takes it back (never lose work).
+  const reset = () => {
+    const before = value;
+    onChange(null);
+    if (before) toast.undo("Back to Spaghetti's own slicing", { onUndo: () => onChange(before) });
+  };
+  return (
+    <div className="flex flex-col gap-7">
+      <SlicingChoices
+        settings={settings}
+        onChange={(next) => onChange(slicingDefaultsOf(next))}
+        spools={[]}
+        plates={[]}
+        scalable={false}
+        scope="workspace"
+      />
+      {/* The way back sits beside the caption where there is room for both, and under it on a phone. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="text-small text-ink-faint grow basis-72 text-pretty">
+          The filament comes from the Pantry's first loaded spool, the plate and nozzle from this page.
+        </p>
+        {own && (
+          <Button variant="quiet" size="sm" icon={UndoIcon} onClick={reset} className="-ml-3">
+            Back to Spaghetti's own
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

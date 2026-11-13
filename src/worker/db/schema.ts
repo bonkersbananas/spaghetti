@@ -327,6 +327,11 @@ export const recipes = sqliteTable("recipes", {
   finish: text("finish"),
   /** The attempt's chosen settings (shared/recipes.ts recipeSettings); never edited, a newer recipe replaces it. */
   settings: text("settings", { mode: "json" }).$type<AttemptSettings>().notNull().default({}),
+  /**
+   * The slicing settings its attempt's model was sliced with by Spaghetti (decision 0051), the kind of filament and
+   * not the spool; null for a recipe from a slicer's own file, or older than them.
+   */
+  slicing: text("slicing", { mode: "json" }).$type<SlicingSettings>(),
   /** The attempt and build it came from. Not foreign keys: the recipe outlives them (the link just goes quiet). */
   sourceAttemptId: text("source_attempt_id"),
   sourceItemId: text("source_item_id"),

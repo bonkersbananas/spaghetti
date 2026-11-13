@@ -836,7 +836,8 @@ export const operations: Record<string, Operation> = {
     response: list("recipes", z.looseObject({})),
   },
   "POST /recipes": {
-    summary: "Saves an attempt that worked as a recipe.",
+    summary:
+      "Saves an attempt that worked as a recipe: its settings, and when its model was sliced by Spaghetti, the slicing settings it was sliced with (`slicing`, the kind of filament and not the spool).",
     body: createRecipe,
     response: one("recipe", z.looseObject({})),
     status: 201,
@@ -969,7 +970,8 @@ export const operations: Record<string, Operation> = {
     }),
   },
   "PUT /printer": {
-    summary: "Changes the printer's setup (nozzles, plates); what isn't sent is kept.",
+    summary:
+      "Changes the printer's setup (nozzles, plates, AMS units, drying days, and `slicing`: how a model nobody set up is sliced here, null for Spaghetti's own); what isn't sent is kept.",
     body: setupSchema,
     response: any("The printer."),
   },

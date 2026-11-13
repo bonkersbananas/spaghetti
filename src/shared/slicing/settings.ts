@@ -458,6 +458,20 @@ export function slicingFromRecord(record: {
   });
 }
 
+/* The workspace's defaults -------------------------------------------------------------------------------- */
+
+/**
+ * The settings a workspace sets for models nobody set up (the Printer page, decision 0051): how a model prints, not
+ * with what. The filament comes from the Pantry, the plate and the nozzle from the Printer page.
+ */
+export const DEFAULT_KEYS = ["layerHeight", "walls", "infill", "pattern", "supports", "supportStyle", "brim"] as const;
+export type SlicingDefaults = Pick<SlicingSettings, (typeof DEFAULT_KEYS)[number]>;
+
+/** The part of a whole set of settings a workspace keeps as its defaults. */
+export function slicingDefaultsOf(settings: SlicingSettings): SlicingDefaults {
+  return Object.fromEntries(DEFAULT_KEYS.map((key) => [key, settings[key]])) as SlicingDefaults;
+}
+
 /** The whole settings for what was chosen, with the defaults for the rest. */
 export const slicingFor = (chosen: Partial<SlicingSettings>, defaults: SlicingSettings = DEFAULT_SLICING) =>
   normalizeSlicing({ ...defaults, ...chosen }, defaults);
