@@ -284,7 +284,20 @@ export function PantrySection() {
           <div className="flex gap-2">
             <PlateThumb alt="" className="size-16" />
           </div>
-          <Label>A model Spaghetti slices: slicing, sliced, a caution, why it couldn't be, and not sliced yet</Label>
+          <Label>
+            A model Spaghetti slices: saving, waiting, slicing, sliced, a caution, why it couldn't be, and not sliced
+            yet
+          </Label>
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["1.2 MB"]}
+            status={<ModelStatus state={{ kind: "saving" }} phone={false} />}
+          />
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["1.2 MB"]}
+            status={<ModelStatus state={{ kind: "waiting" }} phone={false} />}
+          />
           <FileCard
             name="fusilli-knob.stl"
             meta={["1.2 MB"]}
