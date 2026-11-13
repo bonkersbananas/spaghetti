@@ -115,11 +115,8 @@ mod tests {
         // Bambu's tray id is known only for its PLA Basic.
         assert_eq!(s.filament_tray, "");
         // What it doesn't print as asked, it says.
-        assert!(
-            s.fallbacks().iter().any(|f| f == "gyroid sparse infill printed as straight lines"),
-            "{:?}",
-            s.fallbacks()
-        );
+        assert_eq!(s.sparse_infill_pattern, "gyroid");
+        assert!(s.fallbacks().iter().any(|f| f == "no auto brim"), "{:?}", s.fallbacks());
         // Everything else is still the X2D's.
         assert_eq!(s.outer_wall_speed, 200.0);
     }
