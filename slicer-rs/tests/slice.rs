@@ -222,6 +222,8 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
     let (mut x, mut y, mut z) = (f64::NAN, f64::NAN, 1.0);
     let mut layer_z = f64::NAN;
+    // Heights as the G-code writes them, to the micrometre (a layer of support may lie at 0.474286 mm).
+    let written = |z: f64| (z * 1000.0).round() / 1000.0;
     let mut pulled: f64 = 0.0;
     let mut label: Option<u32> = None;
     let mut layers: Vec<Vec<u32>> = Vec::new();
@@ -273,10 +275,10 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             let moves_xy = (word(code, 'X').is_some() || word(code, 'Y').is_some()) && (nx != x || ny != y);
             if moves_xy {
                 assert!((0.0..=s.bed[0]).contains(&nx) && (0.0..=s.bed[1]).contains(&ny), "on the plate: {}", at());
-                assert!(nz >= layer_z - 1e-6, "never below the layer while moving: {}", at());
+                assert!(nz >= written(layer_z) - 1e-6, "never below the layer while moving: {}", at());
             }
             if e > 0.0 && moves_xy {
-                assert!((nz - layer_z).abs() < 1e-6, "prints at the layer's height: {}", at());
+                assert!((nz - written(layer_z)).abs() < 1e-6, "prints at the layer's height: {}", at());
                 assert!(pulled.abs() < 1e-4, "prints only with the filament pushed back: {}", at());
                 if feature == "Brim" {
                     assert!(layers.len() == 1 && label.is_none(), "a brim prints first, outside the labels: {}", at());
@@ -292,7 +294,7 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             let (i, j) = (word(code, 'I').unwrap(), word(code, 'J').unwrap());
             let nz = word(code, 'Z').unwrap();
             assert!((i.hypot(j) - r).abs() < 0.002, "a spiral of the z-hop's radius: {}", at());
-            assert!((nz - (layer_z + s.z_hop)).abs() < 1e-6, "lifts by the z-hop: {}", at());
+            assert!((nz - written(layer_z + s.z_hop)).abs() < 1e-6, "lifts by the z-hop: {}", at());
             let (cx, cy) = (x + i, y + j);
             assert!(
                 cx - r >= 0.0 && cy - r >= 0.0 && cx + r <= s.bed[0] && cy + r <= s.bed[1],
@@ -488,6 +490,11 @@ fn lightning_infill_holds_up_the_top_and_nothing_else() {
 
 /// The first layer's brim loops, as printed: each a run of extrusions, between travels.
 fn brim_loops(gcode: &str) -> Vec<Vec<[f64; 2]>> {
+    first_layer_runs(gcode, "Brim")
+}
+
+/// The first layer's runs of extrusions of one feature, between travels.
+fn first_layer_runs(gcode: &str, want: &str) -> Vec<Vec<[f64; 2]>> {
     let first = gcode.split("; CHANGE_LAYER\n").nth(1).expect("a first layer");
     let (mut x, mut y) = (f64::NAN, f64::NAN);
     let mut feature = "";
@@ -503,7 +510,7 @@ fn brim_loops(gcode: &str) -> Vec<Vec<[f64; 2]>> {
         }
         let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
         let moved = nx != x || ny != y;
-        if moved && feature == "Brim" && word(code, 'E').is_some_and(|e| e > 0.0) {
+        if moved && feature == want && word(code, 'E').is_some_and(|e| e > 0.0) {
             if !extruding {
                 loops.push(vec![[x, y]]);
             }
@@ -718,4 +725,47 @@ fn supports_leave_a_model_that_needs_none_as_it_was() {
     let without = slice(&[Input { name: "cube.stl", bytes: &cube }], &Settings::default(), &options).unwrap();
     assert_eq!((with.stats.layers, with.stats.volume), (without.stats.layers, without.stats.volume));
     assert!(!String::from_utf8(with.gcode).unwrap().contains("; FEATURE: Support"));
+}
+
+#[test]
+fn a_brim_leaves_room_for_the_supports_flange() {
+    // A fin 4 × 20 mm and 40 mm tall gets a brim; an arm off it 10 mm up has support down to the plate, whose flange
+    // lies where the brim would go. Native OrcaSlicer 2.5.0 (Nov 13) keeps the brim out of what the flange prints:
+    // 10 loops round it, 1,225.4 mm of line, where the fin alone gets 20.
+    let model = boxes_stl(&[([100., 110., 0.], [104., 130., 40.]), ([104., 115., 10.], [114., 125., 14.])]);
+    let s = normal_supports();
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "fin.stl", bytes: &model }], &s, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    check_moves(&gcode, &s);
+    let loops = brim_loops(&gcode);
+    assert_eq!(loops.len(), 10);
+    let length =
+        |run: &Vec<[f64; 2]>| run.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum::<f64>();
+    let total: f64 = loops.iter().map(length).sum();
+    assert!((total - 1225.4).abs() < 1.5, "{total} mm of brim");
+    // Nowhere does a brim line come near the flange's lines: they lie a line apart (0.46 mm), but at the corner where
+    // the flange's loop starts and ends.
+    let flange: Vec<[[f64; 2]; 2]> =
+        first_layer_runs(&gcode, "Support").iter().flat_map(|run| run.windows(2).map(|w| [w[0], w[1]])).collect();
+    assert!(!flange.is_empty());
+    let to_flange = |p: [f64; 2]| {
+        flange
+            .iter()
+            .map(|[a, b]| {
+                let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+                let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy).max(1e-12)).clamp(0.0, 1.0);
+                (p[0] - a[0] - t * dx).hypot(p[1] - a[1] - t * dy)
+            })
+            .fold(f64::MAX, f64::min)
+    };
+    for run in &loops {
+        for w in run.windows(2) {
+            for k in 0..=20 {
+                let t = k as f64 / 20.0;
+                let p = [w[0][0] + t * (w[1][0] - w[0][0]), w[0][1] + t * (w[1][1] - w[0][1])];
+                assert!(to_flange(p) > 0.35, "brim at {p:?}, {} mm from the flange", to_flange(p));
+            }
+        }
+    }
 }
