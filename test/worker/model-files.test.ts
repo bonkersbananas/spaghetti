@@ -146,6 +146,23 @@ describe("models kept with an idea", () => {
     ]);
   });
 
+  it("keeps what its slice stored when the model is sent again by its id (an outbox retry)", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const { file: sliced } = await (await putSliced(id, slicedForm())).json<ItemFileResponse>();
+    expect((await putModel(item.id, id)).status).toBe(200);
+    const file = (await itemOf(item.id)).files?.[0];
+    expect(file).toMatchObject({
+      hasThumb: true,
+      slicer: "OrcaSlicer 2.5.0-dev",
+      objects: ["Benchy.stl"],
+      prefill: { estimatedMinutes: 38, layerHeight: 0.2, weightGrams: 11.3 },
+      slice: { status: "sliced" },
+    });
+    expect(file).toEqual(sliced);
+  });
+
   it("keeps why a slice failed, and drops the sliced file it had", async () => {
     const item = await idea();
     const id = uuid();

@@ -121,3 +121,41 @@ test("an .stl dropped in the attempt sheet is sliced there, fills in the attempt
   await page.reload();
   await expect(page.getByRole("button", { name: "See cube.stl in 3D" })).toBeVisible();
 });
+
+test("an .stl dropped on a logged attempt is kept on it at once, while it slices, and its slice follows", async ({
+  page,
+}) => {
+  await signIn(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Cube", stage: "building" } });
+  await page.request.post(`/api/items/${id}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: "success" },
+  });
+  // The engine is held until the model is on the server: slicing can't be what keeps it.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/slicer/*/engine-st.wasm", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  const fileOf = async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.attempts[0]?.file;
+
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Attempt 1: success. Open" }).click({ position: { x: 24, y: 24 } });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(sheet).toBeVisible();
+  await page.getByTestId("slicer-file-input").setInputFiles({
+    name: "cube.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(boxStl(20)),
+  });
+  await expect(sheet.getByText("cube.stl")).toBeVisible();
+  await expect.poll(async () => [(await fileOf())?.kind, (await fileOf())?.slice ?? null]).toEqual(["model", null]);
+
+  release();
+  await expect.poll(async () => (await fileOf())?.slice?.status, { timeout: SLICED }).toBe("sliced");
+});

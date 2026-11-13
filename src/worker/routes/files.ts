@@ -125,6 +125,33 @@ const fileFields = z.object({
 });
 
 /**
+ * A file row's values from its upload. A model sent again by its id (an outbox retry whose answer was lost) keeps
+ * what its slice stored meanwhile (the picture, what it said): the upload carries the original only.
+ */
+function uploadValues(
+  fields: z.infer<typeof fileFields>,
+  sent: { stored: boolean; hasThumb: boolean },
+  existing:
+    | Pick<typeof itemFiles.$inferSelect, "kind" | "slice" | "hasThumb" | "slicer" | "prefill" | "objects">
+    | undefined,
+) {
+  const sliced = existing?.kind === "model" && fields.kind === "model" && !!existing.slice;
+  return {
+    name: fields.name,
+    size: fields.size,
+    stored: sent.stored,
+    hasThumb: sent.hasThumb || (sliced && existing.hasThumb),
+    plate: fields.plate,
+    plateCount: fields.plateCount,
+    slicer: sliced ? existing.slicer : fields.slicer || null,
+    prefill: sliced ? existing.prefill : fields.prefill,
+    objects: sliced ? existing.objects : fields.objects,
+    kind: fields.kind,
+    deletedAt: null,
+  };
+}
+
+/**
  * Why a file's upload can't be kept, or null: a slicer file is kept up to MAX_SLICER_FILE_BYTES (only what it said,
  * above), a model only with its bytes, up to MAX_MODEL_FILE_BYTES; the plate's picture is a small image.
  */
@@ -215,19 +242,7 @@ export const attemptFileRoutes = new Hono<AppEnv>()
       );
     }
 
-    const values = {
-      name: fields.name,
-      size: fields.size,
-      stored,
-      hasThumb,
-      plate: fields.plate,
-      plateCount: fields.plateCount,
-      slicer: fields.slicer || null,
-      prefill: fields.prefill,
-      objects: fields.objects,
-      kind: fields.kind,
-      deletedAt: null,
-    };
+    const values = uploadValues(fields, { stored, hasThumb }, existing);
     const itemId = found.attempt.itemId;
     const statements: BatchItem<"sqlite">[] = [
       // The files it replaces, then the new one, its change and the item's date: together.
@@ -361,19 +376,7 @@ export const itemFileRoutes = new Hono<AppEnv>()
         ? c.env.PHOTOS.put(fileKey(fileId, "thumb"), thumb.stream(), { httpMetadata: { contentType: thumb.type } })
         : null,
     ]);
-    const values = {
-      name: fields.name,
-      size: fields.size,
-      stored,
-      hasThumb,
-      plate: fields.plate,
-      plateCount: fields.plateCount,
-      slicer: fields.slicer || null,
-      prefill: fields.prefill,
-      objects: fields.objects,
-      kind: fields.kind,
-      deletedAt: null,
-    };
+    const values = uploadValues(fields, { stored, hasThumb }, existing);
     await db.batch([
       db
         .insert(itemFiles)

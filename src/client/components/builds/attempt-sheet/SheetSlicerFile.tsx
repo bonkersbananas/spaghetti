@@ -87,16 +87,21 @@ export function useSlicerFile({
   };
   const current = useRef<SlicerState | null>(null);
   current.current = state;
-  /** Slices a model in the sheet, in the background (lib/slicing/jobs.ts); it goes on where the attempt goes. */
+  /**
+   * Starts slicing a model in the sheet, in the background (lib/slicing/jobs.ts); it goes on where the attempt goes.
+   * Resolves as soon as the job is under way, with its outcome to come in `done` (wrapped, so awaiting the start
+   * doesn't wait for the slice).
+   */
   const sliceDraft = async (draft: SlicerFileDraft, options: SliceOptions = {}) => {
     const jobs = await import("@/lib/slicing/jobs");
-    return jobs.startSlice(queryClient, {
+    const done = jobs.startSlice(queryClient, {
       fileId: draft.id,
       name: draft.file.name,
       source: draft.file,
       options,
       target: null,
     });
+    return { done };
   };
   /** Once sliced, the model fills in the attempt as a sliced file would (if the sheet still holds it). */
   const follow = async (draft: SlicerFileDraft, done: Promise<SliceOutcome | null>) => {
@@ -117,16 +122,21 @@ export function useSlicerFile({
    * are until then. An attempt that exists keeps the model at once (onReady), and its slice follows it.
    */
   const receiveModel = async (draft: SlicerFileDraft) => {
-    setState({ draft, plate: 1, prefill: null, unknown: [] });
-    const done = await sliceDraft(draft);
-    onReady?.(draft, 1, {});
-    await follow(draft, Promise.resolve(done));
+    const received: SlicerState = { draft, plate: 1, prefill: null, unknown: [] };
+    current.current = received;
+    setState(received);
+    const { done } = await sliceDraft(draft);
+    // The job is under way, so its slice can follow the model (attachSlice needs the job): an attempt that exists
+    // keeps the model now, unless it was taken off meanwhile.
+    if (current.current?.draft.id === draft.id) onReady?.(draft, 1, {});
+    await follow(draft, done);
   };
   /** Slices the sheet's model again ("Slice with supports", "Scale to 80% and slice"). */
   const reslice = async (options: SliceOptions) => {
     const draft = current.current?.draft;
     if (draft?.kind !== "model") return;
-    await follow(draft, sliceDraft(draft, options));
+    const { done } = await sliceDraft(draft, options);
+    await follow(draft, done);
   };
   /** `sliced`: what Spaghetti's slice of a kept model said, for its .gcode.3mf (fetchKeptFile). */
   const receive = async (file: File, sliced?: AttemptSettings) => {
