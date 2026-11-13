@@ -591,18 +591,21 @@ export const twistFileRoutes = new Hono<AppEnv>()
     const fileId = c.req.param("fileId");
     if (!(await liveTwist(c, twistId))) return apiError(c, 404, "not_found", "That twist isn't here any more.");
     const db = c.var.db;
-    const [, [row]] = await db.batch([
-      // One model at a time: the one that took its place makes way.
-      db
-        .update(twistFiles)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(twistFiles.twistId, twistId), isNull(twistFiles.deletedAt), ne(twistFiles.id, fileId))),
+    const [[row]] = await db.batch([
       db
         .update(twistFiles)
         .set({ deletedAt: null })
         .where(and(eq(twistFiles.id, fileId), eq(twistFiles.twistId, twistId), isNotNull(twistFiles.deletedAt)))
         .returning(),
       recordChange(db, { entity: "twist", id: twistId, action: "updated", actor: c.var.actor }),
+      // One model at a time: only once the restore matched a row (the change was recorded) does the one that took its
+      // place make way, so a restore that finds nothing leaves the twist's model alone.
+      db
+        .update(twistFiles)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(afterChange, eq(twistFiles.twistId, twistId), isNull(twistFiles.deletedAt), ne(twistFiles.id, fileId)),
+        ),
     ]);
     if (!row) return apiError(c, 404, "not_found", "That file is gone for good.");
     return c.json<ItemFileResponse>({ file: toApiFile(row) });

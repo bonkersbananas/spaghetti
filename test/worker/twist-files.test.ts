@@ -127,6 +127,9 @@ describe("a twist's model", () => {
     expect(await model(id)).toBeNull();
     expect((await request(`/api/twists/${id}/file/${fileId}/restore`, { method: "POST", cookie })).status).toBe(200);
     expect(await model(id)).toMatchObject({ id: fileId });
+    // A restore that finds nothing leaves the model there.
+    expect((await request(`/api/twists/${id}/file/${uuid()}/restore`, { method: "POST", cookie })).status).toBe(404);
+    expect(await model(id)).toMatchObject({ id: fileId });
     expect((await put(id, uuid(), modelForm("a.3mf", "slicer"))).status).toBe(400);
     expect((await put(uuid(), uuid())).status).toBe(404);
   });
