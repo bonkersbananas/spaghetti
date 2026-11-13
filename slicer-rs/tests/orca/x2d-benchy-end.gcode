@@ -1,0 +1,109 @@
+M981 S0 P20000 ; close spaghetti detector
+; FEATURE: Custom
+; MACHINE_END_GCODE_START
+; filament end gcode 
+
+;======== X2D end gcode ==========
+;===== 2026/05/18 =====
+
+M400 ; wait for buffer to clear
+G92 E0 ; zero the extruder
+M211 Z1
+
+G90
+G1 Z48.4 F900 ; lower z a little
+M1002 judge_flag timelapse_record_flag
+M622 J1
+    G150.3
+    M400 ; wait all motion done
+    M991 S0 P-1 ;end smooth timelapse at safe pos
+    M400 S5 ;wait for last picture to be taken
+M623  ;end of "timelapse_record_flag"
+
+G90
+G1 Z58 F900 ; lower z a little
+
+M140 S0 ; turn off bed
+M141 S0 ; turn off chamber heating
+M106 S0 ; turn off fan
+M106 P2 S0 ; turn off remote part cooling fan
+M106 P3 S0 ; turn off chamber cooling fan
+M106 P10 S0 ; turn off remote part1 cooling fan
+
+; pull back filament to AMS
+M620 S65279 B
+; M620.11 P1 L0 I65279 E-3
+T65279
+G150.1 F8000
+M621 S65279 B
+
+M620 S65535 B
+; M620.11 P1 L0 I65535 E-4
+T65535
+G150.1 F8000
+M621 S65535 B
+
+G150.3
+
+M104 S0 T0; turn off hotend
+M104 S0 T1; turn off hotend
+
+M400 ; wait all motion done
+M17 S
+M17 Z0.4 ; lower z motor current to reduce impact if there is something in the bottom
+
+    
+        G1 Z104 F600
+        G1 Z102
+    
+
+M400 P100
+M17 R ; restore z current
+
+M220 S100  ; Reset feedrate magnitude
+M201.2 K1.0 ; Reset acc magnitude
+M73.2 R1.0 ;Reset left time magnitude
+M1002 set_gcode_claim_speed_level : 0
+
+M1015.3 S0 ;disable clog detect
+M1015.4 S0 K0 ;disable air printing detect
+
+;=====printer finish air purification=========
+M622.1 S0
+M1002 judge_flag print_finish_air_filt_flag
+
+M622 J1
+M1002 gcode_claim_action : 66
+M145 P1
+M106 P10 S255
+M400 S180
+M106 P10 S0
+M623
+
+M622 J2
+M1002 gcode_claim_action : 66
+M145 P0
+M106 P3 S255
+M400 S180
+M106 P3 S0
+M623
+;=====printer finish air purification=========
+
+;=====printer finish  sound=========
+M17
+M400 S1
+M1006 S1
+M1006 A53 B10 L50 C53 D10 M50 E53 F10 N50 
+M1006 A57 B10 L50 C57 D10 M50 E57 F10 N50 
+M1006 A0 B15 L0 C0 D15 M0 E0 F15 N0 
+M1006 A53 B10 L50 C53 D10 M50 E53 F10 N50 
+M1006 A57 B10 L50 C57 D10 M50 E57 F10 N50 
+M1006 A0 B15 L0 C0 D15 M0 E0 F15 N0 
+M1006 A48 B10 L50 C48 D10 M50 E48 F10 N50 
+M1006 A0 B15 L0 C0 D15 M0 E0 F15 N0 
+M1006 A60 B10 L50 C60 D10 M50 E60 F10 N50 
+M1006 W
+;=====printer finish  sound=========
+M400
+M18
+
