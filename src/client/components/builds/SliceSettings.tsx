@@ -228,6 +228,9 @@ function LayItDown({
   return (
     <ChoiceTiles
       label="Lay it down"
+      // Four make a square of two by two, not three and one left over.
+      columns={options.length === 4 ? 2 : 3}
+      wideColumns={options.length === 4 ? 2 : 3}
       options={options}
       value={picked < 0 ? null : (options[picked]?.value ?? null)}
       onChange={(id) => {
