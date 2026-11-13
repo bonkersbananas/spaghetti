@@ -15,6 +15,8 @@ use crate::surfaces;
 pub enum Role {
     InnerWall,
     OuterWall,
+    /// A wall's stretch beyond the layer below, printed as a bridge (Orca's `erOverhangPerimeter`).
+    OverhangWall,
     GapFill,
     Bridge,
     InternalBridge,
@@ -25,9 +27,10 @@ pub enum Role {
 }
 
 impl Role {
-    pub const ALL: [Role; 9] = [
+    pub const ALL: [Role; 10] = [
         Role::InnerWall,
         Role::OuterWall,
+        Role::OverhangWall,
         Role::GapFill,
         Role::Bridge,
         Role::InternalBridge,
@@ -41,6 +44,7 @@ impl Role {
         match self {
             Role::InnerWall => "Inner wall",
             Role::OuterWall => "Outer wall",
+            Role::OverhangWall => "Overhang wall",
             Role::GapFill => "Gap infill",
             Role::Bridge => "Bridge",
             Role::InternalBridge => "Internal Bridge",
@@ -52,7 +56,7 @@ impl Role {
     }
 
     pub fn is_infill(self) -> bool {
-        !matches!(self, Role::InnerWall | Role::OuterWall)
+        !matches!(self, Role::InnerWall | Role::OuterWall | Role::OverhangWall)
     }
 }
 
@@ -93,6 +97,21 @@ pub struct LayerRegions {
     /// within an island's outline and off these needs no retraction (Orca's test against its internal surfaces, the
     /// slice but its tops and bottoms).
     pub surfaces: Shapes,
+    /// The first layer's slice as it was before being pulled in against elephant's foot, each shape with its object:
+    /// what the second layer rests on (Orca keeps the first layer's `lslices` so). Empty on every other layer, whose
+    /// islands' outlines are its slice.
+    pub unpulled: Vec<(geom::Shape, u32)>,
+}
+
+impl LayerRegions {
+    /// An object's slice on this layer, as the layer above sees it (Orca's `lslices`).
+    pub fn slice_of(&self, object: u32) -> Shapes {
+        if self.unpulled.is_empty() {
+            self.islands.iter().filter(|i| i.object == object).map(|i| i.outline.clone()).collect()
+        } else {
+            self.unpulled.iter().filter(|(_, o)| *o == object).map(|(shape, _)| shape.clone()).collect()
+        }
+    }
 }
 
 /// Walls and fills for every layer, from its slice and the object each of the slice's shapes belongs to.
@@ -295,12 +314,18 @@ pub fn regions(
     };
     let fills = bridges::bridge_over_infill(&islands, fills, layers, &lines, s);
 
-    islands
+    let mut out: Vec<LayerRegions> = islands
         .into_iter()
         .zip(fills)
         .zip(surfaces)
-        .map(|((islands, fills), surfaces)| LayerRegions { islands, fills, surfaces })
-        .collect()
+        .map(|((islands, fills), surfaces)| LayerRegions { islands, fills, surfaces, unpulled: Vec::new() })
+        .collect();
+    if let Some(first) = out.first_mut()
+        && s.elephant_foot > 0.0
+    {
+        first.unpulled = slices[0].iter().cloned().zip(owners[0].iter().copied()).collect();
+    }
+    out
 }
 
 /// A layer's top and bottom surfaces with no part in both (Orca's crack rule): a part both is a bottom, unless it

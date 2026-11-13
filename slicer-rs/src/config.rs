@@ -82,6 +82,9 @@ pub struct Settings {
     /// Whether narrow bands of solid infill print as loops instead of lines
     /// (`detect_narrow_internal_solid_infill`).
     pub narrow_solid_loops: bool,
+    /// Whether a wall's stretches more than half the nozzle beyond the layer below print as overhang walls
+    /// (`detect_overhang_wall`).
+    pub detect_overhang_wall: bool,
 
     // What the process asks for by name, which this prints as it can (`fallbacks`) or refuses (`unsupported`).
     pub sparse_infill_pattern: String,
@@ -110,6 +113,17 @@ pub struct Settings {
     pub travel_speed: f64,
     pub first_layer_speed: f64,
     pub first_layer_infill_speed: f64,
+    /// Whether walls and bridges slow down over overhangs (`enable_overhang_speed`), and how far where a quarter,
+    /// half, three quarters and all of a line hangs (`overhang_1_4_speed` to `overhang_4_4_speed`: mm/s, or a share
+    /// of the wall's speed; under 0.5 mm/s, not at all).
+    pub overhang_speed: bool,
+    pub overhang_speeds: [Share; 4],
+    /// Orca's slowing down over walls that curled up below (`slowdown_for_curled_perimeters`), which isn't modelled:
+    /// it only makes the slowest overhang speed `overhang_4_4_speed` instead of the bridge speed.
+    pub slow_for_curls: bool,
+    /// The overhang fan: how much of a line's width may rest on the layer below for the fan to come on (from
+    /// `overhang_fan_threshold`), or below zero where it never does (`enable_overhang_bridge_fan` off).
+    pub overhang_fan_overlap: f64,
 
     // Accelerations, mm/s².
     pub default_accel: f64,
@@ -167,6 +181,40 @@ pub struct Settings {
     /// The auxiliary fan from the first fan layer on (the printer's layer change G-code sets it lower for the first
     /// layers itself).
     pub aux_fan_speed: f64,
+}
+
+/// A setting that may be a share of another (Orca's float-or-percent): "50%" or "50".
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Share {
+    pub value: f64,
+    pub percent: bool,
+}
+
+impl Share {
+    pub fn parse(text: &str) -> Share {
+        match text.trim().strip_suffix('%') {
+            Some(v) => Share { value: v.trim().parse().unwrap_or(0.0), percent: true },
+            None => Share { value: text.trim().parse().unwrap_or(0.0), percent: false },
+        }
+    }
+
+    /// Its value in mm/s (or whatever `base` is in).
+    pub fn of(self, base: f64) -> f64 {
+        if self.percent { self.value / 100.0 * base } else { self.value }
+    }
+}
+
+/// The overlap under which Orca's overhang fan comes on, from `overhang_fan_threshold`
+/// (`overhang_fan_overlap_threshold`); below zero for "0%", where it depends on no overlap.
+fn overhang_fan_overlap(threshold: &str) -> f64 {
+    match threshold.trim() {
+        "10%" | "5%" => 0.9,
+        "25%" => 0.75,
+        "50%" => 0.5,
+        "75%" => 0.25,
+        "95%" => 0.05,
+        _ => -1.0,
+    }
 }
 
 impl Default for Settings {
@@ -291,6 +339,7 @@ impl Settings {
             thick_bridges: p.bool("thick_bridges"),
             thick_internal_bridges: p.bool("thick_internal_bridges"),
             narrow_solid_loops: p.bool("detect_narrow_internal_solid_infill"),
+            detect_overhang_wall: p.bool("detect_overhang_wall"),
 
             sparse_infill_pattern: text("sparse_infill_pattern"),
             top_surface_pattern: text("top_surface_pattern"),
@@ -316,6 +365,15 @@ impl Settings {
             travel_speed: at("travel_speed"),
             first_layer_speed: at("initial_layer_speed"),
             first_layer_infill_speed: at("initial_layer_infill_speed"),
+            overhang_speed: p.bool("enable_overhang_speed"),
+            overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
+                .map(|key| Share::parse(p.list(key).first().copied().unwrap_or("0"))),
+            slow_for_curls: p.bool("slowdown_for_curled_perimeters"),
+            overhang_fan_overlap: if p.bool("enable_overhang_bridge_fan") {
+                overhang_fan_overlap(p.text("overhang_fan_threshold"))
+            } else {
+                -1.0
+            },
 
             default_accel,
             outer_wall_accel,

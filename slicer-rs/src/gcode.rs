@@ -354,8 +354,10 @@ struct Builder<'a> {
     /// The acceleration the printer has, as Orca's writer tracks it: moves that set none keep it.
     accel: f64,
     first_layer: bool,
-    /// The last extrusion, until a wipe goes back over it.
-    wipe: Option<&'a Path>,
+    /// The last extrusion, until a wipe goes back over it, and the speed it ended at.
+    wipe: Option<(&'a Path, f64)>,
+    /// An overhang wall's width, mm³ per mm, speed and acceleration on this layer.
+    overhang: (f64, f64, f64, f64),
 }
 
 impl<'a> Builder<'a> {
@@ -388,8 +390,10 @@ impl<'a> Builder<'a> {
         let s = self.s;
         if self.first_layer {
             s.first_layer_travel_accel
-        } else if next.role == Role::OuterWall && d < s.retract_min_travel {
+        } else if next.first_role() == Role::OuterWall && d < s.retract_min_travel {
             s.outer_wall_accel
+        } else if next.first_role() == Role::OverhangWall && d < s.retract_min_travel {
+            s.bridge_accel
         } else {
             s.travel_accel
         }
@@ -415,7 +419,7 @@ impl<'a> Builder<'a> {
         }
         let s = self.s;
         let mut left = s.retract_length;
-        if let Some(path) = self.wipe.take()
+        if let Some((path, speed)) = self.wipe.take()
             && s.wipe_distance > 0.0
             && path.points.len() >= 2
         {
@@ -425,8 +429,8 @@ impl<'a> Builder<'a> {
             } else {
                 route_length(from, path.points.iter().rev().skip(1), s.wipe_distance)
             };
-            // Orca wipes at the speed the path was printed at (before any slowing down for cooling).
-            let speed = path.speed.max(10.0);
+            // Orca wipes at the speed the path ended at (before any slowing down for cooling).
+            let speed = speed.max(10.0);
             // In the G-code's hundred-thousandths of a millimetre, so that what is written adds up to the whole
             // retraction exactly (Orca's rounding lets a few microns drift over a long print).
             let during = e_units((s.retract_speed * length / speed).min(left));
@@ -509,11 +513,29 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Prints a path. Where its segments print otherwise (`Path::parts`), each stretch of overhang wall or wall
+    /// prints as such, at its segments' speeds as Orca writes them: a new speed where it changes by more than
+    /// 1 mm/s, and the stretch's own where it comes back within 1 mm/s of that.
     fn extrude(&mut self, path: &'a Path) {
         self.ready();
         self.accel = path.accel;
-        let e_per_mm = path.mm3_per_mm * self.s.e_per_mm3();
-        for q in &path.points[1..] {
+        let e_per_mm3 = self.s.e_per_mm3();
+        let mut stretch: Option<bool> = None;
+        // mm/min, as Orca compares them.
+        let mut written = path.speed * 60.0;
+        for (k, q) in path.points[1..].iter().enumerate() {
+            let part = path.parts.get(k);
+            let over = part.is_some_and(|p| p.overhang);
+            let (role, width, mm3_per_mm, own, accel) = if over {
+                let (w, mm3, speed, accel) = self.overhang;
+                (Role::OverhangWall, w, mm3, speed, accel)
+            } else {
+                (path.role, path.width, path.mm3_per_mm, path.speed, path.accel)
+            };
+            if stretch != Some(over) {
+                stretch = Some(over);
+                written = part.map_or(own * 60.0, |p| p.speed as f64 * 60.0);
+            }
             let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
             // A point the G-code would write as the one before (to its thousandth of a millimetre) waits for the
             // next one, which then covers both.
@@ -521,20 +543,32 @@ impl<'a> Builder<'a> {
             if same(x, self.x) && same(y, self.y) {
                 continue;
             }
+            match part {
+                Some(p) => {
+                    let new = p.speed as f64 * 60.0;
+                    if (written - new).abs() > 60.0 {
+                        written = new;
+                    } else if (own * 60.0 - new).abs() <= 60.0 {
+                        written = own * 60.0;
+                    }
+                }
+                None => written = own * 60.0,
+            }
             let length = (x - self.x).hypot(y - self.y);
+            self.accel = accel;
             let m = Move {
                 x,
                 y,
                 z: self.z,
-                e: length * e_per_mm,
-                f: path.speed,
-                accel: path.accel,
-                kind: Kind::Extrude(path.role),
-                width: path.width,
+                e: length * mm3_per_mm * e_per_mm3,
+                f: written / 60.0,
+                accel,
+                kind: Kind::Extrude(role),
+                width,
             };
             self.push(m);
         }
-        self.wipe = Some(path);
+        self.wipe = Some((path, written / 60.0));
     }
 }
 
@@ -564,13 +598,13 @@ fn route_length<'p>(from: (f64, f64), route: impl Iterator<Item = &'p Pt>, most:
 
 /// Whether a travel from the end of a `from` path to the start of a `to` path, `d` mm long, retracts, as Orca's
 /// `needs_retraction` decides: not when it is shorter than the retraction's minimum travel; always when it leaves an
-/// outer wall; not when it goes to anything but a wall and stays within one of the layer's internal shapes (the slice
+/// outer or overhang wall; not when it goes to anything but a wall and stays within one of the layer's internal shapes (the slice
 /// but its top and bottom surfaces), with "reduce infill retraction" on and some sparse infill; else it does.
 fn retracts(from: &Path, to: &Path, d: f64, a: Pt, b: Pt, internal: &Internal, s: &Settings) -> bool {
     if d < s.retract_min_travel {
         return false;
     }
-    if from.role == Role::OuterWall {
+    if matches!(from.last_role(), Role::OuterWall | Role::OverhangWall) {
         return true;
     }
     let wall = matches!(to.role, Role::InnerWall | Role::OuterWall);
@@ -648,6 +682,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         accel: f64::NAN,
         first_layer,
         wipe: None,
+        overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
     };
     if first_layer {
         // Orca retracts at the first layer change, where the start G-code left the nozzle.
@@ -1533,6 +1568,7 @@ impl Stats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan::Part;
 
     fn text(v: f64, d: usize) -> String {
         let mut t = Vec::new();
@@ -1616,6 +1652,7 @@ mod tests {
             accel: 1000.0,
             island,
             object: 0,
+            parts: Vec::new(),
         };
         let (sparse, solid, gap) = (path(Role::SparseInfill, 0), path(Role::SolidInfill, 0), path(Role::GapFill, 0));
         let (inner, outer, top) = (path(Role::InnerWall, 0), path(Role::OuterWall, 0), path(Role::TopSurface, 0));
@@ -1631,6 +1668,58 @@ mod tests {
         assert!(retracts(&outer, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
         // Shorter than the minimum travel, never.
         assert!(!retracts(&outer, &inner, 0.5, p(2.0, 2.0), p(2.0, 2.5), &internal, &s));
+        // Off a wall that ends over an overhang, as off an outer wall.
+        let mut hanging = path(Role::InnerWall, 0);
+        hanging.points = vec![p(2.0, 2.0), p(3.0, 2.0), p(4.0, 2.0)];
+        hanging.parts = vec![Part { overhang: false, speed: 100.0 }, Part { overhang: true, speed: 50.0 }];
+        assert!(retracts(&hanging, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
+    }
+
+    #[test]
+    fn a_wall_over_an_overhang_prints_stretch_by_stretch_as_orca_writes_it() {
+        let s = Settings::default();
+        let overhang = (0.4, 0.07, 50.0, 2500.0);
+        let mut b = Builder {
+            s: &s,
+            moves: Vec::new(),
+            notes: Vec::new(),
+            x: 0.0,
+            y: 0.0,
+            z: 0.2,
+            layer_z: 0.2,
+            retracted: false,
+            lifted: false,
+            accel: f64::NAN,
+            first_layer: false,
+            wipe: None,
+            overhang,
+        };
+        let p = |x: f64| geom::pt(geom::sc(x), 0);
+        let speeds = [200.0, 120.0, 120.5, 199.5, 199.6, 50.0, 50.0];
+        let wall = Path {
+            role: Role::OuterWall,
+            points: (0..=7).map(|k| p(k as f64)).collect(),
+            closed: false,
+            width: 0.42,
+            mm3_per_mm: 0.08,
+            speed: 200.0,
+            accel: 5000.0,
+            island: 0,
+            object: 0,
+            parts: speeds.iter().enumerate().map(|(k, &speed)| Part { overhang: k >= 5, speed }).collect(),
+        };
+        b.extrude(&wall);
+        let f: Vec<f64> = b.moves.iter().map(|m| m.f).collect();
+        // A new speed where it changes by more than 1 mm/s, else the one before, or the wall's own within 1 mm/s of
+        // it; the overhang wall at its own.
+        assert_eq!(f, vec![200.0, 120.0, 120.0, 199.5, 200.0, 50.0, 50.0]);
+        let kinds: Vec<Kind> = b.moves.iter().map(|m| m.kind).collect();
+        assert_eq!(kinds[4], Kind::Extrude(Role::OuterWall));
+        assert_eq!(kinds[5], Kind::Extrude(Role::OverhangWall));
+        assert_eq!((b.moves[5].width, b.moves[5].accel), (0.4, 2500.0));
+        assert!((b.moves[5].e - 0.07 * s.e_per_mm3()).abs() < 1e-12);
+        // The wipe goes at the speed the wall ended at.
+        assert_eq!(b.wipe.map(|(_, speed)| speed), Some(50.0));
     }
 
     #[test]

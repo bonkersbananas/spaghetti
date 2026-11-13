@@ -14,6 +14,7 @@ pub mod medial;
 pub mod mesh;
 pub mod monotonic;
 pub mod order;
+pub mod overhang;
 pub mod pack;
 pub mod plan;
 pub mod png;
@@ -237,7 +238,8 @@ impl Plate {
             gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
         // Each layer from its regions to its G-code in one go, so only the text stays.
         let texts = par::map_range(regions.len(), |i| {
-            let plan = plan::plan_layer(&regions[i], i, &layers, &centres, settings);
+            let lower = i.checked_sub(1).map(|j| &regions[j]);
+            let plan = plan::plan_layer(&regions[i], lower, i, &layers, &centres, settings);
             gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))
         });
         drop(regions);
