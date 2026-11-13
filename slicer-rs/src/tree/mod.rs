@@ -74,6 +74,8 @@ pub struct Config {
     pub top_rate: f64,
     pub tip_diameter: i64,
     pub remove_small_overhangs: bool,
+    /// Only cantilevers and sharp tails are held up (`support_critical_regions_only`).
+    pub critical_regions_only: bool,
     // `TreeSupportSettings`.
     pub branch_radius: i64,
     pub min_radius: i64,
@@ -165,6 +167,7 @@ impl Config {
             top_rate: sp.tree_top_rate,
             tip_diameter,
             remove_small_overhangs: sp.remove_small_overhang,
+            critical_regions_only: sp.critical_regions_only,
             branch_radius,
             min_radius,
             maximum_move_distance: move_distance(tree_angle),

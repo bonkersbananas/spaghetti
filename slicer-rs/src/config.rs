@@ -217,6 +217,10 @@ pub struct SupportSettings {
     /// Degrees from vertical beyond which an overhang needs support (`support_threshold_angle`).
     pub threshold_angle: f64,
     pub remove_small_overhang: bool,
+    /// Supports only under what would fall (`support_critical_regions_only`, the app's "where needed"): trees hold
+    /// up only overhangs that reach far from what holds them and islands that start in the air; normal supports
+    /// ignore it, as Orca's do.
+    pub critical_regions_only: bool,
     /// mm between support and the object above it, below it, beside it, and beside it on the first layer.
     pub top_z_distance: f64,
     pub bottom_z_distance: f64,
@@ -518,6 +522,7 @@ impl Settings {
                 style: text("support_style"),
                 threshold_angle: p.float("support_threshold_angle"),
                 remove_small_overhang: p.bool("support_remove_small_overhang"),
+                critical_regions_only: p.bool("support_critical_regions_only"),
                 top_z_distance: p.float("support_top_z_distance"),
                 bottom_z_distance: match p.float("support_bottom_z_distance") {
                     // 0 is the top distance.

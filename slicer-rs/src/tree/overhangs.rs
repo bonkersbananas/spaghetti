@@ -3,7 +3,8 @@
 //! angle beyond the layer below, square-offset, with nothing added back. Clusters of overhang that grow up over a few
 //! layers are dropped while small (under 1.68 mm across), unless they start in the air ("sharp tails", any size
 //! here) or reach far from what holds them ("cantilevers"). A sharp tail is held up on its first layer and every
-//! half millimetre or so above, as far as it hangs out over the layer below.
+//! half millimetre or so above, as far as it hangs out over the layer below. With supports only where needed
+//! (`support_critical_regions_only`), only cantilevers and sharp tails are held up.
 
 use super::{Config, mm};
 use crate::geom::{self, Join, Shape, Shapes};
@@ -225,6 +226,12 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
             out[l].push((found[l].overhangs[i].clone(), Kind::Detected));
         }
     }
+    // Supports only where needed: of the overhangs, only those that reach far from what holds them.
+    if c.critical_regions_only {
+        for (layer, f) in out.iter_mut().zip(&found) {
+            *layer = f.cantilevers.iter().map(|o| (o.clone(), Kind::Detected)).collect();
+        }
+    }
     // Sharp tails: on their first layer whole, then where they hang out over the layer below, every so often.
     for l in 0..n {
         if l == 0 {
@@ -310,5 +317,41 @@ mod tests {
                 assert!(layer.is_empty(), "layer {l}: {layer:?}");
             }
         }
+    }
+
+    #[test]
+    fn where_needed_holds_up_only_what_reaches_far() {
+        // A slab over a pillar, reaching 15 mm beyond it on one side and 2.5 mm on the other. Both arms are
+        // overhangs; only the long one reaches more than 3 mm from what holds it, the one overhang the trees hold up
+        // with supports only where needed (`support_critical_regions_only`).
+        let mut s = super::super::tests::tree_settings();
+        let n = 125;
+        let slices: Vec<Shapes> =
+            (0..n)
+                .map(|l| {
+                    if l < 100 {
+                        vec![rect(115.0, 123.0, 125.0, 133.0)]
+                    } else {
+                        vec![rect(100.0, 123.0, 127.5, 133.0)]
+                    }
+                })
+                .collect();
+        let heights = vec![0.2; n];
+        let arms = |s: &crate::config::Settings| -> Vec<(i32, i32)> {
+            let found = detect(&slices, &heights, &Config::new(s), s);
+            assert!(found.iter().enumerate().all(|(l, layer)| l == 100 || layer.is_empty()));
+            let mut xs: Vec<(i32, i32)> = found[100]
+                .iter()
+                .map(|(shape, _)| {
+                    let b = geom::bbox_of(shape);
+                    (b[0], b[2])
+                })
+                .collect();
+            xs.sort();
+            xs
+        };
+        assert_eq!(arms(&s), [(geom::sc(100.0), 1_146_671), (1_253_329, geom::sc(127.5))]);
+        s.support.critical_regions_only = true;
+        assert_eq!(arms(&s), [(geom::sc(100.0), 1_146_671)]);
     }
 }
