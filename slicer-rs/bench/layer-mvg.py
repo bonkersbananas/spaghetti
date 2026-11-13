@@ -1,7 +1,8 @@
 """Draws one layer of a G-code file (Orca's or this slicer's), coloured by feature, line widths to scale, as an
 ImageMagick drawing (MVG): python3 layer-mvg.py <file.gcode> <layer number, from 1> <out.mvg> [minx miny maxx maxy],
-then `convert mvg:out.mvg out.png`."""
+then `convert mvg:out.mvg out.png`. Arcs (G2/G3, which Orca fits to curves) are drawn as arcs."""
 
+import math
 import sys
 
 COLOURS = {
@@ -42,7 +43,7 @@ def main():
             if not (line.startswith("G1 ") or line.startswith("G2 ") or line.startswith("G3 ")):
                 continue
             words = line.split(";")[0].split()
-            nx, ny, e = x, y, 0.0
+            nx, ny, e, ci, cj = x, y, 0.0, 0.0, 0.0
             for w in words[1:]:
                 if w[0] == "X":
                     nx = float(w[1:])
@@ -50,8 +51,25 @@ def main():
                     ny = float(w[1:])
                 elif w[0] == "E":
                     e = float(w[1:])
+                elif w[0] == "I":
+                    ci = float(w[1:])
+                elif w[0] == "J":
+                    cj = float(w[1:])
             if layer == wanted and e > 0 and (nx != x or ny != y):
-                segments.append((x, y, nx, ny, feature, width))
+                points = [(x, y), (nx, ny)]
+                if line[1] in "23" and (ci or cj):
+                    # An arc about (x + I, y + J): clockwise for G2, counter-clockwise for G3, in steps of 5°.
+                    cx, cy = x + ci, y + cj
+                    a0, a1 = math.atan2(y - cy, x - cx), math.atan2(ny - cy, nx - cx)
+                    sweep = (a1 - a0) % (2 * math.pi)
+                    if line[1] == "2":
+                        sweep -= 2 * math.pi
+                    r = math.hypot(x - cx, y - cy)
+                    n = max(2, int(abs(sweep) / math.radians(5)) + 1)
+                    points = [(cx + r * math.cos(a0 + sweep * k / n), cy + r * math.sin(a0 + sweep * k / n)) for k in range(n)]
+                    points.append((nx, ny))
+                for (ax, ay), (bx, by) in zip(points, points[1:]):
+                    segments.append((ax, ay, bx, by, feature, width))
             x, y = nx, ny
     if not segments:
         sys.exit(f"no extrusions on layer {wanted}")
