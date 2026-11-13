@@ -23,25 +23,22 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
     <Link
       to={to}
       className={cn(
-        // On a phone the picture sits beside the words and is drawn smaller, so all the places fit one screen.
-        "pressable focus-ring bg-cream shadow-soft hover:shadow-raised duration-fast flex rounded-lg p-1.5 transition-shadow max-md:items-center md:flex-col",
+        "pressable focus-ring bg-cream shadow-soft hover:shadow-raised duration-fast flex flex-col rounded-lg p-1.5 transition-shadow",
         className,
       )}
     >
       <span
-        className="bg-ink/4 flex items-center justify-center overflow-hidden rounded-md px-4 max-md:h-24 max-md:w-32 max-md:shrink-0 max-md:px-0 md:h-28"
+        className="bg-ink/4 flex h-[6.5rem] items-center justify-center overflow-hidden rounded-md px-2 md:h-28 md:px-4"
         aria-hidden
       >
-        <span className="flex items-center justify-center max-md:w-[17rem] max-md:shrink-0 max-md:origin-center max-md:scale-[.45] md:w-full">
-          {visual}
-        </span>
+        {visual}
       </span>
-      <span className="flex min-w-0 flex-1 items-center gap-3 px-3 md:pt-3 md:pb-2.5">
+      <span className="flex items-center gap-3 px-2 pt-2.5 pb-2 md:px-3 md:pt-3 md:pb-2.5">
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-title text-ink font-display font-semibold">{title}</span>
           <span className="text-small text-ink-faint min-h-[1.5em] md:truncate">{summary}</span>
         </span>
-        <NextIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
+        <NextIcon size={18} className="text-ink-faint shrink-0 max-md:hidden" aria-hidden />
       </span>
     </Link>
   );
