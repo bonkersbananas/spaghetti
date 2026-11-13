@@ -60,6 +60,7 @@ export const PhotoRow = forwardRef<HTMLAnchorElement, PhotoRowProps>(function Ph
         />
       ) : (
         <span
+          aria-hidden
           className={cn(
             "flex shrink-0 items-center justify-center rounded-md",
             sizes[size],
