@@ -2,7 +2,8 @@
 //! island's walls (around each hole and then the outline, the deepest loop first), then its infill and gap fill
 //! chained together as Orca chains them (`order.rs`). Outlines run counter-clockwise and holes clockwise, from the
 //! island's rear (a seam that lines up layer to layer). Widths, flows, speeds and accelerations are Orca's for the
-//! role; speeds are capped by the filament's volumetric limit.
+//! role; speeds are capped by the filament's volumetric limit. Walls and bridges then meet the layer below
+//! (`overhang.rs`): a wall's stretches beyond it print as overhang walls, and both slow down where they hang.
 
 use crate::config::Settings;
 use crate::fill;
@@ -11,6 +12,7 @@ use crate::infill;
 use crate::medial;
 use crate::monotonic;
 use crate::order;
+use crate::overhang::Below;
 use crate::region::{self, Fills, Island, LayerRegions, Role};
 use crate::section::Layers;
 use crate::solid;
@@ -29,6 +31,33 @@ pub struct Path {
     pub island: u32,
     /// Which of the plate's objects it belongs to (an index into them).
     pub object: u32,
+    /// How each segment prints, where they don't all print alike: one per segment (empty when they do).
+    pub parts: Vec<Part>,
+}
+
+/// How one segment of a path prints, over an overhang: a wall's stretch beyond the layer below prints as an overhang
+/// wall, and walls and bridges slow down where they hang.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Part {
+    pub overhang: bool,
+    /// mm/s, before any slowing down for a short layer.
+    pub speed: f32,
+}
+
+impl Path {
+    /// What segment `k` prints as.
+    pub fn role_at(&self, k: usize) -> Role {
+        if self.parts.get(k).is_some_and(|p| p.overhang) { Role::OverhangWall } else { self.role }
+    }
+
+    /// What it starts and what it ends printing as.
+    pub fn first_role(&self) -> Role {
+        self.role_at(0)
+    }
+
+    pub fn last_role(&self) -> Role {
+        self.role_at(self.points.len().saturating_sub(2))
+    }
 }
 
 pub struct LayerPlan {
@@ -46,9 +75,34 @@ const FILL_ORDER: [Role; 6] =
 /// (rounded to the millimetre), which starts next to the wipe tower's position, read as nanometres, so next to the
 /// plate's origin, and runs backwards so the layer ends there; an object can come round more than once. `centres` are
 /// the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored.
-pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, centres: &[(f64, f64)], s: &Settings) -> LayerPlan {
+pub fn plan_layer(
+    r: &LayerRegions,
+    lower: Option<&LayerRegions>,
+    i: usize,
+    layers: &Layers,
+    centres: &[(f64, f64)],
+    s: &Settings,
+) -> LayerPlan {
     let z = layers.top[i];
     let h = layers.height[i];
+    // Each object's layer below, where it differs from this one (where it doesn't, nothing hangs).
+    let mut below: Vec<Option<Below>> = Vec::new();
+    if let Some(lower) = lower
+        && i > 0
+        && (s.detect_overhang_wall || s.overhang_speed)
+    {
+        let objects = r.islands.iter().map(|island| island.object as usize + 1).max().unwrap_or(0);
+        below = (0..objects as u32)
+            .map(|o| {
+                let here: Shapes = r.islands.iter().filter(|i| i.object == o).map(|i| i.outline.clone()).collect();
+                if here.is_empty() {
+                    return None;
+                }
+                let under = lower.slice_of(o);
+                (under != here).then(|| Below::new(&under, s))
+            })
+            .collect();
+    }
     let mut per_island: Vec<Vec<Path>> = r
         .islands
         .iter()
@@ -56,7 +110,8 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, centres: &[(f64, 
         .enumerate()
         .map(|(k, (island, fills))| {
             let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
-            island_paths(k as u32, island, fills, i, (z, h), centre, s)
+            let under = below.get(island.object as usize).and_then(Option::as_ref);
+            island_paths(k as u32, island, fills, under, i, (z, h), centre, s)
         })
         .collect();
     let nodes: Vec<usize> = (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).collect();
@@ -91,10 +146,12 @@ struct Group {
     sortable: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn island_paths(
     index: u32,
     island: &Island,
     fills: &Fills,
+    below: Option<&Below>,
     layer: usize,
     (z, h): (f64, f64),
     centre: (f64, f64),
@@ -109,9 +166,14 @@ fn island_paths(
     // Walls in Orca's order: around each hole and then the outline, the deepest loop first, each level's loops chained
     // from the object's centre.
     let centre_pt = geom::pt(centre.0.round() as i32, centre.1.round() as i32);
+    let overhang = overhang_flow(first, h, s);
     for (contour, depth, outline) in wall_order(walls, centre_pt) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
-        out.push(path(role, seam_loop(contour, outline), true, island, first, h, s));
+        let wall = path(role, seam_loop(contour, outline), true, island, first, h, s);
+        out.push(match below {
+            Some(below) => below.wall(wall, overhang, s),
+            None => wall,
+        });
     }
 
     // Gap fill along the middle of the gaps between walls, as wide as each gap is there: each path on its own.
@@ -208,7 +270,10 @@ fn island_paths(
                     groups.push(Group { paths, sortable: false });
                     continue;
                 }
-                let paths = solid_lines(shape, role, style, angle, spacing, origin, island, first, h, s);
+                let mut paths = solid_lines(shape, role, style, angle, spacing, origin, island, first, h, s);
+                if bridge && let Some(below) = below {
+                    paths = paths.into_iter().map(|p| below.bridge(p, s)).collect();
+                }
                 groups.push(Group { paths, sortable });
             }
         }
@@ -547,6 +612,7 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
             accel: accel(role, first, s),
             island,
             object: 0,
+            parts: Vec::new(),
         });
     };
     let mut start = 0;
@@ -634,8 +700,23 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
             return (w, mm3, if internal { s.internal_bridge_speed } else { s.bridge_speed });
         }
         Role::GapFill => (s.inner_wall_width, s.gap_infill_speed),
+        Role::OverhangWall => {
+            // Orca's bridging flow for walls: a bridge line wide (else an inner wall's), round threads if bridges
+            // are thick.
+            if s.thick_bridges {
+                let d = if s.bridge_width > 0.0 { s.bridge_width } else { s.nozzle_diameter };
+                return (d, std::f64::consts::PI * (d / 2.0).powi(2), s.bridge_speed);
+            }
+            (if s.bridge_width > 0.0 { s.bridge_width } else { s.inner_wall_width }, s.bridge_speed)
+        }
     };
     (w, Settings::mm3_per_mm(w, h), speed)
+}
+
+/// An overhang wall's width, mm³ per mm, speed and acceleration on a layer `h` high.
+pub fn overhang_flow(first: bool, h: f64, s: &Settings) -> (f64, f64, f64, f64) {
+    let (width, mm3_per_mm, speed) = flow(Role::OverhangWall, first, h, s);
+    (width, mm3_per_mm, speed.min(s.speed_cap(mm3_per_mm)), accel(Role::OverhangWall, first, s))
 }
 
 fn accel(role: Role, first: bool, s: &Settings) -> f64 {
@@ -646,7 +727,7 @@ fn accel(role: Role, first: bool, s: &Settings) -> f64 {
         Role::OuterWall => s.outer_wall_accel,
         Role::InnerWall => s.inner_wall_accel,
         Role::TopSurface => s.top_surface_accel,
-        Role::Bridge | Role::InternalBridge => s.bridge_accel,
+        Role::Bridge | Role::InternalBridge | Role::OverhangWall => s.bridge_accel,
         _ => s.default_accel,
     }
 }
@@ -654,7 +735,18 @@ fn accel(role: Role, first: bool, s: &Settings) -> f64 {
 fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: f64, s: &Settings) -> Path {
     let (width, mm3_per_mm, speed) = flow(role, first, h, s);
     let speed = speed.min(s.speed_cap(mm3_per_mm));
-    Path { role, points, closed, width, mm3_per_mm, speed, accel: accel(role, first, s), island, object: 0 }
+    Path {
+        role,
+        points,
+        closed,
+        width,
+        mm3_per_mm,
+        speed,
+        accel: accel(role, first, s),
+        island,
+        object: 0,
+        parts: Vec::new(),
+    }
 }
 
 /// A wall loop as printed: counter-clockwise, from the rearmost point (largest y, then smallest x), closed.

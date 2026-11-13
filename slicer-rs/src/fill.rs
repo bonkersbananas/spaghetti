@@ -395,7 +395,7 @@ fn gyroid_waves(
 // ---- Cutting the pattern to the area ----
 
 /// Contour edges sorted into square cells, to find the edges near a segment.
-struct EdgeGrid {
+pub(crate) struct EdgeGrid {
     x0: f64,
     y0: f64,
     cell: f64,
@@ -403,11 +403,11 @@ struct EdgeGrid {
     ny: i64,
     cells: Vec<Vec<u32>>,
     /// Each edge: its ends, its contour and the index of its first point there.
-    edges: Vec<(Pt, Pt, usize, usize)>,
+    pub(crate) edges: Vec<(Pt, Pt, usize, usize)>,
 }
 
 impl EdgeGrid {
-    fn new(contours: &[Contour], cell: f64, margin: f64) -> EdgeGrid {
+    pub(crate) fn new(contours: &[Contour], cell: f64, margin: f64) -> EdgeGrid {
         let mut b = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
         for c in contours {
             for q in c {
@@ -447,7 +447,7 @@ impl EdgeGrid {
     }
 
     /// The edges in the cells the segment a–b passes through, each once, into `out`.
-    fn edges_along(&self, a: (f64, f64), b: (f64, f64), out: &mut Vec<u32>) {
+    pub(crate) fn edges_along(&self, a: (f64, f64), b: (f64, f64), out: &mut Vec<u32>) {
         out.clear();
         let (ax, ay) = ((a.0 - self.x0) / self.cell, (a.1 - self.y0) / self.cell);
         let (bx, by) = ((b.0 - self.x0) / self.cell, (b.1 - self.y0) / self.cell);
@@ -492,7 +492,7 @@ impl EdgeGrid {
     }
 
     /// Whether a point is inside the contours (non-zero winding), from the edges to its right.
-    fn inside(&self, q: (f64, f64)) -> bool {
+    pub(crate) fn inside(&self, q: (f64, f64)) -> bool {
         let (cx, cy) = self.cell_of(q);
         if !(0..self.ny).contains(&cy) {
             return false;
@@ -536,7 +536,7 @@ struct Piece {
 }
 
 /// Where segments a–b and c–d cross: how far along a–b, and along c–d (from c, half open so a corner counts once).
-fn crossing(a: (f64, f64), b: (f64, f64), c: Pt, d: Pt) -> Option<(f64, f64)> {
+pub(crate) fn crossing(a: (f64, f64), b: (f64, f64), c: Pt, d: Pt) -> Option<(f64, f64)> {
     let (cx, cy, dx, dy) = (c.x as f64, c.y as f64, d.x as f64, d.y as f64);
     let r = (b.0 - a.0, b.1 - a.1);
     let s = (dx - cx, dy - cy);
@@ -550,11 +550,11 @@ fn crossing(a: (f64, f64), b: (f64, f64), c: Pt, d: Pt) -> Option<(f64, f64)> {
     ((0.0..=1.0).contains(&t) && (0.0..1.0).contains(&u)).then_some((t, u))
 }
 
-fn to_pt(q: (f64, f64)) -> Pt {
+pub(crate) fn to_pt(q: (f64, f64)) -> Pt {
     geom::pt(q.0.round() as i32, q.1.round() as i32)
 }
 
-fn push_point(points: &mut Vec<Pt>, q: Pt) {
+pub(crate) fn push_point(points: &mut Vec<Pt>, q: Pt) {
     if points.last() != Some(&q) {
         points.push(q);
     }
