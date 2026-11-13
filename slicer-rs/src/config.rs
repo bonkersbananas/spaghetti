@@ -78,6 +78,15 @@ pub struct Settings {
     /// mm between the first layer and a skirt (there is none, but Orca levels the bed that far around the first
     /// layer all the same).
     pub skirt_distance: f64,
+    /// mm: how wide a brim people turn on is (`brim_width`), and how far any brim keeps off its object
+    /// (`brim_object_gap`).
+    pub brim_width: f64,
+    pub brim_object_gap: f64,
+    /// The brim's flow, a share of its line's (`brim_flow_ratio`).
+    pub brim_flow_ratio: f64,
+    /// mm a loop stops short of where it started (`seam_gap`, a share of the nozzle), so it doesn't print over its
+    /// start.
+    pub seam_gap: f64,
     pub only_one_wall_top: bool,
     /// How wide a top must be before it gets one wall (`min_width_top_surface`, a share of the inner wall's width).
     pub min_width_top_surface: Share,
@@ -121,6 +130,8 @@ pub struct Settings {
     pub travel_speed: f64,
     pub first_layer_speed: f64,
     pub first_layer_infill_speed: f64,
+    /// Supports' speed (`support_speed`): there are none, but Orca's auto brim weighs it among the fastest speeds.
+    pub support_speed: f64,
     /// Whether walls and bridges slow down over overhangs (`enable_overhang_speed`), and how far where a quarter,
     /// half, three quarters and all of a line hangs (`overhang_1_4_speed` to `overhang_4_4_speed`: mm/s, or a share
     /// of the wall's speed; under 0.5 mm/s, not at all).
@@ -345,6 +356,10 @@ impl Settings {
             elephant_foot: p.float("elefant_foot_compensation"),
             resolution: p.float("resolution"),
             skirt_distance: p.float("skirt_distance"),
+            brim_width: p.float("brim_width"),
+            brim_object_gap: p.float("brim_object_gap"),
+            brim_flow_ratio: if p.text("brim_flow_ratio").is_empty() { 1.0 } else { p.float("brim_flow_ratio") },
+            seam_gap: p.float_of("seam_gap", nozzle_diameter),
             only_one_wall_top: p.bool("only_one_wall_top"),
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
@@ -377,6 +392,7 @@ impl Settings {
             travel_speed: at("travel_speed"),
             first_layer_speed: at("initial_layer_speed"),
             first_layer_infill_speed: at("initial_layer_infill_speed"),
+            support_speed: at("support_speed"),
             overhang_speed: p.bool("enable_overhang_speed"),
             overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
                 .map(|key| Share::parse(p.list(key).first().copied().unwrap_or("0"))),
@@ -450,8 +466,8 @@ impl Settings {
             Some("spiral vase mode")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
-        } else if !matches!(self.brim_type.as_str(), "auto_brim" | "no_brim" | "") {
-            Some("a brim")
+        } else if !matches!(self.brim_type.as_str(), "auto_brim" | "outer_only" | "no_brim" | "") {
+            Some("this kind of brim")
         } else {
             None
         }
@@ -477,9 +493,6 @@ impl Settings {
         }
         if self.wall_generator == "arachne" {
             out.push("arachne walls printed as classic walls".into());
-        }
-        if self.brim_type == "auto_brim" {
-            out.push("no auto brim".into());
         }
         if !matches!(self.ironing_type.as_str(), "no ironing" | "") {
             out.push("no ironing".into());

@@ -189,7 +189,7 @@ fn word(line: &str, letter: char) -> Option<f64> {
 /// Walks every move between the printer's start and end G-code and checks what keeps a print safe: the nozzle
 /// prints only at its layer's height and never travels below it, stays on the plate, retracts and pushes back the
 /// filament in pairs, lifts by the z-hop in a spiral that stays on the plate, and every object's moves sit inside its
-/// skip labels. Returns the labels each layer printed.
+/// skip labels (a brim's outside them all, as Orca prints it). Returns the labels each layer printed.
 fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).expect("the start G-code's end");
     let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
@@ -199,6 +199,7 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     let mut label: Option<u32> = None;
     let mut layers: Vec<Vec<u32>> = Vec::new();
     let mut in_photo = false;
+    let mut feature = "";
     let r = s.z_hop / (2.0 * std::f64::consts::PI * s.travel_slope.to_radians().atan());
     for (n, line) in body.lines().enumerate() {
         let at = || format!("line {} of the body: {line}", n + 1);
@@ -210,6 +211,9 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
         }
         if in_photo {
             continue;
+        }
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
         }
         if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
             let h: f64 = h.parse().unwrap();
@@ -247,7 +251,11 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             if e > 0.0 && moves_xy {
                 assert!((nz - layer_z).abs() < 1e-6, "prints at the layer's height: {}", at());
                 assert!(pulled.abs() < 1e-4, "prints only with the filament pushed back: {}", at());
-                assert!(label.is_some(), "prints only inside an object's label: {}", at());
+                if feature == "Brim" {
+                    assert!(layers.len() == 1 && label.is_none(), "a brim prints first, outside the labels: {}", at());
+                } else {
+                    assert!(label.is_some(), "prints only inside an object's label: {}", at());
+                }
             } else if e != 0.0 {
                 pulled -= e;
                 assert!(pulled > -1e-4 && pulled < s.retract_length + 1e-4, "{pulled} mm pulled back: {}", at());
@@ -449,6 +457,87 @@ fn lightning_infill_holds_up_the_top_and_nothing_else() {
     };
     let share = sparse_volume(&lightning) / sparse_volume(&crosshatch);
     assert!(share > 0.05 && share < 0.4, "lightning takes {share:.2} of crosshatch's plastic");
+}
+
+/// The first layer's brim loops, as printed: each a run of extrusions, between travels.
+fn brim_loops(gcode: &str) -> Vec<Vec<[f64; 2]>> {
+    let first = gcode.split("; CHANGE_LAYER\n").nth(1).expect("a first layer");
+    let (mut x, mut y) = (f64::NAN, f64::NAN);
+    let mut feature = "";
+    let mut loops: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut extruding = false;
+    for line in first.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        }
+        let code = line.split(';').next().unwrap().trim();
+        if !code.starts_with("G1 ") {
+            continue;
+        }
+        let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+        let moved = nx != x || ny != y;
+        if moved && feature == "Brim" && word(code, 'E').is_some_and(|e| e > 0.0) {
+            if !extruding {
+                loops.push(vec![[x, y]]);
+            }
+            loops.last_mut().unwrap().push([nx, ny]);
+            extruding = true;
+        } else if moved {
+            extruding = false;
+        }
+        (x, y) = (nx, ny);
+    }
+    loops
+}
+
+#[test]
+fn a_tall_thin_model_gets_orcas_auto_brim_before_its_label() {
+    // A fin 4 × 20 mm and 40 mm tall bends easily across its short side: Orca's auto brim gives it 9.4 mm at the X2D's
+    // fastest speed (300 mm/s), which comes to 20 lines, 0.1 mm off the fin.
+    let fin = boxes_stl(&[([100., 100., 0.], [104., 120., 40.])]);
+    let settings = Settings::default();
+    let spacing = Settings::spacing(settings.first_layer_width, settings.first_layer_height);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "fin.stl", bytes: &fin }], &settings, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    check_moves(&gcode, &settings);
+    // First on the first layer, before the fin's label, and nowhere else.
+    let first = gcode.split("; CHANGE_LAYER\n").nth(1).unwrap();
+    let brim = first.find("; FEATURE: Brim\n").expect("a brim");
+    assert!(brim < first.find("; start printing object, unique label id: 1\n").unwrap());
+    assert_eq!(gcode.matches("; FEATURE: Brim\n").count(), 1);
+    let loops = brim_loops(&gcode);
+    assert_eq!(loops.len(), 20);
+    // From the outside in, a line apart: the outermost reaches the gap, the brim's width and half a line less out.
+    let left: Vec<f64> = loops.iter().map(|l| l.iter().map(|p| p[0]).fold(f64::MAX, f64::min)).collect();
+    let outermost = settings.brim_object_gap + 20.0 * spacing - spacing / 2.0;
+    assert!((left[0] - (100.0 - outermost)).abs() < 0.01, "{left:?}");
+    assert!(left.windows(2).all(|w| (w[1] - w[0] - spacing).abs() < 0.01), "{left:?}");
+    // Each loop stops the seam gap short of where it started.
+    for l in &loops {
+        let (a, b) = (l[0], l[l.len() - 1]);
+        let gap = (a[0] - b[0]).hypot(a[1] - b[1]);
+        assert!((gap - settings.seam_gap).abs() < 0.003, "{gap} mm between a loop's start and end");
+    }
+    let feature = |name: &str| out.stats.features[Role::ALL.iter().position(|r| r.feature() == name).unwrap()];
+    assert!(feature("Brim").volume > 0.0 && feature("Brim").time > 0.0);
+}
+
+#[test]
+fn a_brim_people_turn_on_rings_a_model_that_needs_none() {
+    // A 20 mm cube stands on its own: the auto brim leaves it be, and a 5 mm brim turned on is 10 lines.
+    let cube = cube_stl(20.0);
+    let slice_with = |brim: &str| {
+        let settings = Settings { brim_type: brim.into(), ..Settings::default() };
+        let out = slice(&[Input { name: "cube.stl", bytes: &cube }], &settings, &Options::default()).unwrap();
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        check_moves(&gcode, &settings);
+        brim_loops(&gcode).len()
+    };
+    assert_eq!(slice_with("auto_brim"), 0);
+    assert_eq!(slice_with("no_brim"), 0);
+    assert_eq!(slice_with("outer_only"), 10);
 }
 
 /// A slice setup made by the app's own `sliceSetup` from its slicing settings (src/shared/slicing/settings.ts), as

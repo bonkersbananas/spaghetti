@@ -4,6 +4,7 @@
 
 pub mod bambu;
 pub mod bridges;
+pub mod brim;
 pub mod config;
 pub mod fill;
 pub mod gcode;
@@ -220,11 +221,17 @@ impl Plate {
         let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
         let (slices, owners) = section::slice(&meshes, &layers, settings.resolution);
         let t2 = now();
-        let facts = first_layer_facts(&slices, &layers, settings);
         let mut objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
         if let Some(first) = slices.first() {
             first_layers(&mut objects, first, &owners[0]);
         }
+        // Each object's brim, round its first layer as sliced.
+        let heights: Vec<f64> = objects.iter().map(|o| o.max[2] - o.min[2]).collect();
+        let brims = match (slices.first(), owners.first()) {
+            (Some(first), Some(owners)) => brim::brims(first, owners, &heights, settings),
+            _ => brim::Brims::default(),
+        };
+        let facts = first_layer_facts(&slices, &layers, &brims, settings);
         // Each object's infill pattern is anchored at the middle of its bounding box, as Orca anchors it.
         let centres: Vec<(f64, f64)> = objects
             .iter()
@@ -240,7 +247,7 @@ impl Plate {
         // Each layer from its regions to its G-code in one go, so only the text stays.
         let texts = par::map_range(regions.len(), |i| {
             let lower = i.checked_sub(1).map(|j| &regions[j]);
-            let plan = plan::plan_layer(&regions[i], lower, i, &layers, &centres, settings);
+            let plan = plan::plan_layer(&regions[i], lower, i, &layers, &centres, &brims.loops, settings);
             gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))
         });
         drop(regions);
@@ -276,16 +283,27 @@ impl Plate {
 }
 
 /// What the printer's start G-code needs to know about the first layer, as Orca works it out: the extent of its
-/// outline grown by the skirt distance (Orca's first-layer hull takes in the skirt's, which it draws that far out
-/// even with no skirt loops), its area, the print's height and the plate.
-fn first_layer_facts(slices: &[geom::Shapes], layers: &section::Layers, s: &Settings) -> bambu::Facts {
+/// outline and brims grown by the skirt distance (Orca's first-layer hull takes in the skirt's, which it draws that
+/// far out even with no skirt loops), its area with the brims' lines, the print's height and the plate.
+fn first_layer_facts(
+    slices: &[geom::Shapes],
+    layers: &section::Layers,
+    brims: &brim::Brims,
+    s: &Settings,
+) -> bambu::Facts {
     let Some(first) = slices.first() else { return bambu::Facts::default() };
     let margin = s.skirt_distance;
-    let b = geom::bbox(first).map(|b| b.map(geom::unsc)).unwrap_or([0.0; 4]);
+    // The brims count as part of the first layer, as Orca counts them.
+    let b = [geom::bbox(first), geom::bbox(&brims.area)]
+        .into_iter()
+        .flatten()
+        .reduce(|a, b| [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])])
+        .map(|b| b.map(geom::unsc))
+        .unwrap_or([0.0; 4]);
     bambu::Facts {
         first_layer_min: [b[0] - margin, b[1] - margin],
         first_layer_max: [b[2] + margin, b[3] + margin],
-        first_layer_area: geom::area_mm2(first),
+        first_layer_area: geom::area_mm2(first) + brims.covered_mm2(s),
         top: layers.top.last().copied().unwrap_or(0.0),
         bed_type: s.bed_type.to_string(),
     }

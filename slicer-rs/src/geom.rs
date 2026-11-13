@@ -9,6 +9,7 @@ use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::core::simplify::Simplify;
 use i_overlay::core::single::SingleIntOverlay;
 use i_overlay::i_float::int::point::IntPoint;
+use i_overlay::mesh::int::arc::ArcOptions;
 use i_overlay::mesh::int::outline::offset::IntOutlineOffset;
 use i_overlay::mesh::int::style::{IntLineJoin, IntOutlineStyle};
 
@@ -113,6 +114,24 @@ pub fn offset_mitred(shapes: &Shapes, delta: f64, min_angle: f64) -> Shapes {
     };
     let style = IntOutlineStyle::new(d).line_join(join);
     shapes.outline(&style).unwrap_or_default()
+}
+
+/// `offset` with round corners, each arc within `tolerance` mm of the circle: Clipper's round joins with that arc
+/// tolerance (at most a quarter of the offset, as Clipper caps it).
+pub fn offset_round(shapes: &Shapes, delta: f64, tolerance: f64) -> Shapes {
+    let d = sc(delta);
+    if shapes.is_empty() {
+        return Vec::new();
+    }
+    if d == 0 {
+        return shapes.clone();
+    }
+    let r = delta.abs();
+    let y = tolerance.min(r * 0.25);
+    let step = 2.0 * (1.0 - y / r).acos();
+    let max_step = i_overlay::i_float::int::angle::Angle::from_radians(step).unwrap_or(ArcOptions::MAX_STEP);
+    let join = IntLineJoin::Round(ArcOptions { max_step, rotation_precision: 5 });
+    shapes.outline(&IntOutlineStyle::new(d).line_join(join)).unwrap_or_default()
 }
 
 /// `offset` with every corner bevelled: what Clipper's round joins come to at the coarse arc tolerance Orca grows

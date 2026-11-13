@@ -96,7 +96,8 @@ mod tests {
         let setup = read(
             r##"{"machine": {"curr_bed_type": "Cool Plate"},
                 "process": {"layer_height": "0.12", "wall_loops": "4", "sparse_infill_density": "25%",
-                            "sparse_infill_pattern": "gyroid", "print_settings_id": "0.12mm High Quality @BBL X2D"},
+                            "sparse_infill_pattern": "gyroid", "ironing_type": "top",
+                            "print_settings_id": "0.12mm High Quality @BBL X2D"},
                 "filaments": [{"filament_type": ["PETG"], "nozzle_temperature": ["255", "255", "255", "255"],
                                "nozzle_temperature_initial_layer": ["250", "250", "250", "250"],
                                "cool_plate_temp": ["70"], "cool_plate_temp_initial_layer": ["70"],
@@ -116,7 +117,7 @@ mod tests {
         assert_eq!(s.filament_tray, "");
         // What it doesn't print as asked, it says.
         assert_eq!(s.sparse_infill_pattern, "gyroid");
-        assert!(s.fallbacks().iter().any(|f| f == "no auto brim"), "{:?}", s.fallbacks());
+        assert!(s.fallbacks().iter().any(|f| f == "no ironing"), "{:?}", s.fallbacks());
         // Everything else is still the X2D's.
         assert_eq!(s.outer_wall_speed, 200.0);
     }
@@ -125,13 +126,18 @@ mod tests {
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
         assert_eq!(refused(r#"{"process": {"enable_support": "1"}}"#), Some(Error::Unsupported("supports")));
-        assert_eq!(refused(r#"{"process": {"brim_type": "outer_only"}}"#), Some(Error::Unsupported("a brim")));
+        assert_eq!(
+            refused(r#"{"process": {"brim_type": "brim_ears"}}"#),
+            Some(Error::Unsupported("this kind of brim"))
+        );
         assert_eq!(refused(r#"{"process": {"spiral_mode": "1"}}"#), Some(Error::Unsupported("spiral vase mode")));
         assert_eq!(refused(r#"{"filaments": [{}, {}]}"#), Some(Error::Unsupported("more than one filament")));
         assert_eq!(refused("not json"), Some(Error::Setup));
         assert_eq!(refused(r#"{"process": []}"#), Some(Error::Setup));
         assert_eq!(refused(r#"{"slicing": {"scale": 0}}"#), Some(Error::Setup));
-        // An auto brim and no brim slice (an auto brim as none, for now).
-        assert!(read(r#"{"process": {"brim_type": "no_brim"}}"#).is_ok());
+        // An auto brim, a brim people turn on and no brim slice.
+        for brim in ["auto_brim", "outer_only", "no_brim"] {
+            assert!(read(&format!(r#"{{"process": {{"brim_type": "{brim}"}}}}"#)).is_ok(), "{brim}");
+        }
     }
 }

@@ -76,13 +76,16 @@ const FILL_ORDER: [Role; 6] =
 /// Layer `i`'s extrusions in print order: the islands that print anything on Orca's tour of their outlines' middles
 /// (rounded to the millimetre), which starts next to the wipe tower's position, read as nanometres, so next to the
 /// plate's origin, and runs backwards so the layer ends there; an object can come round more than once. `centres` are
-/// the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored.
+/// the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored. On the
+/// first layer each object's `brims` (`brim.rs`) print just before it.
+#[allow(clippy::too_many_arguments)]
 pub fn plan_layer(
     r: &LayerRegions,
     lower: Option<&LayerRegions>,
     i: usize,
     layers: &Layers,
     centres: &[(f64, f64)],
+    brims: &[Vec<Contour>],
     s: &Settings,
 ) -> LayerPlan {
     let z = layers.top[i];
@@ -138,7 +141,118 @@ pub fn plan_layer(
         }
         paths.append(&mut per_island[k]);
     }
+    if i == 0 && brims.iter().any(|b| !b.is_empty()) {
+        paths = with_brims(paths, brims, h, s);
+    }
     LayerPlan { index: i, z, height: h, paths }
+}
+
+/// The first layer's paths with each object's brim loops just before its first path, as Orca prints an object's
+/// brim when it first comes to the object. Each loop starts at the point on it nearest where the nozzle is (the
+/// plate's origin for the layer's first, where Orca's writer reckons it is) and stops the seam gap short of that
+/// point, as Orca's `extrude_loop` splits and clips loops other than walls.
+fn with_brims(paths: Vec<Path>, brims: &[Vec<Contour>], h: f64, s: &Settings) -> Vec<Path> {
+    let (width, mm3_per_mm, speed) = flow(Role::Brim, true, h, s);
+    let speed = speed.min(s.speed_cap(mm3_per_mm));
+    let mut out = Vec::with_capacity(paths.len() + brims.iter().map(Vec::len).sum::<usize>());
+    let mut done = vec![false; brims.len()];
+    let mut at = geom::pt(0, 0);
+    for p in paths {
+        let o = p.object as usize;
+        if o < brims.len() && !done[o] {
+            done[o] = true;
+            for contour in &brims[o] {
+                let Some(points) = brim_loop(contour, at, s.seam_gap) else { continue };
+                at = points[points.len() - 1];
+                out.push(Path {
+                    role: Role::Brim,
+                    points,
+                    closed: true,
+                    width,
+                    mm3_per_mm,
+                    speed,
+                    accel: accel(Role::Brim, true, s),
+                    island: u32::MAX,
+                    object: p.object,
+                    parts: Vec::new(),
+                });
+            }
+        }
+        at = p.points[p.points.len() - 1];
+        out.push(p);
+    }
+    out
+}
+
+/// A loop from the point on it nearest `at` (on a segment if need be) round to that point, less `gap` mm at the
+/// end (Orca's `ExtrusionLoop::split_at` and `clip_end`); none if the loop is no longer than the gap.
+fn brim_loop(contour: &Contour, at: Pt, gap: f64) -> Option<Vec<Pt>> {
+    let n = contour.len();
+    if n < 2 {
+        return None;
+    }
+    // The first segment whose nearest point is nearest (Orca's `foot_pt`).
+    let mut best = (f64::INFINITY, 0usize, contour[0]);
+    for k in 0..n {
+        let f = foot(at, contour[k], contour[(k + 1) % n]);
+        let (dx, dy) = ((f.x - at.x) as f64, (f.y - at.y) as f64);
+        let d = dx * dx + dy * dy;
+        if d < best.0 {
+            best = (d, k, f);
+        }
+    }
+    let (_, k, f) = best;
+    let mut points = Vec::with_capacity(n + 2);
+    points.push(f);
+    for j in 1..=n {
+        let q = contour[(k + j) % n];
+        if q != points[points.len() - 1] {
+            points.push(q);
+        }
+    }
+    if f != points[points.len() - 1] {
+        points.push(f);
+    }
+    let gap = gap * geom::SCALE;
+    let length: f64 = points.windows(2).map(|w| geom::dist(w[0], w[1])).sum();
+    if length <= gap {
+        return None;
+    }
+    // Back from the end by the gap (Orca's `Polyline::clip_end`).
+    let mut left = gap;
+    while left > 0.0 && points.len() >= 2 {
+        let last = points.pop().unwrap_or(f);
+        let prev = points[points.len() - 1];
+        let l = geom::dist(last, prev);
+        if l > left {
+            let t = left / l;
+            let x = last.x as f64 + (prev.x - last.x) as f64 * t;
+            let y = last.y as f64 + (prev.y - last.y) as f64 * t;
+            points.push(geom::pt(x.round() as i32, y.round() as i32));
+            break;
+        }
+        left -= l;
+    }
+    (points.len() >= 2).then_some(points)
+}
+
+/// The point of segment a–b nearest p (Orca's `Point::projection_onto`).
+fn foot(p: Pt, a: Pt, b: Pt) -> Pt {
+    if a == b {
+        return a;
+    }
+    let (lx, ly) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+    let theta = ((b.x - p.x) as f64 * lx + (b.y - p.y) as f64 * ly) / (lx * lx + ly * ly);
+    if (0.0..=1.0).contains(&theta) {
+        let x = theta * a.x as f64 + (1.0 - theta) * b.x as f64;
+        let y = theta * a.y as f64 + (1.0 - theta) * b.y as f64;
+        return geom::pt(x.round() as i32, y.round() as i32);
+    }
+    let d2 = |q: Pt| {
+        let (dx, dy) = ((q.x - p.x) as f64, (q.y - p.y) as f64);
+        dx * dx + dy * dy
+    };
+    if d2(a) < d2(b) { a } else { b }
 }
 
 /// An infill extrusion collection, as Orca makes them: a fill region's lines, or one gap fill path. Fixed ones
@@ -684,6 +798,9 @@ fn simplify_thick(points: &[Pt], widths: &[f64], resolution: f64) -> (Vec<Pt>, V
 pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
     if first {
         let w = s.first_layer_width;
+        if role == Role::Brim {
+            return (w, Settings::mm3_per_mm(w, h) * s.brim_flow_ratio, s.first_layer_speed);
+        }
         let speed = if role.is_infill() { s.first_layer_infill_speed } else { s.first_layer_speed };
         return (w, Settings::mm3_per_mm(w, h), speed);
     }
@@ -700,6 +817,8 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
             return (w, mm3, if internal { s.internal_bridge_speed } else { s.bridge_speed });
         }
         Role::GapFill => (s.inner_wall_width, s.gap_infill_speed),
+        // Only the first layer has one.
+        Role::Brim => (s.first_layer_width, s.first_layer_speed),
         Role::OverhangWall => {
             // Orca's bridging flow for walls: a bridge line wide (else an inner wall's), round threads if bridges
             // are thick.
