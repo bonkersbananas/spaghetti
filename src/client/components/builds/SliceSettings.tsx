@@ -248,7 +248,8 @@ export function SlicingChoices({
     />
   );
   if (twoColumns) {
-    // A desktop panel: the phone's order down the first column, then the second; the licence, the files and More close the first.
+    // A desktop panel: the phone's order down the first column, then the second; More, the licence and the files close
+    // the first.
     return (
       <div className="flex flex-col gap-7">
         <div className="grid grid-cols-2 items-start gap-x-6">
@@ -256,9 +257,10 @@ export function SlicingChoices({
             {recipeGroup}
             {qualityGroup}
             {strengthGroup}
-            {/* The licence, the files and More fill the room under the strength, so nothing scrolls. */}
-            {after}
+            {/* More, the licence and the files fill the room under the strength, so nothing scrolls; as on a phone, the
+                line saying which slicer sliced it, and in how long, follows More's last choice, the slicer. */}
             {more}
+            {after}
           </div>
           <div className="flex min-w-0 flex-col gap-7">
             {supportsGroup}
@@ -750,13 +752,12 @@ export function SliceAbout({
       <p className="text-caption text-ink-faint">
         {made?.fallback ? (
           <>
-            Sliced in this browser by {name}
-            {took}: {fallbackWords(made.fallback)}. OrcaSlicer is free software under the AGPL.{" "}
+            Sliced in this browser{took} by {name}: {fallbackWords(made.fallback)}. OrcaSlicer is free software under
+            the AGPL.{" "}
           </>
         ) : (
           <>
-            Sliced in this browser by {name}
-            {took}, free software under the AGPL.{" "}
+            Sliced in this browser{took} by {name}, free software under the AGPL.{" "}
             {notes.map((note) => `${note.charAt(0).toUpperCase()}${note.slice(1)}. `).join("")}
           </>
         )}
@@ -868,7 +869,7 @@ export function WorkspaceSlicing({
   const reset = () => {
     const before = value;
     onChange(null);
-    if (before) toast.undo("Back to Spaghetti's defaults", { onUndo: () => onChange(before) });
+    if (before) toast.undo("Back to the usual settings", { onUndo: () => onChange(before) });
   };
   return (
     <div className="flex flex-col gap-7">
@@ -883,7 +884,7 @@ export function WorkspaceSlicing({
       {own && (
         <div className="-mt-3">
           <Button variant="quiet" size="sm" icon={UndoIcon} onClick={reset} className="-ml-3">
-            Back to Spaghetti's defaults
+            Back to the usual settings
           </Button>
         </div>
       )}

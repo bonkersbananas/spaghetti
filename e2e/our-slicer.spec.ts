@@ -81,7 +81,7 @@ test("a model picked for Spaghetti's own slicer is sliced by it in the browser, 
   expect(ours.settings.rust).toMatch(/^\d+$/);
   expect(ours.fallback).toBeUndefined();
   expect(ours.ms).toBeGreaterThan(0);
-  await expect(settings.getByText(/^Sliced in this browser by Spaghetti's own slicer in [\d.]+ s/)).toBeVisible();
+  await expect(settings.getByText(/^Sliced in this browser in [\d.]+ s by Spaghetti's own slicer/)).toBeVisible();
   await expect(settings.getByRole("link", { name: "Its source" })).toHaveAttribute(
     "href",
     /releases\/tag\/slicer-rs-v/,

@@ -166,9 +166,9 @@ export const SLICERS: readonly Choice<SlicerId>[] = [
   {
     id: "spaghetti",
     label: "Spaghetti's own",
-    effect: "quicker, and new: OrcaSlicer steps in for what it can't do yet",
+    effect: "quicker to slice; OrcaSlicer steps in for what it can't do yet",
   },
-  { id: "orca", label: "OrcaSlicer", effect: "slower, and slices everything" },
+  { id: "orca", label: "OrcaSlicer", effect: "slower to slice, and slices everything" },
 ];
 
 export const BRIMS: readonly Choice<Brim>[] = [

@@ -534,10 +534,11 @@ export function ModelCard({
   const again = state.kind === "sliced" && !!state.again;
   const busy = state.kind === "sliced" && (again || !!state.ahead);
   // Under the print: what the last change did, else who sliced it (and why OrcaSlicer's engine did, where it stepped
-  // in for ours: decision 0055), with the rest of how where no settings row says it.
+  // in for ours: decision 0055), with the rest of how where no settings row says it. Balanced, so a sentence that
+  // wraps on a phone doesn't leave a word or two alone.
   const line =
     slice && !compact ? (
-      <MetaList className="text-small text-ink-faint">
+      <MetaList className="text-small text-ink-faint text-balance">
         {change && !change.failed
           ? [changeSentence(change, changed)]
           : details

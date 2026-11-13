@@ -556,17 +556,18 @@ async function settleSliceSettings(page: Page) {
 
 /**
  * The fusilli knob's settings open, More open and Spaghetti's own slicer picked there (decision 0055), once ours has
- * sliced it again. Returns the Slicer group and the line saying who sliced it.
+ * sliced it again. Returns the Slicer group.
  */
 async function pickOurSlicer(page: Page) {
   const settings = await openSliceSettings(page);
   await settings.getByRole("button", { name: /^More/ }).click();
   const slicer = settings.getByRole("group", { name: "Slicer" });
   await slicer.getByRole("radio", { name: "Spaghetti's own" }).click();
-  const caption = settings.getByText(/^Sliced in this browser by Spaghetti's own slicer in/);
-  await caption.waitFor({ timeout: 90_000 });
+  await settings
+    .getByText(/^Sliced in this browser in [\d.]+ s by Spaghetti's own slicer/)
+    .waitFor({ timeout: 90_000 });
   await page.waitForTimeout(400);
-  return { slicer, caption };
+  return { slicer };
 }
 
 async function closeSliceSettings(page: Page) {
@@ -1940,31 +1941,13 @@ export const shots: Shot[] = [
     },
   },
   {
-    // More, at its end: which slicer slices it, Spaghetti's own picked and sliced by it (on a phone, under it, who
-    // sliced it and in how long; on desktop that line is higher up: slice-settings-ours).
+    // More, at its end: which slicer slices it, Spaghetti's own picked and sliced by it, and under it who sliced it
+    // and in how long.
     name: "slice-settings-slicer",
     path: "/ideas",
     prepare: async (page) => {
       const { slicer } = await pickOurSlicer(page);
       await slicer.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
-    },
-    beforeShot: settleSliceSettings,
-    cleanup: closeSliceSettings,
-  },
-  {
-    // The desktop panel once Spaghetti's own slicer has sliced the model: under the strength, who sliced it and in
-    // how long.
-    name: "slice-settings-ours",
-    path: "/ideas",
-    width: 1440,
-    prepare: async (page) => {
-      const { caption } = await pickOurSlicer(page);
-      // The panel from its top: the line is under the strength, More open below it.
-      await caption.evaluate((line) => {
-        for (let box = line.parentElement; box; box = box.parentElement) {
-          if (box.scrollHeight > box.clientHeight + 1) box.scrollTop = 0;
-        }
-      });
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
@@ -3497,14 +3480,14 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The defaults changed (Fine): saved, with the way back to Spaghetti's own beside the caption.
+    // The defaults changed (Fine): saved, with the way back to the usual settings beside the caption.
     name: "printer-slicing-own",
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
       const section = await openSlicingDefaults(page);
       await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
-      await section.getByRole("button", { name: "Back to Spaghetti's defaults" }).waitFor();
+      await section.getByRole("button", { name: "Back to the usual settings" }).waitFor();
       // "Saving…" fades out before "Saved" comes in, late under the shots' fixed clock: finish its fades as they come.
       await section.evaluate(
         (element) =>
@@ -3527,7 +3510,7 @@ export const shots: Shot[] = [
   },
   {
     // Which slicer slices new models (decision 0055), at the end of the defaults' More: Spaghetti's own picked, what
-    // it does, and the way back to Spaghetti's defaults.
+    // it does, and the way back to the usual settings.
     name: "printer-slicer",
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
@@ -3536,7 +3519,9 @@ export const shots: Shot[] = [
       await section.getByRole("button", { name: /^More/ }).click();
       const slicer = section.getByRole("group", { name: "Slicer" });
       await slicer.getByRole("radio", { name: "Spaghetti's own" }).click();
-      await section.getByRole("button", { name: "Back to Spaghetti's defaults" }).waitFor();
+      await section.getByRole("button", { name: "Back to the usual settings" }).waitFor();
+      // No hover left on the section's controls.
+      await page.mouse.move(0, 0);
       await section.evaluate(
         (element) =>
           new Promise<void>((resolve) => {
