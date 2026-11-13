@@ -9,6 +9,7 @@ import type { Db } from "../db/index.ts";
 import { amsSlots, attempts, bridge, bridgePairings, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { slicingDefaults } from "../slicing-schema.ts";
 import { disconnectBridge } from "./bridge.ts";
 import { upkeepRoutes } from "./upkeep.ts";
 
@@ -29,6 +30,8 @@ const setupSchema = z.object({
   amsUnits: z.number().int().min(0).max(X2D.maxAmsUnits).optional(),
   /** Days each material stays dry, whole: a material left out goes back to its starting value. */
   dryingDays: z.record(z.string().trim().toUpperCase().min(1).max(20), z.number().int().min(1).max(365)).optional(),
+  /** How a model nobody set up is sliced here (decision 0049), whole; null goes back to Spaghetti's own. */
+  slicing: slicingDefaults.nullable().optional(),
 });
 
 const setSlot = z.object({ spoolId: z.uuid().nullable() });
@@ -116,6 +119,11 @@ export const printerRoutes = new Hono<AppEnv>()
       ...((parsed.data.dryingDays ?? current.dryingDays) && {
         dryingDays: parsed.data.dryingDays ?? current.dryingDays,
       }),
+      ...(parsed.data.slicing === null
+        ? {}
+        : (parsed.data.slicing ?? current.slicing)
+          ? { slicing: parsed.data.slicing ?? current.slicing }
+          : {}),
     };
     await c.var.db.batch([
       c.var.db

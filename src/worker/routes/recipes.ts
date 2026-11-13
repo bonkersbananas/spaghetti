@@ -9,9 +9,10 @@ import {
   recipesFor,
   settingsMaterial,
 } from "../../shared/recipes.ts";
+import { recipeSlicingOf } from "../../shared/slicing/recipe.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { attempts, items, type RecipeRow, recipes, spools } from "../db/schema.ts";
+import { attemptFiles, attempts, items, type RecipeRow, recipes, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { attemptHits } from "./search.ts";
@@ -55,6 +56,7 @@ export async function toApiRecipes(db: Db, rows: RecipeRow[]): Promise<Recipe[]>
       material: row.material,
       finish: row.finish,
       settings: row.settings,
+      slicing: row.slicing ?? null,
       source: hit
         ? {
             attemptId: hit.attempt.id,
@@ -131,6 +133,14 @@ export const recipeRoutes = new Hono<AppEnv>()
       ? await db.select({ finish: spools.finish }).from(spools).where(eq(spools.id, spoolId)).get()
       : null;
 
+    // A model Spaghetti sliced keeps the slicing settings that worked, whole (decision 0049).
+    const file = await db
+      .select({ kind: attemptFiles.kind, slice: attemptFiles.slice })
+      .from(attemptFiles)
+      .where(eq(attemptFiles.attemptId, source.attempt.id))
+      .get();
+    const sliced = file?.kind === "model" && file.slice?.status === "sliced" ? file.slice.settings.slicing : undefined;
+
     const now = new Date();
     await db.batch([
       db
@@ -142,6 +152,7 @@ export const recipeRoutes = new Hono<AppEnv>()
           material,
           finish: spool?.finish?.trim() || null,
           settings: recipeSettings(source.attempt.settings),
+          slicing: sliced ? recipeSlicingOf(sliced) : null,
           sourceAttemptId: source.attempt.id,
           sourceItemId: source.attempt.itemId,
           createdBy: c.var.user.id,

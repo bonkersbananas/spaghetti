@@ -3,6 +3,7 @@ import { filamentOfSpool } from "@shared/slicing/pantry.ts";
 import {
   QUALITIES,
   type QualityId,
+  type SlicingDefaults,
   type SlicingSettings,
   STRENGTHS,
   SUPPORT_PLACEMENTS,
@@ -11,7 +12,7 @@ import type { FileSlice } from "@shared/slicing/types.ts";
 import type { SpoolLike } from "@shared/spools";
 import { useState } from "react";
 import { ModelCard, type ModelState, SliceResult } from "@/components/builds/ModelFile";
-import { SliceSettingsPanel } from "@/components/builds/SliceSettings";
+import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
@@ -81,6 +82,28 @@ const TOO_BIG: FileSlice = {
   volume: [256, 256, 261],
   fitScale: 78,
 };
+/** Two recipes to slice with: one that kept a slice's settings, one from a slicer's own file. */
+const RECIPES = [
+  {
+    id: "knobs",
+    name: "Fine knobs",
+    note: "Fine and tree supports where needed: the threads come out clean.",
+    material: "PLA",
+    finish: "basic",
+    settings: {},
+    slicing: { ...SETTINGS, filaments: [{ material: "PLA", finish: "basic" }] },
+    createdAt: 2,
+  },
+  {
+    id: "bins",
+    name: "PLA bins, fast and square",
+    note: "",
+    material: "PLA",
+    finish: null,
+    settings: { layerHeight: 0.24, wallLoops: 2, infillDensity: 10, brim: false },
+    createdAt: 1,
+  },
+];
 const CHANGE = { before: { minutes: 72, grams: 14 }, after: { minutes: 48, grams: 11.2 } };
 const noop = () => undefined;
 const PREFILL = { estimatedMinutes: 48, weightGrams: 11.2 };
@@ -112,6 +135,7 @@ const sliced = (more: Partial<Extract<ModelState, { kind: "sliced" }>> = {}): Mo
 export function SlicingSection() {
   const [quality, setQuality] = useState<QualityId>("fine");
   const [settings, setSettings] = useState(SETTINGS);
+  const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
   return (
     <Section
       id="slicing"
@@ -289,6 +313,7 @@ export function SlicingSection() {
               plates={["Textured PEI Plate", "Smooth PEI Plate"]}
               slice={SAMPLE_SLICE}
               scalable
+              recipes={RECIPES}
               sliced="#"
               result={<SliceResult state={sliced()} prefill={PREFILL} phone={false} />}
             />
@@ -310,6 +335,13 @@ export function SlicingSection() {
               onUndo={noop}
               phone={false}
             />
+          </Panel>
+          <Label>
+            The workspace's defaults, on the Printer page (live): how a model nobody set up prints, without what is each
+            model's
+          </Label>
+          <Panel className="max-w-md">
+            <WorkspaceSlicing value={defaults} onChange={(next) => setDefaults(next ?? undefined)} />
           </Panel>
           <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
           <div className="bg-lifted shadow-float w-full max-w-md rounded-lg p-4">

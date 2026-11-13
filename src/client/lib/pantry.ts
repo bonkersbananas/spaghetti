@@ -317,7 +317,13 @@ export async function savePrinterSetup(queryClient: QueryClient, changes: Update
     printer
       ? {
           ...printer,
-          setup: { ...printer.setup, ...changes, nozzles: { ...printer.setup.nozzles, ...changes.nozzles } },
+          setup: {
+            ...printer.setup,
+            ...changes,
+            nozzles: { ...printer.setup.nozzles, ...changes.nozzles },
+            // Null takes the workspace's slicing defaults away (Spaghetti's own again).
+            slicing: changes.slicing === undefined ? printer.setup.slicing : (changes.slicing ?? undefined),
+          },
         }
       : printer,
   );

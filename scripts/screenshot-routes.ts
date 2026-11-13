@@ -1449,6 +1449,18 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // Slicing with a recipe (decision 0049): what worked before, in one tap, and the model sliced again with it.
+    name: "slice-settings-recipe",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("button", { name: "PLA bins, fast and square" }).click();
+      await settings.getByRole("button", { name: "Undo" }).waitFor({ timeout: 90_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
     // More, open: how supports are built, the brim, walls and infill by number, the pattern, plate, nozzle and size.
     name: "slice-settings-more",
     path: "/ideas",
@@ -2934,9 +2946,21 @@ export const shots: Shot[] = [
     name: "printer",
     path: "/printer",
     fullPage: true,
-    // Upkeep loads once the page is idle: wait for its list, or the shot shows its skeleton.
+    // Upkeep and the slicing defaults load once the page is idle: wait for them, or the shot shows their skeletons.
     prepare: async (page) => {
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+      await page.locator("section[aria-labelledby=printer-slicing]").getByRole("group", { name: "Quality" }).waitFor();
+    },
+  },
+  {
+    // The workspace's slicing defaults (decision 0049): how a model nobody set up is sliced here, the same choices
+    // as a model's without what is each model's own.
+    name: "printer-slicing",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      await page.locator("section[aria-labelledby=printer-slicing]").getByRole("group", { name: "Quality" }).waitFor();
+      await page.waitForTimeout(300);
     },
   },
   // Upkeep: the list with its meters, and the Done sheet of the most due task.

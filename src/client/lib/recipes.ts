@@ -59,6 +59,8 @@ export async function saveRecipe(
     material,
     finish: spools?.find((spool) => spool.id === spoolId)?.finish?.trim() || null,
     settings: recipeSettings(source.settings),
+    // What its model was sliced with comes in the server's copy.
+    slicing: null,
     source: { attemptId: source.id, itemId: source.itemId, title: source.title, number: source.number, photo: null },
     createdBy: userId,
     createdAt: now,

@@ -10,7 +10,7 @@ import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
 import type { PriceSuggestion, ShoppingPrices, SuggestState } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
-import type { SlicingSettings } from "./slicing/settings.ts";
+import type { SlicingDefaults, SlicingSettings } from "./slicing/settings.ts";
 import type { FileKind, FileSlice, PreviousSlice } from "./slicing/types.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 import type { TwistChange, TwistSourceFields } from "./twists.ts";
@@ -533,6 +533,11 @@ export interface Recipe {
   /** The finish of the spool it was printed on ("silk", "matte"), if known. */
   finish: string | null;
   settings: AttemptSettings;
+  /**
+   * The slicing settings that worked, when the attempt's model was sliced by Spaghetti (decision 0049): what "Slice
+   * with a recipe" uses whole. Null for a recipe from a slicer's own file.
+   */
+  slicing: SlicingSettings | null;
   /** Null once the attempt or its build is deleted: the recipe stays. */
   source: RecipeSource | null;
   createdBy: string;
@@ -731,6 +736,8 @@ export interface UpdatePrinterRequest {
   amsUnits?: number;
   /** Days each material stays dry; sent whole, and a material not listed goes back to its starting value. */
   dryingDays?: Record<string, number>;
+  /** How a model nobody set up is sliced here (decision 0049), sent whole; null goes back to Spaghetti's own. */
+  slicing?: SlicingDefaults | null;
 }
 
 /** GET /api/printer: how the printer is set up, and what is loaded where (slot → spool id). */

@@ -11860,7 +11860,7 @@
       },
       "post": {
         "operationId": "postRecipes",
-        "summary": "Saves an attempt that worked as a recipe.",
+        "summary": "Saves an attempt that worked as a recipe: its settings, and when its model was sliced by Spaghetti, the slicing settings it was sliced with (`slicing`, the kind of filament and not the spool).",
         "description": "Needs the \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "recipes"
@@ -14560,7 +14560,7 @@
       },
       "put": {
         "operationId": "putPrinter",
-        "summary": "Changes the printer's setup (nozzles, plates); what isn't sent is kept.",
+        "summary": "Changes the printer's setup (nozzles, plates, AMS units, drying days, and `slicing`: how a model nobody set up is sliced here, null for Spaghetti's own); what isn't sent is kept.",
         "description": "Needs the \"printer\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "printer"
@@ -14637,6 +14637,16 @@
                       "minimum": 1,
                       "maximum": 365
                     }
+                  },
+                  "slicing": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/SlicingDefaults"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -18755,6 +18765,92 @@
         ],
         "additionalProperties": false,
         "description": "One person's reaction to an idea, build or comment."
+      },
+      "SlicingDefaults": {
+        "type": "object",
+        "properties": {
+          "layerHeight": {
+            "type": "number",
+            "minimum": 0.04,
+            "maximum": 0.56,
+            "description": "mm: Fine 0.12, Standard 0.20, Draft 0.24, Extra draft 0.28 for the 0.4 mm nozzle, which prints 0.08 to 0.28."
+          },
+          "walls": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "infill": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percent of the inside filled."
+          },
+          "pattern": {
+            "type": "string",
+            "enum": [
+              "crosshatch",
+              "gyroid",
+              "grid",
+              "cubic",
+              "honeycomb",
+              "lightning",
+              "zig-zag",
+              "line",
+              "triangles",
+              "tri-hexagon",
+              "adaptivecubic",
+              "quartercubic",
+              "supportcubic",
+              "alignedrectilinear",
+              "3dhoneycomb",
+              "hilbertcurve",
+              "archimedeanchords",
+              "octagramspiral",
+              "concentric",
+              "tpmsd"
+            ],
+            "description": "The sparse infill pattern, as OrcaSlicer names it."
+          },
+          "supports": {
+            "type": "string",
+            "enum": [
+              "off",
+              "where-needed",
+              "everywhere"
+            ],
+            "description": "where-needed: only under what would fall (floating parts, long ledges); everywhere: every steep overhang."
+          },
+          "supportStyle": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "tree-slim",
+              "tree-strong",
+              "tree-hybrid",
+              "normal",
+              "snug"
+            ]
+          },
+          "brim": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ]
+          }
+        },
+        "required": [
+          "layerHeight",
+          "walls",
+          "infill",
+          "pattern",
+          "supports",
+          "supportStyle",
+          "brim"
+        ],
+        "additionalProperties": false
       },
       "SlicingSettings": {
         "type": "object",

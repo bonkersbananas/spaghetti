@@ -21,6 +21,7 @@ const silk: Recipe = {
     bedTemperature: 60,
     brim: true,
   },
+  slicing: null,
   source: { attemptId: "a", itemId: "b", title: "Bath tugboat", number: 3, photo: null },
   createdBy: "a",
   createdAt: now,

@@ -3,6 +3,7 @@ import type { AttemptSettings } from "@shared/attempts";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
+import { recipesFor } from "@shared/slicing/recipe.ts";
 import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import { finishesOnComputer, problemSentence, sliceSummary, worthRetrying } from "@shared/slicing/words.ts";
@@ -20,6 +21,7 @@ import { PulseDot } from "@/components/ui/PulseDot";
 import type { AttemptFileView } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { fileThumbSrc } from "@/lib/previews";
+import { recipesQuery } from "@/lib/recipes-query";
 import type { SlicerFileDraft } from "@/lib/slicer-files";
 import {
   changeSlicing,
@@ -487,6 +489,8 @@ export default function ModelFileCard({
   const [sheet, setSheet] = useState(false);
   const { data: spools = [] } = useQuery(spoolsQuery);
   const { data: printer } = useQuery(printerQuery);
+  // Recipes to slice with, once the settings can open (decision 0049).
+  const { data: recipes = [] } = useQuery({ ...recipesQuery, enabled: !!owner });
   const setup = printer?.setup ?? DEFAULT_PRINTER;
   const defaults = useMemo(() => workshopDefaults({ spools, setup }), [spools, setup]);
   const state = modelState(file, job, change);
@@ -536,6 +540,7 @@ export default function ModelFileCard({
     plates: setup.plates,
     slice: file.slice,
     scalable: isStlName(file.name),
+    recipes: recipesFor(recipes, settings.filaments[0] ?? { material: "" }),
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
     result: <SliceResult state={state} thumbSrc={thumbSrc} prefill={prefill} phone={!isDesktop} {...actions} />,
   };

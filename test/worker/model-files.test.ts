@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentScope, NewTokenResponse } from "../../src/shared/agents.ts";
-import type { AttemptResponse, ItemFileResponse, ItemResponse } from "../../src/shared/api.ts";
+import type { AttemptResponse, ItemFileResponse, ItemResponse, RecipeResponse } from "../../src/shared/api.ts";
 import type { Change } from "../../src/shared/changes.ts";
 import { DEFAULT_SLICING } from "../../src/shared/slicing/defaults.ts";
 import type { SlicingSettings } from "../../src/shared/slicing/settings.ts";
@@ -438,6 +438,33 @@ describe("a model an attempt was printed from", () => {
     next.set("id", uuid());
     expect((await request(`/api/attempts/${attemptId}/file`, { method: "PUT", body: next, cookie })).status).toBe(201);
     expect(await env.PHOTOS.get(`files/${id}/sliced`)).toBeNull();
+  });
+});
+
+describe("a recipe from an attempt printed from a model", () => {
+  it("keeps the slicing settings that worked, the kind of filament and not the spool", async () => {
+    const item = await idea();
+    await request(`/api/items/${item.id}`, { method: "PATCH", cookie, json: { stage: "building" } });
+    const attemptId = uuid();
+    await request(`/api/items/${item.id}/attempts`, {
+      method: "POST",
+      cookie,
+      json: { id: attemptId, outcome: "success", settings: { filaments: [{ type: "PLA", colorName: "Orange" }] } },
+    });
+    const id = uuid();
+    const body = modelForm();
+    body.set("id", id);
+    await request(`/api/attempts/${attemptId}/file`, { method: "PUT", body, cookie });
+    await putSliced(id, slicedForm({ settings: { ...settings, layerHeight: 0.12, slicing: fine } }));
+    const saved = await request("/api/recipes", {
+      method: "POST",
+      cookie,
+      json: { id: uuid(), name: "Fine knobs", sourceAttemptId: attemptId },
+    });
+    expect(saved.status).toBe(201);
+    const { recipe } = await saved.json<RecipeResponse>();
+    const { spoolId: _spool, ...orange } = fine.filaments[0] as NonNullable<(typeof fine.filaments)[0]>;
+    expect(recipe.slicing).toEqual({ ...fine, filaments: [orange] });
   });
 });
 
