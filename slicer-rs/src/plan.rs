@@ -1,7 +1,7 @@
 //! Each layer's extrusions in Orca's print order: its islands on a tour that ends next to the plate's origin, each
 //! island's walls (around each hole and then the outline, the deepest loop first), then its infill and gap fill
 //! chained together as Orca chains them (`order.rs`). Outlines run counter-clockwise and holes clockwise, from the
-//! island's rear (a seam that lines up layer to layer). Widths, flows, speeds and accelerations are Orca's for the
+//! island's rear (a seam that lines up layer to layer), each stopping the seam gap short of where it started. Widths, flows, speeds and accelerations are Orca's for the
 //! role; speeds are capped by the filament's volumetric limit. Every path is simplified as Orca simplifies its paths
 //! (`geom::simplify_line`, to the profile's resolution, 0.04 mm for sparse infill). Walls and bridges then meet the
 //! layer below (`overhang.rs`): a wall's stretches beyond it print as overhang walls, and both slow down where they
@@ -213,27 +213,31 @@ fn brim_loop(contour: &Contour, at: Pt, gap: f64) -> Option<Vec<Pt>> {
     if f != points[points.len() - 1] {
         points.push(f);
     }
-    let gap = gap * geom::SCALE;
-    let length: f64 = points.windows(2).map(|w| geom::dist(w[0], w[1])).sum();
-    if length <= gap {
-        return None;
-    }
-    // Back from the end by the gap (Orca's `Polyline::clip_end`).
-    let mut left = gap;
+    clip_end(&mut points, &mut Vec::new(), gap).then_some(points)
+}
+
+/// Takes `gap` mm off the end of a loop, and off its segments' parts, so that it stops short of where it started
+/// rather than print over it (Orca's `ExtrusionLoop::clip_end`, by its seam gap); false if nothing is left of it.
+fn clip_end(points: &mut Vec<Pt>, parts: &mut Vec<Part>, gap: f64) -> bool {
+    let mut left = gap * geom::SCALE;
     while left > 0.0 && points.len() >= 2 {
-        let last = points.pop().unwrap_or(f);
-        let prev = points[points.len() - 1];
-        let l = geom::dist(last, prev);
+        let n = points.len();
+        let (a, b) = (points[n - 2], points[n - 1]);
+        let l = geom::dist(a, b);
         if l > left {
             let t = left / l;
-            let x = last.x as f64 + (prev.x - last.x) as f64 * t;
-            let y = last.y as f64 + (prev.y - last.y) as f64 * t;
-            points.push(geom::pt(x.round() as i32, y.round() as i32));
-            break;
+            let x = b.x as f64 + (a.x - b.x) as f64 * t;
+            let y = b.y as f64 + (a.y - b.y) as f64 * t;
+            points[n - 1] = geom::pt(x.round() as i32, y.round() as i32);
+            return true;
         }
         left -= l;
+        points.pop();
+        if !parts.is_empty() {
+            parts.pop();
+        }
     }
-    (points.len() >= 2).then_some(points)
+    points.len() >= 2
 }
 
 /// The point of segment a–b nearest p (Orca's `Point::projection_onto`).
@@ -289,10 +293,14 @@ fn island_paths(
     for (contour, depth, outline) in wall_order(walls, centre_pt) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
         let wall = path(role, seam_loop(contour, outline), true, island, first, h, s);
-        out.push(match below {
+        let mut wall = match below {
             Some(below) => below.wall(wall, overhang, s),
             None => wall,
-        });
+        };
+        // It stops the seam gap short of where it started, as Orca's walls do.
+        if clip_end(&mut wall.points, &mut wall.parts, s.seam_gap) {
+            out.push(wall);
+        }
     }
 
     // Gap fill along the middle of the gaps between walls, as wide as each gap is there: each path on its own.
@@ -968,5 +976,27 @@ mod tests {
         for &(contour, _, outline) in &order {
             assert_eq!(geom::area2(&seam_loop(contour, outline)) > 0, outline);
         }
+    }
+
+    #[test]
+    fn a_loop_stops_the_seam_gap_short_of_where_it_started() {
+        // A 10 mm square from its corner round to it again, its last side a slow overhang stretch.
+        let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
+        let start = points[0];
+        let slow = Part { overhang: true, speed: 10.0 };
+        let mut parts = vec![Part { overhang: false, speed: 200.0 }; 3];
+        parts.push(slow);
+        assert!(clip_end(&mut points, &mut parts, 0.04));
+        assert_eq!((points.len(), parts.len()), (5, 4));
+        assert!((geom::dist(points[4], start) / geom::SCALE - 0.04).abs() < 1e-3, "{:?}", points[4]);
+        assert_eq!(parts[3], slow);
+        // A gap past the last corner takes the last side and its part with it.
+        let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
+        let mut parts = vec![Part { overhang: false, speed: 200.0 }; 4];
+        assert!(clip_end(&mut points, &mut parts, 10.5));
+        assert_eq!((points.len(), parts.len()), (4, 3));
+        // One no longer than the gap is gone.
+        let mut points = seam_loop(&square(0.0, 0.0, 0.005, 0.005, false), true);
+        assert!(!clip_end(&mut points, &mut Vec::new(), 0.04));
     }
 }
