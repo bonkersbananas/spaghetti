@@ -359,7 +359,7 @@ function convexHull(points: Float64Array, tolerance: number): HullFace[] {
     },
     [0, 0, 0] as Vec3,
   );
-  let faces: HullFace[] = [
+  const initial: HullFace[] = [
     faceOf(p0, p1, p2, inside),
     faceOf(p0, p1, p3, inside),
     faceOf(p0, p2, p3, inside),
@@ -382,12 +382,27 @@ function convexHull(points: Float64Array, tolerance: number): HullFace[] {
     (function* () {
       for (let i = 0; i < n; i++) yield i;
     })(),
-    faces,
+    initial,
   );
+  // The live faces, and who owns each directed edge, so the faces a point sees are found by walking from one.
+  const alive = new Set<HullFace>();
+  const owner = new Map<number, HullFace>();
+  const edgeKey = (from: number, to: number) => from * n + to;
+  const edgesOf = (face: HullFace): Array<[number, number]> => [
+    [face.a, face.b],
+    [face.b, face.c],
+    [face.c, face.a],
+  ];
+  const add = (face: HullFace) => {
+    alive.add(face);
+    for (const [from, to] of edgesOf(face)) owner.set(edgeKey(from, to), face);
+  };
+  for (const face of initial) add(face);
+  const pending = initial.filter((face) => face.outside.length);
   const deadline = Date.now() + HULL_BUDGET_MS;
-  // Each pass takes the point furthest outside a face that still has some, and wraps the hull round it. A point
-  // inside the hull is never looked at again once the faces it was outside of are gone.
-  for (let next = faces.find((face) => face.outside.length); next; next = faces.find((face) => face.outside.length)) {
+  // Each pass takes the point furthest outside a face that still has some, and wraps the hull round it.
+  for (let next = pending.pop(); next; next = pending.pop()) {
+    if (!alive.has(next) || !next.outside.length) continue;
     if (Date.now() > deadline) return [];
     let far_ = next.outside[0] as number;
     let reach = -Infinity;
@@ -400,29 +415,40 @@ function convexHull(points: Float64Array, tolerance: number): HullFace[] {
     }
     used.add(far_);
     const q = at(far_);
-    const visible = faces.filter((face) => dot(face.normal, q) - face.offset > tolerance);
-    const kept = faces.filter((face) => !visible.includes(face));
-    // The horizon: edges of the visible faces that no other visible face walks the other way.
-    const edges = new Map<string, [number, number]>();
-    for (const face of visible) {
-      for (const [from, to] of [
-        [face.a, face.b],
-        [face.b, face.c],
-        [face.c, face.a],
-      ] as const) {
-        const back = `${to}:${from}`;
-        if (edges.has(back)) edges.delete(back);
-        else edges.set(`${from}:${to}`, [from, to]);
+    // The faces it sees: walk out from the face it is outside of.
+    const visible = new Set<HullFace>([next]);
+    const walk = [next];
+    for (let face = walk.pop(); face; face = walk.pop()) {
+      for (const [from, to] of edgesOf(face)) {
+        const across = owner.get(edgeKey(to, from));
+        if (across && !visible.has(across) && dot(across.normal, q) - across.offset > tolerance) {
+          visible.add(across);
+          walk.push(across);
+        }
       }
     }
-    const made: HullFace[] = [];
-    for (const [from, to] of edges.values()) made.push(faceOf(from, to, far_, inside));
-    spread(
-      visible.flatMap((face) => face.outside),
-      made,
-    );
-    faces = kept.concat(made);
+    // The horizon: edges of the visible faces whose neighbour isn't visible.
+    const horizon: Array<[number, number]> = [];
+    for (const face of visible) {
+      for (const [from, to] of edgesOf(face)) {
+        const across = owner.get(edgeKey(to, from));
+        if (!across || !visible.has(across)) horizon.push([from, to]);
+      }
+    }
+    const freed: number[] = [];
+    for (const face of visible) {
+      for (const [from, to] of edgesOf(face)) owner.delete(edgeKey(from, to));
+      alive.delete(face);
+      for (const i of face.outside) freed.push(i);
+    }
+    const made = horizon.map(([from, to]) => faceOf(from, to, far_, inside));
+    spread(freed, made);
+    for (const face of made) {
+      add(face);
+      if (face.outside.length) pending.push(face);
+    }
   }
+  const faces = [...alive];
   return faces;
 }
 

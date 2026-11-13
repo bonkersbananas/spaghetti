@@ -116,13 +116,17 @@ describe("restingFaces", () => {
     expect(faces.map((face) => Math.abs(face.down[2]))).toEqual([1, 1].map((v) => expect.closeTo(v, 2)));
   });
 
-  it("finds the hull of a smooth, finely meshed model quickly, and no flat face on it", () => {
+  it("finds the hull of a smooth, finely meshed model quickly, and its flat cut", () => {
     const rings = 80;
     const around = 120;
     const at = (i: number, j: number) => {
       const theta = (Math.PI * i) / rings;
       const phi = (2 * Math.PI * j) / around;
-      return [30 * Math.sin(theta) * Math.cos(phi), 30 * Math.sin(theta) * Math.sin(phi), 30 * Math.cos(theta)];
+      return [
+        30 * Math.sin(theta) * Math.cos(phi),
+        30 * Math.sin(theta) * Math.sin(phi),
+        Math.max(-20, 30 * Math.cos(theta)),
+      ];
     };
     const out: number[] = [];
     for (let i = 0; i < rings; i++) {
@@ -131,8 +135,11 @@ describe("restingFaces", () => {
       }
     }
     const started = Date.now();
-    expect(restingFaces({ positions: Float32Array.from(out) })).toEqual([]);
-    expect(Date.now() - started).toBeLessThan(4000);
+    // The sphere is cut flat at the bottom: that disc is the one face it rests on. (A search that gave up would find none.)
+    const faces = restingFaces({ positions: Float32Array.from(out) });
+    expect(faces).toHaveLength(1);
+    expect(near(faces[0]?.down ?? [], [0, 0, -1])).toBe(true);
+    expect(Date.now() - started).toBeLessThan(2500);
   });
 
   it("finds none in a mesh without volume", () => {
