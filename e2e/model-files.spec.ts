@@ -34,11 +34,10 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText("cube.stl")).toBeVisible();
   const open = files.getByRole("button", { name: "Slice with…" });
-  await expect(open).toBeVisible({ timeout: SLICED });
-  // The card leads with the print, not the file, and says how it was sliced.
+  // Sliced: the card says how (each piece of the line carries its dot: they are matched at their end), and leads
+  // with the print, not the file. ("Slice with…" is there while it slices too.)
+  await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
   await expect(files.getByText(/^About \d+ min$/)).toBeVisible();
-  // (Each piece of the line carries its dot: they are matched at their end.)
-  await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible();
   await expect(files.getByText(/Standard$/)).toBeVisible();
 
   // It is on the server: after a reload it is still sliced. With no photo, its plate picture is the idea's cover.
@@ -98,8 +97,7 @@ test("a model too big for the plate says so, and is sliced scaled to fit", async
   });
   await files.getByRole("button", { name: "Scale to 61% and slice" }).click();
   // Sliced at that size, which the model keeps: its line says so.
-  await expect(files.getByRole("button", { name: "Slice with…" })).toBeVisible({ timeout: SLICED });
-  await expect(files.getByText(/61%$/)).toBeVisible();
+  await expect(files.getByText(/61%$/)).toBeVisible({ timeout: SLICED });
   // The original stays as it was.
   await expect(files.getByText("big.stl")).toBeVisible();
 });
