@@ -164,7 +164,11 @@ function Search() {
     const common = {
       terms: shownTerms,
       selected: active === i,
-      onHover: () => setActive(i),
+      // Only a mouse moves the highlight: a finger landing on a result (to scroll) must not.
+      onHover: (event?: { pointerType?: string }) => {
+        if (event?.pointerType && event.pointerType !== "mouse") return;
+        setActive(i);
+      },
       onOpen: remember,
       ref: (el: HTMLElement | null) => {
         refs.current[i] = el;

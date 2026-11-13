@@ -13,6 +13,7 @@ import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/per
 import { isBackMove, trackMoves } from "./lib/previous-path";
 import { RouterError } from "./lib/router-error";
 import { initTheme } from "./lib/theme";
+import { followTouchPress } from "./lib/touch-press";
 import { trackVisibleViewport } from "./lib/viewport";
 import { warmPhotosFor } from "./lib/warm-photos";
 import { routeTree } from "./routeTree.gen";
@@ -60,6 +61,7 @@ addEventListener("vite:preloadError", () => void import("./lib/stale-build").the
 initTheme();
 trackVisibleViewport();
 stopPageZoom();
+followTouchPress();
 followTextSize();
 registerServiceWorker();
 

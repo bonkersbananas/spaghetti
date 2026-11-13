@@ -15,7 +15,7 @@ const variants: Record<ButtonVariant, string> = {
   // on `shadow-float`, so it doesn't read as another row. Pill-shaped whatever the size.
   floating: "bg-lifted text-ink shadow-float hover:shadow-raised disabled:text-ink-ghost",
   danger:
-    "press-tomato active:text-on-accent data-[pressed]:text-on-accent bg-tomato-soft text-tomato-ink hover:bg-tomato hover:text-on-accent",
+    "press-tomato pointer-fine:active:text-on-accent data-[pressed]:text-on-accent bg-tomato-soft text-tomato-ink hover:bg-tomato hover:text-on-accent",
 };
 
 const sizes: Record<ButtonSize, string> = {

@@ -14,7 +14,7 @@ function Tab({ to, label, icon: Icon }: Pick<Section, "to" | "label" | "icon">) 
       {({ isActive }) => (
         <>
           {/* The held highlight: a soft round behind the icon. */}
-          <span className="group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-7 w-12 items-center justify-center">
+          <span className="pointer-fine:group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-7 w-12 items-center justify-center">
             <Icon size={24} weight={isActive ? "fill" : "regular"} aria-hidden />
           </span>
           <span className="text-caption font-semibold">{label}</span>
