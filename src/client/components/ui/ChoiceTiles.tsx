@@ -94,7 +94,7 @@ export function ChoiceTiles<T extends string>({
               key={option.value}
               className={cn(
                 "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg text-center",
-                dense ? "px-1 py-2" : "px-2 py-2.5",
+                dense ? "px-0.5 py-2" : "px-2 py-2.5",
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
                 layout === "row" && "w-28 shrink-0 snap-start",
                 selected
@@ -124,7 +124,10 @@ export function ChoiceTiles<T extends string>({
                 </span>
               )}
               <span
-                className={cn("line-clamp-2 w-full font-semibold text-balance", dense ? "text-caption" : "text-small")}
+                className={cn(
+                  "line-clamp-2 w-full font-semibold text-balance",
+                  dense ? "text-caption tracking-tight" : "text-small",
+                )}
               >
                 {option.label}
               </span>

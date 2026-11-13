@@ -247,11 +247,13 @@ export function SlicingChoices({
     // A desktop panel: the phone's order down the first column, then the second, and More with the licence under both.
     return (
       <div className="flex flex-col gap-7">
-        <div className="grid grid-cols-2 items-start gap-x-8">
+        <div className="grid grid-cols-2 items-start gap-x-6">
           <div className="flex min-w-0 flex-col gap-7">
             {recipeGroup}
             {qualityGroup}
             {strengthGroup}
+            {/* The licence and the files fill the room under the strength, so nothing scrolls. */}
+            {after}
           </div>
           <div className="flex min-w-0 flex-col gap-7">
             {supportsGroup}
@@ -261,7 +263,6 @@ export function SlicingChoices({
           </div>
         </div>
         {more}
-        {after}
       </div>
     );
   }
