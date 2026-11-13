@@ -47,15 +47,8 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
     let offset_x = big as f64 / 2.0 - (min_x + max_x) / 2.0 * scale;
     let offset_y = big as f64 / 2.0 + (min_y + max_y) / 2.0 * scale;
 
-    // Each vertex once to the screen, and each triangle's colour and screen box once.
-    struct Tri {
-        p: [[f32; 3]; 3],
-        area: f32,
-        colour: u32,
-        y0: u16,
-        y1: u16,
-    }
-    let screens: Vec<Vec<[f64; 3]>> = meshes
+    // Each vertex once to the screen. Triangles are numbered across all meshes, in order.
+    let screens: Vec<Vec<[f32; 3]>> = meshes
         .iter()
         .map(|mesh| {
             mesh.vertices
@@ -63,27 +56,85 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
                 .map(|v| {
                     let (x, y, z) = (v[0] as f64, v[1] as f64, v[2] as f64);
                     [
-                        offset_x + (x * right[0] + y * right[1]) * scale,
-                        offset_y - (x * up[0] + y * up[1] + z * up[2]) * scale,
-                        x * forward[0] + y * forward[1] + z * forward[2],
+                        (offset_x + (x * right[0] + y * right[1]) * scale) as f32,
+                        (offset_y - (x * up[0] + y * up[1] + z * up[2]) * scale) as f32,
+                        (x * forward[0] + y * forward[1] + z * forward[2]) as f32,
                     ]
                 })
                 .collect()
         })
         .collect();
-    // Shade and place the triangles in chunks (in parallel where there are threads).
+    let mut first = vec![0usize; meshes.len() + 1];
+    for (m, mesh) in meshes.iter().enumerate() {
+        first[m + 1] = first[m] + mesh.triangles.len();
+    }
+    let corners = |i: usize, m: usize| {
+        let t = meshes[m].triangles[i - first[m]];
+        t.map(|v| screens[m][v as usize].map(f64::from))
+    };
+
+    // The bands of rows each triangle covers (none for one seen edge on or off the picture), in chunks, in
+    // parallel where there are threads. Only these few bytes a triangle are kept: a band shades and draws its
+    // triangles itself, so a plate of millions of triangles needs no copy of them.
+    const BAND: usize = 32;
     const CHUNK: usize = 16384;
-    let chunks: Vec<(usize, usize)> = meshes
-        .iter()
-        .enumerate()
-        .flat_map(|(m, mesh)| (0..mesh.triangles.len().div_ceil(CHUNK)).map(move |c| (m, c * CHUNK)))
-        .collect();
-    let prepared: Vec<Vec<Tri>> = crate::par::map_range(chunks.len(), |k| {
-        let (m, from) = chunks[k];
-        let (mesh, screen) = (&meshes[m], &screens[m]);
-        let mut out = Vec::with_capacity(CHUNK);
-        for t in &mesh.triangles[from..(from + CHUNK).min(mesh.triangles.len())] {
-            let [a, b, c] = t.map(|i| mesh.vertices[i as usize]);
+    const NONE: u32 = u32::MAX;
+    let total = first[meshes.len()];
+    let spans: Vec<Vec<u32>> = crate::par::map_range(total.div_ceil(CHUNK), |k| {
+        let mut m = first.partition_point(|&f| f <= k * CHUNK) - 1;
+        (k * CHUNK..((k + 1) * CHUNK).min(total))
+            .map(|i| {
+                while i >= first[m + 1] {
+                    m += 1;
+                }
+                let p = corners(i, m);
+                let area = (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]) - (p[1][1] - p[0][1]) * (p[2][0] - p[0][0]);
+                let top = p[0][1].min(p[1][1]).min(p[2][1]).floor();
+                let bottom = p[0][1].max(p[1][1]).max(p[2][1]).ceil();
+                if area == 0.0 || bottom < 0.0 || top > (big - 1) as f64 {
+                    return NONE;
+                }
+                let (y0, y1) = (top.max(0.0) as usize / BAND, (bottom as usize).min(big - 1) / BAND);
+                ((y0 as u32) << 16) | y1 as u32
+            })
+            .collect()
+    });
+    let bands = big.div_ceil(BAND);
+    let mut starts = vec![0usize; bands + 1];
+    for &span in spans.iter().flatten().filter(|&&s| s != NONE) {
+        for b in (span >> 16) as usize..=(span & 0xffff) as usize {
+            starts[b + 1] += 1;
+        }
+    }
+    for b in 0..bands {
+        starts[b + 1] += starts[b];
+    }
+    let mut fill_at = starts.clone();
+    let mut binned = vec![0u32; starts[bands]];
+    for (i, &span) in spans.iter().flatten().enumerate() {
+        if span != NONE {
+            for b in (span >> 16) as usize..=(span & 0xffff) as usize {
+                binned[fill_at[b]] = i as u32;
+                fill_at[b] += 1;
+            }
+        }
+    }
+    drop(spans);
+
+    let drawn: Vec<(Vec<f32>, Vec<u32>)> = crate::par::map_range(bands, |band| {
+        let (r0, r1) = (band * BAND, ((band + 1) * BAND).min(big) - 1);
+        let rows = r1 - r0 + 1;
+        let mut depth = vec![f32::INFINITY; rows * big];
+        let mut colours = vec![0u32; rows * big];
+        let mut m = 0;
+        // A band's triangles come in order, so the mesh each is in only moves forward.
+        for &i in &binned[starts[band]..starts[band + 1]] {
+            let i = i as usize;
+            while i >= first[m + 1] {
+                m += 1;
+            }
+            let mesh = &meshes[m];
+            let [a, b, c] = mesh.triangles[i - first[m]].map(|v| mesh.vertices[v as usize]);
             let u = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
             let w = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
             let mut n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
@@ -102,64 +153,22 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
             let shade = lambert.min(1.08);
             let channel = |v: u8| ((v as f64 * shade).round().min(255.0)) as u32;
             let colour = (channel(base[0]) << 16) | (channel(base[1]) << 8) | channel(base[2]);
-            let p = t.map(|i| screen[i as usize]);
-            let area = (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]) - (p[1][1] - p[0][1]) * (p[2][0] - p[0][0]);
-            let top = p[0][1].min(p[1][1]).min(p[2][1]).floor();
-            let bottom = p[0][1].max(p[1][1]).max(p[2][1]).ceil();
-            if area == 0.0 || bottom < 0.0 || top > (big - 1) as f64 {
-                continue;
-            }
-            out.push(Tri {
-                p: p.map(|q| q.map(|v| v as f32)),
-                area: area as f32,
-                colour,
-                y0: top.max(0.0) as u16,
-                y1: (bottom as usize).min(big - 1) as u16,
-            });
-        }
-        out
-    });
-    let tris: Vec<Tri> = prepared.into_iter().flatten().collect();
 
-    // Bands of rows, each drawn on its own (in parallel where there are threads).
-    const BAND: usize = 32;
-    let bands = big.div_ceil(BAND);
-    let mut starts = vec![0usize; bands + 1];
-    for t in &tris {
-        for b in t.y0 as usize / BAND..=t.y1 as usize / BAND {
-            starts[b + 1] += 1;
-        }
-    }
-    for b in 0..bands {
-        starts[b + 1] += starts[b];
-    }
-    let mut fill_at = starts.clone();
-    let mut binned = vec![0u32; starts[bands]];
-    for (i, t) in tris.iter().enumerate() {
-        for b in t.y0 as usize / BAND..=t.y1 as usize / BAND {
-            binned[fill_at[b]] = i as u32;
-            fill_at[b] += 1;
-        }
-    }
-    let drawn: Vec<(Vec<f32>, Vec<u32>)> = crate::par::map_range(bands, |band| {
-        let (r0, r1) = (band * BAND, ((band + 1) * BAND).min(big) - 1);
-        let rows = r1 - r0 + 1;
-        let mut depth = vec![f32::INFINITY; rows * big];
-        let mut colours = vec![0u32; rows * big];
-        for &i in &binned[starts[band]..starts[band + 1]] {
-            let t = &tris[i as usize];
-            let [p0, p1, p2] = t.p.map(|q| q.map(f64::from));
+            let [p0, p1, p2] = corners(i, m);
+            let area = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
+            let y0 = (p0[1].min(p1[1]).min(p2[1]).floor().max(0.0) as usize).max(r0);
+            let y1 = (p0[1].max(p1[1]).max(p2[1]).ceil() as usize).min(r1);
             let x0 = p0[0].min(p1[0]).min(p2[0]).floor().max(0.0) as usize;
             let x1 = (p0[0].max(p1[0]).max(p2[0]).ceil() as isize).min(big as isize - 1);
             if x1 < 0 {
                 continue;
             }
             // The barycentric weights are linear across a row: step them instead of solving each pixel.
-            let inv = 1.0 / t.area as f64;
+            let inv = 1.0 / area;
             let (d0, d1) = ((p1[1] - p2[1]) * inv, (p2[1] - p0[1]) * inv);
             let (z0, z1, z2) = (p0[2] - p2[2], p1[2] - p2[2], p2[2]);
             let sx0 = x0 as f64 + 0.5;
-            for py in (t.y0 as usize).max(r0)..=(t.y1 as usize).min(r1) {
+            for py in y0..=y1 {
                 let sy = py as f64 + 0.5;
                 let mut w0 = ((p1[0] - sx0) * (p2[1] - sy) - (p1[1] - sy) * (p2[0] - sx0)) * inv;
                 let mut w1 = ((p2[0] - sx0) * (p0[1] - sy) - (p2[1] - sy) * (p0[0] - sx0)) * inv;
@@ -170,7 +179,7 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
                         let at = row + px;
                         if z < depth[at] {
                             depth[at] = z;
-                            colours[at] = t.colour;
+                            colours[at] = colour;
                         }
                     }
                     w0 += d0;

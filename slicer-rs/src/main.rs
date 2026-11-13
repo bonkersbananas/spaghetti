@@ -1,6 +1,6 @@
 //! The command line: slices STL and 3MF files into a `.gcode.3mf` with the app's default settings.
 
-use spaghetti_slicer::{Input, Options, Settings, gcode};
+use spaghetti_slicer::{Input, Options, Plate, Settings, gcode};
 use std::process::ExitCode;
 
 const USAGE: &str = "Usage: spaghetti-slicer [options] <model.stl|model.3mf>...
@@ -71,20 +71,24 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let mut files = Vec::new();
+    let settings = Settings::default();
+    let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail };
+    // One file at a time: each file's bytes go once it is read.
+    let mut plate = Plate::default();
     for path in &args.inputs {
-        match std::fs::read(path) {
-            Ok(bytes) => files.push((path.clone(), bytes)),
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
             Err(e) => {
                 eprintln!("can't read {path}: {e}");
                 return ExitCode::FAILURE;
             }
+        };
+        if let Err(e) = plate.add(&Input { name: path, bytes: &bytes }) {
+            eprintln!("can't slice {path}: {e}");
+            return ExitCode::FAILURE;
         }
     }
-    let inputs: Vec<Input> = files.iter().map(|(name, bytes)| Input { name, bytes }).collect();
-    let settings = Settings::default();
-    let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail };
-    let out = match spaghetti_slicer::slice(&inputs, &settings, &options) {
+    let out = match plate.slice(&settings, &options) {
         Ok(out) => out,
         Err(e) => {
             eprintln!("can't slice: {e}");

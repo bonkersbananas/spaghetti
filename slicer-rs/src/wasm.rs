@@ -1,11 +1,9 @@
-//! The WebAssembly entry points: a plain C ABI, no bindings. The host copies its input into memory from `alloc`,
-//! calls `slice`, then reads the `.gcode.3mf` and a JSON summary from `output_ptr`/`output_len` and
-//! `summary_ptr`/`summary_len`. It provides one import, `env.now_ms`, a clock in milliseconds.
-//!
-//! The input: a little-endian u32 count of files, then per file a u32 name length, the name (UTF-8), a u32 data
-//! length and the data. Flags: bit 0 keeps the objects where the files put them; bit 1 leaves out the picture.
+//! The WebAssembly entry points: a plain C ABI, no bindings. For each model file the host copies its name (UTF-8) and
+//! its bytes into memory from `alloc`, calls `add` and frees them with `dealloc`; then it calls `slice` and reads the
+//! `.gcode.3mf` and a JSON summary from `output_ptr`/`output_len` and `summary_ptr`/`summary_len`. It provides one
+//! import, `env.now_ms`, a clock in milliseconds.
 
-use crate::{Input, Options, Settings};
+use crate::{Error, Input, Options, Plate, Settings};
 use std::cell::RefCell;
 
 #[link(wasm_import_module = "env")]
@@ -41,6 +39,7 @@ unsafe extern "Rust" fn __getrandom_v03_custom(dest: *mut u8, len: usize) -> Res
 }
 
 thread_local! {
+    static PLATE: RefCell<Plate> = RefCell::new(Plate::default());
     static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static SUMMARY: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
@@ -64,42 +63,40 @@ pub unsafe extern "C" fn dealloc(ptr: *mut u8, len: usize) {
     unsafe { drop(Vec::from_raw_parts(ptr, 0, len)) };
 }
 
-fn read_u32(bytes: &[u8], at: &mut usize) -> Option<usize> {
-    let v = u32::from_le_bytes(bytes.get(*at..*at + 4)?.try_into().ok()?) as usize;
-    *at += 4;
-    Some(v)
-}
-
-fn files(bytes: &[u8]) -> Option<Vec<(&str, &[u8])>> {
-    let mut at = 0;
-    let count = read_u32(bytes, &mut at)?;
-    let mut out = Vec::with_capacity(count.min(1024));
-    for _ in 0..count {
-        let n = read_u32(bytes, &mut at)?;
-        let name = std::str::from_utf8(bytes.get(at..at + n)?).ok()?;
-        at += n;
-        let d = read_u32(bytes, &mut at)?;
-        let data = bytes.get(at..at + d)?;
-        at += d;
-        out.push((name, data));
+/// An error as a number for the host: 1 unreadable, 2 no model, 3 too big, 4 too tall, 5 too many (and 6 for a name
+/// that isn't UTF-8).
+fn code(e: Error) -> u32 {
+    match e {
+        Error::Unreadable => 1,
+        Error::NoModel => 2,
+        Error::TooBig => 3,
+        Error::TooTall => 4,
+        Error::TooMany => 5,
     }
-    Some(out)
 }
 
-/// Slices the files at `ptr` (see the module's notes). Returns 0 when it made a file, else an error code:
-/// 1 unreadable, 2 no model, 3 too big, 4 too tall, 5 too many, 6 a malformed input.
+/// Reads one model file onto the plate: its name at `name` and its bytes at `data`, written by the host after
+/// `alloc`. Returns 0, or an error code (see `code`). The host can free both once this returns.
 ///
 /// # Safety
-/// `ptr` must point at `len` bytes the host wrote after `alloc`.
+/// `name` and `data` must point at `name_len` and `data_len` bytes the host wrote after `alloc`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn slice(ptr: *const u8, len: usize, flags: u32) -> u32 {
-    // SAFETY: the host wrote `len` bytes at `ptr`.
-    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
-    let Some(list) = files(bytes) else { return 6 };
-    let inputs: Vec<Input> = list.iter().map(|(name, bytes)| Input { name, bytes }).collect();
+pub unsafe extern "C" fn add(name: *const u8, name_len: usize, data: *const u8, data_len: usize) -> u32 {
+    // SAFETY: the host wrote `name_len` bytes at `name`.
+    let Ok(name) = std::str::from_utf8(unsafe { std::slice::from_raw_parts(name, name_len) }) else { return 6 };
+    // SAFETY: the host wrote `data_len` bytes at `data`.
+    let bytes = unsafe { std::slice::from_raw_parts(data, data_len) };
+    PLATE.with(|p| p.borrow_mut().add(&Input { name, bytes })).map_or_else(code, |()| 0)
+}
+
+/// Slices the models added since the last `slice` or `clear`. Flags: bit 0 keeps the objects where the files put
+/// them; bit 1 leaves out the picture. Returns 0 when it made a file, else an error code (see `code`).
+#[unsafe(no_mangle)]
+pub extern "C" fn slice(flags: u32) -> u32 {
+    let plate = PLATE.with(|p| std::mem::take(&mut *p.borrow_mut()));
     let settings = Settings::default();
     let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0 };
-    match crate::slice(&inputs, &settings, &options) {
+    match plate.slice(&settings, &options) {
         Ok(out) => {
             let t = &out.timings;
             let summary = format!(
@@ -120,13 +117,7 @@ pub unsafe extern "C" fn slice(ptr: *const u8, len: usize, flags: u32) -> u32 {
             SUMMARY.with(|s| *s.borrow_mut() = summary.into_bytes());
             0
         }
-        Err(e) => match e {
-            crate::Error::Unreadable => 1,
-            crate::Error::NoModel => 2,
-            crate::Error::TooBig => 3,
-            crate::Error::TooTall => 4,
-            crate::Error::TooMany => 5,
-        },
+        Err(e) => code(e),
     }
 }
 
@@ -150,9 +141,10 @@ pub extern "C" fn summary_len() -> usize {
     SUMMARY.with(|s| s.borrow().len())
 }
 
-/// Frees the last result.
+/// Frees the last result, and any models added but not sliced.
 #[unsafe(no_mangle)]
 pub extern "C" fn clear() {
+    PLATE.with(|p| *p.borrow_mut() = Plate::default());
     OUTPUT.with(|o| *o.borrow_mut() = Vec::new());
     SUMMARY.with(|s| *s.borrow_mut() = Vec::new());
 }

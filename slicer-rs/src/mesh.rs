@@ -23,17 +23,20 @@ pub struct Bounds {
 impl Mesh {
     /// Builds a mesh from a triangle soup (nine floats a triangle), welding corners that are exactly equal.
     pub fn from_soup(name: &str, soup: &[f32]) -> Mesh {
-        let count = soup.len() / 9;
+        Mesh::weld(name, soup.len() / 9, |t, k| [soup[t * 9 + k * 3], soup[t * 9 + k * 3 + 1], soup[t * 9 + k * 3 + 2]])
+    }
+
+    /// `count` triangles, corner `k` of triangle `t` at `corner(t, k)`, with corners at the same spot joined into
+    /// one vertex (exact float bits; -0 is 0) and triangles that collapse dropped.
+    fn weld(name: &str, count: usize, corner: impl Fn(usize, usize) -> [f32; 3]) -> Mesh {
         let mut index: HashMap<[u32; 3], u32, BuildHasherDefault<FastHasher>> =
-            HashMap::with_capacity_and_hasher(count * 3 / 2 + 16, Default::default());
+            HashMap::with_capacity_and_hasher(count / 2 + 16, Default::default());
         let mut vertices = Vec::with_capacity(count / 2 + 16);
         let mut triangles = Vec::with_capacity(count);
         for t in 0..count {
             let mut ids = [0u32; 3];
             for (k, id) in ids.iter_mut().enumerate() {
-                let o = t * 9 + k * 3;
-                let p = [soup[o], soup[o + 1], soup[o + 2]];
-                // -0.0 and 0.0 are the same point.
+                let p = corner(t, k);
                 let key = [(p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits(), (p[2] + 0.0).to_bits()];
                 *id = *index.entry(key).or_insert_with(|| {
                     vertices.push(p);
@@ -156,15 +159,20 @@ pub fn read_stl(name: &str, bytes: &[u8]) -> Result<Mesh, Error> {
         let looks_ascii =
             bytes.starts_with(b"solid") && bytes[..bytes.len().min(512)].windows(5).any(|w| w == b"facet");
         if count > 0 && needed <= bytes.len() && bytes.len() - needed < 50 && !(looks_ascii && needed != bytes.len()) {
-            let mut soup = Vec::with_capacity(count * 9);
-            for t in 0..count {
-                let o = 84 + t * 50 + 12;
-                for k in 0..9 {
-                    let b = &bytes[o + k * 4..o + k * 4 + 4];
-                    soup.push(f32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-                }
+            // Straight from the file's bytes into the mesh, with no copy of every corner in between.
+            let float = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+            let corner = |t: usize, k: usize| {
+                let o = 84 + t * 50 + 12 + k * 12;
+                [float(o), float(o + 4), float(o + 8)]
+            };
+            let mesh = Mesh::weld(name, count, corner);
+            if mesh.vertices.iter().any(|v| !v.iter().all(|c| c.is_finite())) {
+                return Err(Error::Unreadable);
             }
-            return finish(name, &soup);
+            if mesh.triangles.is_empty() {
+                return Err(Error::NoModel);
+            }
+            return Ok(mesh);
         }
     }
     let text = std::str::from_utf8(bytes).map_err(|_| Error::Unreadable)?;

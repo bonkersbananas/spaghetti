@@ -86,82 +86,108 @@ fn now() -> f64 {
 /// Reads the models, lays them on the plate and slices them with `settings`: the whole job, from files to a
 /// `.gcode.3mf`.
 pub fn slice(inputs: &[Input], settings: &Settings, options: &Options) -> Result<Output, Error> {
-    let t0 = now();
-    let mut meshes: Vec<Mesh> = Vec::new();
-    let mut project = false;
+    let mut plate = Plate::default();
     for input in inputs {
+        plate.add(input)?;
+    }
+    plate.slice(settings, options)
+}
+
+/// Models read from their files, not yet laid out or sliced. Adding the files one at a time lets each file's bytes
+/// go as soon as it is read, so a plate of big models never holds all of its files and all of its slices at once.
+#[derive(Default)]
+pub struct Plate {
+    meshes: Vec<Mesh>,
+    project: bool,
+    title: Option<String>,
+    read_ms: f64,
+}
+
+impl Plate {
+    /// Reads one STL or 3MF file onto the plate.
+    pub fn add(&mut self, input: &Input) -> Result<(), Error> {
+        let t0 = now();
+        let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
         if input.bytes.starts_with(b"PK\x03\x04") {
             let model = threemf::read(input.bytes)?;
-            project |= model.project;
-            meshes.extend(model.meshes);
+            self.project |= model.project;
+            self.meshes.extend(model.meshes);
         } else {
-            let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
-            meshes.push(mesh::read_stl(name, input.bytes)?);
+            self.meshes.push(mesh::read_stl(name, input.bytes)?);
         }
+        self.title.get_or_insert_with(|| name.to_string());
+        self.read_ms += now() - t0;
+        Ok(())
     }
-    if meshes.iter().all(|m| m.triangles.is_empty()) {
-        return Err(Error::NoModel);
-    }
-    meshes.retain(|m| !m.triangles.is_empty());
-    for m in &mut meshes {
-        m.orient();
-    }
-    if options.arrange && !project {
-        mesh::arrange(&mut meshes, settings.bed, settings.max_height)?;
-    } else {
-        mesh::drop_to_bed(&mut meshes);
-    }
-    let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
-    if height > settings.max_height {
-        return Err(Error::TooTall);
-    }
-    let t1 = now();
-    let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
-    let slices = section::slice(&meshes, &layers, settings.resolution);
-    let t2 = now();
-    let regions = region::regions(&slices, &layers, settings);
-    drop(slices);
-    let t3 = now();
-    // Each layer from its regions to its G-code in one go, so only the text stays.
-    let texts = par::map_range(regions.len(), |i| {
-        let plan = plan::plan_layer(&regions[i], i, &layers, settings);
-        gcode::layer(&plan, &regions[i], settings, gcode::travel_z(&layers, i, settings))
-    });
-    drop(regions);
-    let t4 = now();
-    let g = gcode::assemble(texts, settings);
-    let t5 = now();
-    let thumbnail = options.thumbnail.then(|| {
-        let size = 512;
-        png::encode(&png::render(&meshes, size, settings.filament_colour), size, size)
-    });
-    let t6 = now();
-    let objects: Vec<pack::Object> = meshes
-        .iter()
-        .map(|m| {
-            let b = m.bounds();
-            pack::Object { name: m.name.clone(), bbox: [b.min[0], b.min[1], b.max[0], b.max[1]] }
+
+    /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
+    pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
+        let Plate { mut meshes, project, title, read_ms } = self;
+        let t0 = now();
+        if meshes.iter().all(|m| m.triangles.is_empty()) {
+            return Err(Error::NoModel);
+        }
+        meshes.retain(|m| !m.triangles.is_empty());
+        for m in &mut meshes {
+            m.orient();
+        }
+        if options.arrange && !project {
+            mesh::arrange(&mut meshes, settings.bed, settings.max_height)?;
+        } else {
+            mesh::drop_to_bed(&mut meshes);
+        }
+        let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
+        if height > settings.max_height {
+            return Err(Error::TooTall);
+        }
+        let t1 = now();
+        let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
+        let slices = section::slice(&meshes, &layers, settings.resolution);
+        let t2 = now();
+        let regions = region::regions(&slices, &layers, settings);
+        drop(slices);
+        let t3 = now();
+        // Each layer from its regions to its G-code in one go, so only the text stays.
+        let texts = par::map_range(regions.len(), |i| {
+            let plan = plan::plan_layer(&regions[i], i, &layers, settings);
+            gcode::layer(&plan, &regions[i], settings, gcode::travel_z(&layers, i, settings))
+        });
+        drop(regions);
+        let t4 = now();
+        let g = gcode::assemble(texts, settings);
+        let t5 = now();
+        let thumbnail = options.thumbnail.then(|| {
+            let size = 512;
+            png::encode(&png::render(&meshes, size, settings.filament_colour), size, size)
+        });
+        let t6 = now();
+        let objects: Vec<pack::Object> = meshes
+            .iter()
+            .map(|m| {
+                let b = m.bounds();
+                pack::Object { name: m.name.clone(), bbox: [b.min[0], b.min[1], b.max[0], b.max[1]] }
+            })
+            .collect();
+        let title = title.as_deref().unwrap_or("Model");
+        let file = pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title);
+        let t7 = now();
+        Ok(Output {
+            file,
+            gcode: g.text,
+            stats: g.stats,
+            timings: Timings {
+                read: read_ms + t1 - t0,
+                slice: t2 - t1,
+                regions: t3 - t2,
+                toolpaths: t4 - t3,
+                gcode: t5 - t4,
+                thumbnail: t6 - t5,
+                pack: t7 - t6,
+                total: read_ms + t7 - t0,
+            },
+            triangles: meshes.iter().map(|m| m.triangles.len()).sum(),
         })
-        .collect();
-    let title = inputs.first().map(|i| i.name.rsplit(['/', '\\']).next().unwrap_or(i.name)).unwrap_or("Model");
-    let file = pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title);
-    let t7 = now();
-    Ok(Output {
-        file,
-        gcode: g.text,
-        stats: g.stats,
-        timings: Timings {
-            read: t1 - t0,
-            slice: t2 - t1,
-            regions: t3 - t2,
-            toolpaths: t4 - t3,
-            gcode: t5 - t4,
-            thumbnail: t6 - t5,
-            pack: t7 - t6,
-            total: t7 - t0,
-        },
-        triangles: meshes.iter().map(|m| m.triangles.len()).sum(),
-    })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

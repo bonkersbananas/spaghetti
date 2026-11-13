@@ -15,25 +15,21 @@ const instantiateMs = performance.now() - t0;
 const e = instance.exports;
 
 const files = models.map((path) => ({ name: Buffer.from(path.split("/").pop()), data: fs.readFileSync(path) }));
-const size = 4 + files.reduce((sum, f) => sum + 8 + f.name.length + f.data.length, 0);
 const t1 = performance.now();
-const ptr = e.alloc(size);
-const bytes = new Uint8Array(e.memory.buffer, ptr, size);
-const view = new DataView(e.memory.buffer, ptr, size);
-let at = 0;
-view.setUint32(at, files.length, true);
-at += 4;
+// One file at a time: its name and bytes into WebAssembly memory, read onto the plate, freed.
+let code = 0;
 for (const f of files) {
-  view.setUint32(at, f.name.length, true);
-  bytes.set(f.name, at + 4);
-  at += 4 + f.name.length;
-  view.setUint32(at, f.data.length, true);
-  bytes.set(f.data, at + 4);
-  at += 4 + f.data.length;
+  const name = e.alloc(f.name.length);
+  new Uint8Array(e.memory.buffer, name, f.name.length).set(f.name);
+  const data = e.alloc(f.data.length);
+  new Uint8Array(e.memory.buffer, data, f.data.length).set(f.data);
+  code = e.add(name, f.name.length, data, f.data.length);
+  e.dealloc(name, f.name.length);
+  e.dealloc(data, f.data.length);
+  if (code !== 0) break;
 }
-const code = e.slice(ptr, size, keep ? 1 : 0);
+if (code === 0) code = e.slice(keep ? 1 : 0);
 const sliceMs = performance.now() - t1;
-e.dealloc(ptr, size);
 if (code !== 0) {
   console.log(JSON.stringify({ error: code }));
   process.exit(1);
