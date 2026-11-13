@@ -613,8 +613,8 @@ export function WorkspaceSlicing({
       />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <p className="text-small text-ink-faint flex-1">
-          The filament comes from the Pantry (the first loaded spool), the plate and the nozzle from above. A model
-          keeps its own settings once you change them there.
+          The filament comes from the Pantry (the first loaded spool), the plate and nozzle from above. A model keeps
+          its own once you change them on its card.
         </p>
         {own && (
           <Button variant="quiet" size="sm" onClick={() => onChange(null)}>

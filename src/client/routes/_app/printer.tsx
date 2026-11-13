@@ -251,17 +251,17 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <PrinterSection
-          title="Slicing"
-          description="How Spaghetti slices a model nobody set up. Each model keeps its own once you change them on its card."
-        >
-          {idle ? (
-            <Suspense fallback={<Skeleton className="h-96 rounded-lg" />}>
-              <WorkspaceSlicing value={value.slicing ?? undefined} onChange={(slicing) => change({ slicing })} />
-            </Suspense>
-          ) : (
-            <Skeleton className="h-96 rounded-lg" />
-          )}
+        <PrinterSection title="Slicing" description="How Spaghetti slices a model nobody set up.">
+          {/* On a cream card, as the nozzles are: the tiles read as they do in a model's sheet. */}
+          <div className="bg-cream shadow-soft rounded-lg p-4 md:p-5">
+            {idle ? (
+              <Suspense fallback={<Skeleton className="h-96 rounded-md" />}>
+                <WorkspaceSlicing value={value.slicing ?? undefined} onChange={(slicing) => change({ slicing })} />
+              </Suspense>
+            ) : (
+              <Skeleton className="h-96 rounded-md" />
+            )}
+          </div>
         </PrinterSection>
 
         <PrinterSection
