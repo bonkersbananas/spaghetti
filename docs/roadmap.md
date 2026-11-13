@@ -77,6 +77,7 @@ Proposal: [docs/proposals/twists.md](proposals/twists.md); decision [0043](decis
 - [x] Stage 1c, builds: a build can print a twist (`items.twist_id`), "Print it" / "Print it again" on the twist page, and the page lists what was printed
 - [x] Stage 1c, the rest: "Save as twist" on a build (its header), MCP tools (`list_twists`, `add_twist`), search finds twists
 - [x] Stage 2a: STL scale, mirror, rotate and "fit to N mm" in the browser (`shared/mesh.ts`, the twist page's "Adapt an STL"); no preview yet
+- [x] Stage 2a, keeping it ([0053](decisions/0053-a-twist-keeps-its-adapted-model.md)): "Adapt an STL" keeps the result as the twist's model (`twist_files`), the page shows the model card (sliced on save, "Slice with…", the 3D view), the Twists screen uses its plate picture as cover, and "Print it" carries the sliced file into the build's first attempt
 - [ ] Stage 2b: the 3MF spike (edit the transform of a project .3mf, keeping plates and settings)
 
 ## Deploy
