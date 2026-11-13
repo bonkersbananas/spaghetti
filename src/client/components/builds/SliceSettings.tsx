@@ -64,6 +64,8 @@ import { useIsDesktop } from "@/lib/use-media-query";
 
 /** The spools offered as tiles, at most: a pantry is rarely bigger, and the rest are a pick under the Pantry. */
 const MAX_SPOOLS = 12;
+/** In a desktop panel, where the spools wrap in rows of four: two rows. */
+const WRAPPED_SPOOLS = 8;
 
 export interface SlicingChoicesProps {
   settings: SlicingSettings;
@@ -220,7 +222,7 @@ export function SlicingChoices({
       settings={settings}
       spools={spools}
       onChange={(filaments) => set({ filaments })}
-      layout={twoColumns ? "row" : "scroll"}
+      wrapped={!!twoColumns}
     />
   );
   // The workspace's defaults carry no filament of their own: where the choice would be, it says where it comes from.
@@ -244,7 +246,7 @@ export function SlicingChoices({
     />
   );
   if (twoColumns) {
-    // A desktop panel: the phone's order down the first column, then the second, and More with the licence under both.
+    // A desktop panel: the phone's order down the first column, then the second; the licence, the files and More close the first.
     return (
       <div className="flex flex-col gap-7">
         <div className="grid grid-cols-2 items-start gap-x-6">
@@ -252,8 +254,9 @@ export function SlicingChoices({
             {recipeGroup}
             {qualityGroup}
             {strengthGroup}
-            {/* The licence and the files fill the room under the strength, so nothing scrolls. */}
+            {/* The licence, the files and More fill the room under the strength, so nothing scrolls. */}
             {after}
+            {more}
           </div>
           <div className="flex min-w-0 flex-col gap-7">
             {supportsGroup}
@@ -262,7 +265,6 @@ export function SlicingChoices({
             {filamentRule}
           </div>
         </div>
-        {more}
       </div>
     );
   }
@@ -432,17 +434,19 @@ function FilamentChoice({
   settings,
   spools,
   onChange,
-  layout,
+  wrapped,
 }: {
   settings: SlicingSettings;
   spools: readonly SpoolLike[];
   onChange: (filaments: SlicingFilament[]) => void;
-  layout: "scroll" | "row";
+  /** In a panel's column: the spools wrap in rows of four, none clipped, instead of a row that scrolls sideways. */
+  wrapped: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const slot = Math.min(index, settings.filaments.length - 1);
   const filament = settings.filaments[slot] ?? settings.filaments[0];
-  const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
+  // A panel's column shows two rows of four (the loaded ones come first), so the panel needn't scroll.
+  const offered = slicingSpools(spools).slice(0, wrapped ? WRAPPED_SPOOLS : MAX_SPOOLS);
   const picked = filament?.spoolId ? offered.find((spool) => spool.id === filament.spoolId) : undefined;
   const own: ChoiceTile<string> | null =
     filament && !picked
@@ -489,7 +493,7 @@ function FilamentChoice({
       )}
       <ChoiceTiles
         label={settings.filaments.length > 1 ? `Filament ${slot + 1}` : "Filament"}
-        layout={layout}
+        {...(wrapped ? { layout: "grid" as const, columns: 4 as const, dense: true } : { layout: "scroll" as const })}
         options={own ? [own, ...offered.map(spoolTile)] : offered.map(spoolTile)}
         value={picked ? picked.id : "own"}
         onChange={choose}

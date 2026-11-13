@@ -24,10 +24,9 @@ interface ChoiceTilesProps<T extends string> {
   onChange: (value: T) => void;
   /**
    * How the tiles sit: "grid" (equal columns, `columns` on phones and `wideColumns` from md) or "scroll" (a row that
-   * scrolls sideways on phones, for a list that can be long: the Pantry's spools; it wraps from md), or "row" (the same
-   * row at every width, within the column it is in: a settings panel's two columns).
+   * scrolls sideways on phones, for a list that can be long: the Pantry's spools; it wraps from md)
    */
-  layout?: "grid" | "scroll" | "row";
+  layout?: "grid" | "scroll";
   columns?: 2 | 3 | 4;
   wideColumns?: 2 | 3 | 4;
   /** Closer tiles for a row of four on a phone: less padding, so "Extra draft" and "Where needed" fit two lines wide. */
@@ -81,10 +80,8 @@ export function ChoiceTiles<T extends string>({
         className={cn(
           layout === "grid"
             ? cn("grid gap-2", COLUMNS[columns], WIDE_COLUMNS[wideColumns])
-            : layout === "row"
-              ? "flex snap-x gap-2 overflow-x-auto pb-1"
-              : // Edge to edge on a phone's sheet, so the row scrolls under the thumb; wrapped from md.
-                "-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0",
+            : // Edge to edge on a phone's sheet, so the row scrolls under the thumb; wrapped from md.
+              "-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0",
         )}
       >
         {options.map((option) => {
@@ -96,7 +93,6 @@ export function ChoiceTiles<T extends string>({
                 "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg text-center",
                 dense ? "px-0.5 py-2" : "px-2 py-2.5",
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
-                layout === "row" && "w-28 shrink-0 snap-start",
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
                   : "bg-tile text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
