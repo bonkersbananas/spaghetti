@@ -7,7 +7,7 @@ export interface ToggleProps extends Omit<ComponentPropsWithRef<"button">, "onCh
   label: string;
   /** One quiet line under the label: what it does, or why it can't be turned on. */
   hint?: ReactNode;
-  /** One line: the hint is still read aloud (and is the button's tooltip) but not drawn. */
+  /** One line: the hint is read aloud but not drawn. Only for a hint that repeats what the switch and label already show; a reason the switch can't be turned on must stay drawn. */
   oneLine?: boolean;
 }
 
