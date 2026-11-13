@@ -427,6 +427,12 @@
     background-image: linear-gradient(var(--sg-press-veil), var(--sg-press-veil));
     transition-duration: var(--sg-duration-instant);
   }
+  /* A press that starts on a strip that swipes inside it (a card's photos) leaves the control where it is: on iOS a
+     transform starting on an ancestor of a scroller rebuilds the scroller's layer mid-touch, which ends the swipe.
+     The veil still answers the touch. */
+  &:has([data-swipe]:active) {
+    transform: none;
+  }
 }
 /* A filled tomato control (the primary and capture buttons) deepens to the pressed tomato instead of taking the veil. */
 @utility press-tomato {

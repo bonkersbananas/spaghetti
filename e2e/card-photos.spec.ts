@@ -59,3 +59,35 @@ test("a card swipes to its second photo and opens the idea there", { tag: "@phon
   await expect(page).toHaveURL(new RegExp(`/ideas/${id}\\?photo=${photoIds[1]}`));
   await expect(page.getByRole("figure", { name: "2 of 3" })).toBeInViewport({ ratio: 0.9 });
 });
+
+// On iOS a transform that starts on an ancestor of the photos' scroller (the card's press) ends the swipe under the
+// finger. The browser here never holds :active for a synthetic touch, so the press is forced through DevTools.
+test("a press on a card's photos leaves the card still, a press on its words shrinks it", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "DevTools protocol");
+  await addIdea(page, "Held carousel", 2);
+  await page.goto("/ideas", { waitUntil: "networkidle" });
+  const link = page.getByRole("listitem").filter({ hasText: "Held carousel" }).getByRole("link");
+  await expect(link.locator("img")).toHaveCount(2);
+  await link.evaluate((el) => el.setAttribute("data-held", ""));
+  const session = await page.context().newCDPSession(page);
+  await session.send("DOM.enable");
+  await session.send("CSS.enable");
+  const { root } = await session.send("DOM.getDocument");
+  const node = async (selector: string) =>
+    (await session.send("DOM.querySelector", { nodeId: root.nodeId, selector })).nodeId;
+  const press = async (selector: string, active: boolean) =>
+    session.send("CSS.forcePseudoState", {
+      nodeId: await node(selector),
+      forcedPseudoClasses: active ? ["active"] : [],
+    });
+  // :active holds on the touched element and every ancestor: on the photos, both the strip and the link.
+  const transform = () => link.evaluate((el) => getComputedStyle(el).transform);
+
+  await press("[data-held]", true);
+  await expect.poll(transform).not.toBe("none");
+  await press("[data-held] [data-swipe]", true);
+  await expect.poll(transform).toBe("none");
+});
