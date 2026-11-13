@@ -109,7 +109,7 @@ export function BuildCard({
         unread={unread}
         chips={
           last ? (
-            <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} className="shadow-soft" />
+            <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} onPhoto className="shadow-soft" />
           ) : (
             <Chip className="bg-veil text-on-veil backdrop-blur-md">Not printed yet</Chip>
           )

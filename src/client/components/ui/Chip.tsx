@@ -26,14 +26,26 @@ interface ChipProps {
   icon?: Icon;
   /** Outlined instead of filled: a suggestion, not yet anyone's choice. */
   suggested?: boolean;
+  /** Drawn over a photo: the neutral tone is dark glass (veil) like every badge over a photo, since its 6 % tint would let the picture through. */
+  onPhoto?: boolean;
   children: ReactNode;
   className?: string;
 }
 
 /** A label: status, material, tag. Static; for filters use ToggleChip. */
-export function Chip({ tone = "neutral", icon: IconComponent, suggested, children, className }: ChipProps) {
+export function Chip({ tone = "neutral", icon: IconComponent, suggested, onPhoto, children, className }: ChipProps) {
   return (
-    <span className={cn(base, suggested ? suggestedTones[tone] : tones[tone], className)}>
+    <span
+      className={cn(
+        base,
+        suggested
+          ? suggestedTones[tone]
+          : onPhoto && tone === "neutral"
+            ? "bg-veil text-on-veil backdrop-blur-md"
+            : tones[tone],
+        className,
+      )}
+    >
       {IconComponent && <IconComponent size={14} weight="bold" aria-hidden />}
       {children}
     </span>

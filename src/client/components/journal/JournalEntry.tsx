@@ -155,6 +155,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
             <OutcomeChip
               outcome={attempt.outcome}
               offTheBed={offBed}
+              onPhoto
               className="shadow-soft absolute bottom-2 left-2 max-md:hidden"
             />
           </div>
@@ -170,7 +171,12 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
             className="size-full"
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
-          <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} className="shadow-soft absolute bottom-2 left-2" />
+          <OutcomeChip
+            outcome={attempt.outcome}
+            offTheBed={offBed}
+            onPhoto
+            className="shadow-soft absolute bottom-2 left-2"
+          />
           {photos.length > 1 && (
             <span className="absolute top-2 right-2">
               <PhotoCountBadge count={photos.length} />
