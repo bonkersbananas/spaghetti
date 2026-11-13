@@ -15,7 +15,7 @@ import { TwistChanges } from "@/components/twists/TwistChanges";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TextArea, TextField } from "@/components/ui/Field";
+import { formatDuration, TextArea, TextField } from "@/components/ui/Field";
 import { ArrowRightIcon, BuildsIcon, EditIcon, SlicerFileIcon, TrashIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
@@ -119,6 +119,15 @@ function TwistBody({ twist }: { twist: Twist }) {
 
   // "Print it again": a build named for the twist, which remembers it, opens ready for its first attempt.
   const printLabel = printed.length ? "Print it again" : "Print it";
+  // What will print, once the model is sliced: "Print it · 42 min · 13.2 g".
+  const prefill = model?.slice?.status === "sliced" ? model.prefill : undefined;
+  const printFigures = [
+    prefill?.estimatedMinutes !== undefined ? formatDuration(prefill.estimatedMinutes) : "",
+    prefill?.weightGrams !== undefined
+      ? `${prefill.weightGrams.toLocaleString("en", { maximumFractionDigits: 1 })} g`
+      : "",
+  ].filter(Boolean);
+  const printWords = [printLabel, ...printFigures].join(" · ");
   function printIt() {
     if (!user || !canEdit(false)) return;
     const id = printTwist(queryClient, twist, value.name.trim() || twist.name, user.id);
@@ -151,7 +160,7 @@ function TwistBody({ twist }: { twist: Twist }) {
             disabled={readOnly || !user}
             className="ml-2"
           >
-            {printLabel}
+            {printWords}
           </Button>
         )}
       </DetailBar>
@@ -318,7 +327,7 @@ function TwistBody({ twist }: { twist: Twist }) {
             disabled={readOnly || !user}
             onClick={printIt}
           >
-            {printLabel}
+            {printWords}
           </Button>
         </ActionBar>
       )}

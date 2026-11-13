@@ -70,7 +70,7 @@ describe('what a change is, after "Slicing with"', () => {
     expect(changeWords(DEFAULT_SLICING, { ...DEFAULT_SLICING, infill: 30 })).toBe("other walls and infill");
     // Which Standard: the quality's or the strength's.
     expect(changeWords(fine, DEFAULT_SLICING)).toBe("Standard quality");
-    expect(changeWords({ ...DEFAULT_SLICING, walls: 4, infill: 25 }, DEFAULT_SLICING)).toBe("Standard strength");
+    expect(changeWords({ ...DEFAULT_SLICING, walls: 4, infill: 25 }, DEFAULT_SLICING)).toBe("Everyday strength");
     expect(
       changeWords(DEFAULT_SLICING, {
         ...DEFAULT_SLICING,

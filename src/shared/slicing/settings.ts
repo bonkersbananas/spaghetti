@@ -117,7 +117,7 @@ export interface Quality extends Choice<QualityId> {
 /** Layer heights by name. The mm is shown beside the name. */
 export const QUALITIES: readonly Quality[] = [
   { id: "fine", label: "Fine", layerHeight: 0.12, effect: "slower, smoother" },
-  { id: "standard", label: "Standard", layerHeight: 0.2, effect: "the everyday balance" },
+  { id: "standard", label: "Standard", layerHeight: 0.2, effect: "the usual balance" },
   { id: "draft", label: "Draft", layerHeight: 0.24, effect: "quicker, lines show" },
   { id: "extra-draft", label: "Extra draft", layerHeight: 0.28, effect: "quickest, roughest" },
 ];
@@ -132,7 +132,7 @@ export interface Strength extends Choice<StrengthId> {
 /** Walls, infill and its pattern together. Exact numbers are under "More". */
 export const STRENGTHS: readonly Strength[] = [
   { id: "light", label: "Light", walls: 2, infill: 10, pattern: "lightning", effect: "for looking at, quickest" },
-  { id: "standard", label: "Standard", walls: 2, infill: 15, pattern: "crosshatch", effect: "for most prints" },
+  { id: "standard", label: "Everyday", walls: 2, infill: 15, pattern: "crosshatch", effect: "for most prints" },
   { id: "strong", label: "Strong", walls: 4, infill: 25, pattern: "gyroid", effect: "for parts that take a load" },
 ];
 
@@ -371,9 +371,9 @@ export function qualityWords(layerHeight: number): string {
   return quality.id === "standard" ? "Standard quality" : quality.label;
 }
 
-/** "Strong", or "Standard strength" (as the quality has a Standard too). */
+/** "Strong", or "Everyday strength" (the quality has the Standard, so the strength has its own word). */
 export const strengthWords = (strength: Strength) =>
-  strength.id === "standard" ? "Standard strength" : strength.label;
+  strength.id === "standard" ? "Everyday strength" : strength.label;
 
 /** "on its side", "upside down": how a model lying on another face is said; empty as designed. */
 export function orientationWords(settings: Pick<SlicingSettings, "orientation">): string {
@@ -424,6 +424,28 @@ export function slicingLine(settings: SlicingSettings): string[] {
         ? ""
         : strength.label
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
+    orientationWords(settings),
+    settings.scale !== 100 ? `${settings.scale}%` : "",
+  ].filter(Boolean);
+}
+
+/**
+ * What a model is sliced with, in a line a person can read at a glance: "Standard · Everyday strength · No supports ·
+ * PLA Basic jade white", with the way it lies and its size when they aren't the usual. The settings row on the card
+ * says it; the Printer page's folded defaults use the same words without the filament.
+ */
+export function slicingSummary(settings: SlicingSettings): string[] {
+  const [first, ...others] = settings.filaments;
+  const strength = strengthOf(settings);
+  const supports = supportWords(settings);
+  return [
+    qualityOf(settings.layerHeight)?.label ?? `${Number(settings.layerHeight.toFixed(2))} mm layers`,
+    strength
+      ? strengthWords(strength)
+      : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
+    supports ? `${supports.charAt(0).toUpperCase()}${supports.slice(1)}` : "No supports",
+    first ? filamentWords(first) : "",
+    others.length ? `+${others.length} more` : "",
     orientationWords(settings),
     settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);

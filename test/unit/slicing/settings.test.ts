@@ -17,6 +17,7 @@ import {
   slicingFromRecord,
   slicingLine,
   slicingProblems,
+  slicingSummary,
   strengthOf,
   supportWords,
 } from "../../../src/shared/slicing/settings.ts";
@@ -174,6 +175,32 @@ describe("saying the settings", () => {
     expect(filamentWords({ material: "PLA", finish: "silk" })).toBe("PLA Silk");
     // The stand-in has no colour anyone chose: it isn't named.
     expect(filamentWords(STAND_IN_FILAMENT)).toBe("PLA");
+  });
+
+  it("says what a model is sliced with in one line for the settings row", () => {
+    expect(slicingSummary({ ...DEFAULT_SLICING, filaments: [orange] })).toEqual([
+      "Standard",
+      "Everyday strength",
+      "No supports",
+      "PLA Basic orange",
+    ]);
+    expect(
+      slicingSummary({
+        ...DEFAULT_SLICING,
+        layerHeight: 0.12,
+        walls: 4,
+        infill: 25,
+        pattern: "gyroid",
+        supports: "fins",
+        scale: 110,
+      }),
+    ).toEqual(["Fine", "Strong", "Fins", "PLA", "110%"]);
+    expect(slicingSummary({ ...DEFAULT_SLICING, layerHeight: 0.16, walls: 3, infill: 20, pattern: "gyroid" })).toEqual([
+      "0.16 mm layers",
+      "3 walls, 20% gyroid",
+      "No supports",
+      "PLA",
+    ]);
   });
 
   it("puts the card's line together: quality, filament, supports, then what isn't the usual", () => {

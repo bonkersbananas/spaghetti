@@ -4,7 +4,7 @@ import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
-import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
+import { type SlicingSettings, slicingFor, slicingSummary } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import { finishesOnComputer, problemSentence, sliceSummary, worthRetrying } from "@shared/slicing/words.ts";
 import { DEFAULT_PRINTER } from "@shared/spools";
@@ -22,7 +22,7 @@ import {
 import { BeforeAfter, type Change } from "@/components/ui/BeforeAfter";
 import { Button } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
-import { SettingsIcon, UndoIcon } from "@/components/ui/icons";
+import { NextIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PopoverAnchor, PopoverPanel, PopoverRoot, PopoverTrigger } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
@@ -171,6 +171,27 @@ export function changeFigures(change: SliceChange): Change[] {
   ];
 }
 
+/**
+ * What a change did, in words: "Fine: 26 min longer, 0.4 g lighter". `what` is the change itself ("Fine", "supports
+ * where needed", from `changeWords`), left out when several things changed. A figure that stayed the same isn't said.
+ */
+export function changeSentence(change: SliceChange, what?: string): string {
+  const { before, after } = change;
+  const said: string[] = [];
+  if (before.minutes !== undefined && after.minutes !== undefined) {
+    const minutes = Math.round(after.minutes - before.minutes);
+    if (minutes !== 0) said.push(`${formatMinutes(Math.abs(minutes))} ${minutes > 0 ? "longer" : "shorter"}`);
+  }
+  if (before.grams !== undefined && after.grams !== undefined) {
+    const delta = Math.round((after.grams - before.grams) * 10) / 10;
+    if (delta !== 0) said.push(`${grams(Math.abs(delta))} ${delta > 0 ? "heavier" : "lighter"}`);
+  }
+  const effect = said.length ? said.join(", ") : "the same time and filament";
+  return what
+    ? `${what.charAt(0).toUpperCase()}${what.slice(1)}: ${effect}`
+    : `${effect.charAt(0).toUpperCase()}${effect.slice(1)}`;
+}
+
 /** "Sliced by Spaghetti · Fine · PLA Basic orange", or only "Sliced by Spaghetti" where the attempt's line says the rest. */
 const slicedPieces = (slice: FileSlice, short?: boolean) =>
   short ? ["Sliced by Spaghetti"] : ["Sliced by Spaghetti", ...sliceSummary(slice.settings)];
@@ -192,12 +213,33 @@ const SlicedOpener = (props: ComponentPropsWithRef<"button">) => (
   </Button>
 );
 
-/** "Slice with…": opens a model's settings. */
-const SettingsButton = (props: ComponentPropsWithRef<"button">) => (
-  <Button variant="secondary" size="sm" icon={SettingsIcon} {...props}>
-    Slice with…
-  </Button>
-);
+/**
+ * What a model is sliced with, in one tappable row across its card ("Standard · Everyday strength · No supports ·
+ * Jade white"), which opens its settings: tall enough for a thumb, and the same in every state, so a popover hanging
+ * from the card keeps its trigger.
+ */
+function SettingsRow({ summary, className, ...props }: ComponentPropsWithRef<"button"> & { summary: string[] }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Slice with… ${summary.join(", ")}`}
+      {...props}
+      className={cn(
+        "pressable focus-ring bg-ink/4 hover:bg-ink/6 text-small text-ink-soft flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2.5 pl-3 text-left md:flex-none",
+        className,
+      )}
+    >
+      <MetaList className="min-w-0 flex-1">
+        {summary.map((piece) => (
+          <span key={piece} className="whitespace-nowrap">
+            {piece}
+          </span>
+        ))}
+      </MetaList>
+      <NextIcon size={14} weight="bold" className="text-ink-ghost shrink-0" aria-hidden />
+    </button>
+  );
+}
 
 /** A slice under way, as a progressbar that says where it is (not a live region that reads out every percent). */
 function SliceProgress({ fraction, words }: { fraction: number | null; words: string }) {
@@ -225,11 +267,6 @@ function SliceProgress({ fraction, words }: { fraction: number | null; words: st
   );
 }
 
-/** What can be done about a model's slicing, side by side. */
-const Actions = ({ children }: { children: ReactNode }) => (
-  <div className="flex flex-wrap items-center gap-2 empty:hidden">{children}</div>
-);
-
 export interface ModelActions {
   /** Slices it with a change of its settings ("Supports where needed", "Scale to 80% and slice"); absent where it only shows. */
   onSlice?: (change: SliceOptions) => void;
@@ -237,7 +274,7 @@ export interface ModelActions {
   onUndo?: () => void;
   /** Stops slicing it again: the slice there stays, and so do the settings it was made with. */
   onStop?: () => void;
-  /** The "Slice with…" button, as it opens the settings here; absent where they don't open. */
+  /** The settings row, as it opens the settings here; absent where they don't open. */
   settings?: ReactNode;
 }
 
@@ -260,21 +297,25 @@ export function ModelStatus({
   /** Only where it stands and its undo: the settings below it say the rest (their sheet's result). */
   quiet?: boolean;
 }) {
-  const { lines, actions } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
-  // The lines change with the state; the row of actions stays in its place, "Slice with…" first in it, so the
-  // button keeps its place, and its popover stays open, while the card changes under it.
+  const { lines, primary, quiet: aside } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
+  // The lines change with the state; the actions keep their places. What helps (the filled buttons) sits above the
+  // settings row, which every state renders, with a quiet Undo beside it, so the row keeps its place, and its popover
+  // stays open, while the card changes under it.
   return (
     <>
       {lines}
-      <Actions>
-        {settings}
-        {actions}
-      </Actions>
+      <div className="flex w-full min-w-0 flex-col gap-2 empty:hidden">
+        <div className="flex flex-wrap items-center gap-2 empty:hidden">{primary}</div>
+        <div className="flex items-center gap-1 empty:hidden">
+          {settings}
+          {aside}
+        </div>
+      </div>
     </>
   );
 }
 
-/** What a model's status says in each state, and what helps there (after "Slice with…"). */
+/** What a model's status says in each state, what helps there (`primary`) and what only takes a step back (`quiet`). */
 function statusOf(
   state: ModelState,
   {
@@ -289,16 +330,28 @@ function statusOf(
     line?: ReactNode;
     quiet?: boolean;
   },
-): { lines: ReactNode; actions: ReactNode } {
-  const button = (label: ReactNode, onClick: () => void, icon?: typeof UndoIcon) => (
-    <Button variant="secondary" size="sm" icon={icon} onClick={onClick}>
+): { lines: ReactNode; primary: ReactNode; quiet?: ReactNode } {
+  // What helps is the filled button; going back is a quiet one.
+  const button = (
+    label: ReactNode,
+    onClick: () => void,
+    icon?: typeof UndoIcon,
+    variant: "primary" | "quiet" = "primary",
+  ) => (
+    <Button
+      variant={variant}
+      size="sm"
+      icon={icon}
+      onClick={onClick}
+      className={variant === "quiet" ? "shrink-0" : undefined}
+    >
       {label}
     </Button>
   );
   switch (state.kind) {
     case "saving": {
       if (state.fraction === undefined) {
-        return { lines: <span className="text-small text-ink-faint">Saving the model…</span>, actions: null };
+        return { lines: <span className="text-small text-ink-faint">Saving the model…</span>, primary: null };
       }
       // A big file in parts (decision 0048): how far it is.
       const percent = Math.round(state.fraction * 100);
@@ -317,18 +370,18 @@ function statusOf(
             Saving {percent}%
           </span>
         ),
-        actions: null,
+        primary: null,
       };
     }
     case "notSaved":
       return {
         lines: <Caution className="px-0">Didn't finish saving. Your file is still here.</Caution>,
-        actions: button("Try again", state.retry),
+        primary: button("Try again", state.retry),
       };
     case "waiting":
-      return { lines: <SliceProgress fraction={null} words="Waiting to slice" />, actions: null };
+      return { lines: <SliceProgress fraction={null} words="Waiting to slice" />, primary: null };
     case "slicing":
-      return { lines: <SliceProgress fraction={state.fraction} words="Slicing" />, actions: null };
+      return { lines: <SliceProgress fraction={state.fraction} words="Slicing" />, primary: null };
     case "sliced": {
       const { again, change, ahead } = state;
       const floating = !quiet && !again && !!state.slice.cautions?.includes("floating");
@@ -359,6 +412,12 @@ function statusOf(
                   )}
                 </span>
               </span>
+            ) : change && onUndo && line ? (
+              // What the change did, with its way back at the end of that line: quiet, and apart from the settings row.
+              <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                {line}
+                {button("Undo", onUndo, UndoIcon, "quiet")}
+              </span>
             ) : (
               line
             )}
@@ -369,31 +428,27 @@ function statusOf(
             {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
           </>
         ),
-        actions: (
+        primary: (
           <>
-            {change && !again && onUndo && button("Undo", onUndo, UndoIcon)}
             {floating && onSlice && button("Supports where needed", () => onSlice({ supports: "where-needed" }))}
             {ahead && !again && onSlice && button("Slice it", () => onSlice({}))}
           </>
         ),
+        quiet: change && !again && onUndo && !line ? button("Undo", onUndo, UndoIcon, "quiet") : null,
       };
     }
     case "failed": {
       const help = remedy(state.slice, phone);
       return {
         lines: <Caution className="px-0">{problemSentence(state.slice, { phone })}</Caution>,
-        actions: (
-          <>
-            {onSlice && help && button(help.label, () => onSlice(help.change))}
-            {state.change?.failed && onUndo && button("Back to the last slice", onUndo, UndoIcon)}
-          </>
-        ),
+        primary: onSlice && help ? button(help.label, () => onSlice(help.change)) : null,
+        quiet: state.change?.failed && onUndo ? button("Back to the last slice", onUndo, UndoIcon, "quiet") : null,
       };
     }
     case "unsliced":
       return {
         lines: <span className="text-small text-ink-faint">Not sliced yet</span>,
-        actions: onSlice && button("Slice it", () => onSlice({})),
+        primary: onSlice ? button("Slice it", () => onSlice({})) : null,
       };
   }
 }
@@ -402,12 +457,18 @@ function statusOf(
 export interface SettingsOpener {
   wrap?: (trigger: ReactNode) => ReactNode;
   open?: () => void;
+  /** What it is sliced with, in words: the row says it. */
+  summary: string[];
 }
 
-/** The trigger of a model's settings as it opens here: "Slice with…", or on a story card "Sliced by Spaghetti". */
+/** The trigger of a model's settings as it opens here: the settings row, or on a story card "Sliced by Spaghetti". */
 function opener(details: SettingsOpener | undefined, inline: boolean): ReactNode {
   if (!details) return null;
-  const trigger = inline ? <SlicedOpener onClick={details.open} /> : <SettingsButton onClick={details.open} />;
+  const trigger = inline ? (
+    <SlicedOpener onClick={details.open} />
+  ) : (
+    <SettingsRow summary={details.summary} onClick={details.open} />
+  );
   return details.wrap ? details.wrap(trigger) : trigger;
 }
 
@@ -431,9 +492,12 @@ export function ModelCard({
   compact,
   raised,
   className,
+  changed,
   ...actions
 }: Omit<ModelActions, "settings"> & {
   name: string;
+  /** What the last change was ("Fine"), to say what it did in words. */
+  changed?: string;
   state: ModelState;
   thumbSrc?: string;
   /** What the slice said: its estimate and weight lead the card. */
@@ -455,8 +519,17 @@ export function ModelCard({
   const figures = change ? changeFigures(change) : [];
   const again = state.kind === "sliced" && !!state.again;
   const busy = state.kind === "sliced" && (again || !!state.ahead);
+  // Under the print: what the last change did, else who sliced it (with the rest of how, where no settings row says it).
   const line =
-    slice && !compact ? <MetaList className="text-small text-ink-faint">{slicedPieces(slice)}</MetaList> : null;
+    slice && !compact ? (
+      <MetaList className="text-small text-ink-faint">
+        {change && !change.failed
+          ? [changeSentence(change, changed)]
+          : details
+            ? ["Sliced by Spaghetti"]
+            : slicedPieces(slice)}
+      </MetaList>
+    ) : null;
   const quiet = !!slice && compact && !busy && !change && !slice.cautions?.includes("floating");
   return (
     <FileCard
@@ -637,13 +710,22 @@ export default function ModelFileCard({
   // Its settings: on desktop a popover hanging below the card, which stays in view, on phones a sheet (but not over
   // the attempt's sheet).
   const popover = isDesktop && !!panel;
+  const summary = slicingSummary(settings);
   const details: SettingsOpener | undefined = !panel
     ? undefined
     : popover
-      ? { wrap: (trigger: ReactNode) => <PopoverTrigger asChild>{trigger}</PopoverTrigger> }
+      ? { summary, wrap: (trigger: ReactNode) => <PopoverTrigger asChild>{trigger}</PopoverTrigger> }
       : inSheet
         ? undefined
-        : { open: () => setSheet(true) };
+        : { summary, open: () => setSheet(true) };
+  // What the last change was, to say what it did ("Fine: 26 min longer"): from the slice it replaced.
+  const changed =
+    change && file.previous && file.slice?.status === "sliced"
+      ? (() => {
+          const words = changeWords(slicingOfSlice(file.previous.slice), slicingOfSlice(file.slice));
+          return words === "the new settings" ? undefined : words;
+        })()
+      : undefined;
   const card = (
     <ModelCard
       name={file.name}
@@ -658,6 +740,7 @@ export default function ModelFileCard({
       }
       onRemove={onRemove}
       details={details}
+      changed={changed}
       phone={!isDesktop}
       compact={compact}
       raised={raised}
