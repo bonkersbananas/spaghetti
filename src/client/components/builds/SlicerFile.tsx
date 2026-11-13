@@ -42,6 +42,8 @@ interface FileCardProps {
    * "About 36 min · 10.6 g". The name follows it, quieter.
    */
   lead?: string[];
+  /** A lead of its own, in the same place: what a change did to a sliced model ("1 h 12 min → 48 min"). */
+  leadNode?: ReactNode;
   /** Short pieces: "plate 2 of 3", "est. 1 h 30 min", "4.2 MB"; or a line of its own (a story card's "Sliced by Spaghetti"). */
   meta: ReactNode[];
   /** A line under it, such as "Too big to keep". */
@@ -69,6 +71,7 @@ export function FileCard({
   name,
   thumbSrc,
   lead,
+  leadNode,
   meta,
   note,
   status,
@@ -96,18 +99,20 @@ export function FileCard({
       {plateOverlay}
     </span>
   );
-  const named = !!lead?.length;
+  const named = !!leadNode || !!lead?.length;
   const text = (
     <div className={cn("flex min-w-0 flex-1 flex-col gap-0.5", !!status && "md:self-end")}>
       {named ? (
         <>
-          <MetaList className="text-body text-ink tabular font-semibold">
-            {lead.map((piece) => (
-              <span key={piece} className="whitespace-nowrap">
-                {piece}
-              </span>
-            ))}
-          </MetaList>
+          {leadNode ?? (
+            <MetaList className="text-body text-ink tabular font-semibold">
+              {lead?.map((piece) => (
+                <span key={piece} className="whitespace-nowrap">
+                  {piece}
+                </span>
+              ))}
+            </MetaList>
+          )}
           <span className="text-small text-ink-faint truncate" title={name}>
             {name}
           </span>

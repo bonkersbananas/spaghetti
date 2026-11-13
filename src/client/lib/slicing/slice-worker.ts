@@ -10,7 +10,7 @@ import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
-import { chosenFromOptions, slicingFor } from "@shared/slicing/settings.ts";
+import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions, SliceProblem, SliceSettings } from "@shared/slicing/types.ts";
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
@@ -25,7 +25,10 @@ import { readThreeMf } from "@shared/threemf/read.ts";
 export interface SliceRequest {
   file: Blob;
   name: string;
-  options: SliceOptions;
+  /** The settings chosen: they win over a 3MF project's own and `defaults`. */
+  chosen: SliceOptions;
+  /** What the rest is sliced with: the workshop's defaults (shared/slicing/pantry.ts). */
+  defaults: SlicingSettings;
   /** Where the engine is (absolute `base`, the host's file name in it) and its release. */
   engine: { base: string; host: string; version: string };
 }
@@ -94,15 +97,16 @@ function progress(phase: SlicePhase, fraction: number) {
 }
 
 async function run(request: SliceRequest) {
-  const { options, engine } = request;
-  const scale = Math.max(1, Math.min(100, Math.round(options.scale ?? 100)));
-  const chosen = chosenFromOptions(options);
-  let settings: Omit<SliceSettings, "scale" | "engine" | "orca"> = presetRecord(slicingFor(chosen));
+  const { chosen, defaults, engine } = request;
+  // What it is asked for, whole; once the presets are read, what it is sliced with (a project's own included).
+  let slicing = slicingFor(chosen, defaults);
+  const scale = slicing.scale;
+  let settings: Omit<SliceSettings, "scale" | "engine" | "orca"> = presetRecord(slicing);
   let orca = "";
   let png: Blob | null = null;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
-    settings: { ...settings, scale, engine: engine.version, orca },
+    settings: { ...settings, scale, engine: engine.version, orca, slicing },
     at: Date.now(),
   });
   try {
@@ -116,10 +120,12 @@ async function run(request: SliceRequest) {
     const filamentCount = Math.max(...read.objects.map((object) => object.extruder));
     const setup = sliceSetup(presets, {
       settings: chosen,
+      defaults,
       ...(read.settings ? { project: { settings: read.settings } } : {}),
       filaments: filamentCount,
     });
     settings = setup.settings;
+    slicing = setup.slicing;
     const plate = plateArea(setup.machine.printable_area, first(setup.machine.printable_height));
     const volume: [number, number, number] = [plate.maxX - plate.minX, plate.maxY - plate.minY, plate.height];
 
@@ -147,7 +153,7 @@ async function run(request: SliceRequest) {
     }
     const result = await sliceWithEngine(engine, setup, objects);
     const cautions =
-      !settings.supports && result.warnings.some((warning) => warning.kind === "need_support_on")
+      slicing.supports === "off" && result.warnings.some((warning) => warning.kind === "need_support_on")
         ? (["floating"] as const)
         : [];
 
@@ -195,8 +201,9 @@ async function run(request: SliceRequest) {
         ? { problem: error.problem, ...error.extra }
         : error instanceof EngineError
           ? engineProblem(error)
-          : // A nozzle the engine's presets don't have yet is this release's limit: "engine" too.
-            { problem: "engine" as const, ...(error instanceof MissingPreset ? { message: error.message } : {}) };
+          : error instanceof MissingPreset
+            ? { problem: "nozzle" as const }
+            : { problem: "engine" as const };
     post({ type: "failed", slice: slice({ status: "failed", ...problem }), png });
   } finally {
     host?.terminate();

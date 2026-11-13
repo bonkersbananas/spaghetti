@@ -10,7 +10,8 @@ import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
 import type { PriceSuggestion, ShoppingPrices, SuggestState } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
-import type { FileKind, FileSlice } from "./slicing/types.ts";
+import type { SlicingSettings } from "./slicing/settings.ts";
+import type { FileKind, FileSlice, PreviousSlice } from "./slicing/types.ts";
 import type { PrinterSetup, Remaining } from "./spools.ts";
 import type { TwistChange, TwistSourceFields } from "./twists.ts";
 
@@ -161,6 +162,13 @@ export interface AttemptFile {
   kind?: FileKind;
   /** A model's slicing: null until it is sliced, or until slicing fails (shared/slicing/types.ts). */
   slice?: FileSlice | null;
+  /**
+   * The slicing settings people chose for a model (decision 0047), what its next slice uses: null until someone
+   * changed one. `slice.settings.slicing` is what the slice there was made with.
+   */
+  slicing?: SlicingSettings | null;
+  /** The slice a re-slice replaced, kept for one undo (POST /api/files/:id/sliced/restore). */
+  previous?: PreviousSlice | null;
   createdAt: number;
 }
 

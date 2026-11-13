@@ -24,8 +24,14 @@ import type { SliceSettings } from "./types.ts";
 /** "Bambu Lab X2D": the printer, as Orca's machine presets and a project's `printer_model` name it. */
 export const ORCA_PRINTER = "Bambu Lab X2D";
 
-/** The machine preset for a nozzle: "Bambu Lab X2D 0.4 nozzle". The engine's release has the 0.4 mm one so far. */
+/** The machine preset for a nozzle: "Bambu Lab X2D 0.4 nozzle". */
 export const machinePreset = (nozzle: number) => `${ORCA_PRINTER} ${nozzle} nozzle`;
+
+/**
+ * The nozzle sizes the engine's release (scripts/slicer/engine.json) has presets for: the 0.4 mm one so far. The
+ * others need a release whose presets.json has their machine, processes and filaments (resolve-presets.mjs).
+ */
+export const ENGINE_NOZZLES: readonly number[] = [0.4];
 
 /** The filament presets' suffix for a nozzle: "@BBL X2D 0.4 nozzle". */
 const filamentSuffix = (nozzle: number) => `@BBL X2D ${nozzle} nozzle`;

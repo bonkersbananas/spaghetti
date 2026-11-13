@@ -30,7 +30,18 @@ export function hasPreview(photoId: string): boolean {
   return previews.has(photoId);
 }
 
-/** A slicer file's plate picture: the local copy while it uploads, else the server's. */
-export function fileThumbSrc(fileId: string): string {
-  return previews.get(fileId)?.thumb ?? fileUrl(fileId, "thumb");
+/**
+ * A slicer file's plate picture: the local copy while it uploads, else the server's. `version` (a model's slice time)
+ * gives a picture that changes when the model is sliced again an address of its own.
+ */
+export function fileThumbSrc(fileId: string, version?: number): string {
+  return previews.get(fileId)?.thumb ?? `${fileUrl(fileId, "thumb")}${version ? `?v=${version}` : ""}`;
+}
+
+/** Forgets a file's local picture (a re-slice was undone: the server's is the one to show). */
+export function dropPreview(fileId: string) {
+  const old = previews.get(fileId);
+  if (!old) return;
+  previews.delete(fileId);
+  setTimeout(() => URL.revokeObjectURL(old.thumb), 10_000);
 }

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentScope, NewTokenResponse } from "../../src/shared/agents.ts";
 import type { AttemptResponse, ItemFileResponse, ItemResponse } from "../../src/shared/api.ts";
 import type { Change } from "../../src/shared/changes.ts";
+import { DEFAULT_SLICING } from "../../src/shared/slicing/defaults.ts";
+import type { SlicingSettings } from "../../src/shared/slicing/settings.ts";
 import type { FileSlice } from "../../src/shared/slicing/types.ts";
 import { PURGE_AFTER_MS, purgeDeleted } from "../../src/worker/photos.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
@@ -54,16 +56,23 @@ const settings = {
   orca: "2.5.0-dev",
 } satisfies FileSlice["settings"];
 
-function slicedForm(slice: Partial<FileSlice> = {}, options: { sliced?: boolean; thumb?: boolean } = {}) {
+function slicedForm(
+  slice: Partial<FileSlice> = {},
+  options: { sliced?: boolean; thumb?: boolean; bytes?: Uint8Array; minutes?: number; keep?: boolean } = {},
+) {
   const body = new FormData();
   body.set("slice", JSON.stringify({ status: "sliced", settings, at: Date.now(), ...slice }));
   if (options.sliced !== false && (slice.status ?? "sliced") === "sliced") {
-    body.set("sliced", new File([SLICED], "Benchy.gcode.3mf"));
-    body.set("prefill", JSON.stringify({ estimatedMinutes: 38, layerHeight: 0.2, weightGrams: 11.3 }));
+    body.set("sliced", new File([options.bytes ?? SLICED], "Benchy.gcode.3mf"));
+    body.set(
+      "prefill",
+      JSON.stringify({ estimatedMinutes: options.minutes ?? 38, layerHeight: 0.2, weightGrams: 11.3 }),
+    );
     body.set("objects", JSON.stringify(["Benchy.stl"]));
     body.set("slicer", "OrcaSlicer 2.5.0-dev");
   }
   if (options.thumb !== false) body.set("thumb", new File([PNG], "plate_1.png", { type: "image/png" }));
+  if (options.keep) body.set("keep", "previous");
   return body;
 }
 
@@ -209,14 +218,197 @@ describe("models kept with an idea", () => {
     expect((await putSliced(id, slicedForm())).status).toBe(404);
   });
 
-  it("purges the original, the picture and the sliced file together", async () => {
+  it("purges the original, the picture, the sliced file and the slice kept for an undo together", async () => {
     const item = await idea();
     const id = uuid();
     await putModel(item.id, id);
     await putSliced(id, slicedForm());
+    await putSliced(id, slicedForm({}, { keep: true }));
+    expect(await env.PHOTOS.get(`files/${id}/previous`)).not.toBeNull();
     await request(`/api/items/${item.id}/files/${id}`, { method: "DELETE", cookie });
     await purgeDeleted(env, Date.now() + PURGE_AFTER_MS + 60_000);
-    for (const part of ["file", "thumb", "sliced"]) expect(await env.PHOTOS.get(`files/${id}/${part}`)).toBeNull();
+    for (const part of ["file", "thumb", "sliced", "previous", "previous-thumb"]) {
+      expect(await env.PHOTOS.get(`files/${id}/${part}`)).toBeNull();
+    }
+  });
+});
+
+/** Fine, in orange PLA, with supports where needed: settings people chose (decision 0047). */
+const fine: SlicingSettings = {
+  ...DEFAULT_SLICING,
+  layerHeight: 0.12,
+  supports: "where-needed",
+  filaments: [{ material: "PLA", colorHex: "#f2754e", colorName: "Orange", finish: "basic", spoolId: "spool-1" }],
+};
+
+const patchFile = (fileId: string, json: unknown, as: string | null = cookie) =>
+  request(`/api/files/${fileId}`, { method: "PATCH", json, ...(as ? { cookie: as } : {}) });
+const restore = (fileId: string) => request(`/api/files/${fileId}/sliced/restore`, { method: "POST", cookie });
+
+describe("a model's slicing settings", () => {
+  it("are kept with the model, whole, and put back to the defaults with null", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const response = await patchFile(id, {
+      slicing: { ...fine, filaments: [{ ...fine.filaments[0], colorHex: "#F2754E" }] },
+    });
+    expect(response.status).toBe(200);
+    // Normalized: the colour as the settings write it.
+    expect((await response.json<ItemFileResponse>()).file.slicing).toEqual(fine);
+    expect((await itemOf(item.id)).files?.[0]?.slicing).toEqual(fine);
+    const cleared = await patchFile(id, { slicing: null });
+    expect((await cleared.json<ItemFileResponse>()).file.slicing).toBeNull();
+
+    const feed = await (await request("/api/changes?after=0", { cookie })).json<{ changes: Change[] }>();
+    expect(feed.changes.filter((change) => change.entity === "file").map((change) => change.action)).toEqual([
+      "created",
+      "updated",
+      "updated",
+    ]);
+  });
+
+  it("refuse settings a slicer can't use, and anything but a model", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    // A layer the 0.4 mm nozzle can't print, a setting that isn't one, a half wall, nothing at all.
+    for (const slicing of [
+      { ...fine, layerHeight: 0.32 },
+      { ...fine, speed: "fast" },
+      { ...fine, walls: 2.5 },
+      { ...fine, filaments: [] },
+      {},
+    ]) {
+      expect((await patchFile(id, { slicing })).status).toBe(400);
+    }
+    expect((await patchFile(id, {})).status).toBe(400);
+    expect((await patchFile(uuid(), { slicing: fine })).status).toBe(404);
+    expect((await patchFile("not-a-uuid", { slicing: fine })).status).toBe(400);
+    const slicer = uuid();
+    const form = modelForm({ name: "Bin.gcode.3mf" });
+    form.delete("kind");
+    await putModel(item.id, slicer, form);
+    expect((await patchFile(slicer, { slicing: fine })).status).toBe(409);
+    expect((await patchFile(id, { slicing: fine }, null)).status).toBe(401);
+  });
+
+  it("are what a slice says it was made with, checked like any", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const saved = await putSliced(id, slicedForm({ settings: { ...settings, slicing: fine } }));
+    expect((await saved.json<ItemFileResponse>()).file.slice?.settings.slicing).toEqual(fine);
+    const wrong = await putSliced(id, slicedForm({ settings: { ...settings, slicing: { ...fine, nozzle: 0.5 } } }));
+    expect(wrong.status).toBe(400);
+  });
+});
+
+describe("a model in the build's story (MCP's get_build)", () => {
+  it("says what it was sliced with, in full, and a change it isn't sliced with yet", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    await putSliced(id, slicedForm({ settings: { ...settings, layerHeight: 0.12, slicing: fine } }));
+    const sliced = await (await request(`/api/builds/${item.id}/story.md`, { cookie })).text();
+    expect(sliced).toContain(
+      "Benchy.stl (a model, sliced by Spaghetti with OrcaSlicer 2.5.0-dev for the X2D: Fine (0.12 mm layers), 2 walls and 15% crosshatch infill, tree supports where needed, a brim where needed, PLA Basic orange, Textured PEI Plate, 0.4 mm nozzle, est. 38 min)",
+    );
+    await patchFile(id, { slicing: { ...fine, layerHeight: 0.24, supports: "off" } });
+    const changed = await (await request(`/api/builds/${item.id}/story.md`, { cookie })).text();
+    expect(changed).toContain(
+      "; to be sliced next with Draft (0.24 mm layers), 2 walls and 15% crosshatch infill, no supports",
+    );
+  });
+});
+
+describe("slicing a model again", () => {
+  it("keeps the slice it replaces for one undo, which brings back its file, picture, figures and settings", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    await putSliced(id, slicedForm({ settings: { ...settings, slicing: DEFAULT_SLICING } }, { minutes: 72 }));
+    await patchFile(id, { slicing: fine });
+    const again = await putSliced(
+      id,
+      slicedForm(
+        { settings: { ...settings, layerHeight: 0.12, slicing: fine } },
+        { bytes: new Uint8Array([7, 7]), minutes: 48, keep: true },
+      ),
+    );
+    expect(again.status).toBe(200);
+    const { file } = await again.json<ItemFileResponse>();
+    expect(file).toMatchObject({ prefill: { estimatedMinutes: 48 }, slicing: fine });
+    expect(file.previous).toMatchObject({
+      prefill: { estimatedMinutes: 72 },
+      slice: { status: "sliced", settings: { slicing: DEFAULT_SLICING } },
+      hasThumb: true,
+    });
+    expect(new Uint8Array(await (await request(`/api/files/${id}/sliced`, { cookie })).arrayBuffer())).toEqual(
+      new Uint8Array([7, 7]),
+    );
+    expect(new Uint8Array(await (await env.PHOTOS.get(`files/${id}/previous`))!.arrayBuffer())).toEqual(SLICED);
+
+    const undone = await restore(id);
+    expect(undone.status).toBe(200);
+    const restored = (await undone.json<ItemFileResponse>()).file;
+    expect(restored).toMatchObject({
+      prefill: { estimatedMinutes: 72 },
+      slicing: DEFAULT_SLICING,
+      previous: null,
+      slice: { status: "sliced", settings: { slicing: DEFAULT_SLICING } },
+    });
+    expect(new Uint8Array(await (await request(`/api/files/${id}/sliced`, { cookie })).arrayBuffer())).toEqual(SLICED);
+    expect(await env.PHOTOS.get(`files/${id}/previous`)).toBeNull();
+    expect((await itemOf(item.id)).files?.[0]).toEqual(restored);
+    // Once: the slice it undid isn't kept.
+    expect((await restore(id)).status).toBe(409);
+  });
+
+  it("brings back the slice before a change it couldn't slice", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    await putSliced(id, slicedForm());
+    const failed = await putSliced(
+      id,
+      slicedForm({ status: "failed", problem: "too-big", fitScale: 80 }, { thumb: false, keep: true }),
+    );
+    expect((await failed.json<ItemFileResponse>()).file).toMatchObject({
+      slice: { status: "failed" },
+      previous: { slice: { status: "sliced" } },
+    });
+    expect((await request(`/api/files/${id}/sliced`, { cookie })).status).toBe(404);
+    const back = await (await restore(id)).json<ItemFileResponse>();
+    expect(back.file).toMatchObject({ slice: { status: "sliced" }, prefill: { estimatedMinutes: 38 }, previous: null });
+    expect((await request(`/api/files/${id}/sliced`, { cookie })).status).toBe(200);
+  });
+
+  it("forgets the kept slice once another is made without keeping one", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    await putSliced(id, slicedForm());
+    await putSliced(id, slicedForm({}, { keep: true }));
+    const plain = await (await putSliced(id, slicedForm())).json<ItemFileResponse>();
+    expect(plain.file.previous).toBeNull();
+    expect(await env.PHOTOS.get(`files/${id}/previous`)).toBeNull();
+    expect((await restore(id)).status).toBe(409);
+  });
+
+  it("is for people: an agent can't change settings or undo", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const made = await request("/api/agents", {
+      method: "POST",
+      cookie,
+      json: { name: "Claude", scopes: ["read", "capture", "attempts", "printer"] satisfies AgentScope[] },
+    });
+    const { token } = await made.json<NewTokenResponse>();
+    const headers = { Authorization: `Bearer ${token}`, Origin: "http://other.test" };
+    expect((await request(`/api/files/${id}`, { method: "PATCH", headers, json: { slicing: fine } })).status).toBe(403);
+    expect((await request(`/api/files/${id}/sliced/restore`, { method: "POST", headers })).status).toBe(403);
   });
 });
 

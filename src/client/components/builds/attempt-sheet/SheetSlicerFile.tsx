@@ -92,13 +92,13 @@ export function useSlicerFile({
    * Resolves as soon as the job is under way, with its outcome to come in `done` (wrapped, so awaiting the start
    * doesn't wait for the slice).
    */
-  const sliceDraft = async (draft: SlicerFileDraft, options: SliceOptions = {}) => {
+  const sliceDraft = async (draft: SlicerFileDraft, chosen: SliceOptions = {}) => {
     const jobs = await import("@/lib/slicing/jobs");
     const done = jobs.startSlice(queryClient, {
       fileId: draft.id,
       name: draft.file.name,
       source: draft.file,
-      options,
+      chosen,
       target: null,
     });
     return { done };
@@ -131,11 +131,11 @@ export function useSlicerFile({
     if (current.current?.draft.id === draft.id) onReady?.(draft, 1, {});
     await follow(draft, done);
   };
-  /** Slices the sheet's model again ("Slice with supports", "Scale to 80% and slice"). */
-  const reslice = async (options: SliceOptions) => {
+  /** Slices the sheet's model again with these settings ("Supports where needed", "Scale to 80% and slice"). */
+  const reslice = async (chosen: SliceOptions) => {
     const draft = current.current?.draft;
     if (draft?.kind !== "model") return;
-    const { done } = await sliceDraft(draft, options);
+    const { done } = await sliceDraft(draft, chosen);
     await follow(draft, done);
   };
   /** `sliced`: what Spaghetti's slice of a kept model said, for its .gcode.3mf (fetchKeptFile). */
@@ -184,7 +184,7 @@ export function useSlicerFile({
     choosePlate: (plate: number) => state && apply(state.draft, plate),
     /** Forgets the file in the sheet (it was saved, or the sheet starts afresh); a model's slicing goes on. */
     clear: () => setState(null),
-    reslice: (options: SliceOptions) => void reslice(options),
+    reslice: (chosen: SliceOptions) => void reslice(chosen),
     /** Takes the file off: a model's slicing stops. */
     remove: () => {
       const draft = state?.draft;
@@ -209,7 +209,7 @@ export function DraftFile({
   state: SlicerState;
   onRemove: () => void;
   /** A model: slice it again, differently. */
-  onSlice?: (options: SliceOptions) => void;
+  onSlice?: (chosen: SliceOptions) => void;
 }) {
   if (state.draft.kind === "model") {
     return (

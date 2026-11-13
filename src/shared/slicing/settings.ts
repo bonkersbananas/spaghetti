@@ -8,7 +8,6 @@
 import { BED_TYPES, NOZZLE_DIAMETERS } from "../attempts.ts";
 import { finishLabel } from "../spools.ts";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
-import type { SliceOptions } from "./types.ts";
 
 /** Off, only under what would otherwise fall (floating parts, long ledges), or under every steep overhang. */
 export type SupportPlacement = "off" | "where-needed" | "everywhere";
@@ -408,17 +407,6 @@ export function slicingFromRecord(record: {
     ...(record.bedType ? { plate: record.bedType } : {}),
     ...(record.scale !== undefined ? { scale: record.scale } : {}),
   });
-}
-
-/**
- * What decision 0046's one-tap asks were ("Slice with supports": Orca's tree supports under every steep overhang;
- * "Scale to 80 % and slice"), as chosen settings.
- */
-export function chosenFromOptions(options: SliceOptions): Partial<SlicingSettings> {
-  return {
-    ...(options.supports ? { supports: "everywhere" as const, supportStyle: "tree" as const } : {}),
-    ...(options.scale !== undefined && options.scale !== 100 ? { scale: options.scale } : {}),
-  };
 }
 
 /** The whole settings for what was chosen, with the defaults for the rest. */

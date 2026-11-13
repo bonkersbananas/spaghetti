@@ -1,8 +1,11 @@
 /**
  * Model files: an `.stl` or a plain `.3mf` (no G-code) that Spaghetti slices in the browser with OrcaSlicer's engine
  * (docs/slicer.md, decision 0046). The original is the file row's bytes; the sliced `.gcode.3mf` is a second part
- * of the same row (`/api/files/<id>/sliced`), and `slice` on the row says how it went.
+ * of the same row (`/api/files/<id>/sliced`), and `slice` on the row says how it went, with the settings it was sliced
+ * with (decision 0047).
  */
+import type { AttemptSettings } from "../attempts.ts";
+import type { SlicingSettings } from "./settings.ts";
 
 /** "slicer": a slicer's own file, kept as it is. "model": an `.stl` or plain `.3mf` that Spaghetti slices. */
 export type FileKind = "slicer" | "model";
@@ -25,6 +28,8 @@ export type SliceProblem =
   | "engine"
   /** OrcaSlicer refused it: `message` has its words. */
   | "orca"
+  /** The engine's release has no presets for the nozzle asked for (it has the 0.4 mm one so far). */
+  | "nozzle"
   /** The sliced file is over MAX_SLICER_FILE_BYTES. */
   | "too-large";
 
@@ -41,8 +46,10 @@ export interface SliceSettings {
   /** "Textured PEI Plate" */
   bedType: string;
   supports: boolean;
-  /** Percent of the original size: 100 unless it was scaled to fit. */
+  /** Percent of the original size: 100 unless it was scaled. */
   scale: number;
+  /** The settings it was sliced with, in people's words (decision 0047); absent on a slice made before them. */
+  slicing?: SlicingSettings;
   /** A 3MF's own settings: "own" for a project made for this printer, "some" (layer height, walls, infill, supports) for another printer's. */
   project?: "own" | "some";
   /** The engine release (`/slicer/<version>/`) and OrcaSlicer's version that sliced it. */
@@ -75,9 +82,18 @@ export interface FileSlice {
   at: number;
 }
 
-/** What a slice is asked to do differently from the defaults: Orca's tree supports, or a smaller model. */
-export interface SliceOptions {
-  supports?: boolean;
-  /** Percent of the original size (1-100). */
-  scale?: number;
+/**
+ * What a slice is asked for: the settings chosen, which win over a 3MF project's own and the defaults. All of them
+ * once a model has been sliced and changed; none on its first slice ("Slice it"); one for a one-tap remedy of a slice
+ * made before the settings existed ("Supports where needed", "Scale to 80 % and slice").
+ */
+export type SliceOptions = Partial<SlicingSettings>;
+
+/** The slice a re-slice replaced, kept for its undo (one step back): its record, and what its sliced file said. */
+export interface PreviousSlice {
+  slice: FileSlice;
+  prefill: AttemptSettings;
+  objects: string[];
+  slicer: string | null;
+  hasThumb: boolean;
 }

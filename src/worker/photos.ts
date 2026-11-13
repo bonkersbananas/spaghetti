@@ -40,10 +40,19 @@ export async function photoOwner(db: Db, photoId: string): Promise<string | null
   return null;
 }
 
-/** A slicer file's bytes and its plate's picture (a model's original, and its sliced .gcode.3mf), in the photos' bucket. */
-export function fileKey(fileId: string, part: "file" | "thumb" | "sliced"): string {
+/**
+ * A slicer file's bytes and its plate's picture (a model's original, and its sliced .gcode.3mf), in the photos' bucket;
+ * for a model sliced again, the slice it replaced and that one's picture, kept for its undo.
+ */
+export function fileKey(fileId: string, part: FilePart): string {
   return `files/${fileId}/${part}`;
 }
+
+export type FilePart = "file" | "thumb" | "sliced" | "previous" | "previous-thumb";
+
+/** Every R2 object a file row may have: what the purge removes with it. */
+export const fileKeys = (fileId: string) =>
+  (["file", "thumb", "sliced", "previous", "previous-thumb"] as const).map((part) => fileKey(fileId, part));
 
 export { PURGE_AFTER_MS };
 
@@ -96,9 +105,7 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     );
   for (let i = 0; i < doomedFiles.length; i += 50) {
     const batch = doomedFiles.slice(i, i + 50).map((file) => file.id);
-    await env.PHOTOS.delete(
-      batch.flatMap((fileId) => [fileKey(fileId, "file"), fileKey(fileId, "thumb"), fileKey(fileId, "sliced")]),
-    );
+    await env.PHOTOS.delete(batch.flatMap(fileKeys));
     await db.delete(attemptFiles).where(inArray(attemptFiles.id, batch));
   }
   const doomedItemFiles = await db
@@ -109,9 +116,7 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     );
   for (let i = 0; i < doomedItemFiles.length; i += 50) {
     const batch = doomedItemFiles.slice(i, i + 50).map((file) => file.id);
-    await env.PHOTOS.delete(
-      batch.flatMap((fileId) => [fileKey(fileId, "file"), fileKey(fileId, "thumb"), fileKey(fileId, "sliced")]),
-    );
+    await env.PHOTOS.delete(batch.flatMap(fileKeys));
     await db.delete(itemFiles).where(inArray(itemFiles.id, batch));
   }
   const doomedSpools = await db
