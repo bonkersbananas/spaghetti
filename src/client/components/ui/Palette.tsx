@@ -269,7 +269,7 @@ export function PaletteDialog({ open, onOpenChange, onClosed, children }: Palett
             onClosed?.(event);
             if (!event.defaultPrevented) returnFocus(event);
           }}
-          className="sg-dialog bg-lifted shadow-float fixed top-[12vh] left-1/2 z-50 flex max-h-[76vh] w-full max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl focus:outline-none"
+          className="sg-dialog sg-lifted-surface bg-lifted shadow-float fixed top-[12vh] left-1/2 z-50 flex max-h-[76vh] w-full max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl focus:outline-none"
         >
           <Dialog.Title className="sr-only">Command palette</Dialog.Title>
           {children}
