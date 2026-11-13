@@ -627,13 +627,14 @@ export function WorkspaceSlicing({
         scalable={false}
         scope="workspace"
       />
+      {/* The way back sits beside the caption where there is room for both, and under it on a phone. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p className="text-small text-ink-faint flex-1">
+        <p className="text-small text-ink-faint grow basis-72">
           The filament is the Pantry's first loaded spool, the plate and nozzle come from this page. A model keeps its
           own once you change them on its card.
         </p>
         {own && (
-          <Button variant="quiet" size="sm" onClick={() => onChange(null)}>
+          <Button variant="quiet" size="sm" onClick={() => onChange(null)} className="-ml-3">
             Back to Spaghetti's own
           </Button>
         )}

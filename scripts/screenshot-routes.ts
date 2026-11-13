@@ -3122,7 +3122,13 @@ export const shots: Shot[] = [
       const section = page.locator("section[aria-labelledby=printer-slicing]");
       await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
       await section.getByRole("button", { name: "Back to Spaghetti's own" }).waitFor();
-      await section.getByText("Saved").waitFor();
+      const saved = section.getByText("Saved");
+      await saved.waitFor();
+      // The shots' fixed clock starts Motion's fade late: finish it, or "Saved" is shot see-through.
+      await saved.evaluate(async (status) => {
+        const shown = status.closest("span[aria-live]") ?? status;
+        for (const animation of shown.getAnimations({ subtree: true })) animation.finish();
+      });
       // A tap leaves no focus ring; the click did.
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.waitForTimeout(300);
