@@ -32,7 +32,9 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
         className="bg-ink/4 flex items-center justify-center overflow-hidden rounded-md px-4 max-md:h-24 max-md:w-32 max-md:shrink-0 max-md:px-0 md:h-28"
         aria-hidden
       >
-        <span className="flex w-full items-center justify-center max-md:origin-center max-md:scale-[.5]">{visual}</span>
+        <span className="flex items-center justify-center max-md:w-[17rem] max-md:shrink-0 max-md:origin-center max-md:scale-[.45] md:w-full">
+          {visual}
+        </span>
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-3 px-3 md:pt-3 md:pb-2.5">
         <span className="flex min-w-0 flex-1 flex-col">
