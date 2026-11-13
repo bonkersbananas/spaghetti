@@ -195,7 +195,8 @@ export function FileCard({
   }
   // With a status (a model's slicing): under the text on desktop; on phones a row of its own across the card, where
   // its line and its action have room. A raised card's actions sit in its top corner, so on desktop its status also
-  // takes the room under them (a long settings row wraps only at the card's edge).
+  // takes the room under them, as far from the card's edge as its other sides (the corner's padding is tighter), and a
+  // long settings row wraps there.
   return (
     <div
       className={cn(
@@ -210,7 +211,7 @@ export function FileCard({
       <div
         className={cn(
           "col-span-3 flex min-w-0 flex-col items-start gap-1.5 md:col-start-2 md:self-start",
-          raised ? "md:col-span-2" : "md:col-span-1",
+          raised ? "md:col-span-2 md:mr-1.5" : "md:col-span-1",
         )}
       >
         {status}
