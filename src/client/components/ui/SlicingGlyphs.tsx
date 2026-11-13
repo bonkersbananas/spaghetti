@@ -81,11 +81,12 @@ export function StrengthGlyph({ strength, className }: { strength: StrengthId; c
   );
 }
 
-/** A ledge over the plate: nothing under it, one column under its far end, or columns all along it. */
+/** A ledge over the plate: nothing under it, one column under its far end, columns all along it, or a fin: a thin wall. */
 const COLUMNS: Record<SupportPlacement, number[]> = {
   off: [],
   "where-needed": [22],
   everywhere: [13, 17.5, 22],
+  fins: [],
 };
 
 export function SupportsGlyph({ placement, className }: { placement: SupportPlacement; className?: string }) {
@@ -99,6 +100,16 @@ export function SupportsGlyph({ placement, className }: { placement: SupportPlac
       {COLUMNS[placement].map((x) => (
         <rect key={x} x={x - 1} y={10} width={2} height={11} rx={0.6} opacity={0.6} />
       ))}
+      {placement === "fins" && (
+        <>
+          {/* A thin wall, with the little tines that join it to the ledge. */}
+          <rect x={15} y={11.5} width={1.6} height={9.5} rx={0.5} opacity={0.6} />
+          <rect x={20.5} y={11.5} width={1.6} height={9.5} rx={0.5} opacity={0.6} />
+          <rect x={15} y={8.5} width={7.1} height={1.2} opacity={0.6} />
+          <rect x={15} y={9.7} width={1.6} height={1.8} opacity={0.6} />
+          <rect x={20.5} y={9.7} width={1.6} height={1.8} opacity={0.6} />
+        </>
+      )}
     </svg>
   );
 }

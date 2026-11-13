@@ -14,6 +14,7 @@ import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions, SliceProblem, SliceSettings } from "@shared/slicing/types.ts";
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
+import { withFins } from "./fins";
 
 /**
  * Slices one model off the main thread: reads the .stl or .3mf, puts its objects on the X2D's plate, draws the plate
@@ -143,6 +144,15 @@ async function run(request: SliceRequest) {
       png = await picture(objects, setup);
       throw error;
     }
+    // Fins are the model's own walls: built on the part as it lies on the plate, appended to it.
+    if (slicing.supports === "fins") {
+      for (const object of objects) {
+        object.positions = await withFins(object.positions, {
+          layerHeight: slicing.layerHeight,
+          nozzle: slicing.nozzle,
+        }).then((fins) => fins.positions);
+      }
+    }
     progress("reading", 1);
 
     png = await picture(objects, setup);
@@ -154,6 +164,8 @@ async function run(request: SliceRequest) {
       setup.process.wipe_tower_y = [String(Math.round(tower.y))];
     }
     const result = await sliceWithEngine(engine, setup, objects);
+    // Orca can't see fins as supports (they are separate solids under a gap), so it warns of a floating part that the
+    // fins hold up: the caution is for a model with no supports at all.
     const cautions =
       slicing.supports === "off" && result.warnings.some((warning) => warning.kind === "need_support_on")
         ? (["floating"] as const)

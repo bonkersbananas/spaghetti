@@ -121,7 +121,7 @@ describe("the slicing settings", () => {
       "infill is a whole number from 0 to 100.",
       "scale is a whole number from 1 to 1000.",
       expect.stringMatching(/^pattern is one of crosshatch, gyroid/),
-      "supports is off, where-needed or everywhere.",
+      "supports is off, where-needed, everywhere or fins.",
       expect.stringMatching(/^supportStyle is one of tree, tree-slim/),
       "brim is auto, on or off.",
       expect.stringMatching(/^plate is one of Textured PEI Plate/),
@@ -265,5 +265,19 @@ describe("a model's orientation", () => {
     expect(slicingLine(slicingFor({ orientation: [0, 0, 1] }))).toContain("upside down");
     expect(slicingLine(DEFAULT_SLICING).join(" ")).not.toMatch(/side|upside/);
     expect(changedSlicing(DEFAULT_SLICING, slicingFor({ orientation: [1, 0, 0] }))).toEqual(["orientation"]);
+  });
+});
+
+describe("fins", () => {
+  it("are a way to place supports, said as fins", () => {
+    const fins = slicingFor({ supports: "fins" });
+    expect(fins.supports).toBe("fins");
+    expect(slicingProblems(fins)).toEqual([]);
+    expect(slicingLine(fins)).toContain("fins");
+    expect(supportWords(fins, true)).toBe("fins");
+    expect(changedSlicing(DEFAULT_SLICING, fins)).toEqual(["supports"]);
+    expect(slicingProblems({ ...DEFAULT_SLICING, supports: "wings" })).toEqual([
+      "supports is off, where-needed, everywhere or fins.",
+    ]);
   });
 });

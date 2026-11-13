@@ -19408,9 +19408,10 @@
             "enum": [
               "off",
               "where-needed",
-              "everywhere"
+              "everywhere",
+              "fins"
             ],
-            "description": "where-needed: only under what would fall (floating parts, long ledges); everywhere: every steep overhang."
+            "description": "where-needed: only under what would fall (floating parts, long ledges); everywhere: every steep overhang; fins: breakaway fins built into the model, with the slicer's supports off."
           },
           "supportStyle": {
             "type": "string",

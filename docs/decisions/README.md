@@ -70,3 +70,4 @@ Status: Accepted | Open | Superseded by NNNN
 | [0048](0048-big-files-go-in-parts.md) | Files up to 250 MB are kept; over 32 MB they go to R2 in multipart parts through the Worker, with progress and a retry on the card | Accepted |
 | [0049](0049-a-model-keeps-its-settings-and-one-slice-to-undo.md) | A model keeps its slicing settings, is sliced again in the background with the slice there kept in view, and keeps one slice to undo | Accepted |
 | [0050](0050-a-model-can-be-sliced-lying-on-another-face.md) | A model can be sliced lying on another face: its settings gain an orientation, chosen from plate pictures of the faces it can rest on, and only the slice is turned | Accepted |
+| [0051](0051-fins-are-built-into-the-model-when-it-is-sliced.md) | Supports gain Fins: Support Fins (vendored, MIT) builds breakaway fins into the model in the slice worker, loaded only when picked | Accepted |

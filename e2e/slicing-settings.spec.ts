@@ -192,3 +192,49 @@ test("lay it down: a block can be sliced on another face, the card says so, and 
   await lay.getByRole("radio", { name: /^As designed/ }).click();
   await expect.poll(async () => (await fileOf(page, id))?.slicing?.orientation).toBeNull();
 });
+
+test("fins: the drying rack is sliced with breakaway fins built into it, and nothing floats any more", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { id, title: "Drying rack", note: "" },
+  });
+  await page.goto(`/ideas/${id}`);
+  await page.getByTestId("idea-file-input").setInputFiles({
+    name: "rack.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(
+      boxesStl([
+        { at: [0, 0, 0], size: [36, 36, 4] },
+        { at: [12, 12, 4], size: [12, 12, 46] },
+        { at: [30, 15, 34], size: [26, 6, 4] },
+      ]),
+    ),
+  });
+  const files = page.getByRole("region", { name: /^Files/ });
+  await expect(files.getByText("Parts of it float in the air.")).toBeVisible({ timeout: SLICED });
+  await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
+  const plain = (await fileOf(page, id)).prefill.weightGrams as number;
+
+  await files.getByRole("button", { name: "Slice with…" }).click();
+  const settings = page.getByRole("dialog", { name: "How to slice it" });
+  const supports = settings.getByRole("group", { name: "Supports" });
+  await expect(supports.getByRole("radio", { name: /^Fins/ })).toBeVisible();
+  await supports.getByRole("radio", { name: /^Fins/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+
+  await expect(files.getByText(/fins$/)).toBeVisible({ timeout: SLICED });
+  await expect(files.getByText("Parts of it float in the air.")).toBeHidden();
+  await expect
+    .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.supports, { timeout: SLICED })
+    .toBe("fins");
+  const after = await fileOf(page, id);
+  // The object grew: the fins are printed with it.
+  expect(after.prefill.weightGrams).toBeGreaterThan(plain);
+  expect(after.slice.cautions ?? []).toEqual([]);
+});

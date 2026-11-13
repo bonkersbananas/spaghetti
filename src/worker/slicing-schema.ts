@@ -10,6 +10,7 @@ import {
   normalizeSlicing,
   SLICING_PLATES,
   type SlicingSettings,
+  SUPPORT_PLACEMENT_IDS,
   SUPPORT_STYLE_IDS,
   slicingProblems,
 } from "../shared/slicing/settings.ts";
@@ -52,9 +53,9 @@ export const slicingSettingsShape = z
     infill: z.number().int().min(LIMITS.infill.min).max(LIMITS.infill.max).describe("Percent of the inside filled."),
     pattern: z.enum(INFILL_PATTERNS).describe("The sparse infill pattern, as OrcaSlicer names it."),
     supports: z
-      .enum(["off", "where-needed", "everywhere"])
+      .enum(SUPPORT_PLACEMENT_IDS)
       .describe(
-        "where-needed: only under what would fall (floating parts, long ledges); everywhere: every steep overhang.",
+        "where-needed: only under what would fall (floating parts, long ledges); everywhere: every steep overhang; fins: breakaway fins built into the model, with the slicer's supports off.",
       ),
     supportStyle: z.enum(SUPPORT_STYLE_IDS),
     brim: z.enum(["auto", "on", "off"]),
