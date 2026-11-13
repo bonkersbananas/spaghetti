@@ -45,6 +45,7 @@ pub struct Settings {
     pub top_shell_layers: usize,
     pub bottom_shell_layers: usize,
     pub top_shell_thickness: f64,
+    pub bottom_shell_thickness: f64,
     pub sparse_density: f64,
     /// Degrees from the X axis.
     pub infill_direction: f64,
@@ -72,6 +73,12 @@ pub struct Settings {
     /// layer all the same).
     pub skirt_distance: f64,
     pub only_one_wall_top: bool,
+    /// mm: how wide bridge lines are (`bridge_line_width`, a share of the nozzle); 0 for solid infill's width.
+    pub bridge_width: f64,
+    /// Whether bridges over air and over sparse infill print as round threads, a bridge line wide and as high
+    /// (`thick_bridges`, `thick_internal_bridges`), rather than flat at the layer's height.
+    pub thick_bridges: bool,
+    pub thick_internal_bridges: bool,
 
     // What the process asks for by name, which this prints as it can (`fallbacks`) or refuses (`unsupported`).
     pub sparse_infill_pattern: String,
@@ -256,6 +263,7 @@ impl Settings {
             top_shell_layers: p.int("top_shell_layers").max(0) as usize,
             bottom_shell_layers: p.int("bottom_shell_layers").max(0) as usize,
             top_shell_thickness: p.float("top_shell_thickness"),
+            bottom_shell_thickness: p.float("bottom_shell_thickness"),
             sparse_density: share("sparse_infill_density"),
             infill_direction: p.float("infill_direction"),
             solid_infill_direction: p.float("solid_infill_direction"),
@@ -274,6 +282,9 @@ impl Settings {
             resolution: p.float("resolution"),
             skirt_distance: p.float("skirt_distance"),
             only_one_wall_top: p.bool("only_one_wall_top"),
+            bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
+            thick_bridges: p.bool("thick_bridges"),
+            thick_internal_bridges: p.bool("thick_internal_bridges"),
 
             sparse_infill_pattern: text("sparse_infill_pattern"),
             top_surface_pattern: text("top_surface_pattern"),
@@ -416,9 +427,20 @@ impl Settings {
         width - height * (1.0 - PI / 4.0)
     }
 
-    /// mm³ per mm of a bridge: a round thread the nozzle's width.
-    pub fn bridge_mm3_per_mm(&self) -> f64 {
-        PI * (self.nozzle_diameter / 2.0).powi(2)
+    /// Width, mm³ per mm and line spacing of a bridge on a layer `h` high, over air or (`internal`) over sparse
+    /// infill, as Orca's `bridging_flow`: a thick bridge is a round thread a bridge line wide (else the nozzle's
+    /// width), its lines that and 0.05 mm apart; any other is a flat line at the layer's height, a bridge line wide
+    /// (else solid infill's width).
+    pub fn bridge_flow(&self, internal: bool, h: f64) -> (f64, f64, f64) {
+        let thick = if internal { self.thick_internal_bridges } else { self.thick_bridges };
+        let given = (self.bridge_width > 0.0).then_some(self.bridge_width);
+        if thick {
+            let d = given.unwrap_or(self.nozzle_diameter);
+            (d, PI * (d / 2.0).powi(2), d + 0.05)
+        } else {
+            let w = given.unwrap_or(self.solid_infill_width);
+            (w, Settings::mm3_per_mm(w, h), Settings::spacing(w, h))
+        }
     }
 
     /// Extruded filament (mm) per mm³ of plastic.

@@ -3,6 +3,7 @@
 //! exact integer geometry. See `docs/proposals/rust-slicer.md` for what it does, how fast, and what it lacks.
 
 pub mod bambu;
+pub mod bridges;
 pub mod config;
 pub mod fill;
 pub mod gcode;
@@ -18,6 +19,7 @@ pub mod profile;
 pub mod region;
 pub mod section;
 pub mod setup;
+pub mod surfaces;
 pub mod template;
 pub mod threemf;
 #[cfg(target_arch = "wasm32")]
@@ -218,7 +220,12 @@ impl Plate {
         if let Some(first) = slices.first() {
             first_layers(&mut objects, first, &owners[0]);
         }
-        let regions = region::regions(&slices, &owners, &layers, settings);
+        // Each object's infill pattern is anchored at the middle of its bounding box, as Orca anchors it.
+        let centres: Vec<(f64, f64)> = objects
+            .iter()
+            .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
+            .collect();
+        let regions = region::regions(&slices, &owners, &layers, &centres, settings);
         drop((slices, owners));
         let t3 = now();
         let frame = bambu::Frame::new(settings.profile.clone(), &facts);
@@ -226,11 +233,6 @@ impl Plate {
         let job =
             gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
         // Each layer from its regions to its G-code in one go, so only the text stays.
-        // Each object's infill pattern is anchored at the middle of its bounding box, as Orca anchors it.
-        let centres: Vec<(f64, f64)> = objects
-            .iter()
-            .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
-            .collect();
         let texts = par::map_range(regions.len(), |i| {
             let plan = plan::plan_layer(&regions[i], i, &layers, &centres, settings);
             gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))

@@ -141,35 +141,60 @@ fn island_paths(
         if region.is_empty() {
             continue;
         }
-        if let (Role::SparseInfill, Some(pattern)) = (role, fill::Pattern::of(&s.sparse_infill_pattern)) {
-            let mut runs = sparse_runs(region, pattern, z, h, centre, s);
+        if role == Role::SparseInfill {
+            let mut runs = sparse_lines(region, layer, z, h, centre, s);
             order_runs(&mut runs, &mut at);
             for points in runs {
-                out.push(path(role, points, false, island, first, h, s));
+                if points.len() >= 2 {
+                    out.push(path(role, points, false, island, first, h, s));
+                }
             }
             continue;
         }
         let (width, _, _) = flow(role, first, h, s);
-        let grown = geom::offset(region, overlap * width);
         let solid_angle =
             if layer.is_multiple_of(2) { s.solid_infill_direction } else { s.solid_infill_direction + 90.0 };
-        let (angle, spacing) = match role {
-            Role::SparseInfill => {
-                let angle = if layer.is_multiple_of(2) { s.infill_direction } else { s.infill_direction + 90.0 };
-                (angle, Settings::spacing(width, h) / s.sparse_density)
-            }
-            Role::InternalBridge => (solid_angle, s.nozzle_diameter + 0.05),
-            _ => (solid_angle, Settings::spacing(width, h)),
+        // Each bridge spans its own way; everything else in a region fills at one angle.
+        let angled = |shapes: &Shapes, angles: &[f64]| -> Vec<(Shapes, f64)> {
+            shapes
+                .iter()
+                .zip(angles.iter().copied().chain(std::iter::repeat(solid_angle)))
+                .map(|(shape, angle)| (vec![shape.clone()], angle))
+                .collect()
         };
-        let mut runs = infill::fill(&grown, angle, spacing, 0.0);
-        order_runs(&mut runs, &mut at);
-        for points in runs {
-            if points.len() >= 2 {
-                out.push(path(role, points, false, island, first, h, s));
+        let parts: Vec<(Shapes, f64)> = match role {
+            Role::Bridge => angled(&fills.bridge, &fills.bridge_angles),
+            Role::InternalBridge => angled(&fills.internal_bridge, &fills.internal_bridge_angles),
+            _ => vec![(region.clone(), solid_angle)],
+        };
+        let spacing = match role {
+            Role::Bridge | Role::InternalBridge => s.bridge_flow(role == Role::InternalBridge, h).2,
+            _ => Settings::spacing(width, h),
+        };
+        for (part, angle) in parts {
+            let grown = geom::offset(&part, overlap * width);
+            let mut runs = infill::fill(&grown, angle, spacing, 0.0);
+            order_runs(&mut runs, &mut at);
+            for points in runs {
+                if points.len() >= 2 {
+                    out.push(path(role, points, false, island, first, h, s));
+                }
             }
         }
     }
     out
+}
+
+/// The sparse infill lines of a region on a layer, as printed: Orca's pattern where there is one, else straight
+/// lines at the infill direction, turned a quarter every other layer.
+pub fn sparse_lines(region: &Shapes, layer: usize, z: f64, h: f64, centre: (f64, f64), s: &Settings) -> Vec<Vec<Pt>> {
+    if let Some(pattern) = fill::Pattern::of(&s.sparse_infill_pattern) {
+        return sparse_runs(region, pattern, z, h, centre, s);
+    }
+    let (width, _, _) = flow(Role::SparseInfill, layer == 0, h, s);
+    let grown = geom::offset(region, s.infill_wall_overlap * width);
+    let angle = if layer.is_multiple_of(2) { s.infill_direction } else { s.infill_direction + 90.0 };
+    infill::fill(&grown, angle, Settings::spacing(width, h) / s.sparse_density, 0.0)
 }
 
 /// Sparse infill in Orca's pattern (`fill.rs`), where Orca puts its lines' middles: into the walls by Orca's
@@ -291,12 +316,14 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         Role::SolidInfill => (s.solid_infill_width, s.solid_infill_speed),
         Role::TopSurface => (s.top_surface_width, s.top_surface_speed),
         Role::BottomSurface => (s.solid_infill_width, s.solid_infill_speed),
-        Role::Bridge => (s.solid_infill_width, s.bridge_speed),
-        Role::InternalBridge => (s.nozzle_diameter, s.internal_bridge_speed),
+        Role::Bridge | Role::InternalBridge => {
+            let internal = role == Role::InternalBridge;
+            let (w, mm3, _) = s.bridge_flow(internal, h);
+            return (w, mm3, if internal { s.internal_bridge_speed } else { s.bridge_speed });
+        }
         Role::GapFill => (s.inner_wall_width, s.gap_infill_speed),
     };
-    let mm3 = if role == Role::InternalBridge { s.bridge_mm3_per_mm() } else { Settings::mm3_per_mm(w, h) };
-    (w, mm3, speed)
+    (w, Settings::mm3_per_mm(w, h), speed)
 }
 
 fn accel(role: Role, first: bool, s: &Settings) -> f64 {
