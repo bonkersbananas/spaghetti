@@ -164,6 +164,7 @@ export default function AdaptSheet({
               <Button
                 variant="primary"
                 icon={SlicerFileIcon}
+                className="w-full"
                 disabled={!validScale || isUnchanged(adaptation)}
                 onClick={() => finish("keep")}
               >

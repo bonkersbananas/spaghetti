@@ -470,6 +470,55 @@ async function sliceSaved(page: Page) {
   throw new Error("The model's slice never reached the server");
 }
 
+/** Twists (and the builds they printed) that a shot made, for its cleanup. */
+const modelTwists: string[] = [];
+
+/**
+ * A new twist with the fusilli knob adapted to 110 % and kept as its model, through the sheet; waits until it is
+ * sliced and its picture is saved. Leaves the browser on the twist's page.
+ */
+async function twistWithModel(page: Page) {
+  const id = crypto.randomUUID();
+  modelTwists.push(id);
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/twists", { headers, data: { id, name: "Fusilli jar knob" } });
+  await page.goto(`/twists/${id}`);
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  const sheet = page.getByRole("dialog", { name: "Adapt an STL" });
+  await sheet.getByTestId("adapt-file-input").setInputFiles({
+    name: FUSILLI.name,
+    mimeType: "model/stl",
+    buffer: Buffer.from(FUSILLI.bytes),
+  });
+  await sheet.getByRole("textbox", { name: "Scale" }).fill("110");
+  await sheet.getByRole("button", { name: "Keep with the twist" }).click();
+  await sheet.waitFor({ state: "hidden" });
+  await page
+    .getByRole("region", { name: "Model" })
+    .getByText(/Sliced by Spaghetti/)
+    .first()
+    .waitFor({ timeout: 90_000 });
+  for (let tries = 0; tries < 120; tries++) {
+    const { twist } = await (await page.request.get(`/api/twists/${id}`)).json();
+    if (twist?.model?.hasThumb && twist.model.slice?.status === "sliced") break;
+    await page.waitForTimeout(500);
+  }
+  await page.getByRole("img", { name: "Slicer preview: Fusilli jar knob" }).waitFor();
+  await page.waitForTimeout(400);
+}
+
+async function removeTwistModels(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const { items = [] } = await (await page.request.get("/api/items")).json().catch(() => ({ items: [] }));
+  for (const id of modelTwists) {
+    for (const item of items.filter((i: { twistId?: string }) => i.twistId === id)) {
+      await page.request.delete(`/api/items/${item.id}`, { headers });
+    }
+    await page.request.delete(`/api/twists/${id}`, { headers });
+  }
+  modelTwists.splice(0);
+}
+
 /** Waits for a sliced model's card and brings it into view. */
 async function modelInView(page: Page) {
   await page.getByRole("region", { name: /^Files/ }).evaluate((region) => region.scrollIntoView({ block: "center" }));
@@ -3046,6 +3095,49 @@ export const shots: Shot[] = [
       await sheet.getByRole("button", { name: "X", exact: true }).first().click();
       await page.waitForTimeout(500);
     },
+  },
+  {
+    // Adapted and kept (decision 0053): the twist page leads with the model's plate picture and shows its card.
+    name: "twist-model",
+    path: "/twists",
+    fullPage: true,
+    prepare: async (page) => {
+      await twistWithModel(page);
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // The Twists screen: a twist with no photo takes its model's plate picture as its cover.
+    name: "twists-model-cover",
+    path: "/twists",
+    prepare: async (page) => {
+      await twistWithModel(page);
+      await page.goto("/twists", { waitUntil: "networkidle" });
+      const alt = "Slicer preview: Fusilli jar knob";
+      await page.waitForFunction((name) => document.querySelectorAll(`img[alt="${name}"]`).length === 1, alt);
+      await page
+        .getByRole("img", { name: alt })
+        .evaluate((img) => img.closest("li")?.scrollIntoView({ block: "center", behavior: "instant" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // "Print it": the build the twist printed, its first attempt carrying the sliced file (plate picture and 3D view).
+    name: "twist-printed-build",
+    path: "/twists",
+    fullPage: true,
+    prepare: async (page) => {
+      await twistWithModel(page);
+      await page.getByRole("button", { name: "Print it" }).first().click();
+      await page.waitForURL(/\/builds\/[\w-]+$/);
+      await page
+        .getByRole("button", { name: /in 3D$/ })
+        .first()
+        .waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: removeTwistModels,
   },
   {
     name: "twist-new",

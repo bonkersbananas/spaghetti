@@ -193,7 +193,7 @@ function TwistBody({ twist }: { twist: Twist }) {
           </div>
 
           {model && (
-            <Section id="model" title="Model">
+            <section id="model" aria-label="Model">
               <SavedFileCard
                 raised
                 file={model}
@@ -204,7 +204,7 @@ function TwistBody({ twist }: { twist: Twist }) {
                     : () => removeTwistModel(queryClient, twist.id, model)
                 }
               />
-            </Section>
+            </section>
           )}
 
           <Section id="changes" title="What we changed">
