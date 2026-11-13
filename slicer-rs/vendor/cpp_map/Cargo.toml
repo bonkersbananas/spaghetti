@@ -1,0 +1,21 @@
+# cpp_map 0.2.0 (https://codeberg.org/eadf/cpp_map_rs, MIT OR Apache-2.0), vendored with one change: a skip list's
+# node levels come from a fixed sequence of its own instead of rand's thread RNG (src/skiplist/skiplist_impl.rs,
+# `LevelRng`), so boostvoronoi builds the same diagram on every run, on any thread, natively and in WebAssembly.
+# Its tests and examples are left out.
+[package]
+name = "cpp_map"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.87.0"
+description = "A simple C++ std::map emulator"
+license = "MIT OR Apache-2.0"
+repository = "https://codeberg.org/eadf/cpp_map_rs"
+publish = false
+
+[dependencies]
+smallvec = "1.15.0"
+thiserror = "2.0.17"
+
+[features]
+console_debug = []
+linkedlist_midpoint = []

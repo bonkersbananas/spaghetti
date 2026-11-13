@@ -37,6 +37,13 @@ pub fn axis(shape: &Shape, min_width: f64, max_width: f64) -> Vec<ThickLine> {
     let built = Builder::<i32>::default().with_segments(segments.iter().map(|s| Line::<i32>::from(*s)));
     let Ok(diagram) = built.and_then(|b| b.build()) else { return Vec::new() };
     let region: Shapes = vec![shape.clone()];
+    // Where a diagram comes out broken (its input segments touch or cross somewhere), an edge can lie far outside
+    // the region yet on the inner side of its own segment: both ends of every edge kept must be in the region.
+    let bb = geom::bbox_of(shape);
+    let within = |x: f64, y: f64| {
+        let p = geom::pt(x.round() as i32, y.round() as i32);
+        p.x >= bb[0] && p.x <= bb[2] && p.y >= bb[1] && p.y <= bb[3] && geom::contains(&region, p)
+    };
 
     // How far a point is from the site that made a cell: its segment, or one of the segment's ends.
     let distance = |cell: &Cell, x: f64, y: f64| -> f64 {
@@ -84,6 +91,11 @@ pub fn axis(shape: &Shape, min_width: f64, max_width: f64) -> Vec<ThickLine> {
         }
         let w = [2.0 * distance(cell, a.x(), a.y()), 2.0 * distance(cell, b.x(), b.y())];
         if w[0].max(w[1]) < min_units || w[0].min(w[1]) > max_units {
+            continue;
+        }
+        // On the boundary counts: edges into a corner end there.
+        let on_or_in = |x: f64, y: f64, w: f64| w < 1.0 || within(x, y);
+        if !on_or_in(a.x(), a.y(), w[0]) || !on_or_in(b.x(), b.y(), w[1]) {
             continue;
         }
         // An edge that reaches the boundary runs into a corner. Keep it only where the region narrows to a point
@@ -242,5 +254,35 @@ mod tests {
     #[test]
     fn a_wide_region_has_no_gap_line() {
         assert!(axis(&rect(0.0, 0.0, 10.0, 5.0), 0.05, 0.8).is_empty());
+    }
+
+    #[test]
+    fn the_axis_stays_inside_the_region_and_comes_out_the_same_every_time() {
+        // A ring with a wavy, finely cut outside around a square hole: narrow everywhere, many segments.
+        let outer: Vec<Pt> = (0..400)
+            .map(|k| {
+                let a = k as f64 / 400.0 * std::f64::consts::TAU;
+                let r = 6.0 + 0.3 * (7.0 * a).sin();
+                geom::pt(sc(r * a.cos()), sc(r * a.sin()))
+            })
+            .collect();
+        let mut hole = rect(-4.0, -4.0, 4.0, 4.0).remove(0);
+        hole.reverse();
+        let shape: Shape = vec![outer, hole];
+        let region: Shapes = vec![shape.clone()];
+        let first = axis(&shape, 0.1, 6.0);
+        assert!(!first.is_empty());
+        for line in &first {
+            for &p in &line.points {
+                assert!(geom::contains(&region, p), "{p:?} is outside the ring");
+            }
+        }
+        for _ in 0..20 {
+            let again = axis(&shape, 0.1, 6.0);
+            assert_eq!(again.len(), first.len());
+            for (a, b) in again.iter().zip(&first) {
+                assert_eq!(a.points, b.points);
+            }
+        }
     }
 }

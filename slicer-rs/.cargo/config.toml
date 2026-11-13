@@ -1,4 +1,0 @@
-# Plain WebAssembly has no source of randomness for getrandom, which boostvoronoi's skip list draws on (through
-# cpp_map and rand) only to balance itself: the module provides one (src/wasm.rs).
-[target.wasm32-unknown-unknown]
-rustflags = ['--cfg', 'getrandom_backend="custom"']
