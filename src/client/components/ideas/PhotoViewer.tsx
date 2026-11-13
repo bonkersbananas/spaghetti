@@ -91,12 +91,16 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, class
   const scroller = useRef<HTMLDivElement>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Follow the index when it changes from outside: arrow keys, the strip.
+  // Follow the index when it changes from outside: arrow keys, the strip. Opening on a later photo (the one a card was
+  // swiped to) is there at once, so it can travel from its card.
+  const placed = useRef(false);
   useEffect(() => {
     const el = scroller.current;
     if (!el?.clientWidth) return;
     const target = index * el.clientWidth;
-    if (Math.abs(el.scrollLeft - target) > 2) el.scrollTo({ left: target, behavior: scrollBehavior() });
+    if (Math.abs(el.scrollLeft - target) > 2)
+      el.scrollTo({ left: target, behavior: placed.current ? scrollBehavior() : "instant" });
+    placed.current = true;
   }, [index]);
 
   function onScroll() {
