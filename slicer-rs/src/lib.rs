@@ -42,12 +42,51 @@ pub struct Object {
     /// mm on the plate: the lowest corner of its bounding box, then the highest.
     pub min: [f64; 3],
     pub max: [f64; 3],
+    /// Its first layer's extent on the plate (min x, min y, max x, max y, mm) and area (mm²), which the plate's
+    /// description gives the printer.
+    pub first_layer: [f64; 4],
+    pub first_layer_area: f64,
 }
 
 impl Object {
     fn from_mesh(index: usize, m: &Mesh) -> Object {
         let b = m.bounds();
-        Object { name: m.name.clone(), label: index as u32 + 1, min: b.min, max: b.max }
+        Object {
+            name: m.name.clone(),
+            label: index as u32 + 1,
+            min: b.min,
+            max: b.max,
+            first_layer: [b.min[0], b.min[1], b.max[0], b.max[1]],
+            first_layer_area: 0.0,
+        }
+    }
+}
+
+/// Gives each object the parts of the first layer's outline that lie on it: their extent and area.
+fn first_layers(objects: &mut [Object], first: &geom::Shapes) {
+    let mut seen = vec![false; objects.len()];
+    for shape in first {
+        let b = geom::bbox_of(shape).map(geom::unsc);
+        let (x, y) = ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
+        let distance =
+            |o: &Object| (o.min[0] - x).max(x - o.max[0]).max(0.0).hypot((o.min[1] - y).max(y - o.max[1]).max(0.0));
+        let Some(k) = (0..objects.len()).min_by(|&a, &b| distance(&objects[a]).total_cmp(&distance(&objects[b])))
+        else {
+            return;
+        };
+        let o = &mut objects[k];
+        o.first_layer = if seen[k] {
+            [
+                o.first_layer[0].min(b[0]),
+                o.first_layer[1].min(b[1]),
+                o.first_layer[2].max(b[2]),
+                o.first_layer[3].max(b[3]),
+            ]
+        } else {
+            b
+        };
+        o.first_layer_area += geom::shape_area_mm2(shape);
+        seen[k] = true;
     }
 }
 
@@ -168,10 +207,13 @@ impl Plate {
         let slices = section::slice(&meshes, &layers, settings.resolution);
         let t2 = now();
         let facts = first_layer_facts(&slices, &layers, settings);
+        let mut objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
+        if let Some(first) = slices.first() {
+            first_layers(&mut objects, first);
+        }
         let regions = region::regions(&slices, &layers, settings);
         drop(slices);
         let t3 = now();
-        let objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
         let frame = bambu::Frame::new(profile::x2d(), &facts);
         let photos = timelapse_spots(&objects, &layers, settings);
         let job =

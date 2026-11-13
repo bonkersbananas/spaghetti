@@ -85,10 +85,11 @@ impl Frame {
             .int("min_vitrification_temperature", p.int("temperature_vitrification"))
             .bool("is_all_bbl_filament", p.text("filament_vendor") == "Bambu Lab")
             .float("max_additional_fan", p.float("additional_cooling_fan_speed"))
-            // Held only for a print under 0.3 mm covering more than 40 000 mm².
+            // Held only for a print under 0.3 mm covering more than 400 mm²: Orca's threshold reads "40 000 mm²",
+            // but it compares 40 000 × 10¹⁰ with an area in its units (10⁻¹² mm²), which is 400 mm².
             .bool(
                 "hold_chamber_temp_for_flat_print",
-                facts.top > 0.0 && facts.top < 0.3 && facts.first_layer_area > 40000.0,
+                facts.top > 0.0 && facts.top < 0.3 && facts.first_layer_area > 400.0,
             )
             .floats("first_layer_print_min", &facts.first_layer_min)
             .floats("first_layer_print_size", &size)
@@ -389,8 +390,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_flat_wide_print_holds_the_chamber_temperature_as_orca_does() {
+        let frame = |top: f64, area: f64| {
+            let facts = Facts {
+                first_layer_min: [100.0, 100.0],
+                first_layer_max: [130.0, 130.0],
+                first_layer_area: area,
+                top,
+                bed_type: "Textured PEI Plate".into(),
+            };
+            Frame::new(profile::x2d(), &facts)
+        };
+        // The start G-code takes its flat-print branches (`G29 H R` among them) only for a print under 0.3 mm that
+        // covers more than 400 mm².
+        let flat = |f: Frame| f.start().contains("G29 H R");
+        assert!(flat(frame(0.2, 401.0)));
+        assert!(!flat(frame(0.2, 399.0)), "small");
+        assert!(!flat(frame(0.4, 900.0)), "taller than 0.3 mm");
+        assert!(!flat(benchy()), "the Benchy");
+    }
+
     fn object(min: [f64; 3], max: [f64; 3]) -> crate::Object {
-        crate::Object { name: "model.stl".into(), label: 1, min, max }
+        crate::Object {
+            name: "model.stl".into(),
+            label: 1,
+            min,
+            max,
+            first_layer: [min[0], min[1], max[0], max[1]],
+            first_layer_area: 0.0,
+        }
     }
 
     #[test]

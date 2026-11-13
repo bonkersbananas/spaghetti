@@ -99,6 +99,8 @@ pub struct Settings {
     pub filament: &'static str,
     pub filament_type: &'static str,
     pub filament_colour: &'static str,
+    /// Bambu's id for the filament (`tray_info_idx`), which the printer matches against what its trays hold.
+    pub filament_tray: &'static str,
     pub filament_diameter: f64,
     pub filament_density: f64,
     pub flow_ratio: f64,
@@ -197,6 +199,7 @@ impl Default for Settings {
             filament: "Bambu PLA Basic @BBL X2D 0.4 nozzle",
             filament_type: "PLA",
             filament_colour: "#F2754E",
+            filament_tray: "GFA00",
             filament_diameter: 1.75,
             filament_density: 1.26,
             flow_ratio: 0.98,

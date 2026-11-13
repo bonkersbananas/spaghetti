@@ -52,13 +52,22 @@ pub fn gcode_3mf(
     let setting = |key: &str| settings.iter().find(|(k, _)| *k == key).map(|(_, v)| v.first().to_string());
     let nozzle = setting("nozzle_diameter").unwrap_or_else(|| "0.4".into());
     let bed_type = setting("curr_bed_type").unwrap_or_else(|| "Textured PEI Plate".into());
+    // The first layer's extent: what Orca tells the printer the plate's objects cover.
     let bbox_all = if objects.is_empty() {
         [0.0; 4]
     } else {
         objects.iter().fold([f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY], |b, o| {
-            [b[0].min(o.min[0]), b[1].min(o.min[1]), b[2].max(o.max[0]), b[3].max(o.max[1])]
+            let f = o.first_layer;
+            [b[0].min(f[0]), b[1].min(f[1]), b[2].max(f[2]), b[3].max(f[3])]
         })
     };
+    // Orca's "first layer time" in the plate's description: the start and the first layer.
+    let first_layer_time = stats.prepare_time + stats.layer_times.first().copied().unwrap_or(0.0);
+    let x2d = crate::profile::x2d();
+    // The X2D's two extruders, as Orca's enum numbers them, and each one's nozzle.
+    let extruder_types: Vec<&str> =
+        x2d.list("extruder_type").iter().map(|t| if *t == "Bowden" { "1" } else { "0" }).collect();
+    let nozzles = x2d.list("nozzle_diameter").join(",");
     let grams = round(stats.weight, 2);
     let metres = round(stats.filament_mm / 1000.0, 2);
 
@@ -133,6 +142,8 @@ pub fn gcode_3mf(
     }
     model_settings.extend(["  </plate>".into(), "</config>".into(), String::new()]);
     files.push(("Metadata/model_settings.config", model_settings.join("\n").into_bytes()));
+    // As Orca writes it for the X2D with one filament on the left extruder (`filament_maps` 1), which is what
+    // Bambu Studio and the printer read to map the filament to a nozzle and a tray.
     let mut slice_info = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
         "<config>".into(),
@@ -143,42 +154,65 @@ pub fn gcode_3mf(
         "  </header>".into(),
         "  <plate>".into(),
         r#"    <metadata key="index" value="1"/>"#.into(),
-        format!(r#"    <metadata key="nozzle_diameters" value="{}"/>"#, xml(&nozzle)),
+        format!(r#"    <metadata key="extruder_type" value="{}"/>"#, extruder_types.join(" ")),
+        r#"    <metadata key="nozzle_volume_type" value="0"/>"#.into(),
+        r#"    <metadata key="printer_model_id" value=""/>"#.into(),
+        format!(r#"    <metadata key="nozzle_diameters" value="{}"/>"#, xml(&nozzles)),
+        format!(r#"    <metadata key="timelapse_type" value="{}"/>"#, xml(x2d.text("timelapse_type"))),
         format!(r#"    <metadata key="prediction" value="{}"/>"#, stats.total_time.round()),
-        format!(r#"    <metadata key="weight" value="{grams}"/>"#),
+        format!(r#"    <metadata key="weight" value="{grams:.2}"/>"#),
+        format!(r#"    <metadata key="first_layer_time" value="{first_layer_time:.6}"/>"#),
         r#"    <metadata key="outside" value="false"/>"#.into(),
         r#"    <metadata key="support_used" value="false"/>"#.into(),
         format!(r#"    <metadata key="label_object_enabled" value="{}"/>"#, objects.len() < 64),
+        r#"    <metadata key="enable_filament_dynamic_map" value="false"/>"#.into(),
+        r#"    <metadata key="has_filament_switcher" value="false"/>"#.into(),
+        r#"    <metadata key="filament_maps" value="1"/>"#.into(),
+        r#"    <metadata key="limit_filament_maps" value="0"/>"#.into(),
     ];
     for o in objects {
         slice_info.push(format!(r#"    <object identify_id="{}" name="{}" skipped="false"/>"#, o.label, xml(&o.name)));
     }
     slice_info.push(format!(
-        r#"    <filament id="1" type="{}" color="{}" used_m="{metres}" used_g="{grams}"/>"#,
+        r#"    <filament id="1" tray_info_idx="{}" type="{}" color="{}" used_m="{metres:.2}" used_g="{grams:.2}" group_id="0" nozzle_diameter="{:.2}" volume_type="Standard" used_for_object="true" used_for_support="false"/>"#,
+        xml(s.filament_tray),
         xml(s.filament_type),
-        xml(s.filament_colour)
+        xml(s.filament_colour),
+        s.nozzle_diameter,
     ));
+    slice_info.push(format!(
+        r#"    <nozzle id="0" extruder_id="1" nozzle_diameter="{}" volume_type="Standard"/>"#,
+        crate::template::format_g(s.nozzle_diameter)
+    ));
+    slice_info.push("    <layer_filament_lists>".into());
+    slice_info.push(format!(
+        r#"      <layer_filament_list filament_list="0" layer_ranges="0 {}" />"#,
+        stats.layers.saturating_sub(1)
+    ));
+    slice_info.push("    </layer_filament_lists>".into());
     slice_info.extend(["  </plate>".into(), "</config>".into(), String::new()]);
     files.push(("Metadata/slice_info.config", slice_info.join("\n").into_bytes()));
     let objects_json: Vec<String> = objects
         .iter()
         .map(|o| {
+            let f = o.first_layer;
             format!(
-                r#"{{"id":{},"name":{},"bbox":[{},{},{},{}],"layer_height":{}}}"#,
+                r#"{{"area":{},"bbox":[{},{},{},{}],"id":{},"layer_height":{},"name":{}}}"#,
+                o.first_layer_area,
+                f[0],
+                f[1],
+                f[2],
+                f[3],
                 o.label,
-                json(&o.name),
-                o.min[0],
-                o.min[1],
-                o.max[0],
-                o.max[1],
-                s.layer_height
+                s.first_layer_height,
+                json(&o.name)
             )
         })
         .collect();
     files.push((
         "Metadata/plate_1.json",
         format!(
-            r#"{{"bbox_all":[{},{},{},{}],"bbox_objects":[{}],"bed_type":{},"filament_colors":[{}],"filament_ids":[0],"first_extruder":0,"is_seq_print":false,"nozzle_diameter":{},"version":2}}"#,
+            r#"{{"bbox_all":[{},{},{},{}],"bbox_objects":[{}],"bed_type":{},"filament_colors":[{}],"filament_ids":[0],"first_extruder":0,"first_layer_time":{},"is_seq_print":false,"nozzle_diameter":{},"version":2}}"#,
             bbox_all[0],
             bbox_all[1],
             bbox_all[2],
@@ -186,9 +220,15 @@ pub fn gcode_3mf(
             objects_json.join(","),
             json(bed_type_key(&bed_type)),
             json(s.filament_colour),
+            first_layer_time,
             nozzle
         )
         .into_bytes(),
+    ));
+    // Which filament each nozzle prints, in order: the one filament on the left nozzle.
+    files.push((
+        "Metadata/filament_sequence.json",
+        br#"{"plate_1":{"nozzle_sequence":[0],"optimal_assignment":[0],"sequence":[1]}}"#.to_vec(),
     ));
     let mut project = String::from("{\n");
     for (i, (key, value)) in settings.iter().enumerate() {

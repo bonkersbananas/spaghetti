@@ -88,6 +88,7 @@ fn a_cube_becomes_a_file_the_app_reads() {
         "Metadata/model_settings.config",
         "Metadata/slice_info.config",
         "Metadata/plate_1.json",
+        "Metadata/filament_sequence.json",
         "Metadata/project_settings.config",
         "Metadata/plate_1.png",
     ] {
@@ -101,6 +102,10 @@ fn a_cube_becomes_a_file_the_app_reads() {
     assert!(info.contains(&format!(r#"<metadata key="prediction" value="{}"/>"#, s.total_time.round())));
     assert!(info.contains(r#"<object identify_id="1" name="cube.stl" skipped="false"/>"#));
     assert!(info.contains(r##"type="PLA" color="#F2754E""##));
+    // What the printer maps the filament by, as Orca writes it for the X2D: Bambu PLA Basic on the left nozzle.
+    assert!(info.contains(r#"<filament id="1" tray_info_idx="GFA00" type="PLA""#));
+    assert!(info.contains(r#"<metadata key="filament_maps" value="1"/>"#));
+    assert!(info.contains(r#"<nozzle id="0" extruder_id="1" nozzle_diameter="0.4" volume_type="Standard"/>"#));
     let png = entry(&out.file, "Metadata/plate_1.png");
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
 }
