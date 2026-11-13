@@ -33,9 +33,9 @@ export const Route = createFileRoute("/_app/ideas/")({
   component: Ideas,
 });
 
-/** The grid both pages of ideas share: two columns on phones, more on desktop. */
-// Up next is the featured row: fewer, wider cards than the inbox below it.
+/** Up next is the featured row: fewer, wider cards than the inbox below it. */
 const upNextGrid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-6 2xl:grid-cols-3";
+/** The inbox's grid: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 function Ideas() {
