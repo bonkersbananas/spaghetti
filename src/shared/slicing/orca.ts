@@ -63,6 +63,8 @@ export interface PresetSet {
 
 export const first = (value: ConfigValue | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
 const number = (value: ConfigValue | undefined): number => Number.parseFloat(first(value) ?? "");
+/** Millimetres to a hundredth, as the settings keep layer heights. */
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
 /**
  * The process preset a layer height starts from, among those for the machine: the one for that height (Orca's
@@ -224,11 +226,13 @@ export function readSlicing(
  */
 export function applySlicing(configs: Pick<OrcaConfigs, "machine" | "process">, settings: SlicingSettings): void {
   const { machine, process } = configs;
-  if (!(Math.abs(number(process.layer_height) - settings.layerHeight) < 0.001)) {
+  // A value that reads as the setting is left as it is: a project's 12.5 % infill is "13 %" in the settings' words,
+  // and stays 12.5 % unless someone picks another.
+  if (round2(number(process.layer_height)) !== round2(settings.layerHeight)) {
     process.layer_height = String(settings.layerHeight);
   }
-  if (number(process.wall_loops) !== settings.walls) process.wall_loops = String(settings.walls);
-  if (number(process.sparse_infill_density) !== settings.infill) {
+  if (Math.round(number(process.wall_loops)) !== settings.walls) process.wall_loops = String(settings.walls);
+  if (Math.round(number(process.sparse_infill_density)) !== settings.infill) {
     process.sparse_infill_density = `${settings.infill}%`;
   }
   if (first(process.sparse_infill_pattern) !== settings.pattern) process.sparse_infill_pattern = settings.pattern;

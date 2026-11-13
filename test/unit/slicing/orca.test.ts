@@ -154,6 +154,21 @@ describe("settings onto Orca's keys and back", () => {
     expect(configs.process).toEqual(before);
   });
 
+  it("leave a project's values that the settings round as they are, unless another is picked", () => {
+    const configs = standard();
+    Object.assign(configs.process, { sparse_infill_density: "12.5%", layer_height: "0.125" });
+    const read = readSlicing({ ...configs, filaments: [] });
+    expect(read).toMatchObject({ infill: 13, layerHeight: 0.13 });
+    applySlicing(configs, read);
+    expect(configs.process).toMatchObject({ sparse_infill_density: "12.5%", layer_height: "0.125" });
+    applySlicing(configs, { ...read, infill: 15, layerHeight: 0.12 });
+    expect(configs.process).toMatchObject({ sparse_infill_density: "15%", layer_height: "0.12" });
+    // A key the config doesn't have is written.
+    const bare = { machine: {}, process: {} as Config };
+    applySlicing(bare, DEFAULT_SLICING);
+    expect(bare.process).toMatchObject({ layer_height: "0.2", wall_loops: "2", sparse_infill_density: "15%" });
+  });
+
   it("name the presets a slice that failed early would have used", () => {
     expect(presetRecord(DEFAULT_SLICING)).toEqual({
       machine: "Bambu Lab X2D 0.4 nozzle",
