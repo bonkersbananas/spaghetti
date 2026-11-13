@@ -48,7 +48,7 @@ import { cn } from "@/lib/cn";
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
  * Strength, Supports, Filament), and the rest under More. A tap changes the model's settings at once, and the card
  * slices it again in the background (lib/slicing/jobs.ts). On phones a tall sheet, its result at the thumb; on
- * desktop a popover beside the card, its result on top. Loaded the first time it opens.
+ * desktop a popover hanging below the card, which shows the result. Loaded the first time it opens.
  */
 
 /** The spools offered as tiles, at most: a pantry is rarely bigger, and the rest are a pick under the Pantry. */
@@ -271,8 +271,12 @@ function MoreSettings({
     slice?.status === "failed" && slice.fitScale && ["too-big", "too-tall", "too-many"].includes(slice.problem ?? "")
       ? slice.fitScale
       : null;
+  // The kind of supports means nothing while they are off: none is shown picked, and picking one turns them on.
+  const supportsOn = settings.supports !== "off";
+  // Room in each stepper for the widest value of the column (the size's, where there is one), so they line up.
+  const room = scalable ? `${LIMITS.scale.max}%` : `${LIMITS.infill.max}%`;
   const summary = [
-    `${supportStyleWords(settings.supportStyle)} supports`,
+    supportsOn ? `${supportStyleWords(settings.supportStyle)} supports` : "",
     settings.brim === "auto" ? "brim where needed" : settings.brim === "on" ? "brim" : "no brim",
     `${settings.walls} walls`,
     `${settings.infill}% ${patternWords(settings.pattern)}`,
@@ -287,6 +291,7 @@ function MoreSettings({
       title="More"
       icon={SettingsIcon}
       summary={<MetaList>{summary}</MetaList>}
+      appearance="plain"
     >
       <div className="flex flex-col gap-5 pt-1">
         <SettingRow label="Kind of supports" wide>
@@ -295,14 +300,20 @@ function MoreSettings({
               <ToggleChip
                 key={choice.id}
                 tone="semolina"
-                selected={choice.id === settings.supportStyle}
-                onClick={() => set({ supportStyle: choice.id as SupportStyle })}
+                selected={supportsOn && choice.id === settings.supportStyle}
+                onClick={() =>
+                  set({ supportStyle: choice.id as SupportStyle, ...(supportsOn ? {} : { supports: "where-needed" }) })
+                }
               >
                 {choice.label}
               </ToggleChip>
             ))}
           </ChipRow>
-          {style && <Effect name={style.label} effect={style.effect} />}
+          {supportsOn ? (
+            style && <Effect name={style.label} effect={style.effect} />
+          ) : (
+            <p className="text-small text-ink-faint">Supports are off. Pick a kind to have them where needed.</p>
+          )}
         </SettingRow>
         <SettingRow label="Brim" wide>
           <SegmentedControl<Brim>
@@ -320,6 +331,7 @@ function MoreSettings({
             value={settings.walls}
             min={LIMITS.walls.min}
             max={LIMITS.walls.max}
+            room={room}
             onChange={(walls) => set({ walls })}
           />
         </SettingRow>
@@ -331,6 +343,7 @@ function MoreSettings({
             max={LIMITS.infill.max}
             step={5}
             format={(value) => `${value}%`}
+            room={room}
             onChange={(infill) => set({ infill })}
           />
         </SettingRow>
@@ -394,6 +407,7 @@ function MoreSettings({
                 max={LIMITS.scale.max}
                 step={10}
                 format={(value) => `${value}%`}
+                room={room}
                 onChange={(scale) => set({ scale })}
               />
             </span>
@@ -457,23 +471,20 @@ export function SliceAbout({
 
 export interface SliceSettingsProps extends SlicingChoicesProps {
   file: { id: string; name: string; url: string };
-  /** Where the slice stands, with what helps: the plate, its figures, progress, before → after and its undo. */
-  result: ReactNode;
   sliced?: string;
 }
 
 /**
- * On desktop, in a popover beside the card: the choices, as tall as the window lets them be, and under them, always
- * in view, the result. The popover's own padding is the scroller's, so the fade at its edges reaches the corners.
+ * On desktop, in a popover hanging below the card, whose card shows the result: the choices, as tall as the window
+ * lets them be. The popover's own padding is the scroller's, so the fade at its edges reaches the corners.
  */
-export function SliceSettingsPanel({ file, result, sliced, ...choices }: SliceSettingsProps) {
+export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsProps) {
   return (
-    <div className="-m-4 flex max-h-(--radix-popover-content-available-height) flex-col">
-      <div className="scroll-fade flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto overscroll-contain p-4 pb-5">
+    <div className="scroll-fade -m-4 max-h-(--radix-popover-content-available-height) overflow-y-auto overscroll-contain p-5">
+      <div className="flex flex-col gap-7">
         <SlicingChoices {...choices} />
         <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
       </div>
-      {result && <div className="shrink-0 px-3 pb-3">{result}</div>}
     </div>
   );
 }
@@ -486,7 +497,12 @@ export default function SliceSettingsSheet({
   result,
   sliced,
   ...choices
-}: SliceSettingsProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
+}: SliceSettingsProps & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Where the slice stands, with what helps: the plate, its figures, progress, before → after and its undo. */
+  result: ReactNode;
+}) {
   return (
     <Sheet
       open={open}

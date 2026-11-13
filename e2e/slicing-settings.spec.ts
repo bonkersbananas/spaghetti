@@ -55,6 +55,9 @@ test("changing a model's quality slices it again in the background, says what ch
   await files.getByRole("button", { name: "Slice with…" }).click();
   const settings = page.getByRole("dialog", { name: "How to slice it" });
   const quality = settings.getByRole("group", { name: "Quality" });
+  // Where the result shows: at the foot of a phone's sheet, which covers the card; on desktop the card itself, which
+  // the popover hangs below.
+  const result = isMobile ? settings : files;
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
   if (isMobile) {
     // Every control in the sheet, More's too, has a thumb's target.
@@ -66,29 +69,30 @@ test("changing a model's quality slices it again in the background, says what ch
   await expect(quality.getByRole("radio", { name: /^Extra draft/ })).toBeChecked();
   await expect(settings.getByText("Extra draft · quickest, roughest")).toBeVisible();
   // Slicing again, the slice there and what it said stay.
-  await expect(settings.getByRole("progressbar", { name: "Slicing" })).toHaveAttribute(
+  await expect(result.getByRole("progressbar", { name: "Slicing" })).toHaveAttribute(
     "aria-valuetext",
     /^Slicing with Extra draft/,
   );
-  await expect(settings.getByText(`About ${before} min`)).toBeVisible();
+  await expect(result.getByText(`About ${before} min`)).toBeVisible();
   // The model keeps the settings at once, before its slice is made.
   await expect.poll(async () => (await fileOf(page, id))?.slicing?.layerHeight).toBe(0.28);
 
   release();
   // Sliced: what the change did, and its undo.
-  const undo = settings.getByRole("button", { name: "Undo" });
+  const undo = result.getByRole("button", { name: "Undo" });
   await expect(undo).toBeVisible({ timeout: SLICED });
   const after = await fileOf(page, id);
   expect(after.slice.settings.slicing.layerHeight).toBe(0.28);
   expect(after.previous.prefill.estimatedMinutes).toBe(before);
   expect(after.prefill.estimatedMinutes).toBeLessThan(before);
-  await expect(settings.getByText(`${before} min`, { exact: true })).toBeVisible();
-  await expect(settings.getByText(`${after.prefill.estimatedMinutes} min`, { exact: true })).toBeVisible();
+  await expect(result.getByText(`${before} min`, { exact: true })).toBeVisible();
+  await expect(result.getByText(`${after.prefill.estimatedMinutes} min`, { exact: true })).toBeVisible();
 
-  // Undone: the slice before comes back, settings and all, and nothing more to undo.
+  // Undone: the slice before comes back, settings and all, and nothing more to undo. (On desktop the popover stays
+  // open while its card is used.)
   await undo.click();
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
-  await expect(settings.getByText(`About ${before} min`)).toBeVisible();
+  await expect(result.getByText(`About ${before} min`)).toBeVisible();
   await expect
     .poll(async () => {
       const file = await fileOf(page, id);
@@ -102,7 +106,7 @@ test("changing a model's quality slices it again in the background, says what ch
   await page.reload();
   await expect(files.getByText(`About ${before} min`)).toBeVisible();
   // (Each piece of the card's line carries its dot: it is matched at its end.)
-  await expect(files.getByText(/Standard$/)).toBeVisible();
+  await expect(files.getByText(/Standard quality$/)).toBeVisible();
   await files.getByRole("button", { name: "Slice with…" }).click();
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
 });

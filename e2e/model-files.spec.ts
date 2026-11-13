@@ -38,7 +38,7 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   // with the print, not the file. ("Slice with…" is there while it slices too.)
   await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
   await expect(files.getByText(/^About \d+ min$/)).toBeVisible();
-  await expect(files.getByText(/Standard$/)).toBeVisible();
+  await expect(files.getByText(/Standard quality$/)).toBeVisible();
 
   // It is on the server: after a reload it is still sliced. With no photo, its plate picture is the idea's cover.
   await page.reload();

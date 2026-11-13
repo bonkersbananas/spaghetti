@@ -12,6 +12,11 @@ interface StepperProps {
   step?: number;
   /** How the number reads: "15%". */
   format?: (value: number) => string;
+  /**
+   * Room for the widest value any stepper in its column shows ("1000%"), so the column's buttons line up and none
+   * changes width as its value does.
+   */
+  room?: string;
   disabled?: boolean;
   className?: string;
 }
@@ -31,6 +36,7 @@ export function Stepper({
   max = 999,
   step = 1,
   format = String,
+  room,
   disabled,
   className,
 }: StepperProps) {
@@ -75,9 +81,14 @@ export function Stepper({
             down();
           }
         }}
-        className="text-body tabular text-ink focus-ring md:text-small min-w-6 rounded-xs px-0.5 text-center font-semibold"
+        className="text-body tabular text-ink focus-ring md:text-small grid min-w-6 rounded-xs px-0.5 text-center font-semibold"
       >
-        {format(value)}
+        {room && (
+          <span className="invisible col-start-1 row-start-1" aria-hidden>
+            {room}
+          </span>
+        )}
+        <span className="col-start-1 row-start-1">{format(value)}</span>
       </span>
       <button
         type="button"

@@ -89,7 +89,7 @@ export function ChoiceTiles<T extends string>({
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
-                  : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
+                  : "bg-tile text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
                 (option.disabled || disabled) && "hover:shadow-soft cursor-default opacity-50",
               )}
             >
@@ -107,7 +107,7 @@ export function ChoiceTiles<T extends string>({
                   {option.glyph}
                 </span>
               )}
-              <span className="text-small w-full truncate font-semibold">{option.label}</span>
+              <span className="text-small line-clamp-2 w-full font-semibold text-balance">{option.label}</span>
               {option.detail && (
                 <span className={cn("text-caption tabular w-full truncate", !selected && "text-ink-faint")}>
                   {option.detail}

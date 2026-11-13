@@ -330,10 +330,19 @@ export function changedSlicing(before: SlicingSettings, after: SlicingSettings):
 
 /* Saying it -------------------------------------------------------------------------------------------------- */
 
-/** "Fine", or "0.16 mm layers" for a height without a name. */
+/**
+ * "Fine", "Standard quality" (a line can't say which Standard it means otherwise: the strength has one too), or
+ * "0.16 mm layers" for a height without a name.
+ */
 export function qualityWords(layerHeight: number): string {
-  return qualityOf(layerHeight)?.label ?? `${Number(layerHeight.toFixed(2))} mm layers`;
+  const quality = qualityOf(layerHeight);
+  if (!quality) return `${Number(layerHeight.toFixed(2))} mm layers`;
+  return quality.id === "standard" ? "Standard quality" : quality.label;
 }
+
+/** "Strong", or "Standard strength" (as the quality has a Standard too). */
+export const strengthWords = (strength: Strength) =>
+  strength.id === "standard" ? "Standard strength" : strength.label;
 
 /** "0.12 mm": a layer height as slicers write it, beside its name. */
 export const layerMillimetres = (layerHeight: number) => `${layerHeight.toFixed(2)} mm`;

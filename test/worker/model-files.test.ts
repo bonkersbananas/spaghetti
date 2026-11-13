@@ -347,7 +347,8 @@ describe("slicing a model again", () => {
     expect(new Uint8Array(await (await request(`/api/files/${id}/sliced`, { cookie })).arrayBuffer())).toEqual(
       new Uint8Array([7, 7]),
     );
-    expect(new Uint8Array(await (await env.PHOTOS.get(`files/${id}/previous`))!.arrayBuffer())).toEqual(SLICED);
+    const kept = await env.PHOTOS.get(`files/${id}/previous`);
+    expect(new Uint8Array((await kept?.arrayBuffer()) ?? new ArrayBuffer(0))).toEqual(SLICED);
 
     const undone = await restore(id);
     expect(undone.status).toBe(200);

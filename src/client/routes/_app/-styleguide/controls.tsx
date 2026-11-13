@@ -14,6 +14,7 @@ export function ControlSection() {
   const [minutes, setMinutes] = useState<number | undefined>(130);
   const [color, setColor] = useState<string | undefined>(SAMPLE_COLOR);
   const [open, setOpen] = useState(false);
+  const [plainOpen, setPlainOpen] = useState(false);
   return (
     <Section
       id="controls"
@@ -59,6 +60,21 @@ export function ControlSection() {
           >
             <p className="text-body text-ink-soft">The optional detail lives here, out of the way of the quick path.</p>
           </Disclosure>
+          <Label>Disclosure, plain: among other groups on a sheet or popover (a model's More)</Label>
+          <div className="bg-lifted shadow-float rounded-xl p-5">
+            <Disclosure
+              open={plainOpen}
+              onOpenChange={setPlainOpen}
+              title="More"
+              icon={Icons.SettingsIcon}
+              summary="tree supports · brim where needed · 2 walls · 15% crosshatch"
+              appearance="plain"
+            >
+              <p className="text-body text-ink-soft">
+                Its rows sit in the sheet's own column, with no panel of their own.
+              </p>
+            </Disclosure>
+          </div>
           <Label>Action bar (phones)</Label>
           <p className="text-body text-ink-soft">
             <code className="text-small">ActionBar</code> puts a screen's main action within thumb reach, on top of the

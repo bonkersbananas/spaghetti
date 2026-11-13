@@ -15,7 +15,6 @@ import { SliceSettingsPanel } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
-import { ThreeDButton } from "@/components/viewer/ThreeDButton";
 import type { AttemptFileView } from "@/lib/items";
 import { Label, Panel, Section } from "./shared";
 
@@ -256,7 +255,7 @@ export function SlicingSection() {
             state={sliced()}
             prefill={PREFILL}
             download="#"
-            plateOverlay={<ThreeDButton file={SAMPLE_MODEL} />}
+            view3d={{ file: SAMPLE_MODEL }}
             onRemove={noop}
             details={{ open: noop }}
             phone={false}
@@ -267,7 +266,7 @@ export function SlicingSection() {
             state={sliced()}
             prefill={PREFILL}
             download="#"
-            plateOverlay={<ThreeDButton file={SAMPLE_MODEL} glyph />}
+            view3d={{ file: SAMPLE_MODEL }}
             details={{ open: noop }}
             phone={false}
             compact
@@ -278,9 +277,9 @@ export function SlicingSection() {
 
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
-          <Label>How to slice it (live): a popover beside the card on desktop, a tall sheet on phones</Label>
+          <Label>How to slice it (live): a popover hanging below the card on desktop, a tall sheet on phones</Label>
           {/* As the popover draws it: lifted, floating, its padding the panel's own. */}
-          <div className="bg-lifted shadow-float w-full max-w-md rounded-lg p-4">
+          <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "fusilli-knob.stl", url: "#" }}
               settings={settings}
@@ -290,12 +289,14 @@ export function SlicingSection() {
               slice={SAMPLE_SLICE}
               scalable
               sliced="#"
-              result={<SliceResult state={sliced()} prefill={PREFILL} phone={false} />}
             />
           </div>
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <Label>Its result: slicing again, what the change did with its undo, and a change it couldn't slice</Label>
+          <Label>
+            Its result at a phone's sheet's foot: slicing again, what the change did with its undo, and a change it
+            couldn't slice
+          </Label>
           <Panel className="flex max-w-md flex-col gap-5">
             <SliceResult
               state={sliced({ again: { fraction: 0.42, words: "Fine" } })}
@@ -312,7 +313,7 @@ export function SlicingSection() {
             />
           </Panel>
           <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
-          <div className="bg-lifted shadow-float w-full max-w-md rounded-lg p-4">
+          <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#" }}
               settings={{ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }}
@@ -322,7 +323,6 @@ export function SlicingSection() {
               slice={TOO_BIG}
               scalable
               moreOpen
-              result={null}
             />
           </div>
         </div>
