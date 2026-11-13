@@ -1,0 +1,14 @@
+# 0047. Slicing settings are one shape, in people's words, mapped to OrcaSlicer in one place
+
+Status: Accepted
+
+**Decision:** What people change when Spaghetti slices a model is one plain JSON shape, `SlicingSettings` in `shared/slicing/settings.ts`: the layer height (named Fine 0.12, Standard 0.20, Draft 0.24 and Extra draft 0.28 mm; another height is kept as a number), walls, infill and its pattern (named together as the strengths Light, Standard and Strong), supports (off, where needed, everywhere) and how they are built (Orca's tree, slim, strong and hybrid trees, normal and snug), the brim (auto, on, off), the filaments (from the Pantry: material, colour, brand, finish and the spool's id; PLA in no colour anyone chose only when there is none), the plate, the nozzle and the scale. Once normalized every field is there. The defaults (`defaults.ts`) are OrcaSlicer's 0.20 mm Standard for the X2D on the Textured PEI plate, as decision 0046 sliced. `shared/slicing/orca.ts` is the one place that knows Orca's names: which of its X2D presets a slice starts from (the process for the layer height, Standard before High Quality; Extra draft is the 0.24 mm one at 0.28) and which keys say each setting, both ways. A slice takes each setting from what was chosen, else from what a 3MF project says, else from the defaults.
+
+**Why:** Carl Oscar asked (Nov 13) for slicing that is easy to set, with a well designed interface, and to be able to use it for real later. People think in "smoother", "stronger" and "hold up that arm", not in `support_critical_regions_only`; a shape in those words can be shown on a card, kept per model, reported to agents and taken by the Rust slicer of decision 0046's last consequence (`slicer-rs`, [rust-slicer.md](../proposals/rust-slicer.md)) without knowing Orca. Each mapping was tried on the engine: "where needed" is Orca's "support critical regions only" (a floating arm and a long ledge get supports, a steep slope doesn't), "everywhere" its usual automatic supports (every overhang past 30°), and every pattern, style and brim value slices.
+
+**Consequences:**
+
+- The settings name nothing of Orca's. A setting is added in `settings.ts` (its words, its check) and mapped in `orca.ts` (its keys both ways); `readSlicing(applySlicing(x))` stays `x`, which the tests hold.
+- Writing settings onto Orca's configs changes only what differs, so what the settings can't tell apart survives a re-slice (a project's brim ears are a brim that is on).
+- A project made for another printer at 0.16 mm now starts from Orca's own 0.16 mm process, with its walls and infill, where it took the 0.20 mm one squeezed to 0.16.
+- The engine's release has presets for the 0.4 mm nozzle only: the shape takes 0.2, 0.6 and 0.8 mm, and slicing for them waits for a release with their presets (`MissingPreset`).

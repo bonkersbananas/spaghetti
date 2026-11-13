@@ -1,6 +1,7 @@
 import engine from "virtual:slicer-engine";
 import type { AttemptSettings } from "@shared/attempts";
-import { defaultSettings } from "@shared/slicing/defaults.ts";
+import { presetRecord } from "@shared/slicing/orca.ts";
+import { chosenFromOptions, slicingFor } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions, SliceProblem } from "@shared/slicing/types.ts";
 import type { SliceMessage, SlicePhase, SliceRequest } from "./slice-worker";
 
@@ -48,7 +49,7 @@ const failed = (problem: SliceProblem, options: SliceOptions): NotSliced => ({
     status: "failed",
     problem,
     settings: {
-      ...defaultSettings(options),
+      ...presetRecord(slicingFor(chosenFromOptions(options))),
       scale: options.scale ?? 100,
       engine: engine.version,
       orca: engine.orca.version,

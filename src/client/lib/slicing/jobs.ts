@@ -1,6 +1,7 @@
 import type { AttemptFile, ItemFileResponse } from "@shared/api";
-import { defaultSettings } from "@shared/slicing/defaults.ts";
 import { slicedName } from "@shared/slicing/files.ts";
+import { presetRecord } from "@shared/slicing/orca.ts";
+import { chosenFromOptions, slicingFor } from "@shared/slicing/settings.ts";
 import type { SliceOptions } from "@shared/slicing/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
@@ -143,7 +144,12 @@ export function startSlice(
         slice: {
           status: "failed",
           problem: "engine",
-          settings: { ...defaultSettings(entry.options), scale: entry.options.scale ?? 100, engine: "", orca: "" },
+          settings: {
+            ...presetRecord(slicingFor(chosenFromOptions(entry.options))),
+            scale: entry.options.scale ?? 100,
+            engine: "",
+            orca: "",
+          },
           at: Date.now(),
         },
       };
