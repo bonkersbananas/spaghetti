@@ -5,6 +5,7 @@ import {
   applySlicing,
   DEFAULT_PRESETS,
   filamentPreset,
+  filamentStandIn,
   machinePreset,
   orcaBedType,
   presetRecord,
@@ -51,7 +52,31 @@ describe("Orca's presets for the settings", () => {
     expect(filamentPreset({ material: "PAHT-CF" }, 0.4)).toBe("Generic PA-CF @BBL X2D 0.4 nozzle");
     expect(filamentPreset({ material: "TPE" }, 0.4)).toBe("Generic TPU @BBL X2D 0.4 nozzle");
     expect(filamentPreset({ material: "Wood" }, 0.4)).toBe("Generic PLA @BBL X2D 0.4 nozzle");
-    expect(filamentPreset({ material: "PETG" }, 0.6)).toBe("Generic PETG @BBL X2D 0.6 nozzle");
+  });
+
+  it("name each nozzle's filament presets as Bambu does: one set for the 0.6 and 0.8 mm", () => {
+    expect(filamentPreset({ material: "PLA" }, 0.2)).toBe("Bambu PLA Basic @BBL X2D 0.2 nozzle");
+    expect(filamentPreset({ material: "PETG" }, 0.2)).toBe("Generic PETG @BBL X2D 0.2 nozzle");
+    expect(filamentPreset({ material: "PETG" }, 0.6)).toBe("Generic PETG @BBL X2D");
+    expect(filamentPreset({ material: "PLA" }, 0.8)).toBe("Bambu PLA Basic @BBL X2D");
+    expect(filamentPreset({ material: "TPU" }, 0.8)).toBe("Generic TPU @BBL X2D");
+  });
+
+  it("slice what the 0.2 mm nozzle has no preset for as its nearest kin, and say so", () => {
+    expect(filamentPreset({ material: "PETG-CF" }, 0.2)).toBe("Generic PETG @BBL X2D 0.2 nozzle");
+    expect(filamentStandIn({ material: "PETG-CF" }, 0.2)).toEqual({ material: "PETG-CF", as: "PETG" });
+    expect(filamentPreset({ material: "PLA-CF" }, 0.2)).toBe("Generic PLA @BBL X2D 0.2 nozzle");
+    expect(filamentPreset({ material: "PCTG" }, 0.2)).toBe("Generic PETG @BBL X2D 0.2 nozzle");
+    expect(filamentPreset({ material: "TPU" }, 0.2)).toBe("Generic PLA @BBL X2D 0.2 nozzle");
+    expect(filamentStandIn({ material: "TPU 95A" }, 0.2)).toEqual({ material: "TPU 95A", as: "PLA" });
+    expect(filamentPreset({ material: "PA6-CF" }, 0.2)).toBe("Generic PLA @BBL X2D 0.2 nozzle");
+    // Silk is Bambu's own silk PLA there: the same thing, nothing to say.
+    expect(filamentPreset({ material: "PLA", finish: "silk" }, 0.2)).toBe("Bambu PLA Silk @BBL X2D 0.2 nozzle");
+    expect(filamentStandIn({ material: "PLA", finish: "silk" }, 0.2)).toBeNull();
+    // Every other nozzle has them all.
+    expect(filamentStandIn({ material: "PETG-CF" }, 0.4)).toBeNull();
+    expect(filamentStandIn({ material: "TPU" }, 0.6)).toBeNull();
+    expect(filamentStandIn({ material: "PLA" }, 0.2)).toBeNull();
   });
 
   it("call the smooth PEI plate what Orca calls it", () => {
@@ -192,6 +217,15 @@ describe("settings onto Orca's keys and back", () => {
     expect(presetRecord({ ...DEFAULT_SLICING, layerHeight: 0.28, supports: "where-needed" })).toMatchObject({
       process: "0.24mm Standard @BBL X2D",
       supports: true,
+    });
+    expect(presetRecord({ ...DEFAULT_SLICING, nozzle: 0.2, layerHeight: 0.1 })).toMatchObject({
+      machine: "Bambu Lab X2D 0.2 nozzle",
+      process: "0.10mm Standard @BBL X2D 0.2 nozzle",
+      filaments: ["Bambu PLA Basic @BBL X2D 0.2 nozzle"],
+    });
+    expect(presetRecord({ ...DEFAULT_SLICING, nozzle: 0.8, layerHeight: 0.56 })).toMatchObject({
+      process: "0.40mm Standard @BBL X2D 0.8 nozzle",
+      filaments: ["Bambu PLA Basic @BBL X2D"],
     });
   });
 });

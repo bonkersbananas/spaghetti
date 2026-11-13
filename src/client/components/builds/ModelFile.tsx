@@ -2,11 +2,17 @@ import { fileUrl } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
-import { workshopDefaults } from "@shared/slicing/pantry.ts";
+import { fittedNozzles, workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
 import { type SlicingSettings, slicingFor, slicingSummary } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
-import { finishesOnComputer, problemSentence, sliceSummary, worthRetrying } from "@shared/slicing/words.ts";
+import {
+  finishesOnComputer,
+  problemSentence,
+  sliceSummary,
+  standInSentence,
+  worthRetrying,
+} from "@shared/slicing/words.ts";
 import { DEFAULT_PRINTER } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -394,6 +400,8 @@ function statusOf(
     case "sliced": {
       const { again, change, ahead } = state;
       const floating = !quiet && !again && !!state.slice.cautions?.includes("floating");
+      // A filament its nozzle has no preset for was sliced as its nearest kin: said once, quietly.
+      const standIn = !quiet && !again ? standInSentence(slicingOfSlice(state.slice)) : null;
       return {
         lines: (
           <>
@@ -434,6 +442,7 @@ function statusOf(
             {!again && !ahead && quiet && !change && (
               <span className="text-small text-ink-faint">Sliced with these settings.</span>
             )}
+            {standIn && <span className="text-small text-ink-soft">{standIn}</span>}
             {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
           </>
         ),
@@ -693,6 +702,7 @@ export default function ModelFileCard({
     onChange: (next: SlicingSettings) => change_(next),
     spools,
     plates: setup.plates,
+    nozzles: fittedNozzles(setup),
     slice: file.slice,
     scalable: isStlName(file.name),
     recipes: offered,

@@ -12,12 +12,13 @@ import {
 } from "@shared/slicing/settings.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import type { SpoolLike } from "@shared/spools";
+import { DEFAULT_PRINTER } from "@shared/spools";
 import { useEffect, useState } from "react";
 import { ModelCard, type ModelState, SliceResult } from "@/components/builds/ModelFile";
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
-import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
+import { LayersGlyph, NozzleGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import type { AttemptFileView } from "@/lib/items";
 import type { LyingState } from "@/lib/slicing/orientations";
 import { Label, Panel, Section } from "./shared";
@@ -250,7 +251,10 @@ export function SlicingSection() {
               onChange={setQuality}
             />
           </Panel>
-          <Label>Glyphs: the layers of each quality, how solid each strength is, where supports go</Label>
+          <Label>
+            Glyphs: the layers of each quality, how solid each strength is, where supports go, which nozzle prints (the
+            line it lays as wide as it is)
+          </Label>
           <div className="text-ink-soft flex flex-wrap items-center gap-4">
             {QUALITIES.map((choice) => (
               <LayersGlyph key={choice.id} quality={choice.id} />
@@ -263,6 +267,10 @@ export function SlicingSection() {
             {SUPPORT_PLACEMENTS.map((choice) => (
               <SupportsGlyph key={choice.id} placement={choice.id} />
             ))}
+            <span className="bg-ink/10 h-6 w-px" aria-hidden />
+            <NozzleGlyph diameter={0.4} side="left" />
+            <NozzleGlyph diameter={0.2} side="right" />
+            <NozzleGlyph diameter={0.8} side={null} />
           </div>
           <Label>Before → after: what a change did, the new figure in ink</Label>
           <BeforeAfter
@@ -396,7 +404,8 @@ export function SlicingSection() {
         <div className="flex min-w-0 flex-col gap-4">
           <Label>
             How to slice it (live): a panel beside the page on desktop, two columns that need no scrolling at 1440×900;
-            a tall sheet on phones, one column in the same order
+            a tall sheet on phones, one column in the same order. A 0.2 mm nozzle is fitted on the right, so the nozzle
+            is a choice
           </Label>
           {/* As the panel draws it: lifted, floating. */}
           <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
@@ -407,6 +416,10 @@ export function SlicingSection() {
               onChange={setSettings}
               spools={SPOOLS}
               plates={["Textured PEI Plate", "Smooth PEI Plate"]}
+              nozzles={[
+                { diameter: 0.4, nozzle: "main" },
+                { diameter: 0.2, nozzle: "auxiliary" },
+              ]}
               slice={SAMPLE_SLICE}
               scalable
               recipes={RECIPES}
@@ -457,7 +470,11 @@ export function SlicingSection() {
             model's
           </Label>
           <Panel className="max-w-md">
-            <WorkspaceSlicing value={defaults} onChange={(next) => setDefaults(next ?? undefined)} />
+            <WorkspaceSlicing
+              value={defaults}
+              onChange={(next) => setDefaults(next ?? undefined)}
+              nozzles={DEFAULT_PRINTER.nozzles}
+            />
           </Panel>
         </div>
       </div>

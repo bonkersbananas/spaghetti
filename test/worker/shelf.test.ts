@@ -233,6 +233,12 @@ describe("printer and slots", () => {
     expect((await put({ slicing: { ...fine, plate: "Cool Plate" } })).status).toBe(400);
     expect((await put({ slicing: { ...fine, layerHeight: 0.4 } })).status).toBe(400);
     expect((await put({ slicing: { layerHeight: 0.12 } })).status).toBe(400);
+    // A nozzle of their own, its layer height that nozzle's: Standard on the 0.2 mm is 0.10 mm.
+    const small = { ...fine, layerHeight: 0.1, nozzle: 0.2 };
+    expect((await put({ slicing: small })).status).toBe(200);
+    expect((await getPrinter()).setup.slicing).toEqual(small);
+    expect((await put({ slicing: { ...fine, layerHeight: 0.2, nozzle: 0.2 } })).status).toBe(400);
+    expect((await put({ slicing: { ...fine, nozzle: 0.5 } })).status).toBe(400);
     expect((await put({ slicing: null })).status).toBe(200);
     expect((await getPrinter()).setup.slicing).toBeUndefined();
   });

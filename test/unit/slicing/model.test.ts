@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SLICING } from "../../../src/shared/slicing/defaults.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "../../../src/shared/slicing/model.ts";
 import type { SlicingSettings } from "../../../src/shared/slicing/settings.ts";
+import { withNozzle } from "../../../src/shared/slicing/settings.ts";
 import type { FileSlice } from "../../../src/shared/slicing/types.ts";
 import { slicingDetail } from "../../../src/shared/slicing/words.ts";
 
@@ -60,6 +61,7 @@ describe('what a change is, after "Slicing with"', () => {
   it("names the one thing that changed", () => {
     expect(changeWords(DEFAULT_SLICING, fine)).toBe("Fine");
     expect(changeWords(DEFAULT_SLICING, { ...DEFAULT_SLICING, layerHeight: 0.16 })).toBe("0.16 mm layers");
+    expect(changeWords(DEFAULT_SLICING, withNozzle(DEFAULT_SLICING, 0.2))).toBe("the 0.2 mm nozzle");
     expect(changeWords(DEFAULT_SLICING, { ...DEFAULT_SLICING, supports: "where-needed" })).toBe(
       "supports where needed",
     );

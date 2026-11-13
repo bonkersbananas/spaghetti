@@ -9,6 +9,8 @@ import {
   printerName,
   problemSentence,
   sliceSummary,
+  slicingDetail,
+  standInSentence,
   worthRetrying,
 } from "../../../src/shared/slicing/words.ts";
 
@@ -64,5 +66,16 @@ describe("what a model's card says", () => {
     expect(finishesOnComputer(failed({ problem: "memory", device: "phone" }))).toBe(true);
     expect(finishesOnComputer(failed({ problem: "memory", device: "computer" }))).toBe(false);
     expect(finishesOnComputer(null)).toBe(false);
+  });
+});
+
+describe("a filament the nozzle has no preset for", () => {
+  it("says what it was sliced as, in the sheet's words and the story's", () => {
+    const petgCf = { ...DEFAULT_SLICING, nozzle: 0.2, layerHeight: 0.1, filaments: [{ material: "PETG-CF" }] };
+    expect(standInSentence(petgCf)).toBe("No 0.2 mm preset for PETG-CF: sliced as PETG.");
+    expect(slicingDetail(petgCf)).toContain("0.2 mm nozzle (PETG-CF sliced as PETG, which has a preset for it)");
+    expect(slicingDetail(petgCf)).toMatch(/^Standard \(0\.10 mm layers\)/);
+    expect(standInSentence({ ...petgCf, nozzle: 0.4 })).toBeNull();
+    expect(standInSentence({ ...petgCf, filaments: [{ material: "PLA" }] })).toBeNull();
   });
 });

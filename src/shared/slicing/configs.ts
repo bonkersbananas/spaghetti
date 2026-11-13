@@ -18,7 +18,7 @@ import {
   readSlicing,
   STAND_IN_COLOURS,
 } from "./orca.ts";
-import { layerRange, type SlicingFilament, type SlicingSettings } from "./settings.ts";
+import { layerRange, type SlicingFilament, type SlicingSettings, withNozzle } from "./settings.ts";
 import type { SliceSettings } from "./types.ts";
 
 export type { PresetSet } from "./orca.ts";
@@ -122,8 +122,9 @@ export function sliceSetup(
   } = {},
 ): SliceSetup {
   const chosen = input.settings ?? {};
-  const defaults = input.defaults ?? DEFAULT_SLICING;
-  const nozzle = chosen.nozzle ?? defaults.nozzle;
+  const nozzle = chosen.nozzle ?? (input.defaults ?? DEFAULT_SLICING).nozzle;
+  // The defaults for the nozzle chosen: their quality keeps its name there (Standard is 0.10 mm on the 0.2 mm).
+  const defaults = withNozzle(input.defaults ?? DEFAULT_SLICING, nozzle);
   const machineName = machinePreset(nozzle);
   const machineBase = presets.machine[machineName];
   if (!machineBase) throw new MissingPreset(machineName);

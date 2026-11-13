@@ -3,7 +3,8 @@ import { cn } from "@/lib/cn";
 
 /**
  * Small pictures of what a slicing choice does, drawn in the ink around them (currentColor): the layers a quality
- * prints, how solid a strength fills a part, and where supports go under a ledge. 28 × 24, for ChoiceTiles.
+ * prints, how solid a strength fills a part, where supports go under a ledge, and which nozzle prints. 28 × 24, for
+ * ChoiceTiles.
  */
 
 const glyph = "h-6 w-7 shrink-0";
@@ -120,4 +121,33 @@ export function SupportsGlyph({ placement, className }: { placement: SupportPlac
 export function PlatePicture({ src, className }: { src: string | null; className?: string }) {
   if (!src) return <span className={cn("bg-wash size-3/4 rounded-md", className)} aria-hidden />;
   return <img src={src} alt="" draggable={false} className={cn("size-full object-contain", className)} />;
+}
+
+/**
+ * The X2D's two nozzles side by side, the one a slice is for drawn solid with the line it lays under it, as wide as
+ * the nozzle (a 0.2 mm lays a fine one, a 0.8 mm a fat one), the other faint. `side` null: a nozzle that isn't
+ * fitted, on its own.
+ */
+export function NozzleGlyph({
+  diameter,
+  side,
+  className,
+}: {
+  diameter: number;
+  side: "left" | "right" | null;
+  className?: string;
+}) {
+  const tip = 0.5 + diameter * 2.5;
+  const nozzle = (x: number, on: boolean) => (
+    <g key={x} opacity={on ? 1 : 0.28}>
+      <rect x={x - 3.5} y={1} width={7} height={9} rx={1.5} />
+      <path d={`M${x - 3} 10.5 L${x + 3} 10.5 L${x + tip} 15.5 L${x - tip} 15.5 Z`} />
+      {on && <rect x={x - 6} y={19} width={12} height={1 + diameter * 4} rx={(1 + diameter * 4) / 2} opacity={0.7} />}
+    </g>
+  );
+  return (
+    <svg viewBox="0 0 28 24" className={cn(glyph, className)} aria-hidden fill="currentColor">
+      {side === null ? nozzle(14, true) : [nozzle(8, side === "left"), nozzle(20, side === "right")]}
+    </svg>
+  );
 }

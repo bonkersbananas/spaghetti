@@ -69,7 +69,10 @@ export interface SlicingFilament {
 }
 
 export interface SlicingSettings {
-  /** mm. Fine 0.12, Standard 0.20, Draft 0.24, Extra draft 0.28 (`QUALITIES`); another (a project's 0.16) is fine. */
+  /**
+   * mm. For the 0.4 mm nozzle Fine 0.12, Standard 0.20, Draft 0.24, Extra draft 0.28 (`QUALITIES`); each nozzle has
+   * its own (`qualitiesFor`). Another height (a project's 0.16) is fine, within what the nozzle prints (`layerRange`).
+   */
   layerHeight: number;
   /** Wall loops round the outside. */
   walls: number;
@@ -114,13 +117,33 @@ export interface Quality extends Choice<QualityId> {
   layerHeight: number;
 }
 
-/** Layer heights by name. The mm is shown beside the name. */
+/** Layer heights by name, for the 0.4 mm nozzle (`qualitiesFor` has each nozzle's). The mm is shown beside the name. */
 export const QUALITIES: readonly Quality[] = [
   { id: "fine", label: "Fine", layerHeight: 0.12, effect: "slower, smoother" },
   { id: "standard", label: "Standard", layerHeight: 0.2, effect: "the usual balance" },
   { id: "draft", label: "Draft", layerHeight: 0.24, effect: "quicker, lines show" },
   { id: "extra-draft", label: "Extra draft", layerHeight: 0.28, effect: "quickest, roughest" },
 ];
+
+/**
+ * Each nozzle's layer heights by name: Bambu's own X2D processes where it has one (Fine is its High or Balanced
+ * Quality, Standard its Standard; the 0.2 mm's Draft its 0.12 mm Balanced), the rest that nozzle's coarsest process
+ * at a taller layer, Extra draft the tallest the nozzle prints (seven tenths of its width). orca.ts picks the process.
+ */
+const QUALITY_HEIGHTS: Readonly<Record<string, Readonly<Record<QualityId, number>>>> = {
+  "0.2": { fine: 0.08, standard: 0.1, draft: 0.12, "extra-draft": 0.14 },
+  "0.4": { fine: 0.12, standard: 0.2, draft: 0.24, "extra-draft": 0.28 },
+  "0.6": { fine: 0.18, standard: 0.3, draft: 0.36, "extra-draft": 0.42 },
+  "0.8": { fine: 0.24, standard: 0.4, draft: 0.48, "extra-draft": 0.56 },
+};
+
+/** The named qualities for a nozzle: the same four names, at that nozzle's own heights. */
+export function qualitiesFor(nozzle: number): readonly Quality[] {
+  const heights = QUALITY_HEIGHTS[String(nozzle)];
+  if (heights) return QUALITIES.map((quality) => ({ ...quality, layerHeight: heights[quality.id] }));
+  // A nozzle without its own: the 0.4 mm's, in proportion.
+  return QUALITIES.map((quality) => ({ ...quality, layerHeight: round2((quality.layerHeight * nozzle) / 0.4) }));
+}
 
 export type StrengthId = "light" | "standard" | "strong";
 export interface Strength extends Choice<StrengthId> {
@@ -188,9 +211,24 @@ export function layerRange(nozzle: number): { min: number; max: number } {
   return { min: round2(nozzle * 0.2), max: round2(nozzle * 0.7) };
 }
 
-/** The named quality of a layer height ("Fine" for 0.12 mm), or null for another height. */
-export const qualityOf = (layerHeight: number): Quality | null =>
-  QUALITIES.find((quality) => Math.abs(quality.layerHeight - layerHeight) < 0.001) ?? null;
+/** The named quality of a layer height on a nozzle ("Fine" for 0.12 mm on the 0.4 mm), or null for another height. */
+export const qualityOf = (layerHeight: number, nozzle: number = DEFAULT_SLICING.nozzle): Quality | null =>
+  qualitiesFor(nozzle).find((quality) => Math.abs(quality.layerHeight - layerHeight) < 0.001) ?? null;
+
+/**
+ * The settings for another nozzle. The layer height keeps its name (Standard's 0.20 mm on the 0.4 mm nozzle is
+ * Standard's 0.10 mm on the 0.2 mm); a height without a name keeps its share of the nozzle's width (0.16 mm on the
+ * 0.4 mm is 0.08 mm on the 0.2 mm), within what the new nozzle prints. The rest stays as it was.
+ */
+export function withNozzle(settings: SlicingSettings, nozzle: number): SlicingSettings {
+  if (nozzle === settings.nozzle || !SLICING_NOZZLES.includes(nozzle)) return settings;
+  const named = qualityOf(settings.layerHeight, settings.nozzle);
+  const range = layerRange(nozzle);
+  const height = named
+    ? (qualitiesFor(nozzle).find((quality) => quality.id === named.id)?.layerHeight ?? settings.layerHeight)
+    : round2((settings.layerHeight * nozzle) / settings.nozzle);
+  return { ...settings, nozzle, layerHeight: Math.min(range.max, Math.max(range.min, height)) };
+}
 
 /** The named strength of walls, infill and pattern together, or null when they are set by hand. */
 export const strengthOf = (settings: Pick<SlicingSettings, "walls" | "infill" | "pattern">): Strength | null =>
@@ -365,8 +403,8 @@ export function changedSlicing(before: SlicingSettings, after: SlicingSettings):
  * "Fine", "Standard quality" (a line can't say which Standard it means otherwise: the strength has one too), or
  * "0.16 mm layers" for a height without a name.
  */
-export function qualityWords(layerHeight: number): string {
-  const quality = qualityOf(layerHeight);
+export function qualityWords(layerHeight: number, nozzle: number = DEFAULT_SLICING.nozzle): string {
+  const quality = qualityOf(layerHeight, nozzle);
   if (!quality) return `${Number(layerHeight.toFixed(2))} mm layers`;
   return quality.id === "standard" ? "Standard quality" : quality.label;
 }
@@ -384,6 +422,12 @@ export function orientationWords(settings: Pick<SlicingSettings, "orientation">)
 
 /** "0.12 mm": a layer height as slicers write it, beside its name. */
 export const layerMillimetres = (layerHeight: number) => `${layerHeight.toFixed(2)} mm`;
+
+/**
+ * "0.2 mm nozzle" for a slice made for any nozzle but the 0.4 mm, which most are made for and goes without saying.
+ */
+export const nozzleWords = (settings: Pick<SlicingSettings, "nozzle">) =>
+  settings.nozzle === DEFAULT_SLICING.nozzle ? "" : `${settings.nozzle} mm nozzle`;
 
 /** "PLA Basic orange", "PETG black", "PLA": a filament the way people say it, for one quiet line. */
 export function filamentWords(filament: SlicingFilament): string {
@@ -415,7 +459,8 @@ export function slicingLine(settings: SlicingSettings): string[] {
   const [first, ...others] = settings.filaments;
   const strength = strengthOf(settings);
   return [
-    qualityWords(settings.layerHeight),
+    qualityWords(settings.layerHeight, settings.nozzle),
+    nozzleWords(settings),
     first ? filamentWords(first) : "",
     others.length ? `+${others.length} more` : "",
     supportWords(settings),
@@ -431,7 +476,7 @@ export function slicingLine(settings: SlicingSettings): string[] {
 
 /**
  * What a model is sliced with, in a line a person can read at a glance: "Standard · Everyday strength · No supports ·
- * PLA Basic jade white", with the way it lies and its size when they aren't the usual. The settings row on the card
+ * PLA Basic jade white", with the nozzle, the way it lies and its size when they aren't the usual. The settings row on the card
  * says it; the Printer page's folded defaults use the same words without the filament.
  */
 export function slicingSummary(settings: SlicingSettings): string[] {
@@ -439,7 +484,8 @@ export function slicingSummary(settings: SlicingSettings): string[] {
   const strength = strengthOf(settings);
   const supports = supportWords(settings);
   return [
-    qualityOf(settings.layerHeight)?.label ?? `${Number(settings.layerHeight.toFixed(2))} mm layers`,
+    qualityOf(settings.layerHeight, settings.nozzle)?.label ?? `${Number(settings.layerHeight.toFixed(2))} mm layers`,
+    nozzleWords(settings),
     strength
       ? strengthWords(strength)
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
@@ -484,10 +530,22 @@ export function slicingFromRecord(record: {
 
 /**
  * The settings a workspace sets for models nobody set up (the Printer page, decision 0051): how a model prints, not
- * with what. The filament comes from the Pantry, the plate and the nozzle from the Printer page.
+ * with what. The filament comes from the Pantry and the plate from the Printer page; the nozzle is one of those
+ * fitted (`defaultNozzle`), and the layer height is that nozzle's.
  */
-export const DEFAULT_KEYS = ["layerHeight", "walls", "infill", "pattern", "supports", "supportStyle", "brim"] as const;
-export type SlicingDefaults = Pick<SlicingSettings, (typeof DEFAULT_KEYS)[number]>;
+export const DEFAULT_KEYS = [
+  "layerHeight",
+  "walls",
+  "infill",
+  "pattern",
+  "supports",
+  "supportStyle",
+  "brim",
+  "nozzle",
+] as const;
+/** The nozzle is optional: defaults kept before they named one (or that never picked one) mean the main nozzle. */
+export type SlicingDefaults = Pick<SlicingSettings, Exclude<(typeof DEFAULT_KEYS)[number], "nozzle">> &
+  Partial<Pick<SlicingSettings, "nozzle">>;
 
 /** The part of a whole set of settings a workspace keeps as its defaults. */
 export function slicingDefaultsOf(settings: SlicingSettings): SlicingDefaults {

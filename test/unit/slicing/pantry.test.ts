@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "../../../src/shared/slicing/defaults.ts";
 import {
+  defaultNozzle,
   engineSlices,
   filamentOfSpool,
+  fittedNozzles,
   ownedPlate,
   pantryFilament,
   slicingSpools,
   workshopDefaults,
 } from "../../../src/shared/slicing/pantry.ts";
+import { type SlicingDefaults, slicingDefaultsOf } from "../../../src/shared/slicing/settings.ts";
 import { DEFAULT_PRINTER, type PrinterSetup, type SpoolLike } from "../../../src/shared/spools.ts";
 
 const spool = (id: string, change: Partial<SpoolLike> = {}): SpoolLike => ({
@@ -69,14 +72,45 @@ describe("a slice's defaults from the workshop", () => {
       plates: ["Smooth PEI Plate"],
       nozzles: { ...DEFAULT_PRINTER.nozzles, main: { diameter: 0.6, hardened: true } },
     };
+    // Standard is the 0.6 mm nozzle's own: 0.30 mm.
     expect(workshopDefaults({ spools: [spool("pla", { slot: "A1" })], setup })).toEqual({
       ...DEFAULT_SLICING,
       filaments: [{ material: "PLA", spoolId: "pla" }],
       plate: "Smooth PEI Plate",
       nozzle: 0.6,
+      layerHeight: 0.3,
     });
-    expect(engineSlices(0.4)).toBe(true);
-    expect(engineSlices(0.6)).toBe(false);
+    for (const nozzle of [0.2, 0.4, 0.6, 0.8]) expect(engineSlices(nozzle)).toBe(true);
+  });
+
+  it("offer the nozzle sizes fitted, one when both nozzles are the same", () => {
+    expect(fittedNozzles(DEFAULT_PRINTER)).toEqual([{ diameter: 0.4, nozzle: "main" }]);
+    const mixed = {
+      nozzles: { main: { diameter: 0.4, hardened: true }, auxiliary: { diameter: 0.2, hardened: false } },
+    };
+    expect(fittedNozzles(mixed)).toEqual([
+      { diameter: 0.4, nozzle: "main" },
+      { diameter: 0.2, nozzle: "auxiliary" },
+    ]);
+  });
+
+  it("slice for the nozzle the Printer page's defaults name while it is fitted, else the main one", () => {
+    const nozzles = { main: { diameter: 0.4, hardened: true }, auxiliary: { diameter: 0.2, hardened: false } };
+    const fine = { ...DEFAULT_SLICING, layerHeight: 0.08, nozzle: 0.2 };
+    const setup: PrinterSetup = { ...DEFAULT_PRINTER, nozzles, slicing: slicingDefaultsOf(fine) };
+    expect(defaultNozzle(setup)).toBe(0.2);
+    expect(workshopDefaults({ spools: [], setup })).toMatchObject({ nozzle: 0.2, layerHeight: 0.08 });
+    // The 0.2 mm taken out: the main nozzle, at its own Fine.
+    const swapped = { ...setup, nozzles: { ...nozzles, auxiliary: { diameter: 0.4, hardened: true } } };
+    expect(defaultNozzle(swapped)).toBe(0.4);
+    expect(workshopDefaults({ spools: [], setup: swapped })).toMatchObject({ nozzle: 0.4, layerHeight: 0.12 });
+    // Defaults kept before they named a nozzle: the main one.
+    const { nozzle: _, ...older } = slicingDefaultsOf({ ...DEFAULT_SLICING, layerHeight: 0.24 });
+    const main02 = { ...DEFAULT_PRINTER, nozzles: { ...nozzles, main: { diameter: 0.2, hardened: true } } };
+    expect(workshopDefaults({ spools: [], setup: { ...main02, slicing: older as SlicingDefaults } })).toMatchObject({
+      nozzle: 0.2,
+      layerHeight: 0.12,
+    });
   });
 
   it("keep a base's own spool while it is still in the Pantry with filament on it", () => {

@@ -2,6 +2,8 @@
  * What the app (and Claude, through MCP) says about a model's slicing: one quiet line for how it was sliced, and one
  * short human sentence for why it couldn't be.
  */
+
+import { filamentStandIn } from "./orca.ts";
 import {
   filamentWords,
   orientationWords,
@@ -67,8 +69,9 @@ export function sliceSummary(settings: SliceSettings): string[] {
  * (Bambu Lab), Textured PEI Plate, 0.4 mm nozzle", and the size when it was scaled.
  */
 export function slicingDetail(settings: SlicingSettings): string {
-  const quality = qualityOf(settings.layerHeight);
+  const quality = qualityOf(settings.layerHeight, settings.nozzle);
   const layers = `${settings.layerHeight.toFixed(2)} mm layers`;
+  const standIn = settings.filaments.map((filament) => filamentStandIn(filament, settings.nozzle)).find(Boolean);
   return [
     quality ? `${quality.label} (${layers})` : layers,
     `${settings.walls} walls and ${settings.infill}% ${patternWords(settings.pattern)} infill`,
@@ -78,12 +81,24 @@ export function slicingDetail(settings: SlicingSettings): string {
       .map((filament) => `${filamentWords(filament)}${filament.brand ? ` (${filament.brand})` : ""}`)
       .join(" + "),
     settings.plate,
-    `${settings.nozzle} mm nozzle`,
+    `${settings.nozzle} mm nozzle${standIn ? ` (${standIn.material} sliced as ${standIn.as}, which has a preset for it)` : ""}`,
     orientationWords(settings) ? `laid ${orientationWords(settings)}` : "",
     settings.scale !== 100 ? `scaled to ${settings.scale}%` : "",
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+/**
+ * "No 0.2 mm preset for PETG-CF: sliced as PETG.": a filament that slices as another material on its nozzle,
+ * because Bambu has none for it there (orca.ts `filamentStandIn`); null when every filament has its own.
+ */
+export function standInSentence(settings: Pick<SlicingSettings, "filaments" | "nozzle">): string | null {
+  for (const filament of settings.filaments) {
+    const standIn = filamentStandIn(filament, settings.nozzle);
+    if (standIn) return `No ${settings.nozzle} mm preset for ${standIn.material}: sliced as ${standIn.as}.`;
+  }
+  return null;
 }
 
 /** "312 mm" */
@@ -117,7 +132,7 @@ export function problemSentence(slice: FileSlice, options: { phone?: boolean } =
       return "The sliced file is over 25 MB, too large to keep.";
     case "nozzle": {
       const size = slice.settings.slicing?.nozzle;
-      return `Spaghetti can't slice for ${size ? `the ${size} mm` : "this"} nozzle yet, only the 0.4 mm one.`;
+      return `This slicer has no presets for ${size ? `the ${size} mm` : "this"} nozzle.`;
     }
     default: {
       const said = (slice.message ?? "").trim().replace(/\s+/g, " ");
