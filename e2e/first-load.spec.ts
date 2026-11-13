@@ -32,14 +32,15 @@ const CEILING_KB = {
   "/sign-in": 184,
   // 283: the Workshop route adds a lazy chunk to the entry (+0.5 kB), and the journal's Now block shares the print card with Today, which gives it a chunk of its own (+0.3 kB).
   // Twists (#722) adds its sidebar icon and two route stubs to every screen (+1.3 to 1.8 kB): today 286, ideas and builds 272.
-  "/today": 286,
+  // 288, 275, 275, 272, 280, 280, 280: main grew ~1.1 kB in every screen with the swipe between a card's photos (#220) and the floating Button variant (#223); the heavier Ideas route of this branch adds nothing to the others.
+  "/today": 288,
   // 270: the Workshop tab's Toolbox icon is in every screen's tab bar (+0.7 kB).
-  "/ideas": 272,
-  "/builds": 272,
-  "/journal": 270,
-  "/search": 278,
-  "/pantry": 278,
-  "/printer": 278,
+  "/ideas": 275,
+  "/builds": 275,
+  "/journal": 272,
+  "/search": 280,
+  "/pantry": 280,
+  "/printer": 280,
 } as const;
 
 /** Changes smaller than this don't make a screen heavier: a renamed chunk moves a few bytes in every screen. */
