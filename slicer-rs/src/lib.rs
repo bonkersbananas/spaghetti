@@ -4,6 +4,7 @@
 
 pub mod bambu;
 pub mod config;
+pub mod fill;
 pub mod gcode;
 pub mod geom;
 pub mod infill;
@@ -225,8 +226,13 @@ impl Plate {
         let job =
             gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
         // Each layer from its regions to its G-code in one go, so only the text stays.
+        // Each object's infill pattern is anchored at the middle of its bounding box, as Orca anchors it.
+        let centres: Vec<(f64, f64)> = objects
+            .iter()
+            .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
+            .collect();
         let texts = par::map_range(regions.len(), |i| {
-            let plan = plan::plan_layer(&regions[i], i, &layers, settings);
+            let plan = plan::plan_layer(&regions[i], i, &layers, &centres, settings);
             gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))
         });
         drop(regions);

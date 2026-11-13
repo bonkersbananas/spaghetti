@@ -77,14 +77,7 @@ function Twists() {
       )}
       {!empty && !isPending && !isDesktop && (
         <ActionBar>
-          <Button
-            variant="secondary"
-            size="lg"
-            icon={PlusIcon}
-            disabled={readOnly}
-            onClick={add}
-            className="rounded-pill! shadow-float! bg-lifted! mx-auto px-6"
-          >
+          <Button variant="floating" size="lg" icon={PlusIcon} disabled={readOnly} onClick={add} className="mx-auto">
             New twist
           </Button>
         </ActionBar>

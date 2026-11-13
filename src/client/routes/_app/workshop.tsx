@@ -13,6 +13,7 @@ import { useRunningLow } from "@/lib/running-low";
 import { useShopping } from "@/lib/shopping";
 import { useTwists } from "@/lib/twists";
 import { useDueUpkeep } from "@/lib/upkeep";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 export const Route = createFileRoute("/_app/workshop")({
   component: Workshop,
@@ -40,13 +41,15 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
   const { twists } = useTwists();
+  // Two tiles across on a phone, so the pictures are drawn smaller there (still as large as the tile allows).
+  const isDesktop = useIsDesktop();
 
   // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
   // slots hold only the loaded ones). Nothing without an AMS.
   const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
   const slots = unit ? unitSlots(unit) : [];
   const pictured = toBuy.filter((thing) => thing.picture);
-  const shown = pictured.slice(0, PICTURES);
+  const shown = pictured.slice(0, isDesktop ? PICTURES : PICTURES - 1);
 
   const pantryLine = spools ? (
     spools.length === 0 ? (
@@ -79,15 +82,20 @@ function Workshop() {
   return (
     <>
       <PageHeader title="Workshop" subtitle="The spools, the printer, what to buy and the models we twist." />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] md:gap-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] md:gap-5">
         <HubTile
           to="/pantry"
           title="Pantry"
           summary={pantryLine}
           visual={
             <span className="flex">
-              {(spools ?? []).slice(0, 5).map((spool) => (
-                <SpoolDisc key={spool.id} color={spool.colorHex} size="lg" className="-ml-4 first:ml-0" />
+              {(spools ?? []).slice(0, isDesktop ? 5 : 4).map((spool) => (
+                <SpoolDisc
+                  key={spool.id}
+                  color={spool.colorHex}
+                  size={isDesktop ? "lg" : "md"}
+                  className="-ml-4 first:ml-0"
+                />
               ))}
               {spools?.length === 0 && <SpoolDisc empty size="lg" />}
             </span>
@@ -99,16 +107,16 @@ function Workshop() {
           summary={printerLine}
           visual={
             slots.length > 0 ? (
-              <span className="grid w-full max-w-72 grid-cols-4 gap-2">
+              <span className="grid w-full max-w-72 grid-cols-4 gap-1 md:gap-2">
                 {slots.map((slot) => {
                   const spoolId = printer?.slots[slot];
                   return (
                     <span
                       key={slot}
-                      className="bg-cream shadow-soft flex flex-col items-center gap-1 rounded-md px-1 pt-2.5 pb-1.5"
+                      className="bg-cream shadow-soft flex flex-col items-center gap-1 rounded-md px-0.5 pt-2 pb-1.5 md:px-1 md:pt-2.5"
                     >
                       <SpoolDisc
-                        size="md"
+                        size={isDesktop ? "md" : "sm"}
                         color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
                         empty={!spoolId}
                       />
@@ -137,12 +145,12 @@ function Workshop() {
                       key={thing.id}
                       src={thing.picture.url}
                       alt=""
-                      className="ring-cream -ml-3 size-16 rounded-md ring-2 first:ml-0"
+                      className="ring-cream -ml-2 size-12 rounded-md ring-2 first:ml-0 md:-ml-3 md:size-16"
                     />
                   ) : null,
                 )}
                 {toBuy.length > shown.length && (
-                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-3 flex size-16 items-center justify-center rounded-md font-semibold ring-2">
+                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-2 flex size-12 items-center justify-center rounded-md font-semibold ring-2 md:-ml-3 md:size-16">
                     +{toBuy.length - shown.length}
                   </span>
                 )}
@@ -166,8 +174,8 @@ function Workshop() {
                     alt=""
                     color={photo.color || undefined}
                     className={cn(
-                      "ring-cream shadow-raised h-20 w-28 rounded-md ring-4",
-                      index === 0 ? "z-10 -rotate-3" : "-ml-8 rotate-6 opacity-90",
+                      "ring-cream shadow-raised h-14 w-20 rounded-md ring-2 md:h-20 md:w-28 md:ring-4",
+                      index === 0 ? "z-10 -rotate-3" : "-ml-5 rotate-6 opacity-90 md:-ml-8",
                     )}
                   />
                 ))}

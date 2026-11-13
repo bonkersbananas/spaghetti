@@ -466,8 +466,9 @@ fn a_setup_made_from_the_apps_settings_slices_as_they_ask() {
     let fan_on = |part: &str| part.lines().any(|l| l.starts_with("M106 S") && l != "M106 S0");
     assert!(!by_layer[..3].iter().any(|part| fan_on(part)), "a fan before the fourth layer");
     assert!(fan_on(by_layer[3]), "no fan for the fourth layer");
-    // What it printed otherwise than asked, it says.
-    assert!(out.fallbacks.iter().any(|f| f == "gyroid sparse infill printed as straight lines"), "{:?}", out.fallbacks);
+    // The gyroid is drawn as asked; what it printed otherwise, it says (the top surfaces, for now).
+    assert!(!out.fallbacks.iter().any(|f| f.contains("gyroid")), "{:?}", out.fallbacks);
+    assert!(out.fallbacks.iter().any(|f| f == "monotonicline top surfaces printed as zig-zag"), "{:?}", out.fallbacks);
     // The plate's description: ABS in its colour, and no Bambu tray id for a generic filament.
     let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
     assert!(info.contains(r##"<filament id="1" tray_info_idx="" type="ABS" color="#2B6CB0""##), "{info}");

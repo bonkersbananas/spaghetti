@@ -1178,6 +1178,18 @@ export const shots: Shot[] = [
   },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
+  {
+    // A card with several photos swiped to its second (and hovered, where a mouse shows the arrows).
+    name: "ideas-swiped",
+    path: "/ideas",
+    beforeShot: async (page) => {
+      const card = page.getByRole("listitem").filter({ hasText: "Desk tidy-up" });
+      await card.scrollIntoViewIfNeeded();
+      await card.locator(".snap-x").evaluate((el) => el.scrollTo({ left: el.clientWidth, behavior: "instant" }));
+      if (wide(page) === 1440) await card.hover();
+      await page.waitForTimeout(500);
+    },
+  },
   { name: "ideas-started", path: "/ideas", fullPage: true },
   { name: "wishlist", path: "/wishlist", prepare: waitForWishlist },
   {
