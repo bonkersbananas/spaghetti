@@ -113,7 +113,8 @@ pub fn plan_layer(
         .map(|(k, (island, fills))| {
             let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
             let under = below.get(island.object as usize).and_then(Option::as_ref);
-            island_paths(k as u32, island, fills, under, i, (z, h), centre, s)
+            let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
+            island_paths(k as u32, island, fills, under, i, (z, h), centre, trees, s)
         })
         .collect();
     let nodes: Vec<usize> = (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).collect();
@@ -157,6 +158,7 @@ fn island_paths(
     layer: usize,
     (z, h): (f64, f64),
     centre: (f64, f64),
+    trees: &[Vec<Pt>],
     s: &Settings,
 ) -> Vec<Path> {
     let first = layer == 0;
@@ -218,7 +220,7 @@ fn island_paths(
         if role == Role::SparseInfill {
             // A collection for each region, as Orca fills them one by one.
             for shape in region {
-                let paths: Vec<Path> = sparse_lines(&vec![shape.clone()], layer, z, h, centre, s)
+                let paths: Vec<Path> = sparse_lines(&vec![shape.clone()], layer, z, h, centre, trees, s)
                     .into_iter()
                     .filter(|points| points.len() >= 2)
                     .map(|points| path(role, points, false, island, first, h, s))
@@ -496,11 +498,20 @@ fn solid_lines(
     out
 }
 
-/// The sparse infill lines of a region on a layer, as printed: Orca's pattern where there is one, else straight
-/// lines at the infill direction, turned a quarter every other layer.
-pub fn sparse_lines(region: &Shapes, layer: usize, z: f64, h: f64, centre: (f64, f64), s: &Settings) -> Vec<Vec<Pt>> {
+/// The sparse infill lines of a region on a layer, as printed: Orca's pattern where there is one (lightning's from
+/// `trees`, the object's lightning lines on the layer), else straight lines at the infill direction, turned a
+/// quarter every other layer.
+pub fn sparse_lines(
+    region: &Shapes,
+    layer: usize,
+    z: f64,
+    h: f64,
+    centre: (f64, f64),
+    trees: &[Vec<Pt>],
+    s: &Settings,
+) -> Vec<Vec<Pt>> {
     if let Some(pattern) = fill::Pattern::of(&s.sparse_infill_pattern) {
-        return sparse_runs(region, pattern, layer, z, h, centre, s);
+        return sparse_runs(region, pattern, layer, (z, h), centre, trees, s);
     }
     let (width, _, _) = flow(Role::SparseInfill, layer == 0, h, s);
     let grown = geom::offset(region, s.infill_wall_overlap * width);
@@ -508,27 +519,29 @@ pub fn sparse_lines(region: &Shapes, layer: usize, z: f64, h: f64, centre: (f64,
     infill::fill(&grown, angle, Settings::spacing(width, h) / s.sparse_density, 0.0)
 }
 
-/// Sparse infill in Orca's pattern (`fill.rs`), where Orca puts its lines' middles: into the walls by Orca's
-/// overlap (a share of half the last wall's and half a solid line's spacing), less half the infill's spacing.
-fn sparse_runs(
-    region: &Shapes,
-    pattern: fill::Pattern,
-    layer: usize,
-    z: f64,
-    h: f64,
-    centre: (f64, f64),
-    s: &Settings,
-) -> Vec<Vec<Pt>> {
+/// mm Orca's sparse infill area reaches into the walls on a layer `h` high: a share of half the last wall's and half
+/// a solid line's spacing.
+pub fn sparse_overlap(h: f64, s: &Settings) -> f64 {
     let inset = match s.wall_loops {
         0 => 0.0,
         1 => Settings::spacing(s.outer_wall_width, h) / 2.0,
         _ => Settings::spacing(s.inner_wall_width, h) / 2.0,
     };
-    let overlap = if inset > 0.0 {
-        s.infill_wall_overlap * (inset + Settings::spacing(s.solid_infill_width, h) / 2.0)
-    } else {
-        0.0
-    };
+    if inset > 0.0 { s.infill_wall_overlap * (inset + Settings::spacing(s.solid_infill_width, h) / 2.0) } else { 0.0 }
+}
+
+/// Sparse infill in Orca's pattern (`fill.rs`), where Orca puts its lines' middles: into the walls by Orca's
+/// overlap (`sparse_overlap`), less half the infill's spacing.
+fn sparse_runs(
+    region: &Shapes,
+    pattern: fill::Pattern,
+    layer: usize,
+    (z, h): (f64, f64),
+    centre: (f64, f64),
+    trees: &[Vec<Pt>],
+    s: &Settings,
+) -> Vec<Vec<Pt>> {
+    let overlap = sparse_overlap(h, s);
     // Orca spaces sparse lines for the object's layer height, so they line up from layer to layer.
     let spacing = Settings::spacing(s.sparse_infill_width, s.layer_height);
     let params = fill::Sparse {
@@ -541,6 +554,7 @@ fn sparse_runs(
         density: s.sparse_density,
         anchor: s.infill_anchor,
         anchor_max: s.infill_anchor_max,
+        trees,
     };
     fill::sparse(region, overlap - spacing / 2.0, &params)
 }
