@@ -1,7 +1,9 @@
 import type { Spool } from "@shared/api";
 import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
+import type { FileSlice } from "@shared/slicing/types.ts";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
+import { ModelStatus } from "@/components/builds/ModelFile";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeLine } from "@/components/pantry/BridgeLine";
@@ -26,6 +28,34 @@ const GREEN = "#00ae42"; // design-lint-ignore: a filament color is data
 const SILK = "#c9a46b"; // design-lint-ignore: a filament color is data
 
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
+
+/** A model sliced with the defaults (shared/slicing/defaults.ts), for the model card's specimens. */
+const SAMPLE_SLICE: FileSlice = {
+  status: "sliced",
+  settings: {
+    machine: "Bambu Lab X2D 0.4 nozzle",
+    process: "0.20mm Standard @BBL X2D",
+    filaments: ["Bambu PLA Basic @BBL X2D 0.4 nozzle"],
+    layerHeight: 0.2,
+    materials: ["PLA"],
+    bedType: "Textured PEI Plate",
+    supports: false,
+    scale: 100,
+    engine: "1",
+    orca: "2.5.0-dev",
+  },
+  bytes: 2_150_000,
+  at: 0,
+};
+const TOO_BIG: FileSlice = {
+  ...SAMPLE_SLICE,
+  status: "failed",
+  problem: "too-big",
+  dimensions: [320, 100, 4],
+  volume: [256, 256, 261],
+  fitScale: 78,
+};
+const noop = () => undefined;
 
 const sampleSpool: Spool = {
   id: "sample-spool",
@@ -250,6 +280,40 @@ export function PantrySection() {
           </ul>
           <Label>A slicer file on an attempt, and how long it took</Label>
           <FileCard name="desk-clips.gcode.3mf" meta={["plate 1 of 2", "est. 1 h 12 min", "14 KB"]} download="#" />
+          <Label>A model Spaghetti slices: slicing, sliced, a caution, why it couldn't be, and not sliced yet</Label>
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["1.2 MB"]}
+            status={<ModelStatus state={{ kind: "slicing", fraction: 0.42 }} phone={false} />}
+          />
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["est. 38 min", "11.3 g", "2.1 MB"]}
+            status={<ModelStatus state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }} phone={false} />}
+            download="#"
+          />
+          <FileCard
+            name="steampunk-glasses.stl"
+            meta={["est. 1 h 16 min", "7.7 g", "3.4 MB"]}
+            status={
+              <ModelStatus
+                state={{ kind: "sliced", slice: { ...SAMPLE_SLICE, cautions: ["floating"] }, saved: true }}
+                phone={false}
+                onSlice={noop}
+              />
+            }
+            download="#"
+          />
+          <FileCard
+            name="lasagne-sheet.stl"
+            meta={["14 KB"]}
+            status={<ModelStatus state={{ kind: "failed", slice: TOO_BIG }} phone={false} onSlice={noop} />}
+          />
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["1.2 MB"]}
+            status={<ModelStatus state={{ kind: "unsliced" }} phone={false} onSlice={noop} />}
+          />
           <EstimateLine estimated={72} actual={78} />
           <div className="flex gap-2">
             <PlateThumb alt="" className="size-16" />

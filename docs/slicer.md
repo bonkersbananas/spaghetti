@@ -44,3 +44,14 @@ To build a newer engine or OrcaSlicer: set the engine's new tag and commit in `p
 - `import engine from "virtual:slicer-engine"` tells the app where they are (`base`, `host`) and what they are (the engine, OrcaSlicer's version and commit, the release with the source), typed by `src/shared/slicing/engine.ts`.
 
 Nothing of it is in a first load or in the service worker's precache (`sw.js` leaves `/slicer/` to the browser, and `public/_headers` makes the files immutable), so a phone downloads the engine only when something needs slicing, once per version. With no network, `SLICER_ARCHIVE=<zip>` makes the plugin use a local zip; `pnpm dev` without one runs on, without slicing, and says so.
+
+## How the app slices
+
+What the feature does is [decision 0046](decisions/0046-models-are-sliced-in-the-browser.md); the code, in the order a model goes through it:
+
+1. `lib/slicer-files.ts` (`readSlicerFile`) and `lib/item-files.ts` take an `.stl`, or a `.3mf` with no G-code, as a model: the row is saved at once with the original (`kind=model`), through the outbox for an attempt and directly for an idea.
+2. `lib/slicing/jobs.ts` runs one job at a time on this device, and `sliceModel(file)` (`lib/slicing/slice-model.ts`) starts `slice-worker.ts`, a module worker that reads the model (`shared/mesh.ts` for STL, `shared/slicing/model3mf.ts` for 3MF), lays it out on plate 1 (`arrange.ts`, or a project's own layout when it fits), draws the plate picture (`render.ts`) and starts the engine's host by URL as a nested worker.
+3. The worker sends the host `load` and `slice` with the X2D's presets from `presets.json` (`configs.ts` merges the defaults of `defaults.ts`, a project's own settings and "Slice with supports"), packs the G-code the way Orca exports it (`gcode3mf.ts`: the plate's G-code with its MD5, `slice_info.config`, the project settings and the picture), and reads the result back with the app's own reader, so the estimate and filaments are what a dropped `.gcode.3mf` would give.
+4. The job sends it to `PUT /api/files/:id/sliced` once the model is on the server. A failure is the engine's code mapped to a `problem` (2 is out of memory; a model larger than the plate fails before the engine runs, with the scale at which it would fit).
+
+`pnpm test` covers the pure parts (`test/unit/slicing/`), `test/worker/model-files.test.ts` the API, and `e2e/model-files.spec.ts` slices a small STL with the real engine in Chromium (also at phone width) and opens it in 3D.

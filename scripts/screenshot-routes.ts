@@ -366,6 +366,7 @@ async function ideaWithModel(
   until: RegExp,
 ) {
   const id = crypto.randomUUID();
+  modelItems.push(id);
   await page.request.post("/api/items", { headers: { Origin: new URL(page.url()).origin }, data: { id, ...idea } });
   await openIdea(page, id);
   await page.getByTestId("idea-file-input").setInputFiles({
@@ -387,6 +388,38 @@ const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the 
 async function modelInView(page: Page) {
   await page.getByRole("region", { name: /^Files/ }).evaluate((region) => region.scrollIntoView({ block: "center" }));
   await page.waitForTimeout(300);
+}
+
+/** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
+const modelItems: string[] = [];
+
+async function removeModelItems(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of modelItems.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+}
+
+/**
+ * A new build with its first attempt's sheet open and the fusilli knob's .stl dropped in it, sliced there: what the
+ * slice says fills in the attempt, which isn't logged yet. Returns the sheet.
+ */
+async function buildWithModel(page: Page) {
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { id, ...FUSILLI_IDEA, stage: "building" },
+  });
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).first().click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await sheet.waitFor();
+  await page.getByTestId("slicer-file-input").setInputFiles({
+    name: FUSILLI.name,
+    mimeType: "model/stl",
+    buffer: Buffer.from(FUSILLI.bytes),
+  });
+  await sheet.getByRole("button", { name: /Sliced by Spaghetti/ }).waitFor({ timeout: 90_000 });
+  return sheet;
 }
 
 /** The spools the label shots make (removed again by their cleanup). */
@@ -1220,6 +1253,7 @@ export const shots: Shot[] = [
     beforeShot: modelInView,
     cleanup: async (page) => {
       await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
     },
   },
   {
@@ -1230,6 +1264,7 @@ export const shots: Shot[] = [
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
     },
     beforeShot: modelInView,
+    cleanup: removeModelItems,
   },
   {
     // How it was sliced: a popover on desktop, a sheet on phones, with the engine's source and the original.
@@ -1244,7 +1279,10 @@ export const shots: Shot[] = [
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
     },
-    cleanup: closeDialog,
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
   },
   {
     // The sliced model in the 3D view: the G-code Spaghetti made, layer by layer.
@@ -1258,7 +1296,10 @@ export const shots: Shot[] = [
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
     },
-    cleanup: closeDialog,
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
   },
   {
     // A model too long for the plate: one sentence, and the one thing that helps.
@@ -1273,6 +1314,54 @@ export const shots: Shot[] = [
       );
     },
     beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // A model dropped in the attempt sheet: sliced there, and what its slice says (estimate, filament) fills in the
+    // attempt, as a slicer's own file would.
+    name: "build-model-sheet",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildWithModel(page);
+      // Once sliced, the sheet reads the sliced file and the settings open with what it says, with an animation that
+      // changes the sheet's height: scroll once it has finished, the whole card at the top.
+      await sheet.getByLabel("Layer height").waitFor();
+      await page.waitForTimeout(900);
+      await sheet.getByText(FUSILLI.name).evaluate((element) => {
+        const card = element.closest(".grid") ?? element;
+        card.scrollIntoView({ block: "start", behavior: "instant" });
+        let scroller = card.parentElement;
+        while (scroller && scroller.scrollHeight <= scroller.clientHeight) scroller = scroller.parentElement;
+        scroller?.scrollBy({ top: -12, behavior: "instant" });
+      });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+      await page.reload();
+    },
+  },
+  {
+    // The model on its attempt, on the build's page: logged as it worked, with the plate Spaghetti drew, the estimate
+    // and the 3D view, like any slicer file.
+    name: "build-model",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildWithModel(page);
+      await sheet.getByRole("radio", { name: "Worked" }).click();
+      await sheet.getByRole("button", { name: "Log attempt" }).click();
+      await sheet.waitFor({ state: "hidden" });
+      // The model goes with the attempt through the outbox, and its slice follows: the 3D control shows once the
+      // server has both.
+      await page.getByRole("button", { name: `See ${FUSILLI.name} in 3D` }).waitFor({ timeout: 90_000 });
+      await page
+        .getByRole("button", { name: /Sliced by Spaghetti/ })
+        .first()
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: removeModelItems,
   },
   {
     // The 3D view opened from the idea's own file.

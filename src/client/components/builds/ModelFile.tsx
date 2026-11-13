@@ -351,7 +351,13 @@ export function SliceDetails({
 }) {
   const { settings } = slice;
   const again = onSlice && (
-    <Button variant="secondary" size={size} icon={SameAgainIcon} onClick={() => onSlice(optionsOf(slice))}>
+    <Button
+      variant="secondary"
+      size={size}
+      icon={SameAgainIcon}
+      fullWidth={size === "md"}
+      onClick={() => onSlice(optionsOf(slice))}
+    >
       Slice again
     </Button>
   );
@@ -392,13 +398,14 @@ export function SliceDetails({
           </a>
         )}
       </p>
-      <div className={cn("flex flex-wrap items-center gap-2")}>
+      {/* Side by side in a popover; in a phone's sheet, one under the other at the thumb's width. */}
+      <div className={size === "sm" ? "flex flex-wrap items-center gap-2" : "flex flex-col gap-2"}>
         <a
           href={fileUrl(file.id)}
           download={file.name}
           className={cn(
-            "pressable focus-ring bg-cream text-ink shadow-key hover:shadow-key-hover inline-flex items-center font-semibold",
-            size === "sm" ? "text-small h-8 gap-1.5 rounded-sm px-3" : "text-body h-11 gap-2 rounded-md px-4",
+            "pressable focus-ring bg-cream text-ink shadow-key hover:shadow-key-hover inline-flex items-center justify-center font-semibold",
+            size === "sm" ? "text-small h-8 gap-1.5 rounded-sm px-3" : "text-body h-11 w-full gap-2 rounded-md px-4",
           )}
         >
           <DownloadIcon size={size === "sm" ? 16 : 20} weight="bold" aria-hidden />
