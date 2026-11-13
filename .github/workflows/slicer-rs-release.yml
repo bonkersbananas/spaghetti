@@ -2,9 +2,9 @@ name: Rust slicer release
 
 # Builds Spaghetti's own slicer (slicer-rs/, docs/proposals/rust-slicer.md) to WebAssembly, slices a model with it,
 # packs it (scripts/slicer-rs/pack.ts) and publishes it as a GitHub release with its source (docs/slicer.md). Tag a
-# commit `slicer-rs-vN` to release; pull requests that change how it is packed, and "Run workflow", build and test
-# without publishing. The app pins the release's zip by sha256 in scripts/slicer-rs/release.json; normal CI never
-# compiles it.
+# commit on main `slicer-rs-vN` to release (a tag elsewhere fails, so a release always matches merged code); pull
+# requests that change how it is packed, and "Run workflow", build and test without publishing. The app pins the
+# release's zip by sha256 in scripts/slicer-rs/release.json; normal CI never compiles it.
 
 on:
   push:
@@ -26,6 +26,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      # A release is cut from main only: the tagged commit has to be merged already.
+      - name: Released from main
+        if: github.ref_type == 'tag'
+        run: |
+          git fetch --no-tags --unshallow origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::$GITHUB_REF_NAME tags ${GITHUB_SHA::10}, which isn't on main: merge it first, then tag the commit on main."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
