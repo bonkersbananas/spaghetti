@@ -2,7 +2,7 @@ import { AnimatePresence, m } from "motion/react";
 import { useSyncExternalStore } from "react";
 import { DropIcon } from "@/components/ui/icons";
 import { duration, ease } from "@/lib/motion";
-import { hasSlicerDropTarget, subscribeSlicerDropTargets } from "@/lib/slicer-files";
+import { hasSlicerDropTarget, subscribeSlicerDropTargets } from "@/lib/slicer-drop";
 
 /** Shown while photos are dragged over the window: let go anywhere to capture them. */
 export function DropOverlay({ visible }: { visible: boolean }) {

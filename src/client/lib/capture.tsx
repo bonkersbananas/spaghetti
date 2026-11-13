@@ -12,7 +12,7 @@ import { outbox } from "./outbox";
 import { setPreview } from "./previews";
 import { sessionQuery } from "./queries";
 import { canEdit } from "./read-only";
-import { isSlicerFile, takeSlicerDrop } from "./slicer-files";
+import { isSlicerFile, takeSlicerDrop } from "./slicer-drop";
 
 /** A photo in the capture sheet, resized in the background while you type. */
 export interface DraftPhoto {

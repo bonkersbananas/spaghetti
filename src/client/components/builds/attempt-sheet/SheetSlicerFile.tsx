@@ -7,21 +7,20 @@ import { applyFileSettings, printablePlates } from "@shared/threemf/prefill.ts";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { ToggleChip } from "@/components/ui/Chip";
-import { ModelIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { SlicerFileIcon } from "@/components/ui/icons";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
 import { addSpool } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { sessionQuery } from "@/lib/queries";
+import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import {
   fileSettings,
   formatBytes,
   linkSpools,
   plateOf,
   readSlicerFile,
-  SLICER_ACCEPT,
   type SlicerFileDraft,
-  useSlicerDropTarget,
 } from "@/lib/slicer-files";
 import type { SliceOutcome } from "@/lib/slicing/slice-model";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -193,11 +192,7 @@ export function DraftFile({
 }) {
   if (state.draft.kind === "model") {
     return (
-      <Suspense
-        fallback={
-          <FileCard name={state.draft.file.name} meta={[formatBytes(state.draft.file.size)]} icon={ModelIcon} />
-        }
-      >
+      <Suspense fallback={<FileCard name={state.draft.file.name} meta={[formatBytes(state.draft.file.size)]} />}>
         <ModelDraftCard draft={state.draft} onRemove={onRemove} onSlice={onSlice} />
       </Suspense>
     );

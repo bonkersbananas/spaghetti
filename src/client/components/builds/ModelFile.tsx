@@ -14,7 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
-import { DownloadIcon, ExternalIcon, ModelIcon, SameAgainIcon, SpaghettiIcon } from "@/components/ui/icons";
+import { DownloadIcon, ExternalIcon, SameAgainIcon } from "@/components/ui/icons";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { cn } from "@/lib/cn";
@@ -87,9 +87,8 @@ const SlicedLine = ({ slice, ...props }: { slice: FileSlice } & React.ComponentP
   <button
     type="button"
     {...props}
-    className="pressable focus-ring text-small text-ink-faint hover:text-ink -mx-1 inline-flex max-w-full items-center gap-1.5 self-start rounded-sm px-1 text-left"
+    className="pressable focus-ring text-small text-ink-faint hover:text-ink decoration-ink-ghost -mx-1 inline-flex max-w-full items-center self-start rounded-sm px-1 text-left underline decoration-dotted underline-offset-4"
   >
-    <SpaghettiIcon size={14} className="shrink-0" aria-hidden />
     <span className="truncate">{["Sliced by Spaghetti", ...sliceSummary(slice.settings)].join(" · ")}</span>
   </button>
 );
@@ -232,7 +231,6 @@ export default function ModelFileCard({
       <FileCard
         name={file.name}
         thumbSrc={file.hasThumb || job?.picture ? fileThumbSrc(file.id) : undefined}
-        icon={ModelIcon}
         meta={modelMeta(file, state)}
         status={<ModelStatus state={state} phone={!isDesktop} onSlice={slice} details={details} />}
         download={saved ? fileUrl(file.id, "sliced") : undefined}
@@ -302,7 +300,6 @@ export function ModelDraftCard({
     <FileCard
       name={file.name}
       thumbSrc={job?.picture || draft.picture ? fileThumbSrc(draft.id) : undefined}
-      icon={ModelIcon}
       meta={
         state.kind === "sliced" && prefill
           ? [

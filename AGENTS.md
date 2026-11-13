@@ -53,7 +53,8 @@ src/
       search.ts           search and "what worked" queries, recent searches
       pantry.ts           spools, AMS slots and the printer's setup: optimistic mutations (re-exports the queries)
       pantry-queries.ts   the spools and printer queries and usePrinterSetup, kept apart from pantry.ts because the shell and Today read them on every first load
-      slicer-files.ts     reading a dropped .3mf, linking its filaments to spools, queueing the file, drop targets
+      slicer-files.ts     reading a dropped .3mf (or a model to slice), linking its filaments to spools, queueing the file
+      slicer-drop.ts      which files are slicer files, and where a dropped one goes (small: it loads with the app)
     styles/tokens.css     every design token (light and dark)
     lib/theme.ts          light / dark / system, applied to <html data-theme>
     lib/offline.ts, connection.ts   service worker registration, "is the server reachable"

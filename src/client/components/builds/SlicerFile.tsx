@@ -3,7 +3,7 @@ import type { AttemptFilament } from "@shared/attempts";
 import type { Plate } from "@shared/threemf/types.ts";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { CloseIcon, DownloadIcon, type Icon, ModelIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
@@ -17,18 +17,7 @@ import { canView3d, type PrintingAttempt, ThreeDButton } from "../viewer/ThreeDB
 import { formatMinutes } from "./settings";
 
 /** A plate's picture on a quiet well (slicers render them on transparent ground). */
-export function PlateThumb({
-  src,
-  alt,
-  className,
-  icon: IconComponent = SlicerFileIcon,
-}: {
-  src?: string;
-  alt: string;
-  className?: string;
-  /** What stands in while there is no picture: the slicer file's glyph, or a model's. */
-  icon?: Icon;
-}) {
+export function PlateThumb({ src, alt, className }: { src?: string; alt: string; className?: string }) {
   return (
     <span
       className={cn(
@@ -39,7 +28,7 @@ export function PlateThumb({
       {src ? (
         <img src={src} alt={alt} className="size-full object-contain" draggable={false} />
       ) : (
-        <IconComponent size={22} className="text-ink-faint" aria-hidden />
+        <SlicerFileIcon size={22} className="text-ink-faint" aria-hidden />
       )}
     </span>
   );
@@ -54,8 +43,6 @@ interface FileCardProps {
   note?: string;
   /** Lines under the meta in place of the note: a model's slicing, with its actions (ModelFile.tsx). */
   status?: ReactNode;
-  /** What stands in on the plate until there is a picture. */
-  icon?: Icon;
   download?: string;
   /** The download's file name, when it isn't the card's name (a model's sliced file). */
   downloadName?: string;
@@ -76,7 +63,6 @@ export function FileCard({
   meta,
   note,
   status,
-  icon,
   download,
   downloadName,
   plateOverlay,
@@ -95,7 +81,6 @@ export function FileCard({
       <PlateThumb
         src={thumbSrc}
         alt="The plate, as sliced"
-        icon={icon}
         className={compact ? "size-12" : raised ? "size-20" : "size-16"}
       />
       {plateOverlay}
@@ -210,7 +195,6 @@ export function SavedFileCard(props: SavedFileCardProps) {
           <FileCard
             name={props.file.name}
             meta={[formatBytes(props.file.size)]}
-            icon={ModelIcon}
             compact={props.compact}
             raised={props.raised}
             className={props.className}

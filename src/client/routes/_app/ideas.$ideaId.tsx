@@ -49,7 +49,7 @@ import { photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
-import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-files";
+import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext } from "@/lib/up-next";

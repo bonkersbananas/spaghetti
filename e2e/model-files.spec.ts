@@ -82,3 +82,42 @@ test("a model too big for the plate says so, and is sliced scaled to fit", async
   // The original stays as it was.
   await expect(files.getByText("big.stl")).toBeVisible();
 });
+
+test("an .stl dropped in the attempt sheet is sliced there, fills in the attempt, and its slice follows it", async ({
+  page,
+}) => {
+  await signIn(page);
+  const id = crypto.randomUUID();
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id, title: "Cube", stage: "building" } });
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).first().click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await page.getByTestId("slicer-file-input").setInputFiles({
+    name: "cube.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(boxStl(20)),
+  });
+  await expect(sheet.getByText("cube.stl")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: /Sliced by Spaghetti · 0\.20 mm · PLA/ })).toBeVisible({
+    timeout: SLICED,
+  });
+  // What the slice says is now the attempt's, as a dropped .gcode.3mf would be.
+  await expect(sheet.getByText(/est\. /)).toBeVisible();
+  await sheet.getByRole("button", { name: "Still printing" }).click();
+  await expect(sheet).toBeHidden();
+
+  // The model goes with the attempt, and its sliced file follows once the attempt is on the server.
+  await expect
+    .poll(
+      async () => {
+        const item = await (await page.request.get(`/api/items/${id}`)).json();
+        const file = item.item.attempts[0]?.file;
+        return [file?.kind, file?.slice?.status, file?.prefill?.estimatedMinutes !== undefined];
+      },
+      { timeout: SLICED },
+    )
+    .toEqual(["model", "sliced", true]);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "See cube.stl in 3D" })).toBeVisible();
+});
