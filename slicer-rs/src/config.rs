@@ -75,6 +75,8 @@ pub struct Settings {
     /// layer all the same).
     pub skirt_distance: f64,
     pub only_one_wall_top: bool,
+    /// How wide a top must be before it gets one wall (`min_width_top_surface`, a share of the inner wall's width).
+    pub min_width_top_surface: Share,
     /// mm: how wide bridge lines are (`bridge_line_width`, a share of the nozzle); 0 for solid infill's width.
     pub bridge_width: f64,
     /// Whether bridges over air and over sparse infill print as round threads, a bridge line wide and as high
@@ -338,6 +340,7 @@ impl Settings {
             resolution: p.float("resolution"),
             skirt_distance: p.float("skirt_distance"),
             only_one_wall_top: p.bool("only_one_wall_top"),
+            min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
             thick_bridges: p.bool("thick_bridges"),
             thick_internal_bridges: p.bool("thick_internal_bridges"),
