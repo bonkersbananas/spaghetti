@@ -67,7 +67,7 @@ export function PopoverPanel({
           if (inside) event.preventDefault();
         }}
         className={cn(
-          "sg-popover bg-lifted shadow-float z-50 p-4 focus:outline-none",
+          "sg-popover sg-lifted-surface bg-lifted shadow-float z-50 p-4 focus:outline-none",
           size === "panel" ? "w-md rounded-xl" : "w-72 rounded-lg",
           className,
         )}
