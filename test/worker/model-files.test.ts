@@ -488,6 +488,30 @@ describe("a recipe from an attempt printed from a model", () => {
     const { spoolId: _spool, ...orange } = fine.filaments[0] as NonNullable<(typeof fine.filaments)[0]>;
     expect(recipe.slicing).toEqual({ ...fine, filaments: [orange] });
   });
+
+  it("keeps none from a model taken off the attempt, which waits for the purge", async () => {
+    const item = await idea();
+    await request(`/api/items/${item.id}`, { method: "PATCH", cookie, json: { stage: "building" } });
+    const attemptId = uuid();
+    await request(`/api/items/${item.id}/attempts`, {
+      method: "POST",
+      cookie,
+      json: { id: attemptId, outcome: "success", settings: { filaments: [{ type: "PLA", colorName: "Orange" }] } },
+    });
+    const id = uuid();
+    const body = modelForm();
+    body.set("id", id);
+    await request(`/api/attempts/${attemptId}/file`, { method: "PUT", body, cookie });
+    await putSliced(id, slicedForm({ settings: { ...settings, layerHeight: 0.12, slicing: fine } }));
+    expect((await request(`/api/attempts/${attemptId}/file`, { method: "DELETE", cookie })).status).toBe(204);
+    const saved = await request("/api/recipes", {
+      method: "POST",
+      cookie,
+      json: { id: uuid(), name: "Knobs", sourceAttemptId: attemptId },
+    });
+    expect(saved.status).toBe(201);
+    expect((await saved.json<RecipeResponse>()).recipe.slicing).toBeNull();
+  });
 });
 
 describe("models, for agents", () => {
