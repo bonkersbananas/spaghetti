@@ -3100,9 +3100,15 @@ export const shots: Shot[] = [
     // Adapted and kept (decision 0053): the twist page leads with the model's plate picture and shows its card.
     name: "twist-model",
     path: "/twists",
-    fullPage: true,
     prepare: async (page) => {
       await twistWithModel(page);
+      // A viewport shot (a full page draws the phone's tab bar mid-page): the phone is scrolled to the card.
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await page
+          .getByRole("region", { name: "Model" })
+          .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
+        await page.waitForTimeout(400);
+      }
     },
     cleanup: removeTwistModels,
   },

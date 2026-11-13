@@ -274,3 +274,31 @@ test("keeps an adapted STL as the twist's model, slices it, slices it again, and
     timeout: SLICED,
   });
 });
+
+test("adapting again says it replaced the model, and Undo brings the old one back", async ({ page }) => {
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/twists", { headers: { Origin: origin(page) }, data: { id, name: "Fusilli knob" } });
+  await page.goto(`/twists/${id}`);
+  const adaptTo = async (percent: string) => {
+    await page.getByRole("button", { name: "Adapt an STL" }).click();
+    const adapt = page.getByRole("dialog", { name: "Adapt an STL" });
+    await adapt.getByTestId("adapt-file-input").setInputFiles({
+      name: "knob.stl",
+      mimeType: "model/stl",
+      buffer: Buffer.from(boxStl(20)),
+    });
+    await adapt.getByRole("textbox", { name: "Scale" }).fill(percent);
+    await adapt.getByRole("button", { name: "Keep with the twist" }).click();
+    await expect(adapt).toBeHidden();
+  };
+  const modelName = async () => (await (await page.request.get(`/api/twists/${id}`)).json()).twist.model?.name;
+  await adaptTo("110");
+  await expect.poll(modelName).toBe("knob, 110 %.stl");
+  await adaptTo("84");
+  await expect.poll(modelName).toBe("knob, 84 %.stl");
+  await expect(page.getByText("Model replaced")).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(modelName).toBe("knob, 110 %.stl");
+  await expect(page.getByRole("region", { name: "Model" }).getByText("knob, 110 %.stl")).toBeVisible();
+});

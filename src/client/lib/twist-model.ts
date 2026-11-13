@@ -46,6 +46,7 @@ export async function keepTwistModel(queryClient: QueryClient, twistId: string, 
     pending: true,
   };
   withModel(queryClient, twistId, () => shown);
+  // The old model's slicing and upload stop here; its row stays on the server for the undo.
   if (replaced) cleanUp(replaced);
   // The jobs' code comes with the first model, not with the app.
   const jobs = await import("./slicing/jobs");
@@ -58,7 +59,7 @@ export async function keepTwistModel(queryClient: QueryClient, twistId: string, 
   form.set("prefill", "{}");
   form.set("kind", "model");
   if (file.size <= ONE_REQUEST_FILE_BYTES) form.set("file", file, file.name);
-  await keepFile(`/twists/${twistId}/file/${id}`, file, id, "model", form, {
+  const kept = keepFile(`/twists/${twistId}/file/${id}`, file, id, "model", form, {
     // A slice that reached the server first (it waits for this) stays.
     saved: (saved) =>
       withModel(queryClient, twistId, (model) => (model?.id === id ? (model.slice ? model : saved) : model)),
@@ -68,6 +69,22 @@ export async function keepTwistModel(queryClient: QueryClient, twistId: string, 
       toast.error("Couldn't keep that model", "Check the connection and try again.");
     },
   });
+  // Never silent: the model it replaced comes back with one tap (the server makes way for it).
+  if (replaced && !("pending" in replaced)) {
+    toast.undo("Model replaced", {
+      description: replaced.name,
+      onUndo: async () => {
+        await kept;
+        const current = queryClient.getQueryData<Twist[]>(twistsQuery.queryKey)?.find((t) => t.id === twistId)?.model;
+        if (current?.id === id) cleanUp(current);
+        withModel(queryClient, twistId, () => replaced);
+        await api(`/twists/${twistId}/file/${replaced.id}/restore`, { method: "POST" }).catch(() =>
+          toast.error("Couldn't bring the model back"),
+        );
+      },
+    });
+  }
+  await kept;
 }
 
 /** What a model leaves behind on this device when it goes: its upload and its slicing. */
