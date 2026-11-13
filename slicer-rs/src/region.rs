@@ -26,10 +26,12 @@ pub enum Role {
     SolidInfill,
     SparseInfill,
     TopSurface,
+    /// Loops round an object's first layer that hold it to the plate (`brim.rs`).
+    Brim,
 }
 
 impl Role {
-    pub const ALL: [Role; 10] = [
+    pub const ALL: [Role; 11] = [
         Role::InnerWall,
         Role::OuterWall,
         Role::OverhangWall,
@@ -40,6 +42,7 @@ impl Role {
         Role::SolidInfill,
         Role::SparseInfill,
         Role::TopSurface,
+        Role::Brim,
     ];
 
     pub fn feature(self) -> &'static str {
@@ -54,11 +57,12 @@ impl Role {
             Role::SolidInfill => "Internal solid infill",
             Role::SparseInfill => "Sparse infill",
             Role::TopSurface => "Top surface",
+            Role::Brim => "Brim",
         }
     }
 
     pub fn is_infill(self) -> bool {
-        !matches!(self, Role::InnerWall | Role::OuterWall | Role::OverhangWall)
+        !matches!(self, Role::InnerWall | Role::OuterWall | Role::OverhangWall | Role::Brim)
     }
 }
 

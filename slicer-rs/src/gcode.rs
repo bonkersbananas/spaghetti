@@ -604,7 +604,8 @@ fn retracts(from: &Path, to: &Path, d: f64, a: Pt, b: Pt, internal: &Internal, s
     if d < s.retract_min_travel {
         return false;
     }
-    if matches!(from.last_role(), Role::OuterWall | Role::OverhangWall) {
+    // A brim lies outside every island, and the first layer has no internal surfaces to hide a travel in.
+    if matches!(from.last_role(), Role::OuterWall | Role::OverhangWall | Role::Brim) || to.role == Role::Brim {
         return true;
     }
     let wall = matches!(to.role, Role::InnerWall | Role::OuterWall);
@@ -711,16 +712,20 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
     }
     let labels = job.labels();
     let internal = Internal::new(&regions.islands, &regions.surfaces);
+    // The object a path prints inside the labels of: none for a brim, which Orca prints before it starts the object.
+    let owner = |p: &Path| (p.role != Role::Brim).then_some(p.object);
     let mut last: Option<&Path> = None;
     for path in &plan.paths {
         let to = path.points[0];
         let (x, y) = (geom::unsc(to.x), geom::unsc(to.y));
         match last {
             None => {
-                b.note(Note::Printing(path.object));
+                if let Some(o) = owner(path) {
+                    b.note(Note::Printing(o));
+                }
                 b.set_accel(b.travel_accel(path, f64::INFINITY));
-                if labels {
-                    b.note(Note::LabelStart(path.object));
+                if let Some(o) = owner(path).filter(|_| labels) {
+                    b.note(Note::LabelStart(o));
                 }
                 b.travel(x, y, false);
                 if first_layer {
@@ -729,11 +734,26 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
                 }
             }
             Some(prev) => {
-                let other = prev.object != path.object;
+                let (was, now) = (owner(prev), owner(path));
+                let other = was != now;
                 if other {
-                    b.note(Note::Stopped(prev.object));
-                    b.note(Note::Printing(path.object));
+                    if let Some(o) = was {
+                        b.note(Note::Stopped(o));
+                    }
+                    if let Some(o) = now {
+                        b.note(Note::Printing(o));
+                    }
                 }
+                let relabel = |b: &mut Builder| {
+                    if other && labels {
+                        if let Some(o) = was {
+                            b.note(Note::LabelEnd(o));
+                        }
+                        if let Some(o) = now {
+                            b.note(Note::LabelStart(o));
+                        }
+                    }
+                };
                 let d = (x - b.x).hypot(y - b.y);
                 if d > 1e-6 {
                     b.set_accel(b.travel_accel(path, d));
@@ -742,19 +762,15 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
                     if !stay {
                         b.retract();
                     }
-                    if other && labels {
-                        b.note(Note::LabelEnd(prev.object));
-                        b.note(Note::LabelStart(path.object));
-                    }
+                    relabel(&mut b);
                     if stay {
                         b.travel(x, y, false);
                     } else {
                         b.lift(Some((x, y)));
                         b.travel(x, y, true);
                     }
-                } else if other && labels {
-                    b.note(Note::LabelEnd(prev.object));
-                    b.note(Note::LabelStart(path.object));
+                } else {
+                    relabel(&mut b);
                 }
             }
         }
@@ -762,11 +778,13 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         last = Some(path);
     }
     if let Some(prev) = last {
-        b.note(Note::Stopped(prev.object));
+        if let Some(o) = owner(prev) {
+            b.note(Note::Stopped(o));
+        }
         b.retract();
         b.lift(None);
-        if labels {
-            b.note(Note::LabelEnd(prev.object));
+        if let Some(o) = owner(prev).filter(|_| labels) {
+            b.note(Note::LabelEnd(o));
         }
     }
     // The timelapse photo, which the printer skips with the layer's objects when all of them are skipped.
