@@ -34,6 +34,8 @@ export const Route = createFileRoute("/_app/ideas/")({
 });
 
 /** The grid both pages of ideas share: two columns on phones, more on desktop. */
+// Up next is the featured row: fewer, wider cards than the inbox below it.
+const upNextGrid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-6 2xl:grid-cols-3";
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 function Ideas() {
@@ -74,6 +76,7 @@ function Ideas() {
       via={via(item.createdVia)}
       landing={item.id === landed || arrived.has(item.id)}
       headingLevel={queue.length > 0 ? 3 : 2}
+      featured={isDesktop && index >= 0}
       menu={menuFor(item, index)}
       drag={
         isDesktop && index >= 0 && queue.length > 1
@@ -140,7 +143,7 @@ function Ideas() {
           )}
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">
-              <ul data-picks className={`${grid} relative`} aria-label="Up next">
+              <ul data-picks className={`${upNextGrid} relative`} aria-label="Up next">
                 <Reflow key={filter ?? "all"}>{queue.map((item, index) => card(item, index))}</Reflow>
               </ul>
             </Section>

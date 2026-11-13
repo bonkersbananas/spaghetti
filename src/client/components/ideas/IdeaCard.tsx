@@ -89,11 +89,13 @@ interface IdeaCardProps {
   drag?: CardDrag;
   /** 3 when the grid sits under a section heading (Up next). */
   headingLevel?: 2 | 3;
+  /** Up next on desktop: a wider, squarer card, so the queue reads as the featured row. */
+  featured?: boolean;
   /** Lets the list measure the card when it leaves (see Reflow). */
   ref?: Ref<HTMLLIElement>;
 }
 
-export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2, ref }: IdeaCardProps) {
+export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2, featured, ref }: IdeaCardProps) {
   const cover = item.photos[0];
   const plate = cover ? undefined : plateCover(item);
   const upload = useUploadState(item);
@@ -134,7 +136,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
       >
         <Card
           link={{ to: "/ideas/$ideaId", params: { ideaId: item.id } }}
-          aspect="portrait"
+          aspect={featured ? "square" : "portrait"}
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
           photo={
