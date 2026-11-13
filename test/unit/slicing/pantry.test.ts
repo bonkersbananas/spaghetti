@@ -4,7 +4,6 @@ import {
   defaultNozzle,
   engineSlices,
   filamentOfSpool,
-  fittedNozzles,
   ownedPlate,
   pantryFilament,
   slicingSpools,
@@ -83,30 +82,19 @@ describe("a slice's defaults from the workshop", () => {
     for (const nozzle of [0.2, 0.4, 0.6, 0.8]) expect(engineSlices(nozzle)).toBe(true);
   });
 
-  it("offer the nozzle sizes fitted, one when both nozzles are the same", () => {
-    expect(fittedNozzles(DEFAULT_PRINTER)).toEqual([{ diameter: 0.4, nozzle: "main" }]);
-    const mixed = {
-      nozzles: { main: { diameter: 0.4, hardened: true }, auxiliary: { diameter: 0.2, hardened: false } },
-    };
-    expect(fittedNozzles(mixed)).toEqual([
-      { diameter: 0.4, nozzle: "main" },
-      { diameter: 0.2, nozzle: "auxiliary" },
-    ]);
-  });
-
-  it("slice for the nozzle the Printer page's defaults name while it is fitted, else the main one", () => {
+  it("slice for the main nozzle, whatever the auxiliary has, the defaults' quality by its name there", () => {
     const nozzles = { main: { diameter: 0.4, hardened: true }, auxiliary: { diameter: 0.2, hardened: false } };
+    // Fine, set while the 0.2 mm was the main nozzle: Fine on the 0.4 mm now in the main.
     const fine = { ...DEFAULT_SLICING, layerHeight: 0.08, nozzle: 0.2 };
     const setup: PrinterSetup = { ...DEFAULT_PRINTER, nozzles, slicing: slicingDefaultsOf(fine) };
-    expect(defaultNozzle(setup)).toBe(0.2);
-    expect(workshopDefaults({ spools: [], setup })).toMatchObject({ nozzle: 0.2, layerHeight: 0.08 });
-    // The 0.2 mm taken out: the main nozzle, at its own Fine.
-    const swapped = { ...setup, nozzles: { ...nozzles, auxiliary: { diameter: 0.4, hardened: true } } };
-    expect(defaultNozzle(swapped)).toBe(0.4);
-    expect(workshopDefaults({ spools: [], setup: swapped })).toMatchObject({ nozzle: 0.4, layerHeight: 0.12 });
-    // Defaults kept before they named a nozzle: the main one.
+    expect(defaultNozzle(setup)).toBe(0.4);
+    expect(workshopDefaults({ spools: [], setup })).toMatchObject({ nozzle: 0.4, layerHeight: 0.12 });
+    // The 0.2 mm fitted as the main nozzle: everything new slices for it.
+    const main02 = { ...setup, nozzles: { ...nozzles, main: { diameter: 0.2, hardened: true } } };
+    expect(defaultNozzle(main02)).toBe(0.2);
+    expect(workshopDefaults({ spools: [], setup: main02 })).toMatchObject({ nozzle: 0.2, layerHeight: 0.08 });
+    // Defaults that name no nozzle were set for the 0.4 mm: Draft (0.24 mm) is the 0.2 mm's Draft, 0.12 mm.
     const { nozzle: _, ...older } = slicingDefaultsOf({ ...DEFAULT_SLICING, layerHeight: 0.24 });
-    const main02 = { ...DEFAULT_PRINTER, nozzles: { ...nozzles, main: { diameter: 0.2, hardened: true } } };
     expect(workshopDefaults({ spools: [], setup: { ...main02, slicing: older as SlicingDefaults } })).toMatchObject({
       nozzle: 0.2,
       layerHeight: 0.12,

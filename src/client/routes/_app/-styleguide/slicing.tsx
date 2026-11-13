@@ -410,8 +410,8 @@ export function SlicingSection() {
         <div className="flex min-w-0 flex-col gap-4">
           <Label>
             How to slice it (live): a panel beside the page on desktop, two columns that need no scrolling at 1440×900;
-            a tall sheet on phones, one column in the same order. A 0.2 mm nozzle is fitted on the right, so the nozzle
-            is a choice
+            a tall sheet on phones, one column in the same order. A 0.2 mm nozzle is fitted on the right: a line says it
+            slices for the main one
           </Label>
           {/* As the panel draws it: lifted, floating. */}
           <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
@@ -422,10 +422,10 @@ export function SlicingSection() {
               onChange={setSettings}
               spools={SPOOLS}
               plates={["Textured PEI Plate", "Smooth PEI Plate"]}
-              nozzles={[
-                { diameter: 0.4, nozzle: "main" },
-                { diameter: 0.2, nozzle: "auxiliary" },
-              ]}
+              nozzles={{
+                main: { diameter: 0.4, hardened: true },
+                auxiliary: { diameter: 0.2, hardened: false },
+              }}
               slice={SAMPLE_SLICE}
               scalable
               recipes={RECIPES}

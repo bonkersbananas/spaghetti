@@ -34,10 +34,7 @@ const WorkspaceSlicing = lazy(() => loadTiles().then((m) => ({ default: m.Worksp
  * nozzle they slice for (named when it isn't the 0.4 mm).
  */
 function defaultsWords(value: Defaults | null, nozzles: PrinterSetup["nozzles"]): string[] {
-  const settings = withNozzle(
-    slicingFor(value ?? {}, DEFAULT_SLICING),
-    defaultNozzle({ nozzles, slicing: value ?? undefined }),
-  );
+  const settings = withNozzle(slicingFor(value ?? {}, DEFAULT_SLICING), defaultNozzle({ nozzles }));
   const strength = strengthOf(settings);
   return [
     qualityWords(settings.layerHeight, settings.nozzle),

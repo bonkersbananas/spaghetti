@@ -1788,24 +1788,19 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
-    // A 0.2 mm nozzle fitted on the right (decision 0055): "Slice with…" offers the nozzle after the filament, and
-    // the 0.2 mm is picked: the quality tiles' heights are its own (Standard 0.10 mm). A phone's sheet is scrolled to
-    // the nozzle; a desktop panel has it under the strength.
+    // A 0.2 mm nozzle fitted on the right (decision 0055): the engine prints every slice with the main nozzle, so there
+    // is no choice, only one line where it would be (after the filament on a phone, under the strength on desktop):
+    // it slices for the main 0.4 mm, and fitting the 0.2 mm as the main nozzle is how to slice for it.
     name: "slice-settings-nozzle",
     path: "/ideas",
     prepare: async (page) => {
       await fitSmallNozzle(page);
       const settings = await openSliceSettings(page);
-      const nozzle = settings.getByRole("group", { name: "Nozzle" });
-      await nozzle.getByRole("radio", { name: /^0\.2 mm/ }).check();
-      await settings
-        .getByRole("group", { name: "Quality" })
-        .getByRole("radio", { name: /^Standard 0\.10 mm/ })
-        .waitFor();
-      // A phone's sheet scrolls to it; a desktop panel shows it under the strength as it opens.
+      const line = settings.getByText("Slices for the main nozzle (0.4 mm)");
+      await line.waitFor();
       if ((page.viewportSize()?.width ?? 0) < 768) {
-        await nozzle.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
-      } else await scrollSheetToTop(settings);
+        await line.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      }
     },
     beforeShot: settleSliceSettings,
     cleanup: async (page) => {
@@ -1814,27 +1809,44 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The same, at the top of a phone's sheet: Quality, Strength and Supports first, the qualities the 0.2 mm's.
+    // The 0.2 mm fitted as the main nozzle: the quality tiles are its own (Standard 0.10 mm), the same four names.
     name: "slice-settings-nozzle-qualities",
     path: "/ideas",
-    width: 390,
     prepare: async (page) => {
-      await fitSmallNozzle(page);
+      await fitSmallNozzle(page, "main");
       const settings = await openSliceSettings(page);
       await settings
-        .getByRole("group", { name: "Nozzle" })
-        .getByRole("radio", { name: /^0\.2 mm/ })
-        .check();
-      const quality = settings.getByRole("group", { name: "Quality" });
-      await quality.getByRole("radio", { name: /^Standard 0\.10 mm/ }).waitFor();
-      await quality.evaluate((group) => group.scrollIntoView({ block: "end", behavior: "instant" }));
-      await scrollSheetToTop(settings);
+        .getByRole("group", { name: "Quality" })
+        .getByRole("radio", { name: /^Standard 0\.10 mm/ })
+        .waitFor();
     },
     beforeShot: settleSliceSettings,
     cleanup: async (page) => {
       await closeSliceSettings(page);
       await fitStockNozzles(page);
     },
+  },
+  {
+    // A model sliced ahead of a swap for a size the main nozzle doesn't have (More's nozzle): the card says the file
+    // needs it as the main nozzle, with one tap back to the main nozzle's size.
+    name: "idea-model-other-nozzle",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      await modelInView(page);
+      await files.getByRole("button", { name: "Slice with…" }).click();
+      const settings = page.getByRole("dialog", { name: "How to slice it" });
+      await settings.getByRole("button", { name: /^More/ }).click();
+      await settings.getByRole("radio", { name: "0.6 mm" }).click();
+      await page.keyboard.press("Escape");
+      await files.getByText("Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.").waitFor({ timeout: 90_000 });
+      // Closing the sheet hands focus back to the row: a tap leaves no ring.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.waitForTimeout(400);
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
   },
   {
     // A model sliced for the 0.2 mm nozzle (fitted as the main one): the card's row names the nozzle, and leads with
@@ -3540,8 +3552,8 @@ export const shots: Shot[] = [
     cleanup: fitStockNozzles,
   },
   {
-    // Open, with the two nozzles different: the defaults offer which one new models are sliced for, the 0.2 mm picked
-    // and the quality tiles its own.
+    // Open, with the two nozzles different: new models slice for the main nozzle, and one line where the filament's
+    // rule is says how to slice for the other.
     name: "printer-slicing-nozzle",
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
@@ -3549,14 +3561,7 @@ export const shots: Shot[] = [
       await fitSmallNozzle(page);
       await page.reload();
       const section = await openSlicingDefaults(page);
-      await section
-        .getByRole("group", { name: "Nozzle" })
-        .getByRole("radio", { name: /^0\.2 mm/ })
-        .check();
-      await section
-        .getByRole("group", { name: "Quality" })
-        .getByRole("radio", { name: /^Standard 0\.10 mm/ })
-        .waitFor();
+      await section.getByText("New models slice for the main nozzle (0.4 mm)").waitFor();
       await settleSection(page, section);
     },
     cleanup: fitStockNozzles,

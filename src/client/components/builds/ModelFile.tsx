@@ -2,12 +2,13 @@ import { fileUrl } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
-import { fittedNozzles, workshopDefaults } from "@shared/slicing/pantry.ts";
+import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
-import { type SlicingSettings, slicingFor, slicingSummary } from "@shared/slicing/settings.ts";
+import { type SlicingSettings, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
   finishesOnComputer,
+  nozzleSentence,
   problemSentence,
   sliceSummary,
   standInSentence,
@@ -291,6 +292,11 @@ export interface ModelActions {
   onStop?: () => void;
   /** The settings row, as it opens the settings here; absent where they don't open. */
   settings?: ReactNode;
+  /**
+   * The size of the main nozzle fitted, which the engine prints every slice with (decision 0055): a slice for another
+   * size says so, with the way to slice for this one.
+   */
+  mainNozzle?: number;
 }
 
 /** The lines under a model's name: its slicing, and what can be done about it. */
@@ -303,6 +309,7 @@ export function ModelStatus({
   onUndo,
   onStop,
   settings,
+  mainNozzle,
 }: ModelActions & {
   state: ModelState;
   /** Says it about a phone ("ran out of memory on this phone"). */
@@ -312,7 +319,19 @@ export function ModelStatus({
   /** Only where it stands and its undo: the settings below it say the rest (their sheet's result). */
   quiet?: boolean;
 }) {
-  const { lines, primary, quiet: aside } = statusOf(state, { phone, line, quiet, onSlice, onUndo, onStop });
+  const {
+    lines,
+    primary,
+    quiet: aside,
+  } = statusOf(state, {
+    phone,
+    line,
+    quiet,
+    onSlice,
+    onUndo,
+    onStop,
+    mainNozzle,
+  });
   // The lines change with the state; the actions keep their places. What helps (the filled buttons) sits above the
   // settings row, which every state renders, with a quiet Undo beside it, so the row keeps its place while the card
   // changes under it.
@@ -340,6 +359,7 @@ function statusOf(
     onSlice,
     onUndo,
     onStop,
+    mainNozzle,
   }: Omit<ModelActions, "settings"> & {
     phone: boolean;
     line?: ReactNode;
@@ -402,6 +422,9 @@ function statusOf(
       const floating = !quiet && !again && !!state.slice.cautions?.includes("floating");
       // A filament its nozzle has no preset for was sliced as its nearest kin: said once, quietly.
       const standIn = !quiet && !again ? standInSentence(slicingOfSlice(state.slice)) : null;
+      // Sliced for a size the main nozzle doesn't have: the file needs that nozzle fitted as the main one to print.
+      const sliced = slicingOfSlice(state.slice);
+      const elsewhere = !again && mainNozzle !== undefined ? nozzleSentence(sliced, mainNozzle) : null;
       return {
         lines: (
           <>
@@ -444,10 +467,18 @@ function statusOf(
             )}
             {standIn && <span className="text-small text-ink-soft">{standIn}</span>}
             {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
+            {elsewhere && <Caution className="px-0">{elsewhere}</Caution>}
           </>
         ),
         primary: (
           <>
+            {elsewhere &&
+              onSlice &&
+              mainNozzle !== undefined &&
+              button(`Slice for the ${mainNozzle} mm`, () => {
+                const { nozzle, layerHeight } = withNozzle(sliced, mainNozzle);
+                onSlice({ nozzle, layerHeight });
+              })}
             {floating && onSlice && button("Supports where needed", () => onSlice({ supports: "where-needed" }))}
             {ahead && !again && onSlice && button("Slice it", () => onSlice({}))}
           </>
@@ -702,7 +733,7 @@ export default function ModelFileCard({
     onChange: (next: SlicingSettings) => change_(next),
     spools,
     plates: setup.plates,
-    nozzles: fittedNozzles(setup),
+    nozzles: setup.nozzles,
     slice: file.slice,
     scalable: isStlName(file.name),
     recipes: offered,
@@ -748,6 +779,7 @@ export default function ModelFileCard({
       compact={compact}
       raised={raised}
       className={className}
+      mainNozzle={setup.nozzles.main.diameter}
       {...actions}
     />
   );

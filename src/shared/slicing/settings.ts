@@ -531,8 +531,9 @@ export function slicingFromRecord(record: {
 
 /**
  * The settings a workspace sets for models nobody set up (the Printer page, decision 0051): how a model prints, not
- * with what. The filament comes from the Pantry and the plate from the Printer page; the nozzle is one of those
- * fitted (`defaultNozzle`), and the layer height is that nozzle's.
+ * with what. The filament comes from the Pantry, the plate and the nozzle from the Printer page (the main one,
+ * `defaultNozzle`); `nozzle` here only says which nozzle the layer height was set for, so it keeps its name on
+ * another (`withNozzle`).
  */
 export const DEFAULT_KEYS = [
   "layerHeight",

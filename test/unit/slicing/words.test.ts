@@ -6,6 +6,7 @@ import {
   finishesOnComputer,
   layersDetail,
   materialsText,
+  nozzleSentence,
   printerName,
   problemSentence,
   sliceSummary,
@@ -77,5 +78,12 @@ describe("a filament the nozzle has no preset for", () => {
     expect(slicingDetail(petgCf)).toMatch(/^Standard \(0\.10 mm layers\)/);
     expect(standInSentence({ ...petgCf, nozzle: 0.4 })).toBeNull();
     expect(standInSentence({ ...petgCf, filaments: [{ material: "PLA" }] })).toBeNull();
+  });
+});
+
+describe("a slice for another nozzle size than the main one", () => {
+  it("says so plainly, since the main nozzle prints every slice", () => {
+    expect(nozzleSentence({ nozzle: 0.6 }, 0.4)).toBe("Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.");
+    expect(nozzleSentence({ nozzle: 0.4 }, 0.4)).toBeNull();
   });
 });

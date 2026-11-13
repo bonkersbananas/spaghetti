@@ -101,6 +101,16 @@ export function standInSentence(settings: Pick<SlicingSettings, "filaments" | "n
   return null;
 }
 
+/**
+ * "Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.": a slice made for a size that isn't the main nozzle's,
+ * which the engine prints every slice with (decision 0055); null when it is the main nozzle's.
+ */
+export function nozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNozzle: number): string | null {
+  return settings.nozzle === mainNozzle
+    ? null
+    : `Sliced for a ${settings.nozzle} mm nozzle; the main nozzle has a ${mainNozzle} mm.`;
+}
+
 /** "312 mm" */
 const mm = (value: number) => `${Math.round(value)} mm`;
 
