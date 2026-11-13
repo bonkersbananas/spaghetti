@@ -500,7 +500,7 @@ fn solid_lines(
 /// lines at the infill direction, turned a quarter every other layer.
 pub fn sparse_lines(region: &Shapes, layer: usize, z: f64, h: f64, centre: (f64, f64), s: &Settings) -> Vec<Vec<Pt>> {
     if let Some(pattern) = fill::Pattern::of(&s.sparse_infill_pattern) {
-        return sparse_runs(region, pattern, z, h, centre, s);
+        return sparse_runs(region, pattern, layer, z, h, centre, s);
     }
     let (width, _, _) = flow(Role::SparseInfill, layer == 0, h, s);
     let grown = geom::offset(region, s.infill_wall_overlap * width);
@@ -513,6 +513,7 @@ pub fn sparse_lines(region: &Shapes, layer: usize, z: f64, h: f64, centre: (f64,
 fn sparse_runs(
     region: &Shapes,
     pattern: fill::Pattern,
+    layer: usize,
     z: f64,
     h: f64,
     centre: (f64, f64),
@@ -534,6 +535,7 @@ fn sparse_runs(
         pattern,
         origin: centre,
         z,
+        layer,
         angle: s.infill_direction,
         spacing,
         density: s.sparse_density,
