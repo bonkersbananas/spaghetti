@@ -71,7 +71,8 @@ Proposal: [docs/proposals/twists.md](proposals/twists.md); decision [0043](decis
 - [x] Stage 1b: the Twists screen and twist page, "Make a twist" from an idea (a build or attempt gets "Save as twist" in 1c)
 - [x] Stage 1c, builds: a build can print a twist (`items.twist_id`), "Print it" / "Print it again" on the twist page, and the page lists what was printed
 - [x] Stage 1c, the rest: "Save as twist" on a build (its header), MCP tools (`list_twists`, `add_twist`), search finds twists
-- [ ] Stage 2a: STL scale, mirror, rotate and "fit to N mm"; then the 3MF spike
+- [x] Stage 2a: STL scale, mirror, rotate and "fit to N mm" in the browser (`shared/mesh.ts`, the twist page's "Adapt an STL"); no preview yet
+- [ ] Stage 2b: the 3MF spike (edit the transform of a project .3mf, keeping plates and settings)
 
 ## Deploy
 
