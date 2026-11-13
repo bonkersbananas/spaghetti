@@ -811,6 +811,8 @@ fn draw_branch(c: &Config, v: &Volumes, layers: &[Vec<Element>], b: &Branch, fra
         })
         .collect();
     let bed = &v.bed;
+    // The plate's box, when the plate is that box.
+    let bed_box = geom::bbox(bed).filter(|_| bed.len() == 1 && bed[0].len() == 1 && bed[0][0].len() == 4);
     let mut slices: Vec<Shapes> = cut(&tube, &zs, frame)
         .into_iter()
         .enumerate()
@@ -819,7 +821,13 @@ fn draw_branch(c: &Config, v: &Volumes, layers: &[Vec<Element>], b: &Branch, fra
                 return slice;
             }
             let kept = util::diff(&slice, v.collision(0, begin + k, true));
-            let kept = if bed.is_empty() { kept } else { geom::intersection(&kept, bed) };
+            // (On the plate a slice needs no clipping to it.)
+            let inside = match (geom::bbox(&kept), bed_box) {
+                (Some(b), Some(p)) => b[0] > p[0] && b[1] > p[1] && b[2] < p[2] && b[3] < p[3],
+                (Some(_), None) => bed.is_empty(),
+                (None, _) => true,
+            };
+            let kept = if inside { kept } else { geom::intersection(&kept, bed) };
             remove_small(kept)
         })
         .collect();

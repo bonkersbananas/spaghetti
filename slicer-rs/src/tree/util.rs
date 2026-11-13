@@ -16,9 +16,17 @@ pub fn offset(shapes: &Shapes, nm: f64, join: Join) -> Shapes {
     if shapes.is_empty() { Vec::new() } else { geom::offset_c2(shapes, mm(nm), join) }
 }
 
-/// Orca's `union_`: all of them as clean shapes.
+/// Orca's `union_`: all of them as clean shapes. One set alone is taken as it is: every set here comes clean out of
+/// a boolean, an offset or a simplification (or is a single circle), and a union would change only where its loops
+/// start.
 pub fn union(a: &Shapes, b: &Shapes) -> Shapes {
-    if a.is_empty() && b.is_empty() { Vec::new() } else { geom::union_all(&[a, b]) }
+    if b.is_empty() {
+        a.clone()
+    } else if a.is_empty() {
+        b.clone()
+    } else {
+        geom::union_all(&[a, b])
+    }
 }
 
 /// Orca's `diff` and `intersection`, by bounding box first (`diff_clipped`).

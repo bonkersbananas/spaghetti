@@ -239,17 +239,8 @@ fn grown(
     bed: [f64; 2],
 ) -> Option<(Config, volumes::Volumes, Branches)> {
     let c = Config::new(s);
-    let t0 = std::time::Instant::now();
     let found = overhangs::detect(slices, heights, &c, s);
     let areas = overhangs::areas(&found);
-    let lap = |what: &str, t: &mut std::time::Instant| {
-        if std::env::var_os("TREE_TIMINGS").is_some() {
-            eprintln!("tree {what}: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
-        }
-        *t = std::time::Instant::now();
-    };
-    let mut t = t0;
-    lap("overhangs", &mut t);
     // Support layers up to the highest overhang above the first layer, less the top gap (Orca's `precalculate`).
     let top = (1..areas.len()).rev().find(|&l| !areas[l].is_empty())?;
     let n = top.saturating_sub(c.z_distance_top_layers);
@@ -258,19 +249,15 @@ fn grown(
     }
     let v = volumes::Volumes::new(slices, &c, bed);
     v.precalculate(&c, n);
-    lap("volumes", &mut t);
     let flow_spacing =
         (s.support.line_width as f32 - s.layer_height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
     let roof_density = (flow_spacing / (s.support.interface_spacing + flow_spacing)).min(1.0);
     let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n);
     seeder.seed(&areas);
     let seeds = seeder.finish();
-    lap("seeds", &mut t);
     let mut layers = seeds.layers;
     grow::grow(&c, &v, &mut layers);
-    lap("growth", &mut t);
     grow::place(&c, &v, &mut layers);
-    lap("placing", &mut t);
     Some((c, v, Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces }))
 }
 
@@ -295,11 +282,7 @@ pub fn supports(
     bed: [f64; 2],
 ) -> Option<crate::support::TreeLayers> {
     let (c, v, mut b) = grown(slices, heights, s, origin, bed)?;
-    let t = std::time::Instant::now();
     let drawn = draw::draw(&c, &v, &mut b.layers, &b.contacts, origin);
-    if std::env::var_os("TREE_TIMINGS").is_some() {
-        eprintln!("tree drawing: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
-    }
     let z = (0..b.layers.len()).map(|l| (if l > 0 { c.layer_z(l - 1) } else { 0.0 }, c.layer_z(l))).collect();
     Some(crate::support::TreeLayers {
         base: drawn.base,

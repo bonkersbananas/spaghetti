@@ -394,14 +394,6 @@ impl Volumes {
             .flat_map(|(&r, &top)| (0..=top).map(move |l| (r, l)))
             .map(|(r, l)| (self.key(r), l))
             .collect();
-        let timing = std::env::var_os("TREE_TIMINGS").is_some();
-        let mut t = std::time::Instant::now();
-        let mut lap = |what: &str| {
-            if timing {
-                eprintln!("  volumes {what}: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
-            }
-            t = std::time::Instant::now();
-        };
         par::map_range(cells.len(), |i| {
             let (k, l) = cells[i];
             self.collision_key(k, l);
@@ -415,17 +407,14 @@ impl Volumes {
             .flat_map(|&(r, top)| (0..=top).map(move |l| (r, l)))
             .map(|(r, l)| (self.key(r), l))
             .collect();
-        lap("collisions");
         par::map_range(small.len(), |i| {
             self.holefree(small[i].0, small[i].1);
         });
-        lap("hole-free");
         let placeable: Vec<(i64, usize)> =
             avoidance.iter().flat_map(|&(r, top)| (0..=top).map(move |l| (r, l))).collect();
         par::map_range(placeable.len(), |i| {
             self.placeable(placeable[i].0, placeable[i].1);
         });
-        lap("placeable");
         // Avoidances (each a recurrence up its layers) and wall restrictions, all at once.
         // Each an avoidance (its kind and whether it may end on the model) or, without one, the wall restrictions.
         type Task = (Option<(Avoid, bool)>, i64, usize);
@@ -455,7 +444,6 @@ impl Volumes {
             }
             _ => {}
         });
-        lap("avoidance");
     }
 }
 
