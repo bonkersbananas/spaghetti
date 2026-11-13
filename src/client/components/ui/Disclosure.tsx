@@ -45,12 +45,17 @@ export function Disclosure({
         aria-controls={id}
         onClick={() => onOpenChange(!open)}
         className={cn(
-          "pressable focus-ring flex min-h-14 items-center gap-3 text-left",
+          "pressable focus-ring flex min-h-14 gap-3 text-left",
           // Plain: its words in the column of the groups around it; the hover reaches past them, as a quiet button's.
-          plain ? "hover:bg-ink/4 -mx-3 w-[calc(100%+1.5rem)] rounded-md px-3 py-2" : "w-full rounded-lg px-4 py-3",
+          // Its glyphs keep to the title's line, however many lines the summary takes.
+          plain
+            ? "hover:bg-ink/4 -mx-3 w-[calc(100%+1.5rem)] items-start rounded-md px-3 py-2"
+            : "w-full items-center rounded-lg px-4 py-3",
         )}
       >
-        {IconComponent && <IconComponent size={20} className="text-ink-faint shrink-0" aria-hidden />}
+        {IconComponent && (
+          <IconComponent size={20} className={cn("text-ink-faint shrink-0", plain && "mt-0.5")} aria-hidden />
+        )}
         <span className="min-w-0 flex-1">
           <span className="text-body text-ink block font-semibold">{title}</span>
           {summary && !open && <span className="text-small text-ink-faint mt-0.5 line-clamp-2 block">{summary}</span>}
@@ -58,7 +63,11 @@ export function Disclosure({
         <ExpandIcon
           size={18}
           weight="bold"
-          className={cn("text-ink-faint duration-base shrink-0 transition-transform ease-out", open && "rotate-180")}
+          className={cn(
+            "text-ink-faint duration-base shrink-0 transition-transform ease-out",
+            plain && "mt-1",
+            open && "rotate-180",
+          )}
           aria-hidden
         />
       </button>

@@ -299,7 +299,7 @@ function statusOf(
                     {line}
                   </span>
                 )}
-                <span className="col-start-1 row-start-1 flex flex-wrap items-center gap-x-2 self-start">
+                <span className="col-start-1 row-start-1 flex flex-wrap items-center gap-x-2 self-center">
                   <SliceProgress fraction={again.fraction} words={`Slicing with ${again.words}`} />
                   {onStop && (
                     <Button

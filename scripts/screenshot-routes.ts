@@ -1437,6 +1437,10 @@ export const shots: Shot[] = [
         .waitFor({ timeout: 90_000 });
       await page.keyboard.press("Escape");
       await settings.waitFor({ state: "hidden" });
+      // Closed with a key, focus is back on "Slice with…" with its ring (a sheet hands it back 60 ms after it
+      // closes): a tap leaves none.
+      await page.waitForTimeout(200);
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await modelInView(page);
     },
     cleanup: removeModelItems,
@@ -1463,6 +1467,10 @@ export const shots: Shot[] = [
       await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
       await page.keyboard.press("Escape");
       await settings.waitFor({ state: "hidden" });
+      // Closed with a key, focus is back on "Slice with…" with its ring (a sheet hands it back 60 ms after it
+      // closes): a tap leaves none.
+      await page.waitForTimeout(200);
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
     beforeShot: modelInView,
     cleanup: removeModelItems,
