@@ -1856,14 +1856,9 @@ fn traverse(contours: &[Vec<(i64, i64)>], segs: &mut [Vline]) -> Vec<Vec<Pt>> {
                 } else {
                     out.push(vec![p(pos, segs[v].its[iv].pos())]);
                 }
-                if going_up {
-                    for i in it..iv {
-                        segs[v].its[i].consumed_vertical_up = true;
-                    }
-                } else {
-                    for i in iv..it {
-                        segs[v].its[i].consumed_vertical_up = true;
-                    }
+                let run = if going_up { it..iv } else { iv..it };
+                for is in &mut segs[v].its[run] {
+                    is.consumed_vertical_up = true;
                 }
                 segs[v].its[it].consumed_perimeter_right = true;
                 let beside = if going_up { it + 1 } else { it - 1 };
