@@ -3113,6 +3113,26 @@ export const shots: Shot[] = [
       await page.waitForTimeout(300);
     },
   },
+  {
+    // The defaults changed (Fine): saved, with the way back to Spaghetti's own beside the caption.
+    name: "printer-slicing-own",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      const section = page.locator("section[aria-labelledby=printer-slicing]");
+      await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
+      await section.getByRole("button", { name: "Back to Spaghetti's own" }).waitFor();
+      await section.getByText("Saved").waitFor();
+      // A tap leaves no focus ring; the click did.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.waitForTimeout(300);
+    },
+    // The shots after this one slice with Spaghetti's own again.
+    cleanup: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.put("/api/printer", { headers, data: { slicing: null } });
+    },
+  },
   // Upkeep: the list with its meters, and the Done sheet of the most due task.
   { name: "printer-upkeep", path: "/printer", selector: "section[aria-labelledby=printer-upkeep]" },
   {

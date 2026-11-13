@@ -10,4 +10,4 @@ Status: Accepted
 
 - A recipe from a slicer's own file, or older than this, slices with what its attempt's settings say; its slicing settings stay null.
 - The defaults change what models nobody set up are sliced with next, not the slices already made.
-- The section loads after the Printer page (with the settings sheet's code), so its first load is unchanged.
+- The section is a chunk of its own that the Printer page loads once it has settled, and it loads the settings sheet's code in turn: the page's first load carries only a skeleton of its tiles (0.2 kB).
