@@ -6,8 +6,8 @@ use std::process::ExitCode;
 const USAGE: &str = "Usage: spaghetti-slicer [options] <model.stl|model.3mf>...
 
 Slices the models with Spaghetti's defaults (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, PLA on the Textured
-PEI plate) into a .gcode.3mf for looking at in Spaghetti's 3D view. Not for printing yet: the start G-code is not
-the X2D's.
+PEI plate) into a .gcode.3mf for Spaghetti's 3D view and the printer: its start and end G-code are the X2D's own,
+filled as OrcaSlicer fills them. It is new: watch its first prints.
 
 Options:
   -o, --output <file>   The .gcode.3mf to write (default: the first model's name with .gcode.3mf)
