@@ -181,7 +181,7 @@ fn island_paths(
     // Gap fill along the middle of the gaps between walls, as wide as each gap is there: each path on its own.
     let mut groups: Vec<Group> = Vec::new();
     let (gap_min, gap_max) = region::gap_widths(layer, h, s);
-    for line in gaps.iter().flat_map(|shape| medial::axis(shape, gap_min, gap_max)) {
+    for line in gaps.iter().flat_map(|shape| medial::gap_fill(shape, gap_min, gap_max)) {
         for p in thick_paths(Role::GapFill, &line.points, &line.widths, island, first, h, s) {
             groups.push(Group { paths: vec![p], sortable: true });
         }
@@ -267,7 +267,8 @@ fn island_paths(
                     let near = geom::pt(origin.0.round() as i32, origin.1.round() as i32);
                     let mut paths = Vec::new();
                     for p in solid::narrow_loops(&room, spacing, s.nozzle_diameter, near) {
-                        paths.extend(thick_paths(role, &p.points, &p.widths, island, first, h, s));
+                        let (points, widths) = simplify_thick(&p.points, &p.widths, s.resolution);
+                        paths.extend(thick_paths(role, &points, &widths, island, first, h, s));
                     }
                     groups.push(Group { paths, sortable: false });
                     continue;
@@ -570,7 +571,6 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
     if points.len() < 2 {
         return out;
     }
-    let (points, widths) = simplify_thick(points, widths, s.resolution);
     let mut pts: Vec<Pt> = vec![points[0]];
     let mut ws: Vec<f64> = vec![widths[0]];
     for i in 1..points.len() {
