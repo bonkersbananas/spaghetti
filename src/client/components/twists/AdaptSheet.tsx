@@ -40,11 +40,14 @@ export default function AdaptSheet({
   open,
   onOpenChange,
   twistName,
+  room,
   onAdapted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   twistName: string;
+  /** How many more changes the twist can hold (it keeps at most 20). */
+  room: number;
   onAdapted: (changes: AdaptedChange[]) => void;
 }) {
   const picker = useRef<HTMLInputElement | null>(null);
@@ -106,8 +109,17 @@ export default function AdaptSheet({
     link.download = named;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    onAdapted(changes);
-    toast.success("Adapted file made", "What you changed is in the twist.");
+    const kept = changes.slice(0, Math.max(0, room));
+    onAdapted(kept);
+    if (kept.length === changes.length) toast.success("Adapted file made", "What we changed is in the twist.");
+    else {
+      toast.message(
+        "Adapted file made",
+        kept.length
+          ? "Not all of what we changed fits in the twist: it keeps 20 changes."
+          : "The twist already has 20 changes, so this isn't written in it.",
+      );
+    }
     setFile(null);
     onOpenChange(false);
   }
@@ -183,7 +195,7 @@ export default function AdaptSheet({
                 suffix="%"
                 inputMode="decimal"
                 value={scale}
-                error={validScale ? undefined : "A number above 0 and up to 100 000, like 84."}
+                error={validScale ? undefined : "A number above 0 and up to 10 000, like 84."}
                 onChange={(event) => setScale(event.target.value)}
               />
               <div className="flex flex-col gap-2">

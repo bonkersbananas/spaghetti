@@ -204,6 +204,7 @@ function TwistBody({ twist }: { twist: Twist }) {
                   open={adapting}
                   onOpenChange={setAdapting}
                   twistName={value.name}
+                  room={TWIST_CHANGES_MAX - value.changes.length}
                   onAdapted={(made) =>
                     change((current) => ({
                       changes: [
@@ -215,7 +216,7 @@ function TwistBody({ twist }: { twist: Twist }) {
                           value: line.value,
                           note: "adapted in the app",
                         })),
-                      ].slice(0, TWIST_CHANGES_MAX),
+                      ],
                     }))
                   }
                 />
