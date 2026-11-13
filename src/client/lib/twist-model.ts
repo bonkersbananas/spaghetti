@@ -76,7 +76,9 @@ export async function keepTwistModel(queryClient: QueryClient, twistId: string, 
       onUndo: async () => {
         await kept;
         const current = queryClient.getQueryData<Twist[]>(twistsQuery.queryKey)?.find((t) => t.id === twistId)?.model;
-        if (current?.id === id) cleanUp(current);
+        // The save was refused and the old model is already back: there is nothing to undo.
+        if (current?.id !== id) return;
+        cleanUp(current);
         withModel(queryClient, twistId, () => replaced);
         await api(`/twists/${twistId}/file/${replaced.id}/restore`, { method: "POST" }).catch(() =>
           toast.error("Couldn't bring the model back"),
