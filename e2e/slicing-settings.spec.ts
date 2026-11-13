@@ -212,7 +212,8 @@ test("a recipe slices a model the way it worked, in one tap", async ({ page }) =
     await recipe.click();
     await expect(recipe).toHaveAttribute("aria-pressed", "true");
     await expect(settings.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Draft/ })).toBeChecked();
-    await expect(settings.getByRole("button", { name: "Undo" })).toBeVisible({ timeout: SLICED });
+    // On desktop the result (and its Undo) is on the card below the popover.
+    await expect(files.getByRole("button", { name: "Undo" })).toBeVisible({ timeout: SLICED });
     const sliced = (await fileOf(page, id)).slice.settings.slicing;
     expect([sliced.layerHeight, sliced.walls, sliced.brim]).toEqual([0.24, 3, "off"]);
   } finally {

@@ -1,12 +1,12 @@
 import { BED_TYPES, NOZZLE_DIAMETERS, type Nozzle, plateName } from "@shared/attempts";
 import { DRYING_DAYS } from "@shared/drying";
-import type { SlicingDefaults } from "@shared/slicing/settings.ts";
 import { type NozzleSetup, type PrinterSetup, X2D } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeCard } from "@/components/printer/BridgeCard";
+import { SlicingDefaults } from "@/components/printer/SlicingDefaults";
 import { UpkeepSkeleton } from "@/components/printer/UpkeepSkeleton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
@@ -34,10 +34,6 @@ import { useIdle } from "@/lib/use-idle";
 const Upkeep = lazy(() => import("@/components/printer/Upkeep").then((m) => ({ default: m.Upkeep })));
 // Below the fold, or only after a tap: their own chunks, not part of the first load.
 const DryingTable = lazy(() => import("@/components/printer/DryingTable").then((m) => ({ default: m.DryingTable })));
-// The slicing defaults share the settings sheet's chunk (its tiles and glyphs).
-const WorkspaceSlicing = lazy(() =>
-  import("@/components/builds/SliceSettings").then((m) => ({ default: m.WorkspaceSlicing })),
-);
 const AddSpoolSheet = lazy(() =>
   import("@/components/pantry/AddSpoolSheet").then((m) => ({ default: m.AddSpoolSheet })),
 );
@@ -109,8 +105,6 @@ interface SetupFields extends Record<string, unknown> {
   plates: string[];
   amsUnits: number;
   dryingDays: Record<string, number>;
-  /** Null: Spaghetti's own. */
-  slicing: SlicingDefaults | null;
 }
 
 function Setup({ initial }: { initial: PrinterSetup }) {
@@ -124,7 +118,6 @@ function Setup({ initial }: { initial: PrinterSetup }) {
       plates: initial.plates,
       amsUnits: initial.amsUnits,
       dryingDays: initial.dryingDays ?? {},
-      slicing: initial.slicing ?? null,
     }),
     [initial],
   );
@@ -139,7 +132,6 @@ function Setup({ initial }: { initial: PrinterSetup }) {
     plates: value.plates,
     amsUnits: value.amsUnits,
     dryingDays: value.dryingDays,
-    ...(value.slicing ? { slicing: value.slicing } : {}),
   };
   const [adding, setAdding] = useState<string | null>(null);
   const idle = useIdle();
@@ -251,18 +243,7 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <PrinterSection title="Slicing" description="How Spaghetti slices a model nobody set up.">
-          {/* On a cream card, as the nozzles are: the tiles read as they do in a model's sheet. */}
-          <div className="bg-cream shadow-soft rounded-lg p-4 md:p-5">
-            {idle ? (
-              <Suspense fallback={<Skeleton className="h-96 rounded-md" />}>
-                <WorkspaceSlicing value={value.slicing ?? undefined} onChange={(slicing) => change({ slicing })} />
-              </Suspense>
-            ) : (
-              <Skeleton className="h-96 rounded-md" />
-            )}
-          </div>
-        </PrinterSection>
+        <SlicingDefaults />
 
         <PrinterSection
           title="AMS"

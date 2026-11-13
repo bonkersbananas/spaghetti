@@ -1535,7 +1535,8 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const settings = await openSliceSettings(page);
       await settings.getByRole("button", { name: "PLA bins, fast and square" }).click();
-      await settings.getByRole("button", { name: "Undo" }).waitFor({ timeout: 90_000 });
+      // In the sheet's result on a phone, on the card below the popover on desktop.
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
