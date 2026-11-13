@@ -427,6 +427,30 @@ fn a_part_standing_in_a_frames_opening_keeps_its_own_label() {
     assert!(near(&bbox_of(2), [114., 114., 126., 126.]), "{:?}", bbox_of(2));
 }
 
+#[test]
+fn lightning_infill_holds_up_the_top_and_nothing_else() {
+    // The Light strength's infill, 10 % lightning: a 20 mm cube's sparse infill is trees that reach in from the walls
+    // under its top, shrinking a fifth of a millimetre a layer at each tip below it, so the lowest layers have none.
+    // Native OrcaSlicer 2.5.0's start on the 28th layer (Nov 13).
+    let stl = cube_stl(20.0);
+    let with = |pattern: &str| {
+        let s = Settings { sparse_infill_pattern: pattern.into(), sparse_density: 0.1, ..Settings::default() };
+        slice(&[Input { name: "cube.stl", bytes: &stl }], &s, &Options::default()).unwrap()
+    };
+    let (lightning, crosshatch) = (with("lightning"), with("crosshatch"));
+    assert!(!lightning.fallbacks.iter().any(|f| f.contains("lightning")), "{:?}", lightning.fallbacks);
+    let gcode = String::from_utf8(lightning.gcode.clone()).unwrap();
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    let sparse = |part: &str| part.contains("; FEATURE: Sparse infill\n");
+    assert!(layers[85..94].iter().all(|part| sparse(part)), "no trees under the top");
+    assert!(!layers[4..20].iter().any(|part| sparse(part)), "trees low down");
+    let sparse_volume = |out: &spaghetti_slicer::Output| {
+        out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()].volume
+    };
+    let share = sparse_volume(&lightning) / sparse_volume(&crosshatch);
+    assert!(share > 0.05 && share < 0.4, "lightning takes {share:.2} of crosshatch's plastic");
+}
+
 /// A slice setup made by the app's own `sliceSetup` from its slicing settings (src/shared/slicing/settings.ts), as
 /// it hands them to Orca's engine: Generic ABS in blue at 0.12 mm, four walls and 25 % gyroid on the Engineering
 /// Plate, at 80 %. Made again with:

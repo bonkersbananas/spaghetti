@@ -4,7 +4,9 @@
 
 use crate::bridges;
 use crate::config::Settings;
+use crate::fill;
 use crate::geom::{self, Contour, Shapes};
+use crate::lightning;
 use crate::par;
 use crate::plan;
 use crate::section::Layers;
@@ -104,6 +106,8 @@ pub struct LayerRegions {
     /// what the second layer rests on (Orca keeps the first layer's `lslices` so). Empty on every other layer, whose
     /// islands' outlines are its slice.
     pub unpulled: Vec<(geom::Shape, u32)>,
+    /// Each object's lightning lines on the layer (`lightning.rs`), when its sparse infill is lightning.
+    pub lightning: Vec<Vec<Contour>>,
 }
 
 impl LayerRegions {
@@ -320,19 +324,27 @@ pub fn regions(
     });
 
     // Solid infill resting on sparse infill prints as internal bridges, as Orca's do, over the sparse lines as they
-    // print.
+    // print. Lightning's trees grow first, round where those bridges will be.
+    let candidates = bridges::candidates(&islands, &fills, layers, s);
+    let mut lightning = lightning_lines(&islands, &fills, &candidates, layers, centres, s);
     let lines = |layer: usize, island: usize, sparse: &Shapes| {
         let object = islands[layer][island].object as usize;
         let centre = centres.get(object).copied().unwrap_or((0.0, 0.0));
-        plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, s)
+        let trees = lightning.get(object).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
+        plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, trees, s)
     };
-    let fills = bridges::bridge_over_infill(&islands, fills, layers, &lines, s);
+    let fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
 
     let mut out: Vec<LayerRegions> = islands
         .into_iter()
         .zip(fills)
         .zip(surfaces)
-        .map(|((islands, fills), surfaces)| LayerRegions { islands, fills, surfaces, unpulled: Vec::new() })
+        .enumerate()
+        .map(|(l, ((islands, fills), surfaces))| {
+            let lightning =
+                lightning.iter_mut().map(|o| o.get_mut(l).map(std::mem::take).unwrap_or_default()).collect();
+            LayerRegions { islands, fills, surfaces, unpulled: Vec::new(), lightning }
+        })
         .collect();
     if let Some(first) = out.first_mut()
         && s.elephant_foot > 0.0
@@ -340,6 +352,63 @@ pub fn regions(
         first.unpulled = slices[0].iter().cloned().zip(owners[0].iter().copied()).collect();
     }
     out
+}
+
+/// Each object's lightning lines, layer by layer (`lightning.rs`), when the sparse infill is lightning. As Orca grows
+/// them: from the object's sparse infill area (reaching into the walls by Orca's overlap) before internal bridges
+/// take from it, less 3 mm round the solid infill worth bridging over the sparse infill of the layer below, so that
+/// the trees hold up those bridges' ends as well.
+fn lightning_lines(
+    islands: &[Vec<Island>],
+    fills: &[Vec<Fills>],
+    candidates: &bridges::Candidates,
+    layers: &Layers,
+    centres: &[(f64, f64)],
+    s: &Settings,
+) -> Vec<Vec<Vec<Contour>>> {
+    if fill::Pattern::of(&s.sparse_infill_pattern) != Some(fill::Pattern::Lightning) || s.sparse_density <= 0.0 {
+        return Vec::new();
+    }
+    let n = fills.len();
+    let objects = islands.iter().flatten().map(|island| island.object as usize + 1).max().unwrap_or(0);
+    let params = lightning::Params {
+        line_width: s.sparse_infill_width,
+        density_percent: (s.sparse_density * 100.0 * 1e6).round() / 1e6,
+        layer_height: s.layer_height,
+        overhang_angle: s.lightning_angles[0],
+        prune_angle: s.lightning_angles[1],
+        straightening_angle: s.lightning_angles[2],
+        junction_gap: Settings::spacing(s.sparse_infill_width, s.layer_height) / 2.0,
+    };
+    par::map_range(objects, |o| {
+        let sparse = |l: usize| -> Shapes {
+            islands[l]
+                .iter()
+                .zip(&fills[l])
+                .filter(|(island, _)| island.object as usize == o)
+                .flat_map(|(_, f)| f.sparse.iter().cloned())
+                .collect()
+        };
+        let areas: Vec<Shapes> = (0..n)
+            .map(|l| {
+                let here = sparse(l);
+                if here.is_empty() {
+                    return here;
+                }
+                let here = geom::offset(&here, plan::sparse_overlap(layers.height[l], s));
+                if l == 0 {
+                    return here;
+                }
+                let worth: Vec<&Shapes> =
+                    candidates.on(l).filter(|c| islands[l][c.island].object as usize == o).map(|c| &c.area).collect();
+                if worth.is_empty() || sparse(l - 1).is_empty() {
+                    return here;
+                }
+                geom::difference(&here, &geom::offset(&geom::union_all(&worth), 3.0))
+            })
+            .collect();
+        lightning::grow(&areas, centres.get(o).copied().unwrap_or((0.0, 0.0)), &params)
+    })
 }
 
 /// A layer's top and bottom surfaces with no part in both (Orca's crack rule): a part both is a bottom, unless it

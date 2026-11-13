@@ -19,9 +19,24 @@ const RESOLUTION: f64 = 0.0125;
 pub type SparseLines<'a> = dyn Fn(usize, usize, &Shapes) -> Vec<Vec<Pt>> + Sync + 'a;
 
 /// Part of a layer's solid infill worth bridging: the island it is in, and the part.
-struct Candidate {
-    island: usize,
-    area: Shapes,
+pub struct Candidate {
+    pub island: usize,
+    pub area: Shapes,
+}
+
+/// Every layer's solid infill worth bridging (`candidates`).
+pub struct Candidates(Vec<Vec<Candidate>>);
+
+impl Candidates {
+    /// Those of layer `l`.
+    pub fn on(&self, l: usize) -> impl Iterator<Item = &Candidate> {
+        self.0.get(l).into_iter().flatten()
+    }
+}
+
+/// Every layer's solid infill worth bridging, for `bridge_over_infill`.
+pub fn candidates(islands: &[Vec<Island>], fills: &[Vec<Fills>], layers: &Layers, s: &Settings) -> Candidates {
+    Candidates(par::map_range(fills.len(), |l| layer_candidates(l, islands, fills, layers, s)))
 }
 
 /// A bridge made of a candidate: its island, its area and the way its threads run (radians).
@@ -31,17 +46,18 @@ struct Bridge {
     angle: f64,
 }
 
-/// Every layer's fills with Orca's internal bridges. `lines(layer, island, sparse)` gives the sparse infill lines an
-/// island of a layer prints in that area.
+/// Every layer's fills with Orca's internal bridges, made of `candidates` (from these fills). `lines(layer, island,
+/// sparse)` gives the sparse infill lines an island of a layer prints in that area.
 pub fn bridge_over_infill(
     islands: &[Vec<Island>],
     fills: Vec<Vec<Fills>>,
+    candidates: Candidates,
     layers: &Layers,
     lines: &SparseLines,
     s: &Settings,
 ) -> Vec<Vec<Fills>> {
     let n = fills.len();
-    let candidates: Vec<Vec<Candidate>> = par::map_range(n, |l| candidates(l, islands, &fills, layers, s));
+    let candidates = candidates.0;
     // The thick bridge Orca measures with (whatever the bridges print as): a round thread, its height 0.9 of which
     // decides how deep the sparse infill under it must be.
     let (thread, _, thread_spacing) = {
@@ -128,7 +144,7 @@ fn solid_spacing(l: usize, layers: &Layers, s: &Settings) -> f64 {
 /// The layer's solid infill worth bridging: where it rests on the layer below's sparse infill, a good way in from
 /// that infill's edge and from its solid infill, either all of it or more than a few lines' square of it; with
 /// some room round that, and the small pieces of the rest that would be left between.
-fn candidates(
+fn layer_candidates(
     l: usize,
     islands: &[Vec<Island>],
     fills: &[Vec<Fills>],

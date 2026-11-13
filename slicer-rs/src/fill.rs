@@ -1,5 +1,6 @@
 //! Sparse infill as OrcaSlicer 2.5 draws it (`libslic3r/Fill/`): the crosshatch, gyroid, grid, cubic and honeycomb
-//! patterns, laid out in the object's own frame (centred on its bounding box, turned by the infill direction), cut to
+//! patterns, laid out in the object's own frame (centred on its bounding box, turned by the infill direction), and
+//! lightning's trees (grown for the whole object in `lightning.rs`), cut to
 //! the area (crosshatch's and gyroid's short bits dropped), then joined along the area's edge as Orca's `connect_infill` joins them: two lines whose ends are close
 //! along the edge become one path, and an end that joins nothing hooks a short anchor onto the edge. Lines whose ends
 //! lie within two spacings of each other then print as one path (`join_close_ends`).
@@ -27,6 +28,8 @@ pub enum Pattern {
     Cubic,
     /// Hexagons, turned by 60° from layer to layer (`FillHoneycomb`).
     Honeycomb,
+    /// Trees that hold up the top surfaces from inside and nothing else (`FillLightning`), from `Sparse::trees`.
+    Lightning,
 }
 
 impl Pattern {
@@ -37,6 +40,7 @@ impl Pattern {
             "grid" => Some(Pattern::Grid),
             "cubic" => Some(Pattern::Cubic),
             "honeycomb" => Some(Pattern::Honeycomb),
+            "lightning" => Some(Pattern::Lightning),
             _ => None,
         }
     }
@@ -44,7 +48,7 @@ impl Pattern {
 
 /// What a layer's sparse infill is drawn with.
 #[derive(Clone, Debug)]
-pub struct Sparse {
+pub struct Sparse<'a> {
     pub pattern: Pattern,
     /// Where the object's pattern is anchored: the centre of its bounding box on the plate (units).
     pub origin: (f64, f64),
@@ -62,6 +66,8 @@ pub struct Sparse {
     pub anchor: f64,
     /// The longest stretch of edge that joins two lines (`infill_anchor_max`), mm.
     pub anchor_max: f64,
+    /// Lightning's lines on this layer for the whole object (units), each from a tip towards its tree's root.
+    pub trees: &'a [Vec<Pt>],
 }
 
 /// The infill of `area`, each of its shapes grown by `grow` mm first (Orca's overlap with the walls, less half a
@@ -88,6 +94,9 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         Pattern::Crosshatch | Pattern::Gyroid => return waves(part, p),
         Pattern::Grid | Pattern::Cubic => multilines(part, p),
         Pattern::Honeycomb => honeycomb(part, p),
+        Pattern::Lightning => {
+            p.trees.iter().map(|line| line.iter().map(|q| (q.x as f64, q.y as f64)).collect()).collect()
+        }
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -1837,7 +1846,7 @@ mod tests {
         vec![vec![vec![pt(0, 0), pt(s, 0), pt(s, s), pt(0, s)]]]
     }
 
-    fn params(pattern: Pattern, z: f64) -> Sparse {
+    fn params(pattern: Pattern, z: f64) -> Sparse<'static> {
         Sparse {
             pattern,
             origin: (sc(10.0) as f64, sc(10.0) as f64),
@@ -1848,6 +1857,7 @@ mod tests {
             density: 0.15,
             anchor: 4.0 * 0.407,
             anchor_max: 20.0,
+            trees: &[],
         }
     }
 
@@ -1987,6 +1997,48 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn lightning_lines_are_cut_to_the_area_and_anchored_on_its_edge() {
+        let s = sc(20.0);
+        let (h0, h1) = (sc(7.0), sc(13.0));
+        let area: Shapes = vec![vec![
+            vec![pt(0, 0), pt(s, 0), pt(s, s), pt(0, s)],
+            vec![pt(h0, h0), pt(h0, h1), pt(h1, h1), pt(h1, h0)],
+        ]];
+        // Sparse infill on 30 layers under a top; the trees of the topmost.
+        let mut areas: Vec<Shapes> = (0..30).map(|_| area.clone()).collect();
+        areas.push(Vec::new());
+        let p = crate::lightning::Params {
+            line_width: 0.45,
+            density_percent: 15.0,
+            layer_height: 0.2,
+            overhang_angle: 45.0,
+            prune_angle: 45.0,
+            straightening_angle: 45.0,
+            junction_gap: 0.2035,
+        };
+        let trees = crate::lightning::grow(&areas, (sc(10.0) as f64, sc(10.0) as f64), &p);
+        let paths = sparse(
+            &area,
+            -0.2,
+            &Sparse { pattern: Pattern::Lightning, trees: &trees[29], ..params(Pattern::Lightning, 6.0) },
+        );
+        assert!(!paths.is_empty());
+        let shrunk = geom::offset(&area, -0.199);
+        for l in &paths {
+            for w in l.windows(2) {
+                assert!(geom::segment_inside(&shrunk, w[0], w[1]) || geom::dist(w[0], w[1]) < 5.0);
+            }
+        }
+        // Lines that reach the edge follow it a little (anchors) or join along it.
+        let on_edge = |q: &Pt| {
+            shrunk.iter().flatten().any(|c| {
+                (0..c.len()).any(|i| geom::segment_dist2(*q, c[i], c[(i + 1) % c.len()]).sqrt() < 0.02 * geom::SCALE)
+            })
+        };
+        assert!(paths.iter().any(|l| l.windows(2).any(|w| on_edge(&w[0]) && on_edge(&w[1]))), "no anchor");
     }
 
     #[test]

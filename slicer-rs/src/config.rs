@@ -68,6 +68,10 @@ pub struct Settings {
     pub infill_anchor: f64,
     /// mm: the longest stretch of wall that joins two sparse infill lines into one (`infill_anchor_max`).
     pub infill_anchor_max: f64,
+    /// Lightning infill's angles, degrees (Orca's `lightning_overhang_angle`, `lightning_prune_angle` and
+    /// `lightning_straightening_angle`): how far in the walls hold up the layer above, how far each layer cuts the
+    /// trees' tips back, and how far it may move a node to straighten them, each as a slope over one layer.
+    pub lightning_angles: [f64; 3],
     pub elephant_foot: f64,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
@@ -335,6 +339,8 @@ impl Settings {
             top_bottom_infill_wall_overlap: share("top_bottom_infill_wall_overlap"),
             min_sparse_infill_area: p.float("minimum_sparse_infill_area"),
             infill_anchor,
+            lightning_angles: ["lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle"]
+                .map(|key| if p.text(key).is_empty() { 45.0 } else { p.float(key) }),
             infill_anchor_max,
             elephant_foot: p.float("elefant_foot_compensation"),
             resolution: p.float("resolution"),
@@ -456,7 +462,7 @@ impl Settings {
         let mut out = Vec::new();
         if !matches!(
             self.sparse_infill_pattern.as_str(),
-            "zig-zag" | "rectilinear" | "crosshatch" | "gyroid" | "grid" | "cubic" | "honeycomb" | ""
+            "zig-zag" | "rectilinear" | "crosshatch" | "gyroid" | "grid" | "cubic" | "honeycomb" | "lightning" | ""
         ) {
             out.push(format!("{} sparse infill printed as straight lines", self.sparse_infill_pattern));
         }
