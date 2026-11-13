@@ -1,7 +1,6 @@
 import type { Person } from "@shared/api";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
-import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import type { Ref } from "react";
 import { photoAlt } from "@/components/ideas/IdeaCard";
@@ -9,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { Photo } from "@/components/ui/Photo";
+import { PhotoRow } from "@/components/ui/PhotoRow";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { heroPhoto, newestPhoto } from "@/lib/builds";
@@ -140,23 +139,12 @@ export function BuildRow({ item }: { item: ItemView }) {
   const title = item.title || item.note.split("\n")[0] || "Untitled build";
   return (
     <li className="list-none">
-      <Link
-        to="/builds/$buildId"
-        params={{ buildId: item.id }}
-        className="pressable focus-ring hover:bg-ink/4 flex items-center gap-3.5 rounded-lg p-2"
+      <PhotoRow
+        link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
+        photo={photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null}
+        tile={<BuildsIcon size={24} aria-hidden />}
+        faded={item.stage === "shelved"}
       >
-        {photo ? (
-          <Photo
-            src={photoSrc(photo.id, "thumb")}
-            alt=""
-            color={photo.color || undefined}
-            className={cn("size-16 shrink-0 rounded-md", item.stage === "shelved" && "opacity-75 saturate-50")}
-          />
-        ) : (
-          <span className="bg-well text-ink-ghost flex size-16 shrink-0 items-center justify-center rounded-md">
-            <BuildsIcon size={24} aria-hidden />
-          </span>
-        )}
         <span className="min-w-0 flex-1">
           <span
             className={cn(
@@ -171,7 +159,7 @@ export function BuildRow({ item }: { item: ItemView }) {
             {attempts > 0 && ` · ${attempts} ${attempts === 1 ? "attempt" : "attempts"}`}
           </span>
         </span>
-      </Link>
+      </PhotoRow>
     </li>
   );
 }

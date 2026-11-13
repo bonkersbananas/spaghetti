@@ -4,7 +4,7 @@ import { displayName } from "@shared/people";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { Link, type LinkProps } from "@tanstack/react-router";
+import type { LinkProps } from "@tanstack/react-router";
 import { forwardRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
@@ -20,7 +20,7 @@ import {
   IdeasIcon,
   ShelveIcon,
 } from "@/components/ui/icons";
-import { Photo } from "@/components/ui/Photo";
+import { PhotoRow } from "@/components/ui/PhotoRow";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
@@ -57,36 +57,27 @@ const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
   ref,
 ) {
   return (
-    <Link
+    <PhotoRow
       ref={ref}
-      {...link}
       // Named by what it shows (outcome, title, the words that matched), as people see it.
-      aria-current={selected || undefined}
-      onPointerEnter={onPointerEnter}
-      viewTransition
-      onClick={(event) => {
-        heroClick(event, photo?.id);
-        onOpen?.();
+      link={{
+        ...link,
+        onPointerEnter,
+        viewTransition: true,
+        onClick: (event) => {
+          heroClick(event, photo?.id);
+          onOpen?.();
+        },
       }}
-      className={cn(
-        "pressable focus-ring flex items-start gap-3.5 rounded-lg p-2 md:gap-4",
-        selected ? "bg-cream shadow-ring" : "hover:bg-ink/4",
-      )}
+      photo={photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null}
+      tile={<FallbackIcon size={26} aria-hidden />}
+      tileClassName="bg-ink/5 text-ink-faint"
+      size="lg"
+      align="start"
+      selected={selected}
     >
-      {photo ? (
-        <Photo
-          src={photoSrc(photo.id, "thumb")}
-          alt=""
-          color={photo.color || undefined}
-          className="size-20 shrink-0 rounded-md md:size-24"
-        />
-      ) : (
-        <span className="bg-ink/5 text-ink-faint flex size-20 shrink-0 items-center justify-center rounded-md md:size-24">
-          <FallbackIcon size={26} aria-hidden />
-        </span>
-      )}
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 py-0.5">{children}</span>
-    </Link>
+    </PhotoRow>
   );
 });
 
