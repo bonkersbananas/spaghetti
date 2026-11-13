@@ -59,17 +59,23 @@ export interface PrintingAttempt {
   id: string;
 }
 
-/** A quiet "3D" pill on the plate picture. Opens the viewer; its code is fetched as a finger or the pointer nears it. */
+/**
+ * A quiet "3D" pill on the plate picture, or on a small picture (a story card's) only its cube, a corner glyph on the
+ * veil that leaves the model in view. Opens the viewer; its code is fetched as a finger or the pointer nears it.
+ */
 export function ThreeDButton({
   file,
   fallbackColors,
   printing,
+  glyph,
   className,
 }: {
   file: AttemptFileView;
   fallbackColors?: (string | null | undefined)[];
   /** Set while the attempt is printing: the viewer shows the layers printed so far solid and the rest as a ghost. */
   printing?: PrintingAttempt;
+  /** Only the cube, in the corner: for a picture too small for the pill. */
+  glyph?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -83,12 +89,15 @@ export function ThreeDButton({
         onClick={() => setOpen(true)}
         aria-label={`See ${file.name} in 3D`}
         className={cn(
-          "pressable focus-ring bg-veil text-on-veil text-caption touch-target absolute right-1 bottom-1 flex items-center gap-1 rounded-full py-0.5 pr-2 pl-1.5 font-semibold",
+          "pressable focus-ring bg-veil text-on-veil touch-target absolute flex items-center rounded-full",
+          glyph
+            ? "right-0.5 bottom-0.5 size-5 justify-center backdrop-blur-sm"
+            : "text-caption right-1 bottom-1 gap-1 py-0.5 pr-2 pl-1.5 font-semibold",
           className,
         )}
       >
-        <CubeIcon size={12} weight="bold" aria-hidden />
-        3D
+        <CubeIcon size={glyph ? 11 : 12} weight="bold" aria-hidden />
+        {!glyph && "3D"}
       </button>
       {open && (
         <ViewerSheet

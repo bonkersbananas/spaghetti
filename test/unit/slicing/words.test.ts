@@ -3,6 +3,7 @@ import { defaultSettings } from "../../../src/shared/slicing/defaults.ts";
 import type { FileSlice } from "../../../src/shared/slicing/types.ts";
 import {
   finishesOnComputer,
+  layersDetail,
   materialsText,
   printerName,
   problemSentence,
@@ -15,16 +16,25 @@ const failed = (extra: Partial<FileSlice>): FileSlice => ({ status: "failed", se
 
 describe("what a model's card says", () => {
   it("says how it was sliced in a few words", () => {
-    expect(sliceSummary(settings)).toEqual(["0.20 mm", "PLA"]);
+    expect(sliceSummary(settings)).toEqual(["PLA", "0.2 mm layers"]);
     expect(sliceSummary({ ...settings, supports: true, scale: 80, layerHeight: 0.16 })).toEqual([
-      "0.16 mm",
       "PLA",
+      "0.16 mm layers",
       "supports",
       "80%",
     ]);
     expect(materialsText(["PLA", "PLA", "PLA"])).toBe("PLA ×3");
     expect(materialsText(["PLA", "PETG", "PLA"])).toBe("PLA + PETG");
     expect(printerName("Bambu Lab X2D 0.4 nozzle")).toBe("X2D");
+  });
+
+  it("says the layers in the details with the preset's word, only when the preset is for that height", () => {
+    expect(layersDetail(settings)).toBe("0.20 mm (Standard)");
+    expect(layersDetail({ process: "0.16mm Optimal @BBL X2D", layerHeight: 0.16 })).toBe("0.16 mm (Optimal)");
+    expect(layersDetail({ process: "0.08mm Extra Fine @BBL X2D", layerHeight: 0.08 })).toBe("0.08 mm (Extra Fine)");
+    // A project from another printer keeps its own layer height under the default preset.
+    expect(layersDetail({ process: "0.20mm Standard @BBL X2D", layerHeight: 0.12 })).toBe("0.12 mm");
+    expect(layersDetail({ process: "My process", layerHeight: 0.2 })).toBe("0.20 mm");
   });
 
   it("says why it couldn't be sliced, in one short sentence", () => {

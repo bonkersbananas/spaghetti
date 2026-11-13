@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { CheckCircleIcon, WarningIcon } from "./icons";
+import { PulseDot } from "./PulseDot";
 
 export type LiveState = "waiting" | "connected" | "problem";
 
@@ -33,7 +34,7 @@ export function LiveStatus({
       )}
     >
       <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center" aria-hidden>
-        {state === "waiting" && <span className="bg-semolina sg-pulse size-3 rounded-full" />}
+        {state === "waiting" && <PulseDot />}
         {state === "connected" && <CheckCircleIcon size={20} weight="fill" />}
         {state === "problem" && <WarningIcon size={20} weight="fill" />}
       </span>

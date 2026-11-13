@@ -1,28 +1,31 @@
 import engine from "virtual:slicer-engine";
 import { fileUrl } from "@shared/api";
+import type { AttemptSettings } from "@shared/attempts";
 import { plateName, shortPreset } from "@shared/attempts";
 import { slicedName } from "@shared/slicing/files.ts";
-import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
+import type { FileSlice, SliceOptions, SliceSettings } from "@shared/slicing/types.ts";
 import {
   finishesOnComputer,
+  layersDetail,
   printerName,
   problemSentence,
   sliceSummary,
   worthRetrying,
 } from "@shared/slicing/words.ts";
 import { useQueryClient } from "@tanstack/react-query";
-import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
+import { type ComponentPropsWithRef, lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
 import { DownloadIcon, ExternalIcon, InfoIcon, SameAgainIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
+import { PulseDot } from "@/components/ui/PulseDot";
 import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
-import { formatBytes, type SlicerFileDraft } from "@/lib/slicer-files";
+import type { SlicerFileDraft } from "@/lib/slicer-files";
 import { onPhone, type SliceJob, startSlice, useSliceJob } from "@/lib/slicing/jobs";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { canView3d, ThreeDButton } from "../viewer/ThreeDButton";
@@ -31,9 +34,10 @@ import { formatMinutes } from "./settings";
 
 /**
  * A model (.stl or plain .3mf) kept as it is and sliced in the browser (decision 0046): the card of a slicer file,
- * with its slicing in one quiet line. While it slices, a ring and "Slicing 42%"; once sliced, the plate picture
- * with its 3D control, the estimate, the sliced file to download, and "Sliced by Spaghetti · 0.20 mm · PLA", a quiet
- * row that opens how; when it can't be, one short sentence and the one thing that helps ("Scale to 80% and slice").
+ * led by the print once it is sliced. While it waits, a pulsing dot; while it slices, a ring and "Slicing 42%"; once
+ * sliced, the plate picture with its 3D control, "About 36 min · 10.6 g" with the file's name quieter under it, the
+ * sliced file to download, and "Sliced by Spaghetti · PLA · 0.2 mm layers", a quiet row that opens how; when it
+ * can't be, one short sentence and the one thing that helps ("Scale to 80% and slice").
  */
 
 /** Where a model's slicing is, from its row and this device's job. */
@@ -84,59 +88,73 @@ function LineAction({ children, onClick }: { children: ReactNode; onClick: () =>
   );
 }
 
-/** "Sliced by Spaghetti · 0.20 mm · PLA", or only "Sliced by Spaghetti" where the attempt's own line says the rest. */
+/** "Sliced by Spaghetti · PLA · 0.2 mm layers", or only "Sliced by Spaghetti" where the attempt's own line says the rest. */
 const slicedPieces = (slice: FileSlice, short?: boolean) =>
   short ? ["Sliced by Spaghetti"] : ["Sliced by Spaghetti", ...sliceSummary(slice.settings)];
 
 /**
- * How it was sliced, as a quiet row that opens the details (44 px tall on phones). Without `onClick` or a wrapping
- * popover it is only words: a card in a sheet has nowhere to open them.
+ * How it was sliced, as a quiet row that opens the details (44 px tall on phones); `inline`, only "Sliced by
+ * Spaghetti" as a piece of a story card's meta line (its hit area still 44 px on touch screens).
  */
 const SlicedLine = ({
   slice,
-  short,
+  inline,
   ...props
-}: { slice: FileSlice; short?: boolean } & React.ComponentPropsWithRef<"button">) => {
-  const pieces = slicedPieces(slice, short);
+}: { slice: FileSlice; inline?: boolean } & ComponentPropsWithRef<"button">) => {
+  const pieces = slicedPieces(slice, inline);
   return (
     <button
       type="button"
       aria-label={`${pieces.join(", ")}: how it was sliced`}
       {...props}
-      className={cn(quietRowClass, "w-fit max-w-full self-start text-left md:min-h-0 md:py-1")}
+      className={
+        inline
+          ? "focus-ring pressable hover:text-ink duration-fast touch-target relative -mx-1 inline-flex items-center gap-1 rounded-sm px-1 transition-colors"
+          : cn(quietRowClass, "w-fit max-w-full self-start text-left md:min-h-0 md:py-1")
+      }
     >
-      <QuietRowContent icon={InfoIcon}>
-        <MetaList>{pieces}</MetaList>
-      </QuietRowContent>
+      {inline ? (
+        <>
+          <InfoIcon size={14} className="shrink-0" aria-hidden />
+          {pieces[0]}
+        </>
+      ) : (
+        <QuietRowContent icon={InfoIcon}>
+          <MetaList>{pieces}</MetaList>
+        </QuietRowContent>
+      )}
     </button>
   );
 };
 
-/** The same words where they open nothing. */
-const SlicedWords = ({ slice, short }: { slice: FileSlice; short?: boolean }) => (
-  <MetaList className="text-small text-ink-faint">{slicedPieces(slice, short)}</MetaList>
-);
+/** The same words where they open nothing (a card in a sheet has nowhere to open them). */
+const SlicedWords = ({ slice, short }: { slice: FileSlice; short?: boolean }) =>
+  short ? "Sliced by Spaghetti" : <MetaList className="text-small text-ink-faint">{slicedPieces(slice)}</MetaList>;
+
+/** "About 36 min · 10.6 g": what a sliced model's card leads with. */
+export function sliceLead(prefill: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams"> | undefined): string[] {
+  return [
+    prefill?.estimatedMinutes !== undefined ? `About ${formatMinutes(prefill.estimatedMinutes)}` : "",
+    prefill?.weightGrams !== undefined
+      ? `${prefill.weightGrams.toLocaleString("en", { maximumFractionDigits: 1 })} g`
+      : "",
+  ].filter(Boolean);
+}
 
 /** The lines under a model's name: its slicing, and what can be done about it. */
 export function ModelStatus({
   state,
   phone,
   onSlice,
-  details,
-  short,
+  line,
 }: {
   state: ModelState;
   /** Says it about a phone ("ran out of memory on this phone"). */
   phone: boolean;
   /** Slicing it (again) from here; absent where the card only shows. */
   onSlice?: (options: SliceOptions) => void;
-  /**
-   * How the "Sliced by Spaghetti" line opens its details: wrapped (a popover's trigger), or a tap (a sheet). Without
-   * it the line is only words.
-   */
-  details?: { wrap?: (line: ReactNode) => ReactNode; open?: () => void };
-  /** Only "Sliced by Spaghetti": on a story card, whose settings line already says the layer height and material. */
-  short?: boolean;
+  /** Once sliced, how it was ("Sliced by Spaghetti"), unless the card's meta line says it. */
+  line?: ReactNode;
 }) {
   switch (state.kind) {
     case "saving":
@@ -145,7 +163,8 @@ export function ModelStatus({
     case "slicing": {
       const percent = state.kind === "slicing" ? Math.round(state.fraction * 100) : null;
       const words = percent === null ? "Waiting to slice" : `Slicing ${percent}%`;
-      // A progressbar that says where it is, not a live region that reads out every percent.
+      // A progressbar that says where it is, not a live region that reads out every percent. Waiting is a pulse
+      // (it will start by itself), not a spinner that looks stuck.
       return (
         <span
           className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
@@ -156,21 +175,19 @@ export function ModelStatus({
           {...(percent === null ? {} : { "aria-valuenow": percent })}
           aria-valuetext={words}
         >
-          <ProgressRing value={percent === null ? null : percent / 100} className="text-semolina" />
+          {percent === null ? (
+            <PulseDot className="m-0.5" />
+          ) : (
+            <ProgressRing value={percent / 100} className="text-semolina" />
+          )}
           {words}
         </span>
       );
     }
     case "sliced": {
-      const line =
-        details?.open || details?.wrap ? (
-          <SlicedLine slice={state.slice} short={short} onClick={details.open} />
-        ) : (
-          <SlicedWords slice={state.slice} short={short} />
-        );
       return (
         <>
-          {details?.wrap ? details.wrap(line) : line}
+          {line}
           {state.slice.cautions?.includes("floating") && (
             <>
               <Caution className="px-0">Parts of it float in the air.</Caution>
@@ -203,19 +220,79 @@ export function ModelStatus({
   }
 }
 
+/** How a model's "Sliced by Spaghetti" line opens its details: wrapped (a popover's trigger), or a tap (a sheet). */
+export interface DetailsOpener {
+  wrap?: (line: ReactNode) => ReactNode;
+  open?: () => void;
+}
+
 /**
- * What the card's meta line says: the estimate, weight and sliced file's size, or the model's size. `compact` (a
- * story card) leaves the weight to the attempt's own settings line, as a slicer file's compact card does.
+ * A model's card as it shows, from where its slicing is: what the saved card, the attempt sheet's draft and the
+ * styleguide share. Once sliced it leads with the print ("About 36 min · 10.6 g") and the file's name follows,
+ * quieter; a model's size says nothing about the print, so it isn't shown. On a story card (`compact`) the attempt's
+ * settings line already gives the estimate and weight: the card says only "Sliced by Spaghetti", in its meta line.
  */
-export function modelMeta(file: AttemptFileView, state: ModelState, compact?: boolean): string[] {
-  if (state.kind !== "sliced") return [formatBytes(file.size)];
-  const estimate = state.saved ? file.prefill.estimatedMinutes : undefined;
-  const grams = state.saved && !compact ? file.prefill.weightGrams : undefined;
-  return [
-    estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "",
-    grams !== undefined ? `${grams.toLocaleString("en", { maximumFractionDigits: 1 })} g` : "",
-    formatBytes(state.slice.bytes ?? file.size),
-  ].filter(Boolean);
+export function ModelCard({
+  name,
+  state,
+  thumbSrc,
+  prefill,
+  download,
+  plateOverlay,
+  onRemove,
+  onSlice,
+  details,
+  phone,
+  compact,
+  raised,
+  className,
+}: {
+  name: string;
+  state: ModelState;
+  thumbSrc?: string;
+  /** What the slice said: its estimate and weight lead the card. */
+  prefill?: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams">;
+  /** The sliced file's address, once it is saved. */
+  download?: string;
+  plateOverlay?: ReactNode;
+  onRemove?: () => void;
+  onSlice?: (options: SliceOptions) => void;
+  /** Without it the "Sliced by Spaghetti" line is only words. */
+  details?: DetailsOpener;
+  phone: boolean;
+  compact?: boolean;
+  raised?: boolean;
+  className?: string;
+}) {
+  const slice = state.kind === "sliced" ? state.slice : null;
+  const opens = !!(details?.open || details?.wrap);
+  const words = slice ? (
+    opens ? (
+      <SlicedLine slice={slice} inline={compact} onClick={details?.open} />
+    ) : (
+      <SlicedWords slice={slice} short={compact} />
+    )
+  ) : null;
+  const line = words && details?.wrap ? details.wrap(words) : words;
+  const quiet = !!slice && compact && !slice.cautions?.includes("floating");
+  return (
+    <FileCard
+      name={name}
+      thumbSrc={thumbSrc}
+      lead={slice && !compact ? sliceLead(prefill) : undefined}
+      meta={compact && line ? [line] : []}
+      status={
+        quiet ? undefined : <ModelStatus state={state} phone={phone} onSlice={onSlice} line={compact ? null : line} />
+      }
+      download={download}
+      downloadName={slicedName(name)}
+      plateOverlay={plateOverlay}
+      onRemove={onRemove}
+      compact={compact}
+      raised={raised}
+      className={className}
+    />
+  );
 }
 
 /** The original's bytes, for slicing a saved model again. */
@@ -263,7 +340,7 @@ export default function ModelFileCard({
 
   const saved = state.kind === "sliced" && state.saved;
   // How it was sliced: a popover beside the line on desktop, a sheet on phones (but not over the attempt's sheet).
-  const details =
+  const details: DetailsOpener | undefined =
     state.kind !== "sliced" || (inSheet && !isDesktop)
       ? undefined
       : isDesktop
@@ -277,19 +354,28 @@ export default function ModelFileCard({
         : { open: () => setSheet(true) };
   return (
     <>
-      <FileCard
+      <ModelCard
         name={file.name}
+        state={state}
         thumbSrc={file.hasThumb || job?.picture ? fileThumbSrc(file.id) : undefined}
-        meta={modelMeta(file, state, compact)}
-        status={<ModelStatus state={state} phone={!isDesktop} onSlice={slice} details={details} short={compact} />}
-        download={saved ? fileUrl(file.id, "sliced") : undefined}
-        downloadName={slicedName(file.name)}
+        // Until the server has the slice, what this device's job said.
+        prefill={job?.outcome?.ok ? job.outcome.prefill : file.prefill}
+        // On a phone an idea's card keeps its width for "About 36 min · 10.6 g": the sliced file is in its details.
+        download={saved && (isDesktop || !raised) ? fileUrl(file.id, "sliced") : undefined}
         plateOverlay={
           saved && canView3d(file) ? (
-            <ThreeDButton file={file} fallbackColors={filaments?.map((f) => f.colorHex)} printing={printing} />
+            <ThreeDButton
+              file={file}
+              fallbackColors={filaments?.map((f) => f.colorHex)}
+              printing={printing}
+              glyph={compact}
+            />
           ) : undefined
         }
         onRemove={onRemove}
+        onSlice={slice}
+        details={details}
+        phone={!isDesktop}
         compact={compact}
         raised={raised}
         className={className}
@@ -301,6 +387,7 @@ export default function ModelFileCard({
               file={file}
               slice={state.slice}
               size="md"
+              sliced={saved && raised ? fileUrl(file.id, "sliced") : undefined}
               onSlice={
                 slice &&
                 ((options) => {
@@ -343,25 +430,15 @@ export function ModelDraftCard({
     slice: null,
     createdAt: 0,
   };
-  const state = modelState(file, job);
-  const prefill = job?.outcome?.ok ? job.outcome.prefill : undefined;
   return (
-    <FileCard
+    <ModelCard
       name={file.name}
+      state={modelState(file, job)}
       thumbSrc={job?.picture || draft.picture ? fileThumbSrc(draft.id) : undefined}
-      meta={
-        state.kind === "sliced" && prefill
-          ? [
-              prefill.estimatedMinutes !== undefined ? `est. ${formatMinutes(prefill.estimatedMinutes)}` : "",
-              prefill.weightGrams !== undefined
-                ? `${prefill.weightGrams.toLocaleString("en", { maximumFractionDigits: 1 })} g`
-                : "",
-              formatBytes(state.slice.bytes ?? file.size),
-            ].filter(Boolean)
-          : [formatBytes(file.size)]
-      }
-      status={<ModelStatus state={state} phone={!isDesktop} onSlice={onSlice} />}
+      prefill={job?.outcome?.ok ? job.outcome.prefill : undefined}
       onRemove={onRemove}
+      onSlice={onSlice}
+      phone={!isDesktop}
     />
   );
 }
@@ -376,13 +453,24 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** "Sliced here with the X2D's usual settings.": what a slice's details say first, in plain words. */
+export function slicedWith(settings: Pick<SliceSettings, "machine" | "project">): string {
+  const printer = printerName(settings.machine);
+  if (settings.project === "own") return "Sliced here with the file's own settings.";
+  if (settings.project === "some") {
+    return `Sliced here with the ${printer}'s usual settings, and the file's layer height, walls, infill and supports.`;
+  }
+  return `Sliced here with the ${printer}'s usual settings.`;
+}
+
 /**
- * How a model was sliced: the printer, process, filaments, plate, supports and scale, whose engine (with a link to
- * its source, as its licence asks), the original to download, and "Slice again".
+ * How a model was sliced: in plain words first, then the printer, layers, filaments, plate, supports and scale, the
+ * engine's licence (with a link to its source, as the licence asks), the original to download, and "Slice again".
  */
 export function SliceDetails({
   file,
   slice,
+  sliced,
   onSlice,
   heading,
   close,
@@ -390,6 +478,8 @@ export function SliceDetails({
 }: {
   file: Pick<AttemptFileView, "id" | "name">;
   slice: FileSlice;
+  /** The sliced file's address, where the card has no download of its own (an idea's card on a phone). */
+  sliced?: string;
   onSlice?: (options: SliceOptions) => void;
   /** Its own title ("Sliced by Spaghetti"), where nothing above says it (a popover; a sheet has its title). */
   heading?: boolean;
@@ -414,24 +504,17 @@ export function SliceDetails({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         {heading && <p className="text-body text-ink font-semibold">Sliced by Spaghetti</p>}
-        <p className="text-small text-ink-soft">
-          In the browser, with OrcaSlicer's own engine and its presets for the {printerName(settings.machine)}.
-        </p>
+        <p className="text-small text-ink-soft">{slicedWith(settings)}</p>
       </div>
       <dl className="text-small flex flex-col gap-1.5">
         <Fact label="Printer">{settings.machine.replace(/\s+([\d.]+)\s*nozzle$/i, ", $1 mm nozzle")}</Fact>
-        <Fact label="Process">{shortPreset(settings.process)}</Fact>
+        <Fact label="Layers">{layersDetail(settings)}</Fact>
         <Fact label={settings.filaments.length > 1 ? "Filaments" : "Filament"}>
           {settings.filaments.map(shortPreset).join(", ")}
         </Fact>
         <Fact label="Plate">{plateName(settings.bedType)}</Fact>
         <Fact label="Supports">{settings.supports ? "Tree supports, where needed" : "Off"}</Fact>
         {settings.scale !== 100 && <Fact label="Size">{settings.scale}% of the model</Fact>}
-        {settings.project && (
-          <Fact label="Settings">
-            {settings.project === "own" ? "The file's own" : "The file's layer height, walls, infill and supports"}
-          </Fact>
-        )}
       </dl>
       <p className="text-caption text-ink-faint">
         OrcaSlicer is free software under the AGPL.{" "}
@@ -449,6 +532,17 @@ export function SliceDetails({
       </p>
       {/* Side by side in a popover; in a phone's sheet, one under the other at the thumb's width. */}
       <div className={size === "sm" ? "flex flex-wrap items-center gap-2" : "flex flex-col gap-2"}>
+        {sliced && (
+          <ButtonLink
+            href={sliced}
+            download={slicedName(file.name)}
+            size={size}
+            icon={DownloadIcon}
+            fullWidth={size === "md"}
+          >
+            Download the sliced file
+          </ButtonLink>
+        )}
         <ButtonLink
           href={fileUrl(file.id)}
           download={file.name}

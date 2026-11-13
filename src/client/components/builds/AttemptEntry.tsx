@@ -211,8 +211,9 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             <AttemptTags attempt={attempt} />
 
             {attempt.file && (
-              // Above the open button, so its download link works.
-              <div className="pointer-events-auto relative z-10 md:max-w-md">
+              // Above the open button, so its controls work; the card's width, so the download lines up with the
+              // attempt's menu above it. Between its controls a tap still opens the attempt.
+              <div className="relative z-10 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
                 <SavedFileCard
                   compact
                   file={attempt.file}

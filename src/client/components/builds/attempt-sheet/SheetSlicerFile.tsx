@@ -213,7 +213,7 @@ export function DraftFile({
 }) {
   if (state.draft.kind === "model") {
     return (
-      <Suspense fallback={<FileCard name={state.draft.file.name} meta={[formatBytes(state.draft.file.size)]} />}>
+      <Suspense fallback={<FileCard name={state.draft.file.name} meta={[]} />}>
         <ModelDraftCard draft={state.draft} onRemove={onRemove} onSlice={onSlice} />
       </Suspense>
     );

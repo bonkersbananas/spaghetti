@@ -3,7 +3,7 @@ import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
-import { ModelStatus, SliceDetails } from "@/components/builds/ModelFile";
+import { ModelCard, SliceDetails } from "@/components/builds/ModelFile";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeLine } from "@/components/pantry/BridgeLine";
@@ -20,6 +20,8 @@ import { NumberField, TextField } from "@/components/ui/Field";
 import { FromLabel } from "@/components/ui/FromLabel";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { ThreeDButton } from "@/components/viewer/ThreeDButton";
+import type { AttemptFileView } from "@/lib/items";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
 
 const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
@@ -56,6 +58,22 @@ const TOO_BIG: FileSlice = {
   fitScale: 78,
 };
 const noop = () => undefined;
+/** The sliced model the specimens' 3D control would open (there is no such file: the view says it can't read it). */
+const SAMPLE_MODEL: AttemptFileView = {
+  id: "styleguide-model",
+  name: "fusilli-knob.stl",
+  size: 1_200_000,
+  stored: true,
+  hasThumb: false,
+  plate: 1,
+  plateCount: 1,
+  slicer: null,
+  prefill: { estimatedMinutes: 38, weightGrams: 11.3 },
+  objects: [],
+  kind: "model",
+  slice: SAMPLE_SLICE,
+  createdAt: 0,
+};
 
 const sampleSpool: Spool = {
   id: "sample-spool",
@@ -285,94 +303,62 @@ export function PantrySection() {
             <PlateThumb alt="" className="size-16" />
           </div>
           <Label>
-            A model Spaghetti slices: saving, waiting, slicing, sliced, a caution, why it couldn't be, and not sliced
-            yet
+            A model Spaghetti slices: saving, waiting (a pulse), slicing, sliced (led by the print, the name quieter), a
+            caution, why it couldn't be, and not sliced yet
           </Label>
-          <FileCard
+          <ModelCard name="fusilli-knob.stl" state={{ kind: "saving" }} phone={false} />
+          <ModelCard name="fusilli-knob.stl" state={{ kind: "waiting" }} phone={false} />
+          <ModelCard name="fusilli-knob.stl" state={{ kind: "slicing", fraction: 0.05 }} phone={false} />
+          <ModelCard
             name="fusilli-knob.stl"
-            meta={["1.2 MB"]}
-            status={<ModelStatus state={{ kind: "saving" }} phone={false} />}
-          />
-          <FileCard
-            name="fusilli-knob.stl"
-            meta={["1.2 MB"]}
-            status={<ModelStatus state={{ kind: "waiting" }} phone={false} />}
-          />
-          <FileCard
-            name="fusilli-knob.stl"
-            meta={["1.2 MB"]}
-            status={<ModelStatus state={{ kind: "slicing", fraction: 0.42 }} phone={false} />}
-          />
-          <FileCard
-            name="fusilli-knob.stl"
-            meta={["est. 38 min", "11.3 g", "2.1 MB"]}
-            status={
-              <ModelStatus
-                state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-                phone={false}
-                details={{ open: noop }}
-              />
-            }
+            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
             download="#"
+            details={{ open: noop }}
+            phone={false}
           />
-          <FileCard
+          <ModelCard
             name="steampunk-glasses.stl"
-            meta={["est. 1 h 16 min", "7.7 g", "3.4 MB"]}
-            status={
-              <ModelStatus
-                state={{ kind: "sliced", slice: { ...SAMPLE_SLICE, cautions: ["floating"] }, saved: true }}
-                phone={false}
-                onSlice={noop}
-                details={{ open: noop }}
-              />
-            }
+            state={{ kind: "sliced", slice: { ...SAMPLE_SLICE, cautions: ["floating"] }, saved: true }}
+            prefill={{ estimatedMinutes: 76, weightGrams: 7.7 }}
             download="#"
+            onSlice={noop}
+            details={{ open: noop }}
+            phone={false}
           />
-          <FileCard
-            name="lasagne-sheet.stl"
-            meta={["14 KB"]}
-            status={<ModelStatus state={{ kind: "failed", slice: TOO_BIG }} phone={false} onSlice={noop} />}
-          />
-          <FileCard
-            name="fusilli-knob.stl"
-            meta={["1.2 MB"]}
-            status={<ModelStatus state={{ kind: "unsliced" }} phone={false} onSlice={noop} />}
-          />
+          <ModelCard name="lasagne-sheet.stl" state={{ kind: "failed", slice: TOO_BIG }} onSlice={noop} phone={false} />
+          <ModelCard name="fusilli-knob.stl" state={{ kind: "unsliced" }} onSlice={noop} phone={false} />
           <Label>
-            On an idea (raised); on a story card (compact: only "Sliced by Spaghetti", the settings line says the rest);
-            in an attempt's sheet on phones the words open nothing
+            On an idea (raised: a 96 px plate with the 3D pill, its actions in the top corner); on a story card
+            (compact: the 3D control a corner glyph, only "Sliced by Spaghetti", in the meta line, as the settings line
+            says the rest); in an attempt's sheet on phones the words open nothing
           </Label>
-          <FileCard
+          <ModelCard
             name="fusilli-knob.stl"
-            meta={["est. 38 min", "11.3 g", "2.1 MB"]}
-            status={
-              <ModelStatus
-                state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-                phone={false}
-                details={{ open: noop }}
-              />
-            }
+            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
             download="#"
+            plateOverlay={<ThreeDButton file={SAMPLE_MODEL} />}
+            onRemove={noop}
+            details={{ open: noop }}
+            phone={false}
             raised
           />
-          <FileCard
+          <ModelCard
             name="fusilli-knob.stl"
-            meta={["est. 38 min", "2.1 MB"]}
-            status={
-              <ModelStatus
-                state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-                phone={false}
-                details={{ open: noop }}
-                short
-              />
-            }
+            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
             download="#"
+            plateOverlay={<ThreeDButton file={SAMPLE_MODEL} glyph />}
+            details={{ open: noop }}
+            phone={false}
             compact
           />
-          <FileCard
+          <ModelCard
             name="fusilli-knob.stl"
-            meta={["est. 38 min", "11.3 g", "2.1 MB"]}
-            status={<ModelStatus state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }} phone />}
+            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
+            phone
           />
           <Label>How it was sliced: a popover on desktop, a sheet on phones</Label>
           <Panel className="max-w-96">

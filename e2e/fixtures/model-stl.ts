@@ -1,8 +1,9 @@
-/** A box as a binary STL: a model to slice, as small as a model gets (12 triangles). Sizes in mm. */
-export function boxStl(width: number, depth = width, height = width): Uint8Array {
-  const corners = (x: number, y: number, z: number) => [x * width, y * depth, z * height];
-  // Two triangles a face, corners counter-clockwise seen from outside.
-  const faces: number[][][] = [
+type Vec = [number, number, number];
+
+/** A box's twelve triangles, two a face, corners counter-clockwise seen from outside. Sizes in mm. */
+function boxFaces([x0, y0, z0]: Vec, [width, depth, height]: Vec): number[][][] {
+  const corners = (x: number, y: number, z: number) => [x0 + x * width, y0 + y * depth, z0 + z * height];
+  return [
     [corners(0, 0, 0), corners(0, 1, 0), corners(1, 1, 0)],
     [corners(0, 0, 0), corners(1, 1, 0), corners(1, 0, 0)],
     [corners(0, 0, 1), corners(1, 0, 1), corners(1, 1, 1)],
@@ -16,15 +17,35 @@ export function boxStl(width: number, depth = width, height = width): Uint8Array
     [corners(1, 0, 0), corners(1, 1, 0), corners(1, 1, 1)],
     [corners(1, 0, 0), corners(1, 1, 1), corners(1, 0, 1)],
   ] as number[][][];
+}
+
+/** Triangles as a binary STL. */
+function binaryStl(faces: number[][][], header: string): Uint8Array {
   const out = new Uint8Array(84 + faces.length * 50);
   const view = new DataView(out.buffer);
-  out.set(new TextEncoder().encode("box"), 0);
+  out.set(new TextEncoder().encode(header), 0);
   view.setUint32(80, faces.length, true);
   for (const [index, face] of faces.entries()) {
     const at = 84 + index * 50 + 12;
     for (const [k, value] of face.flat().entries()) view.setFloat32(at + k * 4, value, true);
   }
   return out;
+}
+
+/** A box as a binary STL: a model to slice, as small as a model gets (12 triangles). Sizes in mm. */
+export function boxStl(width: number, depth = width, height = width): Uint8Array {
+  return binaryStl(boxFaces([0, 0, 0], [width, depth, height]), "box");
+}
+
+/**
+ * Boxes in one binary STL, each where it is (mm): one mesh, so a box that starts above the others floats in the air
+ * once the lowest stands on the bed, and the slicer asks for supports.
+ */
+export function boxesStl(boxes: Array<{ at: Vec; size: Vec }>): Uint8Array {
+  return binaryStl(
+    boxes.flatMap((box) => boxFaces(box.at, box.size)),
+    "boxes",
+  );
 }
 
 /**

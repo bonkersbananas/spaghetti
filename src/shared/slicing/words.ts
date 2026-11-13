@@ -9,8 +9,27 @@ export function printerName(machine: string): string {
   return machine.replace(/^Bambu Lab\s+/i, "").replace(/\s+[\d.]+\s*(mm\s+)?nozzle$/i, "") || machine;
 }
 
-/** "0.2" → "0.20 mm", as slicers write layer heights. */
+/** "0.2" → "0.20 mm", as slicers write layer heights (the details' "Layers" line). */
 export const layerHeightText = (millimetres: number) => `${millimetres.toFixed(2)} mm`;
+
+/** "0.2" → "0.2 mm layers", "0.16" → "0.16 mm layers": the layer height in plain words, for the card's line. */
+export const layersText = (millimetres: number) => `${Number(millimetres.toFixed(2))} mm layers`;
+
+/**
+ * The quality word of a process preset, "0.20mm Standard @BBL X2D" → "Standard", when the preset is for the layer
+ * height the slice used (a project from another printer keeps its own height under our preset): else null.
+ */
+export function processQuality(process: string, layerHeight: number): string | null {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*mm\s+([^@]+?)\s*(?:@.*)?$/i.exec(process);
+  if (!match?.[2] || Math.abs(Number(match[1]) - layerHeight) > 0.001) return null;
+  return match[2];
+}
+
+/** The details' "Layers" line: "0.20 mm (Standard)", or only the height when the preset's word doesn't apply. */
+export function layersDetail(settings: Pick<SliceSettings, "process" | "layerHeight">): string {
+  const quality = processQuality(settings.process, settings.layerHeight);
+  return quality ? `${layerHeightText(settings.layerHeight)} (${quality})` : layerHeightText(settings.layerHeight);
+}
 
 /** "PLA", "PLA + PETG", "PLA ×3": the materials of a slice, said once each. */
 export function materialsText(materials: string[]): string {
@@ -19,11 +38,11 @@ export function materialsText(materials: string[]): string {
   return unique.join(" + ") || "PLA";
 }
 
-/** The card's line after "Sliced by Spaghetti": "0.20 mm · PLA", with supports or a scale when it had them. */
+/** The card's line after "Sliced by Spaghetti": "PLA · 0.2 mm layers", with supports or a scale when it had them. */
 export function sliceSummary(settings: SliceSettings): string[] {
   return [
-    layerHeightText(settings.layerHeight),
     materialsText(settings.materials),
+    layersText(settings.layerHeight),
     settings.supports ? "supports" : "",
     settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);

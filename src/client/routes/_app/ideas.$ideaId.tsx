@@ -7,9 +7,10 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { DraftNote } from "@/components/ideas/DraftNote";
-import { photoAlt } from "@/components/ideas/IdeaCard";
+import { photoAlt, plateAlt, plateCover } from "@/components/ideas/IdeaCard";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
+import { PlateCover } from "@/components/ideas/PlateCover";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
@@ -256,6 +257,9 @@ function Idea({ item }: { item: ItemView }) {
   useSlicerDropTarget(keepFile);
 
   const hasPhotos = photos.length > 0;
+  // No photo yet, but a model or slicer file: its plate picture is the cover until the first photo comes.
+  const plate = hasPhotos ? undefined : plateCover(item);
+  const hero = hasPhotos || !!plate;
   const reading = item.draft?.status === "reading";
   // The model card follows the note once typing pauses (half an address is not a model page yet).
   const settledNote = useSettled(note);
@@ -305,9 +309,7 @@ function Idea({ item }: { item: ItemView }) {
 
         {/* The build page's proportions (photo two parts, text three), so an idea that becomes a build keeps its photo
           where it was at the size it was, and the attempts take the side the text had. */}
-        <div
-          className={hasPhotos ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}
-        >
+        <div className={hero ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}>
           {hasPhotos && (
             <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
               <PhotoViewer
@@ -328,11 +330,16 @@ function Idea({ item }: { item: ItemView }) {
               />
             </div>
           )}
+          {plate && (
+            <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
+              <PlateCover file={plate} alt={plateAlt({ title, note })} className="-mx-5 md:mx-0" />
+              <AddFirstPhotos itemId={item.id} small />
+            </div>
+          )}
 
           <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
             {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
-            {!hasPhotos &&
-              (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
+            {!hero && (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
             {reading && !title.trim() ? (
               <Skeleton className="my-1.5 h-8 w-3/4" />
             ) : (

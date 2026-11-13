@@ -37,8 +37,13 @@ export function PlateThumb({ src, alt, className }: { src?: string; alt: string;
 interface FileCardProps {
   name: string;
   thumbSrc?: string;
-  /** Short pieces: "plate 2 of 3", "est. 1 h 30 min", "4.2 MB". */
-  meta: string[];
+  /**
+   * The card's first line, in the name's place, when the print says more than the file's name: a sliced model's
+   * "About 36 min · 10.6 g". The name follows it, quieter.
+   */
+  lead?: string[];
+  /** Short pieces: "plate 2 of 3", "est. 1 h 30 min", "4.2 MB"; or a line of its own (a story card's "Sliced by Spaghetti"). */
+  meta: ReactNode[];
   /** A line under it, such as "Too big to keep". */
   note?: string;
   /** Lines under the meta in place of the note: a model's slicing, with its actions (ModelFile.tsx). */
@@ -49,9 +54,12 @@ interface FileCardProps {
   /** Sits on the plate picture's corner (the "3D" control). */
   plateOverlay?: ReactNode;
   onRemove?: () => void;
-  /** On a story card: no box of its own and a smaller plate. */
+  /** On a story card: no box of its own and a smaller plate, its download in line with the attempt's menu above it. */
   compact?: boolean;
-  /** A raised card (like a model's link card, the column's width) with a larger plate; on desktop Remove shows on hover. */
+  /**
+   * A raised card (like a model's link card, the column's width) with a 96 px plate and its actions in the top corner;
+   * on desktop Remove shows on hover.
+   */
   raised?: boolean;
   className?: string;
 }
@@ -60,6 +68,7 @@ interface FileCardProps {
 export function FileCard({
   name,
   thumbSrc,
+  lead,
   meta,
   note,
   status,
@@ -78,26 +87,46 @@ export function FileCard({
       : "bg-ink/3 rounded-lg p-2.5 pr-1.5";
   const thumb = (
     <span className={cn("relative shrink-0", !!status && "md:row-span-2 md:self-start")}>
+      {/* A story card's plate is small: the well's padding keeps the whole model clear of its rounded edge. */}
       <PlateThumb
         src={thumbSrc}
         alt="The plate, as sliced"
-        className={compact ? "size-12" : raised ? "size-20" : "size-16"}
+        className={compact ? "size-12 p-1" : raised ? "size-24" : "size-16"}
       />
       {plateOverlay}
     </span>
   );
+  const named = !!lead?.length;
   const text = (
     <div className={cn("flex min-w-0 flex-1 flex-col gap-0.5", !!status && "md:self-end")}>
-      <span className="text-small text-ink truncate font-semibold" title={name}>
-        {name}
-      </span>
-      <MetaList className="text-small text-ink-faint tabular">
-        {meta.map((piece) => (
-          <span key={piece} className="whitespace-nowrap">
-            {piece}
+      {named ? (
+        <>
+          <MetaList className="text-body text-ink tabular font-semibold">
+            {lead.map((piece) => (
+              <span key={piece} className="whitespace-nowrap">
+                {piece}
+              </span>
+            ))}
+          </MetaList>
+          <span className="text-small text-ink-faint truncate" title={name}>
+            {name}
           </span>
-        ))}
-      </MetaList>
+        </>
+      ) : (
+        <span className="text-small text-ink truncate font-semibold" title={name}>
+          {name}
+        </span>
+      )}
+      {meta.length > 0 && (
+        <MetaList className="text-small text-ink-faint tabular">
+          {meta.map((piece, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: the pieces are their place in the line.
+            <span key={index} className="whitespace-nowrap">
+              {piece}
+            </span>
+          ))}
+        </MetaList>
+      )}
       {note && <span className="text-caption text-ink-faint">{note}</span>}
     </div>
   );
@@ -107,7 +136,11 @@ export function FileCard({
         <a
           href={download}
           download={downloadName ?? name}
-          className="pressable focus-ring text-ink-soft hover:bg-ink/5 hover:text-ink flex size-11 shrink-0 items-center justify-center rounded-md md:size-9"
+          className={cn(
+            "pressable focus-ring text-ink-soft hover:bg-ink/5 hover:text-ink flex shrink-0 items-center justify-center",
+            // On a story card it is the attempt menu's size, so the two line up down the card's edge.
+            compact ? "touch-target relative size-8 rounded-sm" : "size-11 rounded-md md:size-9",
+          )}
           aria-label={`Download ${downloadName ?? name}`}
           title={downloadName ? "Download the sliced file" : "Download the file"}
         >
@@ -130,7 +163,7 @@ export function FileCard({
       <div className={cn("flex items-center gap-3", box, className)}>
         {thumb}
         {text}
-        {actions}
+        <div className={cn("flex items-center", raised && "self-start")}>{actions}</div>
       </div>
     );
   }
@@ -146,7 +179,7 @@ export function FileCard({
     >
       {thumb}
       {text}
-      <div className="flex items-center md:row-span-2">{actions}</div>
+      <div className={cn("flex items-center md:row-span-2", raised && "self-start")}>{actions}</div>
       <div className="col-span-3 flex min-w-0 flex-col items-start gap-1.5 md:col-span-1 md:col-start-2 md:self-start">
         {status}
       </div>
@@ -154,11 +187,16 @@ export function FileCard({
   );
 }
 
-/** What a file that's on an attempt (or on its way) says about itself. */
-export function savedFileMeta(file: AttemptFileView): { meta: string[]; note?: string } {
+/**
+ * What a file that's on an attempt (or on its way) says about itself. On a story card (`compact`) the attempt's
+ * settings line already gives the estimate: the card doesn't say it twice.
+ */
+export function savedFileMeta(file: AttemptFileView, compact?: boolean): { meta: string[]; note?: string } {
   const meta = [
     file.plateCount > 1 ? `plate ${file.plate} of ${file.plateCount}` : "",
-    file.prefill.estimatedMinutes !== undefined ? `est. ${formatMinutes(file.prefill.estimatedMinutes)}` : "",
+    file.prefill.estimatedMinutes !== undefined && !compact
+      ? `est. ${formatMinutes(file.prefill.estimatedMinutes)}`
+      : "",
     formatBytes(file.size),
   ].filter(Boolean);
   const note = !file.stored
@@ -196,7 +234,7 @@ export function SavedFileCard(props: SavedFileCardProps) {
         fallback={
           <FileCard
             name={props.file.name}
-            meta={[formatBytes(props.file.size)]}
+            meta={[]}
             compact={props.compact}
             raised={props.raised}
             className={props.className}
@@ -211,7 +249,7 @@ export function SavedFileCard(props: SavedFileCardProps) {
 }
 
 function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, className }: SavedFileCardProps) {
-  const { meta, note } = savedFileMeta(file);
+  const { meta, note } = savedFileMeta(file, compact);
   return (
     <FileCard
       name={file.name}
@@ -221,7 +259,12 @@ function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, 
       download={file.stored && !file.pending ? fileUrl(file.id) : undefined}
       plateOverlay={
         canView3d(file) ? (
-          <ThreeDButton file={file} fallbackColors={filaments?.map((f) => f.colorHex)} printing={printing} />
+          <ThreeDButton
+            file={file}
+            fallbackColors={filaments?.map((f) => f.colorHex)}
+            printing={printing}
+            glyph={compact}
+          />
         ) : undefined
       }
       onRemove={onRemove}

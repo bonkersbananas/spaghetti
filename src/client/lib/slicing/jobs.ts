@@ -128,6 +128,8 @@ export function startSlice(
             entry.png = png;
             setPreview(job.fileId, png, png);
             update(entry, { picture: true });
+            // Wherever the file shows, its picture does now (an idea's cover, the journal), from this device.
+            if (entry.target) showPicture(queryClient, entry.target, job.fileId);
           },
         },
         controller.signal,
@@ -239,6 +241,22 @@ async function save(entry: Entry) {
       await sleep(Math.min(30_000, 2_000 * 1.4 ** tries));
     }
   }
+}
+
+/** A model's plate picture is drawn: its row says so, so the page shows it (lib/previews has it on this device). */
+function showPicture(queryClient: QueryClient, target: SliceTarget, fileId: string) {
+  patchCachedItem(queryClient, target.itemId, (item) =>
+    target.attemptId
+      ? {
+          ...item,
+          attempts: item.attempts.map((attempt) =>
+            attempt.id === target.attemptId && attempt.file?.id === fileId
+              ? { ...attempt, file: { ...attempt.file, hasThumb: true } }
+              : attempt,
+          ),
+        }
+      : { ...item, files: (item.files ?? []).map((kept) => (kept.id === fileId ? { ...kept, hasThumb: true } : kept)) },
+  );
 }
 
 /** The server's copy of a model, wherever the page shows it. */
