@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { boxesStl, boxStl } from "./fixtures/model-stl";
+import { boxesStl, boxStl, glassesStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn, smallTargets } from "./helpers";
 
 // A model's slicing settings (decision 0047): changed on its card ("Slice with…": a panel on desktop, a sheet on
@@ -191,6 +191,39 @@ test("lay it down: a block can be sliced on another face, the card says so, and 
   // Back to as designed: one tap.
   await lay.getByRole("radio", { name: /^As designed/ }).click();
   await expect.poll(async () => (await fileOf(page, id))?.slicing?.orientation).toBeNull();
+});
+
+test("lay it down: glasses with no flat side get one they stand on at their rims, said plainly, and slice lying so", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { id, title: "Glasses", note: "" },
+  });
+  await page.goto(`/ideas/${id}`);
+  await page.getByTestId("idea-file-input").setInputFiles({
+    name: "glasses.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(glassesStl()),
+  });
+  const files = page.getByRole("region", { name: /^Files/ });
+  // Standing on its rims' lowest points, the first layer is empty: it can't be sliced as designed.
+  await expect(files.getByText(/can't be printed/)).toBeVisible({ timeout: SLICED });
+  await files.getByRole("button", { name: /^Slice with…/ }).click();
+  const settings = page.getByRole("dialog", { name: "How to slice it" });
+  const lay = settings.getByRole("group", { name: "Lay it down" });
+  await expect(lay.getByRole("radio")).toHaveCount(2);
+  const side = lay.getByRole("radio", { name: /^On its side/ });
+  await side.click();
+  await expect(lay).toContainText("touches the plate in a few spots: a brim helps");
+  await expect
+    .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.orientation, { timeout: SLICED })
+    .not.toBeNull();
+  await expect(files.getByText(/on its side$/)).toBeVisible({ timeout: SLICED });
+  await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
 });
 
 test("the Printer page's defaults are how a model nobody set up is sliced, until they go back to Spaghetti's defaults", async ({

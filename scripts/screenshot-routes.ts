@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { boxesStl, boxStl, fusilliStl } from "../e2e/fixtures/model-stl.ts";
+import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { commentId } from "./seed/comments.ts";
@@ -433,6 +433,10 @@ const BRACKET_IDEA = {
   title: "Shelf bracket",
   note: "Holds the pasta shelf up. Takes a load, so it matters which way it prints.",
 };
+
+/** Glasses on rims with no flat side: as designed they can't be sliced; the side they can lie on is a few spots. */
+const GLASSES = { name: "steampunk-glasses.stl", bytes: glassesStl() };
+const GLASSES_IDEA = { title: "Steampunk glasses", note: "Brass rims and diamond lenses. Prints neater on its side?" };
 
 /** An idea with a model the server keeps but nobody sliced (its tab closed while it waited). */
 async function ideaWithUnslicedModel(page: Page) {
@@ -1607,6 +1611,29 @@ export const shots: Shot[] = [
       const lay = settings.getByRole("group", { name: "Lay it down" });
       await lay.getByRole("radio").nth(1).waitFor();
       // The pictures are drawn in a worker: wait until they have loaded.
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('[role="dialog"] fieldset img')).every(
+          (img) => (img as HTMLImageElement).complete,
+        ),
+      );
+      await lay.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Lay it down on a model with no flat side (glasses on narrow rims): the side it stands on at a few spots, picked,
+    // with the tile's line saying so.
+    name: "slice-settings-lay-spots",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, GLASSES_IDEA, GLASSES, /can't be printed/);
+      await modelInView(page);
+      await files.getByRole("button", { name: /^Slice with…/ }).click();
+      const settings = page.getByRole("dialog", { name: "How to slice it" });
+      const lay = settings.getByRole("group", { name: "Lay it down" });
+      await lay.getByRole("radio").nth(1).waitFor();
+      await lay.getByRole("radio").nth(1).click();
       await page.waitForFunction(() =>
         Array.from(document.querySelectorAll('[role="dialog"] fieldset img')).every(
           (img) => (img as HTMLImageElement).complete,

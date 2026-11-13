@@ -23,8 +23,10 @@ export interface OrientRequest {
 export interface OrientOption {
   /** null: the model as its file lies. */
   down: Orientation | null;
-  /** mm² of the face it rests on. */
+  /** mm² of the face it rests on (what its touching points span, when `spots`). */
   area: number;
+  /** It touches the plate only in spots (rims, ridges), with no flat area. */
+  spots?: boolean;
   /** How tall it stands in this orientation, mm. */
   height: number;
   png: Blob | null;
@@ -89,6 +91,7 @@ async function run(request: OrientRequest) {
     options.push({
       down: face.down,
       area: face.area,
+      spots: face.spots,
       height: boundsOf(turned).size[2],
       png: await picture(turned, request),
     });

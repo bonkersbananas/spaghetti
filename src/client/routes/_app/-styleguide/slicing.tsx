@@ -79,16 +79,22 @@ function useBracketLying(colour: string): LyingState {
     };
     const options = [
       { down: null, area: 0, mesh: layMeshDown(BRACKET, [0, 0, -1]) },
-      ...restingFaces(BRACKET, 6)
-        .filter((face) => face.down[2] > -0.99)
-        .slice(0, 3)
-        .map((face) => ({ down: face.down, area: face.area, mesh: layMeshDown(BRACKET, face.down) })),
+      // Two with a flat face, then the one it only stands on at its edges (the slanted face across the hollow).
+      ...[
+        ...restingFaces(BRACKET, 6)
+          .filter((face) => face.down[2] > -0.99)
+          .reduce<ReturnType<typeof restingFaces>>((kept, face) => {
+            if (face.spots ? kept.some((k) => k.spots) : kept.filter((k) => !k.spots).length >= 2) return kept;
+            return [...kept, face];
+          }, []),
+      ].map((face) => ({ down: face.down, area: face.area, spots: face.spots, mesh: layMeshDown(BRACKET, face.down) })),
     ];
     setState({
       status: "ready",
       options: options.map((option) => ({
         down: option.down,
         area: option.area,
+        spots: "spots" in option ? option.spots : undefined,
         height: height(option.mesh),
         src: draw(option.mesh),
       })),
