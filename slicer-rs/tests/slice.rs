@@ -151,6 +151,33 @@ fn models_that_cannot_print_are_refused() {
 }
 
 #[test]
+fn objects_kept_where_they_are_must_be_on_the_plate() {
+    // Kept where the files put them, as a project's objects are: one partly off the plate stops the slice, as Orca
+    // stops it; one wholly off it (on another of a project's plates) is left out, and with nothing on the plate there
+    // is nothing to slice.
+    let settings = Settings::default();
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let on = boxes_stl(&[([100., 100., 0.], [110., 110., 10.])]);
+    let partly = boxes_stl(&[([250., 100., 0.], [260., 110., 10.])]);
+    let off = boxes_stl(&[([300., 100., 0.], [310., 110., 10.])]);
+    let run = |models: &[&[u8]]| {
+        let inputs: Vec<Input> = models.iter().map(|bytes| Input { name: "box.stl", bytes }).collect();
+        slice(&inputs, &settings, &options)
+    };
+    assert_eq!(run(&[&on, &partly]).err(), Some(Error::OffPlate));
+    assert_eq!(run(&[&off]).err(), Some(Error::OffPlate));
+    let out = run(&[&off, &on]).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    assert!(gcode.contains("; model label id: 1\n"), "one object");
+    let layers = check_moves(&gcode, &settings);
+    assert!(layers.iter().all(|l| l == &[1]));
+    // Arranged, as the app's files are, the same objects all fit.
+    let arranged = Options { arrange: true, ..options.clone() };
+    let inputs = [Input { name: "a.stl", bytes: &on }, Input { name: "b.stl", bytes: &off }];
+    assert!(slice(&inputs, &settings, &arranged).is_ok());
+}
+
+#[test]
 fn an_inside_out_model_slices_as_if_right_way_out() {
     let stl = String::from_utf8(cube_stl(15.0)).unwrap();
     // Every facet's last two corners swapped: the same cube, wound the other way.

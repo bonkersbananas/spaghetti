@@ -279,6 +279,34 @@ pub fn drop_to_bed(meshes: &mut [Mesh]) {
     }
 }
 
+/// Where an object stands against the plate, as Orca judges it before slicing (`BuildVolume::object_state`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OnPlate {
+    Inside,
+    /// Some of it off the plate: Orca won't slice the plate.
+    Partly,
+    /// All of it off the plate (on a project's other plates, say): Orca leaves it out.
+    Outside,
+}
+
+/// mm: how far a corner may lie past the plate's edge and still count as on it (Orca's `SceneEpsilon`).
+const PLATE_EPSILON: f64 = 1e-4;
+
+/// Where an object stands against a plate `bed` mm wide and deep, by its vertices, as Orca tests a rectangular
+/// plate.
+pub fn on_plate(m: &Mesh, bed: [f64; 2]) -> OnPlate {
+    let on = |v: &[f32; 3]| {
+        let (x, y) = (v[0] as f64, v[1] as f64);
+        x >= -PLATE_EPSILON && x <= bed[0] + PLATE_EPSILON && y >= -PLATE_EPSILON && y <= bed[1] + PLATE_EPSILON
+    };
+    let inside = m.vertices.iter().filter(|v| on(v)).count();
+    match inside {
+        0 => OnPlate::Outside,
+        n if n == m.vertices.len() => OnPlate::Inside,
+        _ => OnPlate::Partly,
+    }
+}
+
 /// FxHash-style hashing for the welding map: fast, and plenty for exact float bits.
 #[derive(Default)]
 pub struct FastHasher(u64);

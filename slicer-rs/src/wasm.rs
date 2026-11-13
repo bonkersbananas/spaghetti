@@ -46,7 +46,7 @@ pub unsafe extern "C" fn dealloc(ptr: *mut u8, len: usize) {
 }
 
 /// An error as a number for the host: 1 unreadable, 2 no model, 3 too big, 4 too tall, 5 too many, 6 for a name
-/// that isn't UTF-8, 7 a setup that isn't one, 8 settings this can't slice yet. The summary then says it in words:
+/// that isn't UTF-8, 7 a setup that isn't one, 8 settings this can't slice yet, 9 an object off the plate. The summary then says it in words:
 /// `{"error": "can't slice with supports yet"}`.
 fn code(e: Error) -> u32 {
     SUMMARY.with(|s| *s.borrow_mut() = format!(r#"{{"error":{}}}"#, crate::pack::json(&e.to_string())).into_bytes());
@@ -58,6 +58,7 @@ fn code(e: Error) -> u32 {
         Error::TooMany => 5,
         Error::Setup => 7,
         Error::Unsupported(_) => 8,
+        Error::OffPlate => 9,
     }
 }
 
