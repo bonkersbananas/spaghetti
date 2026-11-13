@@ -39,7 +39,7 @@ export interface SliceJob {
   status: "waiting" | "slicing" | "sliced" | "failed";
   /** 0-1 while slicing. */
   fraction: number;
-  /** Its plate picture is drawn: `fileThumbSrc(fileId)` shows it. */
+  /** Its plate picture is drawn: `fileThumbSrc(file)` shows it. */
   picture: boolean;
   /** The settings chosen for it. */
   chosen: SliceOptions;

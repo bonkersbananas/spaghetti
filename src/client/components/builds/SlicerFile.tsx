@@ -314,7 +314,7 @@ function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, 
   return (
     <FileCard
       name={file.name}
-      thumbSrc={file.hasThumb ? fileThumbSrc(file.id) : undefined}
+      thumbSrc={file.hasThumb ? fileThumbSrc(file) : undefined}
       meta={meta}
       note={going ? undefined : note}
       status={going ? <UploadLine upload={going} /> : undefined}
