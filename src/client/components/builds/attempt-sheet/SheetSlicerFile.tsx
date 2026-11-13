@@ -1,11 +1,13 @@
 import { type AttemptFile, fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
+import { slicedName } from "@shared/slicing/files.ts";
+import type { SliceOptions } from "@shared/slicing/types.ts";
 import { filamentFromSpool, spoolFromFilament } from "@shared/spools";
-import { applyFileSettings } from "@shared/threemf/prefill.ts";
+import { applyFileSettings, printablePlates } from "@shared/threemf/prefill.ts";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { ToggleChip } from "@/components/ui/Chip";
-import { SlicerFileIcon } from "@/components/ui/icons";
+import { ModelIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
 import { addSpool } from "@/lib/pantry";
@@ -21,6 +23,7 @@ import {
   type SlicerFileDraft,
   useSlicerDropTarget,
 } from "@/lib/slicer-files";
+import type { SliceOutcome } from "@/lib/slicing/slice-model";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { AddSlicerFile, FileCard, PlateChooser, UnknownFilaments, usePlateThumbUrl } from "../SlicerFile";
 import { formatMinutes } from "../settings";
@@ -64,19 +67,63 @@ export function useSlicerFile({
   const latest = useRef(settings);
   latest.current = settings;
 
-  const apply = (draft: SlicerFileDraft, plate: number | null) => {
+  const apply = (draft: SlicerFileDraft, plate: number | null, ready = true) => {
     const prefill = fileSettings(draft, plate);
     const linked = linkSpools(prefill, spools);
     onSettings(applyFileSettings(latest.current, linked.settings));
     setState({ draft, plate, prefill, unknown: linked.unknown });
     setSettingsKey((key) => key + 1);
-    onReady?.(draft, plate, prefill);
+    if (ready) onReady?.(draft, plate, prefill);
     onObjects?.((plateOf(draft, plate)?.objects ?? []).map((object) => object.name));
+  };
+  const current = useRef<SlicerState | null>(null);
+  current.current = state;
+  /** Slices a model in the sheet, in the background (lib/slicing/jobs.ts); it goes on where the attempt goes. */
+  const sliceDraft = async (draft: SlicerFileDraft, options: SliceOptions = {}) => {
+    const jobs = await import("@/lib/slicing/jobs");
+    return jobs.startSlice(queryClient, {
+      fileId: draft.id,
+      name: draft.file.name,
+      source: draft.file,
+      options,
+      target: null,
+    });
+  };
+  /** Once sliced, the model fills in the attempt as a sliced file would (if the sheet still holds it). */
+  const follow = async (draft: SlicerFileDraft, done: Promise<SliceOutcome | null>) => {
+    const outcome = await done;
+    if (current.current?.draft.id !== draft.id || !outcome) return;
+    const picture = outcome.png ?? undefined;
+    if (!outcome.ok) {
+      setState((now) => (now?.draft.id === draft.id ? { ...now, draft: { ...now.draft, picture } } : now));
+      return;
+    }
+    const { readThreeMf } = await import("@shared/threemf/read.ts");
+    const result = readThreeMf(new Uint8Array(await outcome.sliced.arrayBuffer()));
+    if (current.current?.draft.id !== draft.id) return;
+    apply({ ...draft, result, plates: printablePlates(result), picture }, 1, false);
+  };
+  /**
+   * A model (.stl or plain .3mf): it is sliced here and fills in the attempt once it is; the settings stay as they
+   * are until then. An attempt that exists keeps the model at once (onReady), and its slice follows it.
+   */
+  const receiveModel = async (draft: SlicerFileDraft) => {
+    setState({ draft, plate: 1, prefill: null, unknown: [] });
+    const done = await sliceDraft(draft);
+    onReady?.(draft, 1, {});
+    await follow(draft, Promise.resolve(done));
+  };
+  /** Slices the sheet's model again ("Slice with supports", "Scale to 80 % and slice"). */
+  const reslice = async (options: SliceOptions) => {
+    const draft = current.current?.draft;
+    if (draft?.kind !== "model") return;
+    await follow(draft, sliceDraft(draft, options));
   };
   const receive = async (file: File) => {
     const draft = await readSlicerFile(file);
     if (!draft) return;
-    if (draft.plates.length > 1) setState({ draft, plate: null, prefill: null, unknown: [] });
+    if (draft.kind === "model") void receiveModel(draft);
+    else if (draft.plates.length > 1) setState({ draft, plate: null, prefill: null, unknown: [] });
     else apply(draft, draft.plates[0]?.index ?? null);
   };
   const picker = useFilePicker({
@@ -115,15 +162,50 @@ export function useSlicerFile({
     picker,
     take: receive,
     choosePlate: (plate: number) => state && apply(state.draft, plate),
+    /** Forgets the file in the sheet (it was saved, or the sheet starts afresh); a model's slicing goes on. */
     clear: () => setState(null),
+    reslice: (options: SliceOptions) => void reslice(options),
+    /** Takes the file off: a model's slicing stops. */
+    remove: () => {
+      const draft = state?.draft;
+      if (draft?.kind === "model") void import("@/lib/slicing/jobs").then(({ cancelSlice }) => cancelSlice(draft.id));
+      setState(null);
+    },
     addUnknown,
     unknownFilaments,
     settingsKey,
   };
 }
 
+/** A model's card in the sheet: its code (and the slicing jobs') loads with the first model. */
+const ModelDraftCard = lazy(() => import("../ModelFile").then((m) => ({ default: m.ModelDraftCard })));
+
 /** A file read into a new attempt, before it is logged. */
-export function DraftFile({ state, onRemove }: { state: SlicerState; onRemove: () => void }) {
+export function DraftFile({
+  state,
+  onRemove,
+  onSlice,
+}: {
+  state: SlicerState;
+  onRemove: () => void;
+  /** A model: slice it again, differently. */
+  onSlice?: (options: SliceOptions) => void;
+}) {
+  if (state.draft.kind === "model") {
+    return (
+      <Suspense
+        fallback={
+          <FileCard name={state.draft.file.name} meta={[formatBytes(state.draft.file.size)]} icon={ModelIcon} />
+        }
+      >
+        <ModelDraftCard draft={state.draft} onRemove={onRemove} onSlice={onSlice} />
+      </Suspense>
+    );
+  }
+  return <SlicerDraftFile state={state} onRemove={onRemove} />;
+}
+
+function SlicerDraftFile({ state, onRemove }: { state: SlicerState; onRemove: () => void }) {
   const plate = plateOf(state.draft, state.plate);
   const src = usePlateThumbUrl(plate);
   const plateCount = state.draft.result.plates.length;
@@ -193,7 +275,7 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
       <span className="text-small text-ink-faint">Kept with the idea:</span>
       <div className="flex flex-wrap gap-2">
         {files
-          .filter((file) => file.stored)
+          .filter((file) => file.stored && (file.kind !== "model" || file.slice?.status === "sliced"))
           .map((file) => (
             <ToggleChip key={file.id} icon={SlicerFileIcon} onClick={() => onUse(file)}>
               <span className="max-w-48 truncate">{file.name}</span>
@@ -204,12 +286,16 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
   );
 }
 
-/** Fetches a kept file's bytes as a File, so the sheet reads it like a dropped one. */
+/**
+ * Fetches a kept file's bytes as a File, so the sheet reads it like a dropped one. A model gives its sliced
+ * .gcode.3mf: that is what an attempt prints from.
+ */
 export async function fetchKeptFile(file: AttemptFile): Promise<File | null> {
+  const model = file.kind === "model";
   try {
-    const response = await fetch(fileUrl(file.id), { credentials: "same-origin" });
+    const response = await fetch(fileUrl(file.id, model ? "sliced" : "file"), { credentials: "same-origin" });
     if (!response.ok) throw new Error(String(response.status));
-    return new File([await response.blob()], file.name);
+    return new File([await response.blob()], model ? slicedName(file.name) : file.name);
   } catch {
     toast.error("Couldn't get that file", "It needs a connection.");
     return null;

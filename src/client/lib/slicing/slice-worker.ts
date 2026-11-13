@@ -2,13 +2,8 @@
 import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
-import {
-  defaultSettings,
-  mergedSettings,
-  type PresetSet,
-  type SliceSetup,
-  sliceSetup,
-} from "@shared/slicing/configs.ts";
+import { mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
+import { defaultSettings, SLICING_DEFAULTS } from "@shared/slicing/defaults.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
@@ -49,6 +44,8 @@ export type SliceMessage =
     }
   | { type: "failed"; slice: FileSlice; png: Blob | null };
 
+/** A filament's colour when nothing says one (the defaults' first: Orca's own). */
+const FALLBACK_COLOUR = SLICING_DEFAULTS.colours[0];
 /** Plate pictures are drawn at the size Bambu Studio and Orca use. */
 const PICTURE = 512;
 /** Room kept free round the edge of the plate when scaling to fit, in mm. */
@@ -161,7 +158,7 @@ async function run(request: SliceRequest) {
       settings: mergedSettings(setup),
       filaments: setup.filaments.map((filament, index) => ({
         type: first(filament.filament_type) ?? "PLA",
-        colour: setup.colours[index] ?? "#F2754E",
+        colour: setup.colours[index] ?? FALLBACK_COLOUR,
         ...(summary.grams[index] !== undefined ? { usedGrams: summary.grams[index] } : {}),
         ...(summary.millimetres[index] !== undefined ? { usedMeters: (summary.millimetres[index] ?? 0) / 1000 } : {}),
       })),
@@ -336,7 +333,7 @@ async function picture(objects: Placed[], setup: SliceSetup): Promise<Blob | nul
       objects.map((object) => object.positions),
       {
         size: PICTURE,
-        colour: setup.colours[0] ?? "#F2754E",
+        colour: setup.colours[0] ?? FALLBACK_COLOUR,
         colours: objects.map((object) => setup.colours[object.extruder - 1]),
       },
     );

@@ -1,6 +1,6 @@
 import engine from "virtual:slicer-engine";
 import type { AttemptSettings } from "@shared/attempts";
-import { defaultSettings } from "@shared/slicing/configs.ts";
+import { defaultSettings } from "@shared/slicing/defaults.ts";
 import type { FileSlice, SliceOptions, SliceProblem } from "@shared/slicing/types.ts";
 import type { SliceMessage, SlicePhase, SliceRequest } from "./slice-worker";
 

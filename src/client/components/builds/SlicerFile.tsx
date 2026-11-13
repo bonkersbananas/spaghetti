@@ -1,9 +1,9 @@
 import { fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptFilament } from "@shared/attempts";
 import type { Plate } from "@shared/threemf/types.ts";
-import { type ReactNode, useMemo } from "react";
+import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { CloseIcon, DownloadIcon, type Icon, ModelIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
@@ -11,12 +11,24 @@ import { useOnline } from "@/lib/connection";
 import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
 import { formatBytes, plateThumb, type SlicerFileDraft } from "@/lib/slicer-files";
+import type { SliceTarget } from "@/lib/slicing/jobs";
 import { useObjectUrl } from "@/lib/use-object-url";
 import { canView3d, type PrintingAttempt, ThreeDButton } from "../viewer/ThreeDButton";
 import { formatMinutes } from "./settings";
 
 /** A plate's picture on a quiet well (slicers render them on transparent ground). */
-export function PlateThumb({ src, alt, className }: { src?: string; alt: string; className?: string }) {
+export function PlateThumb({
+  src,
+  alt,
+  className,
+  icon: IconComponent = SlicerFileIcon,
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+  /** What stands in while there is no picture: the slicer file's glyph, or a model's. */
+  icon?: Icon;
+}) {
   return (
     <span
       className={cn(
@@ -27,7 +39,7 @@ export function PlateThumb({ src, alt, className }: { src?: string; alt: string;
       {src ? (
         <img src={src} alt={alt} className="size-full object-contain" draggable={false} />
       ) : (
-        <SlicerFileIcon size={22} className="text-ink-faint" aria-hidden />
+        <IconComponent size={22} className="text-ink-faint" aria-hidden />
       )}
     </span>
   );
@@ -40,7 +52,13 @@ interface FileCardProps {
   meta: string[];
   /** A line under it, such as "Too big to keep". */
   note?: string;
+  /** Lines under the meta in place of the note: a model's slicing, with its actions (ModelFile.tsx). */
+  status?: ReactNode;
+  /** What stands in on the plate until there is a picture. */
+  icon?: Icon;
   download?: string;
+  /** The download's file name, when it isn't the card's name (a model's sliced file). */
+  downloadName?: string;
   /** Sits on the plate picture's corner (the "3D" control). */
   plateOverlay?: ReactNode;
   onRemove?: () => void;
@@ -57,7 +75,10 @@ export function FileCard({
   thumbSrc,
   meta,
   note,
+  status,
+  icon,
   download,
+  downloadName,
   plateOverlay,
   onRemove,
   compact,
@@ -80,6 +101,7 @@ export function FileCard({
         <PlateThumb
           src={thumbSrc}
           alt="The plate, as sliced"
+          icon={icon}
           className={compact ? "size-12" : raised ? "size-20" : "size-16"}
         />
         {plateOverlay}
@@ -96,11 +118,12 @@ export function FileCard({
           ))}
         </MetaList>
         {note && <span className="text-caption text-ink-faint">{note}</span>}
+        {status}
       </div>
       {download && (
         <a
           href={download}
-          download={name}
+          download={downloadName ?? name}
           className="pressable focus-ring text-ink-soft hover:bg-ink/5 hover:text-ink flex size-11 shrink-0 items-center justify-center rounded-md md:size-9"
           aria-label={`Download ${name}`}
           title="Download the file"
@@ -136,16 +159,7 @@ export function savedFileMeta(file: AttemptFileView): { meta: string[]; note?: s
   return { meta, ...(note ? { note } : {}) };
 }
 
-/** The card for a file on a saved attempt. */
-export function SavedFileCard({
-  file,
-  filaments,
-  printing,
-  onRemove,
-  compact,
-  raised,
-  className,
-}: {
+export interface SavedFileCardProps {
   file: AttemptFileView;
   compact?: boolean;
   raised?: boolean;
@@ -154,8 +168,38 @@ export function SavedFileCard({
   /** The attempt's filaments: their colours stand in for any the file doesn't give. */
   filaments?: AttemptFilament[];
   onRemove?: () => void;
+  /** Where the file is kept, so a model can be sliced (again) from its card; without it the card only shows. */
+  owner?: SliceTarget;
   className?: string;
-}) {
+}
+
+/** A model's card: its code (and the slicing jobs') loads when the first model is shown. */
+const ModelFileCard = lazy(() => import("./ModelFile"));
+
+/** The card for a kept file: a slicer's file as it is, or a model with its slicing. */
+export function SavedFileCard(props: SavedFileCardProps) {
+  if (props.file.kind === "model") {
+    return (
+      <Suspense
+        fallback={
+          <FileCard
+            name={props.file.name}
+            meta={[formatBytes(props.file.size)]}
+            icon={ModelIcon}
+            compact={props.compact}
+            raised={props.raised}
+            className={props.className}
+          />
+        }
+      >
+        <ModelFileCard {...props} />
+      </Suspense>
+    );
+  }
+  return <SlicerFileCard {...props} />;
+}
+
+function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, className }: SavedFileCardProps) {
   const { meta, note } = savedFileMeta(file);
   return (
     <FileCard

@@ -166,19 +166,6 @@ export function sliceSetup(
   };
 }
 
-/** What the defaults say, before presets.json is at hand (a file that fails before it). */
-export function defaultSettings(options: SliceOptions = {}): SliceSetup["settings"] {
-  return {
-    machine: SLICING_DEFAULTS.machine,
-    process: SLICING_DEFAULTS.process,
-    filaments: [SLICING_DEFAULTS.filament],
-    layerHeight: 0.2,
-    materials: ["PLA"],
-    bedType: SLICING_DEFAULTS.bedType,
-    supports: !!options.supports,
-  };
-}
-
 /**
  * Every setting of a slice in one config, as a sliced file's `project_settings.config` holds it: the machine, the
  * process, and each filament key as a list with one value per filament.

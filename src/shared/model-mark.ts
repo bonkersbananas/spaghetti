@@ -84,17 +84,21 @@ export function modelMarkIn(note: string): ModelMark | null {
   return null;
 }
 
-/** The model an idea has: its first model link, else its draft's page, else a kept slicer file (ours, so not a link out). */
+/**
+ * The model an idea has: its first model link, else its draft's page, else a kept file (ours, so not a link out): a
+ * slicer's .3mf, or a model Spaghetti slices (.stl, .3mf).
+ */
 export function modelOf(item: {
   note: string;
   draft?: { url: string } | null;
-  files?: ReadonlyArray<{ id: string }>;
+  files?: ReadonlyArray<{ id: string; name?: string }>;
 }): ModelMark | null {
   const file = item.files?.[0];
+  const ext = (file?.name ? FILE.exec(file.name)?.[0] : undefined)?.toLowerCase() ?? ".3mf";
   return (
     modelMarkIn(item.note) ??
     (item.draft ? modelMarkOf(item.draft.url) : null) ??
-    (file ? { kind: "file", site: null, name: ".3mf", url: `/api/files/${file.id}` } : null)
+    (file ? { kind: "file", site: null, name: ext, url: `/api/files/${file.id}` } : null)
   );
 }
 

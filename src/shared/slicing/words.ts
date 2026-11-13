@@ -51,8 +51,8 @@ export function problemSentence(slice: FileSlice, options: { phone?: boolean } =
     case "unreadable":
       return "Spaghetti can't read this file as an STL or a 3MF.";
     case "memory":
-      return options.phone
-        ? "Slicing ran out of memory on this phone. It will finish on a laptop or desktop."
+      return slice.device === "phone"
+        ? `Slicing ran out of memory on ${options.phone ? "this" : "a"} phone. It will finish on a laptop or desktop.`
         : "Slicing ran out of memory.";
     case "engine":
       return "The slicer couldn't start. It needs a connection the first time.";
@@ -67,3 +67,7 @@ export function problemSentence(slice: FileSlice, options: { phone?: boolean } =
 
 /** Whether slicing it again the same way could go differently (the engine or memory), so "Try again" makes sense. */
 export const worthRetrying = (slice: FileSlice) => slice.problem === "engine" || slice.problem === "memory";
+
+/** A phone that ran out of memory: a laptop or desktop that shows the file slices it by itself. */
+export const finishesOnComputer = (slice: FileSlice | null | undefined) =>
+  slice?.status === "failed" && slice.problem === "memory" && slice.device === "phone";

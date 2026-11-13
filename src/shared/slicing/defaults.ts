@@ -1,3 +1,5 @@
+import type { SliceOptions, SliceSettings } from "./types.ts";
+
 /**
  * How Spaghetti slices a model nobody set up: one place, so these can become settings. The names are OrcaSlicer's
  * own presets for the X2D, flattened from the engine's Orca commit into its `presets.json` (docs/slicer.md).
@@ -41,4 +43,17 @@ export function filamentPresetFor(material: string | undefined): string {
   if (key.startsWith("HIPS")) return generic("HIPS");
   if (key.startsWith("PP")) return generic("PP");
   return generic("PLA");
+}
+
+/** What the defaults say about a slice, before presets.json is at hand (a file that fails before it is read). */
+export function defaultSettings(options: SliceOptions = {}): Omit<SliceSettings, "scale" | "engine" | "orca"> {
+  return {
+    machine: SLICING_DEFAULTS.machine,
+    process: SLICING_DEFAULTS.process,
+    filaments: [SLICING_DEFAULTS.filament],
+    layerHeight: 0.2,
+    materials: ["PLA"],
+    bedType: SLICING_DEFAULTS.bedType,
+    supports: !!options.supports,
+  };
 }

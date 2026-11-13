@@ -47,14 +47,11 @@ function LoadedViewer(props: import("./PrintViewer").PrintViewerProps) {
   return <div className="sg-stage size-full" />;
 }
 
-/** A sliced file (one with G-code) that the server kept can be opened in 3D. */
+/** A sliced file (one with G-code) that the server kept can be opened in 3D: a model once it is sliced. */
 export function canView3d(file: AttemptFileView | undefined): file is AttemptFileView {
-  return (
-    !!file &&
-    file.stored &&
-    !file.pending &&
-    (/\.gcode\.3mf$/i.test(file.name) || file.prefill.estimatedMinutes !== undefined)
-  );
+  if (!file?.stored || file.pending) return false;
+  if (file.kind === "model") return file.slice?.status === "sliced";
+  return /\.gcode\.3mf$/i.test(file.name) || file.prefill.estimatedMinutes !== undefined;
 }
 
 /** The attempt a file belongs to while it prints: what the viewer needs to follow it. */
@@ -129,7 +126,7 @@ export function ViewerSheet({
       fill
     >
       <LoadedViewer
-        url={fileUrl(file.id)}
+        url={fileUrl(file.id, file.kind === "model" ? "sliced" : "file")}
         fileId={file.id}
         plate={file.plate}
         fallbackColors={fallbackColors}

@@ -73,6 +73,7 @@ const fileSlice = z.object({
   dimensions: z.tuple([millimetres, millimetres, millimetres]).optional(),
   volume: z.tuple([millimetres, millimetres, millimetres]).optional(),
   fitScale: z.number().int().min(1).max(100).optional(),
+  device: z.enum(["phone", "computer"]).optional(),
   at: z.number().int().min(0),
 });
 

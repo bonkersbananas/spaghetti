@@ -685,6 +685,7 @@ function Build({ item }: { item: ItemView }) {
                           partsLabel={attemptPartsLabel(attempt, item.parts)}
                           photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
                           onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
+                          readOnly={readOnly || attempt.pending}
                           person={byId.get(attempt.createdBy)}
                           via={via(attempt.createdVia)}
                           selected={attempt.id === selected}

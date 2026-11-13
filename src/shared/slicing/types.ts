@@ -69,6 +69,8 @@ export interface FileSlice {
   volume?: [number, number, number];
   /** The largest scale (percent, whole) at which it fits, for "Scale to 80 % and slice". */
   fitScale?: number;
+  /** For "memory": what ran out. A laptop or desktop finishes what a phone couldn't. */
+  device?: "phone" | "computer";
   /** When it was sliced or failed (epoch ms). */
   at: number;
 }

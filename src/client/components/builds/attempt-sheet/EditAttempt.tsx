@@ -202,6 +202,7 @@ export function EditAttempt({
                 <SavedFileCard
                   file={attempt.file}
                   filaments={attempt.settings.filaments}
+                  owner={readOnly ? undefined : { itemId: item.id, attemptId: attempt.id }}
                   onRemove={() => removeSlicerFile(queryClient, item.id, attempt)}
                 />
               ) : null
