@@ -148,6 +148,8 @@ mod tests {
             Some(Error::Unsupported("this kind of brim"))
         );
         assert_eq!(refused(r#"{"process": {"spiral_mode": "1"}}"#), Some(Error::Unsupported("spiral vase mode")));
+        // A raft prints with supports off too.
+        assert_eq!(refused(r#"{"process": {"raft_layers": "3"}}"#), Some(Error::Unsupported("a raft")));
         assert_eq!(refused(r#"{"filaments": [{}, {}]}"#), Some(Error::Unsupported("more than one filament")));
         assert_eq!(refused("not json"), Some(Error::Setup));
         assert_eq!(refused(r#"{"process": []}"#), Some(Error::Setup));
