@@ -150,3 +150,45 @@ test("a part that floats: its caution offers supports where needed in one tap, a
   await expect(files.getByRole("button", { name: "Undo" })).toBeVisible();
   expect((await fileOf(page, id)).slice.settings.slicing.supports).toBe("where-needed");
 });
+
+test("lay it down: a block can be sliced on another face, the card says so, and the original stays as it was", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { id, title: "Block", note: "" },
+  });
+  await page.goto(`/ideas/${id}`);
+  await page.getByTestId("idea-file-input").setInputFiles({
+    name: "block.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(boxStl(20, 30, 40)),
+  });
+  const files = page.getByRole("region", { name: /^Files/ });
+  await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
+  await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
+  const original: number = (await fileOf(page, id)).size;
+
+  await files.getByRole("button", { name: "Slice with…" }).click();
+  const settings = page.getByRole("dialog", { name: "How to slice it" });
+  // Found in the background: as designed first and picked, then the five other faces of a block.
+  const lay = settings.getByRole("group", { name: "Lay it down" });
+  await expect(lay.getByRole("radio")).toHaveCount(6);
+  await expect(lay.getByRole("radio").first()).toBeChecked();
+  await expect(lay.getByRole("radio", { name: /^As designed/ })).toBeChecked();
+  await lay.getByRole("radio", { name: /^On side 1/ }).click();
+  await expect(lay.getByRole("radio", { name: /^On side 1/ })).toBeChecked();
+  await expect.poll(async () => (await fileOf(page, id))?.slicing?.orientation).not.toBeNull();
+  await expect
+    .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.orientation, { timeout: SLICED })
+    .not.toBeNull();
+  await expect(files.getByText(/on its side$/)).toBeVisible({ timeout: SLICED });
+  expect((await fileOf(page, id)).size).toBe(original);
+
+  // Back to as designed: one tap.
+  await lay.getByRole("radio", { name: /^As designed/ }).click();
+  await expect.poll(async () => (await fileOf(page, id))?.slicing?.orientation).toBeNull();
+});

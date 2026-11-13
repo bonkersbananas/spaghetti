@@ -44,6 +44,7 @@ describe("the slicing settings", () => {
       plate: "Textured PEI Plate",
       nozzle: 0.4,
       scale: 100,
+      orientation: null,
     });
     expect(slicingProblems(DEFAULT_SLICING)).toEqual([]);
     expect(qualityOf(DEFAULT_SLICING.layerHeight)?.id).toBe("standard");
@@ -235,5 +236,34 @@ describe("older slices and one-tap asks", () => {
       layerHeight: 0.12,
       supports: "where-needed",
     });
+  });
+});
+
+describe("a model's orientation", () => {
+  it("is null as designed, and a unit direction otherwise", () => {
+    expect(DEFAULT_SLICING.orientation).toBeNull();
+    expect(slicingFor({ orientation: [0, 0, 2] }).orientation).toEqual([0, 0, 1]);
+    expect(slicingFor({ orientation: [3, 0, 4] }).orientation).toEqual([0.6, 0, 0.8]);
+    // Straight down is how a file lies already.
+    expect(slicingFor({ orientation: [0, 0, -5] }).orientation).toBeNull();
+  });
+
+  it("mends what isn't a direction, and keeps the base's", () => {
+    const turned = slicingFor({ orientation: [1, 0, 0] });
+    expect(normalizeSlicing({ orientation: "side" }, turned).orientation).toEqual([1, 0, 0]);
+    expect(normalizeSlicing({ orientation: [0, 0, 0] }, turned).orientation).toEqual([1, 0, 0]);
+    expect(normalizeSlicing({ orientation: null }, turned).orientation).toBeNull();
+    expect(normalizeSlicing({}, turned).orientation).toEqual([1, 0, 0]);
+  });
+
+  it("is checked, said on the card's line, and counted as a change", () => {
+    expect(slicingProblems({ ...DEFAULT_SLICING, orientation: [1, 2] })).toEqual([
+      "orientation is null, or [x, y, z]: the direction in the model that points down.",
+    ]);
+    expect(slicingProblems({ ...DEFAULT_SLICING, orientation: [1, 0, 0] })).toEqual([]);
+    expect(slicingLine(slicingFor({ orientation: [1, 0, 0] }))).toContain("on its side");
+    expect(slicingLine(slicingFor({ orientation: [0, 0, 1] }))).toContain("upside down");
+    expect(slicingLine(DEFAULT_SLICING).join(" ")).not.toMatch(/side|upside/);
+    expect(changedSlicing(DEFAULT_SLICING, slicingFor({ orientation: [1, 0, 0] }))).toEqual(["orientation"]);
   });
 });

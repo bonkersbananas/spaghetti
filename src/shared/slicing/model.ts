@@ -7,6 +7,7 @@ import type { AttemptFile } from "../api.ts";
 import {
   changedSlicing,
   filamentWords,
+  orientationWords,
   qualityWords,
   type SlicingSettings,
   slicingFromRecord,
@@ -61,6 +62,8 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
       return `the ${after.nozzle} mm nozzle`;
     case "scale":
       return `${after.scale}%`;
+    case "orientation":
+      return orientationWords(after) || "the model as designed";
     default:
       return "the new settings";
   }

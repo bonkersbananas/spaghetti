@@ -616,7 +616,7 @@ export default function ModelFileCard({
   const thumbSrc = file.hasThumb || job?.picture ? fileThumbSrc(file) : undefined;
   const prefill = job?.outcome?.ok && !job.again ? job.outcome.prefill : file.prefill;
   const panel = target && {
-    file: { id: file.id, name: file.name, url: fileUrl(file.id) },
+    file: { id: file.id, name: file.name, url: fileUrl(file.id), size: file.size },
     settings,
     onChange: (next: SlicingSettings) => change_(next),
     spools,

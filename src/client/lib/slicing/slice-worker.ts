@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
-import { parseStl, scaleMesh } from "@shared/mesh";
+import { layMeshDown, parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
 import { MissingPreset, mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
@@ -129,13 +129,15 @@ async function run(request: SliceRequest) {
     const plate = plateArea(setup.machine.printable_area, first(setup.machine.printable_height));
     const volume: [number, number, number] = [plate.maxX - plate.minX, plate.maxY - plate.minY, plate.height];
 
-    const objects = read.objects.map((object) => ({
-      ...object,
+    // Laid on another face (settings.ts `orientation`): every object turned the same way, then set on the plate.
+    const down = slicing.orientation;
+    const objects = read.objects.map((object) => {
+      const turned = down ? layMeshDown({ positions: object.positions }, down).positions : object.positions;
       // Scaled about the origin (shared/mesh.ts, as Twists scales): the plate's arrangement places it after.
-      positions: scale === 100 ? object.positions : scaleMesh({ positions: object.positions }, scale / 100).positions,
-    }));
+      return { ...object, positions: scale === 100 ? turned : scaleMesh({ positions: turned }, scale / 100).positions };
+    });
     try {
-      place(objects, plate, volume, read.project && scale === 100, scale);
+      place(objects, plate, volume, read.project && scale === 100 && !down, scale);
     } catch (error) {
       // A model that doesn't fit still gets its picture, as it is.
       png = await picture(objects, setup);

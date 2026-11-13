@@ -19516,6 +19516,31 @@
             "minimum": 1,
             "maximum": 1000,
             "description": "Percent of the model's own size."
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "items": false,
+                "minItems": 3,
+                "maxItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The face the model rests on, as the direction in the model's own axes [x, y, z] that points down; null lays it as the file does."
           }
         },
         "required": [
@@ -19529,7 +19554,8 @@
           "filaments",
           "plate",
           "nozzle",
-          "scale"
+          "scale",
+          "orientation"
         ],
         "additionalProperties": false
       },

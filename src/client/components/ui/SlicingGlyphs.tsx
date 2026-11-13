@@ -102,3 +102,13 @@ export function SupportsGlyph({ placement, className }: { placement: SupportPlac
     </svg>
   );
 }
+
+/**
+ * A model drawn on the plate (the picture the app draws for a slice, shared/slicing/render.ts), for a ChoiceTile's
+ * `picture`: contained in a square, with the drawing's clear background showing the tile. Without a picture (the
+ * browser couldn't draw one) a soft stand-in keeps the tile's shape.
+ */
+export function PlatePicture({ src, className }: { src: string | null; className?: string }) {
+  if (!src) return <span className={cn("bg-wash size-3/4 rounded-md", className)} aria-hidden />;
+  return <img src={src} alt="" draggable={false} className={cn("size-full object-contain", className)} />;
+}
