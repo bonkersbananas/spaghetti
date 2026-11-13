@@ -2,8 +2,10 @@
 //! island's walls (around each hole and then the outline, the deepest loop first), then its infill and gap fill
 //! chained together as Orca chains them (`order.rs`). Outlines run counter-clockwise and holes clockwise, from the
 //! island's rear (a seam that lines up layer to layer). Widths, flows, speeds and accelerations are Orca's for the
-//! role; speeds are capped by the filament's volumetric limit. Walls and bridges then meet the layer below
-//! (`overhang.rs`): a wall's stretches beyond it print as overhang walls, and both slow down where they hang.
+//! role; speeds are capped by the filament's volumetric limit. Every path is simplified as Orca simplifies its paths
+//! (`geom::simplify_line`, to the profile's resolution, 0.04 mm for sparse infill). Walls and bridges then meet the
+//! layer below (`overhang.rs`): a wall's stretches beyond it print as overhang walls, and both slow down where they
+//! hang.
 
 use crate::config::Settings;
 use crate::fill;
@@ -604,7 +606,7 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
         let mm3_per_mm = Settings::mm3_per_mm(width, h);
         out.push(Path {
             role,
-            points: pts[from..=to].to_vec(),
+            points: geom::simplify_line(&pts[from..=to], resolution(role, s)),
             closed: false,
             width,
             mm3_per_mm,
@@ -732,12 +734,24 @@ fn accel(role: Role, first: bool, s: &Settings) -> f64 {
     }
 }
 
+/// mm a sparse infill line may stray from its course when simplified (Orca's `SPARSE_INFILL_RESOLUTION`); other
+/// paths keep to the profile's resolution.
+const SPARSE_INFILL_RESOLUTION: f64 = 0.04;
+
+/// How far a path of a role may stray from its course as Orca simplifies it before printing (mm).
+fn resolution(role: Role, s: &Settings) -> f64 {
+    if role == Role::SparseInfill { SPARSE_INFILL_RESOLUTION } else { s.resolution }
+}
+
+/// A path of a role, simplified as Orca simplifies every path before printing it: without the points it can lose and
+/// stay within its resolution of its course (`resolution`), which fills and their anchors along the walls leave by
+/// the thousand, a few micrometres apart.
 fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: f64, s: &Settings) -> Path {
     let (width, mm3_per_mm, speed) = flow(role, first, h, s);
     let speed = speed.min(s.speed_cap(mm3_per_mm));
     Path {
         role,
-        points,
+        points: geom::simplify_line(&points, resolution(role, s)),
         closed,
         width,
         mm3_per_mm,
