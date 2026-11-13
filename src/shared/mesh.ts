@@ -208,6 +208,19 @@ export function describeAdaptation(a: Adaptation): Array<{ kind: "scale" | "othe
   return lines;
 }
 
+/**
+ * The file name an adapted model is kept under, after its source and what changed: "fusilli-knob, 110 %.stl",
+ * "fusilli-knob, 84 %, mirrored X.stl". The source's own `.stl` is dropped first.
+ */
+export function adaptedName(source: string, a: Adaptation): string {
+  const base = source.replace(/\.stl$/i, "").trim() || "model";
+  const said = describeAdaptation(a).map((line) => {
+    if (line.kind === "scale") return line.value;
+    return `${line.label.toLowerCase()} ${line.value}`;
+  });
+  return `${[base, ...said].join(", ")}.stl`;
+}
+
 /* Lying on a face ------------------------------------------------------------------------------------------- */
 
 type Vec3 = [number, number, number];

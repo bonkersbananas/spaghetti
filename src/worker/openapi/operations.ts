@@ -698,6 +698,25 @@ export const operations: Record<string, Operation> = {
     status: 204,
   },
   "POST /items/:id/files/:fileId/restore": { summary: "Brings the file back.", response: one("file", AttemptFile) },
+  "PUT /twists/:id/file/:fileId": {
+    summary:
+      "Keeps a model (kind model: an .stl or plain .3mf the app slices) as the twist's own, in place of the one it kept. The same body as an idea's file. People only.",
+    multipart: {
+      fields: fileFields.omit({ id: true }),
+      files: {
+        file: "The .stl or .3mf, kept up to 32 MB in this request (a bigger one goes in parts first: POST /uploads, then `uploaded`).",
+        thumb: "The plate's picture.",
+      },
+    },
+    response: one("file", AttemptFile),
+    errors: { 404: notFound("twist"), 415: "unsupported: not a picture." },
+  },
+  "DELETE /twists/:id/file/:fileId": {
+    summary: "Removes the twist's model (it can be restored). People only.",
+    response: "empty",
+    status: 204,
+  },
+  "POST /twists/:id/file/:fileId/restore": { summary: "Brings the model back.", response: one("file", AttemptFile) },
   "GET /files/:id/:part?": {
     summary:
       "A file's bytes (a model's original), its plate thumbnail with `/thumb`, or a model's sliced .gcode.3mf with `/sliced`.",

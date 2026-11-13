@@ -756,6 +756,41 @@ export const itemFiles = sqliteTable(
   (table) => [index("item_files_item_idx").on(table.itemId)],
 );
 
+/**
+ * The model a twist keeps (decision 0053): what "Adapt an STL" made, or any .stl or plain .3mf, `kind` "model" and
+ * sliced in the browser like an idea's. Same fields, R2 keys (`files/<id>/…`) and serving (`/api/files/:id`) as
+ * `item_files`; a twist keeps one live model at a time. Soft delete is the undo; the purge removes the bytes.
+ */
+export const twistFiles = sqliteTable(
+  "twist_files",
+  {
+    id: text("id").primaryKey(),
+    twistId: text("twist_id")
+      .notNull()
+      .references(() => twists.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    size: integer("size").notNull(),
+    stored: integer("stored", { mode: "boolean" }).notNull(),
+    hasThumb: integer("has_thumb", { mode: "boolean" }).notNull(),
+    plate: integer("plate").notNull(),
+    plateCount: integer("plate_count").notNull(),
+    slicer: text("slicer"),
+    prefill: text("prefill", { mode: "json" }).$type<AttemptSettings>().notNull(),
+    objects: text("objects", { mode: "json" }).$type<string[]>().notNull().default([]),
+    kind: text("kind").$type<FileKind>().notNull().default("slicer"),
+    slice: text("slice", { mode: "json" }).$type<FileSlice>(),
+    slicing: text("slicing", { mode: "json" }).$type<SlicingSettings>(),
+    previousSlice: text("previous_slice", { mode: "json" }).$type<PreviousSlice>(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("twist_files_twist_idx").on(table.twistId)],
+);
+
+export type TwistFileRow = typeof twistFiles.$inferSelect;
 export type ItemFileRow = typeof itemFiles.$inferSelect;
 export type Spool = typeof spools.$inferSelect;
 export type AmsSlot = typeof amsSlots.$inferSelect;

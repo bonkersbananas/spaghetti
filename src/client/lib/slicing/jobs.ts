@@ -1,4 +1,4 @@
-import { type AttemptFile, fileUrl, type ItemFileResponse, ONE_REQUEST_FILE_BYTES } from "@shared/api";
+import { type AttemptFile, fileUrl, type ItemFileResponse, ONE_REQUEST_FILE_BYTES, type Twist } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { slicedName } from "@shared/slicing/files.ts";
 import { slicingOfSlice } from "@shared/slicing/model.ts";
@@ -15,6 +15,7 @@ import { itemKeys } from "../item-keys";
 import { patchCachedItem } from "../items";
 import { printerQuery, spoolsQuery } from "../pantry-queries";
 import { dropPreview, setPreview } from "../previews";
+import { twistsQuery } from "../twists-query";
 import type { SliceOutcome } from "./slice-model";
 
 /**
@@ -28,11 +29,10 @@ import type { SliceOutcome } from "./slice-model";
  * ready; the server keeps the one it replaced for one undo, and the card says what changed ("1 h 12 min → 48 min").
  */
 
-/** Where a model is kept: an idea's or build's files, or an attempt's file. */
-export interface SliceTarget {
-  itemId: string;
-  attemptId: string | null;
-}
+/** Where a model is kept: an idea's or build's files, an attempt's file, or a twist's model (decision 0053). */
+export type SliceTarget =
+  | { itemId: string; attemptId: string | null; twistId?: undefined }
+  | { twistId: string; itemId?: undefined; attemptId?: undefined };
 
 export interface SliceJob {
   fileId: string;
@@ -399,7 +399,9 @@ export function changeSlicing(
   const before = file.slicing ?? null;
   // A refetch already on its way would land after this and put the old settings back: it is dropped (the feed
   // fetches again on its next change).
-  void queryClient.cancelQueries({ queryKey: itemKeys.detail(target.itemId) });
+  void queryClient.cancelQueries({
+    queryKey: target.itemId === undefined ? twistsQuery.queryKey : itemKeys.detail(target.itemId),
+  });
   patchFile(queryClient, target, file.id, { slicing: next });
   forgetChange(file.id);
   clearTimeout(pending.get(file.id));
@@ -446,30 +448,40 @@ function showPicture(queryClient: QueryClient, target: SliceTarget, fileId: stri
 
 /** Changes a file wherever the page shows it. */
 function patchFile(queryClient: QueryClient, target: SliceTarget, fileId: string, change: Partial<AttemptFile>) {
+  mapFile(queryClient, target, fileId, (file) => ({ ...file, ...change }));
+}
+
+/** The server's copy of a model, wherever the page shows it. */
+export function showSavedFile(queryClient: QueryClient, target: SliceTarget, file: AttemptFile) {
+  mapFile(queryClient, target, file.id, () => file);
+}
+
+/** Replaces one file in the cache that holds it: a twist's list, an item's files, or an attempt's file. */
+function mapFile(
+  queryClient: QueryClient,
+  target: SliceTarget,
+  fileId: string,
+  change: (file: AttemptFile) => AttemptFile,
+) {
+  if (target.itemId === undefined) {
+    const twistId = target.twistId;
+    queryClient.setQueryData<Twist[]>(twistsQuery.queryKey, (twists) =>
+      twists?.map((twist) =>
+        twist.id === twistId && twist.model?.id === fileId ? { ...twist, model: change(twist.model) } : twist,
+      ),
+    );
+    return;
+  }
   patchCachedItem(queryClient, target.itemId, (item) =>
     target.attemptId
       ? {
           ...item,
           attempts: item.attempts.map((attempt) =>
             attempt.id === target.attemptId && attempt.file?.id === fileId
-              ? { ...attempt, file: { ...attempt.file, ...change } }
+              ? { ...attempt, file: change(attempt.file) }
               : attempt,
           ),
         }
-      : { ...item, files: (item.files ?? []).map((kept) => (kept.id === fileId ? { ...kept, ...change } : kept)) },
-  );
-}
-
-/** The server's copy of a model, wherever the page shows it. */
-export function showSavedFile(queryClient: QueryClient, target: SliceTarget, file: AttemptFile) {
-  patchCachedItem(queryClient, target.itemId, (item) =>
-    target.attemptId
-      ? {
-          ...item,
-          attempts: item.attempts.map((attempt) =>
-            attempt.id === target.attemptId && attempt.file?.id === file.id ? { ...attempt, file } : attempt,
-          ),
-        }
-      : { ...item, files: (item.files ?? []).map((kept) => (kept.id === file.id ? file : kept)) },
+      : { ...item, files: (item.files ?? []).map((kept) => (kept.id === fileId ? change(kept) : kept)) },
   );
 }

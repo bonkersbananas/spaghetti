@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
@@ -13,7 +13,17 @@ import {
 import { isStlName, slicedName } from "../../shared/slicing/files.ts";
 import type { PreviousSlice } from "../../shared/slicing/types.ts";
 import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
-import { type AttemptFileRow, attemptFiles, attempts, type ItemFileRow, itemFiles, items } from "../db/schema.ts";
+import {
+  type AttemptFileRow,
+  attemptFiles,
+  attempts,
+  type ItemFileRow,
+  itemFiles,
+  items,
+  type TwistFileRow,
+  twistFiles,
+  twists,
+} from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile } from "../http.ts";
 import { type FilePart, fileKey, fileKeys } from "../photos.ts";
@@ -484,6 +494,120 @@ export const itemFileRoutes = new Hono<AppEnv>()
     return c.json<ItemFileResponse>({ file: toApiFile(row) });
   });
 
+/** A twist that isn't deleted. */
+const liveTwist = (c: { var: AppEnv["Variables"] }, twistId: string) =>
+  c.var.db
+    .select({ id: twists.id })
+    .from(twists)
+    .where(and(eq(twists.id, twistId), isNull(twists.deletedAt)))
+    .get();
+
+/**
+ * /api/twists/:id/file/:fileId: the model a twist keeps (decision 0053). The same multipart body as an idea's file, and
+ * a twist keeps one model at a time: a new one takes the place of the one before, which stays for the purge (and for
+ * "Remove"'s undo only while it is the live one). People only.
+ */
+export const twistFileRoutes = new Hono<AppEnv>()
+  .put("/:id/file/:fileId", async (c) => {
+    const twistId = c.req.param("id");
+    const fileId = c.req.param("fileId");
+    if (!z.uuid().safeParse(fileId).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    const length = Number(c.req.header("content-length") ?? 0);
+    if (length > MAX_UPLOAD) return apiError(c, 413, "too_large", "That file is too large to keep.");
+    if (!(await liveTwist(c, twistId))) return apiError(c, 404, "not_found", "That twist isn't here any more.");
+    const form = await c.req.formData().catch(() => null);
+    const parsed = fileFields.safeParse(
+      form
+        ? { ...Object.fromEntries([...form.entries()].filter(([, value]) => typeof value === "string")), id: fileId }
+        : null,
+    );
+    if (!parsed.success) return apiError(c, 400, "invalid", "That file's details couldn't be read.");
+    const fields = parsed.data;
+    // A twist keeps a model to slice, nothing else.
+    if (fields.kind !== "model") return apiError(c, 400, "invalid", "A twist keeps a model: an .stl or a plain .3mf.");
+    const file = form?.get("file");
+    const thumb = form?.get("thumb");
+    const refused = uploadProblem(fields.kind, file, thumb, !!fields.uploaded);
+    if (refused) return refuse(c, refused);
+    const incomplete = await unfinishedUpload(c, fields);
+    if (incomplete) return incomplete;
+    const db = c.var.db;
+    const existing = await db.select().from(twistFiles).where(eq(twistFiles.id, fileId)).get();
+    if (existing && existing.twistId !== twistId) {
+      return apiError(c, 409, "conflict", "That file belongs to another twist.");
+    }
+    const stored = file instanceof File || !!fields.uploaded;
+    const hasThumb = thumb instanceof File;
+    await Promise.all([
+      file instanceof File
+        ? c.env.PHOTOS.put(fileKey(fileId, "file"), file.stream(), {
+            httpMetadata: fileMetadata(fields.kind, fields.name),
+          })
+        : null,
+      hasThumb
+        ? c.env.PHOTOS.put(fileKey(fileId, "thumb"), thumb.stream(), { httpMetadata: { contentType: thumb.type } })
+        : null,
+    ]);
+    const values = uploadValues(fields, { stored, hasThumb }, existing);
+    await db.batch([
+      // The model it replaces goes the way a removed one does.
+      db
+        .update(twistFiles)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(twistFiles.twistId, twistId), isNull(twistFiles.deletedAt), ne(twistFiles.id, fileId))),
+      db
+        .insert(twistFiles)
+        .values({ id: fileId, twistId, ...values, createdBy: c.var.user.id, createdAt: new Date() })
+        .onConflictDoUpdate({ target: twistFiles.id, set: values }),
+      recordChange(db, { entity: "twist", id: twistId, action: "updated", actor: c.var.actor }),
+      db
+        .update(twists)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(twists.id, twistId), afterChange)),
+    ]);
+    const row = await db.select().from(twistFiles).where(eq(twistFiles.id, fileId)).get();
+    return c.json<ItemFileResponse>({ file: toApiFile(row as NonNullable<typeof row>) }, existing ? 200 : 201);
+  })
+
+  /** Takes the model off at once; restore is the undo. */
+  .delete("/:id/file/:fileId", async (c) => {
+    const twistId = c.req.param("id");
+    const fileId = c.req.param("fileId");
+    const db = c.var.db;
+    const [[row]] = await db.batch([
+      db
+        .update(twistFiles)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(twistFiles.id, fileId), eq(twistFiles.twistId, twistId), isNull(twistFiles.deletedAt)))
+        .returning({ id: twistFiles.id }),
+      recordChange(db, { entity: "twist", id: twistId, action: "updated", actor: c.var.actor }),
+    ]);
+    if (!row) return apiError(c, 404, "not_found", "That file isn't here.");
+    return c.body(null, 204);
+  })
+
+  .post("/:id/file/:fileId/restore", async (c) => {
+    const twistId = c.req.param("id");
+    const fileId = c.req.param("fileId");
+    if (!(await liveTwist(c, twistId))) return apiError(c, 404, "not_found", "That twist isn't here any more.");
+    const db = c.var.db;
+    const [, [row]] = await db.batch([
+      // One model at a time: the one that took its place makes way.
+      db
+        .update(twistFiles)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(twistFiles.twistId, twistId), isNull(twistFiles.deletedAt), ne(twistFiles.id, fileId))),
+      db
+        .update(twistFiles)
+        .set({ deletedAt: null })
+        .where(and(eq(twistFiles.id, fileId), eq(twistFiles.twistId, twistId), isNotNull(twistFiles.deletedAt)))
+        .returning(),
+      recordChange(db, { entity: "twist", id: twistId, action: "updated", actor: c.var.actor }),
+    ]);
+    if (!row) return apiError(c, 404, "not_found", "That file is gone for good.");
+    return c.json<ItemFileResponse>({ file: toApiFile(row) });
+  });
+
 /** The answer for an upload that can't be kept (uploadProblem). */
 function refuse(c: Parameters<typeof apiError>[0], refused: NonNullable<ReturnType<typeof uploadProblem>>) {
   const code = refused.status === 413 ? "too_large" : refused.status === 415 ? "unsupported" : "invalid";
@@ -499,16 +623,23 @@ export function disposition(name: string): string {
 /** A file's bytes never change (a new file gets a new id). */
 const IMMUTABLE = "private, max-age=31536000, immutable";
 
+/** Which table a file is in: an attempt's file, one kept with an item, or a twist's model. */
+export type FileTable = "attempt" | "item" | "twist";
+
 /**
- * A file that is there to be served or sliced: kept on a live attempt of a live item, or on a live item. Says which
- * table it is in and its item, for the change feed.
+ * A file that is there to be served or sliced: kept on a live attempt of a live item, on a live item, or on a live
+ * twist. Says which table it is in and its item (or its twist), for the change feed.
  */
 export async function liveFile(
   c: { var: AppEnv["Variables"] },
   id: string,
-): Promise<{ row: AttemptFileRow | ItemFileRow; table: "attempt" | "item"; itemId: string } | undefined> {
+): Promise<
+  | { row: AttemptFileRow | ItemFileRow | TwistFileRow; table: "attempt" | "item"; itemId: string; twistId?: undefined }
+  | { row: TwistFileRow; table: "twist"; itemId: null; twistId: string }
+  | undefined
+> {
   const db = c.var.db;
-  const [onAttempt, onItem] = await Promise.all([
+  const [onAttempt, onItem, onTwist] = await Promise.all([
     db
       .select({ file: attemptFiles, itemId: attempts.itemId })
       .from(attemptFiles)
@@ -529,10 +660,50 @@ export async function liveFile(
       .innerJoin(items, eq(items.id, itemFiles.itemId))
       .where(and(eq(itemFiles.id, id), isNull(itemFiles.deletedAt), isNull(items.deletedAt)))
       .get(),
+    db
+      .select({ file: twistFiles })
+      .from(twistFiles)
+      .innerJoin(twists, eq(twists.id, twistFiles.twistId))
+      .where(and(eq(twistFiles.id, id), isNull(twistFiles.deletedAt), isNull(twists.deletedAt)))
+      .get(),
   ]);
   if (onAttempt) return { row: onAttempt.file, table: "attempt", itemId: onAttempt.itemId };
   if (onItem) return { row: onItem.file, table: "item", itemId: onItem.file.itemId };
+  if (onTwist) return { row: onTwist.file, table: "twist", itemId: null, twistId: onTwist.file.twistId };
   return undefined;
+}
+
+/** The table a found file is in. */
+function tableOf(table: FileTable) {
+  return table === "attempt" ? attemptFiles : table === "item" ? itemFiles : twistFiles;
+}
+
+/**
+ * What goes in the batch after a write to a found file: the change that tells the other screens (a twist's model
+ * changes its twist) and the date of what holds it.
+ */
+function touched(
+  c: { var: AppEnv["Variables"] },
+  found: NonNullable<Awaited<ReturnType<typeof liveFile>>>,
+  id: string,
+) {
+  const db = c.var.db;
+  if (found.table === "twist") {
+    return [
+      recordChange(db, { entity: "twist", id: found.twistId, action: "updated", actor: c.var.actor }),
+      db
+        .update(twists)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(twists.id, found.twistId), afterChange)),
+    ] as const;
+  }
+  return [
+    recordChange(db, { entity: "file", id, itemId: found.itemId, action: "updated", actor: c.var.actor }),
+    db
+      .update(items)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(items.id, found.itemId), afterChange)),
+  ] as const;
 }
 
 /**
@@ -605,7 +776,7 @@ export const fileRoutes = new Hono<AppEnv>()
     if (thumb instanceof File && (thumb.size > MAX_FILE_THUMB_BYTES || !THUMB_TYPES.includes(thumb.type))) {
       return apiError(c, 415, "unsupported", "The plate's picture couldn't be kept.");
     }
-    const { row, table, itemId } = found;
+    const { row, table } = found;
     // Kept for one undo: the slice this replaces, its file and its picture.
     const previous: PreviousSlice | null | undefined =
       fields.keep === "previous" && !fields.uploaded && row.slice
@@ -643,15 +814,8 @@ export const fileRoutes = new Hono<AppEnv>()
       ...(done ? { prefill: fields.prefill ?? {}, objects: fields.objects ?? [], slicer: fields.slicer || null } : {}),
     };
     const db = c.var.db;
-    const target = table === "attempt" ? attemptFiles : itemFiles;
-    await db.batch([
-      db.update(target).set(values).where(eq(target.id, id)),
-      recordChange(db, { entity: "file", id, itemId, action: "updated", actor: c.var.actor }),
-      db
-        .update(items)
-        .set({ updatedAt: new Date() })
-        .where(and(eq(items.id, itemId), afterChange)),
-    ]);
+    const target = tableOf(table);
+    await db.batch([db.update(target).set(values).where(eq(target.id, id)), ...touched(c, found, id)]);
     const updated = await db.select().from(target).where(eq(target.id, id)).get();
     return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });
   })
@@ -669,14 +833,10 @@ export const fileRoutes = new Hono<AppEnv>()
     if (!found) return apiError(c, 404, "not_found", "That file isn't here.");
     if (found.row.kind !== "model") return apiError(c, 409, "conflict", "Only a model has slicing settings.");
     const db = c.var.db;
-    const target = found.table === "attempt" ? attemptFiles : itemFiles;
+    const target = tableOf(found.table);
     await db.batch([
       db.update(target).set({ slicing: parsed.data.slicing }).where(eq(target.id, id)),
-      recordChange(db, { entity: "file", id, itemId: found.itemId, action: "updated", actor: c.var.actor }),
-      db
-        .update(items)
-        .set({ updatedAt: new Date() })
-        .where(and(eq(items.id, found.itemId), afterChange)),
+      ...touched(c, found, id),
     ]);
     const updated = await db.select().from(target).where(eq(target.id, id)).get();
     return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });
@@ -701,7 +861,7 @@ export const fileRoutes = new Hono<AppEnv>()
     ]);
     await c.env.PHOTOS.delete([fileKey(id, "previous"), fileKey(id, "previous-thumb")]);
     const db = c.var.db;
-    const target = found.table === "attempt" ? attemptFiles : itemFiles;
+    const target = tableOf(found.table);
     await db.batch([
       db
         .update(target)
@@ -716,11 +876,7 @@ export const fileRoutes = new Hono<AppEnv>()
           previousSlice: null,
         })
         .where(eq(target.id, id)),
-      recordChange(db, { entity: "file", id, itemId: found.itemId, action: "updated", actor: c.var.actor }),
-      db
-        .update(items)
-        .set({ updatedAt: new Date() })
-        .where(and(eq(items.id, found.itemId), afterChange)),
+      ...touched(c, found, id),
     ]);
     const updated = await db.select().from(target).where(eq(target.id, id)).get();
     return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });

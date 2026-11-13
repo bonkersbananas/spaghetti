@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Photo, Twist, TwistResponse, TwistsResponse } from "../../shared/api.ts";
@@ -14,9 +14,9 @@ import {
 } from "../../shared/twists.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { itemDrafts, items, photos, recipes, type TwistRow, twists } from "../db/schema.ts";
+import { itemDrafts, items, photos, recipes, type TwistRow, twistFiles, twists } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
-import { apiError, toApiPhoto } from "../http.ts";
+import { apiError, toApiFile, toApiPhoto } from "../http.ts";
 
 const short = (max: number) =>
   z
@@ -87,6 +87,24 @@ export async function toApiTwists(db: Db, rows: TwistRow[]): Promise<Twist[]> {
       .map((row) => row.id)
       .filter((id) => rows.some((row) => row.fromItemId === id)),
   );
+  // Each twist's live model (one at a time; the newest if a retry left two).
+  const models = new Map<string, Twist["model"]>();
+  if (rows.length) {
+    const files = await db
+      .select()
+      .from(twistFiles)
+      .where(
+        and(
+          inArray(
+            twistFiles.twistId,
+            rows.map((row) => row.id),
+          ),
+          isNull(twistFiles.deletedAt),
+        ),
+      )
+      .orderBy(asc(twistFiles.createdAt));
+    for (const file of files) models.set(file.twistId, toApiFile(file));
+  }
   return rows.map((row) => {
     const mark = row.sourceUrl ? modelMarkOf(row.sourceUrl) : null;
     return {
@@ -104,6 +122,7 @@ export async function toApiTwists(db: Db, rows: TwistRow[]): Promise<Twist[]> {
       changes: row.changes,
       fromItemId: row.fromItemId && liveItems.has(row.fromItemId) ? row.fromItemId : null,
       recipeId: row.recipeId,
+      model: models.get(row.id) ?? null,
       createdBy: row.createdBy,
       createdAt: row.createdAt.getTime(),
       updatedAt: row.updatedAt.getTime(),
