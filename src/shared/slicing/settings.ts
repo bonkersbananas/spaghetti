@@ -83,7 +83,15 @@ export interface SlicingSettings {
   nozzle: number;
   /** Percent of the model's own size. */
   scale: number;
+  /**
+   * The face the model rests on, as the direction in the model's own axes (a unit vector) that points down: null
+   * lays it as the file does. The original file stays as it is; only the slice is turned (`layMeshDown`).
+   */
+  orientation: Orientation | null;
 }
+
+/** A direction in the model's own axes: [x, y, z], unit length. */
+export type Orientation = [number, number, number];
 
 export type SlicingKey = keyof SlicingSettings;
 
@@ -201,6 +209,19 @@ const text = (value: unknown, max: number): string | undefined => {
   return trimmed && trimmed.length <= max ? trimmed : undefined;
 };
 
+/** A direction as given, as a unit vector rounded to 4 decimals; undefined when it isn't three finite numbers. */
+export function orientationOf(value: unknown): Orientation | null | undefined {
+  if (value === null) return null;
+  if (!Array.isArray(value) || value.length !== 3) return undefined;
+  const [x, y, z] = value as unknown[];
+  if (![x, y, z].every((v) => typeof v === "number" && Number.isFinite(v))) return undefined;
+  const length = Math.hypot(x as number, y as number, z as number);
+  if (!(length > 1e-6)) return undefined;
+  const unit = [x, y, z].map((v) => Math.round(((v as number) / length) * 1e4) / 1e4 + 0) as Orientation;
+  // Straight down is how a file lies already.
+  return unit[0] === 0 && unit[1] === 0 && unit[2] === -1 ? null : unit;
+}
+
 const COLOR = /^#[0-9a-f]{6}$/i;
 const SPOOL_ID = /^[\w-]{1,64}$/;
 
@@ -262,6 +283,9 @@ export function slicingProblems(value: unknown): string[] {
   } else if (filaments.some((filament) => !slicingFilament(filament))) {
     problems.push("Each filament has a material (and a colorHex like #f2754e, if any).");
   }
+  if (value.orientation !== undefined && orientationOf(value.orientation) === undefined) {
+    problems.push("orientation is null, or [x, y, z]: the direction in the model that points down.");
+  }
   const known = new Set<string>(Object.keys(DEFAULT_SLICING));
   for (const key of Object.keys(value)) if (!known.has(key)) problems.push(`${key} isn't a slicing setting.`);
   return problems;
@@ -300,6 +324,8 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     plate: oneOf(SLICING_PLATES, given.plate) ?? base.plate,
     nozzle: nozzleOk,
     scale: whole("scale"),
+    orientation:
+      orientationOf(given.orientation) === undefined ? base.orientation : (orientationOf(given.orientation) ?? null),
   };
 }
 
@@ -344,6 +370,13 @@ export function qualityWords(layerHeight: number): string {
 export const strengthWords = (strength: Strength) =>
   strength.id === "standard" ? "Standard strength" : strength.label;
 
+/** "on its side", "upside down": how a model lying on another face is said; empty as designed. */
+export function orientationWords(settings: Pick<SlicingSettings, "orientation">): string {
+  const down = settings.orientation;
+  if (!down) return "";
+  return down[2] > 0.9 ? "upside down" : "on its side";
+}
+
 /** "0.12 mm": a layer height as slicers write it, beside its name. */
 export const layerMillimetres = (layerHeight: number) => `${layerHeight.toFixed(2)} mm`;
 
@@ -385,6 +418,7 @@ export function slicingLine(settings: SlicingSettings): string[] {
         ? ""
         : strength.label
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
+    orientationWords(settings),
     settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);
 }

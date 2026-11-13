@@ -2,7 +2,15 @@
  * What the app (and Claude, through MCP) says about a model's slicing: one quiet line for how it was sliced, and one
  * short human sentence for why it couldn't be.
  */
-import { filamentWords, patternWords, qualityOf, type SlicingSettings, slicingLine, supportWords } from "./settings.ts";
+import {
+  filamentWords,
+  orientationWords,
+  patternWords,
+  qualityOf,
+  type SlicingSettings,
+  slicingLine,
+  supportWords,
+} from "./settings.ts";
 import type { FileSlice, SliceSettings } from "./types.ts";
 
 /** "Bambu Lab X2D 0.4 nozzle" → "X2D". */
@@ -71,6 +79,7 @@ export function slicingDetail(settings: SlicingSettings): string {
       .join(" + "),
     settings.plate,
     `${settings.nozzle} mm nozzle`,
+    orientationWords(settings) ? `laid ${orientationWords(settings)}` : "",
     settings.scale !== 100 ? `scaled to ${settings.scale}%` : "",
   ]
     .filter(Boolean)

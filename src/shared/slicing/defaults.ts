@@ -23,4 +23,5 @@ export const DEFAULT_SLICING: SlicingSettings = {
   plate: "Textured PEI Plate",
   nozzle: 0.4,
   scale: 100,
+  orientation: null,
 };
