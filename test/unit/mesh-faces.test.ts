@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxesStl, boxStl, fusilliStl } from "../../e2e/fixtures/model-stl.ts";
+import { boxesStl, boxStl, fusilliStl, glassesStl } from "../../e2e/fixtures/model-stl.ts";
 import { boundsOf, centreOfMass, layMeshDown, type Mesh, parseStl, restingFaces } from "../../src/shared/mesh.ts";
 
 const mesh = (bytes: Uint8Array): Mesh => {
@@ -105,9 +105,12 @@ describe("restingFaces", () => {
     const faces = restingFaces(l);
     expect(faces.length).toBeGreaterThanOrEqual(2);
     expect(faces.some((face) => near(face.down, [0, 0, -1]))).toBe(true);
-    expect(faces.some((face) => face.down[0] > 0.3 && face.down[2] > 0.3)).toBe(false);
     // Its underside is what it rests on there: the whole 60 × 30 foot.
     expect(faces.find((face) => near(face.down, [0, 0, -1]))?.area).toBeCloseTo(1800);
+    // The slanted face across the hollow is offered only as a pose on its edges, after the flat ones.
+    const slanted = faces.filter((face) => face.down[0] > 0.3 && face.down[2] > 0.3);
+    expect(slanted.every((face) => face.spots)).toBe(true);
+    expect(faces.findIndex((face) => face.spots)).toBe(faces.length - slanted.length);
   });
 
   it("finds the two ends of a twisted pasta, and not its rounded sides", () => {
@@ -140,6 +143,19 @@ describe("restingFaces", () => {
     expect(faces).toHaveLength(1);
     expect(near(faces[0]?.down ?? [], [0, 0, -1])).toBe(true);
     expect(Date.now() - started).toBeLessThan(2500);
+  });
+
+  it("offers the front of glasses, which touch the plate on ridges only, as a pose on a few spots", () => {
+    const faces = restingFaces(mesh(glassesStl()));
+    expect(faces).toHaveLength(1);
+    expect(near(faces[0]?.down ?? [], [0, -1, 0])).toBe(true);
+    expect(faces[0]?.spots).toBe(true);
+    expect(faces[0]?.area).toBeGreaterThan(3000);
+  });
+
+  it("marks faces with flat contact as such, and finds no spots on a box or a pasta", () => {
+    expect(restingFaces(mesh(boxStl(20, 30, 40))).some((face) => face.spots)).toBe(false);
+    expect(restingFaces(mesh(fusilliStl())).some((face) => face.spots)).toBe(false);
   });
 
   it("finds none in a mesh without volume", () => {

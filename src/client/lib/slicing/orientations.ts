@@ -15,6 +15,8 @@ export interface Lying {
   down: Orientation | null;
   /** mm² of the face it rests on. */
   area: number;
+  /** It touches the plate only in spots: a brim helps. */
+  spots?: boolean;
   /** mm: how tall it stands. */
   height: number;
   /** An object URL of the picture, if the browser could draw one. */
@@ -43,6 +45,7 @@ function lyingOf(fileId: string, name: string, size: number, colour: string): Pr
           event.data.options.map((option) => ({
             down: option.down,
             area: option.area,
+            spots: option.spots,
             height: option.height,
             src: option.png ? URL.createObjectURL(option.png) : null,
           })),

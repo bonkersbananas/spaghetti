@@ -84,3 +84,45 @@ export function fusilliStl({ radius = 14, height = 60, turns = 1.25, around = 96
   }
   return out;
 }
+
+/**
+ * Glasses as a binary STL: two round rims whose section is a diamond (a narrow ridge in front and behind, nothing wide enough to lie on), a
+ * bridge and two flat temples running back, standing the way the file lies (z up, the front toward -y). A model with
+ * no flat side to lie on, though it prints lying on one: the trouble `restingFaces` has to see through. About 1 000
+ * triangles, 140 mm wide. Sizes in mm.
+ */
+export function glassesStl({ around = 32 } = {}): Uint8Array {
+  const triangles: number[][][] = [];
+  const rim = (cx: number) => {
+    // Section, going round: outer edge, the front ridge (a land under a millimetre wide), inner edge, the back ridge.
+    const section: Array<[number, number]> = [
+      [26, 0],
+      [23.4, -3.5],
+      [22.6, -3.5],
+      [20, 0],
+      [22.6, 3.5],
+      [23.4, 3.5],
+    ];
+    const at = (step: number, k: number): number[] => {
+      const theta = (step / around) * 2 * Math.PI;
+      const [r, y] = section[k % section.length] as [number, number];
+      return [cx + Math.cos(theta) * r, y, Math.sin(theta) * r];
+    };
+    for (let step = 0; step < around; step++) {
+      for (let k = 0; k < section.length; k++) {
+        const a = at(step, k);
+        const b = at(step + 1, k);
+        const c = at(step + 1, k + 1);
+        const d = at(step, k + 1);
+        triangles.push([a, c, b], [a, d, c]);
+      }
+    }
+  };
+  rim(-30);
+  rim(30);
+  // The bridge, and a temple on each side, going back from the rim's edge.
+  triangles.push(...boxFaces([-6, -1.5, 8], [12, 3, 4]));
+  triangles.push(...boxFaces([-56, 0, -2], [4, 100, 4]));
+  triangles.push(...boxFaces([52, 0, -2], [4, 100, 4]));
+  return binaryStl(triangles, "glasses");
+}
