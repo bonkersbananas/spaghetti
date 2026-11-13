@@ -6,7 +6,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeCard } from "@/components/printer/BridgeCard";
-import { SlicingDefaults } from "@/components/printer/SlicingDefaults";
+import { SlicingDefaultsSkeleton } from "@/components/printer/SlicingDefaultsSkeleton";
 import { UpkeepSkeleton } from "@/components/printer/UpkeepSkeleton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
@@ -34,6 +34,10 @@ import { useIdle } from "@/lib/use-idle";
 const Upkeep = lazy(() => import("@/components/printer/Upkeep").then((m) => ({ default: m.Upkeep })));
 // Below the fold, or only after a tap: their own chunks, not part of the first load.
 const DryingTable = lazy(() => import("@/components/printer/DryingTable").then((m) => ({ default: m.DryingTable })));
+// The workspace's slicing defaults (decision 0050), which load the slicing settings' tiles in turn.
+const SlicingDefaults = lazy(() =>
+  import("@/components/printer/SlicingDefaults").then((m) => ({ default: m.SlicingDefaults })),
+);
 const AddSpoolSheet = lazy(() =>
   import("@/components/pantry/AddSpoolSheet").then((m) => ({ default: m.AddSpoolSheet })),
 );
@@ -243,7 +247,13 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
 
-        <SlicingDefaults />
+        {idle ? (
+          <Suspense fallback={<SlicingDefaultsSkeleton />}>
+            <SlicingDefaults />
+          </Suspense>
+        ) : (
+          <SlicingDefaultsSkeleton />
+        )}
 
         <PrinterSection
           title="AMS"
