@@ -390,7 +390,11 @@ function LayItDown({
       value: option.down ? `face-${index}` : "designed",
       label: lyingLabel(option, side, sides),
       detail: `${Math.round(option.height)} mm tall`,
-      effect: option.down ? `laid on a ${Math.round(option.area / 100)} cm² face` : "the way the file lies",
+      effect: !option.down
+        ? "the way the file lies"
+        : option.spots
+          ? "touches the plate in a few spots: a brim helps"
+          : `laid on a ${Math.round(option.area / 100)} cm² face`,
       picture: <PlatePicture src={option.src} />,
     };
   });

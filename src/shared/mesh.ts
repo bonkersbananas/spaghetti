@@ -229,8 +229,13 @@ type Vec3 = [number, number, number];
 export interface RestingFace {
   /** The face's outward normal, a unit vector in the mesh's own axes: the way the model points when it rests on it. */
   down: Vec3;
-  /** mm² of the model's convex hull that lies on this face (its coplanar neighbours counted in). */
+  /** mm² of the model that lies flat on this face (its coplanar neighbours counted in); for a face it touches only at spots, what those span. */
   area: number;
+  /**
+   * True when the model has no flat area on this face but still stands on it: it touches the plate only at its
+   * rims, ridges or corners (glasses lying on their side).
+   */
+  spots?: boolean;
 }
 
 /** Hull faces whose normals differ by less than this are one face. */
@@ -240,6 +245,10 @@ const MIN_FACE_SHARE = 0.04;
 /** Above this many points the hull is built from the extreme ones in many directions: the same hull, much quicker. */
 /** Faces whose contact is measured, the biggest hull faces first: more is more than anyone is offered. */
 const MOST_CANDIDATES = 24;
+/** A face with no flat contact is still offered if the corners and ridges that touch it span at least this share of the hull's surface... */
+const MIN_SPOTS_SHARE = 0.06;
+/** ...and are within this share of the model's longest side from the face's plane. */
+const SPOTS_TOLERANCE = 0.005;
 const HULL_POINT_LIMIT = 60_000;
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -567,7 +576,7 @@ export function restingFaces(mesh: Mesh, max = 6): RestingFace[] {
   const resting = stable
     .sort((x, y) => y.area - x.area)
     .slice(0, MOST_CANDIDATES)
-    .map((face) => {
+    .map((face): RestingFace | null => {
       const n = face.down;
       let top = -Infinity;
       for (let i = 0; i < p.length; i += 3) {
@@ -583,13 +592,68 @@ export function restingFaces(mesh: Mesh, max = 6): RestingFace[] {
         const c: Vec3 = [p[t + 6] as number, p[t + 7] as number, p[t + 8] as number];
         contact += Math.hypot(...cross(sub(b, a), sub(c, a))) / 2;
       }
-      return { down: face.down, area: contact };
+      if (contact >= total * MIN_FACE_SHARE) return { down: face.down, area: contact };
+      // No flat area: what do its touching corners span, and does the centre of mass stand inside that?
+      const span = footprint(p, n, top - extent * SPOTS_TOLERANCE, centre);
+      return span && span.area >= total * MIN_SPOTS_SHARE && span.holds
+        ? { down: face.down, area: span.area, spots: true }
+        : null;
     })
-    .filter((face) => face.area >= total * MIN_FACE_SHARE);
+    .filter((face): face is RestingFace => face !== null);
+  // Flat faces first, largest first; then the ones it stands on in spots.
+  const rank = (face: RestingFace) => (face.spots ? 0 : 1e9) + face.area;
   return resting
-    .sort((x, y) => y.area - x.area)
+    .sort((x, y) => rank(y) - rank(x))
     .slice(0, max)
-    .map(({ down, area }) => ({ down: down.map((v) => Math.round(v * 1e4) / 1e4) as Vec3, area }));
+    .map(({ down, area, spots }) => ({
+      down: down.map((v) => Math.round(v * 1e4) / 1e4) as Vec3,
+      area,
+      ...(spots ? { spots } : {}),
+    }));
+}
+
+/**
+ * What the mesh's corners that reach the plane `n · x = top` (to within the depth `floor`) span there: the area of
+ * their convex hull, seen along n, and whether the centre of mass, dropped onto the plane, lands inside it. Null when
+ * they are fewer than three or in a line.
+ */
+function footprint(p: Float32Array, n: Vec3, floor: number, centre: Vec3): { area: number; holds: boolean } | null {
+  const helper: Vec3 = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+  const u0 = cross(n, helper);
+  const ul = Math.hypot(...u0);
+  const u: Vec3 = [u0[0] / ul, u0[1] / ul, u0[2] / ul];
+  const v = cross(n, u);
+  type P2 = [number, number];
+  const points: P2[] = [];
+  for (let i = 0; i < p.length; i += 3) {
+    const x: Vec3 = [p[i] as number, p[i + 1] as number, p[i + 2] as number];
+    if (dot(n, x) >= floor) points.push([dot(u, x), dot(v, x)]);
+  }
+  if (points.length < 3) return null;
+  points.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const turn = (o: P2, a: P2, b: P2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  // Andrew's monotone chain, counter-clockwise.
+  const half = (list: P2[]) => {
+    const out: P2[] = [];
+    for (const q of list) {
+      while (out.length >= 2 && turn(out[out.length - 2] as P2, out[out.length - 1] as P2, q) <= 0) out.pop();
+      out.push(q);
+    }
+    out.pop();
+    return out;
+  };
+  const hull = [...half(points), ...half([...points].reverse())];
+  if (hull.length < 3) return null;
+  let area = 0;
+  let holds = true;
+  const c: P2 = [dot(u, centre), dot(v, centre)];
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i] as P2;
+    const b = hull[(i + 1) % hull.length] as P2;
+    area += (a[0] * b[1] - b[0] * a[1]) / 2;
+    if (turn(a, b, c) < 0) holds = false;
+  }
+  return { area, holds };
 }
 
 /**
