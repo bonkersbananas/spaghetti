@@ -1,4 +1,4 @@
-import type { AttemptFile, ItemFileResponse } from "@shared/api";
+import { type AttemptFile, type ItemFileResponse, ONE_REQUEST_FILE_BYTES } from "@shared/api";
 import { slicedName } from "@shared/slicing/files.ts";
 import { presetRecord } from "@shared/slicing/orca.ts";
 import { chosenFromOptions, slicingFor } from "@shared/slicing/settings.ts";
@@ -6,6 +6,7 @@ import type { SliceOptions } from "@shared/slicing/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "../api";
+import { tooBigForPhone, uploadInParts } from "../big-upload";
 import { patchCachedItem } from "../items";
 import { setPreview } from "../previews";
 import type { SliceOutcome } from "./slice-model";
@@ -77,6 +78,9 @@ function update(entry: Entry, change: Partial<Pick<Entry, "status" | "fraction" 
   emit();
 }
 
+/** A model this phone can't hold to slice: the same word as running out of memory, which a laptop answers. */
+class TooBigForPhone extends Error {}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A phone: less memory, and the device that a laptop finishes for (decision 0046). */
@@ -118,6 +122,8 @@ export function startSlice(
     let outcome: SliceOutcome;
     try {
       const blob = typeof job.source === "function" ? await job.source() : job.source;
+      // Kept all the same: a laptop or desktop that shows it slices it (the card says so).
+      if (tooBigForPhone(blob.size)) throw new TooBigForPhone();
       const { sliceModel } = await import("./slice-model");
       outcome = await sliceModel(
         blob,
@@ -143,7 +149,7 @@ export function startSlice(
         png: null,
         slice: {
           status: "failed",
-          problem: "engine",
+          problem: error instanceof TooBigForPhone ? "memory" : "engine",
           settings: {
             ...presetRecord(slicingFor(chosenFromOptions(entry.options))),
             scale: entry.options.scale ?? 100,
@@ -153,7 +159,6 @@ export function startSlice(
           at: Date.now(),
         },
       };
-      void error;
     }
     if (controller.signal.aborted) return null;
     if (outcome.png && outcome.png !== entry.png) {
@@ -222,7 +227,9 @@ async function save(entry: Entry) {
   form.set("slice", JSON.stringify(outcome.slice));
   if (outcome.png) form.set("thumb", outcome.png, "plate_1.png");
   if (outcome.ok) {
-    form.set("sliced", outcome.sliced, slicedName(entry.name));
+    // A big one goes in parts first (a request body may hold 100 MB at most).
+    if (outcome.sliced.size > ONE_REQUEST_FILE_BYTES) form.set("uploaded", "1");
+    else form.set("sliced", outcome.sliced, slicedName(entry.name));
     form.set("prefill", JSON.stringify(outcome.prefill));
     if (outcome.objects.length) form.set("objects", JSON.stringify(outcome.objects));
     if (outcome.slicer) form.set("slicer", outcome.slicer);
@@ -230,6 +237,15 @@ async function save(entry: Entry) {
   for (let tries = 0; tries < 60; tries++) {
     if (entry.controller.signal.aborted || entries.get(entry.fileId) !== entry) return;
     try {
+      if (outcome.ok && outcome.sliced.size > ONE_REQUEST_FILE_BYTES) {
+        await uploadInParts({
+          id: entry.fileId,
+          part: "sliced",
+          kind: "model",
+          name: slicedName(entry.name),
+          blob: outcome.sliced,
+        });
+      }
       const { file } = await api<ItemFileResponse>(`/files/${entry.fileId}/sliced`, {
         method: "PUT",
         body: form,

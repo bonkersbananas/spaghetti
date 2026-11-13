@@ -1,7 +1,9 @@
-import { type AttemptFile, type ItemFileResponse, MAX_SLICER_FILE_BYTES } from "@shared/api";
+import { type AttemptFile, type ItemFileResponse, MAX_SLICER_FILE_BYTES, ONE_REQUEST_FILE_BYTES } from "@shared/api";
+import type { FileKind } from "@shared/slicing/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
+import { discardUpload, dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
 import { patchCachedItem } from "./items";
 import { setPreview } from "./previews";
 import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft } from "./slicer-files";
@@ -26,8 +28,58 @@ function bodyOf(draft: SlicerFileDraft) {
   if (objects.length) form.set("objects", JSON.stringify(objects));
   const thumb = plateThumb(plateOf(draft, plate?.index ?? null));
   if (thumb) form.set("thumb", thumb, "thumb.png");
-  if (draft.file.size <= MAX_SLICER_FILE_BYTES) form.set("file", draft.file, draft.file.name);
+  if (draft.file.size <= ONE_REQUEST_FILE_BYTES) form.set("file", draft.file, draft.file.name);
   return { form, plate, prefill };
+}
+
+/**
+ * Saves a file's row, its bytes first in parts when it is big. A big file that doesn't get through stays on its card,
+ * which says so and offers another go (its bytes are in this tab); a small one, or a refused one, is given up on at
+ * once. Calls `saved` with the row, or `giveUp`.
+ */
+function keepItemFile(
+  itemId: string,
+  file: File,
+  id: string,
+  kind: FileKind,
+  form: FormData,
+  after: { saved: (row: AttemptFile) => void; giveUp: () => void },
+) {
+  // Over the cap a slicer file keeps only what it said: there are no bytes to send.
+  const big = file.size > ONE_REQUEST_FILE_BYTES && file.size <= MAX_SLICER_FILE_BYTES;
+  if (big) form.set("uploaded", "1");
+  const attempt = async () => {
+    try {
+      if (big) {
+        setUpload(id, { fraction: 0, failed: false });
+        await uploadInParts({
+          id,
+          part: "file",
+          kind,
+          name: file.name,
+          blob: file,
+          onProgress: (fraction) => setUpload(id, { fraction, failed: false }),
+        });
+      }
+      const { file: row } = await api<ItemFileResponse>(`/items/${itemId}/files/${id}`, {
+        method: "PUT",
+        body: form,
+        keepalive: false,
+      });
+      setUpload(id, null);
+      after.saved(row);
+    } catch (error) {
+      if (big && !isRefusal(error)) {
+        setUpload(id, { fraction: 0, failed: true, retry: () => void attempt() });
+        return;
+      }
+      setUpload(id, null);
+      // The bytes may be whole on the server with no row: take them off.
+      if (big) void discardUpload(id);
+      after.giveUp();
+    }
+  };
+  return attempt();
 }
 
 /**
@@ -57,17 +109,13 @@ export async function addItemFile(queryClient: QueryClient, itemId: string, file
     pending: true,
   };
   withFiles(queryClient, itemId, (files) => [...files, shown]);
-  try {
-    const { file: saved } = await api<ItemFileResponse>(`/items/${itemId}/files/${draft.id}`, {
-      method: "PUT",
-      body: form,
-      keepalive: false,
-    });
-    withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f)));
-  } catch {
-    withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
-    toast.error("Couldn't keep that file", "Check the connection and try again.");
-  }
+  await keepItemFile(itemId, file, draft.id, "slicer", form, {
+    saved: (saved) => withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f))),
+    giveUp: () => {
+      withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
+      toast.error("Couldn't keep that file", "Check the connection and try again.");
+    },
+  });
 }
 
 /**
@@ -108,24 +156,25 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
   form.set("plateCount", "1");
   form.set("prefill", "{}");
   form.set("kind", "model");
-  form.set("file", file, file.name);
-  try {
-    const { file: saved } = await api<ItemFileResponse>(`/items/${itemId}/files/${draft.id}`, {
-      method: "PUT",
-      body: form,
-      keepalive: false,
-    });
+  if (file.size <= ONE_REQUEST_FILE_BYTES) form.set("file", file, file.name);
+  await keepItemFile(itemId, file, draft.id, "model", form, {
     // A slice that reached the server first (it waits for this) stays.
-    withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f)));
-  } catch {
-    jobs.cancelSlice(draft.id);
-    withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
-    toast.error("Couldn't keep that model", "Check the connection and try again.");
-  }
+    saved: (saved) =>
+      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f))),
+    giveUp: () => {
+      jobs.cancelSlice(draft.id);
+      withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
+      toast.error("Couldn't keep that model", "Check the connection and try again.");
+    },
+  });
 }
 
 /** Takes a file off at once, with Undo. */
 export function removeItemFile(queryClient: QueryClient, itemId: string, file: AttemptFile) {
+  // A big file still on its way (or stuck) is let go of, with what the server holds of it.
+  setUpload(file.id, null);
+  void dropUpload(file.id);
+  if ("pending" in file && file.pending) void discardUpload(file.id);
   withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== file.id));
   // A model still slicing stops: brought back, it offers "Slice it".
   if (file.kind === "model") void import("./slicing/jobs").then(({ cancelSlice }) => cancelSlice(file.id));
