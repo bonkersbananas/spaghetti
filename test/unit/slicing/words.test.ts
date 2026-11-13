@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultSettings } from "../../../src/shared/slicing/defaults.ts";
+import { DEFAULT_SLICING } from "../../../src/shared/slicing/defaults.ts";
+import { presetRecord } from "../../../src/shared/slicing/orca.ts";
 import type { FileSlice } from "../../../src/shared/slicing/types.ts";
 import {
   finishesOnComputer,
@@ -11,7 +12,7 @@ import {
   worthRetrying,
 } from "../../../src/shared/slicing/words.ts";
 
-const settings = { ...defaultSettings(), scale: 100, engine: "1", orca: "2.5.0-dev" };
+const settings = { ...presetRecord(DEFAULT_SLICING), scale: 100, engine: "1", orca: "2.5.0-dev" };
 const failed = (extra: Partial<FileSlice>): FileSlice => ({ status: "failed", settings, at: 0, ...extra });
 
 describe("what a model's card says", () => {

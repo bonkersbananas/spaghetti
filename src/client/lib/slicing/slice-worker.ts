@@ -3,13 +3,14 @@ import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
-import { mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
-import { defaultSettings, SLICING_DEFAULTS } from "@shared/slicing/defaults.ts";
+import { MissingPreset, mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
+import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
+import { chosenFromOptions, slicingFor } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions, SliceProblem, SliceSettings } from "@shared/slicing/types.ts";
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
@@ -45,8 +46,8 @@ export type SliceMessage =
     }
   | { type: "failed"; slice: FileSlice; png: Blob | null };
 
-/** A filament's colour when nothing says one (the defaults' first: Orca's own). */
-const FALLBACK_COLOUR = SLICING_DEFAULTS.colours[0];
+/** A filament's colour when nothing says one (the stand-in's first: Orca's own). */
+const FALLBACK_COLOUR = STAND_IN_COLOURS[0];
 /** Plate pictures are drawn at the size Bambu Studio and Orca use. */
 const PICTURE = 512;
 /** Room kept free round the edge of the plate when scaling to fit, in mm. */
@@ -95,7 +96,8 @@ function progress(phase: SlicePhase, fraction: number) {
 async function run(request: SliceRequest) {
   const { options, engine } = request;
   const scale = Math.max(1, Math.min(100, Math.round(options.scale ?? 100)));
-  let settings: Omit<SliceSettings, "scale" | "engine" | "orca"> = defaultSettings(options);
+  const chosen = chosenFromOptions(options);
+  let settings: Omit<SliceSettings, "scale" | "engine" | "orca"> = presetRecord(slicingFor(chosen));
   let orca = "";
   let png: Blob | null = null;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
@@ -113,7 +115,7 @@ async function run(request: SliceRequest) {
     orca = presets.orca.version;
     const filamentCount = Math.max(...read.objects.map((object) => object.extruder));
     const setup = sliceSetup(presets, {
-      ...options,
+      settings: chosen,
       ...(read.settings ? { project: { settings: read.settings } } : {}),
       filaments: filamentCount,
     });
@@ -193,7 +195,8 @@ async function run(request: SliceRequest) {
         ? { problem: error.problem, ...error.extra }
         : error instanceof EngineError
           ? engineProblem(error)
-          : { problem: "engine" as const };
+          : // A nozzle the engine's presets don't have yet is this release's limit: "engine" too.
+            { problem: "engine" as const, ...(error instanceof MissingPreset ? { message: error.message } : {}) };
     post({ type: "failed", slice: slice({ status: "failed", ...problem }), png });
   } finally {
     host?.terminate();
