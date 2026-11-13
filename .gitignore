@@ -10,3 +10,6 @@ playwright-report/
 .DS_Store
 .bridge/
 .first-load/
+
+# The slicing engine's build (scripts/slicer/build.sh) and the engine the app serves, fetched by scripts/vite-slicer.ts.
+.slicer-build/

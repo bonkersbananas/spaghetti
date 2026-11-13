@@ -21,3 +21,8 @@
 # What changed in each version (the ship writes it, scripts/ship.ts): the update toast reads it fresh.
 /whats-new.json
   Cache-Control: no-cache
+
+# The slicing engine (docs/slicer.md): each version has its own folder, so a file never changes under its name.
+/slicer/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff

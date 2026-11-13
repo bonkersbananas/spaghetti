@@ -1,0 +1,14 @@
+--- a/host/src/bridge.ts
++++ b/host/src/bridge.ts
+@@ -561,7 +561,10 @@
+ 
+   /** Only a shared memory (the 'mt' engine's) needs one. */
+   static for(memory: WebAssembly.Memory | null, maxBytes: number): SharedHeapReserve | null {
+-    return memory && memory.buffer instanceof SharedArrayBuffer ? new SharedHeapReserve(memory, maxBytes) : null;
++    // A page that isn't cross-origin isolated has no SharedArrayBuffer at all: there `instanceof` would throw.
++    return memory && typeof SharedArrayBuffer === 'function' && memory.buffer instanceof SharedArrayBuffer
++      ? new SharedHeapReserve(memory, maxBytes)
++      : null;
+   }
+ 
+   get bytes(): number {

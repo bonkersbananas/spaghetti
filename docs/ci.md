@@ -1,10 +1,11 @@
 # CI
 
-Two workflows check every pull request and every push to main, and one publishes the bridge:
+Two workflows check every pull request and every push to main, one publishes the bridge and one the slicing engine:
 
 - **CI** (`.github/workflows/ci.yml`): lint, typecheck, unit and Worker tests, the build and the bridge program in one job; the Playwright suite in two shards of spec files balanced by measured time (`scripts/e2e-shard.ts`, `e2e/timings.json`), each on its own runner in Playwright's container image; and on pushes to main only, **Speed** (the timing tests). The ship deploys the newest commit on main whose CI run passed.
 - **Images** (`.github/workflows/images.yml`): the container and the bridge's image build and start, both in one job. On every push to main, and on pull requests that touch what goes into them (the Dockerfiles, `bridge/`, `src/shared/`, dependencies, the build config, migrations, `scripts/start.ts` and the scripts it uses): its `paths` list says which.
 - **Bridge release** (`.github/workflows/bridge-release.yml`): only for `bridge-v*` tags and by hand.
+- **Slicer release** (`.github/workflows/slicer-release.yml`): for `slicer-v*` tags, pull requests that change the engine's build (`scripts/slicer/` but its `engine.json`), and by hand. It compiles OrcaSlicer's core to WebAssembly (one job, about 20 minutes) and publishes the engine the app pins in `scripts/slicer/engine.json`; the normal CI never compiles it, `pnpm build` downloads the pinned zip ([docs/slicer.md](slicer.md)).
 
 ## Runners are the bottleneck
 

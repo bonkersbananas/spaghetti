@@ -7,3 +7,4 @@ playwright-report
 .git
 .github
 *.log
+.slicer-build

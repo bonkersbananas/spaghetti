@@ -8,6 +8,7 @@ import { bundleReport } from "./scripts/vite-bundle-report.ts";
 import { landingPage } from "./scripts/vite-landing.ts";
 import { phosphorWeights } from "./scripts/vite-phosphor-weights.ts";
 import { serviceWorker } from "./scripts/vite-service-worker.ts";
+import { slicerEngine } from "./scripts/vite-slicer.ts";
 
 // SPAGHETTI_STATE_DIR points local D1/R2 state elsewhere (the screenshot
 // harness and e2e tests use a throwaway directory). Default: .wrangler/state,
@@ -32,6 +33,8 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
     serviceWorker(),
     landingPage(),
+    // The slicing engine's files at /slicer/<version>/ (docs/slicer.md): before the Worker's plugin, so `vite dev` serves them.
+    slicerEngine(),
     ...(process.env.SPAGHETTI_BUNDLE_REPORT ? [bundleReport()] : []),
     cloudflare({
       persistState: stateDir ? { path: stateDir } : true,
