@@ -26,14 +26,14 @@ const sizes: Record<ButtonSize, string> = {
 
 const iconSizes: Record<ButtonSize, number> = { sm: 16, md: 20, lg: 22 };
 
-/**
- * Small buttons keep a 44 px hit area on touch screens (touch-target), which
- * needs a positioned button: relative, unless the caller places it.
- */
 /** The size's classes; a floating button is a pill whatever its size. */
 const sizeClass = (variant: ButtonVariant, size: ButtonSize) =>
   variant === "floating" ? sizes[size].replace(/rounded-\w+/, "rounded-pill") : sizes[size];
 
+/**
+ * Small buttons keep a 44 px hit area on touch screens (touch-target), which
+ * needs a positioned button: relative, unless the caller places it.
+ */
 const hitArea = (size: ButtonSize, className?: string) =>
   size === "sm" && cn("touch-target", !/\b(absolute|fixed|sticky)\b/.test(className ?? "") && "relative");
 
