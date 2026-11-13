@@ -93,7 +93,7 @@ describe("the printer's own progress", () => {
   it("falls back to the percent, or says nearly done, with less to go on", () => {
     expect(livePrintProgress({ ...live, layer: null, remainingMinutes: null }, live.at)?.label).toBe("47% done");
     expect(livePrintProgress({ ...live, remainingMinutes: 0 }, live.at)?.label).toBe("Layer 112 of 240 · nearly done");
-    expect(livePrintProgress({ ...live, layer: null }, live.at)?.label).toBe("About 38 min left");
+    expect(livePrintProgress({ ...live, layer: null }, live.at)?.label).toBe("38 min left");
   });
 
   it("is gone when the bridge goes quiet", () => {
