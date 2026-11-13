@@ -39,11 +39,11 @@ export function ConfirmRemove({ what, onRemove, size = "md", className }: Confir
       setAsking(false);
     };
     document.addEventListener("pointerdown", away, true);
-    document.addEventListener("keydown", onEscape, true);
+    window.addEventListener("keydown", onEscape, true);
     return () => {
       clearTimeout(timer);
       document.removeEventListener("pointerdown", away, true);
-      document.removeEventListener("keydown", onEscape, true);
+      window.removeEventListener("keydown", onEscape, true);
     };
   }, [asking]);
 

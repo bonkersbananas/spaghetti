@@ -12,7 +12,7 @@ The tokens live in [`src/client/styles/tokens.css`](../src/client/styles/tokens.
 4. **The phone is not a shrunken desktop.** Phones get a tab bar, bottom sheets and big thumb targets. Desktop gets a sidebar, keyboard shortcuts and columns.
 5. **Calm, warm, tactile.** Paper and cream surfaces, soft shadows instead of borders, generous space, a gentle press on everything you tap.
 6. **Playful in small doses.** Pasta lives in empty states, names and one or two moments of delight. Never in the way of reading or logging.
-7. **Never lose work.** Autosave everything. Deletes happen immediately and offer Undo in a toast; there are no "are you sure?" dialogs. One exception, in place and not a dialog: removing a saved photo takes two taps (`ConfirmRemove`: the X turns into a "Remove" pill where it sits, back to the X after 3 s, on a tap elsewhere or Escape), because the X sits on the photo, under a thumb; the Undo toast still follows. A draft's photos (capture sheet, Log attempt, not yet saved) still go at once.
+7. **Never lose work.** Autosave everything. Deletes happen immediately and offer Undo in a toast; there are no "are you sure?" dialogs. One exception, in place and not a dialog: removing a saved photo takes two taps (decision 0054, `ConfirmRemove`: the X turns into a "Remove" pill where it sits, back to the X after 3 s, on a tap elsewhere or Escape), because the X sits on the photo, under a thumb; the Undo toast still follows. A draft's photos (capture sheet, Log attempt, not yet saved) still go at once.
 
 ## Color
 
