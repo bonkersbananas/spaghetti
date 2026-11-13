@@ -250,6 +250,7 @@ export function EditAttempt({
                 alt={`Attempt photo ${index + 1}`}
                 color={photo.color || undefined}
                 busy={!!photo.upload}
+                confirmRemove
                 onRemove={offline && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
             ))}

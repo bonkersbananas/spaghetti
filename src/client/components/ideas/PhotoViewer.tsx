@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { CloseIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
+import { ConfirmRemove } from "@/components/ui/ConfirmRemove";
+import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
@@ -153,17 +154,14 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, class
           ))}
         </div>
         {onRemove && photos[index] && (
-          // On the photo, in the corner a thumb reaches: always there on a phone, on hover or focus on desktop. A plain
-          // cross, not the trash of "delete this idea"; removing has its undo toast, so it is one tap.
-          <button
-            type="button"
-            onClick={() => photos[index] && onRemove(photos[index])}
-            aria-label="Remove this photo"
-            title="Remove this photo"
-            className="pressable focus-ring touch-target bg-veil text-on-veil shadow-raised duration-fast absolute right-3 bottom-3 flex size-8 items-center justify-center rounded-full transition-opacity md:opacity-0 md:group-focus-within/viewer:opacity-100 md:group-hover/viewer:opacity-100"
-          >
-            <CloseIcon size={16} weight="bold" aria-hidden />
-          </button>
+          // On the photo's top-right corner, away from where a thumb swipes and holds the phone. Two taps in place
+          // (the X turns into "Remove"); the key starts it afresh on another photo.
+          <ConfirmRemove
+            key={photos[index].id}
+            what="this photo"
+            onRemove={() => photos[index] && onRemove(photos[index])}
+            className="duration-fast absolute top-3 right-3 transition-opacity md:opacity-0 md:group-focus-within/viewer:opacity-100 md:group-hover/viewer:opacity-100 md:has-data-confirming:opacity-100"
+          />
         )}
       </div>
 

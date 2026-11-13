@@ -1,5 +1,6 @@
 import { type ComponentPropsWithRef, forwardRef, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { ConfirmRemove } from "./ConfirmRemove";
 import { CloseIcon, type Icon } from "./icons";
 import { Photo } from "./Photo";
 import { ProgressRing } from "./ProgressRing";
@@ -61,6 +62,8 @@ interface PhotoThumbProps {
   /** Still being resized or uploaded. */
   busy?: boolean;
   onRemove?: () => void;
+  /** The photo is saved: removing asks in place first (ConfirmRemove). Drafts, not yet saved, remove at once. */
+  confirmRemove?: boolean;
   /** Makes the tile a button that picks it (the compare sheet's row of an attempt's photos). */
   onSelect?: () => void;
   /** With `onSelect`: the one showing now. */
@@ -76,6 +79,7 @@ export function PhotoThumb({
   size = "md",
   busy,
   onRemove,
+  confirmRemove,
   onSelect,
   selected,
   className,
@@ -104,7 +108,10 @@ export function PhotoThumb({
           <ProgressRing value={null} className="size-3.5" />
         </span>
       )}
-      {onRemove && (
+      {onRemove && confirmRemove && (
+        <ConfirmRemove what={alt} size="sm" onRemove={onRemove} className="absolute top-1 right-1" />
+      )}
+      {onRemove && !confirmRemove && (
         <button
           type="button"
           onClick={onRemove}
