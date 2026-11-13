@@ -1,23 +1,36 @@
 import type { Person } from "@shared/api";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
+import { scrollBehavior } from "@/lib/motion";
 import { Avatar } from "./Avatar";
 import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
+// The arrows (and their icons) arrive after the first screen: they only matter once a mouse hovers a card.
+const CardArrows = lazy(() => import("./CardArrows").then((m) => ({ default: m.CardArrows })));
+
+export interface CardPhoto {
+  src: string;
+  alt: string;
+  color?: string /** The photo's id, so it can travel to the page this opens. */;
+  id?: string;
+  /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the well, not cropped. */
+  fit?: "cover" | "contain";
+}
+
 export interface CardProps {
   /** The photo leads. Without one, the note fills its place as a note card. */
-  photo?: {
-    src: string;
-    alt: string;
-    color?: string /** The photo's id, so it can travel to the page this opens. */;
-    id?: string;
-    /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the well, not cropped. */
-    fit?: "cover" | "contain";
-  };
+  photo?: CardPhoto;
+  /**
+   * All of its photos, the first being `photo`: with more than one the picture swipes between them (a finger or a
+   * trackpad, arrows on hover with a mouse) and dots say how many there are and which one shows.
+   */
+  photos?: CardPhoto[];
+  /** The photo now showing changed (swiped to, or picked with an arrow). */
+  onPhotoChange?: (index: number) => void;
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
   note?: string;
@@ -63,7 +76,9 @@ const aspects = {
  * note sits where the photo would, on paper, in the same grid.
  */
 export function Card({
-  photo,
+  photo: cover,
+  photos,
+  onPhotoChange,
   title,
   note,
   chips,
@@ -83,6 +98,11 @@ export function Card({
   className,
 }: CardProps) {
   const Heading = headingLevel === 2 ? "h2" : "h3";
+  const scroller = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const slides = photos && photos.length > 1 ? photos : undefined;
+  // The one showing: it travels to the page the card opens.
+  const photo = slides?.[index] ?? cover;
   const noteCard = !photo && !!note;
   // A note card already shows its note; below a photo the note stands in for a title.
   const heading = title || (noteCard ? null : note);
@@ -95,7 +115,35 @@ export function Card({
   const content = (
     <>
       <div className={cn("relative w-full overflow-hidden rounded-md", aspects[aspect])}>
-        {photo ? (
+        {slides ? (
+          <div
+            ref={scroller}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              if (!el.clientWidth) return;
+              const next = Math.min(slides.length - 1, Math.max(0, Math.round(el.scrollLeft / el.clientWidth)));
+              if (next === index) return;
+              setIndex(next);
+              onPhotoChange?.(next);
+            }}
+            // A sideways swipe stays in the card: it never pulls the page, or goes back in the browser's history.
+            className="flex size-full snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden"
+          >
+            {slides.map((slide, i) => (
+              <Photo
+                key={slide.id ?? slide.src}
+                src={slide.src}
+                // The card's link is named by its first photo; the others would only repeat it.
+                alt={i === 0 ? slide.alt : ""}
+                color={slide.color}
+                // The next one is ready before the finger gets there.
+                eager={i <= index + 1}
+                className="size-full shrink-0 snap-center snap-always"
+                imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
+              />
+            ))}
+          </div>
+        ) : photo ? (
           <Photo
             src={photo.src}
             alt={photo.alt}
@@ -112,6 +160,17 @@ export function Card({
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
+        {slides && (
+          // Over the chips while a photo uploads, so the two never meet.
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-x-0 flex justify-center",
+              chips ? "bottom-11" : "bottom-2.5",
+            )}
+          >
+            <PhotoDots count={slides.length} index={index} />
+          </div>
+        )}
         {!!unread && (
           <div className="absolute top-2 left-2">
             <UnreadBadge count={unread} />
@@ -152,18 +211,86 @@ export function Card({
     </>
   );
 
-  if (link) {
-    return (
-      <Link {...link} viewTransition onClick={(event) => heroClick(event, photo?.id)} className={rootClass}>
-        {content}
-      </Link>
-    );
-  }
   const Root = onClick ? "button" : "article";
-  return (
+  const card = link ? (
+    <Link
+      {...link}
+      viewTransition
+      onClick={(event) => heroClick(event, photo?.id, slides ? scroller.current?.children[index] : undefined)}
+      className={rootClass}
+    >
+      {content}
+    </Link>
+  ) : (
     <Root type={onClick ? "button" : undefined} onClick={onClick} className={rootClass}>
       {content}
     </Root>
+  );
+  if (!slides) return card;
+
+  const go = (to: number) => {
+    const el = scroller.current;
+    if (el) el.scrollTo({ left: to * el.clientWidth, behavior: scrollBehavior() });
+  };
+  return (
+    <div className={cn("group/photos relative flex", className)}>
+      {card}
+      {/* Mouse only (a finger swipes, a trackpad scrolls): laid over the photo beside the card's link, not inside it,
+        so the link stays one control. Keyboards see every photo on the page the card opens. */}
+      <Suspense fallback={null}>
+        <CardArrows index={index} count={slides.length} onGo={go} className={aspects[aspect]} />
+      </Suspense>
+    </div>
+  );
+}
+
+/** Up to this many dots; more photos slide the row along under a window this wide. */
+const MAX_DOTS = 5;
+/** A dot and the gap after it (px): `size-1.5` and `gap-1`. */
+const DOT_STEP = 10;
+/** The one showing is a short bar (`w-3.5`): this much wider than a dot. */
+const ACTIVE_EXTRA = 8;
+
+/**
+ * Which of several photos shows: a dot for each on a pill of dark glass, the one showing drawn long. With more than
+ * five the row slides along under a window of five, and the dots at its edges shrink where more wait beyond them.
+ * A picture only: the photos' own labels say "2 of 4".
+ */
+export function PhotoDots({ count, index, className }: { count: number; index: number; className?: string }) {
+  const shown = Math.min(count, MAX_DOTS);
+  const start = Math.max(0, Math.min(index - Math.floor(MAX_DOTS / 2), count - MAX_DOTS));
+  const end = start + shown - 1;
+  return (
+    <span
+      aria-hidden
+      className={cn("rounded-pill bg-veil shadow-soft inline-flex h-4 items-center px-1.5 backdrop-blur-md", className)}
+    >
+      <span
+        className="relative flex h-1.5 overflow-hidden"
+        // The window's width follows from the dots it shows: data, not design.
+        style={{ width: shown * DOT_STEP - 4 + ACTIVE_EXTRA }} // design-lint-ignore
+      >
+        <span
+          className="duration-base absolute inset-y-0 left-0 flex gap-1 transition-transform ease-out"
+          style={{ transform: `translateX(${-start * DOT_STEP}px)` }} // design-lint-ignore
+        >
+          {Array.from({ length: count }, (_, i) => {
+            const edge = (i === start && start > 0) || (i === end && end < count - 1);
+            return (
+              <span
+                // biome-ignore lint/suspicious/noArrayIndexKey: dots are places, not things.
+                key={i}
+                className={cn(
+                  "rounded-pill duration-base h-1.5 shrink-0 transition-[width,opacity,scale] ease-out",
+                  i === index ? "bg-on-veil w-3.5" : "bg-on-veil/50 w-1.5",
+                  edge ? "scale-60" : i < start || i > end ? "scale-0" : "scale-100",
+                )}
+              />
+            );
+          })}
+        </span>
+      </span>
+    </span>
   );
 }
 

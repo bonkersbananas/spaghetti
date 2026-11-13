@@ -213,14 +213,7 @@ function MyList({
       {!above && share}
       {!isDesktop && ideas.length > 0 && (
         <ActionBar>
-          <Button
-            variant="secondary"
-            size="lg"
-            icon={PlusIcon}
-            onClick={onPick}
-            disabled={readOnly}
-            className="rounded-pill! shadow-float! bg-lifted! mx-auto px-6"
-          >
+          <Button variant="floating" size="lg" icon={PlusIcon} onClick={onPick} disabled={readOnly} className="mx-auto">
             Pick ideas
           </Button>
         </ActionBar>

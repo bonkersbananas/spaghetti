@@ -22,6 +22,9 @@ export function ButtonSection() {
           <Button variant="danger" icon={Icons.TrashIcon}>
             Delete
           </Button>
+          <Button variant="floating" size="lg" icon={Icons.PlusIcon}>
+            Floating (phone ActionBar)
+          </Button>
           <ButtonLink href="#buttons" variant="secondary" icon={Icons.DownloadIcon}>
             Download the original
           </ButtonLink>
