@@ -53,13 +53,15 @@ export function ownedPlate(setup: Pick<PrinterSetup, "plates">, preferred = DEFA
 export const engineSlices = (nozzle: number) => ENGINE_NOZZLES.includes(nozzle);
 
 /**
- * What a model nobody set up is sliced with here: `base` (Spaghetti's defaults, or the workspace's) with a filament
- * from the Pantry when the base names none of its own, a plate that is owned and the main nozzle fitted.
+ * What a model nobody set up is sliced with here: `base` (Spaghetti's defaults) with the workspace's own from the
+ * Printer page (how it prints: quality, strength, supports, brim), a filament from the Pantry when the base names
+ * none of its own, a plate that is owned and the main nozzle fitted.
  */
 export function workshopDefaults(
   { spools, setup }: { spools: readonly SpoolLike[]; setup: PrinterSetup },
-  base: SlicingSettings = DEFAULT_SLICING,
+  given: SlicingSettings = DEFAULT_SLICING,
 ): SlicingSettings {
+  const base = setup.slicing ? normalizeSlicing({ ...given, ...setup.slicing }, given) : given;
   // The base's spool while it is still in the pantry with filament on it, else the likeliest one.
   const named = base.filaments[0]?.spoolId;
   const spool = named ? spools.find((candidate) => candidate.id === named && candidate.remaining !== "empty") : null;

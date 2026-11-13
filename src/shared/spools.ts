@@ -5,6 +5,7 @@
  * docs/printer.md.
  */
 import type { AttemptFilament, AttemptSettings, Nozzle } from "./attempts.ts";
+import type { SlicingDefaults } from "./slicing/settings.ts";
 
 /** Roughly how much is left on a spool. Never grams. */
 export const REMAINING = ["full", "half", "low", "empty"] as const;
@@ -125,6 +126,8 @@ export interface PrinterSetup {
   amsUnits: number;
   /** Days a dried spool stays dry, per material, where people changed the starting values (shared/drying.ts). */
   dryingDays?: Record<string, number>;
+  /** How a model nobody set up is sliced here (decision 0051); Spaghetti's own defaults when there are none. */
+  slicing?: SlicingDefaults;
 }
 
 export const DEFAULT_PRINTER: PrinterSetup = {

@@ -507,6 +507,31 @@ async function closeSliceSettings(page: Page) {
   await removeModelItems(page);
 }
 
+/** The Printer page's slicing defaults (decision 0051). */
+const slicingDefaults = (page: Page) => page.locator("section[aria-labelledby=printer-slicing]");
+
+/** The slicing defaults, unfolded, their tiles in place. Returns the section. */
+async function openSlicingDefaults(page: Page) {
+  const section = slicingDefaults(page);
+  await section.getByRole("button", { name: /^How new models are sliced/ }).click();
+  await section.getByRole("group", { name: "Quality" }).waitFor();
+  await settleSection(page, section);
+  return section;
+}
+
+/**
+ * A section's opening and fades finished (the shots' fixed clock starts Motion's late, which would shoot them
+ * half-open or see-through), and no focus ring where a click left one: a tap leaves none.
+ */
+async function settleSection(page: Page, section: Locator) {
+  await page.waitForTimeout(100);
+  await section.evaluate((element) => {
+    for (const animation of element.getAnimations({ subtree: true })) animation.finish();
+  });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.waitForTimeout(400);
+}
+
 /** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
 const modelItems: string[] = [];
 
@@ -1593,6 +1618,33 @@ export const shots: Shot[] = [
     },
     beforeShot: modelInView,
     cleanup: removeModelItems,
+  },
+  {
+    // Slicing with a recipe (decision 0051): what worked before, in one tap, and the model sliced again with it.
+    name: "slice-settings-recipe",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("button", { name: "PLA bins, fast and square" }).click();
+      // In the sheet's result on a phone, on the card below the popover on desktop.
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A recipe for another filament (PETG for a PLA model): set apart from those for its own on a phone, and the
+    // line under them says the filament it brought.
+    name: "slice-settings-recipe-other",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("button", { name: "PETG, dried and 245 °C" }).click();
+      // In the sheet's result on a phone, on the card below the popover on desktop.
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
   },
   {
     // More, open: how supports are built, the brim, walls and infill by number, the pattern, plate, nozzle and size.
@@ -3137,9 +3189,78 @@ export const shots: Shot[] = [
     name: "printer",
     path: "/printer",
     fullPage: true,
-    // Upkeep loads once the page is idle: wait for its list, or the shot shows its skeleton.
+    // Upkeep and the slicing defaults load once the page is idle: wait for them, or the shot shows their skeletons.
     prepare: async (page) => {
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+      await slicingDefaults(page)
+        .getByRole("button", { name: /^How new models are sliced/ })
+        .waitFor();
+    },
+  },
+  {
+    // The workspace's slicing defaults (decision 0051), folded as "Staying dry" is: what they are, in the model
+    // card's words.
+    name: "printer-slicing-folded",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      await slicingDefaults(page)
+        .getByRole("button", { name: /^How new models are sliced/ })
+        .waitFor();
+    },
+  },
+  {
+    // Open: how a model nobody set up is sliced here, the same choices as a model's without what is each model's own.
+    name: "printer-slicing",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      await openSlicingDefaults(page);
+    },
+  },
+  {
+    // The defaults changed (Fine): saved, with the way back to Spaghetti's own beside the caption.
+    name: "printer-slicing-own",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      const section = await openSlicingDefaults(page);
+      await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
+      await section.getByRole("button", { name: "Back to Spaghetti's own" }).waitFor();
+      // "Saving…" fades out before "Saved" comes in, late under the shots' fixed clock: finish its fades as they come.
+      await section.evaluate(
+        (element) =>
+          new Promise<void>((resolve) => {
+            const done = () => {
+              for (const animation of element.getAnimations({ subtree: true })) animation.finish();
+              if (element.textContent?.includes("Saved")) resolve();
+              else setTimeout(done, 50);
+            };
+            done();
+          }),
+      );
+      await settleSection(page, section);
+    },
+    // The shots after this one slice with Spaghetti's own again.
+    cleanup: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.put("/api/printer", { headers, data: { slicing: null } });
+    },
+  },
+  {
+    // The connection gone while they are open: the setup is only for reading (lib/read-only.ts), their tiles,
+    // More and the way back dimmed.
+    name: "printer-slicing-offline",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      const section = await openSlicingDefaults(page);
+      await page.context().setOffline(true);
+      await section.locator("input[type=radio]:disabled").first().waitFor({ state: "attached" });
+      await settleSection(page, section);
+    },
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
     },
   },
   // Upkeep: the list with its meters, and the Done sheet of the most due task.

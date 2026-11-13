@@ -5,6 +5,7 @@ import { renderPlate } from "@shared/slicing/render.ts";
 import {
   QUALITIES,
   type QualityId,
+  type SlicingDefaults,
   type SlicingSettings,
   STRENGTHS,
   SUPPORT_PLACEMENTS,
@@ -13,7 +14,7 @@ import type { FileSlice } from "@shared/slicing/types.ts";
 import type { SpoolLike } from "@shared/spools";
 import { useEffect, useState } from "react";
 import { ModelCard, type ModelState, SliceResult } from "@/components/builds/ModelFile";
-import { SliceSettingsPanel } from "@/components/builds/SliceSettings";
+import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
@@ -153,6 +154,43 @@ const TOO_BIG: FileSlice = {
   volume: [256, 256, 261],
   fitScale: 78,
 };
+/**
+ * Recipes to slice with, as recipesFor offers them: two for the model's filament (one that kept a slice's settings,
+ * one from a slicer's own file), then one for another (set apart on a phone).
+ */
+const RECIPES = [
+  {
+    id: "knobs",
+    name: "Fine knobs",
+    note: "Fine and tree supports where needed: the threads come out clean.",
+    material: "PLA",
+    finish: "basic",
+    settings: {},
+    slicing: { ...SETTINGS, filaments: [{ material: "PLA", finish: "basic" }] },
+    createdAt: 2,
+    fits: true,
+  },
+  {
+    id: "bins",
+    name: "PLA bins, fast and square",
+    note: "",
+    material: "PLA",
+    finish: null,
+    settings: { layerHeight: 0.24, wallLoops: 2, infillDensity: 10, brim: false },
+    createdAt: 1,
+    fits: true,
+  },
+  {
+    id: "petg",
+    name: "PETG, dried and 245 °C",
+    note: "Dried for 6 h first, then 245 °C: no strings.",
+    material: "PETG",
+    finish: null,
+    settings: { layerHeight: 0.2, nozzleTemperature: 245 },
+    createdAt: 3,
+    fits: false,
+  },
+];
 const CHANGE = { before: { minutes: 72, grams: 14 }, after: { minutes: 48, grams: 11.2 } };
 const noop = () => undefined;
 const PREFILL = { estimatedMinutes: 48, weightGrams: 11.2 };
@@ -184,6 +222,7 @@ const sliced = (more: Partial<Extract<ModelState, { kind: "sliced" }>> = {}): Mo
 export function SlicingSection() {
   const [quality, setQuality] = useState<QualityId>("fine");
   const [settings, setSettings] = useState(SETTINGS);
+  const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
   const lying = useBracketLying(ORANGE);
   return (
     <Section
@@ -366,6 +405,7 @@ export function SlicingSection() {
               plates={["Textured PEI Plate", "Smooth PEI Plate"]}
               slice={SAMPLE_SLICE}
               scalable
+              recipes={RECIPES}
               sliced="#"
             />
           </div>
@@ -389,6 +429,13 @@ export function SlicingSection() {
               onUndo={noop}
               phone={false}
             />
+          </Panel>
+          <Label>
+            The workspace's defaults, on the Printer page (live): how a model nobody set up prints, without what is each
+            model's
+          </Label>
+          <Panel className="max-w-md">
+            <WorkspaceSlicing value={defaults} onChange={(next) => setDefaults(next ?? undefined)} />
           </Panel>
           <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
           <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">

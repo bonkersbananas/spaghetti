@@ -4,13 +4,16 @@
  * so the two can't disagree on what is valid (a layer height the nozzle can't print, say).
  */
 import { z } from "zod";
+import { DEFAULT_SLICING } from "../shared/slicing/defaults.ts";
 import {
   INFILL_PATTERNS,
   LIMITS,
   normalizeSlicing,
   SLICING_PLATES,
+  type SlicingDefaults,
   type SlicingSettings,
   SUPPORT_STYLE_IDS,
+  slicingDefaultsOf,
   slicingProblems,
 } from "../shared/slicing/settings.ts";
 
@@ -82,3 +85,18 @@ export const slicingSettings = slicingSettingsShape
     for (const problem of slicingProblems(value)) ctx.addIssue({ code: "custom", message: problem });
   })
   .transform((value): SlicingSettings => normalizeSlicing(value));
+
+/**
+ * A workspace's defaults (the Printer page, decision 0051): how a model nobody set up prints. The filament, plate
+ * and nozzle aren't among them: they come from the Pantry and the setup.
+ */
+export const slicingDefaults = slicingSettingsShape
+  .pick({ layerHeight: true, walls: true, infill: true, pattern: true, supports: true, supportStyle: true, brim: true })
+  .strict()
+  .superRefine((value, ctx) => {
+    for (const problem of slicingProblems({ ...DEFAULT_SLICING, ...value })) {
+      ctx.addIssue({ code: "custom", message: problem });
+    }
+  })
+  .transform((value): SlicingDefaults => slicingDefaultsOf(normalizeSlicing({ ...DEFAULT_SLICING, ...value })))
+  .meta({ id: "SlicingDefaults" });
