@@ -53,12 +53,13 @@ import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 /**
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
  * Strength, Supports, Filament), and the rest under More. A tap changes the model's settings at once, and the card
  * slices it again in the background (lib/slicing/jobs.ts). On phones a tall sheet, its result at the thumb; on
- * desktop a popover hanging below the card, which shows the result. Loaded the first time it opens.
+ * desktop a panel beside the page, in two columns, its foot the result. Loaded the first time it opens.
  */
 
 /** The spools offered as tiles, at most: a pantry is rarely bigger, and the rest are a pick under the Pantry. */
@@ -86,6 +87,13 @@ export interface SlicingChoicesProps {
   recipes?: readonly OfferedRecipe[];
   /** How the model can lie (lib/slicing/orientations.ts): the "Lay it down" tiles show when it can lie more than one way. */
   lying?: LyingState;
+  /**
+   * Two columns, for a desktop panel that has to show everything without scrolling: the same order as a phone's
+   * sheet, down the first column, then down the second.
+   */
+  twoColumns?: boolean;
+  /** Under the last group: the engine's licence and the files (a model's settings). */
+  after?: ReactNode;
 }
 
 /** A recipe as a model's settings offer it: `fits` when it is for the filament the model had (recipesFor). */
@@ -103,6 +111,8 @@ export function SlicingChoices({
   scope = "model",
   recipes = [],
   lying,
+  twoColumns,
+  after,
 }: SlicingChoicesProps) {
   const set = (change: Partial<SlicingSettings>) => onChange(slicingFor(change, settings));
   const model = scope === "model";
@@ -112,105 +122,161 @@ export function SlicingChoices({
   const floating = slice?.status === "sliced" && !!slice.cautions?.includes("floating") && settings.supports === "off";
   const strong = (words: ReactNode) => <span className="text-ink font-semibold">{words}</span>;
 
+  const recipeGroup = model && recipes.length > 0 && (
+    <RecipeChoice settings={settings} spools={spools} recipes={recipes} onChange={onChange} />
+  );
+  const qualityGroup = (
+    <ChoiceTiles<QualityId>
+      label="Quality"
+      columns={4}
+      dense
+      options={QUALITIES.map((choice) => ({
+        value: choice.id,
+        label: choice.label,
+        detail: layerMillimetres(choice.layerHeight),
+        effect: choice.effect,
+        glyph: <LayersGlyph quality={choice.id} />,
+        disabled: choice.layerHeight < range.min - 1e-9 || choice.layerHeight > range.max + 1e-9,
+      }))}
+      value={quality?.id ?? null}
+      onChange={(id) => {
+        const choice = QUALITIES.find((candidate) => candidate.id === id);
+        if (choice) set({ layerHeight: choice.layerHeight });
+      }}
+      caption={
+        quality ? undefined : (
+          <>
+            {strong("Custom")} · {layerMillimetres(settings.layerHeight)} layers
+            {slice?.settings.project ? " · as the file has them" : ""}
+          </>
+        )
+      }
+    />
+  );
+  const strengthGroup = (
+    <ChoiceTiles<StrengthId | "custom">
+      label="Strength"
+      columns={strength ? 3 : 4}
+      dense={!strength}
+      options={[
+        ...STRENGTHS.map((choice) => ({
+          value: choice.id,
+          label: choice.label,
+          detail: `${choice.walls} walls · ${choice.infill}%`,
+          effect: choice.effect,
+          glyph: <StrengthGlyph strength={choice.id} />,
+        })),
+        // Walls and infill that no tile says (a recipe's, a project's): shown as its own, picked, with its numbers.
+        ...(strength
+          ? []
+          : [
+              {
+                value: "custom" as const,
+                label: "Custom",
+                detail: `${settings.walls} walls · ${settings.infill}%`,
+                glyph: <SettingsIcon size={24} aria-hidden />,
+              },
+            ]),
+      ]}
+      value={strength?.id ?? "custom"}
+      onChange={(id) => {
+        const choice = STRENGTHS.find((candidate) => candidate.id === id);
+        if (choice) set({ walls: choice.walls, infill: choice.infill, pattern: choice.pattern });
+      }}
+      caption={
+        strength ? undefined : (
+          <>
+            {strong("Custom")} · {settings.walls} walls, {settings.infill}% {patternWords(settings.pattern)}, set under
+            More
+          </>
+        )
+      }
+    />
+  );
+  const supportsGroup = (
+    <ChoiceTiles
+      label="Supports"
+      columns={4}
+      dense
+      options={SUPPORT_PLACEMENTS.map((choice) => ({
+        value: choice.id,
+        label: choice.label,
+        effect: choice.effect,
+        glyph: <SupportsGlyph placement={choice.id} />,
+      }))}
+      value={settings.supports}
+      onChange={(supports) => set({ supports })}
+      caption={floating ? <>Parts of it float in the air: {strong("Where needed")} holds them up.</> : undefined}
+    />
+  );
+  const layGroup = model && lying && lying.status !== "none" && (
+    // Turning the model is about what it needs held up: it sits with the supports, a little closer than the groups.
+    <div className="-mt-3">
+      <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
+    </div>
+  );
+  const filamentGroup = model && (
+    <FilamentChoice
+      settings={settings}
+      spools={spools}
+      onChange={(filaments) => set({ filaments })}
+      wrapped={!!twoColumns}
+    />
+  );
+  // The workspace's defaults carry no filament of their own: where the choice would be, it says where it comes from.
+  const filamentRule = !model && (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Filament</span>
+      <p className="text-small text-ink-soft text-pretty">
+        {strong("The Pantry's first loaded spool")} · the plate and nozzle come from this page
+      </p>
+    </div>
+  );
+  const more = (
+    <MoreSettings
+      settings={settings}
+      set={set}
+      plates={plates}
+      slice={slice}
+      scalable={model && scalable}
+      model={model}
+      defaultOpen={moreOpen}
+    />
+  );
+  if (twoColumns) {
+    // A desktop panel: the phone's order down the first column, then the second; the licence, the files and More close the first.
+    return (
+      <div className="flex flex-col gap-7">
+        <div className="grid grid-cols-2 items-start gap-x-6">
+          <div className="flex min-w-0 flex-col gap-7">
+            {recipeGroup}
+            {qualityGroup}
+            {strengthGroup}
+            {/* The licence, the files and More fill the room under the strength, so nothing scrolls. */}
+            {after}
+            {more}
+          </div>
+          <div className="flex min-w-0 flex-col gap-7">
+            {supportsGroup}
+            {layGroup}
+            {filamentGroup}
+            {filamentRule}
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-7">
-      {model && recipes.length > 0 && (
-        <RecipeChoice settings={settings} spools={spools} recipes={recipes} onChange={onChange} />
-      )}
-      <ChoiceTiles<QualityId>
-        label="Quality"
-        columns={4}
-        dense
-        options={QUALITIES.map((choice) => ({
-          value: choice.id,
-          label: choice.label,
-          detail: layerMillimetres(choice.layerHeight),
-          effect: choice.effect,
-          glyph: <LayersGlyph quality={choice.id} />,
-          disabled: choice.layerHeight < range.min - 1e-9 || choice.layerHeight > range.max + 1e-9,
-        }))}
-        value={quality?.id ?? null}
-        onChange={(id) => {
-          const choice = QUALITIES.find((candidate) => candidate.id === id);
-          if (choice) set({ layerHeight: choice.layerHeight });
-        }}
-        caption={
-          quality ? undefined : (
-            <>
-              {strong("Custom")} · {layerMillimetres(settings.layerHeight)} layers
-              {slice?.settings.project ? " · as the file has them" : ""}
-            </>
-          )
-        }
-      />
-      <ChoiceTiles<StrengthId | "custom">
-        label="Strength"
-        columns={strength ? 3 : 4}
-        dense={!strength}
-        options={[
-          ...STRENGTHS.map((choice) => ({
-            value: choice.id,
-            label: choice.label,
-            detail: `${choice.walls} walls · ${choice.infill}%`,
-            effect: choice.effect,
-            glyph: <StrengthGlyph strength={choice.id} />,
-          })),
-          // Walls and infill that no tile says (a recipe's, a project's): shown as its own, picked, with its numbers.
-          ...(strength
-            ? []
-            : [
-                {
-                  value: "custom" as const,
-                  label: "Custom",
-                  detail: `${settings.walls} walls · ${settings.infill}%`,
-                  glyph: <SettingsIcon size={24} aria-hidden />,
-                },
-              ]),
-        ]}
-        value={strength?.id ?? "custom"}
-        onChange={(id) => {
-          const choice = STRENGTHS.find((candidate) => candidate.id === id);
-          if (choice) set({ walls: choice.walls, infill: choice.infill, pattern: choice.pattern });
-        }}
-        caption={
-          strength ? undefined : (
-            <>
-              {strong("Custom")} · {settings.walls} walls, {settings.infill}% {patternWords(settings.pattern)}, set
-              under More
-            </>
-          )
-        }
-      />
-      <ChoiceTiles
-        label="Supports"
-        columns={4}
-        dense
-        options={SUPPORT_PLACEMENTS.map((choice) => ({
-          value: choice.id,
-          label: choice.label,
-          effect: choice.effect,
-          glyph: <SupportsGlyph placement={choice.id} />,
-        }))}
-        value={settings.supports}
-        onChange={(supports) => set({ supports })}
-        caption={floating ? <>Parts of it float in the air: {strong("Where needed")} holds them up.</> : undefined}
-      />
-      {model && lying && lying.status !== "none" && (
-        // Turning the model is about what it needs held up: it sits with the supports, a little closer than the groups.
-        <div className="-mt-3">
-          <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
-        </div>
-      )}
-      {model && <FilamentChoice settings={settings} spools={spools} onChange={(filaments) => set({ filaments })} />}
-      <MoreSettings
-        settings={settings}
-        set={set}
-        plates={plates}
-        slice={slice}
-        scalable={model && scalable}
-        model={model}
-        defaultOpen={moreOpen}
-      />
+      {recipeGroup}
+      {qualityGroup}
+      {strengthGroup}
+      {supportsGroup}
+      {layGroup}
+      {filamentGroup}
+      {filamentRule}
+      {more}
+      {after}
     </div>
   );
 }
@@ -370,10 +436,13 @@ function FilamentChoice({
   settings,
   spools,
   onChange,
+  wrapped,
 }: {
   settings: SlicingSettings;
   spools: readonly SpoolLike[];
   onChange: (filaments: SlicingFilament[]) => void;
+  /** In a panel's column: the spools wrap in rows of four, none clipped, instead of a row that scrolls sideways (a big pantry makes the panel scroll). */
+  wrapped: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const slot = Math.min(index, settings.filaments.length - 1);
@@ -425,7 +494,7 @@ function FilamentChoice({
       )}
       <ChoiceTiles
         label={settings.filaments.length > 1 ? `Filament ${slot + 1}` : "Filament"}
-        layout="scroll"
+        {...(wrapped ? { layout: "grid" as const, columns: 4 as const, dense: true } : { layout: "scroll" as const })}
         options={own ? [own, ...offered.map(spoolTile)] : offered.map(spoolTile)}
         value={picked ? picked.id : "own"}
         onChange={choose}
@@ -680,22 +749,26 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
 }
 
 /**
- * On desktop, in a popover hanging below the card, whose card shows the result: the choices, as tall as the window
- * lets them be. The popover's own padding is the scroller's, so the fade at its edges reaches the corners.
+ * The settings of a model as a desktop panel's body: two columns, so everything shows at once at 1440×900 with no
+ * scrolling (the phone's sheet scrolls one column, in the same order).
  */
 export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsProps) {
   const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], !choices.lying);
   return (
-    <div className="scroll-fade -m-4 max-h-(--radix-popover-content-available-height) overflow-y-auto overscroll-contain p-5">
-      <div className="flex flex-col gap-7">
-        <SlicingChoices {...choices} lying={choices.lying ?? found} />
-        <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
-      </div>
-    </div>
+    <SlicingChoices
+      {...choices}
+      lying={choices.lying ?? found}
+      twoColumns
+      after={<SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />}
+    />
   );
 }
 
-/** On a phone: a tall sheet, the choices to scroll and the result where the thumb is. */
+/**
+ * A phone's tall sheet, the choices to scroll and the result where the thumb is; on desktop the same in a panel
+ * beside the page (no scrim: the page stays in view and live), in two columns that need no scrolling, its foot the
+ * same result.
+ */
 export default function SliceSettingsSheet({
   open,
   onOpenChange,
@@ -709,7 +782,9 @@ export default function SliceSettingsSheet({
   /** Where the slice stands, with what helps: the plate, its figures, progress, before → after and its undo. */
   result: ReactNode;
 }) {
+  const isDesktop = useIsDesktop();
   const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], open && !choices.lying);
+  const about = <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />;
   return (
     <Sheet
       open={open}
@@ -717,11 +792,13 @@ export default function SliceSettingsSheet({
       title="How to slice it"
       description={file.name}
       tall
+      desktop="panel"
+      wide
+      modeless
       footer={<div className="min-w-0 flex-1">{result}</div>}
     >
       <div className="flex flex-col gap-7 pb-2">
-        <SlicingChoices {...choices} lying={choices.lying ?? found} />
-        <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
+        <SlicingChoices {...choices} lying={choices.lying ?? found} twoColumns={isDesktop} after={about} />
       </div>
     </Sheet>
   );
@@ -758,17 +835,13 @@ export function WorkspaceSlicing({
         scalable={false}
         scope="workspace"
       />
-      {/* The way back sits beside the caption where there is room for both, and under it on a phone. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p className="text-small text-ink-faint grow basis-72 text-pretty">
-          The filament comes from the Pantry's first loaded spool, the plate and nozzle from this page.
-        </p>
-        {own && (
+      {own && (
+        <div className="-mt-3">
           <Button variant="quiet" size="sm" icon={UndoIcon} onClick={reset} className="-ml-3">
             Back to Spaghetti's own
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

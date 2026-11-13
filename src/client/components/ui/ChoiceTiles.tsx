@@ -24,7 +24,7 @@ interface ChoiceTilesProps<T extends string> {
   onChange: (value: T) => void;
   /**
    * How the tiles sit: "grid" (equal columns, `columns` on phones and `wideColumns` from md) or "scroll" (a row that
-   * scrolls sideways on phones, for a list that can be long: the Pantry's spools; it wraps from md).
+   * scrolls sideways on phones, for a list that can be long: the Pantry's spools; it wraps from md)
    */
   layout?: "grid" | "scroll";
   columns?: 2 | 3 | 4;
@@ -91,7 +91,7 @@ export function ChoiceTiles<T extends string>({
               key={option.value}
               className={cn(
                 "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg text-center",
-                dense ? "px-1 py-2 md:px-2 md:py-2.5" : "px-2 py-2.5",
+                dense ? "px-0.5 py-2" : "px-2 py-2.5",
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
@@ -122,7 +122,7 @@ export function ChoiceTiles<T extends string>({
               <span
                 className={cn(
                   "line-clamp-2 w-full font-semibold text-balance",
-                  dense ? "text-caption md:text-small" : "text-small",
+                  dense ? "text-caption tracking-tight" : "text-small",
                 )}
               >
                 {option.label}

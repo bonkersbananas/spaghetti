@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { boxesStl, boxStl, glassesStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn, smallTargets } from "./helpers";
 
-// A model's slicing settings (decision 0047): changed on its card ("Slice with…": a popover on desktop, a sheet on
+// A model's slicing settings (decision 0047): changed on its card ("Slice with…": a panel on desktop, a sheet on
 // phones), kept on the model, sliced again in the background with the slice there kept until the new one is ready,
 // and undone in one tap.
 test.afterEach(async ({ page }) => {
@@ -55,9 +55,8 @@ test("changing a model's quality slices it again in the background, says what ch
   await files.getByRole("button", { name: "Slice with…" }).click();
   const settings = page.getByRole("dialog", { name: "How to slice it" });
   const quality = settings.getByRole("group", { name: "Quality" });
-  // Where the result shows: at the foot of a phone's sheet, which covers the card; on desktop the card itself, which
-  // the popover hangs below.
-  const result = isMobile ? settings : files;
+  // Where the result shows: at the foot of the settings (a phone's sheet, a desktop's panel, which covers the card).
+  const result = settings;
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
   if (isMobile) {
     // Every control in the sheet, More's too, has a thumb's target.
@@ -88,8 +87,7 @@ test("changing a model's quality slices it again in the background, says what ch
   await expect(result.getByText(`${before} min`, { exact: true })).toBeVisible();
   await expect(result.getByText(`${after.prefill.estimatedMinutes} min`, { exact: true })).toBeVisible();
 
-  // Undone: the slice before comes back, settings and all, and nothing more to undo. (On desktop the popover stays
-  // open while its card is used.)
+  // Undone: the slice before comes back, settings and all, and nothing more to undo.
   await undo.click();
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
   await expect(result.getByText(`About ${before} min`)).toBeVisible();
@@ -107,7 +105,9 @@ test("changing a model's quality slices it again in the background, says what ch
   await expect(files.getByText(`About ${before} min`)).toBeVisible();
   // (Each piece of the card's line carries its dot: it is matched at its end.)
   await expect(files.getByRole("button", { name: /^Slice with… Standard,/ })).toBeVisible();
-  await files.getByRole("button", { name: "Slice with…" }).click();
+  // On desktop the key opens them, too.
+  if (isMobile) await files.getByRole("button", { name: "Slice with…" }).click();
+  else await page.keyboard.press("s");
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
 });
 
@@ -298,8 +298,7 @@ test("a recipe slices a model the way it worked, in one tap", async ({ page }) =
     await recipe.click();
     await expect(recipe).toHaveAttribute("aria-pressed", "true");
     await expect(settings.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Draft/ })).toBeChecked();
-    // On desktop the result (and its Undo) is on the card below the popover.
-    await expect(files.getByRole("button", { name: "Undo" })).toBeVisible({ timeout: SLICED });
+    await expect(settings.getByRole("button", { name: "Undo" })).toBeVisible({ timeout: SLICED });
     const sliced = (await fileOf(page, id)).slice.settings.slicing;
     expect([sliced.layerHeight, sliced.walls, sliced.brim]).toEqual([0.24, 3, "off"]);
   } finally {
