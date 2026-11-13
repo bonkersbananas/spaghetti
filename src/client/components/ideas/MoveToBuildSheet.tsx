@@ -46,7 +46,7 @@ function pictureOf(build: ItemView) {
   const photo = newestPhoto(build);
   if (photo) return { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined };
   const plate = build.attempts.findLast((attempt) => attempt.file?.hasThumb)?.file;
-  return plate ? { src: fileThumbSrc(plate.id), fit: "contain" as const } : null;
+  return plate ? { src: fileThumbSrc(plate), fit: "contain" as const } : null;
 }
 
 /** "30 min left", "Done by now" or "On the bed": the progress sentence kept short. */
@@ -206,7 +206,7 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
                   photo
                     ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined }
                     : attempt.file?.hasThumb
-                      ? { src: fileThumbSrc(attempt.file.id), fit: "contain" }
+                      ? { src: fileThumbSrc(attempt.file), fit: "contain" }
                       : null
                 }
                 glyph={{ icon: attempt.outcome ? outcomeIcons[attempt.outcome] : PrintingIcon, tone: tiles[tone] }}

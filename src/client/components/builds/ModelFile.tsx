@@ -617,7 +617,7 @@ export default function ModelFileCard({
   }, [file.slice?.at]);
 
   const saved = state.kind === "sliced" && state.saved;
-  const thumbSrc = file.hasThumb || job?.picture ? fileThumbSrc(file.id) : undefined;
+  const thumbSrc = file.hasThumb || job?.picture ? fileThumbSrc(file) : undefined;
   const prefill = job?.outcome?.ok && !job.again ? job.outcome.prefill : file.prefill;
   const panel = target && {
     file: { id: file.id, name: file.name, url: fileUrl(file.id) },
@@ -725,7 +725,7 @@ export function ModelDraftCard({
     <ModelCard
       name={file.name}
       state={modelState(file, job)}
-      thumbSrc={job?.picture || draft.picture ? fileThumbSrc(draft.id) : undefined}
+      thumbSrc={job?.picture || draft.picture ? fileThumbSrc({ id: draft.id }) : undefined}
       prefill={job?.outcome?.ok ? job.outcome.prefill : undefined}
       onRemove={onRemove}
       {...(onSlice ? { onSlice: (change: SliceOptions) => onSlice({ ...made, ...change }) } : {})}

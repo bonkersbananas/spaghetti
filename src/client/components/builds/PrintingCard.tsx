@@ -118,7 +118,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             <Photo src={photoSrc(hero.id, "thumb")} alt="" color={hero.color || undefined} className="size-full" />
           ) : plate ? (
             <Photo
-              src={fileThumbSrc(plate.id)}
+              src={fileThumbSrc(plate)}
               alt=""
               fit="contain"
               className={cn("size-full", compact ? "p-1 md:p-3" : "p-3")}

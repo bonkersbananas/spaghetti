@@ -31,11 +31,15 @@ export function hasPreview(photoId: string): boolean {
 }
 
 /**
- * A slicer file's plate picture: the local copy while it uploads, else the server's. `version` (a model's slice time)
- * gives a picture that changes when the model is sliced again an address of its own.
+ * A slicer file's plate picture: the local copy while it uploads or slices here, else the server's, at an address of
+ * its slice (`?v=` its time). A model sliced again, or its re-slice undone, elsewhere then shows the new picture on
+ * every device the change feed reaches, where the same address would keep the old one until a reload.
  */
-export function fileThumbSrc(fileId: string, version?: number): string {
-  return previews.get(fileId)?.thumb ?? `${fileUrl(fileId, "thumb")}${version ? `?v=${version}` : ""}`;
+export function fileThumbSrc(file: { id: string; slice?: { at: number } | null }): string {
+  const local = previews.get(file.id)?.thumb;
+  if (local) return local;
+  const at = file.slice?.at;
+  return `${fileUrl(file.id, "thumb")}${at ? `?v=${at}` : ""}`;
 }
 
 /** Forgets a file's local picture (a re-slice was undone: the server's is the one to show). */

@@ -144,7 +144,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           <div className="relative col-start-1 row-start-2 size-24 overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:row-start-1 md:aspect-4/3 md:h-auto md:w-full">
             {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
             <Photo
-              src={fileThumbSrc(plate.id)}
+              src={fileThumbSrc(plate)}
               alt=""
               fit="contain"
               className="size-full p-1.5 md:p-3"
@@ -416,7 +416,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           className="size-12 shrink-0 rounded-md"
         />
       ) : plate ? (
-        <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-12 shrink-0 rounded-md" />
+        <Photo src={fileThumbSrc(plate)} alt="" fit="contain" className="size-12 shrink-0 rounded-md" />
       ) : (
         <span className="bg-ink/5 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md">
           <BuildsIcon size={22} aria-hidden />

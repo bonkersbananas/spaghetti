@@ -50,7 +50,7 @@ export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
           className="size-9 shrink-0 rounded-sm"
         />
       ) : plate ? (
-        <Photo src={fileThumbSrc(plate.id)} alt="" fit="contain" className="size-9 shrink-0 rounded-sm p-0.5" />
+        <Photo src={fileThumbSrc(plate)} alt="" fit="contain" className="size-9 shrink-0 rounded-sm p-0.5" />
       ) : (
         <span className="bg-ink/5 text-ink-faint flex size-9 shrink-0 items-center justify-center rounded-sm">
           <BuildsIcon size={18} aria-hidden />
