@@ -49,6 +49,15 @@ pub fn union_contours(contours: &[Contour]) -> Shapes {
     contours.simplify(FillRule::Positive, options())
 }
 
+/// The region the contours enclose, counting every point any loop winds round (Orca's NonZero fill): a loop that
+/// crosses itself keeps both its lobes.
+pub fn union_nonzero(contours: &[Contour]) -> Shapes {
+    if contours.is_empty() {
+        return Vec::new();
+    }
+    contours.simplify(FillRule::NonZero, options())
+}
+
 pub fn union(a: &Shapes, b: &Shapes) -> Shapes {
     if a.is_empty() {
         return b.clone();
@@ -205,6 +214,156 @@ pub fn offset_square(shapes: &Shapes, delta: f64) -> Shapes {
                 let t = (sin_a.atan2(cos_a) / 4.0).tan();
                 out.push(at(x + d * (kx - ky * t), y + d * (ky + kx * t)));
                 out.push(at(x + d * (jx + jy * t), y + d * (jy - jx * t)));
+            }
+            k = j;
+        }
+        paths.push(out);
+    }
+    union_contours(&paths)
+}
+
+/// How `offset_c2` joins the edges at a corner it goes round: Clipper2's join kinds as Orca's wrappers set them up
+/// (`c2_offset_setup`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Join {
+    /// `jtSquare`: cut off square `delta` from the corner.
+    Square,
+    /// `jtMiter` with this limit, which Orca raises to at least 2: mitred where the mitre stays within the limit,
+    /// squared beyond.
+    Miter(f64),
+    /// `jtRound` with this arc tolerance (mm), which Orca caps at a quarter of the offset.
+    Round(f64),
+}
+
+/// Grows (positive) or shrinks (negative) shapes by `delta` mm as Orca 2.5 offsets them: Clipper2's `ClipperOffset`
+/// on closed paths, ported with Orca's changes to it, its points to 0.1 µm. Points closer than a two-hundredth of the
+/// offset to the last one kept go first (`append_offset_path`); each edge moves along its normal; a corner the
+/// offset goes into gets the crossing of its edges where both are long enough (Orca's `OffsetConcaveCrossing`), else
+/// three points whose loop the union takes out; a corner it goes round is mitred, squared or rounded by `join`; and
+/// what the paths wind round positively is kept.
+pub fn offset_c2(shapes: &Shapes, delta: f64, join: Join) -> Shapes {
+    let d = delta * SCALE;
+    if shapes.is_empty() {
+        return Vec::new();
+    }
+    if d.abs() < 0.5 {
+        return shapes.clone();
+    }
+    let abs_d = d.abs();
+    let shortest2 = (abs_d * 0.005) * (abs_d * 0.005);
+    // Mitred while the corner turns less than the limit allows (`temp_lim_`), and the round joins' fixed step.
+    let miter_lim = match join {
+        Join::Miter(limit) => 2.0 / limit.max(2.0).powi(2),
+        _ => 2.0,
+    };
+    let (step_sin, step_cos, steps_per_rad) = match join {
+        Join::Round(tolerance) => {
+            let tol = (tolerance * SCALE).min(abs_d * 0.25);
+            let arc_tol = if tol > 1e-12 { tol.min(abs_d) } else { abs_d * 0.002 };
+            let steps_per_360 =
+                (std::f64::consts::PI / (1.0 - arc_tol / abs_d).acos()).min(abs_d * std::f64::consts::PI);
+            let angle = 2.0 * std::f64::consts::PI / steps_per_360;
+            let s = if d < 0.0 { -angle.sin() } else { angle.sin() };
+            (s, angle.cos(), steps_per_360 / (2.0 * std::f64::consts::PI))
+        }
+        _ => (0.0, 1.0, 0.0),
+    };
+    let at = |x: f64, y: f64| pt(x.round() as i32, y.round() as i32);
+    let mut paths: Vec<Contour> = Vec::new();
+    for contour in shapes.iter().flatten() {
+        let close = |a: &Pt, b: &Pt| {
+            let (dx, dy) = ((a.x - b.x) as f64, (a.y - b.y) as f64);
+            dx * dx + dy * dy < shortest2
+        };
+        let mut p: Vec<Pt> = Vec::with_capacity(contour.len());
+        for q in contour {
+            if p.last().is_none_or(|l| !close(q, l)) {
+                p.push(*q);
+            }
+        }
+        while p.len() > 1 && close(&p[p.len() - 1], &p[0]) {
+            p.pop();
+        }
+        if p.len() < 3 || (d < 0.0 && area2(&p) == 0) {
+            continue;
+        }
+        let n = p.len();
+        let norms: Vec<(f64, f64)> = (0..n)
+            .map(|i| {
+                let (a, b) = (p[i], p[(i + 1) % n]);
+                if a == b {
+                    return (0.0, 0.0);
+                }
+                let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+                let f = 1.0 / (dx * dx + dy * dy).sqrt();
+                (dy * f, -dx * f)
+            })
+            .collect();
+        let mut out: Vec<Pt> = Vec::with_capacity(2 * n);
+        let mut k = n - 1;
+        for j in 0..n {
+            let (pj, pk) = (p[j], p[k]);
+            if pj != pk {
+                let (nj, nk) = (norms[j], norms[k]);
+                let sin_a = (nj.1 * nk.0 - nk.1 * nj.0).clamp(-1.0, 1.0);
+                let cos_a = nj.0 * nk.0 + nj.1 * nk.1;
+                let (x, y) = (pj.x as f64, pj.y as f64);
+                let concave = cos_a > -0.999 && sin_a * d < 0.0;
+                // Orca's crossing for a corner the offset goes into, where neither edge is too short for it.
+                let crossing = concave && {
+                    let e = (d * sin_a).abs() / (1.0 + cos_a);
+                    let next = p[(j + 1) % n];
+                    let d2 = |a: Pt, b: Pt| ((a.x - b.x) as f64).powi(2) + ((a.y - b.y) as f64).powi(2);
+                    4.0 * e * e <= d2(pk, pj) && 4.0 * e * e <= d2(pj, next)
+                };
+                if crossing {
+                    let q = d / (1.0 + cos_a);
+                    out.push(at(x + (nk.0 + nj.0) * q, y + (nk.1 + nj.1) * q));
+                } else if concave {
+                    out.push(at(x + nk.0 * d, y + nk.1 * d));
+                    out.push(pj);
+                    out.push(at(x + nj.0 * d, y + nj.1 * d));
+                } else if (cos_a > 0.999 && !matches!(join, Join::Round(_)))
+                    || (matches!(join, Join::Miter(_)) && cos_a > miter_lim - 1.0)
+                {
+                    let q = d / (cos_a + 1.0);
+                    out.push(at(x + (nk.0 + nj.0) * q, y + (nk.1 + nj.1) * q));
+                } else if matches!(join, Join::Round(_)) {
+                    let (mut vx, mut vy) = (nk.0 * d, nk.1 * d);
+                    out.push(at(x + vx, y + vy));
+                    let steps = ((steps_per_rad * sin_a.atan2(cos_a).abs()).round() as i64).max(1);
+                    for _ in 1..steps {
+                        (vx, vy) = (vx * step_cos - step_sin * vy, vx * step_sin + vy * step_cos);
+                        out.push(at(x + vx, y + vy));
+                    }
+                    out.push(at(x + nj.0 * d, y + nj.1 * d));
+                } else {
+                    // Squared off `|d|` out from the corner (`DoSquare`).
+                    let (ax, ay) = (nj.1 - nk.1, nk.0 - nj.0);
+                    let h = (ax * ax + ay * ay).sqrt();
+                    let v = if h < 0.001 { (0.0, 0.0) } else { (ax / h, ay / h) };
+                    let q = (x + abs_d * v.0, y + abs_d * v.1);
+                    let p1 = (q.0 + d * v.1, q.1 - d * v.0);
+                    let p2 = (q.0 - d * v.1, q.1 + d * v.0);
+                    let p3 = (pk.x as f64 + nk.0 * d, pk.y as f64 + nk.1 * d);
+                    let p4 = (x + nk.0 * d, y + nk.1 * d);
+                    let (dx1, dy1, dx2, dy2) = (p2.0 - p1.0, p2.1 - p1.1, p4.0 - p3.0, p4.1 - p3.1);
+                    let det = dy1 * dx2 - dy2 * dx1;
+                    let ip = if det == 0.0 {
+                        q
+                    } else {
+                        let t = ((p1.0 - p3.0) * dy2 - (p1.1 - p3.1) * dx2) / det;
+                        if t <= 0.0 {
+                            p1
+                        } else if t >= 1.0 {
+                            p2
+                        } else {
+                            (p1.0 + t * dx1, p1.1 + t * dy1)
+                        }
+                    };
+                    out.push(at(ip.0, ip.1));
+                    out.push(at(q.0 + (q.0 - ip.0), q.1 + (q.1 - ip.1)));
+                }
             }
             k = j;
         }
@@ -400,6 +559,38 @@ pub fn simplify_shapes(shapes: &Shapes, tolerance: f64) -> Shapes {
         .filter_map(|shape| {
             let simplified: Shape = shape.iter().map(|c| simplify_contour(c, tol)).filter(|c| c.len() >= 3).collect();
             (!simplified.is_empty()).then_some(simplified)
+        })
+        .collect()
+}
+
+/// Orca's `polygons_simplify`: each contour simplified as a closed line (`simplify_line` from its first point round
+/// to it again), those left with fewer than three points dropped, and the rest made clean shapes again.
+pub fn simplify_polygons(shapes: &Shapes, tolerance: f64) -> Shapes {
+    let mut contours: Vec<Contour> = Vec::new();
+    for contour in shapes.iter().flatten() {
+        if contour.len() < 3 {
+            continue;
+        }
+        let mut closed = contour.clone();
+        closed.push(contour[0]);
+        let mut simplified = simplify_line(&closed, tolerance);
+        simplified.pop();
+        if simplified.len() >= 3 {
+            contours.push(simplified);
+        }
+    }
+    union_contours(&contours)
+}
+
+/// Orca's `make_circle`: a circle of `radius` mm round the origin whose chords stray at most `error` mm from it,
+/// counter-clockwise from (radius, 0), its points truncated towards zero (0.1 µm units).
+pub fn make_circle(radius: f64, error: f64) -> Contour {
+    let r = radius * SCALE;
+    let n = (2.0 * std::f64::consts::PI / (2.0 * (1.0 - error / radius).acos())).ceil().max(3.0) as usize;
+    (0..n)
+        .map(|i| {
+            let a = 2.0 * std::f64::consts::PI * i as f64 / n as f64;
+            pt((a.cos() * r) as i32, (a.sin() * r) as i32)
         })
         .collect()
 }
@@ -793,6 +984,31 @@ mod tests {
             simplify_line(&square, 0.012),
             vec![mm(0.0, 0.0), mm(2.0, 0.0), mm(2.0, 2.0), mm(0.0, 2.0), mm(0.0, 0.0)]
         );
+    }
+
+    #[test]
+    fn clipper2_offsets_mitre_square_and_round_as_orca_sets_them_up() {
+        let square: Shapes = vec![vec![vec![mm(0.0, 0.0), mm(10.0, 0.0), mm(10.0, 10.0), mm(0.0, 10.0)]]];
+        // Right angles mitre within the limit of 2: a 12 mm square; shrunk, the edges meet at their crossings.
+        let grown = offset_c2(&square, 1.0, Join::Miter(1.2));
+        assert_eq!(bbox(&grown), Some([sc(-1.0), sc(-1.0), sc(11.0), sc(11.0)]));
+        assert!((area_mm2(&grown) - 144.0).abs() < 1e-6);
+        let shrunk = offset_c2(&square, -1.0, Join::Miter(1.2));
+        assert!((area_mm2(&shrunk) - 64.0).abs() < 1e-6);
+        // Round: a quarter turn in steps of a fixed angle, as many as the tolerance asks (5 for 0.012 mm at 1 mm),
+        // each point on the circle.
+        let round = offset_c2(&square, 1.0, Join::Round(0.012));
+        let corner = 0.5 * 5.0 * (std::f64::consts::FRAC_PI_2 / 5.0).sin();
+        assert!((area_mm2(&round) - (140.0 + 4.0 * corner)).abs() < 1e-3, "{}", area_mm2(&round));
+        assert_eq!(round[0][0].len(), 4 * 6);
+        // A spike of 26.6° goes beyond the mitre limit of 2 (60°): squared off as with Square. The corner of 63.4°
+        // at its top stays within it, mitred, so it reaches further up than the squared one.
+        let spike: Shapes = vec![vec![vec![mm(0.0, 0.0), mm(20.0, 0.0), mm(0.0, 10.0)]]];
+        let mitred = bbox(&offset_c2(&spike, 1.0, Join::Miter(1.2))).unwrap();
+        let squared = bbox(&offset_c2(&spike, 1.0, Join::Square)).unwrap();
+        assert_eq!(mitred[2], squared[2]);
+        assert!(squared[2] < sc(21.5), "{}", squared[2]);
+        assert!(mitred[3] > squared[3] + sc(0.1), "{} {}", mitred[3], squared[3]);
     }
 
     #[test]

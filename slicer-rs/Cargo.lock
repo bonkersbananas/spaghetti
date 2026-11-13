@@ -280,6 +280,7 @@ dependencies = [
  "boostvoronoi",
  "crc32fast",
  "i_overlay",
+ "libm",
  "md-5",
  "miniz_oxide",
  "rayon",

@@ -441,7 +441,11 @@ impl<'a> Builder<'a> {
             && path.points.len() >= 2
         {
             let from = (self.x, self.y);
-            let length = if path.closed {
+            // With tree supports Orca wipes a support path forward, from near its end (`tree_wipe_start`).
+            let forward = tree_wipe_start(path, s);
+            let length = if let Some(start) = forward {
+                route_length(from, path.points[start + 1..].iter(), s.wipe_distance)
+            } else if path.closed {
                 route_length(from, path.points[1..].iter(), s.wipe_distance)
             } else {
                 route_length(from, path.points.iter().rev().skip(1), s.wipe_distance)
@@ -456,7 +460,9 @@ impl<'a> Builder<'a> {
                 if before > 0 {
                     self.line(self.x, self.y, self.z, -from_units(before), s.retract_speed, Kind::Retract);
                 }
-                if path.closed {
+                if let Some(start) = forward {
+                    self.wipe_along(path.points[start + 1..].iter(), length, during, speed);
+                } else if path.closed {
                     self.wipe_along(path.points[1..].iter(), length, during, speed);
                 } else {
                     self.wipe_along(path.points.iter().rev().skip(1), length, during, speed);
@@ -599,6 +605,33 @@ fn e_units(mm: f64) -> i64 {
 
 fn from_units(units: i64) -> f64 {
     units as f64 / 100_000.0
+}
+
+/// Where a wipe after a support path starts with tree supports, which Orca wipes along the path as printed rather
+/// than back over it: from its start when it ends within 0.2 mm of it (a loop), else from the point before the
+/// path turns away again after first coming within 0.2 mm of its end (its last point: no wipe). None for other
+/// paths, which wipe as usual.
+fn tree_wipe_start(path: &Path, s: &Settings) -> Option<usize> {
+    if !s.support.kind.starts_with("tree") || !matches!(path.role, Role::Support | Role::SupportInterface) {
+        return None;
+    }
+    let points = &path.points;
+    let last = points[points.len() - 1];
+    let near = geom::sc(0.2) as f64;
+    if geom::dist(points[0], last) <= near {
+        return Some(0);
+    }
+    let mut closest = near;
+    let mut i = 0;
+    while i < points.len() {
+        let d = geom::dist(points[i], last);
+        closest = closest.min(d);
+        if closest < near && d > closest {
+            break;
+        }
+        i += 1;
+    }
+    Some(i.max(1) - 1)
 }
 
 /// How far a wipe from `from` along `route` can go, up to `most` mm.
