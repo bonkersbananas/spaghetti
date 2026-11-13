@@ -7,6 +7,7 @@
 
 use crate::profile::Profile;
 use crate::template::{self, Var, Vars};
+use std::sync::Arc;
 
 /// What the frame needs to know about the print.
 #[derive(Clone, Debug, Default)]
@@ -25,7 +26,7 @@ pub struct Facts {
 /// The variables, filled templates and fixed lines for one print.
 pub struct Frame {
     print: Vars,
-    profile: &'static Profile,
+    profile: Arc<Profile>,
 }
 
 /// The `*_plate_temp_initial_layer` setting of a plate type.
@@ -45,8 +46,8 @@ fn bed_key(bed_type: &str) -> &'static str {
 const VARIANT: usize = 0;
 
 impl Frame {
-    pub fn new(profile: &'static Profile, facts: &Facts) -> Frame {
-        let p = profile;
+    pub fn new(profile: Arc<Profile>, facts: &Facts) -> Frame {
+        let p = &profile;
         let at = |key: &str| p.list(key).get(VARIANT).copied().unwrap_or("").to_string();
         let int_at = |key: &str| at(key).parse::<i64>().unwrap_or(0);
         let float_at = |key: &str| at(key).trim_end_matches('%').parse::<f64>().unwrap_or(0.0);
@@ -124,7 +125,7 @@ impl Frame {
 
     /// The machine limits, as Orca writes them for Marlin (legacy) firmware: the left extruder's normal-mode values.
     pub fn envelope(&self) -> String {
-        let p = self.profile;
+        let p = &self.profile;
         let n = |key: &str| (p.float_at(key, 0) + 0.5) as i64;
         let f = |key: &str| p.float_at(key, 0);
         format!(

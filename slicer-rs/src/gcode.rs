@@ -144,6 +144,45 @@ pub struct LayerGcode {
     retractions: usize,
     filament_mm: f64,
     features: [Feature; Role::ALL.len()],
+    /// The part and auxiliary fans for the layer, in percent (`layer_fans`).
+    fans: [f64; 2],
+}
+
+/// The part and auxiliary fans for layer `i`, in percent, as Orca's cooling sets them at a layer's start
+/// (`CoolingBuffer::apply_layer_cooldown`): off for the first layers, then by how long the layer takes
+/// (`layer_time`, after slowing down): at the maximum when it is shorter than the slow-down time, easing down to the
+/// minimum by the fan's cooling time, and past that the minimum when the fan stays on, else off; with a ramp over
+/// the first layers when the filament asks for one.
+fn layer_fans(i: usize, layer_time: f64, s: &Settings) -> [f64; 2] {
+    if i < s.fan_off_layers {
+        return [0.0, 0.0];
+    }
+    let (min, max) = (s.fan_min_speed * 100.0, s.fan_max_speed * 100.0);
+    let mut fan = if s.fan_always_on { min } else { 0.0 };
+    if layer_time < s.slow_down_layer_time {
+        fan = max;
+    } else if layer_time < s.fan_cooling_layer_time {
+        // Orca works `t` out in single precision (its times are floats): the blend below is then exact, so equal
+        // minimum and maximum speeds give that speed, never a hair under it.
+        let (lt, slow, cool) = (layer_time as f32, s.slow_down_layer_time as f32, s.fan_cooling_layer_time as f32);
+        let t = ((lt - slow) / (cool - slow)) as f64;
+        fan = (t * min + (1.0 - t) * max).floor();
+    }
+    if i + 1 < s.full_fan_speed_layer {
+        let factor = (i + 1 - s.fan_off_layers) as f32 / (s.full_fan_speed_layer - s.fan_off_layers) as f32;
+        fan = ((fan as f32 * factor + 0.5) as i32).clamp(0, 255) as f64;
+    }
+    [fan, (s.aux_fan_speed * 100.0).round()]
+}
+
+/// `M106 S…`: the part fan at `percent`, as Orca's writer turns it into the fan's 0–255.
+fn set_fan(t: &mut Vec<u8>, percent: f64) {
+    let speed = percent.max(0.0) as u32;
+    if speed == 0 {
+        t.extend_from_slice(b"M106 S0\n");
+    } else {
+        t.extend_from_slice(format!("M106 S{}\n", (255.5 * speed as f64 / 100.0) as u32).as_bytes());
+    }
 }
 
 /// The height the nozzle travels at onto layer `i`: the layer before's top, lifted (the first layer comes from where
@@ -158,22 +197,14 @@ pub fn layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64) -
     let (mut moves, notes) = build_layer(plan, regions, job, from_z);
     let first = plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)]);
     let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]);
-    if let Some(k) = slowdown_factor(&moves, start, s) {
+    let (factor, cooling_time) = slowdown(&moves, start, s);
+    if let Some(k) = factor {
         slow_down(&mut moves, k, s);
     }
-    // The layer's markers, then its moves.
     let i = plan.index;
+    let fans = layer_fans(i, cooling_time, s);
+    // The layer's markers (its fans go before them, in `assemble`), then its moves.
     let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
-    if i == 0 {
-        // Orca's cooling turns both fans off for the first layers…
-        text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
-    } else if i == s.fan_off_layers {
-        // … and on together after them.
-        text.extend_from_slice(
-            format!("M106 S{}\nM106 P2 S{}\n", (s.fan_speed * 255.0) as i64, (s.aux_fan_speed * 255.0) as i64)
-                .as_bytes(),
-        );
-    }
     text.extend_from_slice(
         format!("; CHANGE_LAYER\n; Z_HEIGHT: {}\n; LAYER_HEIGHT: {}\n", format_g(plan.z), format_g(plan.height))
             .as_bytes(),
@@ -194,6 +225,7 @@ pub fn layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64) -
         retractions: out.retractions,
         filament_mm: out.filament_mm,
         features: out.features,
+        fans,
     }
 }
 
@@ -261,7 +293,16 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
     let mut elapsed = stats.prepare_time;
     let mut accel = f64::NAN;
     let (mut last_index, mut last_z) = (0, 0.0);
+    // The fans as Orca's cooling last set them (unknown before the first layer, so it sets both there).
+    let mut fans = [f64::NAN; 2];
     for (i, l) in layers.into_iter().enumerate() {
+        if l.fans[0] != fans[0] {
+            set_fan(&mut text, l.fans[0]);
+        }
+        if l.fans[1] != fans[1] && s.aux_fan {
+            text.extend_from_slice(format!("M106 P2 S{}\n", (255.0 * l.fans[1] / 100.0) as i64).as_bytes());
+        }
+        fans = l.fans;
         let (cut_from, cut_to) = match l.first_accel {
             Some((from, to, value)) if value == accel => (from, to),
             _ => (l.text.len(), l.text.len()),
@@ -566,6 +607,18 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         b.set_accel(s.first_layer_accel);
     } else if i == 1 {
         b.set_accel(s.default_accel);
+        // From the second layer on, the nozzle and the bed take their own temperatures where the filament's differ
+        // from the first layer's, as Orca sets them there.
+        let mut temps = String::new();
+        if s.nozzle_temperature > 0.0 && s.nozzle_temperature != s.first_layer_nozzle_temperature {
+            temps += &format!("M104 S{} ; set nozzle temperature\n", s.nozzle_temperature as i64);
+        }
+        if s.bed_temperature != s.first_layer_bed_temperature {
+            temps += &format!("M140 S{} ; set bed temperature\n", s.bed_temperature as i64);
+        }
+        if !temps.is_empty() {
+            b.note(Note::Text(temps));
+        }
     }
     let labels = job.labels();
     let mut last: Option<&Path> = None;
@@ -690,10 +743,12 @@ fn simple_time(m: &Move, from: [f64; 3]) -> f64 {
     if m.f > 0.0 { d / m.f } else { 0.0 }
 }
 
-/// How many times longer the layer's extrusions must take, if the layer is too quick.
-fn slowdown_factor(moves: &[Move], start: [f64; 3], s: &Settings) -> Option<f64> {
-    if moves.is_empty() || s.slow_down_layer_time <= 0.0 {
-        return None;
+/// How many times longer the layer's extrusions must take, if the layer is too quick; and how long the layer
+/// takes then, as Orca's cooling reckons it for the fans (`calculate_layer_slowdown`: the stretched time, before
+/// speeds are rounded to whole mm/min).
+fn slowdown(moves: &[Move], start: [f64; 3], s: &Settings) -> (Option<f64>, f64) {
+    if moves.is_empty() {
+        return (None, 0.0);
     }
     let mut at = start;
     let mut fixed = 0.0;
@@ -708,21 +763,22 @@ fn slowdown_factor(moves: &[Move], start: [f64; 3], s: &Settings) -> Option<f64>
     }
     let flexible: f64 = adjustable.iter().map(|a| a.0).sum();
     let need = s.slow_down_layer_time - fixed;
-    if flexible <= 0.0 || need <= flexible {
-        return None;
+    if s.slow_down_layer_time <= 0.0 || flexible <= 0.0 || need <= flexible {
+        return (None, fixed + flexible);
     }
     // Each extrusion's time grows by k, but no more than its speed allows (down to the minimum speed).
     let stretched = |k: f64| -> f64 { adjustable.iter().map(|&(t, v)| t * k.min(v / s.slow_down_min_speed)).sum() };
     let most = adjustable.iter().map(|&(_, v)| v / s.slow_down_min_speed).fold(1.0, f64::max);
     if stretched(most) <= need {
-        return Some(most);
+        return (Some(most), fixed + stretched(most));
     }
     let (mut lo, mut hi) = (1.0, most);
     for _ in 0..50 {
         let mid = (lo + hi) / 2.0;
         if stretched(mid) < need { lo = mid } else { hi = mid }
     }
-    Some(hi)
+    // Slowed to the layer time itself.
+    (Some(hi), s.slow_down_layer_time)
 }
 
 /// Slows the layer's extrusions by `k`; like Orca's cooling, a slowed speed is a whole number of mm/min.
@@ -1446,6 +1502,40 @@ mod tests {
         assert_eq!(text(0.000001, 5), "0");
         assert_eq!(text(12000.0, 0), "12000");
         assert_eq!(text(100.05, 3), "100.05");
+    }
+
+    #[test]
+    fn fans_follow_orcas_cooling() {
+        // Generic ABS on the X2D: no fan for three layers, 80 % on a layer under 3 s, easing to 10 % by 30 s.
+        let mut s = Settings::default();
+        (s.fan_off_layers, s.fan_min_speed, s.fan_max_speed) = (3, 0.1, 0.8);
+        (s.slow_down_layer_time, s.fan_cooling_layer_time, s.aux_fan_speed) = (3.0, 30.0, 0.0);
+        assert_eq!(layer_fans(2, 2.0, &s), [0.0, 0.0]);
+        assert_eq!(layer_fans(3, 2.0, &s), [80.0, 0.0]);
+        assert_eq!(layer_fans(3, 3.0, &s), [80.0, 0.0]);
+        assert_eq!(layer_fans(3, 16.5, &s), [45.0, 0.0]);
+        assert_eq!(layer_fans(3, 40.0, &s), [10.0, 0.0]);
+        // A fan that doesn't stay on stops on a long layer.
+        s.fan_always_on = false;
+        assert_eq!(layer_fans(3, 40.0, &s), [0.0, 0.0]);
+        // A ramp over the first fan layers.
+        (s.full_fan_speed_layer, s.fan_always_on) = (6, true);
+        assert_eq!(layer_fans(3, 2.0, &s), [27.0, 0.0]);
+        assert_eq!(layer_fans(4, 2.0, &s), [53.0, 0.0]);
+        assert_eq!(layer_fans(5, 2.0, &s), [80.0, 0.0]);
+        // PLA Basic: full fan from the second layer whatever the layer's time, the auxiliary fan at 70 %.
+        let pla = Settings::default();
+        for time in [1.0, 4.0, 4.5, 37.3, 99.9, 500.0] {
+            assert_eq!(layer_fans(1, time, &pla), [100.0, 70.0], "{time} s");
+        }
+        // As Orca's writer turns percent into the fan's 0–255.
+        for (percent, line) in
+            [(100.0, "M106 S255\n"), (80.0, "M106 S204\n"), (45.0, "M106 S114\n"), (0.0, "M106 S0\n")]
+        {
+            let mut t = Vec::new();
+            set_fan(&mut t, percent);
+            assert_eq!(String::from_utf8(t).unwrap(), line);
+        }
     }
 
     #[test]

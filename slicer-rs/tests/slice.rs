@@ -2,7 +2,7 @@
 
 use md5::{Digest, Md5};
 use spaghetti_slicer::region::Role;
-use spaghetti_slicer::{Error, Input, Options, Settings, slice, zip};
+use spaghetti_slicer::{Error, Input, Options, Settings, setup, slice, zip};
 
 /// A cube as a text STL, corners from 0 to `size`.
 fn cube_stl(size: f32) -> Vec<u8> {
@@ -113,7 +113,7 @@ fn a_cube_becomes_a_file_the_app_reads() {
 #[test]
 fn a_beam_between_two_pillars_is_bridged() {
     let stl = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/models/bridge.stl")).unwrap();
-    let options = Options { arrange: false, thumbnail: false };
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
     let out = slice(&[Input { name: "bridge.stl", bytes: &stl }], &Settings::default(), &options).unwrap();
     assert_eq!(out.stats.layers, 65);
     let gcode = String::from_utf8(out.gcode).unwrap();
@@ -377,7 +377,7 @@ fn a_part_standing_in_a_frames_opening_keeps_its_own_label() {
     let block = boxes_stl(&[([114., 114., 0.], [126., 126., 6.])]);
     let inputs = [Input { name: "frame.stl", bytes: &frame }, Input { name: "block.stl", bytes: &block }];
     let settings = Settings::default();
-    let options = Options { arrange: false, thumbnail: false };
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
     let out = slice(&inputs, &settings, &options).unwrap();
     let gcode = String::from_utf8(out.gcode).unwrap();
     let layers = check_moves(&gcode, &settings);
@@ -425,4 +425,50 @@ fn a_part_standing_in_a_frames_opening_keeps_its_own_label() {
     let near = |a: &[f64], b: [f64; 4]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.01);
     assert!(near(&bbox_of(1), [100., 100., 140., 140.]), "{:?}", bbox_of(1));
     assert!(near(&bbox_of(2), [114., 114., 126., 126.]), "{:?}", bbox_of(2));
+}
+
+/// A slice setup made by the app's own `sliceSetup` from its slicing settings (src/shared/slicing/settings.ts), as
+/// it hands them to Orca's engine: Generic ABS in blue at 0.12 mm, four walls and 25 % gyroid on the Engineering
+/// Plate, at 80 %. Made again with:
+///
+///     node slicer-rs/bench/setup.mts presets.json '{"layerHeight":0.12,"walls":4,"infill":25,"pattern":"gyroid",
+///       "filaments":[{"material":"ABS","colorHex":"#2b6cb0"}],"plate":"Engineering Plate","scale":80}'
+const ABS_SETUP: &str = include_str!("setups/abs-fine-strong.json");
+
+#[test]
+fn a_setup_made_from_the_apps_settings_slices_as_they_ask() {
+    let setup = setup::read(ABS_SETUP).unwrap();
+    let s = &setup.settings;
+    assert_eq!((s.layer_height, s.wall_loops, s.sparse_density, setup.scale), (0.12, 4, 0.25, 80.0));
+    assert_eq!((s.filament.as_str(), s.bed_type.as_str()), ("Generic ABS @BBL X2D 0.4 nozzle", "Engineering Plate"));
+    let options = Options { scale: setup.scale, ..Options::default() };
+    let cube = cube_stl(20.0);
+    let out = slice(&[Input { name: "cube.stl", bytes: &cube }], s, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    // 80 % of the 20 mm cube, in 0.12 mm layers over the 0.2 mm first one.
+    assert!((out.stats.max_z - 16.0).abs() < 0.13, "{} mm tall", out.stats.max_z);
+    assert!(gcode.contains("; LAYER_HEIGHT: 0.12\n"));
+    let layers = check_moves(&gcode, s);
+    assert_eq!(layers.len(), out.stats.layers);
+    // Four walls: three inner loops for each outer one.
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    let walls = volume(Role::InnerWall) / volume(Role::OuterWall);
+    assert!(walls > 2.7 && walls < 3.5, "inner walls {walls} times the outer");
+    // The start heats the chamber for ABS and the Engineering Plate to 90 °C; the nozzle prints the first layer at
+    // 260 °C and the rest at 270 °C, set at the second layer as Orca sets it.
+    assert!(gcode.contains("M191 S60 ; wait for chamber temp\n"));
+    assert!(gcode.contains("M190 S90"));
+    assert!(gcode.contains("M104 S260 A\n"));
+    let by_layer: Vec<&str> = gcode.split("; CHANGE_LAYER\n").collect();
+    assert!(by_layer[2].contains("\nM104 S270 ; set nozzle temperature\n"), "{}", &by_layer[2][..600]);
+    assert_eq!(gcode.matches("M104 S270 ; set nozzle temperature").count(), 1);
+    // The part fan stays off for ABS's first three layers, then follows each layer's time (Orca's cooling).
+    let fan_on = |part: &str| part.lines().any(|l| l.starts_with("M106 S") && l != "M106 S0");
+    assert!(!by_layer[..3].iter().any(|part| fan_on(part)), "a fan before the fourth layer");
+    assert!(fan_on(by_layer[3]), "no fan for the fourth layer");
+    // What it printed otherwise than asked, it says.
+    assert!(out.fallbacks.iter().any(|f| f == "gyroid sparse infill printed as straight lines"), "{:?}", out.fallbacks);
+    // The plate's description: ABS in its colour, and no Bambu tray id for a generic filament.
+    let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+    assert!(info.contains(r##"<filament id="1" tray_info_idx="" type="ABS" color="#2B6CB0""##), "{info}");
 }

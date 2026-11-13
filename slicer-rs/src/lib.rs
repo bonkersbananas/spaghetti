@@ -16,6 +16,7 @@ pub mod png;
 pub mod profile;
 pub mod region;
 pub mod section;
+pub mod setup;
 pub mod template;
 pub mod threemf;
 #[cfg(target_arch = "wasm32")]
@@ -91,11 +92,14 @@ pub struct Options {
     pub arrange: bool,
     /// Draws the plate picture into the file.
     pub thumbnail: bool,
+    /// Percent of the models' own size, scaled about their origin before they are laid out (as the app scales);
+    /// scaled models are always arranged.
+    pub scale: f64,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { arrange: true, thumbnail: true }
+        Options { arrange: true, thumbnail: true, scale: 100.0 }
     }
 }
 
@@ -121,6 +125,8 @@ pub struct Output {
     pub stats: Stats,
     pub timings: Timings,
     pub triangles: usize,
+    /// What the settings ask for that this printed otherwise (`Settings::fallbacks`).
+    pub fallbacks: Vec<String>,
 }
 
 /// A clock that works natively and in WebAssembly (where the host tells the time).
@@ -179,14 +185,21 @@ impl Plate {
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
         let Plate { mut meshes, project, title, read_ms } = self;
         let t0 = now();
+        if let Some(what) = settings.unsupported() {
+            return Err(Error::Unsupported(what));
+        }
         if meshes.iter().all(|m| m.triangles.is_empty()) {
             return Err(Error::NoModel);
         }
         meshes.retain(|m| !m.triangles.is_empty());
+        let scaled = options.scale > 0.0 && (options.scale - 100.0).abs() > 1e-9;
         for m in &mut meshes {
             m.orient();
+            if scaled {
+                m.scale(options.scale / 100.0);
+            }
         }
-        if options.arrange && !project {
+        if (options.arrange && !project) || scaled {
             mesh::arrange(&mut meshes, settings.bed, settings.max_height)?;
         } else {
             mesh::drop_to_bed(&mut meshes);
@@ -207,7 +220,7 @@ impl Plate {
         let regions = region::regions(&slices, &owners, &layers, settings);
         drop((slices, owners));
         let t3 = now();
-        let frame = bambu::Frame::new(profile::x2d(), &facts);
+        let frame = bambu::Frame::new(settings.profile.clone(), &facts);
         let photos = timelapse_spots(&objects, &layers, settings);
         let job =
             gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
@@ -222,7 +235,7 @@ impl Plate {
         let t5 = now();
         let thumbnail = options.thumbnail.then(|| {
             let size = 512;
-            png::encode(&png::render(&meshes, size, settings.filament_colour), size, size)
+            png::encode(&png::render(&meshes, size, &settings.filament_colour), size, size)
         });
         let t6 = now();
         let title = title.as_deref().unwrap_or("Model");
@@ -243,6 +256,7 @@ impl Plate {
                 total: read_ms + t7 - t0,
             },
             triangles: meshes.iter().map(|m| m.triangles.len()).sum(),
+            fallbacks: settings.fallbacks(),
         })
     }
 }
@@ -290,6 +304,10 @@ pub enum Error {
     TooBig,
     TooTall,
     TooMany,
+    /// A slice setup that isn't one (`setup.rs`).
+    Setup,
+    /// Settings this can't slice yet: what they ask for ("supports", "more than one filament"…).
+    Unsupported(&'static str),
 }
 
 impl std::fmt::Display for Error {
@@ -300,6 +318,8 @@ impl std::fmt::Display for Error {
             Error::TooBig => "too big for the plate",
             Error::TooTall => "too tall for the printer",
             Error::TooMany => "too many objects for one plate",
+            Error::Setup => "can't read the slice setup",
+            Error::Unsupported(what) => return write!(f, "can't slice with {what} yet"),
         })
     }
 }

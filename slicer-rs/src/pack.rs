@@ -16,7 +16,7 @@ fn xml(value: &str) -> String {
     value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-fn json(value: &str) -> String {
+pub fn json(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
     out.push('"');
     for c in value.chars() {
@@ -63,7 +63,7 @@ pub fn gcode_3mf(
     };
     // Orca's "first layer time" in the plate's description: the start and the first layer.
     let first_layer_time = stats.prepare_time + stats.layer_times.first().copied().unwrap_or(0.0);
-    let x2d = crate::profile::x2d();
+    let x2d = &s.profile;
     // The X2D's two extruders, as Orca's enum numbers them, and each one's nozzle.
     let extruder_types: Vec<&str> =
         x2d.list("extruder_type").iter().map(|t| if *t == "Bowden" { "1" } else { "0" }).collect();
@@ -175,9 +175,9 @@ pub fn gcode_3mf(
     }
     slice_info.push(format!(
         r#"    <filament id="1" tray_info_idx="{}" type="{}" color="{}" used_m="{metres:.2}" used_g="{grams:.2}" group_id="0" nozzle_diameter="{:.2}" volume_type="Standard" used_for_object="true" used_for_support="false"/>"#,
-        xml(s.filament_tray),
-        xml(s.filament_type),
-        xml(s.filament_colour),
+        xml(&s.filament_tray),
+        xml(&s.filament_type),
+        xml(&s.filament_colour),
         s.nozzle_diameter,
     ));
     slice_info.push(format!(
@@ -219,7 +219,7 @@ pub fn gcode_3mf(
             bbox_all[3],
             objects_json.join(","),
             json(bed_type_key(&bed_type)),
-            json(s.filament_colour),
+            json(&s.filament_colour),
             first_layer_time,
             nozzle
         )
