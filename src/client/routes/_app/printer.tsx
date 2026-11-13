@@ -12,15 +12,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { Disclosure } from "@/components/ui/Disclosure";
-import {
-  HardenedIcon,
-  InfoIcon,
-  MinusIcon,
-  PantryIcon,
-  PlusIcon,
-  RulerIcon,
-  TemperatureIcon,
-} from "@/components/ui/icons";
+import { HardenedIcon, InfoIcon, MinusIcon, PantryIcon, PlusIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -80,20 +73,6 @@ function PrinterSection({
     <Section id={id} title={title} aside={aside} size="title" description={description}>
       {children}
     </Section>
-  );
-}
-
-function Fact({ icon: Icon, label, value }: { icon: typeof RulerIcon; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="bg-ink/5 text-ink-soft flex size-9 shrink-0 items-center justify-center rounded-md">
-        <Icon size={20} aria-hidden />
-      </span>
-      <span className="flex min-w-0 flex-col">
-        <span className="text-small text-ink-faint">{label}</span>
-        <span className="text-body text-ink tabular font-semibold">{value}</span>
-      </span>
-    </div>
   );
 }
 
@@ -166,26 +145,60 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
           <SaveStatus state={saveState} />
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Fact
-            icon={RulerIcon}
-            label="Build volume"
-            value={`${X2D.buildVolume.x} × ${X2D.buildVolume.y} × ${X2D.buildVolume.z} mm`}
-          />
-          <Fact
-            icon={RulerIcon}
-            label="With both nozzles"
-            value={`about ${X2D.dualBuildVolume.x} × ${X2D.dualBuildVolume.y} × ${X2D.dualBuildVolume.z} mm`}
-          />
-          <Fact
-            icon={TemperatureIcon}
-            label="Nozzle and bed, at most"
-            value={`${X2D.maxNozzleTemperature} °C · ${X2D.maxBedTemperature} °C`}
-          />
-          <Fact icon={TemperatureIcon} label="Heated chamber" value={`up to ${X2D.maxChamberTemperature} °C`} />
-        </div>
-        <BridgeCard className="mt-2" />
+        {/* The machine's fixed numbers: one wrapped line of facts, not a block of icons. */}
+        <MetaList className="text-small text-ink-soft tabular">
+          <span>
+            {X2D.buildVolume.x} × {X2D.buildVolume.y} × {X2D.buildVolume.z} mm
+          </span>
+          <span>
+            about {X2D.dualBuildVolume.x} × {X2D.dualBuildVolume.y} × {X2D.dualBuildVolume.z} mm with both nozzles
+          </span>
+          <span>
+            {X2D.maxNozzleTemperature} °C nozzle, {X2D.maxBedTemperature} °C bed
+          </span>
+          <span>{X2D.maxChamberTemperature} °C chamber</span>
+        </MetaList>
+        <BridgeCard />
       </div>
+
+      <fieldset disabled={readOnly} className="contents">
+        <PrinterSection
+          title="AMS"
+          aside={
+            <Link
+              to="/pantry"
+              className="focus-ring touch-target text-small text-ink-soft hover:text-ink relative inline-flex items-center gap-1.5 rounded-sm font-semibold"
+            >
+              <PantryIcon size={16} aria-hidden />
+              Pantry
+            </Link>
+          }
+        >
+          <AmsLoadout readOnly={readOnly} onAddSpool={setAdding} />
+          <div className="flex items-center gap-3">
+            <span className="text-small text-ink-soft flex-1">
+              {units === 1 ? "One AMS unit" : units === 0 ? "No AMS units" : `${units} AMS units`}, up to{" "}
+              {X2D.maxAmsUnits}.
+            </span>
+            <IconButton
+              icon={MinusIcon}
+              variant="secondary"
+              size="sm"
+              label="One AMS unit fewer"
+              disabled={units <= 0}
+              onClick={() => change((current) => ({ amsUnits: Math.max(0, current.amsUnits - 1) }))}
+            />
+            <IconButton
+              icon={PlusIcon}
+              variant="secondary"
+              size="sm"
+              label="One AMS unit more"
+              disabled={units >= X2D.maxAmsUnits}
+              onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
+            />
+          </div>
+        </PrinterSection>
+      </fieldset>
 
       {idle ? (
         <Suspense fallback={<UpkeepSkeleton />}>
@@ -254,43 +267,6 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         ) : (
           <SlicingDefaultsSkeleton />
         )}
-
-        <PrinterSection
-          title="AMS"
-          aside={
-            <Link
-              to="/pantry"
-              className="focus-ring touch-target text-small text-ink-soft hover:text-ink relative inline-flex items-center gap-1.5 rounded-sm font-semibold"
-            >
-              <PantryIcon size={16} aria-hidden />
-              Pantry
-            </Link>
-          }
-        >
-          <AmsLoadout readOnly={readOnly} onAddSpool={setAdding} />
-          <div className="flex items-center gap-3">
-            <span className="text-small text-ink-soft flex-1">
-              {units === 1 ? "One AMS unit" : units === 0 ? "No AMS units" : `${units} AMS units`}, up to{" "}
-              {X2D.maxAmsUnits}.
-            </span>
-            <IconButton
-              icon={MinusIcon}
-              variant="secondary"
-              size="sm"
-              label="One AMS unit fewer"
-              disabled={units <= 0}
-              onClick={() => change((current) => ({ amsUnits: Math.max(0, current.amsUnits - 1) }))}
-            />
-            <IconButton
-              icon={PlusIcon}
-              variant="secondary"
-              size="sm"
-              label="One AMS unit more"
-              disabled={units >= X2D.maxAmsUnits}
-              onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
-            />
-          </div>
-        </PrinterSection>
 
         <PrinterSection title="Staying dry">
           <Disclosure
