@@ -5,7 +5,7 @@
  * with (decision 0047).
  */
 import type { AttemptSettings } from "../attempts.ts";
-import type { SlicingSettings } from "./settings.ts";
+import type { SlicerId, SlicingSettings } from "./settings.ts";
 
 /** "slicer": a slicer's own file, kept as it is. "model": an `.stl` or plain `.3mf` that Spaghetti slices. */
 export type FileKind = "slicer" | "model";
@@ -52,9 +52,27 @@ export interface SliceSettings {
   slicing?: SlicingSettings;
   /** A 3MF's own settings: "own" for a project made for this printer, "some" (layer height, walls, infill, supports) for another printer's. */
   project?: "own" | "some";
-  /** The engine release (`/slicer/<version>/`) and OrcaSlicer's version that sliced it. */
+  /** The engine release (`/slicer/<version>/`) and OrcaSlicer's version: what sliced it, or whose presets it took. */
   engine: string;
   orca: string;
+  /**
+   * The slicer that made it (decision 0055): Spaghetti's own, or OrcaSlicer's engine. Absent on a slice from before
+   * there was a choice, which OrcaSlicer's engine made.
+   */
+  slicer?: SlicerId;
+  /** Spaghetti's own slicer's release (`/slicer/rust-<version>/`), when it made it. */
+  rust?: string;
+}
+
+/**
+ * Why OrcaSlicer's engine made a slice that Spaghetti's own slicer was asked for (decision 0055): what ours can't
+ * slice yet, in its words ("tree supports"), parts that may float (ours can't tell yet, and OrcaSlicer warns of
+ * them), ours not starting (its module didn't load), or ours failing on this model.
+ */
+export interface SliceFallback {
+  why: "unsupported" | "floating" | "unloaded" | "failed";
+  /** For "unsupported": what, as the rest of "can't slice with … yet". */
+  what?: string;
 }
 
 /** Orca's cautions worth a line on the card: "floating", parts that start in the air while supports are off. */
@@ -78,6 +96,12 @@ export interface FileSlice {
   fitScale?: number;
   /** For "memory": what ran out. A laptop or desktop finishes what a phone couldn't. */
   device?: "phone" | "computer";
+  /** OrcaSlicer's engine made it where Spaghetti's own slicer was asked for: why. */
+  fallback?: SliceFallback;
+  /** What Spaghetti's own slicer printed otherwise than asked, in its words: "Auto Lift printed as spiral lifts". */
+  notes?: string[];
+  /** How long the slicer took, in ms, on the device that sliced it: from the placed model to the packed file. */
+  ms?: number;
   /** When it was sliced or failed (epoch ms). */
   at: number;
 }

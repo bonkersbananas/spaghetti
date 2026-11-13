@@ -1,6 +1,6 @@
 import engine from "virtual:slicer-engine";
 import { plateName } from "@shared/attempts";
-import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
+import { DEFAULT_SLICER, DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { slicedName } from "@shared/slicing/files.ts";
 import { STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { engineSlices, filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
@@ -19,7 +19,9 @@ import {
   QUALITIES,
   type QualityId,
   qualityOf,
+  SLICERS,
   SLICING_NOZZLES,
+  type SlicerId,
   type SlicingDefaults,
   type SlicingFilament,
   type SlicingSettings,
@@ -29,11 +31,13 @@ import {
   SUPPORT_STYLES,
   type SupportStyle,
   sameSlicing,
+  slicerWords,
   slicingDefaultsOf,
   slicingFor,
   strengthOf,
   supportStyleWords,
 } from "@shared/slicing/settings.ts";
+import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { type SpoolLike, slotPlace } from "@shared/spools";
 import { Fragment, type ReactNode, useState } from "react";
@@ -510,7 +514,10 @@ function SettingRow({ label, children, wide }: { label: string; children: ReactN
   );
 }
 
-/** The rest, behind one tap: how supports are built, the brim, walls and infill by number, plate, nozzle, size. */
+/**
+ * The rest, behind one tap: how supports are built, the brim, walls and infill by number, plate, nozzle, size, and
+ * which slicer slices it (decision 0055).
+ */
 function MoreSettings({
   settings,
   set,
@@ -552,7 +559,9 @@ function MoreSettings({
     model ? plateName(settings.plate) : "",
     model ? `${settings.nozzle} mm nozzle` : "",
     model && settings.scale !== 100 ? `${settings.scale}%` : "",
+    settings.slicer !== DEFAULT_SLICER ? slicerWords(settings.slicer) : "",
   ].filter(Boolean);
+  const slicer = SLICERS.find((choice) => choice.id === settings.slicer);
   return (
     <Disclosure
       open={open}
@@ -683,6 +692,16 @@ function MoreSettings({
             </span>
           </SettingRow>
         )}
+        <SettingRow label="Slicer" wide>
+          <SegmentedControl<SlicerId>
+            label="Slicer"
+            labelHidden
+            options={SLICERS.map((choice) => ({ value: choice.id, label: choice.label }))}
+            value={settings.slicer}
+            onChange={(value) => set({ slicer: value })}
+          />
+          {slicer && <Effect name={slicer.label} effect={slicer.effect} />}
+        </SettingRow>
       </div>
     </Disclosure>
   );
@@ -698,24 +717,48 @@ function Effect({ name, effect }: { name: string; effect: string }) {
   );
 }
 
-/** The engine, its licence and source (as the AGPL asks), and the files to download. */
+/**
+ * Who sliced it, in how long, its licence and source (as the AGPL asks), and the files to download. The slicer is
+ * the one that made the slice there (decision 0055: OrcaSlicer's engine where it stepped in for ours, and why), or
+ * before there is one, the one asked for.
+ */
 export function SliceAbout({
   file,
   slice,
   sliced,
+  slicer,
 }: {
   file: { id: string; name: string; url: string };
   slice: FileSlice | null;
   /** The sliced file's address, once there is one. */
   sliced?: string;
+  /** The slicer asked for, said while nothing is sliced. */
+  slicer: SlicerId;
 }) {
+  const made = slice?.status === "sliced" ? slice : null;
+  const by = made ? slicerOf(made) : slicer;
+  const name = by === "spaghetti" ? slicerWords(by) : `OrcaSlicer${slice ? ` ${slice.settings.orca}` : ""}`;
+  const source = by === "spaghetti" ? engine.rust.source : engine.source;
+  const took = made?.ms ? ` in ${durationWords(made.ms)}` : "";
+  const notes = made && by === "spaghetti" ? (made.notes ?? []) : [];
   return (
     <div className="flex flex-col gap-3">
       <p className="text-caption text-ink-faint">
-        Sliced in this browser by OrcaSlicer{slice ? ` ${slice.settings.orca}` : ""}, free software under the AGPL.{" "}
-        {engine.source && (
+        {made?.fallback ? (
+          <>
+            Sliced in this browser by {name}
+            {took}: {fallbackWords(made.fallback)}. OrcaSlicer is free software under the AGPL.{" "}
+          </>
+        ) : (
+          <>
+            Sliced in this browser by {name}
+            {took}, free software under the AGPL.{" "}
+            {notes.map((note) => `${note.charAt(0).toUpperCase()}${note.slice(1)}. `).join("")}
+          </>
+        )}
+        {source && (
           <a
-            href={engine.source}
+            href={source}
             target="_blank"
             rel="noreferrer"
             className="focus-ring text-ink-soft hover:text-ink rounded-sm underline underline-offset-2"
@@ -755,7 +798,7 @@ export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsPr
       {...choices}
       lying={choices.lying ?? found}
       twoColumns
-      after={<SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />}
+      after={<SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />}
     />
   );
 }
@@ -780,7 +823,9 @@ export default function SliceSettingsSheet({
 }) {
   const isDesktop = useIsDesktop();
   const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], open && !choices.lying);
-  const about = <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />;
+  const about = (
+    <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />
+  );
   return (
     <Sheet
       open={open}
@@ -808,9 +853,9 @@ export function WorkspaceSlicing({
   value,
   onChange,
 }: {
-  /** The workspace's own, or none: Spaghetti's. */
+  /** The workspace's own, or none: Spaghetti's defaults. */
   value: SlicingDefaults | undefined;
-  /** Null goes back to Spaghetti's own. */
+  /** Null goes back to Spaghetti's defaults. */
   onChange: (next: SlicingDefaults | null) => void;
 }) {
   const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
@@ -819,7 +864,7 @@ export function WorkspaceSlicing({
   const reset = () => {
     const before = value;
     onChange(null);
-    if (before) toast.undo("Back to Spaghetti's own slicing", { onUndo: () => onChange(before) });
+    if (before) toast.undo("Back to Spaghetti's defaults", { onUndo: () => onChange(before) });
   };
   return (
     <div className="flex flex-col gap-7">
@@ -834,7 +879,7 @@ export function WorkspaceSlicing({
       {own && (
         <div className="-mt-3">
           <Button variant="quiet" size="sm" icon={UndoIcon} onClick={reset} className="-ml-3">
-            Back to Spaghetti's own
+            Back to Spaghetti's defaults
           </Button>
         </div>
       )}

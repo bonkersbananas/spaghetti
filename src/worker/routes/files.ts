@@ -11,6 +11,7 @@ import {
   ONE_REQUEST_FILE_BYTES,
 } from "../../shared/api.ts";
 import { isStlName, slicedName } from "../../shared/slicing/files.ts";
+import { SLICER_IDS } from "../../shared/slicing/settings.ts";
 import type { PreviousSlice } from "../../shared/slicing/types.ts";
 import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
 import {
@@ -70,6 +71,13 @@ const sliceSettings = z.object({
   orca: z.string().max(40),
   /** The settings it was sliced with, in people's words (decision 0047). */
   slicing: slicingSettings.optional(),
+  slicer: z
+    .enum(SLICER_IDS)
+    .optional()
+    .describe(
+      "The slicer that made it (decision 0055): spaghetti, Spaghetti's own; orca, OrcaSlicer's engine (also when absent).",
+    ),
+  rust: z.string().max(40).optional().describe("Spaghetti's own slicer's release, when it made it."),
 });
 
 /** A model's slicing (shared/slicing/types.ts FileSlice), as the browser that sliced it says. */
@@ -100,6 +108,27 @@ const fileSlice = z.object({
   volume: z.tuple([millimetres, millimetres, millimetres]).optional(),
   fitScale: z.number().int().min(1).max(1000).optional(),
   device: z.enum(["phone", "computer"]).optional(),
+  fallback: z
+    .object({
+      why: z.enum(["unsupported", "floating", "unloaded", "failed"]),
+      what: z.string().trim().min(1).max(80).optional(),
+    })
+    .optional()
+    .describe(
+      "OrcaSlicer's engine made it where Spaghetti's own slicer was asked for: what ours can't slice yet (unsupported, `what` in its words), parts that may float (which ours can't check yet), ours not starting, or failing on this model.",
+    ),
+  notes: z
+    .array(z.string().trim().min(1).max(120))
+    .max(8)
+    .optional()
+    .describe("What Spaghetti's own slicer printed otherwise than asked, in its words."),
+  ms: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 3_600_000)
+    .optional()
+    .describe("How long the slicer took on the device that sliced it, in ms."),
   at: z.number().int().min(0),
 });
 

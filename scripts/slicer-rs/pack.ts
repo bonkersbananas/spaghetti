@@ -37,7 +37,17 @@ const release = `${repository}/releases/tag/slicer-rs-v${version}`;
 const module = new Uint8Array(readFileSync(wasm));
 if (!WebAssembly.validate(module)) throw new Error(`${wasm} isn't a WebAssembly module`);
 const exports = WebAssembly.Module.exports(new WebAssembly.Module(module)).map((entry) => entry.name);
-for (const name of ["alloc", "dealloc", "setup", "add", "slice", "output_ptr", "output_len", "summary_ptr", "summary_len"]) {
+for (const name of [
+  "alloc",
+  "dealloc",
+  "setup",
+  "add",
+  "slice",
+  "output_ptr",
+  "output_len",
+  "summary_ptr",
+  "summary_len",
+]) {
   if (!exports.includes(name)) throw new Error(`${wasm} has no ${name} export`);
 }
 

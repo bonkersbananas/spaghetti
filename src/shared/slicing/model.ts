@@ -10,6 +10,7 @@ import {
   orientationWords,
   qualityWords,
   type SlicingSettings,
+  slicerWords,
   slicingFromRecord,
   strengthOf,
   strengthWords,
@@ -34,7 +35,7 @@ export function slicingAhead(file: Pick<AttemptFile, "slicing" | "slice">): Slic
 
 /**
  * What a change of settings is, in a few words to follow "Slicing with": "Fine", "supports where needed", "no
- * supports", "PETG black", "Strong", "80%"; "the new settings" when several changed.
+ * supports", "PETG black", "Strong", "80%", "Spaghetti's own slicer"; "the new settings" when several changed.
  */
 export function changeWords(before: SlicingSettings, after: SlicingSettings): string {
   const changed = changedSlicing(before, after);
@@ -64,6 +65,8 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
       return `${after.scale}%`;
     case "orientation":
       return orientationWords(after) || "the model as designed";
+    case "slicer":
+      return slicerWords(after.slicer);
     default:
       return "the new settings";
   }
