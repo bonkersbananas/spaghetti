@@ -13,27 +13,28 @@ const keep = rest.includes("--keep-placement");
 const models = rest.filter((a) => a !== "--keep-placement").map((m) => path.resolve(m));
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-const server = http
-  .createServer((req, res) => {
-    const url = decodeURIComponent(new URL(req.url, "http://x").pathname);
-    let file = null;
-    if (url === "/") file = path.join(here, "web/index.html");
-    else if (url.startsWith("/wasm/")) file = path.join(wasmDir, url.slice(6));
-    else if (url.startsWith("/model/")) file = models[Number(url.slice(7))];
-    if (!file || !fs.existsSync(file)) {
-      res.writeHead(404);
-      res.end();
-      return;
-    }
-    const type = file.endsWith(".wasm")
-      ? "application/wasm"
-      : file.endsWith(".html")
-        ? "text/html"
-        : "application/octet-stream";
-    res.writeHead(200, { "content-type": type, "cache-control": "no-store" });
-    fs.createReadStream(file).pipe(res);
-  })
-  .listen(0);
+// The page, the module and the models, each at its own fixed path: nothing else is served, and only to this machine.
+const files = new Map([
+  ["/", path.join(here, "web/index.html")],
+  ["/wasm/spaghetti_slicer.wasm", path.join(wasmDir, "spaghetti_slicer.wasm")],
+  ...models.map((model, i) => [`/model/${i}`, model]),
+]);
+const server = http.createServer((req, res) => {
+  const file = files.get(new URL(req.url, "http://127.0.0.1").pathname);
+  if (!file || !fs.existsSync(file)) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  const type = file.endsWith(".wasm")
+    ? "application/wasm"
+    : file.endsWith(".html")
+      ? "text/html"
+      : "application/octet-stream";
+  res.writeHead(200, { "content-type": type, "cache-control": "no-store" });
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const port = server.address().port;
 
 function browserRss() {
@@ -47,7 +48,7 @@ function browserRss() {
 const browser = await (which === "webkit" ? webkit : chromium).launch();
 for (let run = 0; run < Number(runsText); run++) {
   const page = await browser.newPage();
-  await page.goto(`http://localhost:${port}/`);
+  await page.goto(`http://127.0.0.1:${port}/`);
   const base = browserRss();
   const baseTotal = base.reduce((s, v) => s + v, 0);
   let peakTotal = baseTotal;

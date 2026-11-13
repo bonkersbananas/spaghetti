@@ -92,6 +92,7 @@ In order of what matters for a good print with the default profile. A small item
 | Crosshatch sparse infill; monotonic top, bottom and solid infill | Orca's look and strength for this profile | Medium |
 | One wall on top surfaces; bridge direction and anchoring; aligned seams | Smoother tops, stronger bridges, the seam in one line | Medium each |
 | Arc fitting, auto brim, lifts in arcs | Orca's defaults: smaller files and smoother curves, a brim for small footprints, faster lifts | Small each |
+| Refuse objects a project places off the plate, as Orca does | Kept where the file puts them, they are sliced there, and their G-code would run off the bed | Small |
 | Supports (normal and tree) | Models that need them: with the app's defaults Orca only warns, and slices without | Large |
 | More than one filament (AMS colours, prime tower, flushing) | Multicolour prints | Large |
 | Arachne walls | Not the profile's default (`wall_generator = classic`); for thin details | Large |

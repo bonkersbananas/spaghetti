@@ -139,9 +139,13 @@ fn read_model_file(text: &str, file: &str) -> HashMap<String, ObjectDef> {
     objects
 }
 
+/// Millimetres per unit of the model, from its `<model unit="…">` (millimetres when it says none).
 fn unit_scale(text: &str) -> f64 {
-    let head_end = text.find("<model").and_then(|s| text[s..].find('>').map(|e| s + e)).unwrap_or(0);
-    let head = text.find("<model").map(|s| &text[s..=head_end]).unwrap_or("");
+    // The model's tag, to its `>` (or to the end of a file cut short).
+    let head = text.find("<model").map_or("", |s| {
+        let rest = &text[s..];
+        rest.find('>').map_or(rest, |e| &rest[..=e])
+    });
     match attr(head, "unit") {
         Some("micron") => 0.001,
         Some("centimeter") => 10.0,
@@ -288,9 +292,17 @@ mod tests {
     use super::*;
 
     fn three_mf(model: &str) -> Vec<u8> {
+        project(model, None)
+    }
+
+    /// A 3MF, and a Bambu project's settings when given.
+    fn project(model: &str, settings: Option<&str>) -> Vec<u8> {
         let mut w = zip::Writer::default();
         w.add("[Content_Types].xml", b"<Types/>", 6);
         w.add("3D/3dmodel.model", model.as_bytes(), 6);
+        if let Some(settings) = settings {
+            w.add("Metadata/model_settings.config", settings.as_bytes(), 6);
+        }
         w.finish()
     }
 
@@ -315,5 +327,37 @@ mod tests {
         let empty = three_mf(r#"<model unit="millimeter"><resources/><build/></model>"#);
         assert_eq!(read(&empty).err(), Some(Error::NoModel));
         assert_eq!(read(b"solid nothing").err(), Some(Error::Unreadable));
+    }
+
+    #[test]
+    fn a_model_tag_that_never_closes_is_read_as_far_as_it_goes() {
+        assert_eq!(unit_scale(r#"<?xml version="1.0"?><model unit="inch""#), 25.4);
+        assert_eq!(unit_scale("<?xml version=\"1.0\"?><model"), 1.0);
+        assert_eq!(unit_scale("no model at all"), 1.0);
+        assert_eq!(read(&three_mf(r#"<?xml version="1.0"?><model unit="inch""#)).err(), Some(Error::NoModel));
+    }
+
+    /// Whatever a damaged file holds, reading it gives a model or an error, never a crash (which would end the
+    /// command line, or the whole WebAssembly module, since a release build aborts on a panic).
+    #[test]
+    fn a_file_cut_short_or_damaged_anywhere_is_never_a_crash() {
+        let model = format!(
+            r#"<?xml version="1.0"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model" name="Tetra">{TETRA}</object><object id="2" type="model"><components><component objectid="1" transform="1 0 0 0 1 0 0 0 1 5 0 0"/><component objectid="1"/></components></object></resources><build><item objectid="2" transform="1 0 0 0 1 0 0 0 1 1 2 3"/><item objectid="1"/></build></model>"#
+        );
+        let settings = r#"<?xml version="1.0"?><config><object id="2"><metadata key="name" value="Pair"/><part id="1" subtype="normal_part"><metadata key="name" value="Tetra"/></part></object><plate><metadata key="plater_id" value="1"/><metadata key="object_id" value="2"/></plate></config>"#;
+        assert_eq!(read(&project(&model, Some(settings))).expect("the whole file reads").meshes.len(), 1);
+        for cut in (0..=model.len()).filter(|&i| model.is_char_boundary(i)) {
+            let _ = read(&three_mf(&model[..cut]));
+        }
+        for cut in 0..=settings.len() {
+            let _ = read(&project(&model, Some(&settings[..cut])));
+        }
+        let file = project(&model, Some(settings));
+        for cut in 0..file.len() {
+            let _ = read(&file[..cut]);
+            let mut damaged = file.clone();
+            damaged[cut] ^= 0xa5;
+            let _ = read(&damaged);
+        }
     }
 }
