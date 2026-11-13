@@ -176,6 +176,23 @@ pub struct Layer {
     pub first: bool,
 }
 
+/// What a support layer prints: each path grown by half its line spacing, with square corners and flat ends, as
+/// Orca's `polygons_covered_by_spacing` measures it. Orca keeps the brim out of what an object's lowest support layer
+/// prints, wherever that layer is.
+pub fn cover(layer: &Layer) -> Shapes {
+    let mut out: Shapes = Vec::new();
+    for item in &layer.items {
+        let paths = match item {
+            Item::Path(path) => std::slice::from_ref(path),
+            Item::Fixed(group) => group.as_slice(),
+        };
+        for path in paths {
+            out.extend(geom::offset_open(&path.points, 0.5 * Settings::spacing(path.width, path.height)));
+        }
+    }
+    geom::union_all(&[&out])
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Kind {
     TopContact,

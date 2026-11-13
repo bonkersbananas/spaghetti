@@ -241,13 +241,9 @@ impl Plate {
         if let Some(first) = slices.first() {
             first_layers(&mut objects, first, &owners[0]);
         }
-        // Each object's brim, round its first layer as sliced.
-        let heights: Vec<f64> = objects.iter().map(|o| o.max[2] - o.min[2]).collect();
-        let brims = match (slices.first(), owners.first()) {
-            (Some(first), Some(owners)) => brim::brims(first, owners, &heights, settings),
-            _ => brim::Brims::default(),
-        };
-        let facts = first_layer_facts(&slices, &layers, &brims, settings);
+        // The first layer as sliced, for the brims once the supports are known.
+        let first = slices.first().cloned().unwrap_or_default();
+        let first_owners = owners.first().cloned().unwrap_or_default();
         // Each object's infill pattern is anchored at the middle of its bounding box, as Orca anchors it.
         let centres: Vec<(f64, f64)> = objects
             .iter()
@@ -261,6 +257,13 @@ impl Plate {
         } else {
             Vec::new()
         };
+        // Each object's brim, round its first layer as sliced and out of what the supports' lowest layers print.
+        let heights: Vec<f64> = objects.iter().map(|o| o.max[2] - o.min[2]).collect();
+        let support_cover: Vec<geom::Shapes> =
+            supports.iter().filter_map(|layers| layers.first()).map(support::cover).collect();
+        let support_cover = geom::union_all(&support_cover.iter().collect::<Vec<_>>());
+        let brims = brim::brims(&first, &first_owners, &heights, &support_cover, settings);
+        let facts = first_layer_facts(&first, &layers, &brims, settings);
         let facts = with_support(facts, &supports, settings);
         let schedule = schedule(&layers, &supports, objects.len());
         let t4 = now();
@@ -342,12 +345,14 @@ impl Plate {
 /// outline and brims grown by the skirt distance (Orca's first-layer hull takes in the skirt's, which it draws that
 /// far out even with no skirt loops), its area with the brims' lines, the print's height and the plate.
 fn first_layer_facts(
-    slices: &[geom::Shapes],
+    first: &geom::Shapes,
     layers: &section::Layers,
     brims: &brim::Brims,
     s: &Settings,
 ) -> bambu::Facts {
-    let Some(first) = slices.first() else { return bambu::Facts::default() };
+    if layers.top.is_empty() {
+        return bambu::Facts::default();
+    }
     let margin = s.skirt_distance;
     // The brims count as part of the first layer, as Orca counts them.
     let b = [geom::bbox(first), geom::bbox(&brims.area)]

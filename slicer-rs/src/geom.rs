@@ -213,6 +213,114 @@ pub fn offset_square(shapes: &Shapes, delta: f64) -> Shapes {
     union_contours(&paths)
 }
 
+/// What an open path covers grown `delta` mm to both sides, with square joins and flat ends: Clipper2's offset of an
+/// open path (`ClipperOffset::OffsetOpenPath`, `EndType::Butt`, `JoinType::Square`), which Orca 2.5's
+/// `offset(Polyline, delta)` makes, its loops resolved with positive fill. A path that ends where it starts covers
+/// the whole ring.
+pub fn offset_open(points: &[Pt], delta: f64) -> Shapes {
+    let d = (delta * SCALE).abs();
+    if d < 0.5 || points.is_empty() {
+        return Vec::new();
+    }
+    // A point closer than Clipper's shortest edge to the last one kept goes (Orca's `append_offset_path`).
+    let shortest2 = (d * 0.005) * (d * 0.005);
+    let mut p: Vec<Pt> = Vec::with_capacity(points.len());
+    for &q in points {
+        let close = p.last().is_some_and(|l: &Pt| {
+            let (dx, dy) = ((q.x - l.x) as f64, (q.y - l.y) as f64);
+            dx * dx + dy * dy < shortest2
+        });
+        if !close {
+            p.push(q);
+        }
+    }
+    let at = |x: f64, y: f64| pt(x.round() as i32, y.round() as i32);
+    let n = p.len();
+    if n == 1 {
+        if d < 1.0 {
+            return Vec::new();
+        }
+        let r = d.ceil() as i32;
+        let (x, y) = (p[0].x, p[0].y);
+        return union_contours(&[vec![pt(x - r, y - r), pt(x + r, y - r), pt(x + r, y + r), pt(x - r, y + r)]]);
+    }
+    let unit_normal = |a: Pt, b: Pt| -> (f64, f64) {
+        if a == b {
+            return (0.0, 0.0);
+        }
+        let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+        let f = 1.0 / (dx * dx + dy * dy).sqrt();
+        (dy * f, -dx * f)
+    };
+    let mut norms: Vec<(f64, f64)> = (0..n).map(|i| unit_normal(p[i], p[(i + 1) % n])).collect();
+    let mut out: Vec<Pt> = Vec::with_capacity(4 * n);
+    // Clipper2's `OffsetPoint` with square joins: the corner at `j`, coming from `k`.
+    let offset_point = |out: &mut Vec<Pt>, norms: &[(f64, f64)], j: usize, k: usize| {
+        if p[j] == p[k] {
+            return;
+        }
+        let (nj, nk) = (norms[j], norms[k]);
+        let sin_a = (nj.1 * nk.0 - nk.1 * nj.0).clamp(-1.0, 1.0);
+        let cos_a = nj.0 * nk.0 + nj.1 * nk.1;
+        let (x, y) = (p[j].x as f64, p[j].y as f64);
+        if cos_a > -0.999 && sin_a * d < 0.0 {
+            // Concave: three points, whose loop the union takes out.
+            out.push(at(x + nk.0 * d, y + nk.1 * d));
+            out.push(p[j]);
+            out.push(at(x + nj.0 * d, y + nj.1 * d));
+        } else if cos_a > 0.999 {
+            // Nearly straight on: a mitre.
+            let q = d / (cos_a + 1.0);
+            out.push(at(x + (nk.0 + nj.0) * q, y + (nk.1 + nj.1) * q));
+        } else {
+            // Squared off `d` out from the corner (`DoSquare`).
+            let (ax, ay) = (nj.1 - nk.1, nk.0 - nj.0);
+            let h = (ax * ax + ay * ay).sqrt();
+            let v = if h < 0.001 { (0.0, 0.0) } else { (ax / h, ay / h) };
+            let q = (x + d * v.0, y + d * v.1);
+            let p1 = (q.0 + d * v.1, q.1 - d * v.0);
+            let p2 = (q.0 - d * v.1, q.1 + d * v.0);
+            let p3 = (p[k].x as f64 + nk.0 * d, p[k].y as f64 + nk.1 * d);
+            let p4 = (x + nk.0 * d, y + nk.1 * d);
+            let (dx1, dy1, dx2, dy2) = (p2.0 - p1.0, p2.1 - p1.1, p4.0 - p3.0, p4.1 - p3.1);
+            let det = dy1 * dx2 - dy2 * dx1;
+            let ip = if det == 0.0 {
+                q
+            } else {
+                let t = ((p1.0 - p3.0) * dy2 - (p1.1 - p3.1) * dx2) / det;
+                if t <= 0.0 {
+                    p1
+                } else if t >= 1.0 {
+                    p2
+                } else {
+                    (p1.0 + t * dx1, p1.1 + t * dy1)
+                }
+            };
+            out.push(at(ip.0, ip.1));
+            out.push(at(q.0 + (q.0 - ip.0), q.1 + (q.1 - ip.1)));
+        }
+    };
+    // The start's flat end, one side forward, the end's flat end, the other side back (counter-clockwise).
+    let (x0, y0) = (p[0].x as f64, p[0].y as f64);
+    out.push(at(x0 - d * norms[0].0, y0 - d * norms[0].1));
+    out.push(at(x0 + d * norms[0].0, y0 + d * norms[0].1));
+    let last = n - 1;
+    for j in 1..last {
+        offset_point(&mut out, &norms, j, j - 1);
+    }
+    for i in (1..=last).rev() {
+        norms[i] = (-norms[i - 1].0, -norms[i - 1].1);
+    }
+    norms[0] = norms[last];
+    let (xl, yl) = (p[last].x as f64, p[last].y as f64);
+    out.push(at(xl - d * norms[last].0, yl - d * norms[last].1));
+    out.push(at(xl + d * norms[last].0, yl + d * norms[last].1));
+    for j in (1..last).rev() {
+        offset_point(&mut out, &norms, j, j + 1);
+    }
+    union_contours(&[out])
+}
+
 /// Shrinks then grows back: drops every part thinner than `2 × d`.
 pub fn opening(shapes: &Shapes, d: f64) -> Shapes {
     offset(&offset(shapes, -d), d)
@@ -685,6 +793,29 @@ mod tests {
             simplify_line(&square, 0.012),
             vec![mm(0.0, 0.0), mm(2.0, 0.0), mm(2.0, 2.0), mm(0.0, 2.0), mm(0.0, 0.0)]
         );
+    }
+
+    #[test]
+    fn an_open_path_covers_a_band_with_flat_ends_and_squared_corners() {
+        // A straight line: a rectangle, flat at both ends.
+        let band = offset_open(&[mm(0.0, 0.0), mm(10.0, 0.0)], 0.2);
+        assert!((area_mm2(&band) - 4.0).abs() < 1e-6, "{}", area_mm2(&band));
+        assert_eq!(bbox(&band), Some([0, sc(-0.2), sc(10.0), sc(0.2)]));
+        // A turn: both arms, the corner outside squared off 0.2 mm out from it (a corner of 0.2² less a triangle
+        // whose legs are 0.4 − 0.2·√2).
+        let leg = 0.4 - 0.2 * 2f64.sqrt();
+        let corner = 0.04 - leg * leg / 2.0;
+        let band = offset_open(&[mm(0.0, 0.0), mm(10.0, 0.0), mm(10.0, 10.0)], 0.2);
+        assert!((area_mm2(&band) - (8.0 - 0.04 + corner)).abs() < 1e-3, "{}", area_mm2(&band));
+        // A loop back to its start: a ring, flat where it starts and ends.
+        let square = [mm(0.0, 0.0), mm(10.0, 0.0), mm(10.0, 10.0), mm(0.0, 10.0), mm(0.0, 0.0)];
+        let ring = offset_open(&square, 0.2);
+        assert_eq!(ring.len(), 1);
+        assert_eq!(ring[0].len(), 2, "a ring with its hole");
+        assert!((area_mm2(&ring) - (16.0 - 0.16 + 3.0 * corner)).abs() < 1e-3, "{}", area_mm2(&ring));
+        // A point: a square round it; nothing for no width.
+        assert!((area_mm2(&offset_open(&[mm(1.0, 1.0)], 0.2)) - 0.16).abs() < 1e-6);
+        assert!(offset_open(&[mm(0.0, 0.0), mm(1.0, 0.0)], 0.0).is_empty());
     }
 
     #[test]

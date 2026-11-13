@@ -6,9 +6,9 @@
 //! printer moves and with how far the material curls, up to 18 mm, and anything under 5 mm is dropped. A tall
 //! object's island too thin to hold on its own (less area than 1.1 mm times its outline) gets a 5 mm brim anyway, as
 //! wide at most as the island. A brim people turn on is the process's width round every island. Either is a band
-//! from `brim_object_gap` off the island's outline, cut where another object (or the edge of a hole in one) is and
-//! where an earlier object's brim already lies, and dropped where it would not touch its object. Loops fill it a
-//! line apart from the outside in, an even number of them.
+//! from `brim_object_gap` off the island's outline, cut where another object (or the edge of a hole in one) is, where
+//! an earlier object's brim already lies and where the supports' lowest layers print, and dropped where it would not
+//! touch its object. Loops fill it a line apart from the outside in, an even number of them.
 
 use crate::config::Settings;
 use crate::geom::{self, Contour, Pt, Shape, Shapes};
@@ -119,8 +119,9 @@ impl Brims {
 }
 
 /// Each object's brim. `first` is the first layer's islands as sliced (before elephant's foot pulls them in, as Orca
-/// keeps them), `owners` the object each belongs to, `heights` each object's height (mm).
-pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], s: &Settings) -> Brims {
+/// keeps them), `owners` the object each belongs to, `heights` each object's height (mm), `support` what the
+/// supports' lowest layers print (`support::cover`), where no brim goes.
+pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, s: &Settings) -> Brims {
     let objects = heights.len();
     let mut out = Brims { loops: vec![Vec::new(); objects], area: Vec::new() };
     let auto = s.brim_type == "auto_brim";
@@ -182,9 +183,10 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], s: &Settings) -> B
     if bands.iter().all(Vec::is_empty) {
         return out;
     }
-    // Near each band: every object's islands grown by the gap, where no brim may go nor one need reach to stay, and
-    // a line's width in from the edge of each of their holes, where no brim may go either. What lies further off
-    // can't change a boolean with the band (`geom::local`), so only the islands near it are grown.
+    // Near each band: every object's islands grown by the gap, where no brim may go nor one need reach to stay, a
+    // line's width in from the edge of each of their holes, and what the supports' lowest layers print, where no brim
+    // may go either. What lies further off can't change a boolean with the band (`geom::local`), so only the islands
+    // near it are grown.
     let reach = 2.0 * spacing;
     let (bx, by) = (geom::sc(s.bed[0]), geom::sc(s.bed[1]));
     let bed: Shapes = vec![vec![vec![geom::pt(0, 0), geom::pt(bx, 0), geom::pt(bx, by), geom::pt(0, by)]]];
@@ -202,6 +204,7 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], s: &Settings) -> B
             let area: Shapes = vec![vec![ring]];
             keep_out.extend(geom::difference(&area, &geom::offset(&area, -spacing)));
         }
+        keep_out.extend(geom::local(support, b));
         // Nothing where another island or a hole's edge is, nor off the plate.
         *band = geom::intersection(&geom::difference(&geom::union_all(&[&*band]), &keep_out), &bed);
     }
@@ -496,11 +499,11 @@ mod tests {
     fn a_squat_object_gets_no_auto_brim_and_a_tall_thin_one_does() {
         let s = settings("auto_brim");
         // A 40 mm square 20 mm tall stands on its own.
-        let squat = brims(&vec![rect(100.0, 100.0, 40.0, 40.0)], &[0], &[20.0], &s);
+        let squat = brims(&vec![rect(100.0, 100.0, 40.0, 40.0)], &[0], &[20.0], &Vec::new(), &s);
         assert!(squat.loops[0].is_empty() && squat.area.is_empty());
         // A 5 × 20 mm footprint 60 mm tall bends easily across its short side: Orca's formula gives it 13.5 mm of
         // brim at the X2D's fastest speed (300 mm/s), which comes to 28 lines.
-        let tall = brims(&vec![rect(100.0, 100.0, 5.0, 20.0)], &[0], &[60.0], &s).loops;
+        let tall = brims(&vec![rect(100.0, 100.0, 5.0, 20.0)], &[0], &[60.0], &Vec::new(), &s).loops;
         let spacing = Settings::spacing(s.first_layer_width, s.first_layer_height);
         assert_eq!(tall[0].len(), 28);
         let widest = tall[0]
@@ -511,14 +514,14 @@ mod tests {
         let outermost = s.brim_object_gap + 28.0 * spacing - spacing / 2.0;
         assert!((widest - (5.0 + 2.0 * outermost)).abs() < 0.01, "{widest} mm across");
         // Twice as tall, it gets the most there is, 18 mm, no wider than the island is long.
-        let taller = brims(&vec![rect(100.0, 100.0, 5.0, 20.0)], &[0], &[120.0], &s).loops;
+        let taller = brims(&vec![rect(100.0, 100.0, 5.0, 20.0)], &[0], &[120.0], &Vec::new(), &s).loops;
         assert_eq!(taller[0].len(), 2 * (18.0 / spacing / 2.0).floor() as usize);
     }
 
     #[test]
     fn a_brim_people_turn_on_rings_every_island_from_the_outside_in() {
         let s = settings("outer_only");
-        let out = brims(&vec![rect(100.0, 100.0, 30.0, 30.0)], &[0], &[10.0], &s).loops;
+        let out = brims(&vec![rect(100.0, 100.0, 30.0, 30.0)], &[0], &[10.0], &Vec::new(), &s).loops;
         let spacing = Settings::spacing(s.first_layer_width, s.first_layer_height);
         let lines = (s.brim_width / spacing / 2.0).floor() as usize * 2;
         assert_eq!(out[0].len(), lines);
@@ -540,7 +543,7 @@ mod tests {
         let mut hole = rect(113.0, 113.0, 14.0, 14.0).remove(0);
         hole.reverse();
         frame.push(hole);
-        let out = brims(&vec![frame, rect(118.0, 118.0, 4.0, 4.0)], &[0, 1], &[10.0, 10.0], &s).loops;
+        let out = brims(&vec![frame, rect(118.0, 118.0, 4.0, 4.0)], &[0, 1], &[10.0, 10.0], &Vec::new(), &s).loops;
         assert!(!out[0].is_empty() && !out[1].is_empty());
         let (lo, hi) = (113.0 + spacing + spacing / 2.0 - 0.01, 127.0 - spacing - spacing / 2.0 + 0.01);
         for q in out[1].iter().flatten() {
@@ -562,7 +565,7 @@ mod tests {
         let s = settings("outer_only");
         // Two blocks 4 mm apart: neither's brim reaches the other block, and they don't overlap.
         let first = vec![rect(100.0, 100.0, 20.0, 20.0), rect(124.0, 100.0, 20.0, 20.0)];
-        let out = brims(&first, &[0, 1], &[10.0, 10.0], &s).loops;
+        let out = brims(&first, &[0, 1], &[10.0, 10.0], &Vec::new(), &s).loops;
         let gap = s.brim_object_gap;
         for (o, x0, x1) in [(0, 124.0, 144.0), (1, 100.0, 120.0)] {
             for q in out[o].iter().flatten() {
