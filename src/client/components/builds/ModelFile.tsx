@@ -586,6 +586,10 @@ export default function ModelFileCard({
   const settings = job && Object.keys(job.chosen).length ? slicingFor(job.chosen, kept) : kept;
   const target = owner && !file.pending ? owner : undefined;
   useWarmSoon(() => (target ? loadSettings() : Promise.resolve()));
+  // Ordered for the filament it has when they arrive, and kept so: picking a recipe for another filament doesn't
+  // move its chip to the front under the finger.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: ordered once for each list of recipes.
+  const offered = useMemo(() => recipesFor(recipes, settings.filaments[0] ?? { material: "" }), [recipes]);
 
   /** Slices it as it is set up now, over the slice there (kept for an undo) if it has one. */
   const sliceNow = () => {
@@ -627,7 +631,7 @@ export default function ModelFileCard({
     plates: setup.plates,
     slice: file.slice,
     scalable: isStlName(file.name),
-    recipes: recipesFor(recipes, settings.filaments[0] ?? { material: "" }),
+    recipes: offered,
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
   };
   // Its settings: on desktop a popover hanging below the card, which stays in view, on phones a sheet (but not over

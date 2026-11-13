@@ -84,7 +84,7 @@ describe("slicing with a recipe", () => {
     ]);
   });
 
-  it("offers the recipes for the model's filament first, then the rest, newest first, six at most", () => {
+  it("offers the recipes for the model's filament first, then its material's, then the rest, six at most", () => {
     const recipe = (id: string, material: string, createdAt: number, finish: string | null = null) => ({
       id,
       name: id,
@@ -100,14 +100,10 @@ describe("slicing with a recipe", () => {
       recipe("pla-new", "PLA", 3),
       ...[6, 7, 8, 9].map((at) => recipe(`asa-${at}`, "ASA", at)),
     ];
-    expect(recipesFor(recipes, orange).map((r) => r.id)).toEqual([
-      "pla-new",
-      "pla-old",
-      "asa-9",
-      "asa-8",
-      "asa-7",
-      "asa-6",
-    ]);
+    const offered = recipesFor(recipes, orange);
+    // Its filament's first, then the same material in another finish, then the rest; each newest first.
+    expect(offered.map((r) => r.id)).toEqual(["pla-new", "pla-old", "silk", "asa-9", "asa-8", "asa-7"]);
+    expect(offered.map((r) => r.fits)).toEqual([true, true, false, false, false, false]);
   });
 });
 

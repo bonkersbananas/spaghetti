@@ -81,7 +81,10 @@ const TOO_BIG: FileSlice = {
   volume: [256, 256, 261],
   fitScale: 78,
 };
-/** Two recipes to slice with: one that kept a slice's settings, one from a slicer's own file. */
+/**
+ * Recipes to slice with, as recipesFor offers them: two for the model's filament (one that kept a slice's settings,
+ * one from a slicer's own file), then one for another (set apart on a phone).
+ */
 const RECIPES = [
   {
     id: "knobs",
@@ -92,6 +95,7 @@ const RECIPES = [
     settings: {},
     slicing: { ...SETTINGS, filaments: [{ material: "PLA", finish: "basic" }] },
     createdAt: 2,
+    fits: true,
   },
   {
     id: "bins",
@@ -101,6 +105,17 @@ const RECIPES = [
     finish: null,
     settings: { layerHeight: 0.24, wallLoops: 2, infillDensity: 10, brim: false },
     createdAt: 1,
+    fits: true,
+  },
+  {
+    id: "petg",
+    name: "PETG, dried and 245 °C",
+    note: "Dried for 6 h first, then 245 °C: no strings.",
+    material: "PETG",
+    finish: null,
+    settings: { layerHeight: 0.2, nozzleTemperature: 245 },
+    createdAt: 3,
+    fits: false,
   },
 ];
 const CHANGE = { before: { minutes: 72, grams: 14 }, after: { minutes: 48, grams: 11.2 } };

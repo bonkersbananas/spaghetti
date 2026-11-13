@@ -107,15 +107,19 @@ export function recipeSlicing(
 }
 
 /**
- * The recipes offered for a model, at most six: those for its filament first (the same material, and finish where
- * both say one), then the rest, newest first.
+ * The recipes offered for a model, at most six: those for its filament first (`fits`: the same material, and finish
+ * where both say one), then those for the same material in another finish (Silk PLA for PLA Basic), then the rest,
+ * each newest first.
  */
 export function recipesFor<R extends SlicingRecipe & { createdAt: number }>(
   recipes: readonly R[],
   filament: Pick<SlicingFilament, "material" | "finish">,
-): R[] {
+): (R & { fits: boolean })[] {
   const kind = materialKey(filament.material);
-  const fits = (recipe: R) =>
-    !!kind && materialKey(recipe.material) === kind && sameFinish(recipe.finish, filament.finish);
-  return [...recipes].sort((a, b) => Number(fits(b)) - Number(fits(a)) || b.createdAt - a.createdAt).slice(0, 6);
+  const rank = (recipe: R) =>
+    !kind || materialKey(recipe.material) !== kind ? 0 : sameFinish(recipe.finish, filament.finish) ? 2 : 1;
+  return [...recipes]
+    .sort((a, b) => rank(b) - rank(a) || b.createdAt - a.createdAt)
+    .slice(0, 6)
+    .map((recipe) => ({ ...recipe, fits: rank(recipe) === 2 }));
 }

@@ -34,19 +34,20 @@ import {
 } from "@shared/slicing/settings.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { type SpoolLike, slotPlace } from "@shared/spools";
-import { type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { ChipRow } from "@/components/ui/FilterChips";
-import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon } from "@/components/ui/icons";
+import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
+import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Stepper } from "@/components/ui/Stepper";
+import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
 /**
@@ -77,9 +78,12 @@ export interface SlicingChoicesProps {
    * the filament, plate, nozzle or size, which are each model's.
    */
   scope?: "model" | "workspace";
-  /** Recipes to slice with (decision 0050), those for its filament first. */
-  recipes?: readonly (SlicingRecipe & { id: string; name: string })[];
+  /** Recipes to slice with (decision 0050), those for its filament (`fits`) first. */
+  recipes?: readonly OfferedRecipe[];
 }
+
+/** A recipe as a model's settings offer it: `fits` when it is for the filament the model had (recipesFor). */
+type OfferedRecipe = SlicingRecipe & { id: string; name: string; note?: string; fits?: boolean };
 
 /** The choices themselves, for a model's settings or the workspace's defaults (and the styleguide). */
 export function SlicingChoices({
@@ -182,8 +186,9 @@ export function SlicingChoices({
 }
 
 /**
- * Slicing with a recipe (decision 0050): what worked before, in one tap, over the model's settings. The one it is
- * sliced with now is picked; its note says why it is the way it is.
+ * Slicing with a recipe (decision 0050): what worked before, in one tap, over the model's settings. Those for the
+ * model's filament come first, set apart on a phone; the one it is sliced with now is picked, and its note says why
+ * it is the way it is (the chip already says its name), with the filament when the recipe brought another.
  */
 function RecipeChoice({
   settings,
@@ -193,33 +198,41 @@ function RecipeChoice({
 }: {
   settings: SlicingSettings;
   spools: readonly SpoolLike[];
-  recipes: readonly (SlicingRecipe & { id: string; name: string; note?: string })[];
+  recipes: readonly OfferedRecipe[];
   onChange: (next: SlicingSettings) => void;
 }) {
   const picked = recipes.find((recipe) => sameSlicing(settings, recipeSlicing(recipe, settings, spools)));
+  const [first] = settings.filaments;
   return (
     <div className="flex flex-col gap-2.5">
       <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">
         From a recipe
       </span>
       <ChipRow label="Slice with a recipe">
-        {recipes.map((recipe) => (
-          <ToggleChip
-            key={recipe.id}
-            icon={RecipeIcon}
-            tone="semolina"
-            selected={recipe === picked}
-            onClick={() => onChange(recipeSlicing(recipe, settings, spools))}
-          >
-            {recipe.name}
-          </ToggleChip>
+        {recipes.map((recipe, index) => (
+          <Fragment key={recipe.id}>
+            {index > 0 && recipes[index - 1]?.fits && !recipe.fits && <ChipDivider />}
+            <ToggleChip
+              icon={RecipeIcon}
+              tone="semolina"
+              selected={recipe === picked}
+              onClick={() => onChange(recipeSlicing(recipe, settings, spools))}
+            >
+              {recipe.name}
+            </ToggleChip>
+          </Fragment>
         ))}
       </ChipRow>
-      <p className="text-small text-ink-soft">
+      <p className="text-small text-ink-soft text-pretty">
         {picked ? (
           <>
-            <span className="text-ink font-semibold">{picked.name}</span>
-            {picked.note ? ` · ${picked.note}` : " · what worked before"}
+            {picked.note || "What worked before."}
+            {picked.fits === false && first && (
+              <>
+                {" "}
+                In <span className="text-ink font-semibold">{filamentWords(first)}</span>.
+              </>
+            )}
           </>
         ) : (
           "What worked before, in one tap."
@@ -617,6 +630,12 @@ export function WorkspaceSlicing({
 }) {
   const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
   const own = !!value && !sameSlicing(settings, DEFAULT_SLICING);
+  // Going back throws away what was set here: the toast takes it back (never lose work).
+  const reset = () => {
+    const before = value;
+    onChange(null);
+    if (before) toast.undo("Back to Spaghetti's own slicing", { onUndo: () => onChange(before) });
+  };
   return (
     <div className="flex flex-col gap-7">
       <SlicingChoices
@@ -629,12 +648,11 @@ export function WorkspaceSlicing({
       />
       {/* The way back sits beside the caption where there is room for both, and under it on a phone. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p className="text-small text-ink-faint grow basis-72">
-          The filament is the Pantry's first loaded spool, the plate and nozzle come from this page. A model keeps its
-          own once you change them on its card.
+        <p className="text-small text-ink-faint grow basis-72 text-pretty">
+          The filament comes from the Pantry's first loaded spool, the plate and nozzle from this page.
         </p>
         {own && (
-          <Button variant="quiet" size="sm" onClick={() => onChange(null)} className="-ml-3">
+          <Button variant="quiet" size="sm" icon={UndoIcon} onClick={reset} className="-ml-3">
             Back to Spaghetti's own
           </Button>
         )}

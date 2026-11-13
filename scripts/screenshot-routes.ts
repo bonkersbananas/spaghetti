@@ -494,6 +494,31 @@ async function closeSliceSettings(page: Page) {
   await removeModelItems(page);
 }
 
+/** The Printer page's slicing defaults (decision 0050). */
+const slicingDefaults = (page: Page) => page.locator("section[aria-labelledby=printer-slicing]");
+
+/** The slicing defaults, unfolded, their tiles in place. Returns the section. */
+async function openSlicingDefaults(page: Page) {
+  const section = slicingDefaults(page);
+  await section.getByRole("button", { name: /^How new models are sliced/ }).click();
+  await section.getByRole("group", { name: "Quality" }).waitFor();
+  await settleSection(page, section);
+  return section;
+}
+
+/**
+ * A section's opening and fades finished (the shots' fixed clock starts Motion's late, which would shoot them
+ * half-open or see-through), and no focus ring where a click left one: a tap leaves none.
+ */
+async function settleSection(page: Page, section: Locator) {
+  await page.waitForTimeout(100);
+  await section.evaluate((element) => {
+    for (const animation of element.getAnimations({ subtree: true })) animation.finish();
+  });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.waitForTimeout(400);
+}
+
 /** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
 const modelItems: string[] = [];
 
@@ -1547,6 +1572,20 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const settings = await openSliceSettings(page);
       await settings.getByRole("button", { name: "PLA bins, fast and square" }).click();
+      // In the sheet's result on a phone, on the card below the popover on desktop.
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A recipe for another filament (PETG for a PLA model): set apart from those for its own on a phone, and the
+    // line under them says the filament it brought.
+    name: "slice-settings-recipe-other",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      await settings.getByRole("button", { name: "PETG, dried and 245 °C" }).click();
       // In the sheet's result on a phone, on the card below the popover on desktop.
       await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
     },
@@ -3099,18 +3138,30 @@ export const shots: Shot[] = [
     // Upkeep and the slicing defaults load once the page is idle: wait for them, or the shot shows their skeletons.
     prepare: async (page) => {
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
-      await page.locator("section[aria-labelledby=printer-slicing]").getByRole("group", { name: "Quality" }).waitFor();
+      await slicingDefaults(page)
+        .getByRole("button", { name: /^How new models are sliced/ })
+        .waitFor();
     },
   },
   {
-    // The workspace's slicing defaults (decision 0050): how a model nobody set up is sliced here, the same choices
-    // as a model's without what is each model's own.
+    // The workspace's slicing defaults (decision 0050), folded as "Staying dry" is: what they are, in the model
+    // card's words.
+    name: "printer-slicing-folded",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      await slicingDefaults(page)
+        .getByRole("button", { name: /^How new models are sliced/ })
+        .waitFor();
+    },
+  },
+  {
+    // Open: how a model nobody set up is sliced here, the same choices as a model's without what is each model's own.
     name: "printer-slicing",
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
-      await page.locator("section[aria-labelledby=printer-slicing]").getByRole("group", { name: "Quality" }).waitFor();
-      await page.waitForTimeout(300);
+      await openSlicingDefaults(page);
     },
   },
   {
@@ -3119,19 +3170,11 @@ export const shots: Shot[] = [
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
-      const section = page.locator("section[aria-labelledby=printer-slicing]");
+      const section = await openSlicingDefaults(page);
       await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
       await section.getByRole("button", { name: "Back to Spaghetti's own" }).waitFor();
-      const saved = section.getByText("Saved");
-      await saved.waitFor();
-      // The shots' fixed clock starts Motion's fade late: finish it, or "Saved" is shot see-through.
-      await saved.evaluate(async (status) => {
-        const shown = status.closest("span[aria-live]") ?? status;
-        for (const animation of shown.getAnimations({ subtree: true })) animation.finish();
-      });
-      // A tap leaves no focus ring; the click did.
-      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-      await page.waitForTimeout(300);
+      await section.getByText("Saved").waitFor();
+      await settleSection(page, section);
     },
     // The shots after this one slice with Spaghetti's own again.
     cleanup: async (page) => {

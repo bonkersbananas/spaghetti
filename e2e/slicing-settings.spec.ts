@@ -161,6 +161,10 @@ test("the Printer page's defaults are how a model nobody set up is sliced, until
   try {
     await page.goto("/printer");
     const section = page.locator("section[aria-labelledby=printer-slicing]");
+    // Folded, they say what they are in the model card's words.
+    const fold = section.getByRole("button", { name: /^How new models are sliced/ });
+    await expect(fold).toContainText("Standard quality");
+    await fold.click();
     const quality = section.getByRole("group", { name: "Quality" });
     await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
     await quality.getByRole("radio", { name: /^Fine/ }).click();
@@ -172,9 +176,15 @@ test("the Printer page's defaults are how a model nobody set up is sliced, until
     expect((await fileOf(page, id)).slice.settings.slicing.layerHeight).toBe(0.12);
 
     await page.goto("/printer");
+    await expect(fold).toContainText("Fine");
+    await fold.click();
     await section.getByRole("button", { name: "Back to Spaghetti's own" }).click();
     await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
     await expect.poll(defaults).toBeUndefined();
+    // Going back throws away what was set: the toast's Undo brings it back.
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(quality.getByRole("radio", { name: /^Fine/ })).toBeChecked();
+    await expect.poll(async () => (await defaults())?.layerHeight).toBe(0.12);
   } finally {
     // The worker's database is shared with the specs after this one.
     await page.request.put("/api/printer", { headers, data: { slicing: null } });
