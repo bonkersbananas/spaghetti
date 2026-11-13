@@ -107,11 +107,12 @@ pub extern "C" fn slice(flags: u32) -> u32 {
         Ok(out) => {
             let t = &out.timings;
             let summary = format!(
-                r#"{{"triangles":{},"timings":{{"read":{:.3},"slice":{:.3},"regions":{:.3},"toolpaths":{:.3},"gcode":{:.3},"thumbnail":{:.3},"pack":{:.3},"total":{:.3}}},"gcodeBytes":{},"fallbacks":[{}],"stats":{}}}"#,
+                r#"{{"triangles":{},"timings":{{"read":{:.3},"slice":{:.3},"regions":{:.3},"supports":{:.3},"toolpaths":{:.3},"gcode":{:.3},"thumbnail":{:.3},"pack":{:.3},"total":{:.3}}},"gcodeBytes":{},"fallbacks":[{}],"stats":{}}}"#,
                 out.triangles,
                 t.read,
                 t.slice,
                 t.regions,
+                t.supports,
                 t.toolpaths,
                 t.gcode,
                 t.thumbnail,

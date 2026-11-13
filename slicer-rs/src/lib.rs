@@ -121,6 +121,8 @@ pub struct Timings {
     pub read: f64,
     pub slice: f64,
     pub regions: f64,
+    /// Normal supports, when the settings ask for them, and the G-code's layers with theirs.
+    pub supports: f64,
     /// Each layer's paths in order, its moves, their timing and its G-code text.
     pub toolpaths: f64,
     /// The layers' G-code into one file, with the header and the progress marks.
@@ -253,6 +255,7 @@ impl Plate {
             .collect();
         let regions = region::regions(&slices, &owners, &layers, &centres, settings);
         drop((slices, owners));
+        let t3 = now();
         let supports = if settings.enable_support {
             object_supports(&regions, &layers, &centres, objects.len(), settings)
         } else {
@@ -260,7 +263,7 @@ impl Plate {
         };
         let facts = with_support(facts, &supports, settings);
         let schedule = schedule(&layers, &supports, objects.len());
-        let t3 = now();
+        let t4 = now();
         let frame = bambu::Frame::new(settings.profile.clone(), &facts);
         let zs: Vec<f64> = schedule.iter().map(|slot| slot.z).collect();
         let photos = timelapse_spots(&objects, &zs, settings);
@@ -303,17 +306,17 @@ impl Plate {
         });
         let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         drop(regions);
-        let t4 = now();
-        let g = gcode::assemble(texts, &job);
         let t5 = now();
+        let g = gcode::assemble(texts, &job);
+        let t6 = now();
         let thumbnail = options.thumbnail.then(|| {
             let size = 512;
             png::encode(&png::render(&meshes, size, &settings.filament_colour), size, size)
         });
-        let t6 = now();
+        let t7 = now();
         let title = title.as_deref().unwrap_or("Model");
         let file = pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title);
-        let t7 = now();
+        let t8 = now();
         Ok(Output {
             file,
             gcode: g.text,
@@ -322,11 +325,12 @@ impl Plate {
                 read: read_ms + t1 - t0,
                 slice: t2 - t1,
                 regions: t3 - t2,
-                toolpaths: t4 - t3,
-                gcode: t5 - t4,
-                thumbnail: t6 - t5,
-                pack: t7 - t6,
-                total: read_ms + t7 - t0,
+                supports: t4 - t3,
+                toolpaths: t5 - t4,
+                gcode: t6 - t5,
+                thumbnail: t7 - t6,
+                pack: t8 - t7,
+                total: read_ms + t8 - t0,
             },
             triangles: meshes.iter().map(|m| m.triangles.len()).sum(),
             fallbacks: settings.fallbacks(),

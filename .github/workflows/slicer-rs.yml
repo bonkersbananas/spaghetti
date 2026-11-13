@@ -66,3 +66,10 @@ jobs:
           ./target/release/spaghetti-slicer --setup /tmp/brim.json tests/models/bridge.stl -o /tmp/brim.gcode.3mf
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/brim-wasm.gcode.3mf --setup /tmp/brim.json tests/models/bridge.stl
           cmp /tmp/brim.gcode.3mf /tmp/brim-wasm.gcode.3mf
+      - name: The same, with normal supports under the bridge
+        run: |
+          echo '{"process": {"enable_support": "1", "support_type": "normal(auto)"}}' > /tmp/supports.json
+          ./target/release/spaghetti-slicer --setup /tmp/supports.json tests/models/bridge.stl -o /tmp/supports.gcode.3mf --gcode /tmp/supports.gcode
+          grep -q '; FEATURE: Support interface' /tmp/supports.gcode
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/supports-wasm.gcode.3mf --setup /tmp/supports.json tests/models/bridge.stl
+          cmp /tmp/supports.gcode.3mf /tmp/supports-wasm.gcode.3mf
