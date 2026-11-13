@@ -90,8 +90,12 @@ export function MeshPreview({ mesh, className }: { mesh: Mesh; className?: strin
       }
       const source = next.positions;
       const positions = new Float32Array(source.length);
-      let min = [Infinity, Infinity, Infinity];
-      let max = [-Infinity, -Infinity, -Infinity];
+      let minX = Infinity;
+      let minY = Infinity;
+      let minZ = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      let maxZ = -Infinity;
       for (let i = 0; i < source.length; i += 3) {
         // (x, y, z) in the file is (x, z, −y) on screen.
         const x = source[i] as number;
@@ -100,28 +104,26 @@ export function MeshPreview({ mesh, className }: { mesh: Mesh; className?: strin
         positions[i] = x;
         positions[i + 1] = y;
         positions[i + 2] = z;
-        min = [Math.min(min[0] as number, x), Math.min(min[1] as number, y), Math.min(min[2] as number, z)];
-        max = [Math.max(max[0] as number, x), Math.max(max[1] as number, y), Math.max(max[2] as number, z)];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
       }
-      const centre = [0, 1, 2].map((a) => ((min[a] as number) + (max[a] as number)) / 2);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const cz = (minZ + maxZ) / 2;
       for (let i = 0; i < positions.length; i += 3) {
-        positions[i] = (positions[i] as number) - (centre[0] as number);
-        positions[i + 1] = (positions[i + 1] as number) - (centre[1] as number);
-        positions[i + 2] = (positions[i + 2] as number) - (centre[2] as number);
+        positions[i] = (positions[i] as number) - cx;
+        positions[i + 1] = (positions[i + 1] as number) - cy;
+        positions[i + 2] = (positions[i + 2] as number) - cz;
       }
       const geometry = new BufferGeometry();
       geometry.setAttribute("position", new BufferAttribute(positions, 3));
-      geometry.computeVertexNormals();
       model = new ThreeMesh(geometry, material);
       turntable.add(model);
-      radius = Math.max(
-        1e-6,
-        Math.hypot(
-          (max[0] as number) - (min[0] as number),
-          (max[1] as number) - (min[1] as number),
-          (max[2] as number) - (min[2] as number),
-        ) / 2,
-      );
+      radius = Math.max(1e-6, Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) / 2);
       resize();
     };
     redraw.current(latest.current);
