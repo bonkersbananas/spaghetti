@@ -9616,6 +9616,116 @@
         "x-scopes": [
           "read"
         ]
+      },
+      "patch": {
+        "operationId": "patchFilesById",
+        "summary": "Sets the slicing settings people chose for a model (quality, strength, supports, brim, filaments, plate, nozzle, scale): what its next slice uses. Null puts the defaults back. People only.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slicing": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/SlicingSettings"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "slicing"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "$ref": "#/components/schemas/AttemptFile"
+                    }
+                  },
+                  "required": [
+                    "file"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid: the request couldn't be read; the message says what is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict: only a model has slicing settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
       }
     },
     "/api/files/{id}/{part}": {
@@ -9741,6 +9851,12 @@
                     "type": "string",
                     "maxLength": 80
                   },
+                  "keep": {
+                    "type": "string",
+                    "enum": [
+                      "previous"
+                    ]
+                  },
                   "uploaded": {
                     "type": "string",
                     "const": "1"
@@ -9827,6 +9943,83 @@
           },
           "415": {
             "description": "unsupported: not a picture.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
+    "/api/files/{id}/sliced/restore": {
+      "post": {
+        "operationId": "postFilesByIdSlicedRestore",
+        "summary": "Undoes a re-slice: the slice it replaced comes back with its file, picture and settings. Once. People only.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "$ref": "#/components/schemas/AttemptFile"
+                    }
+                  },
+                  "required": [
+                    "file"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict: there is no slice before this one.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17915,7 +18108,7 @@
                       "scale": {
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": 100
+                        "maximum": 1000
                       },
                       "project": {
                         "type": "string",
@@ -17931,7 +18124,8 @@
                       "orca": {
                         "type": "string",
                         "maxLength": 40
-                      }
+                      },
+                      "slicing": {}
                     },
                     "required": [
                       "machine",
@@ -17973,7 +18167,8 @@
                       "memory",
                       "engine",
                       "orca",
-                      "too-large"
+                      "too-large",
+                      "nozzle"
                     ]
                   },
                   "message": {
@@ -18029,7 +18224,7 @@
                   "fitScale": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 100
+                    "maximum": 1000
                   },
                   "device": {
                     "type": "string",
@@ -18055,7 +18250,382 @@
                 "type": "null"
               }
             ],
-            "description": "A model's slicing: how it was sliced (printer, process and filament presets, layer height, supports, scale, the engine's release and OrcaSlicer's version) or why it couldn't be (problem). Null until it is sliced or fails."
+            "description": "A model's slicing: how it was sliced (printer, process and filament presets, layer height, supports, scale, the engine's release and OrcaSlicer's version, and `settings.slicing`, the settings in people's words) or why it couldn't be (problem). Null until it is sliced or fails."
+          },
+          "slicing": {
+            "description": "The slicing settings people chose for a model, what its next slice uses (PATCH /files/{id}); null until someone changed one.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlicingSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous": {
+            "description": "The slice a re-slice replaced, kept for one undo (POST /files/{id}/sliced/restore).",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "slice": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "sliced",
+                          "failed"
+                        ]
+                      },
+                      "settings": {
+                        "type": "object",
+                        "properties": {
+                          "machine": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "process": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "filaments": {
+                            "maxItems": 16,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 120
+                            }
+                          },
+                          "layerHeight": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 10
+                          },
+                          "materials": {
+                            "maxItems": 16,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 40
+                            }
+                          },
+                          "bedType": {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "supports": {
+                            "type": "boolean"
+                          },
+                          "scale": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000
+                          },
+                          "project": {
+                            "type": "string",
+                            "enum": [
+                              "own",
+                              "some"
+                            ]
+                          },
+                          "engine": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "orca": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "slicing": {}
+                        },
+                        "required": [
+                          "machine",
+                          "process",
+                          "filaments",
+                          "layerHeight",
+                          "materials",
+                          "bedType",
+                          "supports",
+                          "scale",
+                          "engine",
+                          "orca"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "bytes": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 262144000
+                      },
+                      "cautions": {
+                        "maxItems": 4,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "floating"
+                          ]
+                        }
+                      },
+                      "problem": {
+                        "type": "string",
+                        "enum": [
+                          "too-big",
+                          "too-tall",
+                          "too-many",
+                          "no-model",
+                          "unreadable",
+                          "memory",
+                          "engine",
+                          "orca",
+                          "too-large",
+                          "nozzle"
+                        ]
+                      },
+                      "message": {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      "dimensions": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "volume": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "fitScale": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000
+                      },
+                      "device": {
+                        "type": "string",
+                        "enum": [
+                          "phone",
+                          "computer"
+                        ]
+                      },
+                      "at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "settings",
+                      "at"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "prefill": {
+                    "type": "object",
+                    "properties": {
+                      "filaments": {
+                        "maxItems": 32,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "maxLength": 120
+                            },
+                            "brand": {
+                              "type": "string",
+                              "maxLength": 120
+                            },
+                            "colorHex": {},
+                            "colorName": {
+                              "type": "string",
+                              "maxLength": 120
+                            },
+                            "profile": {
+                              "type": "string",
+                              "maxLength": 120
+                            },
+                            "amsSlot": {
+                              "type": "string",
+                              "maxLength": 16
+                            },
+                            "spoolId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "grams": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100000
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "bedType": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "nozzle": {
+                        "type": "string",
+                        "enum": [
+                          "main",
+                          "auxiliary"
+                        ]
+                      },
+                      "nozzleDiameter": {
+                        "type": "number",
+                        "minimum": 0.1,
+                        "maximum": 2
+                      },
+                      "layerHeight": {
+                        "type": "number",
+                        "minimum": 0.01,
+                        "maximum": 2
+                      },
+                      "infillDensity": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "wallLoops": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "supportEnabled": {
+                        "type": "boolean"
+                      },
+                      "supportType": {
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "tree"
+                        ]
+                      },
+                      "brim": {
+                        "type": "boolean"
+                      },
+                      "processPreset": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "nozzleTemperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 500
+                      },
+                      "bedTemperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 500
+                      },
+                      "chamberTemperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 500
+                      },
+                      "estimatedMinutes": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "actualMinutes": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "weightGrams": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "failedAtPercent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "failedAtLayer": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "filamentDried": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "objects": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "slicer": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "hasThumb": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "slice",
+                  "prefill",
+                  "objects",
+                  "slicer",
+                  "hasThumb"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "createdAt": {
             "type": "integer",
@@ -18786,6 +19356,182 @@
         ],
         "additionalProperties": false,
         "description": "One person's reaction to an idea, build or comment."
+      },
+      "SlicingSettings": {
+        "type": "object",
+        "properties": {
+          "layerHeight": {
+            "type": "number",
+            "minimum": 0.04,
+            "maximum": 0.56,
+            "description": "mm: Fine 0.12, Standard 0.20, Draft 0.24, Extra draft 0.28 for the 0.4 mm nozzle, which prints 0.08 to 0.28."
+          },
+          "walls": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "infill": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percent of the inside filled."
+          },
+          "pattern": {
+            "type": "string",
+            "enum": [
+              "crosshatch",
+              "gyroid",
+              "grid",
+              "cubic",
+              "honeycomb",
+              "lightning",
+              "zig-zag",
+              "line",
+              "triangles",
+              "tri-hexagon",
+              "adaptivecubic",
+              "quartercubic",
+              "supportcubic",
+              "alignedrectilinear",
+              "3dhoneycomb",
+              "hilbertcurve",
+              "archimedeanchords",
+              "octagramspiral",
+              "concentric",
+              "tpmsd"
+            ],
+            "description": "The sparse infill pattern, as OrcaSlicer names it."
+          },
+          "supports": {
+            "type": "string",
+            "enum": [
+              "off",
+              "where-needed",
+              "everywhere"
+            ],
+            "description": "where-needed: only under what would fall (floating parts, long ledges); everywhere: every steep overhang."
+          },
+          "supportStyle": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "tree-slim",
+              "tree-strong",
+              "tree-hybrid",
+              "normal",
+              "snug"
+            ]
+          },
+          "brim": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ]
+          },
+          "filaments": {
+            "minItems": 1,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "material": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "description": "\"PLA\", \"PETG-CF\": what the slicer's filament preset is picked by."
+                },
+                "colorHex": {
+                  "description": "#rrggbb; none for the stand-in nobody chose.",
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "colorName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "brand": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "finish": {
+                  "description": "The Pantry's finish: \"basic\", \"matte\", \"silk\"…",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "spoolId": {
+                  "description": "The Pantry's spool it was picked from.",
+                  "type": "string",
+                  "pattern": "^[\\w-]{1,64}$"
+                }
+              },
+              "required": [
+                "material"
+              ],
+              "additionalProperties": false
+            },
+            "description": "One per filament, filament 1 first."
+          },
+          "plate": {
+            "type": "string",
+            "enum": [
+              "Textured PEI Plate",
+              "Smooth PEI Plate",
+              "Cool Plate",
+              "Engineering Plate",
+              "High Temp Plate",
+              "Supertack Plate",
+              "Textured Cool Plate"
+            ]
+          },
+          "nozzle": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 0.2
+              },
+              {
+                "type": "number",
+                "const": 0.4
+              },
+              {
+                "type": "number",
+                "const": 0.6
+              },
+              {
+                "type": "number",
+                "const": 0.8
+              }
+            ],
+            "description": "mm"
+          },
+          "scale": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Percent of the model's own size."
+          }
+        },
+        "required": [
+          "layerHeight",
+          "walls",
+          "infill",
+          "pattern",
+          "supports",
+          "supportStyle",
+          "brim",
+          "filaments",
+          "plate",
+          "nozzle",
+          "scale"
+        ],
+        "additionalProperties": false
       },
       "Spool": {
         "type": "object",

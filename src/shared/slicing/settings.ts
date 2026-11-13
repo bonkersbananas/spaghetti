@@ -8,7 +8,6 @@
 import { BED_TYPES, NOZZLE_DIAMETERS } from "../attempts.ts";
 import { finishLabel } from "../spools.ts";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
-import type { SliceOptions } from "./types.ts";
 
 /** Off, only under what would otherwise fall (floating parts, long ledges), or under every steep overhang. */
 export type SupportPlacement = "off" | "where-needed" | "everywhere";
@@ -331,10 +330,19 @@ export function changedSlicing(before: SlicingSettings, after: SlicingSettings):
 
 /* Saying it -------------------------------------------------------------------------------------------------- */
 
-/** "Fine", or "0.16 mm layers" for a height without a name. */
+/**
+ * "Fine", "Standard quality" (a line can't say which Standard it means otherwise: the strength has one too), or
+ * "0.16 mm layers" for a height without a name.
+ */
 export function qualityWords(layerHeight: number): string {
-  return qualityOf(layerHeight)?.label ?? `${Number(layerHeight.toFixed(2))} mm layers`;
+  const quality = qualityOf(layerHeight);
+  if (!quality) return `${Number(layerHeight.toFixed(2))} mm layers`;
+  return quality.id === "standard" ? "Standard quality" : quality.label;
 }
+
+/** "Strong", or "Standard strength" (as the quality has a Standard too). */
+export const strengthWords = (strength: Strength) =>
+  strength.id === "standard" ? "Standard strength" : strength.label;
 
 /** "0.12 mm": a layer height as slicers write it, beside its name. */
 export const layerMillimetres = (layerHeight: number) => `${layerHeight.toFixed(2)} mm`;
@@ -408,17 +416,6 @@ export function slicingFromRecord(record: {
     ...(record.bedType ? { plate: record.bedType } : {}),
     ...(record.scale !== undefined ? { scale: record.scale } : {}),
   });
-}
-
-/**
- * What decision 0046's one-tap asks were ("Slice with supports": Orca's tree supports under every steep overhang;
- * "Scale to 80 % and slice"), as chosen settings.
- */
-export function chosenFromOptions(options: SliceOptions): Partial<SlicingSettings> {
-  return {
-    ...(options.supports ? { supports: "everywhere" as const, supportStyle: "tree" as const } : {}),
-    ...(options.scale !== undefined && options.scale !== 100 ? { scale: options.scale } : {}),
-  };
 }
 
 /** The whole settings for what was chosen, with the defaults for the rest. */

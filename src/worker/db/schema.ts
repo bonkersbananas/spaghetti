@@ -11,7 +11,8 @@ import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PriceSuggestion, ShoppingPrices } from "../../shared/prisjakt.ts";
-import type { FileKind, FileSlice } from "../../shared/slicing/types.ts";
+import type { SlicingSettings } from "../../shared/slicing/settings.ts";
+import type { FileKind, FileSlice, PreviousSlice } from "../../shared/slicing/types.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
 import type { TwistChange } from "../../shared/twists.ts";
 import type { DeliveryStatus, WebhookKind, WebhookState } from "../../shared/webhooks.ts";
@@ -699,6 +700,14 @@ export const attemptFiles = sqliteTable(
     kind: text("kind").$type<FileKind>().notNull().default("slicer"),
     /** A model's slicing, once it is sliced or failed; the sliced .gcode.3mf is in R2 at `files/<id>/sliced`. */
     slice: text("slice", { mode: "json" }).$type<FileSlice>(),
+    /**
+     * The slicing settings people chose for a model (decision 0047), what its next slice uses: null until someone
+     * changed one (its first slice took the defaults and its file's own). `slice.settings.slicing` says what the
+     * slice there was made with, which differs while a change is being sliced.
+     */
+    slicing: text("slicing", { mode: "json" }).$type<SlicingSettings>(),
+    /** The slice this one replaced, for its undo; its .gcode.3mf and picture are `files/<id>/previous` and `previous-thumb`. */
+    previousSlice: text("previous_slice", { mode: "json" }).$type<PreviousSlice>(),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -731,6 +740,8 @@ export const itemFiles = sqliteTable(
     objects: text("objects", { mode: "json" }).$type<string[]>().notNull().default([]),
     kind: text("kind").$type<FileKind>().notNull().default("slicer"),
     slice: text("slice", { mode: "json" }).$type<FileSlice>(),
+    slicing: text("slicing", { mode: "json" }).$type<SlicingSettings>(),
+    previousSlice: text("previous_slice", { mode: "json" }).$type<PreviousSlice>(),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),

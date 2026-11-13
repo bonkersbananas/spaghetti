@@ -1,9 +1,7 @@
 import type { Spool } from "@shared/api";
 import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
-import type { FileSlice } from "@shared/slicing/types.ts";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
-import { ModelCard, SliceDetails } from "@/components/builds/ModelFile";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeLine } from "@/components/pantry/BridgeLine";
@@ -20,8 +18,6 @@ import { NumberField, TextField } from "@/components/ui/Field";
 import { FromLabel } from "@/components/ui/FromLabel";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
-import { ThreeDButton } from "@/components/viewer/ThreeDButton";
-import type { AttemptFileView } from "@/lib/items";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
 
 const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
@@ -30,50 +26,6 @@ const GREEN = "#00ae42"; // design-lint-ignore: a filament color is data
 const SILK = "#c9a46b"; // design-lint-ignore: a filament color is data
 
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
-
-/** A model sliced with the defaults (shared/slicing/defaults.ts), for the model card's specimens. */
-const SAMPLE_SLICE: FileSlice = {
-  status: "sliced",
-  settings: {
-    machine: "Bambu Lab X2D 0.4 nozzle",
-    process: "0.20mm Standard @BBL X2D",
-    filaments: ["Bambu PLA Basic @BBL X2D 0.4 nozzle"],
-    layerHeight: 0.2,
-    materials: ["PLA"],
-    bedType: "Textured PEI Plate",
-    supports: false,
-    scale: 100,
-    engine: "1",
-    orca: "2.5.0-dev",
-  },
-  bytes: 2_150_000,
-  at: 0,
-};
-const TOO_BIG: FileSlice = {
-  ...SAMPLE_SLICE,
-  status: "failed",
-  problem: "too-big",
-  dimensions: [320, 100, 4],
-  volume: [256, 256, 261],
-  fitScale: 78,
-};
-const noop = () => undefined;
-/** The sliced model the specimens' 3D control would open (there is no such file: the view says it can't read it). */
-const SAMPLE_MODEL: AttemptFileView = {
-  id: "styleguide-model",
-  name: "fusilli-knob.stl",
-  size: 1_200_000,
-  stored: true,
-  hasThumb: false,
-  plate: 1,
-  plateCount: 1,
-  slicer: null,
-  prefill: { estimatedMinutes: 38, weightGrams: 11.3 },
-  objects: [],
-  kind: "model",
-  slice: SAMPLE_SLICE,
-  createdAt: 0,
-};
 
 const sampleSpool: Spool = {
   id: "sample-spool",
@@ -302,75 +254,6 @@ export function PantrySection() {
           <div className="flex gap-2">
             <PlateThumb alt="" className="size-16" />
           </div>
-          <Label>
-            A model Spaghetti slices: saving, waiting (a pulse), slicing, sliced (led by the print, the name quieter), a
-            caution, why it couldn't be, and not sliced yet
-          </Label>
-          <ModelCard name="fusilli-knob.stl" state={{ kind: "saving" }} phone={false} />
-          <ModelCard name="dragon-scale-armour.stl" state={{ kind: "saving", fraction: 0.42 }} phone={false} />
-          <ModelCard name="dragon-scale-armour.stl" state={{ kind: "notSaved", retry: noop }} phone={false} />
-          <ModelCard name="fusilli-knob.stl" state={{ kind: "waiting" }} phone={false} />
-          <ModelCard name="fusilli-knob.stl" state={{ kind: "slicing", fraction: 0.05 }} phone={false} />
-          <ModelCard
-            name="fusilli-knob.stl"
-            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
-            download="#"
-            details={{ open: noop }}
-            phone={false}
-          />
-          <ModelCard
-            name="steampunk-glasses.stl"
-            state={{ kind: "sliced", slice: { ...SAMPLE_SLICE, cautions: ["floating"] }, saved: true }}
-            prefill={{ estimatedMinutes: 76, weightGrams: 7.7 }}
-            download="#"
-            onSlice={noop}
-            details={{ open: noop }}
-            phone={false}
-          />
-          <ModelCard name="lasagne-sheet.stl" state={{ kind: "failed", slice: TOO_BIG }} onSlice={noop} phone={false} />
-          <ModelCard name="fusilli-knob.stl" state={{ kind: "unsliced" }} onSlice={noop} phone={false} />
-          <Label>
-            On an idea (raised: a 96 px plate with the 3D pill, its actions in the top corner); on a story card
-            (compact: the 3D control a corner glyph, only "Sliced by Spaghetti", in the meta line, as the settings line
-            says the rest); in an attempt's sheet on phones the words open nothing
-          </Label>
-          <ModelCard
-            name="fusilli-knob.stl"
-            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
-            download="#"
-            plateOverlay={<ThreeDButton file={SAMPLE_MODEL} />}
-            onRemove={noop}
-            details={{ open: noop }}
-            phone={false}
-            raised
-          />
-          <ModelCard
-            name="fusilli-knob.stl"
-            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
-            download="#"
-            plateOverlay={<ThreeDButton file={SAMPLE_MODEL} glyph />}
-            details={{ open: noop }}
-            phone={false}
-            compact
-          />
-          <ModelCard
-            name="fusilli-knob.stl"
-            state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
-            prefill={{ estimatedMinutes: 38, weightGrams: 11.3 }}
-            phone
-          />
-          <Label>How it was sliced: a popover on desktop, a sheet on phones</Label>
-          <Panel className="max-w-96">
-            <SliceDetails
-              file={{ id: "sample", name: "fusilli-knob.stl" }}
-              slice={SAMPLE_SLICE}
-              onSlice={noop}
-              heading
-            />
-          </Panel>
         </div>
       </div>
       <Label>The AMS as it is loaded here (live): bays are columns below lg, rows from lg</Label>

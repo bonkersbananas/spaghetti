@@ -33,37 +33,38 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   });
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText("cube.stl")).toBeVisible();
-  const line = files.getByRole("button", { name: /Sliced by Spaghetti, PLA, 0\.2 mm layers/ });
-  await expect(line).toBeVisible({ timeout: SLICED });
-  // The card leads with the print, not the file.
+  const open = files.getByRole("button", { name: "Slice with…" });
+  // Sliced: the card says how (each piece of the line carries its dot: they are matched at their end), and leads
+  // with the print, not the file. ("Slice with…" is there while it slices too.)
+  await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
   await expect(files.getByText(/^About \d+ min$/)).toBeVisible();
+  await expect(files.getByText(/Standard quality$/)).toBeVisible();
 
   // It is on the server: after a reload it is still sliced. With no photo, its plate picture is the idea's cover.
   await page.reload();
-  await expect(line).toBeVisible();
+  await expect(open).toBeVisible();
   const cover = page.getByRole("img", { name: "Slicer preview: Cube" });
   await expect(cover).toBeVisible();
 
-  // How it was sliced, with the engine's source. The sliced file is a .gcode.3mf: on desktop the card downloads it,
-  // on a phone (where the card keeps its width for the estimate) the details do.
-  await line.click();
-  const details = isMobile ? page.getByRole("dialog", { name: "Sliced by Spaghetti" }) : page.getByRole("dialog");
+  // How to slice it, with what it was sliced with, the engine's source and the original. The sliced file is a
+  // .gcode.3mf: on desktop the card downloads it, on a phone (where the card keeps its width for the estimate) the
+  // settings do.
+  await open.click();
+  const settings = page.getByRole("dialog", { name: "How to slice it" });
+  await expect(
+    settings.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Standard/ }),
+  ).toBeChecked();
+  await expect(settings.getByRole("group", { name: "Supports" }).getByRole("radio", { name: /^Off/ })).toBeChecked();
   const download = isMobile
-    ? details.getByRole("link", { name: "Download the sliced file" })
+    ? settings.getByRole("link", { name: "The sliced file" })
     : files.getByRole("link", { name: "Download cube.gcode.3mf" });
   await expect(download).toHaveAttribute("href", /\/sliced$/);
   const sliced = await page.request.get((await download.getAttribute("href")) ?? "");
   expect(sliced.headers()["content-disposition"]).toContain("cube.gcode.3mf");
-  await expect(details.getByText("Sliced here with the X2D's usual settings.")).toBeVisible();
-  await expect(details.getByText("Bambu Lab X2D, 0.4 mm nozzle")).toBeVisible();
-  await expect(details.getByText("0.20 mm (Standard)")).toBeVisible();
-  await expect(details.getByText("Textured PEI")).toBeVisible();
-  await expect(details.getByRole("link", { name: "Its source" })).toHaveAttribute("href", /releases\/tag\/slicer-v/);
-  await expect(details.getByRole("link", { name: "Download the original" })).toHaveAttribute(
-    "href",
-    /\/api\/files\/[^/]+$/,
-  );
+  await expect(settings.getByRole("link", { name: "Its source" })).toHaveAttribute("href", /releases\/tag\/slicer-v/);
+  await expect(settings.getByRole("link", { name: "The original" })).toHaveAttribute("href", /\/api\/files\/[^/]+$/);
   await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
 
   await files.getByRole("button", { name: "See cube.stl in 3D" }).click();
   const viewer = page.getByRole("dialog", { name: "3D view" });
@@ -95,9 +96,8 @@ test("a model too big for the plate says so, and is sliced scaled to fit", async
     timeout: SLICED,
   });
   await files.getByRole("button", { name: "Scale to 61% and slice" }).click();
-  await expect(files.getByRole("button", { name: /Sliced by Spaghetti, PLA, 0\.2 mm layers, 61%/ })).toBeVisible({
-    timeout: SLICED,
-  });
+  // Sliced at that size, which the model keeps: its line says so.
+  await expect(files.getByText(/61%$/)).toBeVisible({ timeout: SLICED });
   // The original stays as it was.
   await expect(files.getByText("big.stl")).toBeVisible();
 });

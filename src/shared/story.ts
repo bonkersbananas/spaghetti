@@ -10,7 +10,8 @@ import {
 import { liveCoachItems } from "./coach.ts";
 import type { Comment } from "./comments.ts";
 import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
-import { printerName, problemSentence, sliceSummary } from "./slicing/words.ts";
+import { slicingAhead } from "./slicing/model.ts";
+import { printerName, problemSentence, sliceSummary, slicingDetail } from "./slicing/words.ts";
 import { formatDuration } from "./time.ts";
 
 /** A kept file in a line: a slicer file with what it said, a model with how Spaghetti sliced it (or why it didn't). */
@@ -24,14 +25,21 @@ function fileLine(file: AttemptFile): string {
       : slice.status === "failed"
         ? `couldn't be sliced: ${problemSentence(slice)}`
         : [
-            `sliced by Spaghetti with OrcaSlicer ${slice.settings.orca} for the ${printerName(slice.settings.machine)}`,
-            ...sliceSummary(slice.settings),
+            `sliced by Spaghetti with OrcaSlicer ${slice.settings.orca} for the ${printerName(slice.settings.machine)}${slice.settings.slicing ? `: ${slicingDetail(slice.settings.slicing)}` : ""}`,
+            ...(slice.settings.slicing ? [] : sliceSummary(slice.settings)),
             estimate,
             slice.cautions?.includes("floating") ? "parts of it float in the air (it needs supports)" : "",
           ]
             .filter(Boolean)
             .join(", ");
-    return `${file.name} (a model, ${how})`;
+    // Settings people changed that it isn't sliced with yet (a change still slicing, or not sliced since).
+    const ahead = slicingAhead(file);
+    const next = ahead
+      ? `; to be sliced next with ${slicingDetail(ahead)}`
+      : !slice && file.slicing
+        ? `; to be sliced with ${slicingDetail(file.slicing)}`
+        : "";
+    return `${file.name} (a model, ${how}${next})`;
   }
   const bits = [
     file.plateCount > 1 ? `plate ${file.plate} of ${file.plateCount}` : "",

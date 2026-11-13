@@ -147,7 +147,7 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
             cover
               ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
               : plate
-                ? { src: fileThumbSrc(plate.id), alt: plateAlt(item), fit: "contain" }
+                ? { src: fileThumbSrc(plate), alt: plateAlt(item), fit: "contain" }
                 : undefined
           }
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}

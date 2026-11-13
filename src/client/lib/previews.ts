@@ -1,5 +1,5 @@
 import type { PhotoVariant } from "@shared/api";
-import { fileUrl, photoUrl } from "@shared/api";
+import { fileThumbUrl, photoUrl } from "@shared/api";
 
 /**
  * Object URLs of photos made on this device. A photo shows from here while
@@ -30,7 +30,15 @@ export function hasPreview(photoId: string): boolean {
   return previews.has(photoId);
 }
 
-/** A slicer file's plate picture: the local copy while it uploads, else the server's. */
-export function fileThumbSrc(fileId: string): string {
-  return previews.get(fileId)?.thumb ?? fileUrl(fileId, "thumb");
+/** A slicer file's plate picture: the local copy while it uploads or slices here, else the server's (`fileThumbUrl`). */
+export function fileThumbSrc(file: { id: string; slice?: { at: number } | null }): string {
+  return previews.get(file.id)?.thumb ?? fileThumbUrl(file);
+}
+
+/** Forgets a file's local picture (a re-slice was undone: the server's is the one to show). */
+export function dropPreview(fileId: string) {
+  const old = previews.get(fileId);
+  if (!old) return;
+  previews.delete(fileId);
+  setTimeout(() => URL.revokeObjectURL(old.thumb), 10_000);
 }
