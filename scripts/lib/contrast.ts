@@ -131,6 +131,10 @@ export const pairs: Pair[] = [
   { label: "An open tick box on a sheet", fg: "ink/0.55", bg: "lifted", min: 3 },
   { label: "A choice tile's name", fg: "ink-soft", bg: "tile", min: 4.5 },
   { label: "A choice tile's figure", fg: "ink-faint", bg: "tile", min: 4.5 },
+  { label: "Body text on what rises from a sheet", fg: "ink", bg: "tile", min: 4.5 },
+  { label: "An unpicked chip on a sheet", fg: "ink-soft", bg: "tile", min: 4.5 },
+  { label: "Held chip or card on a sheet", fg: "ink", bg: "ink/0.08", under: "tile", min: 4.5 },
+  { label: "Meta on a card on a sheet", fg: "ink-faint", bg: "tile", min: 4.5 },
 ];
 
 export function measure(theme: Theme, pair: Pair, tokens = readTokens()[theme]): number {

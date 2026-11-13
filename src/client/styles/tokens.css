@@ -263,6 +263,20 @@
   --sg-ring-error: 0 0 0 1px rgb(245 154 124 / 0.7), 0 0 0 4px rgb(245 154 124 / 0.16);
 }
 
+/*
+ * Things raised on a sheet, dialog or popover (unpicked chips, secondary
+ * buttons, cards, the Undo in a tray) are drawn in `cream`, which at night is
+ * a step darker than the lifted sheet and so reads as a hole. Inside a lifted
+ * surface `cream` is the `tile` value, a step above it, so they rise. Fields
+ * and wells are not affected: they tint with ink or use `well`. Tailwind's
+ * --color-cream was resolved at :root, so it is redefined here too. Daytime
+ * has no rule: cream and lifted are the same there.
+ */
+[data-theme="dark"] .sg-lifted-surface {
+  --sg-cream: var(--sg-tile);
+  --color-cream: var(--sg-tile);
+}
+
 @theme {
   --color-*: initial;
   --color-transparent: transparent;

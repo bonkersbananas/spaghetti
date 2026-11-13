@@ -83,7 +83,7 @@ function PhoneSheet({
           onInteractOutside={keepOpenForToast}
           // Sits on the keyboard when it is up (lib/viewport.ts), so the footer's button stays in view.
           className={cn(
-            "bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex flex-col rounded-t-xl focus:outline-none",
+            "sg-lifted-surface bg-lifted shadow-float fixed inset-x-0 bottom-[var(--sg-keyboard-inset)] z-50 flex flex-col rounded-t-xl focus:outline-none",
             tall || fill
               ? "h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))]"
               : "max-h-[min(92dvh,calc(var(--sg-visible-height)-var(--sg-safe-top)-0.75rem))]",
@@ -161,7 +161,7 @@ function DesktopSheet({
           onCloseAutoFocus={returnFocus}
           onInteractOutside={keepOpenForToast}
           className={cn(
-            "bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
+            "sg-lifted-surface bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel
               ? "sg-panel inset-y-3 right-3 w-full max-w-md rounded-xl"
               : cn(
