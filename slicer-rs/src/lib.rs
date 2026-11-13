@@ -212,6 +212,17 @@ impl Plate {
             mesh::arrange(&mut meshes, settings.bed, settings.max_height)?;
         } else {
             mesh::drop_to_bed(&mut meshes);
+            // Kept where they are, as Orca keeps them: one partly off the plate stops the slice, and those wholly off
+            // it (on a project's other plates) are left out.
+            let places: Vec<mesh::OnPlate> = meshes.iter().map(|m| mesh::on_plate(m, settings.bed)).collect();
+            if places.contains(&mesh::OnPlate::Partly) {
+                return Err(Error::OffPlate);
+            }
+            let mut place = places.into_iter();
+            meshes.retain(|_| place.next() == Some(mesh::OnPlate::Inside));
+            if meshes.is_empty() {
+                return Err(Error::OffPlate);
+            }
         }
         let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
         if height > settings.max_height {
@@ -336,6 +347,8 @@ pub enum Error {
     TooBig,
     TooTall,
     TooMany,
+    /// Kept where a project or the caller put it, an object lies partly off the plate, or none lies on it.
+    OffPlate,
     /// A slice setup that isn't one (`setup.rs`).
     Setup,
     /// Settings this can't slice yet: what they ask for ("supports", "more than one filament"…).
@@ -350,6 +363,7 @@ impl std::fmt::Display for Error {
             Error::TooBig => "too big for the plate",
             Error::TooTall => "too tall for the printer",
             Error::TooMany => "too many objects for one plate",
+            Error::OffPlate => "an object lies off the plate",
             Error::Setup => "can't read the slice setup",
             Error::Unsupported(what) => return write!(f, "can't slice with {what} yet"),
         })
