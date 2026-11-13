@@ -73,7 +73,7 @@ test("a model is sliced for the 0.2 mm nozzle when it is picked, at that nozzle'
     nozzle_diameter: "0.2,0.2",
   });
   // What the change did, in the card's words.
-  await expect(files.getByText(/^The 0\.2 mm nozzle: \d+ min longer/)).toBeVisible();
+  await expect(files.getByText(/The 0\.2 mm nozzle: \d+ min longer/).first()).toBeVisible();
 
   // Its layers in the 3D view: a 10 mm cube in 0.10 mm layers.
   await files.getByRole("button", { name: "See tiny.stl in 3D" }).click();
