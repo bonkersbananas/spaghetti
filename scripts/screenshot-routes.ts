@@ -1959,7 +1959,12 @@ export const shots: Shot[] = [
     width: 1440,
     prepare: async (page) => {
       const { caption } = await pickOurSlicer(page);
-      await caption.evaluate((line) => line.scrollIntoView({ block: "center", behavior: "instant" }));
+      // The panel from its top: the line is under the strength, More open below it.
+      await caption.evaluate((line) => {
+        for (let box = line.parentElement; box; box = box.parentElement) {
+          if (box.scrollHeight > box.clientHeight + 1) box.scrollTop = 0;
+        }
+      });
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,

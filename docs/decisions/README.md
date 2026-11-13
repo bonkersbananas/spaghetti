@@ -74,3 +74,4 @@ Status: Accepted | Open | Superseded by NNNN
 | [0052](0052-fins-are-built-into-the-model-when-it-is-sliced.md) | Supports gain Fins: Support Fins (vendored, MIT) builds breakaway fins into the model in the slice worker, loaded only when picked | Accepted |
 | [0053](0053-a-twist-keeps-its-adapted-model.md) | A twist keeps its adapted model (`twist_files`), sliced like an idea's, and "Print it" carries the slice into the build | Accepted |
 | [0054](0054-removing-a-saved-photo-takes-two-taps.md) | Removing a saved photo takes two taps in place, still with Undo (an exception to 0006) | Accepted |
+| [0055](0055-spaghettis-own-slicer-beside-orcaslicers-engine.md) | Spaghetti's own slicer (Rust, released as WebAssembly) slices a model that picks it, and OrcaSlicer's engine steps in for what it can't do yet, the card saying why; OrcaSlicer stays the default for now | Accepted |

@@ -1,12 +1,13 @@
 # CI
 
-Two workflows check every pull request and every push to main, one checks the Rust slicer when it changes, one publishes the bridge and one the slicing engine:
+Two workflows check every pull request and every push to main, one checks the Rust slicer when it changes, one publishes the bridge, one the slicing engine and one Spaghetti's own slicer:
 
 - **CI** (`.github/workflows/ci.yml`): lint, typecheck, unit and Worker tests, the build and the bridge program in one job; the Playwright suite in two shards of spec files balanced by measured time (`scripts/e2e-shard.ts`, `e2e/timings.json`), each on its own runner in Playwright's container image; and on pushes to main only, **Speed** (the timing tests). The ship deploys the newest commit on main whose CI run passed.
 - **Images** (`.github/workflows/images.yml`): the container and the bridge's image build and start, both in one job. On every push to main, and on pull requests that touch what goes into them (the Dockerfiles, `bridge/`, `src/shared/`, dependencies, the build config, migrations, `scripts/start.ts` and the scripts it uses): its `paths` list says which.
 - **Bridge release** (`.github/workflows/bridge-release.yml`): only for `bridge-v*` tags and by hand.
 - **Rust slicer** (`.github/workflows/slicer-rs.yml`): only on pull requests and pushes to main that change `slicer-rs/` or the workflow. One job, a few minutes: formatting, lints, tests, the native and WebAssembly builds, and one model sliced by both to the same file ([proposals/rust-slicer.md](proposals/rust-slicer.md)).
 - **Slicer release** (`.github/workflows/slicer-release.yml`): for `slicer-v*` tags, pull requests that change the engine's build (`scripts/slicer/` but its `engine.json`), and by hand. It compiles OrcaSlicer's core to WebAssembly (one job, about 20 minutes) and publishes the engine the app pins in `scripts/slicer/engine.json`; the normal CI never compiles it, `pnpm build` downloads the pinned zip ([docs/slicer.md](slicer.md)).
+- **Rust slicer release** (`.github/workflows/slicer-rs-release.yml`): for `slicer-rs-v*` tags, pull requests that change how it is packed (`scripts/slicer-rs/` but its `release.json`, or the workflow), and by hand. It builds Spaghetti's own slicer's WebAssembly module with Rust stable (a few minutes), slices a test model with it, with and without supports, and publishes the module the app pins in `scripts/slicer-rs/release.json`, with its source and its dependencies' ([docs/slicer.md](slicer.md)).
 
 ## Runners are the bottleneck
 
