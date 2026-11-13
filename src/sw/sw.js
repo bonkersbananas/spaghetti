@@ -241,6 +241,8 @@ self.addEventListener("fetch", (event) => {
   }
   // The OAuth endpoints (docs/mcp.md) are the Worker's, never the app shell.
   if (url.pathname.startsWith("/oauth/") || url.pathname.startsWith("/.well-known/")) return;
+  // The slicing engine (docs/slicer.md) is fetched only when something is sliced, and the browser's cache keeps it.
+  if (url.pathname.startsWith("/slicer/")) return;
   if (LANDING.test(url.pathname)) return;
   if (request.mode === "navigate" && url.pathname === "/") {
     event.respondWith(home(request));

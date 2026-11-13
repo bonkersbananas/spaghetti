@@ -17,6 +17,8 @@ on:
       # The container builds the app and starts it with scripts/start.ts, which applies the migrations.
       - vite.config.ts
       - scripts/vite-*.ts
+      # The slicing engine the build fetches (docs/slicer.md).
+      - scripts/slicer/engine.json
       - wrangler.jsonc
       - migrations/**
       - scripts/start.ts
