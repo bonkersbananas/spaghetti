@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adaptedName,
   adaptMesh,
   boundsOf,
   describeAdaptation,
@@ -127,5 +128,15 @@ describe("adapting a mesh", () => {
     ]);
     expect(isUnchanged({ scale: 1, mirror: {}, turns: { x: 4 } })).toBe(true);
     expect(isUnchanged(adaptation)).toBe(false);
+  });
+});
+
+describe("adaptedName", () => {
+  it("names the model after its source and what changed", () => {
+    expect(adaptedName("fusilli-knob.stl", { scale: 1.1, mirror: {}, turns: {} })).toBe("fusilli-knob, 110 %.stl");
+    expect(adaptedName("Knob.STL", { scale: 0.84, mirror: { x: true }, turns: { z: 1 } })).toBe(
+      "Knob, 84 %, mirrored X, turned 90° about Z.stl",
+    );
+    expect(adaptedName("", { scale: 2, mirror: {}, turns: {} })).toBe("model, 200 %.stl");
   });
 });

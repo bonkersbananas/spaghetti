@@ -960,6 +960,11 @@ export interface Twist {
   fromItemId: string | null;
   /** The recipe that says how to print it. */
   recipeId: string | null;
+  /**
+   * The model it keeps (decision 0053): what "Adapt an STL" made, sliced in the browser like an idea's. Null until
+   * it has one.
+   */
+  model: AttemptFile | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;

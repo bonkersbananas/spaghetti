@@ -5,6 +5,8 @@ import { TWIST_CHANGES_MAX, TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twist
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
+import { SavedFileCard } from "@/components/builds/SlicerFile";
+import { PlateCover } from "@/components/ideas/PlateCover";
 import { Fusilli } from "@/components/illustrations/Fusilli";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { PrintedRow } from "@/components/twists/PrintedRow";
@@ -21,13 +23,14 @@ import { Photo } from "@/components/ui/Photo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { createBuild } from "@/lib/builds";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
-import { photoSrc } from "@/lib/previews";
+import { hasPreview, photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useStickyColumn } from "@/lib/sticky-column";
+import { keepTwistModel, removeTwistModel } from "@/lib/twist-model";
+import { printTwist } from "@/lib/twist-print";
 import { deleteTwist, twistsQuery, updateTwist } from "@/lib/twists";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -108,6 +111,9 @@ function TwistBody({ twist }: { twist: Twist }) {
     },
   );
   const photo = twist.source.photo;
+  const model = twist.model;
+  // No picture of the model's page: the plate picture of the model we keep is the cover, as on an idea.
+  const plate = !photo && model && (model.hasThumb || hasPreview(model.id)) ? model : undefined;
   const mark = value.sourceUrl ? modelMarkOf(value.sourceUrl) : null;
   const subtitle = sourceLine(twist);
 
@@ -115,7 +121,7 @@ function TwistBody({ twist }: { twist: Twist }) {
   const printLabel = printed.length ? "Print it again" : "Print it";
   function printIt() {
     if (!user || !canEdit(false)) return;
-    const id = createBuild(user.id, { title: value.name.trim() || twist.name, twistId: twist.id });
+    const id = printTwist(queryClient, twist, value.name.trim() || twist.name, user.id);
     void navigate({ to: "/builds/$buildId", params: { buildId: id } });
   }
 
@@ -160,6 +166,11 @@ function TwistBody({ twist }: { twist: Twist }) {
             />
           </div>
         )}
+        {plate && (
+          <div ref={stickyColumn} className="sticky-column md:min-w-0 md:flex-2">
+            <PlateCover file={plate} alt={`Slicer preview: ${twist.name}`} className="-mx-5 md:mx-0" />
+          </div>
+        )}
         <div className="max-w-content flex min-w-0 flex-col gap-6 md:flex-3 md:pt-2">
           <div className="flex flex-col gap-1">
             <TextArea
@@ -180,6 +191,21 @@ function TwistBody({ twist }: { twist: Twist }) {
             />
             {subtitle && <p className="text-small text-ink-faint">{subtitle}</p>}
           </div>
+
+          {model && (
+            <section id="model" aria-label="Model">
+              <SavedFileCard
+                raised
+                file={model}
+                owner={readOnly ? undefined : { twistId: twist.id }}
+                onRemove={
+                  readOnly || (model as { pending?: boolean }).pending
+                    ? undefined
+                    : () => removeTwistModel(queryClient, twist.id, model)
+                }
+              />
+            </section>
+          )}
 
           <Section id="changes" title="What we changed">
             <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
@@ -205,6 +231,8 @@ function TwistBody({ twist }: { twist: Twist }) {
                   onOpenChange={setAdapting}
                   twistName={value.name}
                   room={TWIST_CHANGES_MAX - value.changes.length}
+                  keeping={model?.name ?? null}
+                  onKeep={(file) => void keepTwistModel(queryClient, twist.id, file)}
                   onAdapted={(made) =>
                     change((current) => ({
                       changes: [

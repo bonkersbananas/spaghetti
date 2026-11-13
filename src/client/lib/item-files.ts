@@ -37,8 +37,8 @@ function bodyOf(draft: SlicerFileDraft) {
  * which says so and offers another go (its bytes are in this tab); a small one, or a refused one, is given up on at
  * once. Calls `saved` with the row, or `giveUp`.
  */
-function keepItemFile(
-  itemId: string,
+export function keepFile(
+  path: string,
   file: File,
   id: string,
   kind: FileKind,
@@ -61,7 +61,7 @@ function keepItemFile(
           onProgress: (fraction) => setUpload(id, { fraction, failed: false }),
         });
       }
-      const { file: row } = await api<ItemFileResponse>(`/items/${itemId}/files/${id}`, {
+      const { file: row } = await api<ItemFileResponse>(path, {
         method: "PUT",
         body: form,
         keepalive: false,
@@ -109,7 +109,7 @@ export async function addItemFile(queryClient: QueryClient, itemId: string, file
     pending: true,
   };
   withFiles(queryClient, itemId, (files) => [...files, shown]);
-  await keepItemFile(itemId, file, draft.id, "slicer", form, {
+  await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "slicer", form, {
     saved: (saved) => withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f))),
     giveUp: () => {
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
@@ -157,7 +157,7 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
   form.set("prefill", "{}");
   form.set("kind", "model");
   if (file.size <= ONE_REQUEST_FILE_BYTES) form.set("file", file, file.name);
-  await keepItemFile(itemId, file, draft.id, "model", form, {
+  await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "model", form, {
     // A slice that reached the server first (it waits for this) stays.
     saved: (saved) =>
       withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f))),

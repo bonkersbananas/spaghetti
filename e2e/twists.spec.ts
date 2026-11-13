@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
 const origin = (page: Page) => new URL(page.url()).origin;
@@ -195,7 +196,7 @@ endsolid tetra`;
 
   const download = page.waitForEvent("download");
   await adapt.getByRole("button", { name: "Download the STL" }).click();
-  expect((await download).suggestedFilename()).toBe("tetra-140pct-adapted.stl");
+  expect((await download).suggestedFilename()).toBe("tetra, 140 %, mirrored X.stl");
   await expect(adapt).toBeHidden();
 
   // What was done is written into the twist's changes.
@@ -208,4 +209,96 @@ endsolid tetra`;
     .getByTestId("adapt-file-input")
     .setInputFiles({ name: "notes.stl", mimeType: "model/stl", buffer: Buffer.from("not a model at all, sorry") });
   await expect(page.getByText("That isn't an STL file.")).toBeVisible();
+});
+
+// A twist keeps the model it adapts (decision 0053): the model card with its slicing, and "Print it" carries the slice.
+test("keeps an adapted STL as the twist's model, slices it, slices it again, and prints it into a build", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
+  const SLICED = 60_000;
+  test.setTimeout(3 * SLICED);
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/twists", { headers: { Origin: origin(page) }, data: { id, name: "Fusilli knob" } });
+  await page.goto(`/twists/${id}`);
+  const twist = async () =>
+    (await (await page.request.get(`/api/twists/${id}`)).json()).twist as {
+      model: { name: string; slice?: { status: string; settings: { slicing?: { layerHeight: number } } } } | null;
+    };
+
+  // Adapted to 110 %: kept with the twist under a name that says what changed, not only downloaded.
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  const adapt = page.getByRole("dialog", { name: "Adapt an STL" });
+  await adapt.getByTestId("adapt-file-input").setInputFiles({
+    name: "fusilli-knob.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(boxStl(20)),
+  });
+  await adapt.getByRole("textbox", { name: "Scale" }).fill("110");
+  await adapt.getByRole("button", { name: "Keep with the twist" }).click();
+  await expect(adapt).toBeHidden();
+  await expect(page.getByRole("button", { name: "Edit scale" })).toContainText("110 %");
+
+  // The model card: the original's name, sliced on its own with the workshop's defaults.
+  const model = page.getByRole("region", { name: "Model" });
+  await expect(model.getByText("fusilli-knob, 110 %.stl")).toBeVisible();
+  await expect(model.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
+  await expect.poll(async () => (await twist()).model?.slice?.status, { timeout: SLICED }).toBe("sliced");
+  // With no photo on the twist, the plate picture is its cover.
+  await expect(page.getByRole("img", { name: "Slicer preview: Fusilli knob" })).toBeVisible();
+  await expect(model.getByRole("button", { name: "See fusilli-knob, 110 %.stl in 3D" })).toBeVisible();
+
+  // Slice it again with another setting; the model keeps it.
+  await model.getByRole("button", { name: "Slice with…" }).click();
+  const settings = page.getByRole("dialog", { name: "How to slice it" });
+  await settings
+    .getByRole("group", { name: "Quality" })
+    .getByRole("radio", { name: /^Extra draft/ })
+    .click();
+  await expect
+    .poll(async () => (await twist()).model?.slice?.settings.slicing?.layerHeight, { timeout: SLICED })
+    .toBe(0.28);
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+  void isMobile;
+
+  // The Twists screen leads with the plate picture too.
+  await page.goto("/twists");
+  await expect(page.getByRole("link", { name: /Fusilli knob/ }).getByRole("img")).toBeVisible();
+
+  // Print it: a build named for the twist whose first attempt carries the sliced file, plate and 3D view as the model had.
+  await page.goto(`/twists/${id}`);
+  await page.getByRole("button", { name: "Print it" }).click();
+  await expect(page).toHaveURL(/\/builds\/[\w-]+$/);
+  await expect(page.getByRole("button", { name: /^See fusilli-knob, 110 %\.gcode\.3mf in 3D$/ })).toBeVisible({
+    timeout: SLICED,
+  });
+});
+
+test("adapting again says it replaced the model, and Undo brings the old one back", async ({ page }) => {
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/twists", { headers: { Origin: origin(page) }, data: { id, name: "Fusilli knob" } });
+  await page.goto(`/twists/${id}`);
+  const adaptTo = async (percent: string) => {
+    await page.getByRole("button", { name: "Adapt an STL" }).click();
+    const adapt = page.getByRole("dialog", { name: "Adapt an STL" });
+    await adapt.getByTestId("adapt-file-input").setInputFiles({
+      name: "knob.stl",
+      mimeType: "model/stl",
+      buffer: Buffer.from(boxStl(20)),
+    });
+    await adapt.getByRole("textbox", { name: "Scale" }).fill(percent);
+    await adapt.getByRole("button", { name: "Keep with the twist" }).click();
+    await expect(adapt).toBeHidden();
+  };
+  const modelName = async () => (await (await page.request.get(`/api/twists/${id}`)).json()).twist.model?.name;
+  await adaptTo("110");
+  await expect.poll(modelName).toBe("knob, 110 %.stl");
+  await adaptTo("84");
+  await expect.poll(modelName).toBe("knob, 84 %.stl");
+  await expect(page.getByText("Model replaced")).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(modelName).toBe("knob, 110 %.stl");
+  await expect(page.getByRole("region", { name: "Model" }).getByText("knob, 110 %.stl")).toBeVisible();
 });

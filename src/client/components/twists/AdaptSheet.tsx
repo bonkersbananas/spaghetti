@@ -2,6 +2,7 @@ import {
   type Adaptation,
   AXES,
   type Axis,
+  adaptedName,
   adaptMesh,
   boundsOf,
   describeAdaptation,
@@ -33,9 +34,11 @@ const readNumber = (text: string) => Number(text.replace(",", ".").replace(/[%\s
 type FitAxis = Axis | "longest";
 
 /**
- * Adapt an STL in the browser: scale it (or fit it to N mm), mirror it, turn it, and download the result, which opens in
- * Bambu Studio like any STL. Nothing is uploaded or kept: the model never leaves the device, and what was done is added
- * to the twist's changes. The mesh functions are pure (`shared/mesh.ts`); this sheet only asks for the numbers.
+ * Adapt an STL in the browser: scale it (or fit it to N mm), mirror it, turn it. The result is kept with the twist as
+ * its model (decision 0053), named after the source and what changed ("fusilli-knob, 110 %.stl"), and sliced on the
+ * page; it can also be downloaded, and opens in Bambu Studio like any STL. The original is never touched, and what was
+ * done is added to the twist's changes. The mesh functions are pure (`shared/mesh.ts`); this sheet only asks for the
+ * numbers.
  */
 export default function AdaptSheet({
   open,
@@ -43,6 +46,8 @@ export default function AdaptSheet({
   twistName,
   room,
   onAdapted,
+  onKeep,
+  keeping,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +55,10 @@ export default function AdaptSheet({
   /** How many more changes the twist can hold (it keeps at most 20). */
   room: number;
   onAdapted: (changes: AdaptedChange[]) => void;
+  /** Keeps the adapted STL with the twist as its model; without it the sheet only downloads. */
+  onKeep?: (file: File) => void;
+  /** The twist keeps a model now: this one takes its place. */
+  keeping?: string | null;
 }) {
   const picker = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<{ name: string; mesh: Mesh } | null>(null);
@@ -103,23 +112,30 @@ export default function AdaptSheet({
     setTurns({});
   };
 
-  function download() {
+  /** Makes the adapted STL and adds what was done to the twist: kept with it, or downloaded. */
+  function finish(how: "keep" | "download") {
     if (!file || !validScale || isUnchanged(adaptation)) return;
     const changes = describeAdaptation(adaptation);
-    const named = `${file.name}${adaptation.scale !== 1 ? `-${Number((adaptation.scale * 100).toFixed(1))}pct` : ""}-adapted.stl`;
+    const named = adaptedName(file.name, adaptation);
     const bytes = writeStl(adaptMesh(file.mesh, adaptation), twistName || file.name);
-    const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: "model/stl" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = named;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "model/stl" });
+    if (how === "keep" && onKeep) onKeep(new File([blob], named, { type: "model/stl" }));
+    else {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = named;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    }
     const kept = changes.slice(0, Math.max(0, room));
     onAdapted(kept);
-    if (kept.length === changes.length) toast.success("Adapted file made", "What we changed is in the twist.");
-    else {
+    const headline = how === "keep" ? "Kept with the twist" : "Adapted file made";
+    if (kept.length === changes.length) {
+      toast.success(headline, how === "keep" ? "It is being sliced." : "What we changed is in the twist.");
+    } else {
       toast.message(
-        "Adapted file made",
+        headline,
         kept.length
           ? "Not all of what we changed fits in the twist: it keeps 20 changes."
           : "The twist already has 20 changes, so this isn't written in it.",
@@ -144,13 +160,24 @@ export default function AdaptSheet({
       footer={
         file ? (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
+            {onKeep && (
               <Button
                 variant="primary"
+                icon={SlicerFileIcon}
+                className="w-full"
+                disabled={!validScale || isUnchanged(adaptation)}
+                onClick={() => finish("keep")}
+              >
+                Keep with the twist
+              </Button>
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                variant={onKeep ? "secondary" : "primary"}
                 icon={DownloadIcon}
                 className="flex-1"
                 disabled={!validScale || isUnchanged(adaptation)}
-                onClick={download}
+                onClick={() => finish("download")}
               >
                 Download the STL
               </Button>
@@ -158,11 +185,13 @@ export default function AdaptSheet({
                 Reset
               </Button>
             </div>
-            <p className="text-caption text-ink-faint text-center">Made on this device</p>
+            <p className="text-caption text-ink-faint text-center">
+              {onKeep && keeping ? `Takes the place of ${keeping}` : "Made on this device"}
+            </p>
           </div>
         ) : undefined
       }
-      description="Scale it, mirror it, turn it. You get a new STL."
+      description="Scale it, mirror it, turn it. The twist keeps the new STL and slices it."
     >
       <div className="flex flex-col gap-6">
         <input

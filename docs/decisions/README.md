@@ -72,3 +72,4 @@ Status: Accepted | Open | Superseded by NNNN
 | [0050](0050-a-model-can-be-sliced-lying-on-another-face.md) | A model can be sliced lying on another face: its settings gain an orientation, chosen from plate pictures of the faces it can rest on, and only the slice is turned | Accepted |
 | [0051](0051-slicing-defaults-live-on-the-printer-page-recipes-keep-slices.md) | The workspace's slicing defaults live on the Printer page, and recipes keep the slicing settings that worked and slice a model in one tap | Accepted |
 | [0052](0052-fins-are-built-into-the-model-when-it-is-sliced.md) | Supports gain Fins: Support Fins (vendored, MIT) builds breakaway fins into the model in the slice worker, loaded only when picked | Accepted |
+| [0053](0053-a-twist-keeps-its-adapted-model.md) | A twist keeps its adapted model (`twist_files`), sliced like an idea's, and "Print it" carries the slice into the build | Accepted |

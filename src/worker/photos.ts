@@ -14,6 +14,7 @@ import {
   recipes,
   shoppingItems,
   spools,
+  twistFiles,
   twists,
   upkeepLogs,
 } from "./db/schema.ts";
@@ -118,6 +119,24 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
     const batch = doomedItemFiles.slice(i, i + 50).map((file) => file.id);
     await env.PHOTOS.delete(batch.flatMap(fileKeys));
     await db.delete(itemFiles).where(inArray(itemFiles.id, batch));
+  }
+  const goneTwists = db
+    .select({ id: twists.id })
+    .from(twists)
+    .where(and(isNotNull(twists.deletedAt), lt(twists.deletedAt, cutoff)));
+  const doomedTwistFiles = await db
+    .select({ id: twistFiles.id })
+    .from(twistFiles)
+    .where(
+      or(
+        and(isNotNull(twistFiles.deletedAt), lt(twistFiles.deletedAt, cutoff)),
+        inArray(twistFiles.twistId, goneTwists),
+      ),
+    );
+  for (let i = 0; i < doomedTwistFiles.length; i += 50) {
+    const batch = doomedTwistFiles.slice(i, i + 50).map((file) => file.id);
+    await env.PHOTOS.delete(batch.flatMap(fileKeys));
+    await db.delete(twistFiles).where(inArray(twistFiles.id, batch));
   }
   const doomedSpools = await db
     .select({ id: spools.id, photoId: spools.photoId })

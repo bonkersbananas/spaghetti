@@ -67,6 +67,7 @@ export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: str
     changes: [],
     fromItemId: input.from?.id ?? null,
     recipeId: null,
+    model: null,
     createdBy: userId,
     createdAt: now,
     updatedAt: now,
@@ -125,7 +126,12 @@ export async function updateTwist(queryClient: QueryClient, id: string, changes:
     }),
   );
   const { twist } = await api<TwistResponse>(`/twists/${id}`, { method: "PATCH", json: changes });
-  patchTwists(queryClient, (twists) => twists.map((t) => (t.id === id ? twist : t)));
+  // A model still on its way to the server isn't in its answer yet: it stays on the page.
+  patchTwists(queryClient, (twists) =>
+    twists.map((t) =>
+      t.id === id ? { ...twist, model: twist.model ?? (t.model && "pending" in t.model ? t.model : null) } : t,
+    ),
+  );
 }
 
 /** Deletes a twist at once, with Undo. */

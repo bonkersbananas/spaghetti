@@ -8,7 +8,7 @@ import {
   UPLOAD_PART_BYTES,
 } from "../../shared/api.ts";
 import { isStlName } from "../../shared/slicing/files.ts";
-import { attemptFiles, itemFiles } from "../db/schema.ts";
+import { attemptFiles, itemFiles, twistFiles } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { fileKey } from "../photos.ts";
@@ -143,11 +143,12 @@ export const uploadRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
     const db = c.var.db;
-    const [onAttempt, onItem] = await Promise.all([
+    const [onAttempt, onItem, onTwist] = await Promise.all([
       db.select({ id: attemptFiles.id }).from(attemptFiles).where(eq(attemptFiles.id, id)).get(),
       db.select({ id: itemFiles.id }).from(itemFiles).where(eq(itemFiles.id, id)).get(),
+      db.select({ id: twistFiles.id }).from(twistFiles).where(eq(twistFiles.id, id)).get(),
     ]);
-    if (!onAttempt && !onItem) await c.env.PHOTOS.delete(fileKey(id, "file"));
+    if (!onAttempt && !onItem && !onTwist) await c.env.PHOTOS.delete(fileKey(id, "file"));
     return c.body(null, 204);
   })
 

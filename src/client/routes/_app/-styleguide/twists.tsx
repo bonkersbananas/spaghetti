@@ -27,6 +27,7 @@ const bins: Twist = {
   ],
   fromItemId: null,
   recipeId: null,
+  model: null,
   createdBy: "a",
   createdAt: now,
   updatedAt: now,
