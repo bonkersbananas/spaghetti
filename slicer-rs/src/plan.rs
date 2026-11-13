@@ -162,6 +162,7 @@ fn island_paths(
     let first = layer == 0;
     let (walls, gaps) = (&island.walls, &island.gaps);
     let island_inner = &island.inner;
+    let overlap = island.overlap;
     let mut out: Vec<Path> = Vec::new();
     let island = index;
 
@@ -188,7 +189,6 @@ fn island_paths(
     }
 
     // The infill reaches into the innermost wall, but not into the infill of other kinds beside it.
-    let overlap = wall_overlap(layer, h, s);
     let into_walls = |region: &Shapes| -> Shapes {
         if overlap <= 0.0 || region.is_empty() {
             return region.clone();
@@ -494,24 +494,6 @@ fn solid_lines(
         }
     }
     out
-}
-
-/// mm the infill reaches into the innermost wall: Orca's share (`infill_wall_overlap`, on the first layer
-/// `top_bottom_infill_wall_overlap`) of half the last wall's spacing and half a solid line's.
-fn wall_overlap(layer: usize, h: f64, s: &Settings) -> f64 {
-    let first = layer == 0;
-    let (w_outer, w_inner, w_solid) = if first {
-        (s.first_layer_width, s.first_layer_width, s.first_layer_width)
-    } else {
-        (s.outer_wall_width, s.inner_wall_width, s.solid_infill_width)
-    };
-    let inset = match s.wall_loops {
-        0 => return 0.0,
-        1 => Settings::spacing(w_outer, h) / 2.0,
-        _ => Settings::spacing(w_inner, h) / 2.0,
-    };
-    let share = if first { s.top_bottom_infill_wall_overlap } else { s.infill_wall_overlap };
-    share * (inset + Settings::spacing(w_solid, h) / 2.0)
 }
 
 /// The sparse infill lines of a region on a layer, as printed: Orca's pattern where there is one, else straight

@@ -73,6 +73,9 @@ pub struct Island {
     pub object: u32,
     /// The shape of the slice it is (on the first layer, pulled in against elephant's foot).
     pub outline: geom::Shape,
+    /// mm its infill reaches into its innermost wall: Orca's share (`infill_wall_overlap`; on the first layer and an
+    /// object's last, `top_bottom_infill_wall_overlap`) of half the last wall's spacing and half a solid line's.
+    pub overlap: f64,
 }
 
 /// The infill areas of one island, by kind.
@@ -124,24 +127,6 @@ pub fn regions(
     s: &Settings,
 ) -> Vec<LayerRegions> {
     let n = slices.len();
-    // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
-    // came from, and belongs to its object.
-    let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
-        let (slice, objects) = if i == 0 && s.elephant_foot > 0.0 {
-            let pulled = geom::offset(&slices[0], -s.elephant_foot);
-            let objects = pulled.iter().map(|shape| owner_within(shape, &slices[0], &owners[0])).collect();
-            (pulled, objects)
-        } else {
-            (slices[i].clone(), owners[i].clone())
-        };
-        let mut islands = walls(&slice, i, layers.height[i], s);
-        for ((island, object), shape) in islands.iter_mut().zip(objects).zip(slice) {
-            island.object = object;
-            island.outline = shape;
-        }
-        islands
-    });
-
     // Top and bottom surfaces (Orca's `detect_surfaces_type`), from the whole slices (under and over the walls
     // too): what the layer above doesn't cover and what the layer below doesn't hold up, opened by a tenth of the
     // outer wall's width against slivers. Both come from one boolean per pair of layers, and none when the two are
@@ -166,6 +151,35 @@ pub fn regions(
     if n > 0 {
         tops.push(slices[n - 1].clone());
     }
+    // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
+    // came from, and belongs to its object.
+    let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
+        let (slice, objects) = if i == 0 && s.elephant_foot > 0.0 {
+            let pulled = geom::offset(&slices[0], -s.elephant_foot);
+            let objects = pulled.iter().map(|shape| owner_within(shape, &slices[0], &owners[0])).collect();
+            (pulled, objects)
+        } else {
+            (slices[i].clone(), owners[i].clone())
+        };
+        // An object's last layer: nothing of it above.
+        let last: Vec<bool> = match owners.get(i + 1) {
+            Some(above) => objects.iter().map(|o| !above.contains(o)).collect(),
+            None => vec![true; objects.len()],
+        };
+        let around = Around {
+            upper: slices.get(i + 1),
+            lower: i.checked_sub(1).map(|j| &slices[j]),
+            top: &tops[i],
+            last: &last,
+        };
+        let mut islands = walls(&slice, i, layers.height[i], &around, s);
+        for ((island, object), shape) in islands.iter_mut().zip(objects).zip(slice) {
+            island.object = object;
+            island.outline = shape;
+        }
+        islands
+    });
+
     // Where a surface is both (a part one layer thick), it is a bottom; but a small crack in a top, unless it lies in
     // a larger bottom, is top, with a margin round it.
     let exposed: Vec<(Shapes, Shapes)> =
@@ -469,6 +483,93 @@ const PATH_RESOLUTION: f64 = 0.0125;
 /// Orca's allowance for walls overlapping where a region narrows (`INSET_OVERLAP_TOLERANCE`).
 const INSET_OVERLAP_TOLERANCE: f64 = 0.4;
 
+/// What `split_top` finds: the top infill beside the outer wall alone (before it reaches into the wall), and the rest
+/// of the area inside the outer wall, where the inner walls go.
+struct TopSplit {
+    fill: Shapes,
+    rest: Shapes,
+}
+
+/// Orca's `split_top_surfaces`, for one wall round a top surface, island by island: of the area inside the outer wall
+/// (`region`), what neither the layer above, grown by `min_width_top_surface`, nor a bridge over the layer below
+/// (grown by one and a half walls, a millimetre and half a spacing) covers is a top. Grown back by nine tenths of the
+/// outer wall's width and that same width, less half its spacing, the top takes the inner walls' place; its fill
+/// keeps a spacing from the outer wall's middle, reaches half that spacing beyond the top, and stays just inside the
+/// outer wall; the inner walls go round the rest. None where nothing is a top. A top lies within the layer's tops,
+/// so everything that decides it is worked out in their box only, and the island's outline is cut to it (exact
+/// inside the box: what the box cuts off is farther than any offset reaches).
+fn split_top(region: &Shapes, around: &Around, layer: usize, height: f64, s: &Settings) -> Option<TopSplit> {
+    let upper = around.upper?;
+    if around.top.is_empty() {
+        return None;
+    }
+    let first = layer == 0;
+    let (w_outer, w_inner) =
+        if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    let (sp_outer, sp_inner) = (Settings::spacing(w_outer, height), Settings::spacing(w_inner, height));
+    let min_width = (sp_outer / 2.0 + 1e-5).max(s.min_width_top_surface.of(w_inner));
+    // Orca's `offset_top_surface`: the walls' width less the inner walls', nine tenths of it.
+    let reach = 0.9 * w_outer + min_width - sp_outer / 2.0;
+    let bridge_reach = 1.5 * sp_outer.max(w_inner) + 1.0f64.min(s.nozzle_diameter / 0.4) + sp_inner / 2.0;
+    let within = |a: [i32; 4], b: [i32; 4]| [a[0].max(b[0]), a[1].max(b[1]), a[2].min(b[2]), a[3].min(b[3])];
+    let mut out = TopSplit { fill: Vec::new(), rest: Vec::new() };
+    let mut any = false;
+    for shape in region {
+        // Islands no top reaches keep their walls, and so do those whose tops are thin strips (a slope's): a top
+        // lies half the outer wall in from the outline and `min_width` from the layer above, so the tops hold a
+        // disc that wide round it.
+        let b = geom::inflate(geom::bbox_of(shape), 1e-4);
+        let tops = geom::near(around.top, b);
+        // (Simplified first, to 0.05 mm, as the strips have many points; the disc is taken that much smaller.)
+        let thick = if tops.is_empty() {
+            tops
+        } else {
+            geom::offset(&geom::simplify_shapes(&tops, 0.05), -(w_outer / 2.0).min(min_width) + 0.06)
+        };
+        // The top lies in that disc's middle: in the thick part of the tops.
+        let Some(tb) = geom::bbox(&thick) else {
+            out.rest.push(shape.clone());
+            continue;
+        };
+        let orig: Shapes = vec![shape.clone()];
+        // A mitred corner where the box cuts an outline reaches up to about three and a half times an offset's
+        // distance: the box keeps that far from the tops.
+        let local = |shapes: &Shapes, d: f64| geom::clip_box(shapes, within(b, geom::inflate(tb, 3.5 * d + 0.01)));
+        // What a bridge over the layer below takes, and the layer above with its margin (Orca clips both to the
+        // island's box).
+        let mut held = local(&orig, 0.0);
+        if let Some(lower) = around.lower {
+            let unsupported = geom::difference(&local(&orig, bridge_reach), &local(lower, bridge_reach));
+            if !unsupported.is_empty() {
+                held = geom::difference(&held, &geom::offset(&unsupported, bridge_reach));
+            }
+        }
+        let top = geom::difference(&held, &geom::offset(&local(upper, min_width), min_width));
+        if top.is_empty() {
+            out.rest.push(shape.clone());
+            continue;
+        }
+        any = true;
+        let grown = geom::offset(&top, reach);
+        let gb = geom::bbox(&grown).unwrap_or(tb);
+        // The outline offset by `d`, exact as far as `beyond` past the grown top.
+        let near_grown = |d: f64, beyond: f64| {
+            geom::offset(&geom::clip_box(&orig, geom::inflate(gb, beyond + 3.5 * d.abs() + 0.01)), d)
+        };
+        // A spacing in from the outer wall's middle: the top's fill goes inside, and what of the top is outside
+        // stays with the rest (for gap fill beside the wall).
+        let fill_clip = near_grown(-sp_outer, 0.0);
+        let beside_wall = geom::difference(&top, &fill_clip);
+        let tops_fill = geom::intersection(&fill_clip, &grown);
+        // Its fill reaches half the outer wall's spacing beyond, as far as half a sparse line inside the wall.
+        let clip = near_grown(sp_outer / 2.0 - s.sparse_infill_width / 2.0, sp_outer / 2.0);
+        out.fill.extend(geom::intersection(&clip, &geom::offset(&tops_fill, sp_outer / 2.0)));
+        let walled = geom::difference(&orig, &grown);
+        out.rest.extend(if s.gap_infill_speed > 0.0 { geom::union(&walled, &beside_wall) } else { walled });
+    }
+    any.then_some(out)
+}
+
 /// How narrow and how wide gap fill's lines may be on a layer (mm), as Orca's: a fifth of the narrower wall's
 /// width less the overlap allowance, and two inner walls' spacing.
 pub fn gap_widths(layer: usize, height: f64, s: &Settings) -> (f64, f64) {
@@ -485,8 +586,50 @@ const MIN_GAP_AREA: f64 = 0.005;
 /// print as a loop going there and back). Where a wall doesn't fit, the narrow leftover is a gap, filled along its
 /// middle; the area inside the last wall, less the gaps and parts too narrow for its lines, is for infill. Each
 /// step works on the whole layer at once (a boolean costs much the same for one island as for ten), and the
-/// results are then shared out to the islands they lie in.
-fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island> {
+/// results are then shared out to the islands they lie in. With Orca's `only_one_wall_top`, an object's last layer
+/// gets one wall, and a top surface only the outer wall, its top infill reaching right up to it (`split_top`).
+fn walls(slice: &Shapes, layer: usize, height: f64, around: &Around, s: &Settings) -> Vec<Island> {
+    if !around.last.iter().any(|&l| l) {
+        return wall_group(slice, s.wall_loops, false, layer, height, around, s);
+    }
+    // An object's last layer: one wall with `only_one_wall_top`, and its infill's overlap is the top's.
+    let (last, rest): (Vec<usize>, Vec<usize>) = (0..slice.len()).partition(|&k| around.last[k]);
+    let pick = |ks: &[usize]| -> Shapes { ks.iter().map(|&k| slice[k].clone()).collect() };
+    let mut out: Vec<Island> = slice.iter().map(|_| Island::default()).collect();
+    for (ks, is_last) in [(last, true), (rest, false)] {
+        if ks.is_empty() {
+            continue;
+        }
+        let one_wall = is_last && s.only_one_wall_top && s.top_shell_layers > 0;
+        let loops = if one_wall { s.wall_loops.min(1) } else { s.wall_loops };
+        let islands = wall_group(&pick(&ks), loops, is_last, layer, height, around, s);
+        for (k, island) in ks.into_iter().zip(islands) {
+            out[k] = island;
+        }
+    }
+    out
+}
+
+/// The layers around one, as the walls see them: the slices above and below (none above the plate's last layer, none
+/// below the first), this layer's tops and, for each shape of the slice, whether it is on its object's last layer.
+pub struct Around<'a> {
+    pub upper: Option<&'a Shapes>,
+    pub lower: Option<&'a Shapes>,
+    /// What the layer above doesn't cover (the tops `regions` finds): where a top may be split off.
+    pub top: &'a Shapes,
+    pub last: &'a [bool],
+}
+
+/// `walls` for shapes that all get `loops` walls, and are (`last`) or aren't on their objects' last layer.
+fn wall_group(
+    slice: &Shapes,
+    loops: usize,
+    last: bool,
+    layer: usize,
+    height: f64,
+    around: &Around,
+    s: &Settings,
+) -> Vec<Island> {
     let first = layer == 0;
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
@@ -503,10 +646,21 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
     let mut depths: Vec<Shapes> = Vec::new();
     let mut gaps: Shapes = Vec::new();
     let mut last_spacing = sp_outer;
+    // Top infill beside the outer wall alone (`split_top`).
+    let mut top: Option<Shapes> = None;
     if !region.is_empty() {
         depths.push(region.clone());
+        if loops > 1
+            && !last
+            && s.only_one_wall_top
+            && s.top_shell_layers > 0
+            && let Some(split) = split_top(&region, around, layer, height, s)
+        {
+            region = split.rest;
+            top = Some(split.fill);
+        }
         // Each inner wall, and one more past the last to find the gaps the last one leaves.
-        for k in 1..=s.wall_loops {
+        for k in 1..=loops {
             // Orca's precise outer wall: the first inner wall a whole line width from the outer one (no overlap,
             // so the outer wall keeps to the model's outline).
             let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };
@@ -517,7 +671,7 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
             let gap = geom::difference(&geom::offset(&region, -d / 2.0), &geom::offset(&next, d / 2.0 + safety));
             // Most of what this finds is the crumbs offsets leave in corners: too small to fill.
             gaps.extend(gap.into_iter().filter(|shape| geom::shape_area_mm2(shape) >= MIN_GAP_AREA));
-            if k == s.wall_loops || next.is_empty() {
+            if k == loops || next.is_empty() {
                 break;
             }
             region = next;
@@ -536,7 +690,7 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
     };
     // Infill goes inside the last wall, but not where gap fill already goes (as Orca: the gaps come out of the
     // area first), nor in parts too narrow for its lines.
-    let inner = if region.is_empty() {
+    let mut inner = if region.is_empty() {
         Vec::new()
     } else {
         let inset = last_spacing / 2.0;
@@ -546,6 +700,22 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
             PATH_RESOLUTION,
         )
     };
+    // How far the infill reaches into the walls, which the planner adds (Orca's overlap, `Island::overlap`).
+    let sp_solid = Settings::spacing(w_solid, height);
+    let share = if first || last { s.top_bottom_infill_wall_overlap } else { s.infill_wall_overlap };
+    let inset = match loops {
+        0 => 0.0,
+        1 => sp_outer / 2.0,
+        _ => sp_inner / 2.0,
+    };
+    let overlap = if loops == 0 { 0.0 } else { share * (inset + sp_solid / 2.0) };
+    // A top beside the outer wall alone: Orca's top fill, reaching into the wall by `top_bottom_infill_wall_overlap`
+    // (nothing on the first layer) rather than the infill's overlap.
+    if let Some(fill) = top {
+        let top_overlap = if first { 0.0 } else { s.top_bottom_infill_wall_overlap * (inset + sp_solid / 2.0) };
+        let fill = if (top_overlap - overlap).abs() > 1e-6 { geom::offset(&fill, top_overlap - overlap) } else { fill };
+        inner = geom::simplify_shapes(&geom::union(&inner, &fill), PATH_RESOLUTION);
+    }
 
     // Share everything out to the islands of the slice it lies in.
     let boxes: Vec<[i32; 4]> = slice.iter().map(geom::bbox_of).collect();
@@ -562,7 +732,7 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
         }
         found
     };
-    let mut out: Vec<Island> = slice.iter().map(|_| Island::default()).collect();
+    let mut out: Vec<Island> = slice.iter().map(|_| Island { overlap, ..Island::default() }).collect();
     for (k, shapes) in depths.iter().enumerate() {
         for shape in shapes {
             if let Some(i) = island_of(shape) {
@@ -585,4 +755,54 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geom::sc;
+
+    fn square(x0: f64, y0: f64, x1: f64, y1: f64) -> geom::Shape {
+        vec![vec![
+            geom::pt(sc(x0), sc(y0)),
+            geom::pt(sc(x1), sc(y0)),
+            geom::pt(sc(x1), sc(y1)),
+            geom::pt(sc(x0), sc(y1)),
+        ]]
+    }
+
+    #[test]
+    fn a_top_surface_has_only_the_outer_wall_and_its_infill_reaches_it() {
+        // A 20 mm block 2 mm high with a 6 mm one standing in its middle, sliced with the X2D's defaults
+        // (`only_one_wall_top`).
+        let s = Settings::default();
+        let layers = Layers::plan(4.0, 0.2, 0.2);
+        let n = layers.top.len();
+        let slices: Vec<Shapes> = (0..n)
+            .map(|i| {
+                if layers.top[i] < 2.0 + 1e-6 {
+                    vec![square(0.0, 0.0, 20.0, 20.0)]
+                } else {
+                    vec![square(7.0, 7.0, 13.0, 13.0)]
+                }
+            })
+            .collect();
+        let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
+        let regions = regions(&slices, &owners, &layers, &[(sc(10.0) as f64, sc(10.0) as f64)], &s);
+        let length = |loops: &[Contour]| loops.iter().map(|c| geom::length_mm(c, true)).sum::<f64>();
+        let step = layers.top.iter().position(|&z| z > 2.0 + 1e-6).unwrap() - 1;
+
+        // The big block's top: the outer wall round it all, the inner wall only round what the small block
+        // stands on, and the top's infill right up to the outer wall (0.6 mm in is under the inner wall elsewhere).
+        let top = &regions[step].islands[0];
+        assert!(length(&top.walls[0]) > 75.0, "{}", length(&top.walls[0]));
+        assert!(length(&top.walls[1]) < 45.0, "{}", length(&top.walls[1]));
+        assert!(geom::contains(&top.inner, geom::pt(sc(0.6), sc(10.0))));
+        // Below it, both walls go all the way round.
+        let below = &regions[step - 6].islands[0];
+        assert!(length(&below.walls[1]) > 70.0, "{}", length(&below.walls[1]));
+        assert!(!geom::contains(&below.inner, geom::pt(sc(0.6), sc(10.0))));
+        // The small block's last layer has one wall.
+        assert_eq!(regions[n - 1].islands[0].walls.len(), 1);
+    }
 }
