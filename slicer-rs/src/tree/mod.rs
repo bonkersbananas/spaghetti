@@ -14,10 +14,14 @@
 //! Lengths are kept in Orca's nanometres where Orca keeps integers, so that its truncations come out the same; the
 //! polygon work is in `geom`'s units (0.1 µm).
 
+pub mod grow;
 pub mod overhangs;
+pub mod seed;
+pub mod util;
 pub mod volumes;
 
 use crate::config::Settings;
+use crate::geom::Shapes;
 
 /// mm from Orca's nanometres.
 #[inline]
@@ -214,6 +218,47 @@ impl Config {
     }
 }
 
+/// One object's trees before they are drawn: each support layer's branches, placed, and the roofs over them.
+pub struct Branches {
+    pub layers: Vec<Vec<grow::Element>>,
+    /// Each support layer's contact roofs (right under the model) and interface roofs.
+    pub contacts: Vec<Shapes>,
+    pub interfaces: Vec<Shapes>,
+}
+
+/// The trees for an object whose layers' slices are `slices` (`heights` thick), about `origin` (units, the middle
+/// of its bounding box), on a plate `bed` mm wide: its overhangs found, the model's volumes worked out, tips seeded
+/// under the overhangs, grown down and placed. None where nothing needs support.
+pub fn branches(
+    slices: &[Shapes],
+    heights: &[f64],
+    s: &Settings,
+    origin: (f64, f64),
+    bed: [f64; 2],
+) -> Option<Branches> {
+    let c = Config::new(s);
+    let found = overhangs::detect(slices, heights, &c, s);
+    let areas = overhangs::areas(&found);
+    // Support layers up to the highest overhang above the first layer, less the top gap (Orca's `precalculate`).
+    let top = (1..areas.len()).rev().find(|&l| !areas[l].is_empty())?;
+    let n = top.saturating_sub(c.z_distance_top_layers);
+    if n == 0 {
+        return None;
+    }
+    let v = volumes::Volumes::new(slices, &c, bed);
+    v.precalculate(&c, n);
+    let flow_spacing =
+        (s.support.line_width as f32 - s.layer_height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
+    let roof_density = (flow_spacing / (s.support.interface_spacing + flow_spacing)).min(1.0);
+    let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n);
+    seeder.seed(&areas);
+    let seeds = seeder.finish();
+    let mut layers = seeds.layers;
+    grow::grow(&c, &v, &mut layers);
+    grow::place(&c, &v, &mut layers);
+    Some(Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,6 +275,56 @@ mod tests {
             .collect();
         let profile = Profile::over_x2d(BTreeMap::new(), process, BTreeMap::new());
         Settings::from_profile(std::sync::Arc::new(profile), None)
+    }
+
+    #[test]
+    fn a_ts_trees_start_under_its_roofs_and_reach_the_plate() {
+        // The T of the normal supports' test: a 10 mm pillar 20 mm tall under a slab 40 mm wide, 5 mm thick.
+        let s = tree_settings();
+        let rect = |x0: f64, y0: f64, x1: f64, y1: f64| -> crate::geom::Shape {
+            let p = |x: f64, y: f64| crate::geom::pt(crate::geom::sc(x), crate::geom::sc(y));
+            vec![vec![p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)]]
+        };
+        let slices: Vec<Shapes> =
+            (0..125)
+                .map(|l| {
+                    if l < 100 {
+                        vec![rect(115.0, 123.0, 125.0, 133.0)]
+                    } else {
+                        vec![rect(100.0, 123.0, 140.0, 133.0)]
+                    }
+                })
+                .collect();
+        let heights = vec![0.2; slices.len()];
+        let origin = (crate::geom::sc(120.0) as f64, crate::geom::sc(128.0) as f64);
+        let b = branches(&slices, &heights, &s, origin, [350.0, 320.0]).expect("trees");
+        // Orca's: a contact roof on layer 98 (z 19.8), an interface under it, and the branches from layer 96 down.
+        assert_eq!(b.layers.len(), 99);
+        let with =
+            |v: &[Shapes]| v.iter().enumerate().filter(|(_, a)| !a.is_empty()).map(|(l, _)| l).collect::<Vec<_>>();
+        assert_eq!(with(&b.contacts), [98]);
+        assert_eq!(with(&b.interfaces), [97]);
+        assert!(b.layers[97].is_empty() && b.layers[98].is_empty() && !b.layers[96].is_empty());
+        for (l, layer) in b.layers.iter().enumerate() {
+            for e in layer {
+                assert!(e.state.result_on_layer.is_some(), "an unplaced branch on layer {l}");
+                for &p in &e.parents {
+                    assert!(p < b.layers[l + 1].len());
+                }
+            }
+        }
+        assert!(!b.layers[0].is_empty(), "the trees reach the plate");
+        // Two trunks, one under each arm, as wide as Orca's near the plate (its trunks stand at about x 106.3 and
+        // 132.0 at z 1.0, 2.9 mm round).
+        let c = Config::new(&s);
+        let mut trunks: Vec<(f64, i64)> = b.layers[4]
+            .iter()
+            .map(|e| (crate::geom::unsc(e.state.result_on_layer.unwrap().x), c.element_radius(&e.state)))
+            .collect();
+        trunks.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(trunks.len(), 2);
+        assert!((trunks[0].0 - 106.3).abs() < 1.5 && (trunks[1].0 - 132.0).abs() < 1.5, "{trunks:?}");
+        assert!(trunks.iter().all(|t| t.1 == c.recommended_min_radius(4)));
     }
 
     #[test]

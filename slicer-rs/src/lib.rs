@@ -586,6 +586,18 @@ pub mod par {
         (0..n).map(f).collect()
     }
 
+    /// Each item's result, in order (on every core where there are threads).
+    #[cfg(feature = "parallel")]
+    pub fn map_vec<T: Send, R: Send, F: Fn(T) -> R + Sync + Send>(items: Vec<T>, f: F) -> Vec<R> {
+        use rayon::prelude::*;
+        items.into_par_iter().map(f).collect()
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn map_vec<T, R, F: Fn(T) -> R>(items: Vec<T>, f: F) -> Vec<R> {
+        items.into_iter().map(f).collect()
+    }
+
     #[cfg(feature = "parallel")]
     pub fn join<A: Send, B: Send>(a: impl FnOnce() -> A + Send, b: impl FnOnce() -> B + Send) -> (A, B) {
         rayon::join(a, b)
