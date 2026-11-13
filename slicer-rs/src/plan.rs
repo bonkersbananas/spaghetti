@@ -65,7 +65,7 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, centres: &[(f64, 
     let points: Vec<Pt> = nodes
         .iter()
         .map(|&k| {
-            let c = r.islands[k].centroid;
+            let c = r.islands[k].outline.first().map_or(geom::pt(0, 0), |c| geom::centroid(c));
             geom::pt(to_mm(c.x), to_mm(c.y))
         })
         .collect();

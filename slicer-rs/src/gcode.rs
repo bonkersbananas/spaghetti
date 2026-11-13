@@ -566,48 +566,55 @@ fn route_length<'p>(from: (f64, f64), route: impl Iterator<Item = &'p Pt>, most:
 /// `needs_retraction` decides: not when it is shorter than the retraction's minimum travel; always when it leaves an
 /// outer wall; not when it goes to anything but a wall and stays within one of the layer's internal shapes (the slice
 /// but its top and bottom surfaces), with "reduce infill retraction" on and some sparse infill; else it does.
-fn retracts(from: Role, to: Role, d: f64, a: Pt, b: Pt, internal: &Internal, s: &Settings) -> bool {
+fn retracts(from: &Path, to: &Path, d: f64, a: Pt, b: Pt, internal: &Internal, s: &Settings) -> bool {
     if d < s.retract_min_travel {
         return false;
     }
-    if from == Role::OuterWall {
+    if from.role == Role::OuterWall {
         return true;
     }
-    let wall = matches!(to, Role::InnerWall | Role::OuterWall);
-    !(!wall && s.reduce_infill_retraction && s.sparse_density > 0.0 && internal.holds(a, b))
+    let wall = matches!(to.role, Role::InnerWall | Role::OuterWall);
+    !(!wall
+        && s.reduce_infill_retraction
+        && s.sparse_density > 0.0
+        && from.island == to.island
+        && internal.holds(from.island as usize, a, b))
 }
 
-/// A layer's slice and its top and bottom surfaces, each shape with its bounding box, for testing travels against.
+/// A layer's islands' outlines and its top and bottom surfaces, each contour and shape with its bounding box, for
+/// testing travels against.
 struct Internal<'a> {
-    slice: &'a Shapes,
-    slice_boxes: Vec<[i32; 4]>,
+    outlines: Vec<Vec<(&'a [Pt], [i32; 4])>>,
     surfaces: &'a Shapes,
     surface_boxes: Vec<[i32; 4]>,
 }
 
 impl<'a> Internal<'a> {
-    fn new(slice: &'a Shapes, surfaces: &'a Shapes) -> Self {
+    fn new(islands: &'a [crate::region::Island], surfaces: &'a Shapes) -> Self {
+        let bbox = |c: &[Pt]| {
+            c.iter().fold([i32::MAX, i32::MAX, i32::MIN, i32::MIN], |b, p| {
+                [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]
+            })
+        };
         Internal {
-            slice,
-            slice_boxes: slice.iter().map(geom::bbox_of).collect(),
+            outlines: islands.iter().map(|i| i.outline.iter().map(|c| (c.as_slice(), bbox(c))).collect()).collect(),
             surfaces,
             surface_boxes: surfaces.iter().map(geom::bbox_of).collect(),
         }
     }
 
-    /// Whether the segment a–b lies within one of the slice's shapes and off its top and bottom surfaces: within one
-    /// of Orca's internal surfaces (the slice but its tops and bottoms), without working that out.
-    fn holds(&self, a: Pt, b: Pt) -> bool {
-        let in_box = |bb: &[i32; 4], p: Pt| p.x >= bb[0] && p.x <= bb[2] && p.y >= bb[1] && p.y <= bb[3];
-        let inside = self.slice.iter().zip(&self.slice_boxes).any(|(shape, bb)| {
-            in_box(bb, a) && in_box(bb, b) && geom::segment_inside(std::slice::from_ref(shape), a, b)
-        });
-        if !inside {
+    /// Whether the segment a–b, between two of island `k`'s paths, stays within its outline and off the layer's top
+    /// and bottom surfaces: within one of Orca's internal surfaces (the slice but its tops and bottoms), without
+    /// working them out. Both ends lie in the island, so the segment stays in it unless it crosses its outline.
+    fn holds(&self, k: usize, a: Pt, b: Pt) -> bool {
+        let (lo, hi) = ((a.x.min(b.x), a.y.min(b.y)), (a.x.max(b.x), a.y.max(b.y)));
+        let near = |bb: &[i32; 4]| bb[0] <= hi.0 && bb[2] >= lo.0 && bb[1] <= hi.1 && bb[3] >= lo.1;
+        let Some(outline) = self.outlines.get(k) else { return false };
+        if outline.iter().any(|&(c, bb)| near(&bb) && geom::contour_crosses(c, a, b)) {
             return false;
         }
-        let (lo, hi) = ((a.x.min(b.x), a.y.min(b.y)), (a.x.max(b.x), a.y.max(b.y)));
         !self.surfaces.iter().zip(&self.surface_boxes).any(|(shape, bb)| {
-            bb[0] <= hi.0 && bb[2] >= lo.0 && bb[1] <= hi.1 && bb[3] >= lo.1 && {
+            near(bb) && {
                 let one = std::slice::from_ref(shape);
                 geom::contains(one, a) || geom::segment_crosses(one, a, b)
             }
@@ -668,7 +675,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         }
     }
     let labels = job.labels();
-    let internal = Internal::new(&regions.slice, &regions.surfaces);
+    let internal = Internal::new(&regions.islands, &regions.surfaces);
     let mut last: Option<&Path> = None;
     for path in &plan.paths {
         let to = path.points[0];
@@ -696,7 +703,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
                 if d > 1e-6 {
                     b.set_accel(b.travel_accel(path, d));
                     let here = geom::pt(geom::sc(b.x), geom::sc(b.y));
-                    let stay = !retracts(prev.role, path.role, d, here, to, &internal, s);
+                    let stay = !retracts(prev, path, d, here, to, &internal, s);
                     if !stay {
                         b.retract();
                     }
@@ -1581,29 +1588,49 @@ mod tests {
 
     #[test]
     fn travels_retract_where_orcas_do() {
-        // A 20 mm square slice with a 4 mm top surface in its middle.
-        let square = |x0: i32, y0: i32, x1: i32, y1: i32| {
-            vec![vec![geom::pt(x0, y0), geom::pt(x1, y0), geom::pt(x1, y1), geom::pt(x0, y1)]]
-        };
+        // An island 20 mm square with a 4 mm hole in its middle, and a top surface in a corner of it.
         let mm = geom::SCALE as i32;
-        let slice: Shapes = vec![square(0, 0, 20 * mm, 20 * mm)];
-        let tops: Shapes = vec![square(8 * mm, 8 * mm, 12 * mm, 12 * mm)];
-        let internal = Internal::new(&slice, &tops);
+        let square = |x0: i32, y0: i32, x1: i32, y1: i32| {
+            vec![
+                geom::pt(x0 * mm, y0 * mm),
+                geom::pt(x1 * mm, y0 * mm),
+                geom::pt(x1 * mm, y1 * mm),
+                geom::pt(x0 * mm, y1 * mm),
+            ]
+        };
+        let mut hole = square(8, 8, 12, 12);
+        hole.reverse();
+        let island = crate::region::Island { outline: vec![square(0, 0, 20, 20), hole], ..Default::default() };
+        let islands = vec![island];
+        let tops: Shapes = vec![vec![square(2, 14, 6, 18)]];
+        let internal = Internal::new(&islands, &tops);
         let s = Settings::default();
         let p = |x: f64, y: f64| geom::pt(geom::sc(x), geom::sc(y));
-        let (sparse, solid, inner, outer, top) =
-            (Role::SparseInfill, Role::SolidInfill, Role::InnerWall, Role::OuterWall, Role::TopSurface);
-        // Within the object, off the top surface: infill to infill, or from an inner wall, needs none.
-        assert!(!retracts(sparse, solid, 15.0, p(2.0, 2.0), p(2.0, 17.0), &internal, &s));
-        assert!(!retracts(inner, sparse, 15.0, p(2.0, 2.0), p(17.0, 2.0), &internal, &s));
-        // Across the top surface, into it, out of the object, to a wall or from the outer wall, it does.
-        assert!(retracts(sparse, solid, 16.0, p(2.0, 10.0), p(18.0, 10.0), &internal, &s));
-        assert!(retracts(sparse, top, 8.0, p(2.0, 10.0), p(10.0, 10.0), &internal, &s));
-        assert!(retracts(sparse, solid, 30.0, p(2.0, 2.0), p(32.0, 2.0), &internal, &s));
-        assert!(retracts(sparse, inner, 15.0, p(2.0, 2.0), p(2.0, 17.0), &internal, &s));
-        assert!(retracts(outer, sparse, 15.0, p(2.0, 2.0), p(2.0, 17.0), &internal, &s));
+        let path = |role: Role, island: u32| Path {
+            role,
+            points: Vec::new(),
+            closed: false,
+            width: 0.42,
+            mm3_per_mm: 0.08,
+            speed: 100.0,
+            accel: 1000.0,
+            island,
+            object: 0,
+        };
+        let (sparse, solid, gap) = (path(Role::SparseInfill, 0), path(Role::SolidInfill, 0), path(Role::GapFill, 0));
+        let (inner, outer, top) = (path(Role::InnerWall, 0), path(Role::OuterWall, 0), path(Role::TopSurface, 0));
+        let elsewhere = path(Role::SparseInfill, 1);
+        // Within the island, off its hole and its top surface: to infill, from infill or an inner wall, none.
+        assert!(!retracts(&sparse, &solid, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
+        assert!(!retracts(&inner, &gap, 8.0, p(2.0, 2.0), p(2.0, 10.0), &internal, &s));
+        // Across the hole, into the top surface, to another island, to a wall or off the outer wall, it retracts.
+        assert!(retracts(&sparse, &solid, 10.0, p(5.0, 10.0), p(15.0, 10.0), &internal, &s));
+        assert!(retracts(&sparse, &top, 6.3, p(2.0, 10.0), p(4.0, 16.0), &internal, &s));
+        assert!(retracts(&sparse, &elsewhere, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
+        assert!(retracts(&sparse, &inner, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
+        assert!(retracts(&outer, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
         // Shorter than the minimum travel, never.
-        assert!(!retracts(outer, inner, 0.5, p(2.0, 2.0), p(2.0, 2.5), &internal, &s));
+        assert!(!retracts(&outer, &inner, 0.5, p(2.0, 2.0), p(2.0, 2.5), &internal, &s));
     }
 
     #[test]

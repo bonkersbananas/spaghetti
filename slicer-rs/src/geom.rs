@@ -323,20 +323,21 @@ pub fn segment_inside(shapes: &[Shape], a: Pt, b: Pt) -> bool {
 
 /// Whether the segment a–b crosses or touches any of the shapes' contours.
 pub fn segment_crosses(shapes: &[Shape], a: Pt, b: Pt) -> bool {
+    shapes.iter().flatten().any(|contour| contour_crosses(contour, a, b))
+}
+
+/// Whether the segment a–b crosses or touches a contour.
+pub fn contour_crosses(contour: &[Pt], a: Pt, b: Pt) -> bool {
     let (lo_x, hi_x) = (a.x.min(b.x), a.x.max(b.x));
     let (lo_y, hi_y) = (a.y.min(b.y), a.y.max(b.y));
-    for shape in shapes {
-        for contour in shape {
-            let n = contour.len();
-            for i in 0..n {
-                let (c, d) = (contour[i], contour[(i + 1) % n]);
-                if c.x.max(d.x) < lo_x || c.x.min(d.x) > hi_x || c.y.max(d.y) < lo_y || c.y.min(d.y) > hi_y {
-                    continue;
-                }
-                if segments_cross(a, b, c, d) {
-                    return true;
-                }
-            }
+    let n = contour.len();
+    for i in 0..n {
+        let (c, d) = (contour[i], contour[(i + 1) % n]);
+        if c.x.max(d.x) < lo_x || c.x.min(d.x) > hi_x || c.y.max(d.y) < lo_y || c.y.min(d.y) > hi_y {
+            continue;
+        }
+        if segments_cross(a, b, c, d) {
+            return true;
         }
     }
     false

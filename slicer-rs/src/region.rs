@@ -4,7 +4,7 @@
 
 use crate::bridges;
 use crate::config::Settings;
-use crate::geom::{self, Contour, Pt, Shapes};
+use crate::geom::{self, Contour, Shapes};
 use crate::par;
 use crate::plan;
 use crate::section::Layers;
@@ -67,8 +67,8 @@ pub struct Island {
     pub gaps: Shapes,
     /// Which of the plate's objects it is a slice of (an index into them).
     pub object: u32,
-    /// The middle of its outline (by area), where Orca tours the layer's islands from.
-    pub centroid: Pt,
+    /// The shape of the slice it is (on the first layer, pulled in against elephant's foot).
+    pub outline: geom::Shape,
 }
 
 /// The infill areas of one island, by kind.
@@ -89,10 +89,9 @@ pub struct Fills {
 pub struct LayerRegions {
     pub islands: Vec<Island>,
     pub fills: Vec<Fills>,
-    /// The layer's slice and its top and bottom surfaces (from the whole slice, walls included): a travel to infill
-    /// that stays within one of the slice's shapes and off its tops and bottoms needs no retraction (Orca's test
-    /// against its internal surfaces, the slice but its tops and bottoms).
-    pub slice: Shapes,
+    /// The layer's top and bottom surfaces (from the whole slice, walls included): a travel to infill that stays
+    /// within an island's outline and off these needs no retraction (Orca's test against its internal surfaces, the
+    /// slice but its tops and bottoms).
     pub surfaces: Shapes,
 }
 
@@ -117,8 +116,9 @@ pub fn regions(
             (slices[i].clone(), owners[i].clone())
         };
         let mut islands = walls(&slice, i, layers.height[i], s);
-        for (island, object) in islands.iter_mut().zip(objects) {
+        for ((island, object), shape) in islands.iter_mut().zip(objects).zip(slice) {
             island.object = object;
+            island.outline = shape;
         }
         islands
     });
@@ -299,8 +299,7 @@ pub fn regions(
         .into_iter()
         .zip(fills)
         .zip(surfaces)
-        .zip(slices)
-        .map(|(((islands, fills), surfaces), slice)| LayerRegions { islands, fills, slice: slice.clone(), surfaces })
+        .map(|((islands, fills), surfaces)| LayerRegions { islands, fills, surfaces })
         .collect()
 }
 
@@ -535,13 +534,7 @@ fn walls(slice: &Shapes, layer: usize, height: f64, s: &Settings) -> Vec<Island>
         }
         found
     };
-    let mut out: Vec<Island> = slice
-        .iter()
-        .map(|shape| Island {
-            centroid: shape.first().map_or(geom::pt(0, 0), |c| geom::centroid(c)),
-            ..Island::default()
-        })
-        .collect();
+    let mut out: Vec<Island> = slice.iter().map(|_| Island::default()).collect();
     for (k, shapes) in depths.iter().enumerate() {
         for shape in shapes {
             if let Some(i) = island_of(shape) {
