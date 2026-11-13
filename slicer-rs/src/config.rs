@@ -58,6 +58,8 @@ pub struct Settings {
     pub solid_infill_width: f64,
     pub top_surface_width: f64,
     pub first_layer_width: f64,
+    /// The process's own line width (`line_width`), which Orca measures sharp tails and small overhangs in.
+    pub line_width: f64,
     /// Share of the infill line's width the infill reaches into the innermost wall.
     pub infill_wall_overlap: f64,
     pub top_bottom_infill_wall_overlap: f64,
@@ -130,8 +132,12 @@ pub struct Settings {
     pub travel_speed: f64,
     pub first_layer_speed: f64,
     pub first_layer_infill_speed: f64,
-    /// Supports' speed (`support_speed`): there are none, but Orca's auto brim weighs it among the fastest speeds.
+    /// Supports' speed (`support_speed`, which Orca's auto brim also weighs among the fastest speeds) and their
+    /// interfaces' (`support_interface_speed`).
     pub support_speed: f64,
+    pub support_interface_speed: f64,
+    /// Normal supports (`support.rs`).
+    pub support: SupportSettings,
     /// Whether walls and bridges slow down over overhangs (`enable_overhang_speed`), and how far where a quarter,
     /// half, three quarters and all of a line hangs (`overhang_1_4_speed` to `overhang_4_4_speed`: mm/s, or a share
     /// of the wall's speed; under 0.5 mm/s, not at all).
@@ -202,6 +208,54 @@ pub struct Settings {
     pub aux_fan_speed: f64,
 }
 
+/// What normal supports are made with (`support.rs`), by Orca's keys.
+#[derive(Clone, Debug)]
+pub struct SupportSettings {
+    /// `support_type` ("normal(auto)", "tree(auto)"…) and `support_style` ("default", "grid", "snug"…).
+    pub kind: String,
+    pub style: String,
+    /// Degrees from vertical beyond which an overhang needs support (`support_threshold_angle`).
+    pub threshold_angle: f64,
+    pub remove_small_overhang: bool,
+    /// mm between support and the object above it, below it, beside it, and beside it on the first layer.
+    pub top_z_distance: f64,
+    pub bottom_z_distance: f64,
+    pub xy_distance: f64,
+    pub first_layer_xy_distance: f64,
+    /// Layers of dense interface on top of the support and under it (the contact layer among them).
+    pub top_interface_layers: usize,
+    pub bottom_interface_layers: usize,
+    /// mm between the columns' lines and the interfaces' (`support_base_pattern_spacing`,
+    /// `support_interface_spacing`, `support_bottom_interface_spacing`).
+    pub base_spacing: f64,
+    pub interface_spacing: f64,
+    pub bottom_interface_spacing: f64,
+    pub line_width: f64,
+    /// The first layer's flange: its density (a share) and how far it reaches past the columns, mm
+    /// (`raft_first_layer_density`, `raft_first_layer_expansion`).
+    pub first_layer_density: f64,
+    pub first_layer_expansion: f64,
+    /// The thinnest and thickest layer the printer prints (`min_layer_height`, `max_layer_height`), which bound the
+    /// support's own layers.
+    pub min_layer_height: f64,
+    pub max_layer_height: f64,
+    // Settings that change normal supports in ways this doesn't follow, which `unsupported` refuses.
+    pub base_pattern: String,
+    pub interface_pattern: String,
+    pub raft_layers: i64,
+    pub on_build_plate_only: bool,
+    pub bridge_no_support: bool,
+    pub enforce_layers: i64,
+    pub expansion: f64,
+    pub angle: f64,
+    pub independent_layer_height: bool,
+    pub ironing: bool,
+    pub interface_loops: bool,
+    pub wall_count: i64,
+    pub filament: i64,
+    pub interface_filament: i64,
+}
+
 /// A setting that may be a share of another (Orca's float-or-percent): "50%" or "50".
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Share {
@@ -233,6 +287,48 @@ fn overhang_fan_overlap(threshold: &str) -> f64 {
         "75%" => 0.25,
         "95%" => 0.05,
         _ => -1.0,
+    }
+}
+
+impl SupportSettings {
+    /// What of supports this can't slice yet, in a few words: only Orca's normal supports, made where they are
+    /// needed, in their grid style, with the settings Orca's presets give them.
+    fn unsupported(&self, s: &Settings) -> Option<&'static str> {
+        let kind = self.kind.as_str();
+        if kind.starts_with("tree") {
+            Some("tree supports")
+        } else if kind != "normal(auto)" {
+            Some("supports painted on")
+        } else if !matches!(self.style.as_str(), "default" | "grid" | "") {
+            Some("this style of support")
+        } else if self.raft_layers > 0 {
+            Some("a raft")
+        } else if self.on_build_plate_only {
+            Some("supports on the plate only")
+        } else if self.threshold_angle <= 0.0 {
+            Some("supports by overlap")
+        } else if !matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
+            || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
+        {
+            Some("this support pattern")
+        } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
+            Some("supports without a gap or interface")
+        } else if !self.independent_layer_height
+            || self.enforce_layers > 0
+            || self.expansion != 0.0
+            || self.angle != 0.0
+            || self.ironing
+            || self.interface_loops
+            || self.wall_count > 0
+            || self.bridge_no_support
+            || s.thick_bridges
+        {
+            Some("these support settings")
+        } else if self.filament > 1 || self.interface_filament > 1 {
+            Some("supports in another filament")
+        } else {
+            None
+        }
     }
 }
 
@@ -346,6 +442,7 @@ impl Settings {
             solid_infill_width: width("internal_solid_infill_line_width"),
             top_surface_width: width("top_surface_line_width"),
             first_layer_width: width("initial_layer_line_width"),
+            line_width: default_width,
             infill_wall_overlap: share("infill_wall_overlap"),
             top_bottom_infill_wall_overlap: share("top_bottom_infill_wall_overlap"),
             min_sparse_infill_area: p.float("minimum_sparse_infill_area"),
@@ -393,6 +490,49 @@ impl Settings {
             first_layer_speed: at("initial_layer_speed"),
             first_layer_infill_speed: at("initial_layer_infill_speed"),
             support_speed: at("support_speed"),
+            support_interface_speed: at("support_interface_speed"),
+            support: SupportSettings {
+                kind: text("support_type"),
+                style: text("support_style"),
+                threshold_angle: p.float("support_threshold_angle"),
+                remove_small_overhang: p.bool("support_remove_small_overhang"),
+                top_z_distance: p.float("support_top_z_distance"),
+                bottom_z_distance: match p.float("support_bottom_z_distance") {
+                    // 0 is the top distance.
+                    d if d > 0.0 => d,
+                    _ => p.float("support_top_z_distance"),
+                },
+                xy_distance: p.float("support_object_xy_distance"),
+                first_layer_xy_distance: p.float("support_object_first_layer_gap"),
+                top_interface_layers: p.int("support_interface_top_layers").max(0) as usize,
+                bottom_interface_layers: match p.int("support_interface_bottom_layers") {
+                    // -1 is as many as on top.
+                    n if n < 0 => p.int("support_interface_top_layers").max(0) as usize,
+                    n => n as usize,
+                },
+                base_spacing: p.float("support_base_pattern_spacing"),
+                interface_spacing: p.float("support_interface_spacing"),
+                bottom_interface_spacing: p.float("support_bottom_interface_spacing"),
+                line_width: width("support_line_width"),
+                first_layer_density: share("raft_first_layer_density"),
+                first_layer_expansion: p.float("raft_first_layer_expansion"),
+                min_layer_height: at("min_layer_height"),
+                max_layer_height: at("max_layer_height"),
+                base_pattern: text("support_base_pattern"),
+                interface_pattern: text("support_interface_pattern"),
+                raft_layers: p.int("raft_layers"),
+                on_build_plate_only: p.bool("support_on_build_plate_only"),
+                bridge_no_support: p.bool("bridge_no_support"),
+                enforce_layers: p.int("enforce_support_layers"),
+                expansion: p.float("support_expansion"),
+                angle: p.float("support_angle"),
+                independent_layer_height: p.text("independent_support_layer_height") != "0",
+                ironing: p.bool("support_ironing"),
+                interface_loops: p.bool("support_interface_loop_pattern"),
+                wall_count: p.int("tree_support_wall_count"),
+                filament: p.int("support_filament"),
+                interface_filament: p.int("support_interface_filament"),
+            },
             overhang_speed: p.bool("enable_overhang_speed"),
             overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
                 .map(|key| Share::parse(p.list(key).first().copied().unwrap_or("0"))),
@@ -460,8 +600,10 @@ impl Settings {
 
     /// What this can't slice yet, which the caller should slice elsewhere (the app: with Orca's engine).
     pub fn unsupported(&self) -> Option<&'static str> {
-        if self.enable_support {
-            Some("supports")
+        if self.enable_support
+            && let Some(what) = self.support.unsupported(self)
+        {
+            Some(what)
         } else if self.spiral_mode {
             Some("spiral vase mode")
         } else if self.print_sequence == "by object" {

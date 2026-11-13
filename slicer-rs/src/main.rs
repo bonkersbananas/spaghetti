@@ -152,8 +152,8 @@ fn main() -> ExitCode {
     if args.timings {
         let t = &out.timings;
         eprintln!(
-            "{} triangles: read {:.1} ms, slice {:.1}, regions {:.1}, toolpaths {:.1}, gcode {:.1}, picture {:.1}, pack {:.1}; total {:.1} ms",
-            out.triangles, t.read, t.slice, t.regions, t.toolpaths, t.gcode, t.thumbnail, t.pack, t.total
+            "{} triangles: read {:.1} ms, slice {:.1}, regions {:.1}, supports {:.1}, toolpaths {:.1}, gcode {:.1}, picture {:.1}, pack {:.1}; total {:.1} ms",
+            out.triangles, t.read, t.slice, t.regions, t.supports, t.toolpaths, t.gcode, t.thumbnail, t.pack, t.total
         );
     }
     ExitCode::SUCCESS

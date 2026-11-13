@@ -176,6 +176,10 @@ struct Isect {
     next_quality: Quality,
     /// Whether the run up from here belongs to a monotonic region yet.
     consumed: bool,
+    /// Rectilinear fill's traversal (`traverse`): whether the run up from here, and the edge from here to the line
+    /// on the right, have been printed.
+    consumed_vertical_up: bool,
+    consumed_perimeter_right: bool,
 }
 
 impl Isect {
@@ -193,6 +197,8 @@ impl Isect {
             prev_quality: Quality::Valid,
             next_quality: Quality::Valid,
             consumed: false,
+            consumed_vertical_up: false,
+            consumed_perimeter_right: false,
         }
     }
 
@@ -210,6 +216,8 @@ impl Isect {
             prev_quality: Quality::Invalid,
             next_quality: Quality::Invalid,
             consumed: false,
+            consumed_vertical_up: false,
+            consumed_perimeter_right: false,
         }
     }
 
@@ -279,6 +287,15 @@ impl Isect {
         if self.prev_link == Link::Down { self.prev_quality } else { self.next_quality }
     }
 
+    /// The link along this line away from the run (down from a low end, up from a high one).
+    fn vertical_outside(&self) -> i32 {
+        if self.is_low() { self.vertical_down() } else { self.vertical_up() }
+    }
+
+    fn vertical_outside_quality(&self) -> Quality {
+        if self.is_low() { self.vertical_down_quality() } else { self.vertical_up_quality() }
+    }
+
     /// The link along the contour on this line: up if it is a high end, down if a low one.
     fn left_vertical(&self) -> i32 {
         if self.has_left_vertical() { self.prev } else { -1 }
@@ -302,7 +319,26 @@ fn prev_idx(i: usize, n: usize) -> usize {
 /// Orca's `slice_region_by_vertical_lines`: every crossing of the vertical lines with the contours, sorted up each
 /// line and typed; `None` if a line's crossings don't pair up as they must (Orca gives up on the region then).
 fn slice(contours: &[Vec<(i64, i64)>], n_outer: usize, n_vlines: usize, x0: i64, ls: i64) -> Option<Vec<Vline>> {
-    let mut segs: Vec<Vline> = (0..n_vlines).map(|i| Vline { pos: x0 + i as i64 * ls, its: Vec::new() }).collect();
+    let positions: Vec<i64> = (0..n_vlines).map(|i| x0 + i as i64 * ls).collect();
+    slice_at(contours, n_outer, &positions)
+}
+
+/// The positions (units) of Orca's vertical lines `ls_nm` nanometres apart on the grid through `origin` (units),
+/// from the last line at or before `min` until they cover `max`: worked out in nanometres as Orca works them out
+/// (`align_to_grid`), so they don't drift from its lines by a rounded spacing, then each rounded to our units.
+pub(crate) fn grid_lines(min: i64, max: i64, origin: f64, ls_nm: i64) -> Vec<i64> {
+    if ls_nm <= 0 {
+        return Vec::new();
+    }
+    let base = (origin * 100.0).round() as i64;
+    let x0 = base + (min * 100 - base).div_euclid(ls_nm) * ls_nm;
+    let n = ((max * 100 - x0 + ls_nm - 1) / ls_nm).max(0);
+    (0..n).map(|i| ((x0 + i * ls_nm) as f64 / 100.0).round() as i64).collect()
+}
+
+/// `slice` with the lines at `positions` (increasing).
+fn slice_at(contours: &[Vec<(i64, i64)>], n_outer: usize, positions: &[i64]) -> Option<Vec<Vline>> {
+    let mut segs: Vec<Vline> = positions.iter().map(|&pos| Vline { pos, its: Vec::new() }).collect();
     if segs.is_empty() {
         return Some(segs);
     }
@@ -315,21 +351,9 @@ fn slice(contours: &[Vec<(i64, i64)>], n_outer: usize, n_vlines: usize, x0: i64,
             let ip = prev_idx(si, n);
             let (p1, p2) = (contour[ip], contour[si]);
             let (l, r) = if p1.0 <= p2.0 { (p1.0, p2.0) } else { (p2.0, p1.0) };
-            let mut il = (l - x0) / ls;
-            while il * ls + x0 < l {
-                il += 1;
-            }
-            il = il.max(0);
-            let mut ir = (r - x0 + ls) / ls;
-            while ir * ls + x0 > r {
-                ir -= 1;
-            }
-            ir = ir.min(segs.len() as i64 - 1);
-            if il > ir {
-                continue;
-            }
-            for i in il..=ir {
-                let this_x = segs[i as usize].pos;
+            let (il, ir) = (positions.partition_point(|&x| x < l), positions.partition_point(|&x| x <= r));
+            for seg in &mut segs[il..ir] {
+                let this_x = seg.pos;
                 let mut is = Isect::new(ci, si);
                 if p1.0 == this_x {
                     if p2.0 == this_x {
@@ -354,7 +378,7 @@ fn slice(contours: &[Vec<(i64, i64)>], n_outer: usize, n_vlines: usize, x0: i64,
                     is.p = pp * (p2.1 - p1.1) + p1.1 * qq;
                     is.q = qq;
                 }
-                segs[i as usize].its.push(is);
+                seg.its.push(is);
             }
         }
     }
@@ -1559,6 +1583,305 @@ fn polylines(path: &[Step], regions: &[Region], contours: &[Vec<(i64, i64)>], se
         let o = if vl.its[ip].is_low() { ip - 1 } else { ip + 1 };
         *out.last_mut().unwrap().last_mut().unwrap() = p(vl.pos, vl.its[o].pos());
         finish(&mut out);
+    }
+    out
+}
+
+/// A run of a vertical line inside the contours: its x, and where it starts and ends (the contour, the edge it
+/// crosses by the edge's end point, and the height).
+pub(crate) struct Run {
+    pub(crate) x: i64,
+    pub(crate) low: (usize, usize, i64),
+    pub(crate) high: (usize, usize, i64),
+}
+
+/// Orca's `make_fill_lines` on contours that are all outer ones: the runs of the vertical lines `x0 + i·ls` (those
+/// from `x_min` to `x_max`) inside them, line by line, each from the bottom up. `None` where Orca's checks on the
+/// crossings fail (it then fills nothing).
+pub(crate) fn vertical_runs(
+    contours: &[Vec<(i64, i64)>],
+    positions: &[i64],
+    x_min: i64,
+    x_max: i64,
+) -> Option<Vec<Run>> {
+    let segs = slice_at(contours, contours.len(), positions)?;
+    let mut out = Vec::new();
+    for v in &segs {
+        if v.pos < x_min {
+            continue;
+        }
+        if v.pos > x_max {
+            break;
+        }
+        let its = &v.its;
+        let mut k = 0;
+        while k < its.len() {
+            let low = its[k];
+            k += 1;
+            if low.kind != Kind::OuterLow {
+                continue;
+            }
+            if k < its.len() && its[k].kind == Kind::OuterHigh {
+                let high = its[k];
+                out.push(Run {
+                    x: v.pos,
+                    low: (low.contour, low.segment, low.pos()),
+                    high: (high.contour, high.segment, high.pos()),
+                });
+                k += 1;
+            }
+        }
+    }
+    Some(out)
+}
+
+/// Orca's rectilinear fill below full density (`FillRectilinear::fill_surface_by_lines` without `monotonic`), as
+/// normal supports' first layer prints: lines on a grid through `origin` (units), the region turned by `angle`
+/// (radians, Orca's `_infill_direction` angle), `spacing` mm wide at `density`, joined along the edge where they
+/// can in Orca's sweep from left to right (`traverse_graph_generate_polylines`), and printed in that order.
+pub fn rectilinear(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, density: f64) -> Vec<Vec<Pt>> {
+    let sp_units = spacing * geom::SCALE;
+    if shape.is_empty() || sp_units < 1.0 || density <= 0.0 {
+        return Vec::new();
+    }
+    let (ox, oy) = origin;
+    let turn = |q: Pt, s: f64, c: f64| -> Pt {
+        let (x, y) = (q.x as f64 - ox, q.y as f64 - oy);
+        geom::pt((ox + c * x - s * y).round() as i32, (oy + c * y + s * x).round() as i32)
+    };
+    let (s, c) = (-angle).sin_cos();
+    let src: Shape = shape.iter().map(|contour| contour.iter().map(|&q| turn(q, s, c)).collect()).collect();
+    let src = vec![src];
+    let outer = geom::offset(&src, -0.05 * spacing);
+    let inner = geom::offset(&outer, -0.45 * spacing);
+    let min_area = 0.01 * (0.5 * sp_units).powi(2) * 2.0;
+    let keep = |c: &&Vec<Pt>| c.len() >= 3 && (geom::area2(c).unsigned_abs() as f64) >= min_area;
+    let mut contours: Vec<Vec<(i64, i64)>> = Vec::new();
+    for shape in &outer {
+        contours.extend(shape.iter().filter(keep).map(|c| c.iter().map(|q| (q.x as i64, q.y as i64)).collect()));
+    }
+    let n_outer = contours.len();
+    for shape in &inner {
+        contours.extend(shape.iter().filter(keep).map(|c| c.iter().map(|q| (q.x as i64, q.y as i64)).collect()));
+    }
+    if contours.len() == n_outer {
+        return Vec::new();
+    }
+    let Some(bb) = geom::bbox(&src) else { return Vec::new() };
+    // Orca's spacing in whole nanometres (its float spacing over its float density).
+    let ls_nm = (spacing * 1e6 / (density as f32 as f64)) as i64;
+    let positions = grid_lines(bb[0] as i64, bb[2] as i64, ox, ls_nm);
+    let Some(mut segs) = slice_at(&contours, n_outer, &positions) else { return Vec::new() };
+    connect(&contours, &mut segs, true, 0);
+    let mut lines = traverse(&contours, &mut segs);
+    let (s, c) = angle.sin_cos();
+    for line in &mut lines {
+        for q in line.iter_mut() {
+            *q = turn(*q, s, c);
+        }
+        line.dedup();
+    }
+    lines.retain(|l| l.len() >= 2);
+    lines
+}
+
+/// Whether the edge from crossing `i` on line `v` to the line on `side` may be followed (Orca's
+/// `intersection_on_prev_next_vertical_line_valid`): it starts no run along the line, ends at the end of a run there
+/// that is still to print, is a valid link, and hasn't been printed.
+fn side_valid(segs: &[Vline], v: usize, i: usize, side: Side) -> bool {
+    let it = &segs[v].its[i];
+    let has_vertical = match side {
+        Side::Left => it.has_left_vertical(),
+        Side::Right => it.has_right_vertical(),
+    };
+    if has_vertical {
+        return false;
+    }
+    let other = it.horizontal(side);
+    if other < 0 {
+        return false;
+    }
+    let other = other as usize;
+    let vo = match side {
+        Side::Left => &segs[v - 1],
+        Side::Right => &segs[v + 1],
+    };
+    let ito = &vo.its[other];
+    let ito2 = &vo.its[if ito.is_low() { other - 1 } else { other + 1 }];
+    if ito2.is_inner() {
+        return false;
+    }
+    let quality = match side {
+        Side::Left => it.prev_quality,
+        Side::Right => it.next_quality,
+    };
+    if quality != Quality::Valid {
+        return false;
+    }
+    if match side {
+        Side::Right => it.consumed_perimeter_right,
+        Side::Left => ito.consumed_perimeter_right,
+    } {
+        return false;
+    }
+    !(if ito.is_low() { ito.consumed_vertical_up } else { vo.its[other - 1].consumed_vertical_up })
+}
+
+/// Orca's `traverse_graph_generate_polylines`: from the leftmost run not yet printed, up or down it, then along the
+/// edge to the next line (or the one before) where that is allowed, the shorter way when both are, or along the edge
+/// to the next run of the same line, until no way goes on; then the next leftmost run.
+fn traverse(contours: &[Vec<(i64, i64)>], segs: &mut [Vline]) -> Vec<Vec<Pt>> {
+    for v in segs.iter_mut() {
+        for i in 0..v.its.len().saturating_sub(1) {
+            if v.its[i].kind == Kind::OuterLow && v.its[i + 1].kind == Kind::OuterHigh {
+                v.its[i].consumed_vertical_up = true;
+            }
+        }
+    }
+    let p = |x: i64, y: i64| geom::pt(x as i32, y as i32);
+    let mut out: Vec<Vec<Pt>> = Vec::new();
+    let mut v = 0usize;
+    let mut at: Option<usize> = None;
+    loop {
+        if at.is_none() {
+            let mut found = None;
+            'search: for (v2, line) in segs.iter().enumerate() {
+                for (k, it) in line.its.iter().enumerate() {
+                    if !it.is_inner() {
+                        let consumed =
+                            if it.is_low() { it.consumed_vertical_up } else { line.its[k - 1].consumed_vertical_up };
+                        if !consumed {
+                            found = Some((v2, k));
+                            break 'search;
+                        }
+                    }
+                }
+            }
+            let Some((v2, k)) = found else { break };
+            v = v2;
+            at = Some(k);
+            out.push(vec![p(segs[v].pos, segs[v].its[k].pos())]);
+        }
+        let cur = out.len() - 1;
+        let mut it = at.unwrap();
+        let pos = segs[v].pos;
+        let going_up = segs[v].its[it].is_low();
+        let mut try_connect = false;
+        if going_up {
+            if segs[v].its[it].is_inner() {
+                it -= 1;
+            }
+            loop {
+                segs[v].its[it].consumed_vertical_up = true;
+                it += 1;
+                if segs[v].its[it].kind == Kind::OuterHigh {
+                    break;
+                }
+            }
+            if segs[v].its[it - 1].is_inner() {
+                it -= 1;
+                try_connect = true;
+            }
+        } else {
+            if segs[v].its[it].is_inner() {
+                segs[v].its[it].consumed_vertical_up = true;
+            }
+            loop {
+                it -= 1;
+                segs[v].its[it].consumed_vertical_up = true;
+                if segs[v].its[it].kind == Kind::OuterLow {
+                    break;
+                }
+            }
+            if segs[v].its[it + 1].is_inner() {
+                it += 1;
+                try_connect = true;
+            }
+        }
+        if try_connect {
+            let i_prev = segs[v].its[it].left_horizontal();
+            let i_next = segs[v].its[it].right_horizontal();
+            let prev_valid = side_valid(segs, v, it, Side::Left);
+            let next_valid = side_valid(segs, v, it, Side::Right);
+            if i_prev != -1 {
+                segs[v - 1].its[i_prev as usize].consumed_perimeter_right = true;
+            }
+            if i_next != -1 {
+                segs[v].its[it].consumed_perimeter_right = true;
+            }
+            if prev_valid || next_valid {
+                let mut take_next = next_valid;
+                if prev_valid && next_valid {
+                    let dist_prev = horizontal_link_length(contours, segs, v - 1, i_prev as usize, it);
+                    let dist_next = horizontal_link_length(contours, segs, v, it, i_next as usize);
+                    take_next = dist_next < dist_prev;
+                }
+                out[cur].push(p(pos, segs[v].its[it].pos()));
+                let (v2, i2) = if take_next { (v + 1, i_next as usize) } else { (v - 1, i_prev as usize) };
+                let a = segs[v].its[it];
+                let b = segs[v2].its[i2];
+                let poly = &contours[a.contour];
+                if a.is_low() == take_next {
+                    append_forward(&mut out[cur], poly, a.segment, b.segment);
+                } else {
+                    append_backward(&mut out[cur], poly, a.segment, b.segment);
+                }
+                out[cur].push(p(segs[v2].pos, b.pos()));
+                v = v2;
+                at = Some(i2);
+                continue;
+            }
+            let i_vertical = segs[v].its[it].vertical_outside();
+            let quality = if i_vertical == -1
+                || segs[v].its[(i_vertical + if going_up { 0 } else { -1 }) as usize].consumed_vertical_up
+            {
+                Quality::Invalid
+            } else {
+                segs[v].its[it].vertical_outside_quality()
+            };
+            if quality != Quality::Invalid {
+                let iv = i_vertical as usize;
+                out[cur].push(p(pos, segs[v].its[it].pos()));
+                if quality == Quality::Valid {
+                    let a = segs[v].its[it];
+                    let b = segs[v].its[iv];
+                    let forward = if going_up { a.prev_link == Link::Up } else { a.next_link == Link::Down };
+                    let poly = &contours[a.contour];
+                    if forward {
+                        append_forward(&mut out[cur], poly, a.segment, b.segment);
+                    } else {
+                        append_backward(&mut out[cur], poly, a.segment, b.segment);
+                    }
+                    out[cur].push(p(pos, b.pos()));
+                } else {
+                    out.push(vec![p(pos, segs[v].its[iv].pos())]);
+                }
+                let run = if going_up { it..iv } else { iv..it };
+                for is in &mut segs[v].its[run] {
+                    is.consumed_vertical_up = true;
+                }
+                segs[v].its[it].consumed_perimeter_right = true;
+                let beside = if going_up { it + 1 } else { it - 1 };
+                segs[v].its[beside].consumed_perimeter_right = true;
+                at = Some(iv);
+                continue;
+            }
+            if going_up {
+                it += 1;
+            } else {
+                it -= 1;
+            }
+        }
+        let cur = out.len() - 1;
+        out[cur].push(p(pos, segs[v].its[it].pos()));
+        out[cur].dedup();
+        let line = &out[cur];
+        if line.len() <= 1
+            || (line.len() == 2 && (line[0].x - line[1].x).abs() < 1 && (line[0].y - line[1].y).abs() < 1)
+        {
+            out.pop();
+        }
+        at = None;
     }
     out
 }

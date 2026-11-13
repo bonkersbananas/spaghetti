@@ -11,11 +11,11 @@ use crate::geom::{self, Contour, Pt, Shape, Shapes};
 use std::f64::consts::{FRAC_PI_2, PI};
 
 /// Orca's `SCALED_EPSILON` (100 nm), in our units.
-const EPS: f64 = 1.0;
+pub(crate) const EPS: f64 = 1.0;
 /// Our units in a nanometre.
 const UNITS_PER_NM: f64 = geom::SCALE / 1e6;
 /// No contour: a line's end that isn't on the area's edge.
-const NONE: usize = usize::MAX;
+pub(crate) const NONE: usize = usize::MAX;
 
 /// The sparse infill patterns drawn here, by Orca's names.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -702,17 +702,17 @@ impl EdgeGrid {
 
 /// Where a line's end meets the area's edge: the contour, the edge (by its first point) and how far along it.
 #[derive(Clone, Copy, Debug)]
-struct End {
-    contour: usize,
-    edge: usize,
-    u: f64,
+pub(crate) struct End {
+    pub(crate) contour: usize,
+    pub(crate) edge: usize,
+    pub(crate) u: f64,
 }
 
 /// A stretch of pattern inside the area, and where each of its ends meets the edge (none if it ends inside).
 #[derive(Clone, Debug)]
-struct Piece {
-    points: Vec<Pt>,
-    ends: [Option<End>; 2],
+pub(crate) struct Piece {
+    pub(crate) points: Vec<Pt>,
+    pub(crate) ends: [Option<End>; 2],
 }
 
 /// Where segments a–b and c–d cross: how far along a–b, and along c–d (from c, half open so a corner counts once).
@@ -820,74 +820,74 @@ fn length(points: &[Pt]) -> f64 {
 
 /// Where a line's end meets the edge, and what of the edge around it is still free.
 #[derive(Clone, Debug)]
-struct Joint {
-    contour: usize,
-    point: usize,
+pub(crate) struct Joint {
+    pub(crate) contour: usize,
+    pub(crate) point: usize,
     /// Length along the contour to it from the contour's first point.
-    param: f64,
+    pub(crate) param: f64,
     /// The joints before and after it along the contour (itself when it is the only one).
-    prev: usize,
-    next: usize,
+    pub(crate) prev: usize,
+    pub(crate) next: usize,
     /// Edge not yet taken going back and going on.
-    free_prev: f64,
-    free_next: f64,
+    pub(crate) free_prev: f64,
+    pub(crate) free_next: f64,
     /// Its line has been joined or anchored, or can't be.
-    consumed: bool,
-    prev_trimmed: bool,
-    next_trimmed: bool,
+    pub(crate) consumed: bool,
+    pub(crate) prev_trimmed: bool,
+    pub(crate) next_trimmed: bool,
 }
 
-struct Graph {
+pub(crate) struct Graph {
     /// The contours with each line's end inserted as a point.
-    boundary: Vec<Vec<Pt>>,
+    pub(crate) boundary: Vec<Vec<Pt>>,
     /// Length along each contour to each of its points; the last is the whole length.
-    params: Vec<Vec<f64>>,
+    pub(crate) params: Vec<Vec<f64>>,
     /// Two per line: its first point's joint, then its last's.
-    joints: Vec<Joint>,
+    pub(crate) joints: Vec<Joint>,
     /// Each contour's joints, in order along it.
-    along: Vec<Vec<usize>>,
+    pub(crate) along: Vec<Vec<usize>>,
 }
 
-fn ccw(from: f64, to: f64, length: f64) -> f64 {
+pub(crate) fn ccw(from: f64, to: f64, length: f64) -> f64 {
     let d = to - from;
     if d < 0.0 { d + length } else { d }
 }
 
-fn cw(from: f64, to: f64, length: f64) -> f64 {
+pub(crate) fn cw(from: f64, to: f64, length: f64) -> f64 {
     ccw(to, from, length)
 }
 
-fn consume_prev(j: &mut [Joint], i: usize) {
+pub(crate) fn consume_prev(j: &mut [Joint], i: usize) {
     j[i].free_prev = 0.0;
     j[i].prev_trimmed = true;
     j[i].consumed = true;
 }
 
-fn consume_next(j: &mut [Joint], i: usize) {
+pub(crate) fn consume_next(j: &mut [Joint], i: usize) {
     j[i].free_next = 0.0;
     j[i].next_trimmed = true;
     j[i].consumed = true;
 }
 
-fn trim_prev(j: &mut [Joint], i: usize, length: f64) {
+pub(crate) fn trim_prev(j: &mut [Joint], i: usize, length: f64) {
     if length < j[i].free_prev {
         j[i].free_prev = length;
         j[i].prev_trimmed = true;
     }
 }
 
-fn trim_next(j: &mut [Joint], i: usize, length: f64) {
+pub(crate) fn trim_next(j: &mut [Joint], i: usize, length: f64) {
     if length < j[i].free_next {
         j[i].free_next = length;
         j[i].next_trimmed = true;
     }
 }
 
-fn could_take_prev(j: &[Joint], i: usize) -> bool {
+pub(crate) fn could_take_prev(j: &[Joint], i: usize) -> bool {
     !j[i].consumed && j[i].free_prev > EPS
 }
 
-fn could_take_next(j: &[Joint], i: usize) -> bool {
+pub(crate) fn could_take_next(j: &[Joint], i: usize) -> bool {
     !j[i].consumed && j[i].free_next > EPS
 }
 
@@ -902,7 +902,7 @@ fn could_connect_next(j: &[Joint], i: usize) -> bool {
 }
 
 impl Graph {
-    fn new(pieces: &[Piece], shape: &Shape, spacing: f64) -> Graph {
+    pub(crate) fn new(pieces: &[Piece], shape: &Shape, spacing: f64) -> Graph {
         let blank = |i: usize| Joint {
             contour: NONE,
             point: NONE,
@@ -1073,7 +1073,7 @@ impl Graph {
         trim_prev(j, high, t);
     }
 
-    fn total(&self, k: usize) -> f64 {
+    pub(crate) fn total(&self, k: usize) -> f64 {
         *self.params[k].last().unwrap()
     }
 }
@@ -1108,7 +1108,13 @@ fn clip_from_end(points: &[(f64, f64)], mut distance: f64) -> Option<(usize, f64
 
 /// Where the line a–b passes within `offset` of the segment s–t (a capsule): the stretch of the line, as lengths
 /// from a (Orca's `line_rounded_thick_segment_collision`).
-fn thick_collision(a: (f64, f64), b: (f64, f64), s: (f64, f64), t: (f64, f64), offset: f64) -> Option<(f64, f64)> {
+pub(crate) fn thick_collision(
+    a: (f64, f64),
+    b: (f64, f64),
+    s: (f64, f64),
+    t: (f64, f64),
+    offset: f64,
+) -> Option<(f64, f64)> {
     let v = (b.0 - a.0, b.1 - a.1);
     let lv = v.0 * v.0 + v.1 * v.1;
     let sv = (t.0 - s.0, t.1 - s.1);
@@ -1157,7 +1163,7 @@ fn thick_collision(a: (f64, f64), b: (f64, f64), s: (f64, f64), t: (f64, f64), o
     (tmin <= tmax).then(|| (tmin * lv.sqrt(), tmax * lv.sqrt()))
 }
 
-fn dist2_to_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+pub(crate) fn dist2_to_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
     let (vx, vy) = (b.0 - a.0, b.1 - a.1);
     let l2 = vx * vx + vy * vy;
     let t = if l2 > 0.0 { (((p.0 - a.0) * vx + (p.1 - a.1) * vy) / l2).clamp(0.0, 1.0) } else { 0.0 };
@@ -1205,7 +1211,7 @@ fn take_full(line: &mut Vec<Pt>, contour: &[Pt], start: usize, end: usize, clock
 }
 
 /// Adds the contour's points after `start` towards `end`, but no more than `to_take` of it; returns how much it took.
-fn take_part(
+pub(crate) fn take_part(
     line: &mut Vec<Pt>,
     contour: &[Pt],
     params: &[f64],
@@ -1242,7 +1248,7 @@ fn take_part(
 }
 
 /// Takes the edge from joint `a` to joint `b` for a join: marks it used (Orca's `take` with its joints).
-fn take_joints(j: &mut [Joint], mut a: usize, mut b: usize, clockwise: bool) {
+pub(crate) fn take_joints(j: &mut [Joint], mut a: usize, mut b: usize, clockwise: bool) {
     if clockwise {
         std::mem::swap(&mut a, &mut b);
     }
@@ -1260,7 +1266,7 @@ fn take_joints(j: &mut [Joint], mut a: usize, mut b: usize, clockwise: bool) {
 
 /// Hooks the line's end at joint `start` onto the edge towards joint `end`, up to `max_length` and never closer than
 /// half a line to the next joint (Orca's `take_limited`).
-fn take_anchor(
+pub(crate) fn take_anchor(
     g: &mut Graph,
     line: &mut Vec<Pt>,
     start: usize,
@@ -1329,7 +1335,7 @@ fn take_anchor(
 }
 
 /// The line `i` has been merged into (the lowest index of its group), updating the record on the way.
-fn merged(merged_with: &mut [usize], i: usize) -> usize {
+pub(crate) fn merged(merged_with: &mut [usize], i: usize) -> usize {
     let mut last = i;
     loop {
         let lower = merged_with[last];

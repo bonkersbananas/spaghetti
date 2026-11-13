@@ -144,6 +144,75 @@ pub fn offset_bevel(shapes: &Shapes, delta: f64) -> Shapes {
     shapes.outline(&IntOutlineStyle::new(d).line_join(IntLineJoin::Bevel)).unwrap_or_default()
 }
 
+/// Grows (positive) or shrinks (negative) shapes by `delta` mm with Clipper's square joins, as Orca's `jtSquare`: a
+/// corner the offset goes round is cut off square `delta` from it (a right angle's by a 45° chamfer), and the
+/// corners it goes into stay sharp. Clipper's `ClipperOffset` step by step: each edge moved along its normal, two
+/// points at each corner it goes round, the corner itself between the ends of the edges at the others, and what
+/// the paths wind round positively kept.
+pub fn offset_square(shapes: &Shapes, delta: f64) -> Shapes {
+    let d = delta * SCALE;
+    if shapes.is_empty() {
+        return Vec::new();
+    }
+    if d.abs() < 0.5 {
+        return shapes.clone();
+    }
+    let at = |x: f64, y: f64| pt(x.round() as i32, y.round() as i32);
+    let mut paths: Vec<Contour> = Vec::new();
+    for contour in shapes.iter().flatten() {
+        let mut src: Vec<Pt> = Vec::with_capacity(contour.len());
+        for &q in contour {
+            if src.last() != Some(&q) {
+                src.push(q);
+            }
+        }
+        while src.len() > 1 && src.first() == src.last() {
+            src.pop();
+        }
+        if src.len() < 3 {
+            continue;
+        }
+        let n = src.len();
+        let normals: Vec<(f64, f64)> = (0..n)
+            .map(|j| {
+                let (a, b) = (src[j], src[(j + 1) % n]);
+                let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+                let f = 1.0 / dx.hypot(dy);
+                (dy * f, -dx * f)
+            })
+            .collect();
+        let mut out = Vec::with_capacity(2 * n);
+        let mut k = n - 1;
+        for j in 0..n {
+            let ((kx, ky), (jx, jy)) = (normals[k], normals[j]);
+            let (x, y) = (src[j].x as f64, src[j].y as f64);
+            let mut sin_a = kx * jy - jx * ky;
+            let cos_a = kx * jx + ky * jy;
+            if (sin_a * d).abs() < 1.0 {
+                // Nearly straight on: one point (and Clipper keeps measuring from the edge before).
+                if cos_a > 0.0 {
+                    out.push(at(x + kx * d, y + ky * d));
+                    continue;
+                }
+            } else {
+                sin_a = sin_a.clamp(-1.0, 1.0);
+            }
+            if sin_a * d < 0.0 {
+                out.push(at(x + kx * d, y + ky * d));
+                out.push(src[j]);
+                out.push(at(x + jx * d, y + jy * d));
+            } else {
+                let t = (sin_a.atan2(cos_a) / 4.0).tan();
+                out.push(at(x + d * (kx - ky * t), y + d * (ky + kx * t)));
+                out.push(at(x + d * (jx + jy * t), y + d * (jy - jx * t)));
+            }
+            k = j;
+        }
+        paths.push(out);
+    }
+    union_contours(&paths)
+}
+
 /// Shrinks then grows back: drops every part thinner than `2 × d`.
 pub fn opening(shapes: &Shapes, d: f64) -> Shapes {
     offset(&offset(shapes, -d), d)

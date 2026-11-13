@@ -87,7 +87,9 @@ struct Move {
     /// mm/s², or NaN where none is set yet.
     accel: f64,
     kind: Kind,
-    width: f64,
+    /// An extrusion's width and height (Orca keeps them as floats, and writes them so).
+    width: f32,
+    height: f32,
 }
 
 /// What the G-code says between two moves.
@@ -185,48 +187,63 @@ fn set_fan(t: &mut Vec<u8>, percent: f64) {
     }
 }
 
-/// The height the nozzle travels at onto layer `i`: the layer before's top, lifted (the first layer comes from where
-/// the start G-code leaves the nozzle).
-pub fn travel_z(layers: &crate::section::Layers, i: usize, s: &Settings, start_z: f64) -> f64 {
-    if i == 0 { start_z } else { layers.top[i - 1] + s.z_hop }
-}
-
-/// One layer, from its plan to its G-code: moves, slowing down if it is too quick, timing and text.
-pub fn layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64) -> LayerGcode {
+/// Layers from their plans to their G-code: moves, slowing down if they are too quick, timing and text. Each comes
+/// with its regions and the height the nozzle travels at onto it (the layer before's top, lifted; for the first,
+/// where the start G-code leaves the nozzle). They are cooled as one, as Orca's cooling buffer holds the support's
+/// own layers until an object layer comes: the last is an object layer (or the print's last), any before it the
+/// support's alone.
+pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<LayerGcode> {
     let s = job.settings;
-    let (mut moves, notes) = build_layer(plan, regions, job, from_z);
-    let first = plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)]);
-    let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]);
-    let (factor, cooling_time) = slowdown(&moves, start, s);
+    let mut built: Vec<_> = group
+        .iter()
+        .map(|&(plan, regions, from_z)| {
+            let (moves, notes) = build_layer(plan, regions, job, from_z);
+            let first = plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)]);
+            let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]);
+            (moves, notes, start, first)
+        })
+        .collect();
+    let (factor, cooling_time) = slowdown(built.iter().map(|b| (b.0.as_slice(), b.2)), s);
     if let Some(k) = factor {
-        slow_down(&mut moves, k, s);
+        for b in &mut built {
+            slow_down(&mut b.0, k, s);
+        }
     }
-    let i = plan.index;
-    let fans = layer_fans(i, cooling_time, s);
-    // The layer's markers (its fans go before them, in `assemble`), then its moves.
-    let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
-    text.extend_from_slice(
-        format!("; CHANGE_LAYER\n; Z_HEIGHT: {}\n; LAYER_HEIGHT: {}\n", format_g(plan.z), format_g(plan.height))
-            .as_bytes(),
-    );
-    let progress_at = text.len();
-    let out = finish_layer(&moves, &notes, start, job, text);
-    LayerGcode {
-        text: out.text,
-        progress_at,
-        first_accel: out.first_accel,
-        last_accel: out.last_accel,
-        z: plan.z,
-        first,
-        end: moves.last().map(|m| [m.x, m.y, m.z]),
-        time: out.time,
-        travel_time: out.travel_time,
-        travel_distance: out.travel_distance,
-        retractions: out.retractions,
-        filament_mm: out.filament_mm,
-        features: out.features,
-        fans,
-    }
+    let fans = layer_fans(group.last().map_or(0, |g| g.0.id), cooling_time, s);
+    group
+        .iter()
+        .zip(built)
+        .map(|(&(plan, _, _), (moves, notes, start, first))| {
+            // The layer's markers (its fans go before them, in `assemble`), then its moves.
+            let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
+            text.extend_from_slice(
+                format!(
+                    "; CHANGE_LAYER\n; Z_HEIGHT: {}\n; LAYER_HEIGHT: {}\n",
+                    format_g(plan.z),
+                    format_g(plan.header_height as f64)
+                )
+                .as_bytes(),
+            );
+            let progress_at = text.len();
+            let out = finish_layer(&moves, &notes, start, job, text, plan.header_height);
+            LayerGcode {
+                text: out.text,
+                progress_at,
+                first_accel: out.first_accel,
+                last_accel: out.last_accel,
+                z: plan.z,
+                first,
+                end: moves.last().map(|m| [m.x, m.y, m.z]),
+                time: out.time,
+                travel_time: out.travel_time,
+                travel_distance: out.travel_distance,
+                retractions: out.retractions,
+                filament_mm: out.filament_mm,
+                features: out.features,
+                fans,
+            }
+        })
+        .collect()
 }
 
 /// Seconds for a travel of `d` mm, from and to a standstill (the jerk speed), as the planner times it.
@@ -380,7 +397,7 @@ impl<'a> Builder<'a> {
     }
 
     fn line(&mut self, x: f64, y: f64, z: f64, e: f64, f: f64, kind: Kind) {
-        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0 };
+        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0, height: 0.0 };
         self.push(m);
     }
 
@@ -532,6 +549,8 @@ impl<'a> Builder<'a> {
             } else {
                 (path.role, path.width, path.mm3_per_mm, path.speed, path.accel)
             };
+            // An overhang wall is a round thread with thick bridges, else as high as its wall.
+            let height = if over && self.s.thick_bridges { width } else { path.height };
             if stretch != Some(over) {
                 stretch = Some(over);
                 written = part.map_or(own * 60.0, |p| p.speed as f64 * 60.0);
@@ -564,7 +583,8 @@ impl<'a> Builder<'a> {
                 f: written / 60.0,
                 accel,
                 kind: Kind::Extrude(role),
-                width,
+                width: width as f32,
+                height: height as f32,
             };
             self.push(m);
         }
@@ -608,6 +628,10 @@ fn retracts(from: &Path, to: &Path, d: f64, a: Pt, b: Pt, internal: &Internal, s
     if matches!(from.last_role(), Role::OuterWall | Role::OverhangWall | Role::Brim) || to.role == Role::Brim {
         return true;
     }
+    // Nor does a travel to support (not its interface) that stays inside one of the object's support areas.
+    if to.role == Role::Support && internal.in_support(to.object, a, b) {
+        return false;
+    }
     let wall = matches!(to.role, Role::InnerWall | Role::OuterWall);
     !(!wall
         && s.reduce_infill_retraction
@@ -622,10 +646,12 @@ struct Internal<'a> {
     outlines: Vec<Vec<(&'a [Pt], [i32; 4])>>,
     surfaces: &'a Shapes,
     surface_boxes: Vec<[i32; 4]>,
+    /// Each object's support areas on the layer.
+    support: &'a [(u32, Shapes)],
 }
 
 impl<'a> Internal<'a> {
-    fn new(islands: &'a [crate::region::Island], surfaces: &'a Shapes) -> Self {
+    fn new(islands: &'a [crate::region::Island], surfaces: &'a Shapes, support: &'a [(u32, Shapes)]) -> Self {
         let bbox = |c: &[Pt]| {
             c.iter().fold([i32::MAX, i32::MAX, i32::MIN, i32::MIN], |b, p| {
                 [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]
@@ -635,7 +661,13 @@ impl<'a> Internal<'a> {
             outlines: islands.iter().map(|i| i.outline.iter().map(|c| (c.as_slice(), bbox(c))).collect()).collect(),
             surfaces,
             surface_boxes: surfaces.iter().map(geom::bbox_of).collect(),
+            support,
         }
+    }
+
+    /// Whether the segment a–b stays inside one of `object`'s support areas (Orca's `support_islands`).
+    fn in_support(&self, object: u32, a: Pt, b: Pt) -> bool {
+        self.support.iter().any(|(o, areas)| *o == object && geom::segment_inside(areas, a, b))
     }
 
     /// Whether the segment a–b, between two of island `k`'s paths, stays within its outline and off the layer's top
@@ -711,7 +743,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         }
     }
     let labels = job.labels();
-    let internal = Internal::new(&regions.islands, &regions.surfaces);
+    let internal = Internal::new(&regions.islands, &regions.surfaces, &plan.support_islands);
     // The object a path prints inside the labels of: none for a brim, which Orca prints before it starts the object.
     let owner = |p: &Path| (p.role != Role::Brim).then_some(p.object);
     let mut last: Option<&Path> = None;
@@ -844,49 +876,77 @@ fn simple_time(m: &Move, from: [f64; 3]) -> f64 {
     if m.f > 0.0 { d / m.f } else { 0.0 }
 }
 
-/// How many times longer the layer's extrusions must take, if the layer is too quick; and how long the layer
-/// takes then, as Orca's cooling reckons it for the fans (`calculate_layer_slowdown`: the stretched time, before
-/// speeds are rounded to whole mm/min).
-fn slowdown(moves: &[Move], start: [f64; 3], s: &Settings) -> (Option<f64>, f64) {
-    if moves.is_empty() {
-        return (None, 0.0);
-    }
-    let mut at = start;
-    let mut fixed = 0.0;
-    let mut adjustable: Vec<(f64, f64)> = Vec::new(); // (time, speed)
-    for m in moves {
-        let t = simple_time(m, at);
-        at = [m.x, m.y, m.z];
-        match m.kind {
-            Kind::Extrude(_) if m.f > s.slow_down_min_speed => adjustable.push((t, m.f)),
-            _ => fixed += t,
-        }
-    }
-    let flexible: f64 = adjustable.iter().map(|a| a.0).sum();
-    let need = s.slow_down_layer_time - fixed;
-    if s.slow_down_layer_time <= 0.0 || flexible <= 0.0 || need <= flexible {
-        return (None, fixed + flexible);
-    }
-    // Each extrusion's time grows by k, but no more than its speed allows (down to the minimum speed).
-    let stretched = |k: f64| -> f64 { adjustable.iter().map(|&(t, v)| t * k.min(v / s.slow_down_min_speed)).sum() };
-    let most = adjustable.iter().map(|&(_, v)| v / s.slow_down_min_speed).fold(1.0, f64::max);
-    if stretched(most) <= need {
-        return (Some(most), fixed + stretched(most));
-    }
-    let (mut lo, mut hi) = (1.0, most);
-    for _ in 0..50 {
-        let mid = (lo + hi) / 2.0;
-        if stretched(mid) < need { lo = mid } else { hi = mid }
-    }
-    // Slowed to the layer time itself.
-    (Some(hi), s.slow_down_layer_time)
+/// How Orca's cooling slows a layer that is too quick.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Slow {
+    /// Every extrusion faster than this (mm/s) comes down to it.
+    To(f64),
+    /// Every extrusion takes this many times longer (a filament with no minimum speed).
+    By(f64),
 }
 
-/// Slows the layer's extrusions by `k`; like Orca's cooling, a slowed speed is a whole number of mm/min.
-fn slow_down(moves: &mut [Move], k: f64, s: &Settings) {
+/// How Orca's cooling slows the layer's extrusions, if the layer is too quick; and how long the layer takes then, as
+/// it reckons it for the fans (`calculate_layer_slowdown`, the stretched time before speeds are rounded to whole
+/// mm/min). It slows non-proportionally: the fastest extrusions come down first, all to one speed, until the layer
+/// takes its minimum time (and a thousandth), none below the filament's minimum speed.
+fn slowdown<'m>(layers: impl Iterator<Item = (&'m [Move], [f64; 3])>, s: &Settings) -> (Option<Slow>, f64) {
+    let mut fixed = 0.0;
+    let mut adjustable: Vec<(f64, f64)> = Vec::new(); // (time, speed)
+    let mut any = false;
+    for (moves, start) in layers {
+        let mut at = start;
+        for m in moves {
+            let t = simple_time(m, at);
+            at = [m.x, m.y, m.z];
+            match m.kind {
+                Kind::Extrude(_) if m.f > s.slow_down_min_speed => adjustable.push((t, m.f)),
+                _ => fixed += t,
+            }
+        }
+        any |= !moves.is_empty();
+    }
+    if !any {
+        return (None, 0.0);
+    }
+    let flexible: f64 = adjustable.iter().map(|a| a.0).sum();
+    let target = s.slow_down_layer_time * 1.001;
+    if s.slow_down_layer_time <= 0.0 || flexible <= 0.0 || fixed + flexible > target {
+        return (None, fixed + flexible);
+    }
+    let min = s.slow_down_min_speed;
+    if min <= 0.0 {
+        return (Some(Slow::By((target - fixed) / flexible)), target);
+    }
+    let slowest = fixed + adjustable.iter().map(|&(t, v)| t * v / min).sum::<f64>();
+    if slowest <= target {
+        return (Some(Slow::To(min)), slowest);
+    }
+    // With the fastest extrusions down to a speed f, the layer takes the rest's time and their length over f.
+    adjustable.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let (mut length, mut rest) = (0.0, flexible);
+    for k in 0..adjustable.len() {
+        let (t, v) = adjustable[k];
+        length += t * v;
+        rest -= t;
+        let floor = adjustable.get(k + 1).map_or(min, |a| a.1.max(min));
+        let room = target - fixed - rest;
+        if room > 0.0 && length / room >= floor {
+            return (Some(Slow::To((length / room).min(v))), target);
+        }
+    }
+    (Some(Slow::To(min)), slowest)
+}
+
+/// Slows the layer's extrusions as `slowdown` says; like Orca's cooling, a slowed speed is a whole number of mm/min.
+fn slow_down(moves: &mut [Move], how: Slow, s: &Settings) {
     for m in moves {
         if matches!(m.kind, Kind::Extrude(_)) && m.f > s.slow_down_min_speed {
-            m.f = ((m.f / k).max(s.slow_down_min_speed) * 60.0).round() / 60.0;
+            let f = match how {
+                Slow::To(f) if m.f > f => f,
+                Slow::To(_) => continue,
+                Slow::By(k) => m.f / k,
+            };
+            m.f = (f * 60.0).round() / 60.0;
         }
     }
 }
@@ -1167,6 +1227,8 @@ fn role_index(role: Role) -> usize {
 struct Writer {
     feature: Option<Role>,
     width: f64,
+    /// The height last written (the layer's, from its header on).
+    height: f32,
     accel: f64,
     /// The feed rate in whole mm/min, as Orca's cooling compares them.
     feed: i64,
@@ -1203,7 +1265,14 @@ impl Writer {
     }
 }
 
-fn finish_layer(moves: &[Move], notes: &[(usize, Note)], start: [f64; 3], job: &Job, text: Vec<u8>) -> LayerOut {
+fn finish_layer(
+    moves: &[Move],
+    notes: &[(usize, Note)],
+    start: [f64; 3],
+    job: &Job,
+    text: Vec<u8>,
+    header_height: f32,
+) -> LayerOut {
     let s = job.settings;
     let times = timing(moves, start, s);
     let mut out = LayerOut {
@@ -1218,7 +1287,8 @@ fn finish_layer(moves: &[Move], notes: &[(usize, Note)], start: [f64; 3], job: &
         features: Default::default(),
     };
     let area = s.filament_area();
-    let mut w = Writer { feature: None, width: f64::NAN, accel: f64::NAN, feed: -1, first_accel: None };
+    let mut w =
+        Writer { feature: None, width: f64::NAN, height: header_height, accel: f64::NAN, feed: -1, first_accel: None };
     let mut wiping = false;
     let mut at = start;
     let mut next_note = 0;
@@ -1262,11 +1332,17 @@ fn finish_layer(moves: &[Move], notes: &[(usize, Note)], start: [f64; 3], job: &
                     t.push(b'\n');
                     w.feature = Some(role);
                 }
-                if m.width != w.width {
+                if m.width as f64 != w.width {
                     t.extend_from_slice(b"; LINE_WIDTH: ");
-                    t.extend_from_slice(format_g(m.width).as_bytes());
+                    t.extend_from_slice(format_g(m.width as f64).as_bytes());
                     t.push(b'\n');
-                    w.width = m.width;
+                    w.width = m.width as f64;
+                }
+                if (m.height - w.height).abs() > 1e-4 {
+                    t.extend_from_slice(b"; LAYER_HEIGHT: ");
+                    t.extend_from_slice(format_g(m.height as f64).as_bytes());
+                    t.push(b'\n');
+                    w.height = m.height;
                 }
                 w.feed(t, m.f, true);
                 t.extend_from_slice(b"G1 X");
@@ -1487,7 +1563,7 @@ fn time_custom(text: &str, s: &Settings) -> f64 {
                     Kind::Retract
                 };
                 if to != at || e != 0.0 {
-                    moves.push(Move { x: to[0], y: to[1], z: to[2], e, f: feed, accel, kind, width: 0.0 });
+                    moves.push(Move { x: to[0], y: to[1], z: to[2], e, f: feed, accel, kind, width: 0.0, height: 0.0 });
                 }
                 at = to;
             }
@@ -1695,7 +1771,7 @@ mod tests {
         let island = crate::region::Island { outline: vec![square(0, 0, 20, 20), hole], ..Default::default() };
         let islands = vec![island];
         let tops: Shapes = vec![vec![square(2, 14, 6, 18)]];
-        let internal = Internal::new(&islands, &tops);
+        let internal = Internal::new(&islands, &tops, &[]);
         let s = Settings::default();
         let p = |x: f64, y: f64| geom::pt(geom::sc(x), geom::sc(y));
         let path = |role: Role, island: u32| Path {
@@ -1703,6 +1779,7 @@ mod tests {
             points: Vec::new(),
             closed: false,
             width: 0.42,
+            height: 0.2,
             mm3_per_mm: 0.08,
             speed: 100.0,
             accel: 1000.0,
@@ -1757,6 +1834,7 @@ mod tests {
             points: (0..=7).map(|k| p(k as f64)).collect(),
             closed: false,
             width: 0.42,
+            height: 0.2,
             mm3_per_mm: 0.08,
             speed: 200.0,
             accel: 5000.0,
@@ -1772,7 +1850,7 @@ mod tests {
         let kinds: Vec<Kind> = b.moves.iter().map(|m| m.kind).collect();
         assert_eq!(kinds[4], Kind::Extrude(Role::OuterWall));
         assert_eq!(kinds[5], Kind::Extrude(Role::OverhangWall));
-        assert_eq!((b.moves[5].width, b.moves[5].accel), (0.4, 2500.0));
+        assert_eq!((b.moves[5].width, b.moves[5].accel), (0.4f32, 2500.0));
         assert!((b.moves[5].e - 0.07 * s.e_per_mm3()).abs() < 1e-12);
         // The wipe goes at the speed the wall ended at.
         assert_eq!(b.wipe.map(|(_, speed)| speed), Some(50.0));
@@ -1802,6 +1880,7 @@ mod tests {
                     accel: 5000.0,
                     kind: Kind::Extrude(Role::OuterWall),
                     width: 0.42,
+                    height: 0.2,
                 }
             })
             .collect();
@@ -1882,7 +1961,17 @@ mod tests {
                 (x, y, z) = (nx, ny, nz);
                 continue;
             }
-            let mv = |x: f64, y: f64, z: f64, e: f64, kind: Kind| Move { x, y, z, e, f, accel, kind, width: 0.4 };
+            let mv = |x: f64, y: f64, z: f64, e: f64, kind: Kind| Move {
+                x,
+                y,
+                z,
+                e,
+                f,
+                accel,
+                kind,
+                width: 0.4,
+                height: 0.2,
+            };
             let moved = (nx - x).abs() > 1e-9 || (ny - y).abs() > 1e-9;
             if g == "G0" || g == "G1" {
                 let kind = match (moved, e > 0.0) {
