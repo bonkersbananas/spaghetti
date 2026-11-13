@@ -1,14 +1,14 @@
 /// <reference lib="webworker" />
 import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
+import { parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
 import { mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { defaultSettings, SLICING_DEFAULTS } from "@shared/slicing/defaults.ts";
+import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
-import { readStl } from "@shared/slicing/stl.ts";
-import { fitPercent, scaleMesh, sizeOf } from "@shared/slicing/transform.ts";
 import type { FileSlice, SliceOptions, SliceProblem, SliceSettings } from "@shared/slicing/types.ts";
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
@@ -122,7 +122,8 @@ async function run(request: SliceRequest) {
 
     const objects = read.objects.map((object) => ({
       ...object,
-      positions: scale === 100 ? object.positions : scaleMesh(object.positions, scale / 100),
+      // Scaled about the origin (shared/mesh.ts, as Twists scales): the plate's arrangement places it after.
+      positions: scale === 100 ? object.positions : scaleMesh({ positions: object.positions }, scale / 100).positions,
     }));
     try {
       place(objects, plate, volume, read.project && scale === 100, scale);
@@ -218,9 +219,11 @@ async function fetchJson<T>(url: URL): Promise<T> {
 function readModel(bytes: Uint8Array, name: string) {
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
   if (!zip) {
-    const mesh = readStl(bytes);
-    if (!mesh) throw new Problem("unreadable");
-    return { objects: [{ name, positions: mesh.positions, extruder: 1 }], project: false, settings: undefined };
+    const parsed = parseStl(bytes);
+    const positions = parsed.ok ? finiteTriangles(parsed.mesh.positions) : null;
+    if (!positions) throw new Problem("unreadable");
+    if (!positions.length) throw new Problem("no-model");
+    return { objects: [{ name, positions, extruder: 1 }], project: false, settings: undefined };
   }
   const model = readModel3mf(bytes);
   if (model === "not-3mf") throw new Problem("unreadable");

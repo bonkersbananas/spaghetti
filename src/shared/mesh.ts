@@ -56,8 +56,7 @@ export function parseStl(input: ArrayBuffer | Uint8Array): ParseResult {
   if (bytes.byteLength < 15) return { ok: false, reason: "That isn't an STL file." };
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const declared = bytes.byteLength >= 84 ? view.getUint32(80, true) : -1;
-  // A binary file is exactly 84 bytes and 50 per triangle, even when its header happens to start with "solid".
-  if (declared >= 0 && bytes.byteLength === 84 + declared * 50) {
+  const binary = (): ParseResult => {
     const positions = new Float32Array(declared * 9);
     for (let t = 0; t < declared; t++) {
       const at = 84 + t * 50 + 12; // skip the normal
@@ -66,18 +65,25 @@ export function parseStl(input: ArrayBuffer | Uint8Array): ParseResult {
     return declared > 0
       ? { ok: true, mesh: { positions }, format: "binary" }
       : { ok: false, reason: "That STL is empty." };
-  }
+  };
+  // A binary file is exactly 84 bytes and 50 per triangle, even when its header happens to start with "solid".
+  if (declared >= 0 && bytes.byteLength === 84 + declared * 50) return binary();
   const text = new TextDecoder().decode(bytes);
-  if (!/^\s*solid/i.test(text)) return { ok: false, reason: "That isn't an STL file." };
-  const numbers: number[] = [];
-  const vertex = /vertex\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)/g;
-  for (let m = vertex.exec(text); m; m = vertex.exec(text)) {
-    numbers.push(Number(m[1]), Number(m[2]), Number(m[3]));
+  const solid = /^\s*solid/i.test(text);
+  if (solid) {
+    const numbers: number[] = [];
+    const vertex = /vertex\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)/g;
+    for (let m = vertex.exec(text); m; m = vertex.exec(text)) {
+      numbers.push(Number(m[1]), Number(m[2]), Number(m[3]));
+    }
+    if (numbers.length > 0 && numbers.length % 9 === 0 && numbers.every((n) => Number.isFinite(n))) {
+      return { ok: true, mesh: { positions: Float32Array.from(numbers) }, format: "ascii" };
+    }
   }
-  if (numbers.length === 0 || numbers.length % 9 !== 0 || numbers.some((n) => !Number.isFinite(n))) {
-    return { ok: false, reason: "That STL couldn't be read." };
-  }
-  return { ok: true, mesh: { positions: Float32Array.from(numbers) }, format: "ascii" };
+  // Some binary writers leave a few bytes after the last triangle (fewer than another triangle would take).
+  const stray = bytes.byteLength - (84 + declared * 50);
+  if (declared > 0 && stray > 0 && stray < 50) return binary();
+  return { ok: false, reason: solid ? "That STL couldn't be read." : "That isn't an STL file." };
 }
 
 /** A binary STL of the mesh, with each triangle's normal worked out from its corners. */
