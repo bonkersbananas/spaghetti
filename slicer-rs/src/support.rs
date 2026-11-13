@@ -75,6 +75,11 @@ pub struct Params {
     /// How the brim keeps the first layer's support off: none, the object's footprint, or that grown by the gap.
     brim: Option<f64>,
     grid_resolution: f64,
+    /// Orca's organic trees (`smsTreeOrganic`), whose layers come from `tree.rs`: their bottom contacts aren't printed,
+    /// their interfaces are rounded off, and their branches print as anchored loops.
+    organic: bool,
+    /// mm²: a tree branch's island larger than this gets a second wall (`tree_branch_diameter_double_wall_area`).
+    double_wall_area: f64,
 }
 
 impl Params {
@@ -120,6 +125,12 @@ impl Params {
                 _ => None,
             },
             grid_resolution: support_spacing,
+            organic: sp.organic(),
+            double_wall_area: match sp.wall_count {
+                0 => 0.25 * 25.0 * std::f64::consts::PI,
+                1 => f64::MAX,
+                _ => 1e-13,
+            },
         }
     }
 
@@ -337,6 +348,158 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
 
     // 6. Layers and toolpaths.
     toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p)
+}
+
+/// One object's organic trees as drawn (`tree.rs`), on the support's layers (the object's): each layer's branches
+/// (Orca's base layers), the bottom contacts where branches rest on the model, and the roofs' contact and interface
+/// layers.
+pub struct TreeLayers {
+    pub base: Vec<Shapes>,
+    pub bottom_contacts: Vec<Shapes>,
+    pub contacts: Vec<Shapes>,
+    pub interfaces: Vec<Shapes>,
+    /// mm: each layer's bottom and top.
+    pub z: Vec<(f64, f64)>,
+}
+
+/// The supports of one object from its organic trees: interfaces under the roofs and over the bottom contacts, the
+/// flange on the plate, then toolpaths, as Orca's `generate_support_areas` goes on after drawing the trees.
+pub fn generate_tree(o: &Object, p: &Params, t: TreeLayers) -> Vec<Layer> {
+    let mut arena: Vec<Gen> = Vec::new();
+    let (mut tops, mut bottoms, mut inter, mut placed) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (l, &(bottom_z, print_z)) in t.z.iter().enumerate() {
+        let height = print_z - bottom_z;
+        let mut add = |kind: Kind, polygons: Option<&Shapes>, list: &mut Vec<usize>| {
+            let Some(polygons) = polygons.filter(|s| !s.is_empty()) else { return };
+            let mut g = Gen::new(kind, bottom_z, print_z, height);
+            // (Orca's bed clip: the first union of the roofs' raw polygons.)
+            g.polygons = geom::union_nonzero(&polygons.iter().flatten().cloned().collect::<Vec<_>>());
+            if !g.polygons.is_empty() {
+                list.push(arena.len());
+                arena.push(g);
+            }
+        };
+        add(Kind::BottomContact, t.bottom_contacts.get(l), &mut bottoms);
+        add(Kind::TopContact, t.contacts.get(l), &mut tops);
+        add(Kind::TopInterface, t.interfaces.get(l), &mut placed);
+        add(Kind::Base, t.base.get(l), &mut inter);
+    }
+    if tops.is_empty() && inter.is_empty() && placed.is_empty() {
+        return Vec::new();
+    }
+    let interfaces = tree_interface_layers(&mut arena, &tops, &bottoms, &inter, &placed, p);
+    flange(o, &mut arena, &tops, &interfaces, &inter, p);
+    toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p)
+}
+
+/// Orca's `generate_interface_layers` for organic trees: a base layer prints as interface where the contacts on its
+/// own layer and the next one up lie, and where the bottom contacts of the two layers below lie (which print
+/// nothing themselves), each grown and rounded off; the roofs' own interface layers take in what falls on their
+/// layer. With no base layer at all, there are no interfaces either.
+fn tree_interface_layers(
+    arena: &mut Vec<Gen>,
+    tops: &[usize],
+    bottoms: &[usize],
+    inter: &[usize],
+    placed: &[usize],
+    p: &Params,
+) -> Vec<usize> {
+    let num_top = p.top_interfaces.saturating_sub(1);
+    let num_bottom = p.bottom_interfaces;
+    if inter.is_empty() || (p.top_interfaces == 0 && p.bottom_interfaces == 0) {
+        return Vec::new();
+    }
+    // Grown by the islands' smallest radius, then rounded off (Orca's `regularize` with smooth supports).
+    let smoothing = (p.spacing * 1e6) as i64 as f64 * 1.5;
+    let regularize = |polys: Shapes, density: f64| -> Shapes {
+        if polys.is_empty() {
+            return polys;
+        }
+        let island = (p.spacing * 1e6) as i64 as f64 / density;
+        let grown = geom::offset_square(
+            &geom::union_nonzero(&polys.into_iter().flatten().collect::<Vec<_>>()),
+            ((smoothing + island) as f32 as f64) / 1e6,
+        );
+        let closed = geom::offset_square(&grown, -((smoothing as f32 as f64) / 1e6));
+        crate::tree::smooth::smooth_outward(&closed, smoothing as i64)
+    };
+    let ni = inter.len();
+    let made: Vec<Option<(Option<Gen>, Shapes, Shapes)>> = {
+        let arena = &*arena;
+        par::map_range(ni, |i| {
+            let it = &arena[inter[i]];
+            let mut top_set: Shapes = Vec::new();
+            let mut bottom_set: Shapes = Vec::new();
+            if num_top > 0 {
+                let top_z = arena[inter[(i + num_top - 1).min(ni - 1)]].print_z;
+                let first = tops.partition_point(|&t| arena[t].print_z < it.print_z);
+                for &t in &tops[first..] {
+                    if arena[t].bottom_z - EPSILON > top_z {
+                        break;
+                    }
+                    top_set.extend(arena[t].polygons.iter().cloned());
+                }
+            }
+            if num_bottom > 0 {
+                let bottom_z = arena[inter[(i + 1).saturating_sub(num_bottom)]].bottom_z;
+                let first = bottoms.partition_point(|&b| arena[b].print_z < bottom_z - EPSILON);
+                for &b in &bottoms[first..] {
+                    if arena[b].print_z - EPSILON > it.bottom_z {
+                        break;
+                    }
+                    bottom_set.extend(arena[b].polygons.iter().cloned());
+                }
+            }
+            let same = placed
+                .iter()
+                .copied()
+                .find(|&q| (arena[q].print_z - it.print_z).abs() < EPSILON && !arena[q].polygons.is_empty());
+            if top_set.is_empty() && bottom_set.is_empty() && same.is_none() {
+                return None;
+            }
+            let kind = if top_set.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
+            let mut both = regularize(bottom_set, p.bottom_interface_density);
+            both.extend(regularize(top_set, p.top_interface_density));
+            let mut poly = if both.is_empty() { Vec::new() } else { geom::intersection(&both, &it.polygons) };
+            if let Some(q) = same {
+                poly = geom::union(&arena[q].polygons, &poly);
+            }
+            if poly.is_empty() {
+                return None;
+            }
+            let rest = geom::difference(&it.polygons, &poly);
+            // Into the roofs' own interface layer where there is one, else a new one.
+            let g = same.is_none().then(|| {
+                let mut g = Gen::new(kind, it.bottom_z, it.print_z, it.height);
+                g.polygons = poly.clone();
+                g
+            });
+            Some((g, poly, rest))
+        })
+    };
+    let mut out = Vec::new();
+    for (i, m) in made.into_iter().enumerate() {
+        let Some((g, poly, rest)) = m else { continue };
+        arena[inter[i]].polygons = rest;
+        match g {
+            Some(g) => {
+                out.push(arena.len());
+                arena.push(g);
+            }
+            None => {
+                let z = arena[inter[i]].print_z;
+                if let Some(&q) = placed.iter().find(|&&q| (arena[q].print_z - z).abs() < EPSILON) {
+                    arena[q].polygons = poly;
+                    arena[q].bottom_z = arena[inter[i]].bottom_z;
+                    arena[q].height = arena[inter[i]].height;
+                }
+            }
+        }
+    }
+    out.extend(placed.iter().copied().filter(|&q| !arena[q].polygons.is_empty()));
+    out.sort_by(|&a, &b| arena[a].print_z.partial_cmp(&arena[b].print_z).unwrap());
+    out.dedup();
+    out
 }
 
 /// Orca's `detect_overhangs` for layer `l`: the parts beyond the layer below by more than the support angle allows,
@@ -1051,7 +1214,9 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
     if p.top_interfaces > 0 && could_merge(&top, &interface) {
         merge(&mut top, &mut interface);
     }
-    if could_merge(&bottom, &top) {
+    // Organic trees' bottom contacts print nothing: nothing merges into them.
+    if p.organic {
+    } else if could_merge(&bottom, &top) {
         let mut b = bottom.take();
         merge(&mut top, &mut b);
     } else if could_merge(&bottom, &interface) {
@@ -1087,7 +1252,9 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
         }
     };
     extrude_interface(&mut top, false);
-    extrude_interface(&mut bottom, true);
+    if !p.organic {
+        extrude_interface(&mut bottom, true);
+    }
     let interface_bottom = interface.as_ref().is_some_and(|i| arena[i.layer].kind == Kind::BottomInterface);
     extrude_interface(&mut interface, interface_bottom);
     let mut base = base;
@@ -1126,6 +1293,8 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
                         item.paths.push(crate::support::Item::Fixed(group));
                     }
                 }
+            } else if p.organic {
+                item.paths.extend(tree_paths(&area, g.height, p));
             } else {
                 let angle = std::f32::consts::FRAC_PI_2 as f64;
                 for shape in &geom::closing(&area, SCALED_EPSILON) {
@@ -1147,6 +1316,202 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
     }
     let islands = geom::union_all(&[&polys]);
     Layer { print_z: z, height, items, islands, first }
+}
+
+/// Orca's `tree_supports_generate_paths`: each of a layer's branch islands as a loop half a line in from its edge,
+/// anticlockwise, starting with an anchor cut from a second loop a line further in and ending where it starts, so
+/// that the loop's seam sits on the anchor. An island over the double-wall area gets a wall outside that loop too,
+/// printed after it. Nothing fills the islands.
+fn tree_paths(area: &Shapes, height: f64, p: &Params) -> Vec<Item> {
+    let (w, sp) = (p.width, p.spacing);
+    let to_units = |mm: f64| mm * geom::SCALE;
+    let clip = to_units(0.15 * sp);
+    let anchor_length = to_units(6.0 * sp);
+    let path = |points: Vec<Pt>| Path {
+        role: Role::Support,
+        points: geom::simplify_line(&points, RESOLUTION),
+        width: w,
+        height,
+    };
+    let closed = geom::offset_c2(
+        &geom::offset_c2(area, SCALED_EPSILON, geom::Join::Miter(3.0)),
+        -(SCALED_EPSILON + 0.5 * w),
+        geom::Join::Miter(3.0),
+    );
+    let mut out = Vec::new();
+    for e in &closed {
+        let mut group: Option<Vec<Path>> = None;
+        let mut regions: Shapes = vec![e.clone()];
+        if p.double_wall_area > 0.0 && geom::shape_area_mm2(e) > p.double_wall_area {
+            let mut g = Vec::new();
+            let level2 = geom::offset_c2(
+                &geom::offset_c2(&vec![e.clone()], -1.5 * w, geom::Join::Miter(3.0)),
+                0.5 * w,
+                geom::Join::Miter(3.0),
+            );
+            if !level2.is_empty() {
+                regions = level2;
+                // The outer wall: each contour from its first point round to it, holes turned anticlockwise.
+                for (k, contour) in e.iter().enumerate() {
+                    let mut pl = contour.clone();
+                    pl.push(pl[0]);
+                    if k > 0 {
+                        pl.reverse();
+                    }
+                    clip_end(&mut pl, clip);
+                    g.push(path(pl));
+                }
+            }
+            group = Some(g);
+        }
+        for region in &regions {
+            let candidates = anchor_candidates(region, w);
+            for (idx_loop, contour) in region.iter().enumerate() {
+                let mut pl = contour.clone();
+                if idx_loop == 0 {
+                    pl.reverse();
+                }
+                pl.push(pl[0]);
+                clip_end(&mut pl, clip);
+                if pl.len() < 2 {
+                    continue;
+                }
+                let seam = pl[pl.len() - 1];
+                let (sx, sy) = (seam.x as f64, seam.y as f64);
+                let tag = idx_loop as i32;
+                // The nearest point of the candidates made from this contour.
+                let mut best: Option<(usize, usize, (f64, f64), f64)> = None;
+                let mut d2min = f64::MAX;
+                for (ci, cand) in candidates.iter().enumerate() {
+                    let m = cand.len();
+                    for i in 0..m {
+                        let j = (i + 1) % m;
+                        let (pi, zi) = cand[i];
+                        let (pj, zj) = cand[j];
+                        if zi != tag && zj != tag {
+                            continue;
+                        }
+                        let (vx, vy) = ((pj.x - pi.x) as f64, (pj.y - pi.y) as f64);
+                        let l2 = vx * vx + vy * vy;
+                        let t = if l2 == 0.0 { 0.0 } else { ((sx - pi.x as f64) * vx + (sy - pi.y as f64) * vy) / l2 };
+                        let t = t.clamp(0.0, 1.0);
+                        if (zi == tag || t > EPSILON) && (zj == tag || t < 1.0 - EPSILON) {
+                            let f = (pi.x as f64 + vx * t, pi.y as f64 + vy * t);
+                            let d2 = (f.0 - sx).powi(2) + (f.1 - sy).powi(2);
+                            if d2 < d2min {
+                                d2min = d2;
+                                best = Some((ci, i, f, t));
+                            }
+                        }
+                    }
+                }
+                if let Some((ci, start, f, t)) = best.filter(|_| d2min < to_units(3.0 * w).powi(2)) {
+                    // An anchor along the candidate from there (both run clockwise here), Orca's length less the
+                    // way to it (and, as Orca has it, not less the rest of its first edge).
+                    let cand = &candidates[ci];
+                    let m = cand.len();
+                    let trunc = |x: f64, y: f64| geom::pt(x as i32, y as i32);
+                    pl.push(trunc(f.0, f.1));
+                    let mut remaining = anchor_length - (sx - f.0).hypot(sy - f.1);
+                    let mut i = start;
+                    let mut j = (i + 1) % m;
+                    let mut pi = (cand[i].0.x as f64, cand[i].0.y as f64);
+                    let mut pj = (cand[j].0.x as f64, cand[j].0.y as f64);
+                    let (mut vx, mut vy) = (pj.0 - pi.0, pj.1 - pi.1);
+                    let mut l = vx.hypot(vy);
+                    if remaining < (1.0 - t) * l {
+                        pl.push(trunc(f.0 + vx * (remaining / l), f.1 + vy * (remaining / l)));
+                    } else {
+                        pl.push(cand[j].0);
+                        pi = pj;
+                        i = j;
+                        while cand[i].1 == tag && remaining > 0.0 {
+                            j = (i + 1) % m;
+                            pj = (cand[j].0.x as f64, cand[j].0.y as f64);
+                            (vx, vy) = (pj.0 - pi.0, pj.1 - pi.1);
+                            l = vx.hypot(vy);
+                            if i == start {
+                                break;
+                            }
+                            if remaining <= l {
+                                pl.push(trunc(pi.0 + vx * (remaining / l), pi.1 + vy * (remaining / l)));
+                                break;
+                            }
+                            pl.push(cand[j].0);
+                            remaining -= l;
+                            i = j;
+                            pi = pj;
+                        }
+                    }
+                }
+                pl.reverse();
+                match group.as_mut() {
+                    Some(g) => g.push(path(pl)),
+                    None => out.push(Item::Fixed(vec![path(pl)])),
+                }
+            }
+        }
+        if let Some(mut g) = group.filter(|g| !g.is_empty()) {
+            // The inner loops first, then the wall outside them.
+            g.reverse();
+            out.push(Item::Fixed(g));
+        }
+    }
+    out
+}
+
+/// Where a tree loop's anchor may run (`shrink_expolygon_with_contour_idx`): the island's outline a line further in
+/// (mitred, Orca's 1.2 raised to 2), less its holes grown as much, all clockwise, each point tagged with the contour
+/// it came from (0 the outline, 1 + k the hole k) or -1 where they cross. None where nothing is left.
+fn anchor_candidates(region: &Shape, w: f64) -> Vec<Vec<(Pt, i32)>> {
+    let ccw = |c: &Vec<Pt>| -> Vec<Pt> {
+        let mut c = c.clone();
+        if geom::area2(&c) < 0 {
+            c.reverse();
+        }
+        c
+    };
+    let join = geom::Join::Miter(1.2);
+    let contours = geom::offset_c2(&vec![vec![ccw(&region[0])]], -w, join);
+    if contours.is_empty() {
+        return Vec::new();
+    }
+    let mut holes: Vec<(Shapes, i32)> = Vec::new();
+    for (k, hole) in region.iter().enumerate().skip(1) {
+        let grown = geom::offset_c2(&vec![vec![ccw(hole)]], w, join);
+        if !grown.is_empty() {
+            holes.push((grown, k as i32));
+        }
+    }
+    let cw = |c: &Vec<Pt>| -> Vec<Pt> {
+        let mut c = c.clone();
+        if geom::area2(&c) > 0 {
+            c.reverse();
+        }
+        c
+    };
+    if holes.is_empty() {
+        return contours.iter().flatten().map(|c| cw(c).into_iter().map(|p| (p, 0)).collect()).collect();
+    }
+    let all_holes: Shapes = holes.iter().flat_map(|(h, _)| h.iter().cloned()).collect();
+    let left = geom::difference(&contours, &geom::union_all(&[&all_holes]));
+    if left.is_empty() {
+        return Vec::new();
+    }
+    // Points keep the contour they come from where they are one of its points (the outline's first).
+    let mut from: std::collections::HashMap<(i32, i32), i32> = std::collections::HashMap::new();
+    for (h, k) in &holes {
+        for q in h.iter().flatten().flatten() {
+            from.insert((q.x, q.y), *k);
+        }
+    }
+    for q in contours.iter().flatten().flatten() {
+        from.insert((q.x, q.y), 0);
+    }
+    left.iter()
+        .flatten()
+        .map(|c| cw(c).into_iter().map(|q| (q, from.get(&(q.x, q.y)).copied().unwrap_or(-1))).collect())
+        .collect()
 }
 
 /// Orca's `Polyline::clip_end`: `distance` (units) off the end.

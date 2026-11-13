@@ -303,15 +303,21 @@ fn overhang_fan_overlap(threshold: &str) -> f64 {
 }
 
 impl SupportSettings {
-    /// What of supports this can't slice yet, in a few words: only Orca's normal supports, made where they are
-    /// needed, in their grid style, with the settings Orca's presets give them.
+    /// Whether these are Orca's organic trees: tree supports made where they are needed, in the default style (which
+    /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one.
+    pub fn organic(&self) -> bool {
+        self.kind == "tree(auto)" && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
+    }
+
+    /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid style and its
+    /// organic trees, made where they are needed, with the settings Orca's presets give them.
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
-        if kind.starts_with("tree") {
-            Some("tree supports")
-        } else if kind != "normal(auto)" {
+        if kind == "tree(auto)" && !self.organic() {
+            Some("this style of tree support")
+        } else if kind != "normal(auto)" && kind != "tree(auto)" {
             Some("supports painted on")
-        } else if !matches!(self.style.as_str(), "default" | "grid" | "") {
+        } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "") {
             Some("this style of support")
         } else if self.raft_layers > 0 {
             Some("a raft")
@@ -319,8 +325,12 @@ impl SupportSettings {
             Some("supports on the plate only")
         } else if self.threshold_angle <= 0.0 {
             Some("supports by overlap")
-        } else if !matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
-            || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
+        } else if !(if self.organic() {
+            // Other patterns fill trees' branches rather than drawing them as loops.
+            matches!(self.base_pattern.as_str(), "default" | "none" | "")
+        } else {
+            matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
+        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
         {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
@@ -331,7 +341,7 @@ impl SupportSettings {
             || self.angle != 0.0
             || self.ironing
             || self.interface_loops
-            || self.wall_count > 0
+            || (self.wall_count > 0 && !self.organic())
             || self.bridge_no_support
             || s.thick_bridges
         {

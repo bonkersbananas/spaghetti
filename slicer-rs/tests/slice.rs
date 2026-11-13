@@ -718,6 +718,55 @@ fn normal_supports_hold_up_a_slab_from_layers_of_their_own() {
 }
 
 #[test]
+fn organic_trees_hold_up_a_slab_on_two_trunks() {
+    // The T again, with the X2D's own supports: Orca's organic trees.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let s = setup::read(r#"{"process": {"enable_support": "1"}}"#).unwrap().settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &s, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers = check_moves(&gcode, &s);
+    // Native OrcaSlicer 2.5.0 (Nov 13): the trees on the object's own 125 layers, 768.7 mm³ of branches and 55.5 mm³
+    // of interface, the roof's two layers at 19.6 and 19.8 mm, branches from 19.4 mm down to the plate.
+    assert_eq!(layers.len(), 125);
+    let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()];
+    let near = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    assert!(near(feature(Role::Support).volume, 768.7, 0.03), "{} mm³ of branches", feature(Role::Support).volume);
+    assert!(
+        near(feature(Role::SupportInterface).volume, 55.5, 0.005),
+        "{} mm³",
+        feature(Role::SupportInterface).volume
+    );
+    let mut feature = "";
+    let mut z = 0.0;
+    let mut first_layer_islands = 0;
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+            if feature == "Support" && z == 0.2 {
+                first_layer_islands += 1;
+            }
+        } else if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            z = h.parse().unwrap();
+        } else if let Some(rest) = line.strip_prefix("G1 X").filter(|_| feature.starts_with("Support")) {
+            let words: Vec<&str> = rest.split(' ').collect();
+            if !words.iter().any(|w| w.starts_with('E') && !w.starts_with("E-")) {
+                continue;
+            }
+            let x: f64 = words[0].parse().unwrap();
+            let y: f64 = words.iter().find_map(|w| w.strip_prefix('Y')).unwrap().parse().unwrap();
+            assert!(!(114.8..=125.2).contains(&x) || !(122.8..=133.2).contains(&y), "support in the pillar at {x} {y}");
+            match feature {
+                "Support interface" => assert!([19.6, 19.8].contains(&z), "interface at {z} mm"),
+                _ => assert!(z <= 19.4 + 1e-9, "a branch at {z} mm"),
+            }
+        }
+    }
+    // On the plate the two trunks' flanges, each with its brim-like ring and lines.
+    assert!(first_layer_islands >= 1);
+}
+
+#[test]
 fn supports_leave_a_model_that_needs_none_as_it_was() {
     let cube = cube_stl(20.0);
     let options = Options { thumbnail: false, ..Options::default() };

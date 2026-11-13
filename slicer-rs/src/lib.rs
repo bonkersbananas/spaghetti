@@ -431,7 +431,12 @@ fn object_supports(
                 tops,
                 origin: centres[o],
             };
-            support::generate(&object, &params)
+            if s.support.organic() {
+                tree::supports(&object.slices, object.height, s, object.origin, s.bed)
+                    .map_or_else(Vec::new, |t| support::generate_tree(&object, &params, t))
+            } else {
+                support::generate(&object, &params)
+            }
         })
         .collect()
 }

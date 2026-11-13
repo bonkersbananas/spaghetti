@@ -14,9 +14,11 @@
 //! Lengths are kept in Orca's nanometres where Orca keeps integers, so that its truncations come out the same; the
 //! polygon work is in `geom`'s units (0.1 µm).
 
+pub mod draw;
 pub mod grow;
 pub mod overhangs;
 pub mod seed;
+pub mod smooth;
 pub mod util;
 pub mod volumes;
 
@@ -226,19 +228,28 @@ pub struct Branches {
     pub interfaces: Vec<Shapes>,
 }
 
-/// The trees for an object whose layers' slices are `slices` (`heights` thick), about `origin` (units, the middle
-/// of its bounding box), on a plate `bed` mm wide: its overhangs found, the model's volumes worked out, tips seeded
-/// under the overhangs, grown down and placed. None where nothing needs support.
-pub fn branches(
+/// The trees grown for an object whose layers' slices are `slices` (`heights` thick), about `origin` (units, the
+/// middle of its bounding box), on a plate `bed` mm wide: its overhangs found, the model's volumes worked out, tips
+/// seeded under the overhangs, grown down and placed. None where nothing needs support.
+fn grown(
     slices: &[Shapes],
     heights: &[f64],
     s: &Settings,
     origin: (f64, f64),
     bed: [f64; 2],
-) -> Option<Branches> {
+) -> Option<(Config, volumes::Volumes, Branches)> {
     let c = Config::new(s);
+    let t0 = std::time::Instant::now();
     let found = overhangs::detect(slices, heights, &c, s);
     let areas = overhangs::areas(&found);
+    let lap = |what: &str, t: &mut std::time::Instant| {
+        if std::env::var_os("TREE_TIMINGS").is_some() {
+            eprintln!("tree {what}: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+        }
+        *t = std::time::Instant::now();
+    };
+    let mut t = t0;
+    lap("overhangs", &mut t);
     // Support layers up to the highest overhang above the first layer, less the top gap (Orca's `precalculate`).
     let top = (1..areas.len()).rev().find(|&l| !areas[l].is_empty())?;
     let n = top.saturating_sub(c.z_distance_top_layers);
@@ -247,16 +258,56 @@ pub fn branches(
     }
     let v = volumes::Volumes::new(slices, &c, bed);
     v.precalculate(&c, n);
+    lap("volumes", &mut t);
     let flow_spacing =
         (s.support.line_width as f32 - s.layer_height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
     let roof_density = (flow_spacing / (s.support.interface_spacing + flow_spacing)).min(1.0);
     let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n);
     seeder.seed(&areas);
     let seeds = seeder.finish();
+    lap("seeds", &mut t);
     let mut layers = seeds.layers;
     grow::grow(&c, &v, &mut layers);
+    lap("growth", &mut t);
     grow::place(&c, &v, &mut layers);
-    Some(Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces })
+    lap("placing", &mut t);
+    Some((c, v, Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces }))
+}
+
+/// The trees for an object (see `grown`), grown and placed but not drawn.
+pub fn branches(
+    slices: &[Shapes],
+    heights: &[f64],
+    s: &Settings,
+    origin: (f64, f64),
+    bed: [f64; 2],
+) -> Option<Branches> {
+    grown(slices, heights, s, origin, bed).map(|(_, _, b)| b)
+}
+
+/// An object's organic trees, drawn into the support's layers: each layer's branches, bottom contacts, and the
+/// roofs' contact and interface layers, for `support::generate_tree` to print.
+pub fn supports(
+    slices: &[Shapes],
+    heights: &[f64],
+    s: &Settings,
+    origin: (f64, f64),
+    bed: [f64; 2],
+) -> Option<crate::support::TreeLayers> {
+    let (c, v, mut b) = grown(slices, heights, s, origin, bed)?;
+    let t = std::time::Instant::now();
+    let drawn = draw::draw(&c, &v, &mut b.layers, &b.contacts, origin);
+    if std::env::var_os("TREE_TIMINGS").is_some() {
+        eprintln!("tree drawing: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+    }
+    let z = (0..b.layers.len()).map(|l| (if l > 0 { c.layer_z(l - 1) } else { 0.0 }, c.layer_z(l))).collect();
+    Some(crate::support::TreeLayers {
+        base: drawn.base,
+        bottom_contacts: drawn.bottom_contacts,
+        contacts: b.contacts,
+        interfaces: b.interfaces,
+        z,
+    })
 }
 
 #[cfg(test)]
@@ -347,5 +398,58 @@ mod tests {
             [400_000, 520_000, 1_000_000, 1_017_497, 1_262_465, 1_437_443, 1_787_397, 2_662_284, 4_412_057]
         );
         assert_eq!([0, 1, 15, 16].map(|l| c.recommended_min_radius(l)), [3_695_322, 3_526_865, 1_168_457, 0]);
+    }
+}
+
+#[cfg(test)]
+mod probe {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn probe_shelf_tips() {
+        let s = tests::tree_settings();
+        let rect = |x0: f64, y0: f64, x1: f64, y1: f64| -> crate::geom::Shape {
+            let p = |x: f64, y: f64| crate::geom::pt(crate::geom::sc(x), crate::geom::sc(y));
+            vec![vec![p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)]]
+        };
+        // The shelf: a column 30 mm tall with a shelf from 15 to 19 mm.
+        let slices: Vec<Shapes> = (0..150)
+            .map(|l| {
+                let z = 0.2 * l as f64 + 0.1;
+                if (15.0..19.0).contains(&z) {
+                    vec![rect(110.0, 120.0, 140.0, 140.0)]
+                } else {
+                    vec![rect(110.0, 120.0, 120.0, 140.0)]
+                }
+            })
+            .collect();
+        let heights = vec![0.2; slices.len()];
+        let origin = (crate::geom::sc(125.0) as f64, crate::geom::sc(130.0) as f64);
+        let c = Config::new(&s);
+        let found = overhangs::detect(&slices, &heights, &c, &s);
+        let areas = overhangs::areas(&found);
+        let top = (1..areas.len()).rev().find(|&l| !areas[l].is_empty()).unwrap();
+        let n = top.saturating_sub(c.z_distance_top_layers);
+        let v = volumes::Volumes::new(&slices, &c, [350.0, 320.0]);
+        v.precalculate(&c, n);
+        let flow_spacing =
+            (s.support.line_width as f32 - s.layer_height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
+        let roof_density = (flow_spacing / (s.support.interface_spacing + flow_spacing)).min(1.0);
+        let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n);
+        seeder.seed(&areas);
+        let seeds = seeder.finish();
+        let counts: Vec<(usize, usize)> =
+            seeds.layers.iter().enumerate().filter(|(_, l)| !l.is_empty()).map(|(i, l)| (i, l.len())).collect();
+        eprintln!("top {top} n {n} seeded {counts:?}");
+        let mut layers = seeds.layers;
+        grow::grow(&c, &v, &mut layers);
+        let lost: usize = layers.iter().flatten().filter(|e| e.state.verylost).count();
+        eprintln!("verylost {lost}");
+        let per: Vec<usize> = layers.iter().map(Vec::len).collect();
+        eprintln!("grown {:?}", &per[per.len().saturating_sub(10)..]);
+        grow::place(&c, &v, &mut layers);
+        let per: Vec<usize> = layers.iter().map(Vec::len).collect();
+        eprintln!("placed {:?}", per);
     }
 }

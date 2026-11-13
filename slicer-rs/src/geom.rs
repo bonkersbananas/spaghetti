@@ -49,6 +49,15 @@ pub fn union_contours(contours: &[Contour]) -> Shapes {
     contours.simplify(FillRule::Positive, options())
 }
 
+/// The region the contours enclose, counting every point any loop winds round (Orca's NonZero fill): a loop that
+/// crosses itself keeps both its lobes.
+pub fn union_nonzero(contours: &[Contour]) -> Shapes {
+    if contours.is_empty() {
+        return Vec::new();
+    }
+    contours.simplify(FillRule::NonZero, options())
+}
+
 pub fn union(a: &Shapes, b: &Shapes) -> Shapes {
     if a.is_empty() {
         return b.clone();
