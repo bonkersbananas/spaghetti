@@ -4,12 +4,12 @@ Status: a first version in [`slicer-rs/`](../../slicer-rs), measured against Orc
 
 ## 1. What it is
 
-A self-contained crate, about 7,000 lines of Rust on six small crates (polygon booleans, a Voronoi diagram, deflate, CRC32, MD5, and threads natively). It turns STL and plain 3MF files into a `.gcode.3mf` with the defaults the app slices with: Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI. Its files open in Spaghetti as Orca's do: the reader finds the estimate, weight, filament, settings and plate picture, and the 3D view shows every layer by feature. Around the toolpaths they carry the printer's own G-code, from the presets the app's engine ships (copied into `slicer-rs/profiles/x2d/`): the X2D's start and end, and its layer change and timelapse G-code, filled as Orca fills them (`src/template.rs` ports Orca's placeholder language).
+A self-contained crate, about 8,000 lines of Rust on six small crates (polygon booleans, a Voronoi diagram, deflate, CRC32, MD5, and threads natively). It turns STL and plain 3MF files into a `.gcode.3mf`, with the defaults the app slices with (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI) or with the slicing settings people choose (below). Its files open in Spaghetti as Orca's do: the reader finds the estimate, weight, filament, settings and plate picture, and the 3D view shows every layer by feature. Around the toolpaths they carry the printer's own G-code, from the presets the app's engine ships (copied into `slicer-rs/profiles/x2d/`): the X2D's start and end, and its layer change and timelapse G-code, filled as Orca fills them (`src/template.rs` ports Orca's placeholder language).
 
 The same code builds two ways:
 
-- **Native**: a 1.6 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
-- **WebAssembly**: a 1.2 MB module (389 kB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
+- **Native**: a 1.7 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
+- **WebAssembly**: a 1.3 MB module (410 kB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
 
 What it does, in order:
 
@@ -22,16 +22,22 @@ What it does, in order:
 
 Left for later: supports, more than one filament, and arachne walls (section 5).
 
+### Settings
+
+It slices from the same settings object as the app's engine (decision 0047). The app's `sliceSetup` turns people's slicing settings (`src/shared/slicing/settings.ts`: quality, walls, infill and pattern, supports, brim, filaments, plate, nozzle, scale) into OrcaSlicer configs through `orca.ts`, the one place that knows Orca's presets and keys, and hands them to Orca's engine. The Rust slicer takes that same setup, as JSON: `spaghetti-slicer --setup setup.json` natively, `setup()` in WebAssembly, and `node slicer-rs/bench/setup.mts presets.json '<settings>'` writes one with the app's own code. It reads every setting by Orca's own keys (`src/config.rs`), laid over the X2D's presets, so a layer height, a filament or a plate needs no code of its own: Fine at 0.12 mm takes Orca's 0.12 mm process, ABS takes Generic ABS, with its first-layer and later temperatures and its heated chamber. The fans follow Orca's cooling layer by layer: off for the filament's first layers, then by how long each layer takes. Without a setup it slices with the X2D's defaults, to the same file as before.
+
+What it can't do yet, it refuses by name ("can't slice with supports yet"), so the app can slice those with Orca's engine: supports, more than one filament, spiral vase, printing one object after another, and a brim people turned on. What it prints otherwise than the settings ask, it says with the file ("gyroid sparse infill printed as straight lines"): sparse infill patterns other than straight lines, monotonic tops and bottoms (zig-zag), arachne walls (classic), an auto brim (none), ironing and fuzzy skin (none), and the slope lifts of generic filaments (spirals). Bambu's tray id goes in the plate's description only for Bambu PLA Basic (`GFA00`), as the engine's presets carry Orca's own ids.
+
 ## 2. Speed and memory
 
 Every runner slices the same placed models with the app's defaults; the Orca runners read the flattened presets the app's engine uses. Times are the median of three runs. Memory is the process's peak resident memory, or for Chromium how much its processes grew while slicing. Everything ran in an agent's sandbox (4 ARM cores, nothing else running). [`slicer-rs/bench/README.md`](../../slicer-rs/bench/README.md) says how to run it again.
 
 | Runner | 3DBenchy (225,154 triangles) | Steampunk glasses (30,080) | UOBF text with clips (1,354) | 12 Benchies on one plate (2,701,848) |
 | --- | --- | --- | --- | --- |
-| **Rust, native, 4 threads** | **0.26 s, 33 MB** | **0.41 s, 38 MB** | **0.04 s, 21 MB** | **2.80 s, 218 MB** |
-| Rust, native, 1 thread | 0.93 s, 32 MB | 1.55 s, 35 MB | 0.10 s, 21 MB | 10.1 s, 209 MB |
-| Rust, WebAssembly, Node | 1.43 s, 117 MB | 2.18 s, 108 MB | 0.22 s, 107 MB | 15.9 s, 369 MB |
-| **Rust, WebAssembly, Chromium** | **1.40 s, 78 MB** | **2.13 s, 53 MB** | **0.20 s, 39 MB** | **16.4 s, 489 MB** |
+| **Rust, native, 4 threads** | **0.26 s, 34 MB** | **0.40 s, 38 MB** | **0.04 s, 21 MB** | **2.72 s, 219 MB** |
+| Rust, native, 1 thread | 0.87 s, 33 MB | 1.45 s, 35 MB | 0.10 s, 21 MB | 9.50 s, 210 MB |
+| Rust, WebAssembly, Node | 1.33 s, 116 MB | 2.05 s, 117 MB | 0.21 s, 96 MB | 15.6 s, 377 MB |
+| **Rust, WebAssembly, Chromium** | **1.31 s, 78 MB** | **2.05 s, 54 MB** | **0.20 s, 39 MB** | **15.7 s, 487 MB** |
 | OrcaSlicer 2.5.0, native, 4 threads | 1.42 s, 208 MB | 1.48 s, 256 MB | 0.35 s, 112 MB | 16.3 s, 964 MB |
 | Orca's engine, WebAssembly, Node | 8.65 s, 597 MB | 7.68 s, 626 MB | 1.75 s, 483 MB | 93.4 s, 1,927 MB |
 | Orca's engine, WebAssembly, Chromium (the app today) | 8.81 s, 489 MB | 8.36 s, 458 MB | 1.72 s, 351 MB | 97.2 s, 2,050 MB |
@@ -47,7 +53,7 @@ Every runner slices the same placed models with the app's defaults; the Orca run
 | --- | --- | --- | --- | --- |
 | 3DBenchy | 821 kB | 653 kB | 3.04 MB | 2.61 MB |
 | Steampunk glasses | 1.41 MB | 1.46 MB | 6.01 MB | 6.59 MB |
-| UOBF text with clips | 164 kB | 148 kB | 862 kB | 845 kB |
+| UOBF text with clips | 165 kB | 148 kB | 862 kB | 845 kB |
 | 12 Benchies on one plate | 8.22 MB | 5.66 MB | 34.48 MB | 29.35 MB |
 
 Our G-code is about as long as Orca's, from 9 % shorter to 17 % longer: Orca fits arcs to curves, and we retract more, each retraction a wipe and a spiral lift. Packed, ours ranges from 3 % smaller to 45 % larger. We deflate at level 4 in parallel chunks, for speed, and our G-code packs less tightly: at level 6 in one stream, as Orca's above, the plate's would be 7.6 MB against 5.7 MB.
@@ -105,22 +111,23 @@ In order of what matters for a good print with the default profile. A small item
 | Ensure vertical shell thickness | Shells on slopes come out thin (20 % less solid infill on a Benchy): weaker, with infill showing through | Medium |
 | Overhang walls: detect them, slow down, more fan | Overhangs droop without it | Medium |
 | Travel as Orca does it: its order of paths, and when to retract | Up to 1.8 times Orca's retractions, which means more strings, and the estimate's whole gap (4 to 9 % over Orca's; each retraction takes about 0.2 s) | Medium |
-| Crosshatch sparse infill; monotonic top, bottom and solid infill | Orca's look and strength for this profile | Medium |
+| Crosshatch and gyroid sparse infill, then the app's other patterns (grid, cubic, honeycomb, lightning); monotonic top, bottom and solid infill | Orca's look and strength for this profile, and the patterns of the app's strengths (Light is lightning, Standard crosshatch, Strong gyroid); until then they print as straight lines, and the file says so | Medium |
 | One wall on top surfaces; bridge direction and anchoring; aligned seams | Smoother tops, stronger bridges, the seam in one line | Medium each |
-| Auto brim | Orca's default: a brim where a footprint is small for the height (the glasses get 4.7 mm) | Small |
+| Auto brim, then a brim people turn on | Orca's default: a brim where a footprint is small for the height (the glasses get 4.7 mm); a setup that asks for a brim is refused | Small |
+| Slope lifts (Orca's `Auto Lift`: a slope, or a spiral where the travel sets off over an overhang) | The X2D's generic filaments lift so; Bambu's PLA lifts in spirals, as this does | Small |
 | Arc fitting | Orca's default: smaller files and smoother curves | Small |
 | Refuse objects a project places off the plate, as Orca does | Kept where the file puts them, they are sliced there, and their G-code would run off the bed | Small |
-| Supports (normal and tree) | Models that need them: with the app's defaults Orca only warns, and slices without | Large |
-| More than one filament (AMS colours, prime tower, flushing) | Multicolour prints | Large |
+| Supports (normal, then tree) | Models that need them: with the app's defaults Orca only warns, and slices without; a setup that asks for them is refused, so the app can slice it with Orca's engine | Large |
+| More than one filament (AMS colours, prime tower, flushing) | Multicolour prints; a setup with more than one is refused | Large |
 | Arachne walls | Not the profile's default (`wall_generator = classic`); for thin details | Large |
 
 The estimate will follow once the features above are in: the planner already models the X2D. A rough guess at parity with Orca for single-filament prints without supports: three to four weeks of sessions, each item measured against Orca as in this proposal.
 
 ## 6. Where it could run
 
-- **On a bridge-like host, as an offline slicing proxy.** A 1.6 MB program, slicing a Benchy in a quarter of a second and a full plate in under 3 s, in 220 MB. It needs nothing installed, and nothing from Bambu or the internet.
-- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 0.39 MB gzip, a Benchy is ready in under a second and a half instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
-- **In the Worker itself**, for single models: a Benchy needs 30 MB of WebAssembly memory and 1.4 s of CPU. That fits in a Worker's 128 MB, if the account's CPU limit allows a few seconds a request. Orca's engine can't run there (its heap starts at 256 MB). A plate of many models would not fit.
+- **On a bridge-like host, as an offline slicing proxy.** A 1.7 MB program, slicing a Benchy in a quarter of a second and a full plate in under 3 s, in 220 MB. It needs nothing installed, and nothing from Bambu or the internet.
+- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 0.41 MB gzip, a Benchy is ready in under a second and a half instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
+- **In the Worker itself**, for single models: a Benchy needs 30 MB of WebAssembly memory and 1.3 s of CPU. That fits in a Worker's 128 MB, if the account's CPU limit allows a few seconds a request. Orca's engine can't run there (its heap starts at 256 MB). A plate of many models would not fit.
 
 ## 7. Recommendation
 

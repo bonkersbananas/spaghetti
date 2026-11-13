@@ -123,14 +123,14 @@ test("the printer's own progress replaces the estimate while it is fresh", async
     },
   });
   // The change feed brings it to the open page.
-  await expect(page.getByText("Layer 112 of 240 · about 38 min left")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Layer 112 of 240 · 38 min left")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("progressbar", { name: "Print progress" }).first()).toHaveAttribute(
     "aria-valuenow",
     "47",
   );
 
   await page.goto("/builds");
-  await expect(page.getByText(/layer 112 of 240 · about 38 min left/i)).toBeVisible();
+  await expect(page.getByText(/layer 112 of 240 · 38 min left/i)).toBeVisible();
 });
 
 test("the Printer page says the bridge is connected, and asks about a spool it can't place", async ({ page }) => {
