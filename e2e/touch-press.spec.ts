@@ -35,7 +35,7 @@ test("a touch that turns into a scroll never shows the pressed look", { tag: "@p
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
   const session = await page.context().newCDPSession(page);
-  const touch = (type: string, ny: number) =>
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", ny: number) =>
     session.send("Input.dispatchTouchEvent", {
       type,
       touchPoints: type === "touchEnd" ? [] : [{ x, y: ny }],
