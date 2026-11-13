@@ -89,9 +89,11 @@ pub struct Fills {
 pub struct LayerRegions {
     pub islands: Vec<Island>,
     pub fills: Vec<Fills>,
-    /// The slice but its top and bottom surfaces, walls included (Orca's internal surfaces): a travel to infill that
-    /// stays within one of these shapes needs no retraction.
-    pub internal: Shapes,
+    /// The layer's slice and its top and bottom surfaces (from the whole slice, walls included): a travel to infill
+    /// that stays within one of the slice's shapes and off its tops and bottoms needs no retraction (Orca's test
+    /// against its internal surfaces, the slice but its tops and bottoms).
+    pub slice: Shapes,
+    pub surfaces: Shapes,
 }
 
 /// Walls and fills for every layer, from its slice and the object each of the slice's shapes belongs to.
@@ -150,13 +152,8 @@ pub fn regions(
     let exposed: Vec<(Shapes, Shapes)> =
         par::map_range(n, |i| one_kind(&tops[i], &bottoms[i], i > 0, 1.5 * outer_width(i)));
     drop((tops, bottoms));
-    let internal_slices: Vec<Shapes> = par::map_range(n, |i| {
-        let (top, bottom) = &exposed[i];
-        if top.is_empty() && bottom.is_empty() {
-            return slices[i].clone();
-        }
-        geom::difference(&slices[i], &[top.as_slice(), bottom.as_slice()].concat())
-    });
+    let surfaces: Vec<Shapes> =
+        exposed.iter().map(|(top, bottom)| [top.as_slice(), bottom.as_slice()].concat()).collect();
 
     // Solid shells (Orca's `discover_vertical_shells`, ensuring the shells' thickness everywhere): solid infill
     // under a top surface and over a bottom, as many layers as the shells take, and wherever a layer within that
@@ -301,8 +298,9 @@ pub fn regions(
     islands
         .into_iter()
         .zip(fills)
-        .zip(internal_slices)
-        .map(|((islands, fills), internal)| LayerRegions { islands, fills, internal })
+        .zip(surfaces)
+        .zip(slices)
+        .map(|(((islands, fills), surfaces), slice)| LayerRegions { islands, fills, slice: slice.clone(), surfaces })
         .collect()
 }
 

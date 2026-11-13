@@ -273,7 +273,17 @@ fn wall_order(walls: &[Vec<Contour>], start: Pt) -> Vec<(&Contour, usize, bool)>
     }
     let contour = |id: usize| &walls[at[id].0][at[id].1];
     let mut children: Vec<Vec<usize>> = vec![Vec::new(); at.len()];
-    let holds = |parent: usize, child: usize| geom::contour_contains(contour(parent), contour(child)[0]);
+    let boxes: Vec<[i32; 4]> = (0..at.len())
+        .map(|id| {
+            contour(id).iter().fold([i32::MAX, i32::MAX, i32::MIN, i32::MIN], |b, p| {
+                [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]
+            })
+        })
+        .collect();
+    let holds = |parent: usize, child: usize| {
+        let (b, p) = (&boxes[parent], contour(child)[0]);
+        p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3] && geom::contour_contains(contour(parent), p)
+    };
     let deepest = walls.len().saturating_sub(1);
     // Holes first: in a hole loop further from the hole, else in the innermost outline loop that holds them.
     for d in 0..walls.len() {
@@ -692,4 +702,48 @@ fn order_runs(runs: &mut Vec<Vec<Pt>>, at: &mut Option<Pt>) {
         runs.push(r);
     }
     *at = Some(cur);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(x0: f64, y0: f64, x1: f64, y1: f64, clockwise: bool) -> Contour {
+        let mut c = vec![
+            geom::pt(geom::sc(x0), geom::sc(y0)),
+            geom::pt(geom::sc(x1), geom::sc(y0)),
+            geom::pt(geom::sc(x1), geom::sc(y1)),
+            geom::pt(geom::sc(x0), geom::sc(y1)),
+        ];
+        if clockwise {
+            c.reverse();
+        }
+        c
+    }
+
+    #[test]
+    fn walls_go_round_each_hole_and_then_the_outline_deepest_first() {
+        // Two walls round a 20 mm square with two holes: depth 0 the outer walls, depth 1 the inner ones.
+        let walls = vec![
+            vec![
+                square(0.0, 0.0, 20.0, 20.0, false),
+                square(3.0, 3.0, 7.0, 7.0, true),
+                square(13.0, 13.0, 17.0, 17.0, true),
+            ],
+            vec![
+                square(0.5, 0.5, 19.5, 19.5, false),
+                square(2.5, 2.5, 7.5, 7.5, true),
+                square(12.5, 12.5, 17.5, 17.5, true),
+            ],
+        ];
+        let order = wall_order(&walls, geom::pt(0, 0));
+        let got: Vec<(usize, bool)> = order.iter().map(|&(_, depth, outline)| (depth, outline)).collect();
+        // Each hole's inner wall, then its outer wall, the nearer hole first; then the outline's, inside out.
+        assert_eq!(got, vec![(1, false), (0, false), (1, false), (0, false), (1, true), (0, true)]);
+        assert_eq!(order[0].0[0], walls[1][1][0], "the hole nearest the start comes first");
+        // Outlines run counter-clockwise, holes clockwise.
+        for &(contour, _, outline) in &order {
+            assert_eq!(geom::area2(&seam_loop(contour, outline)) > 0, outline);
+        }
+    }
 }

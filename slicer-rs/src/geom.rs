@@ -318,9 +318,11 @@ fn winding_number(contour: &[Pt], p: Pt) -> i32 {
 
 /// Whether the segment a–b stays inside the shapes: `a` is inside and the segment crosses no contour.
 pub fn segment_inside(shapes: &[Shape], a: Pt, b: Pt) -> bool {
-    if !contains(shapes, a) {
-        return false;
-    }
+    contains(shapes, a) && !segment_crosses(shapes, a, b)
+}
+
+/// Whether the segment a–b crosses or touches any of the shapes' contours.
+pub fn segment_crosses(shapes: &[Shape], a: Pt, b: Pt) -> bool {
     let (lo_x, hi_x) = (a.x.min(b.x), a.x.max(b.x));
     let (lo_y, hi_y) = (a.y.min(b.y), a.y.max(b.y));
     for shape in shapes {
@@ -332,12 +334,12 @@ pub fn segment_inside(shapes: &[Shape], a: Pt, b: Pt) -> bool {
                     continue;
                 }
                 if segments_cross(a, b, c, d) {
-                    return false;
+                    return true;
                 }
             }
         }
     }
-    true
+    false
 }
 
 /// Whether two segments cross or touch.

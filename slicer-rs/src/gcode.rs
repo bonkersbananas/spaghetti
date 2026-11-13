@@ -577,22 +577,40 @@ fn retracts(from: Role, to: Role, d: f64, a: Pt, b: Pt, internal: &Internal, s: 
     !(!wall && s.reduce_infill_retraction && s.sparse_density > 0.0 && internal.holds(a, b))
 }
 
-/// A layer's internal shapes, each with its bounding box, for testing travels against.
+/// A layer's slice and its top and bottom surfaces, each shape with its bounding box, for testing travels against.
 struct Internal<'a> {
-    shapes: &'a Shapes,
-    boxes: Vec<[i32; 4]>,
+    slice: &'a Shapes,
+    slice_boxes: Vec<[i32; 4]>,
+    surfaces: &'a Shapes,
+    surface_boxes: Vec<[i32; 4]>,
 }
 
 impl<'a> Internal<'a> {
-    fn new(shapes: &'a Shapes) -> Self {
-        Internal { shapes, boxes: shapes.iter().map(geom::bbox_of).collect() }
+    fn new(slice: &'a Shapes, surfaces: &'a Shapes) -> Self {
+        Internal {
+            slice,
+            slice_boxes: slice.iter().map(geom::bbox_of).collect(),
+            surfaces,
+            surface_boxes: surfaces.iter().map(geom::bbox_of).collect(),
+        }
     }
 
-    /// Whether the segment a–b lies within one of the shapes.
+    /// Whether the segment a–b lies within one of the slice's shapes and off its top and bottom surfaces: within one
+    /// of Orca's internal surfaces (the slice but its tops and bottoms), without working that out.
     fn holds(&self, a: Pt, b: Pt) -> bool {
         let in_box = |bb: &[i32; 4], p: Pt| p.x >= bb[0] && p.x <= bb[2] && p.y >= bb[1] && p.y <= bb[3];
-        self.shapes.iter().zip(&self.boxes).any(|(shape, bb)| {
+        let inside = self.slice.iter().zip(&self.slice_boxes).any(|(shape, bb)| {
             in_box(bb, a) && in_box(bb, b) && geom::segment_inside(std::slice::from_ref(shape), a, b)
+        });
+        if !inside {
+            return false;
+        }
+        let (lo, hi) = ((a.x.min(b.x), a.y.min(b.y)), (a.x.max(b.x), a.y.max(b.y)));
+        !self.surfaces.iter().zip(&self.surface_boxes).any(|(shape, bb)| {
+            bb[0] <= hi.0 && bb[2] >= lo.0 && bb[1] <= hi.1 && bb[3] >= lo.1 && {
+                let one = std::slice::from_ref(shape);
+                geom::contains(one, a) || geom::segment_crosses(one, a, b)
+            }
         })
     }
 }
@@ -650,7 +668,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         }
     }
     let labels = job.labels();
-    let internal = Internal::new(&regions.internal);
+    let internal = Internal::new(&regions.slice, &regions.surfaces);
     let mut last: Option<&Path> = None;
     for path in &plan.paths {
         let to = path.points[0];
@@ -1559,6 +1577,33 @@ mod tests {
             set_fan(&mut t, percent);
             assert_eq!(String::from_utf8(t).unwrap(), line);
         }
+    }
+
+    #[test]
+    fn travels_retract_where_orcas_do() {
+        // A 20 mm square slice with a 4 mm top surface in its middle.
+        let square = |x0: i32, y0: i32, x1: i32, y1: i32| {
+            vec![vec![geom::pt(x0, y0), geom::pt(x1, y0), geom::pt(x1, y1), geom::pt(x0, y1)]]
+        };
+        let mm = geom::SCALE as i32;
+        let slice: Shapes = vec![square(0, 0, 20 * mm, 20 * mm)];
+        let tops: Shapes = vec![square(8 * mm, 8 * mm, 12 * mm, 12 * mm)];
+        let internal = Internal::new(&slice, &tops);
+        let s = Settings::default();
+        let p = |x: f64, y: f64| geom::pt(geom::sc(x), geom::sc(y));
+        let (sparse, solid, inner, outer, top) =
+            (Role::SparseInfill, Role::SolidInfill, Role::InnerWall, Role::OuterWall, Role::TopSurface);
+        // Within the object, off the top surface: infill to infill, or from an inner wall, needs none.
+        assert!(!retracts(sparse, solid, 15.0, p(2.0, 2.0), p(2.0, 17.0), &internal, &s));
+        assert!(!retracts(inner, sparse, 15.0, p(2.0, 2.0), p(17.0, 2.0), &internal, &s));
+        // Across the top surface, into it, out of the object, to a wall or from the outer wall, it does.
+        assert!(retracts(sparse, solid, 16.0, p(2.0, 10.0), p(18.0, 10.0), &internal, &s));
+        assert!(retracts(sparse, top, 8.0, p(2.0, 10.0), p(10.0, 10.0), &internal, &s));
+        assert!(retracts(sparse, solid, 30.0, p(2.0, 2.0), p(32.0, 2.0), &internal, &s));
+        assert!(retracts(sparse, inner, 15.0, p(2.0, 2.0), p(2.0, 17.0), &internal, &s));
+        assert!(retracts(outer, sparse, 15.0, p(2.0, 2.0), p(2.0, 17.0), &internal, &s));
+        // Shorter than the minimum travel, never.
+        assert!(!retracts(outer, inner, 0.5, p(2.0, 2.0), p(2.0, 2.5), &internal, &s));
     }
 
     #[test]

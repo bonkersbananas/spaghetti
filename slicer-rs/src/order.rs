@@ -148,7 +148,14 @@ impl<'a> Nearest<'a> {
 
     /// The `k` nearest points to `q` that `filter` accepts, nearest first (fewer when fewer are accepted).
     fn query(&self, q: V, k: usize, filter: &dyn Fn(usize) -> bool) -> Vec<usize> {
-        let mut best: Vec<(f64, usize)> = Vec::with_capacity(k + 1);
+        let mut best = Vec::with_capacity(k + 1);
+        self.query_into(q, k, filter, &mut best);
+        best.into_iter().map(|(_, i)| i).collect()
+    }
+
+    /// The same into `best` (squared distance and index), for callers that ask many times.
+    fn query_into<F: Fn(usize) -> bool>(&self, q: V, k: usize, filter: F, best: &mut Vec<(f64, usize)>) {
+        best.clear();
         let less = |a: (f64, usize), b: (f64, usize)| a.0 < b.0 || (a.0 == b.0 && a.1 < b.1);
         let cx = ((q.0 - self.origin.0) / self.cell).floor().clamp(0.0, (self.cols - 1) as f64) as i64;
         let cy = ((q.1 - self.origin.1) / self.cell).floor().clamp(0.0, (self.rows - 1) as f64) as i64;
@@ -172,15 +179,15 @@ impl<'a> Nearest<'a> {
         };
         for r in 0..=self.cols.max(self.rows) {
             if r == 0 {
-                visit(cx, cy, &mut best);
+                visit(cx, cy, best);
             }
             if r > 0 {
                 for d in -r..=r {
-                    visit(cx + d, cy - r, &mut best);
-                    visit(cx + d, cy + r, &mut best);
+                    visit(cx + d, cy - r, best);
+                    visit(cx + d, cy + r, best);
                     if d != -r && d != r {
-                        visit(cx - r, cy + d, &mut best);
-                        visit(cx + r, cy + d, &mut best);
+                        visit(cx - r, cy + d, best);
+                        visit(cx + r, cy + d, best);
                     }
                 }
             }
@@ -189,7 +196,6 @@ impl<'a> Nearest<'a> {
                 break;
             }
         }
-        best.into_iter().map(|(_, i)| i).collect()
     }
 
     fn nearest(&self, q: V, filter: &dyn Fn(usize) -> bool) -> Option<usize> {
@@ -581,9 +587,17 @@ fn local_search(chain: &mut [(usize, bool)], points: &[V], could_reverse: &[bool
         order[k] = chain[k].0;
         flipped[order[k]] = chain[k].1;
     }
+    // Each end point's K nearest (of other segments), nearest first, NPOS past the last.
     let grid = Nearest::new(points);
-    let neighbors: Vec<Vec<usize>> =
-        (0..points.len()).map(|e| grid.query(points[e], K, &|idx| (idx >> 1) != (e >> 1))).collect();
+    let mut neighbors = vec![NPOS; points.len() * K];
+    let mut best = Vec::with_capacity(K + 1);
+    for e in 0..points.len() {
+        grid.query_into(points[e], K, |idx| (idx >> 1) != (e >> 1), &mut best);
+        for (slot, &(_, idx)) in neighbors[e * K..].iter_mut().zip(best.iter()) {
+            *slot = idx;
+        }
+    }
+    let near = |e: usize| &neighbors[e * K..(e + 1) * K];
     let start_neighbors: Vec<usize> = match start {
         Some(s) => grid.query(s, K, &|_| true),
         None => Vec::new(),
@@ -740,7 +754,7 @@ fn local_search(chain: &mut [(usize, bool)], points: &[V], could_reverse: &[bool
         // 2-opt breaking the link into p, as the first or the last link of the reversed run.
         if let Some(a) = s.prev_exit(p) {
             let old_link = norm(a, s.entry(p));
-            let around: &[usize] = if p > 0 { &neighbors[s.exit_idx(p - 1)] } else { &start_neighbors };
+            let around: &[usize] = if p > 0 { near(s.exit_idx(p - 1)) } else { &start_neighbors };
             for &q in around {
                 if !closer(a, q, old_link) {
                     break;
@@ -751,7 +765,7 @@ fn local_search(chain: &mut [(usize, bool)], points: &[V], could_reverse: &[bool
             }
             if p > 0 {
                 let e = s.entry(p);
-                for &q in &neighbors[s.entry_idx(p)] {
+                for &q in near(s.entry_idx(p)) {
                     if !closer(e, q, old_link) {
                         break;
                     }
@@ -765,7 +779,7 @@ fn local_search(chain: &mut [(usize, bool)], points: &[V], could_reverse: &[bool
         if p + 1 < s.n {
             let old_link = norm(s.exit(p), s.entry(p + 1));
             let x = s.exit(p);
-            for &q in &neighbors[s.exit_idx(p)] {
+            for &q in near(s.exit_idx(p)) {
                 if !closer(x, q, old_link) {
                     break;
                 }
@@ -774,7 +788,7 @@ fn local_search(chain: &mut [(usize, bool)], points: &[V], could_reverse: &[bool
                 }
             }
             let e = s.entry(p + 1);
-            for &q in &neighbors[s.entry_idx(p + 1)] {
+            for &q in near(s.entry_idx(p + 1)) {
                 if !closer(e, q, old_link) {
                     break;
                 }
@@ -809,7 +823,7 @@ fn local_search(chain: &mut [(usize, bool)], points: &[V], could_reverse: &[bool
             let removal = dist(s.prev_exit(p), Some(s.entry(p))) + dist(Some(s.exit(last)), s.next_entry(last))
                 - dist(s.prev_exit(p), s.next_entry(last));
             for e in [s.entry_idx(p), s.exit_idx(last)] {
-                for &q in &neighbors[e] {
+                for &q in near(e) {
                     if !closer(points[e], q, removal) {
                         break;
                     }
