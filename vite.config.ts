@@ -64,6 +64,7 @@ export default defineConfig(({ command }) => ({
     alias: {
       "@": fileURLToPath(new URL("./src/client", import.meta.url)),
       "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
+      "@support-fins": fileURLToPath(new URL("./vendor/support-fins/v1.0.6", import.meta.url)),
     },
   },
 }));

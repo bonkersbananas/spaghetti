@@ -13,6 +13,7 @@
     "bridge",
     "e2e",
     "test/unit",
+    "src/client/lib/slicing/support-fins.d.ts",
     "test/bridge"
   ]
 }

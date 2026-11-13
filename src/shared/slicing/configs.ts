@@ -243,7 +243,7 @@ export function sliceSetup(
       layerHeight: slicing.layerHeight,
       materials: filamentConfigs.map((filament) => first(filament.filament_type) ?? "PLA"),
       bedType: first(machine.curr_bed_type) ?? slicing.plate,
-      supports: slicing.supports !== "off",
+      supports: slicing.supports === "where-needed" || slicing.supports === "everywhere",
       ...(project ? { project: own ? ("own" as const) : ("some" as const) } : {}),
     },
     slicing,

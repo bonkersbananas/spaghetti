@@ -157,6 +157,9 @@ export const ORCA_KEYS = {
   plate: ["curr_bed_type"],
 } as const satisfies Partial<Record<keyof SlicingSettings, readonly string[]>>;
 
+/** Fins are the model's own walls (Support Fins): Orca is told no supports. */
+const orcasSupports = (placement: SupportPlacement): SupportPlacement => (placement === "fins" ? "off" : placement);
+
 function supportsOf(process: Config): SupportPlacement {
   if (first(process.enable_support) !== "1") return "off";
   return first(process.support_critical_regions_only) === "1" ? "where-needed" : "everywhere";
@@ -213,7 +216,8 @@ export function readSlicing(
       walls: number(process.wall_loops),
       infill: number(process.sparse_infill_density),
       pattern: INFILL_PATTERNS.includes(pattern as InfillPattern) ? pattern : hint.pattern,
-      supports: supportsOf(process),
+      // Fins leave Orca's supports off: the asked-for words are kept while the configs say the same.
+      supports: hint.supports === "fins" && supportsOf(process) === "off" ? "fins" : supportsOf(process),
       supportStyle: supportStyleOf(process),
       brim: brimOf(process),
       filaments,
@@ -243,15 +247,16 @@ export function applySlicing(configs: Pick<OrcaConfigs, "machine" | "process">, 
   }
   if (first(process.sparse_infill_pattern) !== settings.pattern) process.sparse_infill_pattern = settings.pattern;
   const supports = supportsOf(process);
-  if (supports !== settings.supports) {
-    process.enable_support = settings.supports === "off" ? "0" : "1";
-    if (settings.supports !== "off") {
-      process.support_critical_regions_only = settings.supports === "where-needed" ? "1" : "0";
+  const wanted = orcasSupports(settings.supports);
+  if (supports !== wanted) {
+    process.enable_support = wanted === "off" ? "0" : "1";
+    if (wanted !== "off") {
+      process.support_critical_regions_only = wanted === "where-needed" ? "1" : "0";
     }
   }
   // Turned on here, supports are automatic (a project's own may be only where it painted them).
   const painted = /manual/i.test(first(process.support_type) ?? "");
-  if (supportStyleOf(process) !== settings.supportStyle || (painted && supports !== settings.supports)) {
+  if (supportStyleOf(process) !== settings.supportStyle || (painted && supports !== wanted)) {
     const { type, style } = SUPPORT_TYPES[settings.supportStyle];
     process.support_type = `${type}(auto)`;
     process.support_style = style;
@@ -283,6 +288,6 @@ export function presetRecord(settings: SlicingSettings): Omit<SliceSettings, "sc
     layerHeight: settings.layerHeight,
     materials: settings.filaments.map((filament) => filament.material),
     bedType: orcaBedType(settings.plate),
-    supports: settings.supports !== "off",
+    supports: orcasSupports(settings.supports) !== "off",
   };
 }

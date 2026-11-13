@@ -95,6 +95,16 @@ describe("settings onto Orca's keys and back", () => {
     expect(configs.machine.curr_bed_type).toBe("High Temp Plate");
   });
 
+  it("tell Orca supports off for fins, which are the model's own, and still read back as fins", () => {
+    const fins = standard();
+    applySlicing(fins, { ...DEFAULT_SLICING, supports: "everywhere" });
+    applySlicing(fins, { ...DEFAULT_SLICING, supports: "fins" });
+    expect(fins.process).toMatchObject({ enable_support: "0" });
+    expect(readSlicing({ ...fins, filaments: [{}] }, { ...DEFAULT_SLICING, supports: "fins" }).supports).toBe("fins");
+    // Without being asked for fins, the same configs are just supports off.
+    expect(readSlicing({ ...fins, filaments: [{}] }).supports).toBe("off");
+  });
+
   it("say supports where needed with Orca's critical regions only, and everywhere with its usual automatic ones", () => {
     const where = standard();
     applySlicing(where, { ...DEFAULT_SLICING, supports: "where-needed" });

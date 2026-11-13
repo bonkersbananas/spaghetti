@@ -1731,6 +1731,53 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // Fins (decision 0052): the fourth Supports tile, picked for the drying rack, whose arm starts in the air. It
+    // slices again in the background, with the fins built into the model.
+    name: "slice-settings-fins",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, RACK_IDEA, RACK, /Parts of it float/);
+      await sliceSaved(page);
+      await modelInView(page);
+      await files.getByRole("button", { name: "Slice with…" }).click();
+      const settings = page.getByRole("dialog", { name: "How to slice it" });
+      const supports = settings.getByRole("group", { name: "Supports" });
+      await supports.getByRole("radio", { name: /^Fins/ }).click();
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+      await supports.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The rack sliced with fins, in the 3D view: the fins are in the G-code like any wall, under the arm.
+    name: "idea-model-fins-3d",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, RACK_IDEA, RACK, /Parts of it float/);
+      await sliceSaved(page);
+      await modelInView(page);
+      await files.getByRole("button", { name: "Slice with…" }).click();
+      const settings = page.getByRole("dialog", { name: "How to slice it" });
+      await settings.getByRole("group", { name: "Supports" }).getByRole("radio", { name: /^Fins/ }).click();
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+      await page.keyboard.press("Escape");
+      await settings.waitFor({ state: "hidden" });
+      await page
+        .getByRole("button", { name: `See ${RACK.name} in 3D` })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
     // A model with a part that starts in the air: sliced as it is, with one caution and the one thing that helps.
     name: "idea-model-floating",
     path: "/ideas",
