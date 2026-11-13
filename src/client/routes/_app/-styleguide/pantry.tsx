@@ -3,7 +3,7 @@ import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
-import { ModelStatus } from "@/components/builds/ModelFile";
+import { ModelStatus, SliceDetails } from "@/components/builds/ModelFile";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { BridgeLine } from "@/components/pantry/BridgeLine";
@@ -280,6 +280,10 @@ export function PantrySection() {
           </ul>
           <Label>A slicer file on an attempt, and how long it took</Label>
           <FileCard name="desk-clips.gcode.3mf" meta={["plate 1 of 2", "est. 1 h 12 min", "14 KB"]} download="#" />
+          <EstimateLine estimated={72} actual={78} />
+          <div className="flex gap-2">
+            <PlateThumb alt="" className="size-16" />
+          </div>
           <Label>A model Spaghetti slices: slicing, sliced, a caution, why it couldn't be, and not sliced yet</Label>
           <FileCard
             name="fusilli-knob.stl"
@@ -289,7 +293,13 @@ export function PantrySection() {
           <FileCard
             name="fusilli-knob.stl"
             meta={["est. 38 min", "11.3 g", "2.1 MB"]}
-            status={<ModelStatus state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }} phone={false} />}
+            status={
+              <ModelStatus
+                state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+                phone={false}
+                details={{ open: noop }}
+              />
+            }
             download="#"
           />
           <FileCard
@@ -300,6 +310,7 @@ export function PantrySection() {
                 state={{ kind: "sliced", slice: { ...SAMPLE_SLICE, cautions: ["floating"] }, saved: true }}
                 phone={false}
                 onSlice={noop}
+                details={{ open: noop }}
               />
             }
             download="#"
@@ -314,10 +325,51 @@ export function PantrySection() {
             meta={["1.2 MB"]}
             status={<ModelStatus state={{ kind: "unsliced" }} phone={false} onSlice={noop} />}
           />
-          <EstimateLine estimated={72} actual={78} />
-          <div className="flex gap-2">
-            <PlateThumb alt="" className="size-16" />
-          </div>
+          <Label>
+            On an idea (raised); on a story card (compact: only "Sliced by Spaghetti", the settings line says the rest);
+            in an attempt's sheet on phones the words open nothing
+          </Label>
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["est. 38 min", "11.3 g", "2.1 MB"]}
+            status={
+              <ModelStatus
+                state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+                phone={false}
+                details={{ open: noop }}
+              />
+            }
+            download="#"
+            raised
+          />
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["est. 38 min", "2.1 MB"]}
+            status={
+              <ModelStatus
+                state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }}
+                phone={false}
+                details={{ open: noop }}
+                short
+              />
+            }
+            download="#"
+            compact
+          />
+          <FileCard
+            name="fusilli-knob.stl"
+            meta={["est. 38 min", "11.3 g", "2.1 MB"]}
+            status={<ModelStatus state={{ kind: "sliced", slice: SAMPLE_SLICE, saved: true }} phone />}
+          />
+          <Label>How it was sliced: a popover on desktop, a sheet on phones</Label>
+          <Panel className="max-w-96">
+            <SliceDetails
+              file={{ id: "sample", name: "fusilli-knob.stl" }}
+              slice={SAMPLE_SLICE}
+              onSlice={noop}
+              heading
+            />
+          </Panel>
         </div>
       </div>
       <Label>The AMS as it is loaded here (live): bays are columns below lg, rows from lg</Label>

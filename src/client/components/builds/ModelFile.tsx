@@ -12,11 +12,13 @@ import {
 } from "@shared/slicing/words.ts";
 import { useQueryClient } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
-import { DownloadIcon, ExternalIcon, SameAgainIcon } from "@/components/ui/icons";
+import { DownloadIcon, ExternalIcon, InfoIcon, SameAgainIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
+import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
@@ -29,9 +31,9 @@ import { formatMinutes } from "./settings";
 
 /**
  * A model (.stl or plain .3mf) kept as it is and sliced in the browser (decision 0046): the card of a slicer file,
- * with its slicing in one quiet line. While it slices, a ring and "Slicing · 42 %"; once sliced, the plate picture
- * with its 3D control, the estimate, the sliced file to download, and "Sliced by Spaghetti · 0.20 mm · PLA", which
- * opens how; when it can't be, one short sentence and the one thing that helps ("Scale to 80 % and slice").
+ * with its slicing in one quiet line. While it slices, a ring and "Slicing 42%"; once sliced, the plate picture
+ * with its 3D control, the estimate, the sliced file to download, and "Sliced by Spaghetti · 0.20 mm · PLA", a quiet
+ * row that opens how; when it can't be, one short sentence and the one thing that helps ("Scale to 80% and slice").
  */
 
 /** Where a model's slicing is, from its row and this device's job. */
@@ -65,7 +67,7 @@ const optionsOf = (slice: FileSlice | null | undefined): SliceOptions => ({
 /** The one thing that helps a slice that failed, if there is one. */
 function remedy(slice: FileSlice): { label: string; options: SliceOptions } | null {
   if (slice.fitScale && (slice.problem === "too-big" || slice.problem === "too-tall" || slice.problem === "too-many")) {
-    return { label: `Scale to ${slice.fitScale} % and slice`, options: { ...optionsOf(slice), scale: slice.fitScale } };
+    return { label: `Scale to ${slice.fitScale}% and slice`, options: { ...optionsOf(slice), scale: slice.fitScale } };
   }
   if (worthRetrying(slice) && !(slice.problem === "memory" && slice.device === "phone")) {
     return { label: "Try again", options: optionsOf(slice) };
@@ -73,7 +75,7 @@ function remedy(slice: FileSlice): { label: string; options: SliceOptions } | nu
   return null;
 }
 
-/** The one thing to do about a model's slicing, under its line ("Scale to 80 % and slice"). */
+/** The one thing to do about a model's slicing, under its line ("Scale to 80% and slice"). */
 function LineAction({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
     <Button variant="secondary" size="sm" onClick={onClick}>
@@ -82,15 +84,37 @@ function LineAction({ children, onClick }: { children: ReactNode; onClick: () =>
   );
 }
 
-/** "Sliced by Spaghetti · 0.20 mm · PLA": how it was sliced, in one line that opens the details. */
-const SlicedLine = ({ slice, ...props }: { slice: FileSlice } & React.ComponentPropsWithRef<"button">) => (
-  <button
-    type="button"
-    {...props}
-    className="pressable focus-ring text-small text-ink-faint hover:text-ink decoration-ink-ghost -mx-1 inline-flex max-w-full items-center self-start rounded-sm px-1 text-left underline decoration-dotted underline-offset-4"
-  >
-    <span className="truncate">{["Sliced by Spaghetti", ...sliceSummary(slice.settings)].join(" · ")}</span>
-  </button>
+/** "Sliced by Spaghetti · 0.20 mm · PLA", or only "Sliced by Spaghetti" where the attempt's own line says the rest. */
+const slicedPieces = (slice: FileSlice, short?: boolean) =>
+  short ? ["Sliced by Spaghetti"] : ["Sliced by Spaghetti", ...sliceSummary(slice.settings)];
+
+/**
+ * How it was sliced, as a quiet row that opens the details (44 px tall on phones). Without `onClick` or a wrapping
+ * popover it is only words: a card in a sheet has nowhere to open them.
+ */
+const SlicedLine = ({
+  slice,
+  short,
+  ...props
+}: { slice: FileSlice; short?: boolean } & React.ComponentPropsWithRef<"button">) => {
+  const pieces = slicedPieces(slice, short);
+  return (
+    <button
+      type="button"
+      aria-label={`${pieces.join(", ")}: how it was sliced`}
+      {...props}
+      className={cn(quietRowClass, "w-fit max-w-full self-start text-left md:min-h-0 md:py-1")}
+    >
+      <QuietRowContent icon={InfoIcon}>
+        <MetaList>{pieces}</MetaList>
+      </QuietRowContent>
+    </button>
+  );
+};
+
+/** The same words where they open nothing. */
+const SlicedWords = ({ slice, short }: { slice: FileSlice; short?: boolean }) => (
+  <MetaList className="text-small text-ink-faint">{slicedPieces(slice, short)}</MetaList>
 );
 
 /** The lines under a model's name: its slicing, and what can be done about it. */
@@ -99,30 +123,51 @@ export function ModelStatus({
   phone,
   onSlice,
   details,
+  short,
 }: {
   state: ModelState;
   /** Says it about a phone ("ran out of memory on this phone"). */
   phone: boolean;
   /** Slicing it (again) from here; absent where the card only shows. */
   onSlice?: (options: SliceOptions) => void;
-  /** How the "Sliced by Spaghetti" line opens its details: wrapped (a popover's trigger), or a tap (a sheet). */
+  /**
+   * How the "Sliced by Spaghetti" line opens its details: wrapped (a popover's trigger), or a tap (a sheet). Without
+   * it the line is only words.
+   */
   details?: { wrap?: (line: ReactNode) => ReactNode; open?: () => void };
+  /** Only "Sliced by Spaghetti": on a story card, whose settings line already says the layer height and material. */
+  short?: boolean;
 }) {
   switch (state.kind) {
     case "saving":
-      return <span className="text-caption text-ink-faint">Saving the model…</span>;
+      return <span className="text-small text-ink-faint">Saving the model…</span>;
     case "waiting":
     case "slicing": {
       const percent = state.kind === "slicing" ? Math.round(state.fraction * 100) : null;
+      const words = percent === null ? "Waiting to slice" : `Slicing ${percent}%`;
+      // A progressbar that says where it is, not a live region that reads out every percent.
       return (
-        <span className="text-small text-ink-soft tabular inline-flex items-center gap-1.5" role="status">
-          <ProgressRing value={percent === null ? null : percent / 100} className="text-tomato" />
-          {percent === null ? "Waiting to slice" : `Slicing · ${percent} %`}
+        <span
+          className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
+          role="progressbar"
+          aria-label="Slicing"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          {...(percent === null ? {} : { "aria-valuenow": percent })}
+          aria-valuetext={words}
+        >
+          <ProgressRing value={percent === null ? null : percent / 100} className="text-semolina" />
+          {words}
         </span>
       );
     }
     case "sliced": {
-      const line = <SlicedLine slice={state.slice} onClick={details?.open} />;
+      const line =
+        details?.open || details?.wrap ? (
+          <SlicedLine slice={state.slice} short={short} onClick={details.open} />
+        ) : (
+          <SlicedWords slice={state.slice} short={short} />
+        );
       return (
         <>
           {details?.wrap ? details.wrap(line) : line}
@@ -151,18 +196,21 @@ export function ModelStatus({
     case "unsliced":
       return (
         <>
-          <span className="text-caption text-ink-faint">Not sliced yet</span>
+          <span className="text-small text-ink-faint">Not sliced yet</span>
           {onSlice && <LineAction onClick={() => onSlice({})}>Slice it</LineAction>}
         </>
       );
   }
 }
 
-/** What the card's meta line says: the estimate, weight and sliced file's size, or the model's size. */
-export function modelMeta(file: AttemptFileView, state: ModelState): string[] {
+/**
+ * What the card's meta line says: the estimate, weight and sliced file's size, or the model's size. `compact` (a
+ * story card) leaves the weight to the attempt's own settings line, as a slicer file's compact card does.
+ */
+export function modelMeta(file: AttemptFileView, state: ModelState, compact?: boolean): string[] {
   if (state.kind !== "sliced") return [formatBytes(file.size)];
   const estimate = state.saved ? file.prefill.estimatedMinutes : undefined;
-  const grams = state.saved ? file.prefill.weightGrams : undefined;
+  const grams = state.saved && !compact ? file.prefill.weightGrams : undefined;
   return [
     estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "",
     grams !== undefined ? `${grams.toLocaleString("en", { maximumFractionDigits: 1 })} g` : "",
@@ -188,6 +236,7 @@ export default function ModelFileCard({
   onRemove,
   compact,
   raised,
+  inSheet,
   className,
 }: SavedFileCardProps) {
   const queryClient = useQueryClient();
@@ -213,9 +262,9 @@ export default function ModelFileCard({
   }, [file.slice?.at]);
 
   const saved = state.kind === "sliced" && state.saved;
-  // How it was sliced: a popover beside the line on desktop, a sheet on phones.
+  // How it was sliced: a popover beside the line on desktop, a sheet on phones (but not over the attempt's sheet).
   const details =
-    state.kind !== "sliced"
+    state.kind !== "sliced" || (inSheet && !isDesktop)
       ? undefined
       : isDesktop
         ? {
@@ -231,8 +280,8 @@ export default function ModelFileCard({
       <FileCard
         name={file.name}
         thumbSrc={file.hasThumb || job?.picture ? fileThumbSrc(file.id) : undefined}
-        meta={modelMeta(file, state)}
-        status={<ModelStatus state={state} phone={!isDesktop} onSlice={slice} details={details} />}
+        meta={modelMeta(file, state, compact)}
+        status={<ModelStatus state={state} phone={!isDesktop} onSlice={slice} details={details} short={compact} />}
         download={saved ? fileUrl(file.id, "sliced") : undefined}
         downloadName={slicedName(file.name)}
         plateOverlay={
@@ -377,7 +426,7 @@ export function SliceDetails({
         </Fact>
         <Fact label="Plate">{plateName(settings.bedType)}</Fact>
         <Fact label="Supports">{settings.supports ? "Tree supports, where needed" : "Off"}</Fact>
-        {settings.scale !== 100 && <Fact label="Size">{settings.scale} % of the model</Fact>}
+        {settings.scale !== 100 && <Fact label="Size">{settings.scale}% of the model</Fact>}
         {settings.project && (
           <Fact label="Settings">
             {settings.project === "own" ? "The file's own" : "The file's layer height, walls, infill and supports"}
@@ -385,7 +434,7 @@ export function SliceDetails({
         )}
       </dl>
       <p className="text-caption text-ink-faint">
-        OrcaSlicer {settings.orca || engine.orca.version} is free software under the AGPL.{" "}
+        OrcaSlicer is free software under the AGPL.{" "}
         {engine.source && (
           <a
             href={engine.source}
@@ -400,17 +449,15 @@ export function SliceDetails({
       </p>
       {/* Side by side in a popover; in a phone's sheet, one under the other at the thumb's width. */}
       <div className={size === "sm" ? "flex flex-wrap items-center gap-2" : "flex flex-col gap-2"}>
-        <a
+        <ButtonLink
           href={fileUrl(file.id)}
           download={file.name}
-          className={cn(
-            "pressable focus-ring bg-cream text-ink shadow-key hover:shadow-key-hover inline-flex items-center justify-center font-semibold",
-            size === "sm" ? "text-small h-8 gap-1.5 rounded-sm px-3" : "text-body h-11 w-full gap-2 rounded-md px-4",
-          )}
+          size={size}
+          icon={DownloadIcon}
+          fullWidth={size === "md"}
         >
-          <DownloadIcon size={size === "sm" ? 16 : 20} weight="bold" aria-hidden />
           Download the original
-        </a>
+        </ButtonLink>
         {again && (close ? <PopoverClose asChild>{again}</PopoverClose> : again)}
       </div>
     </div>

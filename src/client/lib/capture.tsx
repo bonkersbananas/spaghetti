@@ -492,7 +492,10 @@ export function useGlobalCapture(): boolean {
       if (slicer) {
         const onAttempt = event.target instanceof Element ? event.target.closest("[data-attempt-id]") : null;
         if (takeSlicerDrop(slicer, onAttempt?.getAttribute("data-attempt-id") ?? null)) return;
-        toast.message("Open a build to add a slicer file", "Drop the .3mf on a build or an attempt.");
+        toast.message(
+          "Open an idea or a build to add it",
+          "Drop .stl and .3mf files on an idea, a build or an attempt.",
+        );
         return;
       }
       const files = imageFiles(dropped);

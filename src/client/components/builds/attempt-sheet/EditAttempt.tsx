@@ -203,6 +203,7 @@ export function EditAttempt({
                   file={attempt.file}
                   filaments={attempt.settings.filaments}
                   owner={readOnly ? undefined : { itemId: item.id, attemptId: attempt.id }}
+                  inSheet
                   onRemove={() => removeSlicerFile(queryClient, item.id, attempt)}
                 />
               ) : null

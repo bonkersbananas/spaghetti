@@ -1,5 +1,6 @@
 import { type AttemptFile, fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
+import { keepOwnFilaments } from "@shared/slicing/filaments.ts";
 import { slicedName } from "@shared/slicing/files.ts";
 import type { SliceOptions } from "@shared/slicing/types.ts";
 import { filamentFromSpool, spoolFromFilament } from "@shared/spools";
@@ -66,11 +67,20 @@ export function useSlicerFile({
   const latest = useRef(settings);
   latest.current = settings;
 
-  const apply = (draft: SlicerFileDraft, plate: number | null, ready = true) => {
-    const prefill = fileSettings(draft, plate);
+  /**
+   * Lays what a file says over the attempt. `given` is a sliced model's own reading (lib/slicing), whose filaments may
+   * be stand-ins: the attempt then keeps its own.
+   */
+  const apply = (draft: SlicerFileDraft, plate: number | null, ready = true, given?: AttemptSettings) => {
+    const prefill = given ?? fileSettings(draft, plate);
     const linked = linkSpools(prefill, spools);
-    onSettings(applyFileSettings(latest.current, linked.settings));
-    setState({ draft, plate, prefill, unknown: linked.unknown });
+    const model = draft.kind === "model" || given !== undefined;
+    onSettings(
+      applyFileSettings(latest.current, model ? keepOwnFilaments(latest.current, linked.settings) : linked.settings),
+    );
+    // A stand-in filament (no colour: nobody chose it) isn't a spool to add to the pantry.
+    const unknown = model ? linked.unknown.filter((index) => !!prefill.filaments?.[index]?.colorHex) : linked.unknown;
+    setState({ draft, plate, prefill, unknown });
     setSettingsKey((key) => key + 1);
     if (ready) onReady?.(draft, plate, prefill);
     onObjects?.((plateOf(draft, plate)?.objects ?? []).map((object) => object.name));
@@ -100,7 +110,7 @@ export function useSlicerFile({
     const { readThreeMf } = await import("@shared/threemf/read.ts");
     const result = readThreeMf(new Uint8Array(await outcome.sliced.arrayBuffer()));
     if (current.current?.draft.id !== draft.id) return;
-    apply({ ...draft, result, plates: printablePlates(result), picture }, 1, false);
+    apply({ ...draft, result, plates: printablePlates(result), picture }, 1, false, outcome.prefill);
   };
   /**
    * A model (.stl or plain .3mf): it is sliced here and fills in the attempt once it is; the settings stay as they
@@ -112,18 +122,19 @@ export function useSlicerFile({
     onReady?.(draft, 1, {});
     await follow(draft, Promise.resolve(done));
   };
-  /** Slices the sheet's model again ("Slice with supports", "Scale to 80 % and slice"). */
+  /** Slices the sheet's model again ("Slice with supports", "Scale to 80% and slice"). */
   const reslice = async (options: SliceOptions) => {
     const draft = current.current?.draft;
     if (draft?.kind !== "model") return;
     await follow(draft, sliceDraft(draft, options));
   };
-  const receive = async (file: File) => {
+  /** `sliced`: what Spaghetti's slice of a kept model said, for its .gcode.3mf (fetchKeptFile). */
+  const receive = async (file: File, sliced?: AttemptSettings) => {
     const draft = await readSlicerFile(file);
     if (!draft) return;
     if (draft.kind === "model") void receiveModel(draft);
     else if (draft.plates.length > 1) setState({ draft, plate: null, prefill: null, unknown: [] });
-    else apply(draft, draft.plates[0]?.index ?? null);
+    else apply(draft, draft.plates[0]?.index ?? null, true, sliced);
   };
   const picker = useFilePicker({
     accept: SLICER_ACCEPT,

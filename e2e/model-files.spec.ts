@@ -33,15 +33,15 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   });
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText("cube.stl")).toBeVisible();
-  const line = files.getByRole("button", { name: /Sliced by Spaghetti · 0\.20 mm · PLA/ });
+  const line = files.getByRole("button", { name: /Sliced by Spaghetti, 0\.20 mm, PLA/ });
   await expect(line).toBeVisible({ timeout: SLICED });
   await expect(files.getByText(/est\. /)).toBeVisible();
-  await expect(files.getByRole("link", { name: "Download cube.stl" })).toHaveAttribute("href", /\/sliced$/);
+  await expect(files.getByRole("link", { name: "Download cube.gcode.3mf" })).toHaveAttribute("href", /\/sliced$/);
 
   // It is on the server: after a reload it is still sliced, and the sliced file is a .gcode.3mf.
   await page.reload();
   await expect(line).toBeVisible();
-  const href = await files.getByRole("link", { name: "Download cube.stl" }).getAttribute("href");
+  const href = await files.getByRole("link", { name: "Download cube.gcode.3mf" }).getAttribute("href");
   const sliced = await page.request.get(href ?? "");
   expect(sliced.headers()["content-disposition"]).toContain("cube.gcode.3mf");
 
@@ -75,8 +75,8 @@ test("a model too big for the plate says so, and is sliced scaled to fit", async
   await expect(files.getByText("Too big for the plate: 400 mm wide, the X2D takes 256.")).toBeVisible({
     timeout: SLICED,
   });
-  await files.getByRole("button", { name: "Scale to 61 % and slice" }).click();
-  await expect(files.getByRole("button", { name: /Sliced by Spaghetti · 0\.20 mm · PLA · 61 %/ })).toBeVisible({
+  await files.getByRole("button", { name: "Scale to 61% and slice" }).click();
+  await expect(files.getByRole("button", { name: /Sliced by Spaghetti, 0\.20 mm, PLA, 61%/ })).toBeVisible({
     timeout: SLICED,
   });
   // The original stays as it was.
@@ -99,7 +99,7 @@ test("an .stl dropped in the attempt sheet is sliced there, fills in the attempt
     buffer: Buffer.from(boxStl(20)),
   });
   await expect(sheet.getByText("cube.stl")).toBeVisible();
-  await expect(sheet.getByRole("button", { name: /Sliced by Spaghetti · 0\.20 mm · PLA/ })).toBeVisible({
+  await expect(sheet.getByText("Sliced by Spaghetti")).toBeVisible({
     timeout: SLICED,
   });
   // What the slice says is now the attempt's, as a dropped .gcode.3mf would be.

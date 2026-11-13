@@ -33,7 +33,7 @@ export function DropOverlay({ visible }: { visible: boolean }) {
             </p>
             <p className="text-small text-ink-faint max-w-64">
               {slicer
-                ? "A .3mf from Bambu Studio or Orca fills in an attempt. Photos are captured as usual."
+                ? "A slicer's .gcode.3mf is kept as it is; an .stl or .3mf is sliced here. Photos are captured as usual."
                 : "The photos start a new idea."}
             </p>
           </m.div>

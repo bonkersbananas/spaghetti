@@ -5,6 +5,7 @@ import { parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
 import { mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { defaultSettings, SLICING_DEFAULTS } from "@shared/slicing/defaults.ts";
+import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
@@ -180,7 +181,7 @@ async function run(request: SliceRequest) {
           bytes: sliced.byteLength,
           ...(cautions.length ? { cautions: [...cautions] } : {}),
         }),
-        prefill: settingsFromFile(reading, 1),
+        prefill: withoutStandIns(settingsFromFile(reading, 1), setup.chosen),
         objects: objects.map((object) => object.name),
         slicer: slicerName(reading) ?? null,
       },

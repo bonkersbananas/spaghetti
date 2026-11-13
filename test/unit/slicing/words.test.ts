@@ -20,7 +20,7 @@ describe("what a model's card says", () => {
       "0.16 mm",
       "PLA",
       "supports",
-      "80 %",
+      "80%",
     ]);
     expect(materialsText(["PLA", "PLA", "PLA"])).toBe("PLA ×3");
     expect(materialsText(["PLA", "PETG", "PLA"])).toBe("PLA + PETG");

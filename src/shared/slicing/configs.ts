@@ -28,6 +28,8 @@ export interface SliceSetup {
   filaments: Config[];
   /** Each filament's colour, "#RRGGBB". */
   colours: string[];
+  /** Per filament: whether its colour is the project's own (else it is only a stand-in, nobody chose it). */
+  chosen: boolean[];
   /** Where the prime tower stands (mm), when the project says: needed once two filaments print. */
   tower?: { x: number; y: number };
   settings: Omit<SliceSettings, "scale" | "engine" | "orca">;
@@ -132,6 +134,7 @@ export function sliceSetup(
   const filamentNames: string[] = [];
   const filaments: Config[] = [];
   const colours: string[] = [];
+  const chosen: boolean[] = [];
   for (let index = 0; index < count; index++) {
     const name = project ? filamentPresetFor(types[index]) : SLICING_DEFAULTS.filament;
     const base = presets.filament[name] ?? presets.filament[SLICING_DEFAULTS.filament];
@@ -141,6 +144,7 @@ export function sliceSetup(
     filamentNames.push(presets.filament[name] ? name : SLICING_DEFAULTS.filament);
     filaments.push({ ...base, filament_colour: [colour], filament_settings_id: [filamentNames.at(-1) as string] });
     colours.push(colour);
+    chosen.push(colourOf(projectColours[index]) !== null);
   }
 
   const towerX = Number(first(project?.wipe_tower_x));
@@ -150,6 +154,7 @@ export function sliceSetup(
     process,
     filaments,
     colours,
+    chosen,
     ...(own && Number.isFinite(towerX) && Number.isFinite(towerY) && project?.wipe_tower_x !== undefined
       ? { tower: { x: towerX, y: towerY } }
       : {}),

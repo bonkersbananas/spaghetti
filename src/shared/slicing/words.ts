@@ -25,7 +25,7 @@ export function sliceSummary(settings: SliceSettings): string[] {
     layerHeightText(settings.layerHeight),
     materialsText(settings.materials),
     settings.supports ? "supports" : "",
-    settings.scale !== 100 ? `${settings.scale} %` : "",
+    settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);
 }
 

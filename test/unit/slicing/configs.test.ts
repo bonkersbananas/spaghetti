@@ -79,6 +79,8 @@ describe("the defaults", () => {
       filament_settings_id: ["Bambu PLA Basic @BBL X2D 0.4 nozzle"],
     });
     expect(setup.colours).toEqual([SLICING_DEFAULTS.colours[0]]);
+    // Nobody chose that colour: it is a stand-in's.
+    expect(setup.chosen).toEqual([false]);
     expect(setup.tower).toBeUndefined();
   });
 
@@ -132,6 +134,7 @@ describe("a 3MF project's settings", () => {
     // Names of presets and printers are never taken from a file.
     expect(setup.process.compatible_printers).toBeUndefined();
     expect(setup.colours).toEqual(["#00AE42", "#1D1D1F"]);
+    expect(setup.chosen).toEqual([true, true]);
     expect(setup.tower).toEqual({ x: 165, y: 216 });
   });
 

@@ -418,7 +418,7 @@ async function buildWithModel(page: Page) {
     mimeType: "model/stl",
     buffer: Buffer.from(FUSILLI.bytes),
   });
-  await sheet.getByRole("button", { name: /Sliced by Spaghetti/ }).waitFor({ timeout: 90_000 });
+  await sheet.getByText("Sliced by Spaghetti").waitFor({ timeout: 90_000 });
   return sheet;
 }
 
@@ -1248,7 +1248,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await page.route("**/slicer/*/engine-st.wasm", () => undefined);
-      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Slicing · /);
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Slicing \d+%/);
     },
     beforeShot: modelInView,
     cleanup: async (page) => {

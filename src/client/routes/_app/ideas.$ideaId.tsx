@@ -247,7 +247,7 @@ function Idea({ item }: { item: ItemView }) {
     ideaComment: item.pending ? undefined : comment,
   });
 
-  // A .3mf or .gcode.3mf is kept with the idea: picked here, or dropped anywhere on the page (desktop).
+  // A .gcode.3mf, .3mf or .stl is kept with the idea: picked here, or dropped anywhere on the page (desktop).
   const files = item.files ?? [];
   const filePicker = useRef<HTMLInputElement>(null);
   const keepFile = (file: File) => {

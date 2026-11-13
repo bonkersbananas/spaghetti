@@ -77,7 +77,7 @@ export function FileCard({
       ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5"
       : "bg-ink/3 rounded-lg p-2.5 pr-1.5";
   const thumb = (
-    <span className={cn("relative shrink-0", !!status && "md:row-span-2")}>
+    <span className={cn("relative shrink-0", !!status && "md:row-span-2 md:self-start")}>
       <PlateThumb
         src={thumbSrc}
         alt="The plate, as sliced"
@@ -108,8 +108,8 @@ export function FileCard({
           href={download}
           download={downloadName ?? name}
           className="pressable focus-ring text-ink-soft hover:bg-ink/5 hover:text-ink flex size-11 shrink-0 items-center justify-center rounded-md md:size-9"
-          aria-label={`Download ${name}`}
-          title="Download the file"
+          aria-label={`Download ${downloadName ?? name}`}
+          title={downloadName ? "Download the sliced file" : "Download the file"}
         >
           <DownloadIcon size={20} aria-hidden />
         </a>
@@ -180,6 +180,8 @@ export interface SavedFileCardProps {
   onRemove?: () => void;
   /** Where the file is kept, so a model can be sliced (again) from its card; without it the card only shows. */
   owner?: SliceTarget;
+  /** In the attempt's sheet: on phones a model's details don't open a second sheet over it. */
+  inSheet?: boolean;
   className?: string;
 }
 
@@ -328,7 +330,7 @@ export function AddSlicerFile({ onClick, desktop }: { onClick: () => void; deskt
     >
       <SlicerFileIcon size={22} aria-hidden />
       <span className="text-small flex-1 font-semibold">Add the slicer file</span>
-      <span className="text-caption text-ink-faint">{desktop ? "or drop a .3mf here" : ".3mf or .gcode.3mf"}</span>
+      <span className="text-caption text-ink-faint">{desktop ? "or drop one here" : ".gcode.3mf, .3mf or .stl"}</span>
     </button>
   );
 }

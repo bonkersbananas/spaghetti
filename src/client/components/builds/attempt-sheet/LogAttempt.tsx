@@ -178,7 +178,8 @@ export function LogAttempt({
               ideaFiles={previous ? undefined : item.files}
               onUseIdeaFile={async (kept) => {
                 const file = await fetchKeptFile(kept);
-                if (file) void slicer.take(file);
+                // A kept model gives its sliced file, and what its slice said (no stand-in filament claimed).
+                if (file) void slicer.take(file, kept.kind === "model" ? kept.prefill : undefined);
               }}
               unknown={slicer.unknownFilaments}
               card={
