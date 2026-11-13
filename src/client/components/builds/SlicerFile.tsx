@@ -85,41 +85,39 @@ export function FileCard({
   raised,
   className,
 }: FileCardProps) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-3",
-        compact
-          ? "-mr-1.5"
-          : raised
-            ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5"
-            : "bg-ink/3 rounded-lg p-2.5 pr-1.5",
-        className,
-      )}
-    >
-      <span className="relative shrink-0">
-        <PlateThumb
-          src={thumbSrc}
-          alt="The plate, as sliced"
-          icon={icon}
-          className={compact ? "size-12" : raised ? "size-20" : "size-16"}
-        />
-        {plateOverlay}
+  const box = compact
+    ? "-mr-1.5"
+    : raised
+      ? "group bg-cream shadow-soft max-w-content rounded-lg p-3 pr-1.5"
+      : "bg-ink/3 rounded-lg p-2.5 pr-1.5";
+  const thumb = (
+    <span className={cn("relative shrink-0", !!status && "md:row-span-2")}>
+      <PlateThumb
+        src={thumbSrc}
+        alt="The plate, as sliced"
+        icon={icon}
+        className={compact ? "size-12" : raised ? "size-20" : "size-16"}
+      />
+      {plateOverlay}
+    </span>
+  );
+  const text = (
+    <div className={cn("flex min-w-0 flex-1 flex-col gap-0.5", !!status && "md:self-end")}>
+      <span className="text-small text-ink truncate font-semibold" title={name}>
+        {name}
       </span>
-      <div className={cn("flex min-w-0 flex-col gap-0.5", "flex-1")}>
-        <span className="text-small text-ink truncate font-semibold" title={name}>
-          {name}
-        </span>
-        <MetaList className="text-small text-ink-faint tabular">
-          {meta.map((piece) => (
-            <span key={piece} className="whitespace-nowrap">
-              {piece}
-            </span>
-          ))}
-        </MetaList>
-        {note && <span className="text-caption text-ink-faint">{note}</span>}
-        {status}
-      </div>
+      <MetaList className="text-small text-ink-faint tabular">
+        {meta.map((piece) => (
+          <span key={piece} className="whitespace-nowrap">
+            {piece}
+          </span>
+        ))}
+      </MetaList>
+      {note && <span className="text-caption text-ink-faint">{note}</span>}
+    </div>
+  );
+  const actions = (
+    <>
       {download && (
         <a
           href={download}
@@ -140,6 +138,33 @@ export function FileCard({
           className={raised ? "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100" : undefined}
         />
       )}
+    </>
+  );
+  if (!status) {
+    return (
+      <div className={cn("flex items-center gap-3", box, className)}>
+        {thumb}
+        {text}
+        {actions}
+      </div>
+    );
+  }
+  // With a status (a model's slicing): under the text on desktop; on phones a row of its own across the card, where
+  // its line and its action have room.
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 md:gap-y-1",
+        box,
+        className,
+      )}
+    >
+      {thumb}
+      {text}
+      <div className="flex items-center md:row-span-2">{actions}</div>
+      <div className="col-span-3 flex min-w-0 flex-col items-start gap-1.5 md:col-span-1 md:col-start-2 md:self-start">
+        {status}
+      </div>
     </div>
   );
 }

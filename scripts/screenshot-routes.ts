@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
+import { boxStl, fusilliStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { commentId } from "./seed/comments.ts";
@@ -351,6 +352,40 @@ async function openIdea(page: Page, id: string) {
   await page.goto(`/ideas/${id}`);
   await page.locator("h1").first().waitFor({ state: "attached" });
   await page.getByRole("button", { name: "Start building" }).first().waitFor();
+}
+
+/**
+ * A new idea with a model kept on it, as it would be dropped there: an .stl that slices in the browser (decision 0046).
+ * `until` is the card's line to wait for: "Slicing", "Sliced by Spaghetti" or a sentence of why it couldn't be.
+ */
+async function ideaWithModel(
+  page: Page,
+  idea: { title: string; note: string },
+  file: { name: string; bytes: Uint8Array },
+  until: RegExp,
+) {
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: { Origin: new URL(page.url()).origin }, data: { id, ...idea } });
+  await openIdea(page, id);
+  await page.getByTestId("idea-file-input").setInputFiles({
+    name: file.name,
+    mimeType: "model/stl",
+    buffer: Buffer.from(file.bytes),
+  });
+  const files = page.getByRole("region", { name: /^Files/ });
+  await files.getByText(until).first().waitFor({ timeout: 90_000 });
+  // The plate picture is drawn before slicing starts: wait for it to be on screen.
+  await files.locator("img").first().waitFor();
+  return files;
+}
+
+const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
+const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the pasta jar lid: twist to open." };
+
+/** Waits for a sliced model's card and brings it into view. */
+async function modelInView(page: Page) {
+  await page.getByRole("region", { name: /^Files/ }).evaluate((region) => region.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
 }
 
 /** The spools the label shots make (removed again by their cleanup). */
@@ -1171,6 +1206,72 @@ export const shots: Shot[] = [
       });
       await page.waitForTimeout(300);
     },
+  },
+  {
+    // A model (.stl) dropped on an idea, slicing in the browser: its picture is drawn, the engine is on its way (held
+    // here, so the shot always finds it slicing).
+    name: "idea-model-slicing",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route("**/slicer/*/engine-st.wasm", () => undefined);
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Slicing · /);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    // The model sliced: its plate picture with the 3D control, the estimate, and how Spaghetti sliced it.
+    name: "idea-model",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+    },
+    beforeShot: modelInView,
+  },
+  {
+    // How it was sliced: a popover on desktop, a sheet on phones, with the engine's source and the original.
+    name: "idea-model-details",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await modelInView(page);
+      await files.getByRole("button", { name: /Sliced by Spaghetti/ }).click();
+      await page.getByRole("dialog").getByText("Download the original").waitFor();
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
+  {
+    // The sliced model in the 3D view: the G-code Spaghetti made, layer by layer.
+    name: "idea-model-viewer",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await files.getByRole("button", { name: `See ${FUSILLI.name} in 3D` }).click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
+  {
+    // A model too long for the plate: one sentence, and the one thing that helps.
+    name: "idea-model-too-big",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(
+        page,
+        { title: "Lasagne wall art", note: "A whole lasagne sheet, life size, for the kitchen wall." },
+        { name: "lasagne-sheet.stl", bytes: boxStl(320, 100, 4) },
+        /Too big for the plate/,
+      );
+    },
+    beforeShot: modelInView,
   },
   {
     // The 3D view opened from the idea's own file.

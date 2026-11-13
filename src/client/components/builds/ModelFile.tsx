@@ -73,10 +73,10 @@ function remedy(slice: FileSlice): { label: string; options: SliceOptions } | nu
   return null;
 }
 
-/** A quiet action under the card's lines, aligned with their text. */
+/** The one thing to do about a model's slicing, under its line ("Scale to 80 % and slice"). */
 function LineAction({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
-    <Button variant="quiet" size="sm" onClick={onClick} className="-ml-3 self-start">
+    <Button variant="secondary" size="sm" onClick={onClick}>
       {children}
     </Button>
   );
@@ -129,7 +129,7 @@ export function ModelStatus({
           {details?.wrap ? details.wrap(line) : line}
           {state.slice.cautions?.includes("floating") && (
             <>
-              <Caution className="mt-1 px-0">Parts of it float in the air.</Caution>
+              <Caution className="px-0">Parts of it float in the air.</Caution>
               {onSlice && (
                 <LineAction onClick={() => onSlice({ ...optionsOf(state.slice), supports: true })}>
                   Slice with supports
@@ -144,7 +144,7 @@ export function ModelStatus({
       const help = remedy(state.slice);
       return (
         <>
-          <Caution className="mt-0.5 px-0">{problemSentence(state.slice, { phone })}</Caution>
+          <Caution className="px-0">{problemSentence(state.slice, { phone })}</Caution>
           {onSlice && help && <LineAction onClick={() => onSlice(help.options)}>{help.label}</LineAction>}
         </>
       );
@@ -221,7 +221,7 @@ export default function ModelFileCard({
       : isDesktop
         ? {
             wrap: (line: ReactNode) => (
-              <Popover trigger={line} label="How it was sliced" side="bottom" align="start" className="w-80">
+              <Popover trigger={line} label="How it was sliced" side="bottom" align="start" className="w-96">
                 <SliceDetails file={file} slice={state.slice} onSlice={slice} heading close />
               </Popover>
             ),
@@ -253,6 +253,7 @@ export default function ModelFileCard({
             <SliceDetails
               file={file}
               slice={state.slice}
+              size="md"
               onSlice={
                 slice &&
                 ((options) => {
@@ -339,6 +340,7 @@ export function SliceDetails({
   onSlice,
   heading,
   close,
+  size = "sm",
 }: {
   file: Pick<AttemptFileView, "id" | "name">;
   slice: FileSlice;
@@ -347,10 +349,12 @@ export function SliceDetails({
   heading?: boolean;
   /** In a popover: the actions close it. */
   close?: boolean;
+  /** Its buttons: small in a popover, a thumb's size in a phone's sheet. */
+  size?: "sm" | "md";
 }) {
   const { settings } = slice;
   const again = onSlice && (
-    <Button variant="secondary" size="sm" icon={SameAgainIcon} onClick={() => onSlice(optionsOf(slice))}>
+    <Button variant="secondary" size={size} icon={SameAgainIcon} onClick={() => onSlice(optionsOf(slice))}>
       Slice again
     </Button>
   );
@@ -395,9 +399,12 @@ export function SliceDetails({
         <a
           href={fileUrl(file.id)}
           download={file.name}
-          className="pressable focus-ring bg-cream text-small text-ink shadow-key hover:shadow-key-hover inline-flex h-8 items-center gap-1.5 rounded-sm px-3 font-semibold"
+          className={cn(
+            "pressable focus-ring bg-cream text-ink shadow-key hover:shadow-key-hover inline-flex items-center font-semibold",
+            size === "sm" ? "text-small h-8 gap-1.5 rounded-sm px-3" : "text-body h-11 gap-2 rounded-md px-4",
+          )}
         >
-          <DownloadIcon size={16} weight="bold" aria-hidden />
+          <DownloadIcon size={size === "sm" ? 16 : 20} weight="bold" aria-hidden />
           Download the original
         </a>
         {again && (close ? <PopoverClose asChild>{again}</PopoverClose> : again)}
