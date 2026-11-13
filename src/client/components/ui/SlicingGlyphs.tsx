@@ -102,12 +102,10 @@ export function SupportsGlyph({ placement, className }: { placement: SupportPlac
       ))}
       {placement === "fins" && (
         <>
-          {/* A thin wall, with the little tines that join it to the ledge. */}
-          <rect x={15} y={11.5} width={1.6} height={9.5} rx={0.5} opacity={0.6} />
-          <rect x={20.5} y={11.5} width={1.6} height={9.5} rx={0.5} opacity={0.6} />
-          <rect x={15} y={8.5} width={7.1} height={1.2} opacity={0.6} />
-          <rect x={15} y={9.7} width={1.6} height={1.8} opacity={0.6} />
-          <rect x={20.5} y={9.7} width={1.6} height={1.8} opacity={0.6} />
+          {/* One thin wall under the ledge, a break line across it, and the tines that join it. */}
+          <rect x={16.2} y={10} width={1.6} height={11} rx={0.5} opacity={0.6} />
+          <rect x={14} y={8.5} width={6} height={1.4} rx={0.5} />
+          <rect x={14.8} y={16.5} width={4.4} height={0.8} fill="var(--color-tile, white)" />
         </>
       )}
     </svg>
