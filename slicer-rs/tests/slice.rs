@@ -491,6 +491,49 @@ fn brim_loops(gcode: &str) -> Vec<Vec<[f64; 2]>> {
 }
 
 #[test]
+fn walls_stop_the_seam_gap_short_of_where_they_start() {
+    // A 20 mm cube's two walls on a layer of its middle: each loop ends a tenth of the nozzle short of its start,
+    // as Orca's do (its seam gap).
+    let cube = cube_stl(20.0);
+    let settings = Settings::default();
+    let out = slice(&[Input { name: "cube.stl", bytes: &cube }], &settings, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layer = gcode.split("; CHANGE_LAYER\n").nth(50).unwrap();
+    let (mut x, mut y) = (f64::NAN, f64::NAN);
+    let mut feature = "";
+    let mut loops: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut extruding = false;
+    for line in layer.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+            extruding = false;
+        }
+        let code = line.split(';').next().unwrap().trim();
+        if !code.starts_with("G1 ") {
+            continue;
+        }
+        let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+        let moved = nx != x || ny != y;
+        if moved && feature.ends_with("wall") && word(code, 'E').is_some_and(|e| e > 0.0) {
+            if !extruding {
+                loops.push(vec![[x, y]]);
+            }
+            loops.last_mut().unwrap().push([nx, ny]);
+            extruding = true;
+        } else if moved {
+            extruding = false;
+        }
+        (x, y) = (nx, ny);
+    }
+    assert_eq!(loops.len(), 2);
+    for l in &loops {
+        let (a, b) = (l[0], l[l.len() - 1]);
+        let gap = (a[0] - b[0]).hypot(a[1] - b[1]);
+        assert!((gap - settings.seam_gap).abs() < 0.003, "{gap} mm between a wall's start and end");
+    }
+}
+
+#[test]
 fn a_tall_thin_model_gets_orcas_auto_brim_before_its_label() {
     // A fin 4 × 20 mm and 40 mm tall bends easily across its short side: Orca's auto brim gives it 9.4 mm at the X2D's
     // fastest speed (300 mm/s), which comes to 20 lines, 0.1 mm off the fin.
