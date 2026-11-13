@@ -151,12 +151,12 @@ function Setup({ initial }: { initial: PrinterSetup }) {
             {X2D.buildVolume.x} × {X2D.buildVolume.y} × {X2D.buildVolume.z} mm
           </span>
           <span>
-            about {X2D.dualBuildVolume.x} × {X2D.dualBuildVolume.y} × {X2D.dualBuildVolume.z} mm with both nozzles
+            {X2D.dualBuildVolume.x} × {X2D.dualBuildVolume.y} × {X2D.dualBuildVolume.z} mm with both nozzles
           </span>
           <span>
-            nozzle to {X2D.maxNozzleTemperature} °C, bed to {X2D.maxBedTemperature} °C
+            {X2D.maxNozzleTemperature} °C nozzle, {X2D.maxBedTemperature} °C bed
           </span>
-          <span>chamber to {X2D.maxChamberTemperature} °C</span>
+          <span>{X2D.maxChamberTemperature} °C chamber</span>
         </MetaList>
         <BridgeCard />
       </div>
