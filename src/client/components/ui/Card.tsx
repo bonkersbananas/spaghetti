@@ -118,6 +118,8 @@ export function Card({
         {slides ? (
           <div
             ref={scroller}
+            // The card doesn't shrink under a press that starts here (pressable): on iOS that would end the swipe.
+            data-swipe
             onScroll={(event) => {
               const el = event.currentTarget;
               if (!el.clientWidth) return;
