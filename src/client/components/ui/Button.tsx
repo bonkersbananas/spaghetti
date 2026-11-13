@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 import { type Icon, LoadingIcon } from "./icons";
 import { Kbd } from "./Kbd";
 
-export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger" | "floating";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const variants: Record<ButtonVariant, string> = {
@@ -11,6 +11,9 @@ const variants: Record<ButtonVariant, string> = {
     "press-tomato bg-tomato text-on-accent shadow-soft hover:bg-tomato-strong disabled:bg-ink-ghost disabled:shadow-none",
   secondary: "bg-cream text-ink shadow-key hover:shadow-key-hover disabled:text-ink-ghost",
   quiet: "bg-transparent text-ink-soft hover:bg-ink/5 hover:text-ink disabled:text-ink-ghost",
+  // The pill that floats over a list on a phone, in the ActionBar ("Pick ideas", "New twist"): a lifted surface
+  // on `shadow-float`, so it doesn't read as another row. Pill-shaped whatever the size.
+  floating: "bg-lifted text-ink shadow-float hover:shadow-raised disabled:text-ink-ghost",
   danger:
     "press-tomato active:text-on-accent data-[pressed]:text-on-accent bg-tomato-soft text-tomato-ink hover:bg-tomato hover:text-on-accent",
 };
@@ -27,6 +30,10 @@ const iconSizes: Record<ButtonSize, number> = { sm: 16, md: 20, lg: 22 };
  * Small buttons keep a 44 px hit area on touch screens (touch-target), which
  * needs a positioned button: relative, unless the caller places it.
  */
+/** The size's classes; a floating button is a pill whatever its size. */
+const sizeClass = (variant: ButtonVariant, size: ButtonSize) =>
+  variant === "floating" ? sizes[size].replace(/rounded-\w+/, "rounded-pill") : sizes[size];
+
 const hitArea = (size: ButtonSize, className?: string) =>
   size === "sm" && cn("touch-target", !/\b(absolute|fixed|sticky)\b/.test(className ?? "") && "relative");
 
@@ -67,7 +74,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(
         "pressable focus-ring inline-flex shrink-0 items-center justify-center whitespace-nowrap select-none disabled:cursor-not-allowed aria-busy:pointer-events-none",
         variants[variant],
-        sizes[size],
+        sizeClass(variant, size),
         hitArea(size, className),
         fullWidth && "w-full",
         className,
@@ -104,7 +111,7 @@ export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(functio
       className={cn(
         "pressable focus-ring inline-flex shrink-0 items-center justify-center whitespace-nowrap select-none",
         variants[variant],
-        sizes[size],
+        sizeClass(variant, size),
         hitArea(size, className),
         fullWidth && "w-full",
         className,
