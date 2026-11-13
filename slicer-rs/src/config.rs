@@ -79,6 +79,9 @@ pub struct Settings {
     /// (`thick_bridges`, `thick_internal_bridges`), rather than flat at the layer's height.
     pub thick_bridges: bool,
     pub thick_internal_bridges: bool,
+    /// Whether narrow bands of solid infill print as loops instead of lines
+    /// (`detect_narrow_internal_solid_infill`).
+    pub narrow_solid_loops: bool,
 
     // What the process asks for by name, which this prints as it can (`fallbacks`) or refuses (`unsupported`).
     pub sparse_infill_pattern: String,
@@ -285,6 +288,7 @@ impl Settings {
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
             thick_bridges: p.bool("thick_bridges"),
             thick_internal_bridges: p.bool("thick_internal_bridges"),
+            narrow_solid_loops: p.bool("detect_narrow_internal_solid_infill"),
 
             sparse_infill_pattern: text("sparse_infill_pattern"),
             top_surface_pattern: text("top_surface_pattern"),
@@ -391,7 +395,7 @@ impl Settings {
             ("bottom surfaces", &self.bottom_surface_pattern),
             ("solid infill", &self.internal_solid_infill_pattern),
         ] {
-            if !matches!(pattern.as_str(), "zig-zag" | "rectilinear" | "") {
+            if !matches!(pattern.as_str(), "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "") {
                 out.push(format!("{pattern} {what} printed as zig-zag"));
             }
         }
