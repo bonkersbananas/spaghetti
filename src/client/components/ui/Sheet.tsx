@@ -24,8 +24,13 @@ export interface SheetProps {
    * On phones it is always a bottom sheet.
    */
   desktop?: "dialog" | "panel";
-  /** A wider desktop dialog, for content that sits in columns (the shortcut list). */
+  /** A wider desktop dialog, for content that sits in columns (the shortcut list); as a panel, wide enough for two columns beside a picture. */
   wide?: boolean;
+  /**
+   * A desktop panel with no scrim and no lock on the page: what it changes shows beside it (a model's slicing
+   * settings, whose result stays in view). A press outside, or Esc, closes it. Phones still get the bottom sheet.
+   */
+  modeless?: boolean;
   /** On phones, as tall as a sheet gets instead of as tall as its content (the compare sheet's two attempts). */
   tall?: boolean;
   /** The body fills the sheet edge to edge, with no padding or scrolling, for content that draws itself (the 3D view). Taller, and wider on desktop. */
@@ -133,6 +138,7 @@ function DesktopSheet({
   back,
   desktop = "dialog",
   wide,
+  modeless,
   fill,
   children,
 }: SheetProps) {
@@ -140,9 +146,9 @@ function DesktopSheet({
   const returnFocus = useReturnFocus(open);
   const body = useRef<HTMLDivElement>(null);
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={onOpenChange} modal={!(isPanel && modeless)}>
       <Dialog.Portal>
-        <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />
+        {!(isPanel && modeless) && <Dialog.Overlay className="sg-overlay bg-scrim fixed inset-0 z-40" />}
         <Dialog.Content
           // Keyboard use starts where the task does: the first control in the body (the note to write, the outcome
           // to pick), not the header's arrows or Close. Something in the body that took focus itself keeps it.
@@ -163,7 +169,7 @@ function DesktopSheet({
           className={cn(
             "sg-lifted-surface bg-lifted shadow-float fixed z-50 flex flex-col focus:outline-none",
             isPanel
-              ? "sg-panel inset-y-3 right-3 w-full max-w-md rounded-xl"
+              ? cn("sg-panel inset-y-3 right-3 w-full rounded-xl", wide ? "max-w-[44rem]" : "max-w-md")
               : cn(
                   "sg-dialog left-1/2 w-full -translate-x-1/2 rounded-xl",
                   fill

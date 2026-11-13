@@ -23,13 +23,14 @@ import { BeforeAfter, type Change } from "@/components/ui/BeforeAfter";
 import { Button } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
 import { NextIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
+import { Kbd } from "@/components/ui/Kbd";
 import { MetaList } from "@/components/ui/MetaList";
-import { PopoverAnchor, PopoverPanel, PopoverRoot, PopoverTrigger } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import type { AttemptFileView } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { fileThumbSrc } from "@/lib/previews";
@@ -218,11 +219,17 @@ const SlicedOpener = (props: ComponentPropsWithRef<"button">) => (
  * Jade white"), which opens its settings: tall enough for a thumb, and the same in every state, so a popover hanging
  * from the card keeps its trigger.
  */
-function SettingsRow({ summary, className, ...props }: ComponentPropsWithRef<"button"> & { summary: string[] }) {
+function SettingsRow({
+  summary,
+  shortcut,
+  className,
+  ...props
+}: ComponentPropsWithRef<"button"> & { summary: string[]; shortcut?: string[] }) {
   return (
     <button
       type="button"
       aria-label={`Slice with… ${summary.join(", ")}`}
+      aria-haspopup="dialog"
       {...props}
       className={cn(
         "pressable focus-ring bg-ink/4 hover:bg-ink/6 text-small text-ink-soft flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2.5 pl-3 text-left md:flex-none",
@@ -236,6 +243,7 @@ function SettingsRow({ summary, className, ...props }: ComponentPropsWithRef<"bu
           </span>
         ))}
       </MetaList>
+      {shortcut && <Kbd keys={shortcut} />}
       <NextIcon size={14} weight="bold" className="text-ink-ghost shrink-0" aria-hidden />
     </button>
   );
@@ -453,10 +461,11 @@ function statusOf(
   }
 }
 
-/** How a model's settings open from its card: wrapped (a popover's trigger), or a tap (a sheet). */
+/** How a model's settings open from its card: a tap (a sheet on a phone, a panel on desktop). */
 export interface SettingsOpener {
-  wrap?: (trigger: ReactNode) => ReactNode;
   open?: () => void;
+  /** The key that opens it, shown on the row on desktop. */
+  shortcut?: string[];
   /** What it is sliced with, in words: the row says it. */
   summary: string[];
 }
@@ -467,9 +476,9 @@ function opener(details: SettingsOpener | undefined, inline: boolean): ReactNode
   const trigger = inline ? (
     <SlicedOpener onClick={details.open} />
   ) : (
-    <SettingsRow summary={details.summary} onClick={details.open} />
+    <SettingsRow summary={details.summary} shortcut={details.shortcut} onClick={details.open} />
   );
-  return details.wrap ? details.wrap(trigger) : trigger;
+  return trigger;
 }
 
 /**
@@ -606,27 +615,9 @@ export function SliceResult({
   );
 }
 
-/** The settings, loaded the first time they open: a popover's panel, or a phone's sheet. */
+/** The settings, loaded the first time they open: a phone's sheet, or a desktop's panel. */
 const loadSettings = () => import("./SliceSettings");
 
-/** The settings' shape while their code arrives (it is fetched soon after the card shows, so rarely seen). */
-function SliceSettingsLoading() {
-  return (
-    <div className="flex flex-col gap-7" aria-busy="true">
-      {(["Quality", "Strength", "Supports"] as const).map((group) => (
-        <div key={group} className="flex flex-col gap-2.5">
-          <Skeleton className="h-3 w-20 rounded-xs" />
-          <div className={cn("grid gap-2", group === "Quality" ? "grid-cols-4" : "grid-cols-3")}>
-            {(group === "Quality" ? ["a", "b", "c", "d"] : ["a", "b", "c"]).map((tile) => (
-              <Skeleton key={tile} className="h-20 rounded-lg" />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-const SliceSettingsPanel = lazy(() => loadSettings().then((module) => ({ default: module.SliceSettingsPanel })));
 const SliceSettingsSheet = lazy(loadSettings);
 
 export default function ModelFileCard({
@@ -645,7 +636,6 @@ export default function ModelFileCard({
   const change = useSliceChange(file.id);
   const isDesktop = useIsDesktop();
   const [sheet, setSheet] = useState(false);
-  const anchor = useRef<HTMLDivElement>(null);
   const { data: spools = [] } = useQuery(spoolsQuery);
   const { data: printer } = useQuery(printerQuery);
   // Recipes to slice with, once the settings can open (decision 0051).
@@ -707,17 +697,18 @@ export default function ModelFileCard({
     recipes: offered,
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
   };
-  // Its settings: on desktop a popover hanging below the card, which stays in view, on phones a sheet (but not over
-  // the attempt's sheet).
-  const popover = isDesktop && !!panel;
+  // Its settings: a sheet on phones, a panel beside the page on desktop (but not over the attempt's sheet).
   const summary = slicingSummary(settings);
-  const details: SettingsOpener | undefined = !panel
-    ? undefined
-    : popover
-      ? { summary, wrap: (trigger: ReactNode) => <PopoverTrigger asChild>{trigger}</PopoverTrigger> }
-      : inSheet
-        ? undefined
-        : { summary, open: () => setSheet(true) };
+  const details: SettingsOpener | undefined =
+    !panel || inSheet
+      ? undefined
+      : {
+          summary,
+          open: () => setSheet(true),
+          ...(isDesktop ? { shortcut: shortcutCaps("sliceSettings") } : {}),
+        };
+  // "S" opens them on desktop (the first model on the page takes it).
+  useHotkeys({ sliceSettings: details?.open && isDesktop ? details.open : undefined });
   // What the last change was, to say what it did ("Fine: 26 min longer"): from the slice it replaced.
   const changed =
     change && file.previous && file.slice?.status === "sliced"
@@ -750,26 +741,15 @@ export default function ModelFileCard({
   );
   return (
     <>
-      {popover && panel ? (
-        <PopoverRoot>
-          <PopoverAnchor ref={anchor}>{card}</PopoverAnchor>
-          <PopoverPanel label="How to slice it" side="bottom" align="start" size="panel" keepOpenIn={anchor}>
-            <Suspense fallback={<SliceSettingsLoading />}>
-              <SliceSettingsPanel {...panel} />
-            </Suspense>
-          </PopoverPanel>
-        </PopoverRoot>
-      ) : (
-        card
-      )}
+      {card}
       {sheet && panel && (
         <Suspense fallback={null}>
           <SliceSettingsSheet
             open={sheet}
             onOpenChange={setSheet}
             {...panel}
-            // The sheet covers the card: the result is its foot, under the thumb. (On desktop the card above the
-            // popover says it, with its Undo and Stop.)
+            // The result is its foot: under the thumb on a phone, where the sheet covers the card; on desktop the
+            // panel's foot says it too, beside the card, with its Undo and Stop.
             result={<SliceResult state={state} thumbSrc={thumbSrc} prefill={prefill} phone {...actions} />}
           />
         </Suspense>

@@ -90,6 +90,7 @@ export const SHORTCUTS = define([
 
   { id: "ideaBack", group: "idea", label: "Back to Ideas", keys: ["escape"] },
   { id: "ideaBuild", group: "idea", label: "Start building", keys: ["b"] },
+  { id: "sliceSettings", group: "idea", label: "How to slice the model", keys: ["s"] },
   { id: "ideaMove", group: "idea", label: "Add to a build", keys: ["a"] },
   { id: "ideaPhotoPrevious", group: "idea", label: "Previous photo", keys: ["arrowleft"] },
   { id: "ideaPhotoNext", group: "idea", label: "Next photo", keys: ["arrowright"] },
