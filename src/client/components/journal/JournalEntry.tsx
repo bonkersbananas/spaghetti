@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
+import { PhotoRow } from "@/components/ui/PhotoRow";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
@@ -326,38 +327,17 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
   const name = itemName(item);
   const finished = entry.kind === "finished";
   return (
-    <Link
+    <PhotoRow
       ref={ref}
-      {...entryLink(entry, item)}
-      viewTransition
-      onClick={(event) => heroClick(event, photo?.id)}
-      aria-current={selected || undefined}
-      className={cn(
-        "pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5",
-        selected && "shadow-ring",
-      )}
+      link={{ ...entryLink(entry, item), viewTransition: true, onClick: (event) => heroClick(event, photo?.id) }}
+      photo={photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null}
+      tile={<EventIcon size={finished ? 26 : 22} aria-hidden />}
+      tileClassName={finished ? "bg-basil-soft text-basil-ink" : "bg-ink/5 text-ink-faint"}
+      size={finished ? "md" : "sm"}
+      faded={entry.kind === "shelved"}
+      selected={selected}
+      className="-mx-2"
     >
-      {photo ? (
-        <Photo
-          src={photoSrc(photo.id, "thumb")}
-          alt=""
-          color={photo.color || undefined}
-          className={cn(
-            "shrink-0 rounded-md",
-            finished ? "size-16" : "size-12",
-            entry.kind === "shelved" && "opacity-75 saturate-50",
-          )}
-        />
-      ) : (
-        <span
-          className={cn(
-            "flex shrink-0 items-center justify-center rounded-md",
-            finished ? "bg-basil-soft text-basil-ink size-16" : "bg-ink/5 text-ink-faint size-12",
-          )}
-        >
-          <EventIcon size={finished ? 26 : 22} aria-hidden />
-        </span>
-      )}
       <span className="flex min-w-0 flex-1 flex-col">
         <MetaList className="text-small">
           <span
@@ -386,7 +366,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
         </span>
       </span>
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
-    </Link>
+    </PhotoRow>
   );
 });
 
