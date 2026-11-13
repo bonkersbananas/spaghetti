@@ -252,6 +252,18 @@ pub struct SupportSettings {
     pub ironing: bool,
     pub interface_loops: bool,
     pub wall_count: i64,
+    /// Orca's organic trees (`tree_support_*`): the branches' diameter and their angle from vertical, fast and slow
+    /// (degrees), how far apart their tips start, the tips' diameter, how much faster the diameter grows than the
+    /// branch leans (degrees), and the share of a tip's area that is roof (percent).
+    pub tree_branch_diameter: f64,
+    pub tree_branch_angle: f64,
+    pub tree_angle_slow: f64,
+    pub tree_branch_distance: f64,
+    pub tree_tip_diameter: f64,
+    pub tree_branch_diameter_angle: f64,
+    pub tree_top_rate: f64,
+    /// `min_feature_size` as the trees read it: its number, a share of the nozzle, taken as millimetres.
+    pub min_feature_size: f64,
     pub filament: i64,
     pub interface_filament: i64,
 }
@@ -530,6 +542,14 @@ impl Settings {
                 ironing: p.bool("support_ironing"),
                 interface_loops: p.bool("support_interface_loop_pattern"),
                 wall_count: p.int("tree_support_wall_count"),
+                tree_branch_diameter: p.float("tree_support_branch_diameter_organic"),
+                tree_branch_angle: p.float("tree_support_branch_angle_organic"),
+                tree_angle_slow: p.float("tree_support_angle_slow"),
+                tree_branch_distance: p.float("tree_support_branch_distance_organic"),
+                tree_tip_diameter: p.float("tree_support_tip_diameter"),
+                tree_branch_diameter_angle: p.float("tree_support_branch_diameter_angle"),
+                tree_top_rate: p.float("tree_support_top_rate"),
+                min_feature_size: p.float("min_feature_size"),
                 filament: p.int("support_filament"),
                 interface_filament: p.int("support_interface_filament"),
             },

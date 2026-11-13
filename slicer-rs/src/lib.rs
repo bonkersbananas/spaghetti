@@ -31,6 +31,7 @@ pub mod support;
 pub mod surfaces;
 pub mod template;
 pub mod threemf;
+pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 pub mod zip;
