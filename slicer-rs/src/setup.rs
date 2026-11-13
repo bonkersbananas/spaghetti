@@ -125,7 +125,24 @@ mod tests {
     #[test]
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
-        assert_eq!(refused(r#"{"process": {"enable_support": "1"}}"#), Some(Error::Unsupported("supports")));
+        // The X2D's supports are trees; normal ones slice, but not snug ones or those on the plate only.
+        assert_eq!(refused(r#"{"process": {"enable_support": "1"}}"#), Some(Error::Unsupported("tree supports")));
+        let normal =
+            |more: &str| format!(r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)"{more}}}}}"#);
+        assert!(read(&normal("")).is_ok());
+        assert!(read(&normal(r#", "support_critical_regions_only": "1""#)).is_ok());
+        assert_eq!(
+            read(&normal(r#", "support_style": "snug""#)).err(),
+            Some(Error::Unsupported("this style of support"))
+        );
+        assert_eq!(
+            read(&normal(r#", "support_on_build_plate_only": "1""#)).err(),
+            Some(Error::Unsupported("supports on the plate only"))
+        );
+        assert_eq!(
+            read(r#"{"process": {"enable_support": "1", "support_type": "normal(manual)"}}"#).err(),
+            Some(Error::Unsupported("supports painted on"))
+        );
         assert_eq!(
             refused(r#"{"process": {"brim_type": "brim_ears"}}"#),
             Some(Error::Unsupported("this kind of brim"))

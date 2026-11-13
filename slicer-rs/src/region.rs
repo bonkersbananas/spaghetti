@@ -28,10 +28,13 @@ pub enum Role {
     TopSurface,
     /// Loops round an object's first layer that hold it to the plate (`brim.rs`).
     Brim,
+    /// Normal supports' columns and their dense interfaces with the object (`support.rs`).
+    Support,
+    SupportInterface,
 }
 
 impl Role {
-    pub const ALL: [Role; 11] = [
+    pub const ALL: [Role; 13] = [
         Role::InnerWall,
         Role::OuterWall,
         Role::OverhangWall,
@@ -43,6 +46,8 @@ impl Role {
         Role::SparseInfill,
         Role::TopSurface,
         Role::Brim,
+        Role::Support,
+        Role::SupportInterface,
     ];
 
     pub fn feature(self) -> &'static str {
@@ -58,6 +63,8 @@ impl Role {
             Role::SparseInfill => "Sparse infill",
             Role::TopSurface => "Top surface",
             Role::Brim => "Brim",
+            Role::Support => "Support",
+            Role::SupportInterface => "Support interface",
         }
     }
 
@@ -99,6 +106,7 @@ pub struct Fills {
     pub sparse: Shapes,
 }
 
+#[derive(Default)]
 pub struct LayerRegions {
     pub islands: Vec<Island>,
     pub fills: Vec<Fills>,
@@ -112,6 +120,8 @@ pub struct LayerRegions {
     pub unpulled: Vec<(geom::Shape, u32)>,
     /// Each object's lightning lines on the layer (`lightning.rs`), when its sparse infill is lightning.
     pub lightning: Vec<Vec<Contour>>,
+    /// The layer's top surfaces (Orca's `stTop` slices), kept when supports are on: their bottom contacts land there.
+    pub tops: Shapes,
 }
 
 impl LayerRegions {
@@ -193,6 +203,8 @@ pub fn regions(
     let exposed: Vec<(Shapes, Shapes)> =
         par::map_range(n, |i| one_kind(&tops[i], &bottoms[i], i > 0, 1.5 * outer_width(i)));
     drop((tops, bottoms));
+    let mut kept_tops: Vec<Shapes> =
+        if s.enable_support { exposed.iter().map(|(top, _)| top.clone()).collect() } else { Vec::new() };
     let surfaces: Vec<Shapes> =
         exposed.iter().map(|(top, bottom)| [top.as_slice(), bottom.as_slice()].concat()).collect();
 
@@ -347,7 +359,8 @@ pub fn regions(
         .map(|(l, ((islands, fills), surfaces))| {
             let lightning =
                 lightning.iter_mut().map(|o| o.get_mut(l).map(std::mem::take).unwrap_or_default()).collect();
-            LayerRegions { islands, fills, surfaces, unpulled: Vec::new(), lightning }
+            let tops = kept_tops.get_mut(l).map(std::mem::take).unwrap_or_default();
+            LayerRegions { islands, fills, surfaces, unpulled: Vec::new(), lightning, tops }
         })
         .collect();
     if let Some(first) = out.first_mut()

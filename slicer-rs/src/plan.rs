@@ -16,8 +16,8 @@ use crate::monotonic;
 use crate::order;
 use crate::overhang::Below;
 use crate::region::{self, Fills, Island, LayerRegions, Role};
-use crate::section::Layers;
 use crate::solid;
+use crate::support;
 
 #[derive(Clone, Debug)]
 pub struct Path {
@@ -26,6 +26,9 @@ pub struct Path {
     pub points: Vec<Pt>,
     pub closed: bool,
     pub width: f64,
+    /// mm: how high it is laid down, the layer's height but for thick bridges and supports of their own height
+    /// (Orca writes it as `; LAYER_HEIGHT:` where it changes).
+    pub height: f64,
     pub mm3_per_mm: f64,
     /// mm/s, before any slowing down for a short layer.
     pub speed: f64,
@@ -63,33 +66,43 @@ impl Path {
 }
 
 pub struct LayerPlan {
+    /// The G-code layer's index (counting the support's own layers).
     pub index: usize,
+    /// Orca's id of the layer, which its fans count by: the object layer's index, else the support layer's.
+    pub id: usize,
     pub z: f64,
+    /// mm: the object layer's height (the support's own paths carry theirs).
     pub height: f64,
+    /// The height the layer's header gives: from the layer below's top, as Orca works it out in single precision.
+    pub header_height: f32,
     pub paths: Vec<Path>,
+    /// Each object's support areas on the layer: a travel to support that stays inside one needn't retract.
+    pub support_islands: Vec<(u32, Shapes)>,
 }
 
 /// The kind of each infill region, in the order they print.
 const FILL_ORDER: [Role; 6] =
     [Role::Bridge, Role::InternalBridge, Role::BottomSurface, Role::SolidInfill, Role::SparseInfill, Role::TopSurface];
 
-/// Layer `i`'s extrusions in print order: the islands that print anything on Orca's tour of their outlines' middles
-/// (rounded to the millimetre), which starts next to the wipe tower's position, read as nanometres, so next to the
-/// plate's origin, and runs backwards so the layer ends there; an object can come round more than once. `centres` are
-/// the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored. On the
-/// first layer each object's `brims` (`brim.rs`) print just before it.
+/// Object layer `i`'s extrusions (its top at `z`, `h` high) in print order: the islands that print anything on Orca's
+/// tour of their outlines' middles (rounded to the millimetre), which starts next to the wipe tower's position, read
+/// as nanometres, so next to the plate's origin, and runs backwards so the layer ends there; an object can come round
+/// more than once. `centres` are the middles of the objects' bounding boxes on the plate (units), where their infill
+/// patterns are anchored. On the first layer each object's `brims` (`brim.rs`) print just before it. `supports` holds
+/// each object's support layer printed with this one, if any: an object with support and no islands here is a stop
+/// on the tour at its middle, and its support prints when the tour first comes to it, before its islands, chained as
+/// Orca chains it. A layer of the support's own, between the objects' layers, is planned as one with no islands.
 #[allow(clippy::too_many_arguments)]
 pub fn plan_layer(
     r: &LayerRegions,
     lower: Option<&LayerRegions>,
     i: usize,
-    layers: &Layers,
+    (z, h): (f64, f64),
     centres: &[(f64, f64)],
     brims: &[Vec<Contour>],
+    supports: &[Option<&support::Layer>],
     s: &Settings,
 ) -> LayerPlan {
-    let z = layers.top[i];
-    let h = layers.height[i];
     // Each object's layer below, where it differs from this one (where it doesn't, nothing hangs).
     let mut below: Vec<Option<Below>> = Vec::new();
     if let Some(lower) = lower
@@ -120,31 +133,114 @@ pub fn plan_layer(
             island_paths(k as u32, island, fills, under, i, (z, h), centre, trees, s)
         })
         .collect();
-    let nodes: Vec<usize> = (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).collect();
+    // The tour's stops: the islands that print anything, then each object with support and nothing else here.
+    let mut nodes: Vec<(Option<usize>, u32)> =
+        (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).map(|k| (Some(k), r.islands[k].object)).collect();
+    for (o, layer) in supports.iter().enumerate() {
+        if layer.is_some_and(|l| !l.items.is_empty()) && !nodes.iter().any(|&(_, object)| object as usize == o) {
+            nodes.push((None, o as u32));
+        }
+    }
     let mm = geom::SCALE as i32;
     let to_mm = |c: i32| (if c >= 0 { c + mm / 2 } else { c - mm / 2 }) / mm * mm;
     let points: Vec<Pt> = nodes
         .iter()
-        .map(|&k| {
-            let c = r.islands[k].outline.first().map_or(geom::pt(0, 0), |c| geom::centroid(c));
+        .map(|&(k, object)| {
+            let c = match k {
+                Some(k) => r.islands[k].outline.first().map_or(geom::pt(0, 0), |c| geom::centroid(c)),
+                None => {
+                    let (x, y) = centres.get(object as usize).copied().unwrap_or((0.0, 0.0));
+                    geom::pt(x.round() as i32, y.round() as i32)
+                }
+            };
             geom::pt(to_mm(c.x), to_mm(c.y))
         })
         .collect();
     let mut tour = order::tour(&points, Some(geom::pt(0, 2)));
     tour.reverse();
-    let mut paths = Vec::new();
+    let mut paths: Vec<Path> = Vec::new();
+    let mut visited = vec![false; supports.len()];
     for t in tour {
-        let k = nodes[t];
-        let object = r.islands[k].object;
-        for p in &mut per_island[k] {
-            p.object = object;
+        let (k, object) = nodes[t];
+        if let Some(Some(layer)) = supports.get(object as usize)
+            && !visited[object as usize]
+        {
+            // Orca reckons the nozzle at the layer's start where the layer before ended, which is planned apart:
+            // the plate's origin, where the tour ends, stands in for it.
+            let at = paths.last().map_or(geom::pt(0, 0), |p: &Path| p.points[p.points.len() - 1]);
+            paths.extend(support_paths(layer, object, at, s));
         }
-        paths.append(&mut per_island[k]);
+        if let Some(v) = visited.get_mut(object as usize) {
+            *v = true;
+        }
+        if let Some(k) = k {
+            for p in &mut per_island[k] {
+                p.object = object;
+            }
+            paths.append(&mut per_island[k]);
+        }
     }
     if i == 0 && brims.iter().any(|b| !b.is_empty()) {
         paths = with_brims(paths, brims, h, s);
     }
-    LayerPlan { index: i, z, height: h, paths }
+    let support_islands =
+        supports.iter().enumerate().filter_map(|(o, l)| l.map(|l| (o as u32, l.islands.clone()))).collect();
+    LayerPlan { index: i, id: i, z, height: h, header_height: h as f32, paths, support_islands }
+}
+
+/// A support layer's extrusions as Orca prints them on an object's first visit (`extrude_support`): chained from
+/// `at` (Orca's chaining with improvements), the flange's loop and lines in their own order.
+fn support_paths(layer: &support::Layer, object: u32, at: Pt, s: &Settings) -> Vec<Path> {
+    let first = layer.first;
+    let make = |p: &support::Path| {
+        let mm3_per_mm = Settings::mm3_per_mm(p.width, p.height);
+        let speed = if first {
+            s.first_layer_infill_speed
+        } else if p.role == Role::SupportInterface {
+            s.support_interface_speed
+        } else {
+            s.support_speed
+        };
+        Path {
+            role: p.role,
+            points: p.points.clone(),
+            closed: false,
+            width: p.width,
+            height: p.height,
+            mm3_per_mm,
+            speed: speed.min(s.speed_cap(mm3_per_mm)),
+            accel: accel(p.role, first, s),
+            island: u32::MAX,
+            object,
+            parts: Vec::new(),
+        }
+    };
+    let ends: Vec<(Pt, Pt)> = layer
+        .items
+        .iter()
+        .map(|item| match item {
+            support::Item::Path(p) => (p.points[0], p.points[p.points.len() - 1]),
+            support::Item::Fixed(group) => {
+                let last = &group[group.len() - 1].points;
+                (group[0].points[0], last[last.len() - 1])
+            }
+        })
+        .collect();
+    let reversible: Vec<bool> = layer.items.iter().map(|item| matches!(item, support::Item::Path(_))).collect();
+    let mut out = Vec::new();
+    for (k, reversed) in order::chain(&ends, &reversible, Some(at), true) {
+        match &layer.items[k] {
+            support::Item::Path(p) => {
+                let mut path = make(p);
+                if reversed {
+                    path.points.reverse();
+                }
+                out.push(path);
+            }
+            support::Item::Fixed(group) => out.extend(group.iter().map(make)),
+        }
+    }
+    out
 }
 
 /// The first layer's paths with each object's brim loops just before its first path, as Orca prints an object's
@@ -169,6 +265,7 @@ fn with_brims(paths: Vec<Path>, brims: &[Vec<Contour>], h: f64, s: &Settings) ->
                     points,
                     closed: true,
                     width,
+                    height: h,
                     mm3_per_mm,
                     speed,
                     accel: accel(Role::Brim, true, s),
@@ -729,6 +826,7 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
             points: geom::simplify_line(&pts[from..=to], resolution(role, s)),
             closed: false,
             width,
+            height: h,
             mm3_per_mm,
             speed: speed.min(s.speed_cap(mm3_per_mm)),
             accel: accel(role, first, s),
@@ -827,6 +925,8 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         Role::GapFill => (s.inner_wall_width, s.gap_infill_speed),
         // Only the first layer has one.
         Role::Brim => (s.first_layer_width, s.first_layer_speed),
+        Role::Support => (s.support.line_width, s.support_speed),
+        Role::SupportInterface => (s.support.line_width, s.support_interface_speed),
         Role::OverhangWall => {
             // Orca's bridging flow for walls: a bridge line wide (else an inner wall's), round threads if bridges
             // are thick.
@@ -838,6 +938,17 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         }
     };
     (w, Settings::mm3_per_mm(w, h), speed)
+}
+
+/// How high a role's paths are laid on a layer `h` high: a thick bridge (and with thick bridges an overhang wall) is
+/// a round thread as high as it is wide, anything else the layer's height.
+pub fn path_height(role: Role, h: f64, s: &Settings) -> f64 {
+    let thick = match role {
+        Role::InternalBridge => s.thick_internal_bridges,
+        Role::Bridge | Role::OverhangWall => s.thick_bridges,
+        _ => false,
+    };
+    if thick { flow(role, false, h, s).0 } else { h }
 }
 
 /// An overhang wall's width, mm³ per mm, speed and acceleration on a layer `h` high.
@@ -879,6 +990,7 @@ fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: 
         points: geom::simplify_line(&points, resolution(role, s)),
         closed,
         width,
+        height: path_height(role, h, s),
         mm3_per_mm,
         speed,
         accel: accel(role, first, s),

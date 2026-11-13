@@ -3,12 +3,14 @@
 //! exact integer geometry. See `docs/proposals/rust-slicer.md` for what it does, how fast, and what it lacks.
 
 pub mod bambu;
+pub mod base_support;
 pub mod bridges;
 pub mod brim;
 pub mod config;
 pub mod fill;
 pub mod gcode;
 pub mod geom;
+pub mod grid;
 pub mod infill;
 pub mod json;
 pub mod lightning;
@@ -25,6 +27,7 @@ pub mod region;
 pub mod section;
 pub mod setup;
 pub mod solid;
+pub mod support;
 pub mod surfaces;
 pub mod template;
 pub mod threemf;
@@ -250,17 +253,55 @@ impl Plate {
             .collect();
         let regions = region::regions(&slices, &owners, &layers, &centres, settings);
         drop((slices, owners));
+        let supports = if settings.enable_support {
+            object_supports(&regions, &layers, &centres, objects.len(), settings)
+        } else {
+            Vec::new()
+        };
+        let facts = with_support(facts, &supports, settings);
+        let schedule = schedule(&layers, &supports, objects.len());
         let t3 = now();
         let frame = bambu::Frame::new(settings.profile.clone(), &facts);
-        let photos = timelapse_spots(&objects, &layers, settings);
+        let zs: Vec<f64> = schedule.iter().map(|slot| slot.z).collect();
+        let photos = timelapse_spots(&objects, &zs, settings);
         let job =
             gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
-        // Each layer from its regions to its G-code in one go, so only the text stays.
-        let texts = par::map_range(regions.len(), |i| {
-            let lower = i.checked_sub(1).map(|j| &regions[j]);
-            let plan = plan::plan_layer(&regions[i], lower, i, &layers, &centres, &brims.loops, settings);
-            gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))
+        // Each layer from its regions to its G-code in one go, so only the text stays; the support's own layers
+        // with the object layer above them, which they are cooled with.
+        let empty = region::LayerRegions::default();
+        let mut groups: Vec<std::ops::Range<usize>> = Vec::new();
+        for (g, slot) in schedule.iter().enumerate() {
+            if slot.layer.is_some() || g + 1 == schedule.len() {
+                groups.push(groups.last().map_or(0, |r| r.end)..g + 1);
+            }
+        }
+        let texts = par::map_range(groups.len(), |k| {
+            let plans: Vec<(plan::LayerPlan, &region::LayerRegions, f64)> = groups[k]
+                .clone()
+                .map(|g| {
+                    let slot = &schedule[g];
+                    let here: Vec<Option<&support::Layer>> =
+                        slot.supports.iter().enumerate().map(|(o, k)| k.map(|k| &supports[o][k])).collect();
+                    // A layer of the support's own is planned as an object layer with nothing in it (`next` stands
+                    // in for its index: no first layer, no layer below to hang over).
+                    let (l, regions_here) = match slot.layer {
+                        Some(l) => (l, &regions[l]),
+                        None => (slot.next, &empty),
+                    };
+                    let lower = slot.layer.and_then(|l| l.checked_sub(1)).map(|j| &regions[j]);
+                    let h = slot.layer.map_or(slot.header_height as f64, |l| layers.height[l]);
+                    let mut plan =
+                        plan::plan_layer(regions_here, lower, l, (slot.z, h), &centres, &brims.loops, &here, settings);
+                    (plan.index, plan.id, plan.header_height) = (g, slot.id, slot.header_height);
+                    let from_z = if g == 0 { job.start[2] } else { schedule[g - 1].z + settings.z_hop };
+                    (plan, regions_here, from_z)
+                })
+                .collect();
+            let group: Vec<(&plan::LayerPlan, &region::LayerRegions, f64)> =
+                plans.iter().map(|(plan, r, z)| (plan, *r, *z)).collect();
+            gcode::layers(&group, &job)
         });
+        let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         drop(regions);
         let t4 = now();
         let g = gcode::assemble(texts, &job);
@@ -320,12 +361,12 @@ fn first_layer_facts(
     }
 }
 
-/// Where the timelapse photo is taken after each layer: Orca's pick, which changes only when the objects standing at
-/// the layer's height (in whole millimetres) do.
-fn timelapse_spots(objects: &[Object], layers: &section::Layers, s: &Settings) -> Vec<Option<[i64; 2]>> {
-    let mut spots = Vec::with_capacity(layers.top.len());
+/// Where the timelapse photo is taken after each layer (at `zs`): Orca's pick, which changes only when the objects
+/// standing at the layer's height (in whole millimetres) do.
+fn timelapse_spots(objects: &[Object], zs: &[f64], s: &Settings) -> Vec<Option<[i64; 2]>> {
+    let mut spots = Vec::with_capacity(zs.len());
     let mut last: Option<(Vec<bool>, Option<[i64; 2]>)> = None;
-    for &z in &layers.top {
+    for &z in zs {
         let at = z as i64;
         let standing: Vec<bool> = objects.iter().map(|o| (o.min[2] as i64) <= at && at <= (o.max[2] as i64)).collect();
         let spot = match &last {
@@ -336,6 +377,156 @@ fn timelapse_spots(objects: &[Object], layers: &section::Layers, s: &Settings) -
         last = Some((standing, spot));
     }
     spots
+}
+
+/// Each object's normal supports (`support.rs`), from its slices and top surfaces up to its last layer.
+fn object_supports(
+    regions: &[region::LayerRegions],
+    layers: &section::Layers,
+    centres: &[(f64, f64)],
+    objects: usize,
+    s: &Settings,
+) -> Vec<Vec<support::Layer>> {
+    let params = support::Params::new(s);
+    let mut last = vec![None; objects];
+    for (l, r) in regions.iter().enumerate() {
+        for island in &r.islands {
+            if let Some(last) = last.get_mut(island.object as usize) {
+                *last = Some(l);
+            }
+        }
+    }
+    (0..objects)
+        .map(|o| {
+            let Some(top) = last[o] else { return Vec::new() };
+            let slices: Vec<geom::Shapes> = regions[..=top].iter().map(|r| r.slice_of(o as u32)).collect();
+            // The layers' top surfaces, each object's own.
+            let tops = regions[..=top]
+                .iter()
+                .zip(&slices)
+                .map(|(r, slice)| {
+                    if r.tops.is_empty() || slice.is_empty() {
+                        Vec::new()
+                    } else if objects == 1 {
+                        r.tops.clone()
+                    } else {
+                        geom::intersection(&r.tops, slice)
+                    }
+                })
+                .collect();
+            let object = support::Object {
+                print_z: &layers.top[..=top],
+                height: &layers.height[..=top],
+                slices,
+                tops,
+                origin: centres[o],
+            };
+            support::generate(&object, &params)
+        })
+        .collect()
+}
+
+/// The first layer's extent with the support's first layer in it: its extrusions, grown by the skirt distance as
+/// the objects' outlines are (Orca's skirt hull takes in the support's points).
+fn with_support(mut facts: bambu::Facts, supports: &[Vec<support::Layer>], s: &Settings) -> bambu::Facts {
+    let margin = s.skirt_distance;
+    for layer in supports.iter().filter_map(|layers| layers.first()) {
+        if !layer.first {
+            continue;
+        }
+        let points = layer.items.iter().flat_map(|item| match item {
+            support::Item::Path(p) => std::slice::from_ref(p),
+            support::Item::Fixed(group) => group.as_slice(),
+        });
+        for p in points.flat_map(|p| &p.points) {
+            let (x, y) = (geom::unsc(p.x), geom::unsc(p.y));
+            facts.first_layer_min =
+                [facts.first_layer_min[0].min(x - margin), facts.first_layer_min[1].min(y - margin)];
+            facts.first_layer_max =
+                [facts.first_layer_max[0].max(x + margin), facts.first_layer_max[1].max(y + margin)];
+        }
+    }
+    facts
+}
+
+/// One of the G-code's layers: an object layer, with any support printed with it, or a layer of the support's own.
+struct Slot {
+    /// The layer's top, as its header gives it: the object layer's, else the first object's support layer's.
+    z: f64,
+    /// The object layer printed (the plate's layer index), if any.
+    layer: Option<usize>,
+    /// For a layer of the support's own, the object layer above it.
+    next: usize,
+    /// Each object's support layer printed with it.
+    supports: Vec<Option<usize>>,
+    /// Orca's id of the layer (the object layer's index, else the first object's support layer's), which its fans
+    /// count by.
+    id: usize,
+    /// The height the header gives: from the layer before's top, in single precision as Orca works it out.
+    header_height: f32,
+}
+
+/// The G-code's layers, as Orca pairs each object's layers with its support layers (within 0.1 µm of each other)
+/// and merges the objects' (within 0.1 µm): the plate's layers, and between them the support's own, at the heights
+/// it was evened out to.
+fn schedule(layers: &section::Layers, supports: &[Vec<support::Layer>], objects: usize) -> Vec<Slot> {
+    const EPSILON: f64 = 1e-4;
+    let n = layers.top.len();
+    let mut slots: Vec<Slot> = (0..n)
+        .map(|l| Slot {
+            z: layers.top[l],
+            layer: Some(l),
+            next: l,
+            supports: vec![None; objects],
+            id: l,
+            header_height: 0.0,
+        })
+        .collect();
+    // Support layers that pair with an object layer print with it; the others, merged across the objects.
+    let mut own: Vec<(f64, usize, usize)> = Vec::new();
+    for (o, list) in supports.iter().enumerate() {
+        for (k, layer) in list.iter().enumerate() {
+            let l = layers.top.partition_point(|&z| z < layer.print_z - EPSILON);
+            if l < n && layers.top[l] <= layer.print_z + EPSILON {
+                slots[l].supports[o] = Some(k);
+            } else {
+                own.push((layer.print_z, o, k));
+            }
+        }
+    }
+    own.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    let mut i = 0;
+    while i < own.len() {
+        let zmax = own[i].0 + EPSILON;
+        let mut j = i + 1;
+        while j < own.len() && own[j].0 <= zmax {
+            j += 1;
+        }
+        let mut slot = Slot {
+            z: 0.0,
+            layer: None,
+            next: layers.top.partition_point(|&z| z < own[i].0).min(n.saturating_sub(1)),
+            supports: vec![None; objects],
+            id: 0,
+            header_height: 0.0,
+        };
+        // The header's: the first object's.
+        let &(z, _, k) = own[i..j].iter().min_by_key(|&&(_, o, _)| o).unwrap();
+        (slot.z, slot.id) = (z, k);
+        for &(_, o, k) in &own[i..j] {
+            slot.supports[o].get_or_insert(k);
+        }
+        slots.push(slot);
+        i = j;
+    }
+    slots.sort_by(|a, b| a.z.total_cmp(&b.z));
+    let mut below = 0.0f32;
+    for (g, slot) in slots.iter_mut().enumerate() {
+        let z = slot.z as f32;
+        slot.header_height = if g == 0 { z } else { z - below };
+        below = z;
+    }
+    slots
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

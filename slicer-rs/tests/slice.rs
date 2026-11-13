@@ -656,3 +656,66 @@ fn a_setup_made_from_the_apps_settings_slices_as_they_ask() {
     let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
     assert!(info.contains(r##"<filament id="1" tray_info_idx="" type="ABS" color="#2B6CB0""##), "{info}");
 }
+
+/// Settings with Orca's normal supports, as the app asks for them (its "normal" support style).
+fn normal_supports() -> Settings {
+    setup::read(r#"{"process": {"enable_support": "1", "support_type": "normal(auto)"}}"#).unwrap().settings
+}
+
+#[test]
+fn normal_supports_hold_up_a_slab_from_layers_of_their_own() {
+    // A T: a 10 mm pillar 20 mm tall under a 40 × 10 mm slab, 15 mm out on each side.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let s = normal_supports();
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &s, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers = check_moves(&gcode, &s);
+    // Native OrcaSlicer 2.5.0 with these settings (Nov 13): 181 layers, the support's own 0.28 mm ones between the
+    // object's 0.2 mm ones (0.2, 0.4, 0.48, 0.6, 0.76, 0.8…), 1358.6 mm³ of support and 90.7 mm³ of interface.
+    assert_eq!(layers.len(), 181);
+    let zs: Vec<f64> =
+        gcode.lines().filter_map(|l| l.strip_prefix("; Z_HEIGHT: ")).map(|z| z.parse().unwrap()).collect();
+    assert_eq!(&zs[..6], &[0.2, 0.4, 0.48, 0.6, 0.76, 0.8]);
+    let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()];
+    let near = |got: f64, want: f64| (got - want).abs() < want * 0.005;
+    assert!(near(feature(Role::Support).volume, 1358.6), "{} mm³ of support", feature(Role::Support).volume);
+    assert!(near(feature(Role::SupportInterface).volume, 90.7), "{} mm³", feature(Role::SupportInterface).volume);
+    // A layer of the support's own prints support alone, at its own height, and inside the object's label.
+    let own = gcode.split("; Z_HEIGHT: 0.48\n").nth(1).unwrap().split("; CHANGE_LAYER").next().unwrap();
+    assert!(own.contains("; LAYER_HEIGHT: 0.08\n") && own.contains("; LAYER_HEIGHT: 0.28\n"));
+    let features: Vec<&str> = own.lines().filter_map(|l| l.strip_prefix("; FEATURE: ")).collect();
+    assert_eq!(features, ["Support"]);
+    // The support stands clear of the pillar and only under the slab; its interface is the two layers under it.
+    let mut feature = "";
+    let mut z = 0.0;
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        } else if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            z = h.parse().unwrap();
+        } else if let Some(rest) = line.strip_prefix("G1 X").filter(|_| feature.starts_with("Support")) {
+            let words: Vec<&str> = rest.split(' ').collect();
+            if !words.iter().any(|w| w.starts_with('E') && !w.starts_with("E-")) {
+                continue;
+            }
+            let x: f64 = words[0].parse().unwrap();
+            let y: f64 = words.iter().find_map(|w| w.strip_prefix('Y')).unwrap().parse().unwrap();
+            assert!(!(114.8..=125.2).contains(&x) || !(122.8..=133.2).contains(&y), "support in the pillar at {x} {y}");
+            assert!((97.0..=143.0).contains(&x) && (120.0..=136.0).contains(&y), "support at {x} {y}");
+            if feature == "Support interface" {
+                assert!([19.52, 19.8].contains(&z), "interface at {z} mm");
+            }
+        }
+    }
+}
+
+#[test]
+fn supports_leave_a_model_that_needs_none_as_it_was() {
+    let cube = cube_stl(20.0);
+    let options = Options { thumbnail: false, ..Options::default() };
+    let with = slice(&[Input { name: "cube.stl", bytes: &cube }], &normal_supports(), &options).unwrap();
+    let without = slice(&[Input { name: "cube.stl", bytes: &cube }], &Settings::default(), &options).unwrap();
+    assert_eq!((with.stats.layers, with.stats.volume), (without.stats.layers, without.stats.volume));
+    assert!(!String::from_utf8(with.gcode).unwrap().contains("; FEATURE: Support"));
+}
