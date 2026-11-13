@@ -552,7 +552,9 @@ fn ring(tube: &mut Tube, center: [f32; 3], normal: [f32; 3], radius: f32) -> (us
     let begin = tube.vertices.len();
     let mut angle = 0f32;
     for _ in 0..steps {
-        let (c, s) = (angle.cos(), angle.sin());
+        // The tubes' sines and cosines are libm's, natively too, so that WebAssembly slices to the same file: the
+        // system's (glibc's `cosf`, as Orca's) differ from them in the last bit now and then.
+        let (c, s) = (libm::cosf(angle), libm::sinf(angle));
         tube.vertices.push([
             center[0] + x[0] * c + y[0] * s,
             center[1] + x[1] * c + y[1] * s,
@@ -658,8 +660,8 @@ fn extrude_branch(c: &Config, layers: &[Vec<Element>], b: &Branch, frame: Frame,
                 prev = (apex, apex);
                 let mut angle = step;
                 for i in 1..steps {
-                    let center = f32s(sub3(p1, scale3(nprev, r as f64 * angle.cos() as f64)));
-                    let next = ring(tube, center, f32s(nprev), r * angle.sin());
+                    let center = f32s(sub3(p1, scale3(nprev, r as f64 * libm::cosf(angle) as f64)));
+                    let next = ring(tube, center, f32s(nprev), r * libm::sinf(angle));
                     if i == 1 {
                         fan(tube, apex, next, false);
                     } else {
@@ -678,8 +680,8 @@ fn extrude_branch(c: &Config, layers: &[Vec<Element>], b: &Branch, frame: Frame,
             let step = (std::f64::consts::PI / (2.0 * steps as f64)) as f32;
             let mut angle = half_pi as f32;
             for _ in 0..steps {
-                let center = f32s(add3(p2, scale3(ncurrent, r as f64 * angle.cos() as f64)));
-                let next = ring(tube, center, f32s(ncurrent), r * angle.sin());
+                let center = f32s(add3(p2, scale3(ncurrent, r as f64 * libm::cosf(angle) as f64)));
+                let next = ring(tube, center, f32s(ncurrent), r * libm::sinf(angle));
                 strip(tube, prev, next);
                 prev = next;
                 angle -= step;
