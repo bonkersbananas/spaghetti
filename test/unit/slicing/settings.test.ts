@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "../../../src/shared/slicing/defaults.ts";
 import {
   changedSlicing,
-  chosenFromOptions,
   filamentWords,
   INFILL_PATTERNS,
   layerRange,
@@ -63,6 +62,8 @@ describe("the slicing settings", () => {
       expect(slicingProblems({ ...DEFAULT_SLICING, layerHeight: quality.layerHeight })).toEqual([]);
     }
     expect(qualityWords(0.12)).toBe("Fine");
+    // The strength has a Standard too: a line says which.
+    expect(qualityWords(0.2)).toBe("Standard quality");
     expect(qualityWords(0.16)).toBe("0.16 mm layers");
     expect(qualityOf(0.16)).toBeNull();
   });
@@ -175,7 +176,7 @@ describe("saying the settings", () => {
   });
 
   it("puts the card's line together: quality, filament, supports, then what isn't the usual", () => {
-    expect(slicingLine(DEFAULT_SLICING)).toEqual(["Standard", "PLA"]);
+    expect(slicingLine(DEFAULT_SLICING)).toEqual(["Standard quality", "PLA"]);
     expect(
       slicingLine({ ...DEFAULT_SLICING, layerHeight: 0.12, filaments: [orange], supports: "where-needed" }),
     ).toEqual(["Fine", "PLA Basic orange", "supports where needed"]);
@@ -192,7 +193,7 @@ describe("saying the settings", () => {
       }),
     ).toEqual(["0.16 mm layers", "PLA Basic orange", "+1 more", "supports everywhere", "Strong", "80%"]);
     expect(slicingLine({ ...DEFAULT_SLICING, walls: 3, infill: 20, pattern: "gyroid" })).toEqual([
-      "Standard",
+      "Standard quality",
       "PLA",
       "3 walls, 20% gyroid",
     ]);
@@ -227,13 +228,12 @@ describe("older slices and one-tap asks", () => {
     });
   });
 
-  it("turn decision 0046's one-tap asks into chosen settings", () => {
-    expect(chosenFromOptions({})).toEqual({});
-    expect(chosenFromOptions({ supports: true, scale: 80 })).toEqual({
-      supports: "everywhere",
-      supportStyle: "tree",
-      scale: 80,
-    });
+  it("fill what wasn't chosen from the defaults", () => {
     expect(slicingFor({ scale: 80 })).toEqual({ ...DEFAULT_SLICING, scale: 80 });
+    expect(slicingFor({ supports: "where-needed" }, { ...DEFAULT_SLICING, layerHeight: 0.12 })).toEqual({
+      ...DEFAULT_SLICING,
+      layerHeight: 0.12,
+      supports: "where-needed",
+    });
   });
 });

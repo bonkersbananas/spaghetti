@@ -8,7 +8,7 @@ import { captureFields } from "../routes/capture.ts";
 import { changesQuery } from "../routes/changes.ts";
 import { createComment, updateComment } from "../routes/comments.ts";
 import { draftBody } from "../routes/drafts.ts";
-import { fileFields, slicedFields } from "../routes/files.ts";
+import { fileChange, fileFields, slicedFields } from "../routes/files.ts";
 import { insightsQuery } from "../routes/insights.ts";
 import {
   createItem,
@@ -721,6 +721,19 @@ export const operations: Record<string, Operation> = {
       409: "conflict: only a model is sliced.",
       415: "unsupported: not a picture.",
     },
+  },
+  "PATCH /files/:id": {
+    summary:
+      "Sets the slicing settings people chose for a model (quality, strength, supports, brim, filaments, plate, nozzle, scale): what its next slice uses. Null puts the defaults back. People only.",
+    body: fileChange,
+    response: one("file", AttemptFile),
+    errors: { 404: notFound("file"), 409: "conflict: only a model has slicing settings." },
+  },
+  "POST /files/:id/sliced/restore": {
+    summary:
+      "Undoes a re-slice: the slice it replaced comes back with its file, picture and settings. Once. People only.",
+    response: one("file", AttemptFile),
+    errors: { 404: notFound("file"), 409: "conflict: there is no slice before this one." },
   },
 
   // Big files, in parts.

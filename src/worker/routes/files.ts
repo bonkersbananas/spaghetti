@@ -11,11 +11,13 @@ import {
   ONE_REQUEST_FILE_BYTES,
 } from "../../shared/api.ts";
 import { isStlName, slicedName } from "../../shared/slicing/files.ts";
+import type { PreviousSlice } from "../../shared/slicing/types.ts";
 import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
 import { type AttemptFileRow, attemptFiles, attempts, type ItemFileRow, itemFiles, items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile } from "../http.ts";
-import { fileKey } from "../photos.ts";
+import { type FilePart, fileKey, fileKeys } from "../photos.ts";
+import { slicingSettings } from "../slicing-schema.ts";
 import { loadAttempt, settings } from "./attempts.ts";
 
 const THUMB_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -52,10 +54,12 @@ const sliceSettings = z.object({
   materials: z.array(z.string().max(40)).max(16),
   bedType: z.string().max(80),
   supports: z.boolean(),
-  scale: z.number().int().min(1).max(100),
+  scale: z.number().int().min(1).max(1000),
   project: z.enum(["own", "some"]).optional(),
   engine: z.string().max(40),
   orca: z.string().max(40),
+  /** The settings it was sliced with, in people's words (decision 0047). */
+  slicing: slicingSettings.optional(),
 });
 
 /** A model's slicing (shared/slicing/types.ts FileSlice), as the browser that sliced it says. */
@@ -68,12 +72,23 @@ const fileSlice = z.object({
     .max(4)
     .optional(),
   problem: z
-    .enum(["too-big", "too-tall", "too-many", "no-model", "unreadable", "memory", "engine", "orca", "too-large"])
+    .enum([
+      "too-big",
+      "too-tall",
+      "too-many",
+      "no-model",
+      "unreadable",
+      "memory",
+      "engine",
+      "orca",
+      "too-large",
+      "nozzle",
+    ])
     .optional(),
   message: z.string().max(300).optional(),
   dimensions: z.tuple([millimetres, millimetres, millimetres]).optional(),
   volume: z.tuple([millimetres, millimetres, millimetres]).optional(),
-  fitScale: z.number().int().min(1).max(100).optional(),
+  fitScale: z.number().int().min(1).max(1000).optional(),
   device: z.enum(["phone", "computer"]).optional(),
   at: z.number().int().min(0),
 });
@@ -85,9 +100,17 @@ const slicedFields = z.object({
   prefill: jsonField(settings).optional(),
   objects: jsonField(z.array(z.string().trim().min(1).max(200)).max(500)).optional(),
   slicer: z.string().trim().max(80).optional(),
+  /**
+   * "previous": keep the slice this replaces (its file, picture and record) for one undo (POST …/sliced/restore). Left
+   * aside for a sliced file sent in parts, which is in the bucket over the one it replaces already.
+   */
+  keep: z.enum(["previous"]).optional(),
   /** "1" when the sliced file was sent in parts first (POST /api/uploads). */
   uploaded: z.literal("1").optional(),
 });
+
+/** PATCH /api/files/:id: the slicing settings people chose for a model (null: back to the defaults). */
+const fileChange = z.object({ slicing: slicingSettings.nullable() });
 
 const fileFields = z.object({
   id: z.uuid(),
@@ -263,9 +286,7 @@ export const attemptFileRoutes = new Hono<AppEnv>()
       (row) => row.id !== fields.id,
     );
     if (others.length) {
-      await c.env.PHOTOS.delete(
-        others.flatMap((row) => [fileKey(row.id, "file"), fileKey(row.id, "thumb"), fileKey(row.id, "sliced")]),
-      );
+      await c.env.PHOTOS.delete(others.flatMap((row) => fileKeys(row.id)));
     }
 
     const values = uploadValues(fields, { stored, hasThumb }, existing);
@@ -585,6 +606,20 @@ export const fileRoutes = new Hono<AppEnv>()
       return apiError(c, 415, "unsupported", "The plate's picture couldn't be kept.");
     }
     const { row, table, itemId } = found;
+    // Kept for one undo: the slice this replaces, its file and its picture.
+    const previous: PreviousSlice | null | undefined =
+      fields.keep === "previous" && !fields.uploaded && row.slice
+        ? { slice: row.slice, prefill: row.prefill, objects: row.objects, slicer: row.slicer, hasThumb: row.hasThumb }
+        : undefined;
+    if (previous) {
+      await Promise.all([
+        copyPart(c.env.PHOTOS, id, "sliced", "previous"),
+        copyPart(c.env.PHOTOS, id, "thumb", "previous-thumb"),
+      ]);
+    } else if (row.previousSlice) {
+      // A slice made over one that isn't kept: the undo kept for the one before is no longer this one's.
+      await c.env.PHOTOS.delete([fileKey(id, "previous"), fileKey(id, "previous-thumb")]);
+    }
     await Promise.all([
       done && sliced instanceof File
         ? c.env.PHOTOS.put(fileKey(id, "sliced"), sliced.stream(), {
@@ -603,6 +638,7 @@ export const fileRoutes = new Hono<AppEnv>()
         ...(done && sliced instanceof File ? { bytes: sliced.size } : done && early ? { bytes: early.size } : {}),
       },
       hasThumb: row.hasThumb || thumb instanceof File,
+      previousSlice: previous ?? null,
       // What the sliced file says replaces what the model said (nothing); a failure leaves it.
       ...(done ? { prefill: fields.prefill ?? {}, objects: fields.objects ?? [], slicer: fields.slicer || null } : {}),
     };
@@ -618,7 +654,84 @@ export const fileRoutes = new Hono<AppEnv>()
     ]);
     const updated = await db.select().from(target).where(eq(target.id, id)).get();
     return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });
+  })
+
+  /**
+   * The slicing settings people chose for a model (decision 0047): what its next slice uses. The app sets them as
+   * they change and slices in the background; null puts the defaults back. Only a model has them.
+   */
+  .patch("/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    const parsed = fileChange.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "Those slicing settings couldn't be read.");
+    const found = await liveFile(c, id);
+    if (!found) return apiError(c, 404, "not_found", "That file isn't here.");
+    if (found.row.kind !== "model") return apiError(c, 409, "conflict", "Only a model has slicing settings.");
+    const db = c.var.db;
+    const target = found.table === "attempt" ? attemptFiles : itemFiles;
+    await db.batch([
+      db.update(target).set({ slicing: parsed.data.slicing }).where(eq(target.id, id)),
+      recordChange(db, { entity: "file", id, itemId: found.itemId, action: "updated", actor: c.var.actor }),
+      db
+        .update(items)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(items.id, found.itemId), afterChange)),
+    ]);
+    const updated = await db.select().from(target).where(eq(target.id, id)).get();
+    return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });
+  })
+
+  /**
+   * Undoes a re-slice: the slice it replaced (kept with `keep=previous`) comes back, with its file, its picture and
+   * the settings it was sliced with. Once: the slice it undoes isn't kept.
+   */
+  .post("/:id/sliced/restore", async (c) => {
+    const id = c.req.param("id");
+    if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    const found = await liveFile(c, id);
+    if (!found) return apiError(c, 404, "not_found", "That file isn't here.");
+    const previous = found.row.previousSlice;
+    if (!previous) return apiError(c, 409, "conflict", "There is no slice before this one to go back to.");
+    await Promise.all([
+      previous.slice.status === "sliced"
+        ? copyPart(c.env.PHOTOS, id, "previous", "sliced")
+        : c.env.PHOTOS.delete(fileKey(id, "sliced")),
+      previous.hasThumb ? copyPart(c.env.PHOTOS, id, "previous-thumb", "thumb") : null,
+    ]);
+    await c.env.PHOTOS.delete([fileKey(id, "previous"), fileKey(id, "previous-thumb")]);
+    const db = c.var.db;
+    const target = found.table === "attempt" ? attemptFiles : itemFiles;
+    await db.batch([
+      db
+        .update(target)
+        .set({
+          slice: previous.slice,
+          prefill: previous.prefill,
+          objects: previous.objects,
+          slicer: previous.slicer,
+          hasThumb: found.row.hasThumb || previous.hasThumb,
+          // What it was sliced with is what the next slice uses again.
+          ...(previous.slice.settings.slicing ? { slicing: previous.slice.settings.slicing } : {}),
+          previousSlice: null,
+        })
+        .where(eq(target.id, id)),
+      recordChange(db, { entity: "file", id, itemId: found.itemId, action: "updated", actor: c.var.actor }),
+      db
+        .update(items)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(items.id, found.itemId), afterChange)),
+    ]);
+    const updated = await db.select().from(target).where(eq(target.id, id)).get();
+    return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });
   });
 
+/** Copies one of a file's R2 parts to another (a slice kept for its undo, or brought back), streamed. */
+async function copyPart(bucket: R2Bucket, id: string, from: FilePart, to: FilePart) {
+  const object = await bucket.get(fileKey(id, from));
+  if (!object) return bucket.delete(fileKey(id, to));
+  await bucket.put(fileKey(id, to), object.body, { httpMetadata: object.httpMetadata });
+}
+
 /** For the OpenAPI document (worker/openapi). */
-export { fileFields, fileSlice, slicedFields };
+export { fileChange, fileFields, fileSlice, slicedFields };

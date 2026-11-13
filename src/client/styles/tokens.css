@@ -22,6 +22,8 @@
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
   --sg-note: #f6f1e8;
+  /* A choice tile on a card or sheet (ChoiceTiles, the outcome picker): paper by day, a step above a sheet at night, so it rises instead of sinking. */
+  --sg-tile: #f6f1e8;
   /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
   --sg-plate: #d8c4a0;
   --sg-plate-edge: #b59f78;
@@ -220,6 +222,7 @@
   --sg-well: #120f0d;
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
+  --sg-tile: #38312b;
   --sg-plate: #4f4536;
   --sg-plate-edge: #382f25;
   --sg-stage: #2b2520;
@@ -270,6 +273,7 @@
   --color-lifted: var(--sg-lifted);
   --color-well: var(--sg-well);
   --color-note: var(--sg-note);
+  --color-tile: var(--sg-tile);
   --color-qr-bg: var(--sg-qr-bg);
   --color-qr-ink: var(--sg-qr-ink);
   --color-ink: var(--sg-ink);

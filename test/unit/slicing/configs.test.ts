@@ -8,7 +8,6 @@ import {
 } from "../../../src/shared/slicing/configs.ts";
 import { DEFAULT_SLICING } from "../../../src/shared/slicing/defaults.ts";
 import { presetRecord, STAND_IN_COLOURS } from "../../../src/shared/slicing/orca.ts";
-import { chosenFromOptions } from "../../../src/shared/slicing/settings.ts";
 import { presets } from "./presets.ts";
 
 const orange = { material: "PLA", brand: "Bambu", finish: "basic", colorHex: "#f2711c", colorName: "Orange" };
@@ -44,8 +43,8 @@ describe("the defaults", () => {
     expect(setup.tower).toBeUndefined();
   });
 
-  it("turn on Orca's tree supports under every steep overhang for decision 0046's \"Slice with supports\"", () => {
-    const setup = sliceSetup(presets, { settings: chosenFromOptions({ supports: true }) });
+  it("turn on Orca's tree supports under every steep overhang for supports everywhere", () => {
+    const setup = sliceSetup(presets, { settings: { supports: "everywhere", supportStyle: "tree" } });
     expect(setup.process).toMatchObject({ enable_support: "1", support_type: "tree(auto)" });
     expect(setup.process.support_critical_regions_only).toBe("0");
     expect(setup.settings.supports).toBe(true);

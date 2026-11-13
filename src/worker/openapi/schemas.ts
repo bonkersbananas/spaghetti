@@ -6,6 +6,7 @@ import { LABEL_FIELDS } from "../../shared/label-read.ts";
 import { DELIVERY_STATUSES, WEBHOOK_KINDS } from "../../shared/webhooks.ts";
 import { settings } from "../routes/attempts.ts";
 import { fileSlice } from "../routes/files.ts";
+import { slicingSettingsShape } from "../slicing-schema.ts";
 
 /**
  * What the API answers, as zod schemas, for the OpenAPI document. The requests are described by the schemas the
@@ -97,8 +98,25 @@ export const AttemptFile = z
     slice: fileSlice
       .nullable()
       .describe(
-        "A model's slicing: how it was sliced (printer, process and filament presets, layer height, supports, scale, the engine's release and OrcaSlicer's version) or why it couldn't be (problem). Null until it is sliced or fails.",
+        "A model's slicing: how it was sliced (printer, process and filament presets, layer height, supports, scale, the engine's release and OrcaSlicer's version, and `settings.slicing`, the settings in people's words) or why it couldn't be (problem). Null until it is sliced or fails.",
       ),
+    slicing: slicingSettingsShape
+      .nullable()
+      .optional()
+      .describe(
+        "The slicing settings people chose for a model, what its next slice uses (PATCH /files/{id}); null until someone changed one.",
+      ),
+    previous: z
+      .object({
+        slice: fileSlice,
+        prefill: settings,
+        objects: z.array(z.string()),
+        slicer: z.string().nullable(),
+        hasThumb: z.boolean(),
+      })
+      .nullable()
+      .optional()
+      .describe("The slice a re-slice replaced, kept for one undo (POST /files/{id}/sliced/restore)."),
     createdAt: epoch,
   })
   .meta({ id: "AttemptFile" });

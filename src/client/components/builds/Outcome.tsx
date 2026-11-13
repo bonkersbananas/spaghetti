@@ -112,7 +112,7 @@ export function OutcomePicker({ value, onChange, size = "lg", suggested = null, 
                   ? cn(selectedStyles[outcome], "ring-2 ring-inset")
                   : hinted
                     ? cn(suggestedStyles[outcome], "hover:bg-ink/4")
-                    : "bg-paper text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
+                    : "bg-tile text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
               )}
             >
               {/* Picked is the bold weight, not duotone: duotone redraws "Partly" as a circle with one slash, which reads as a prohibited sign.

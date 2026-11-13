@@ -1,7 +1,7 @@
 import engine from "virtual:slicer-engine";
 import type { AttemptSettings } from "@shared/attempts";
 import { presetRecord } from "@shared/slicing/orca.ts";
-import { chosenFromOptions, slicingFor } from "@shared/slicing/settings.ts";
+import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import type { FileSlice, SliceOptions, SliceProblem } from "@shared/slicing/types.ts";
 import type { SliceMessage, SlicePhase, SliceRequest } from "./slice-worker";
 
@@ -42,35 +42,43 @@ const PHASES: Record<SlicePhase, [number, number]> = {
   packing: [0.96, 1],
 };
 
-const failed = (problem: SliceProblem, options: SliceOptions): NotSliced => ({
-  ok: false,
-  png: null,
-  slice: {
-    status: "failed",
-    problem,
-    settings: {
-      ...presetRecord(slicingFor(chosenFromOptions(options))),
-      scale: options.scale ?? 100,
-      engine: engine.version,
-      orca: engine.orca.version,
+/** What a slice is asked for: the settings chosen, over the workshop's defaults. */
+export interface SliceAsk {
+  chosen: SliceOptions;
+  defaults: SlicingSettings;
+}
+
+/** A slice that couldn't be made, with the settings it was asked for. */
+export function notSliced(problem: SliceProblem, ask: SliceAsk, versions = { engine: "", orca: "" }): NotSliced {
+  const slicing = slicingFor(ask.chosen, ask.defaults);
+  return {
+    ok: false,
+    png: null,
+    slice: {
+      status: "failed",
+      problem,
+      settings: { ...presetRecord(slicing), scale: slicing.scale, ...versions, slicing },
+      at: Date.now(),
     },
-    at: Date.now(),
-  },
-});
+  };
+}
+
+const failed = (problem: SliceProblem, ask: SliceAsk) =>
+  notSliced(problem, ask, { engine: engine.version, orca: engine.orca.version });
 
 /**
  * Slices an .stl or a plain .3mf into a .gcode.3mf with OrcaSlicer's engine, off the main thread (slice-worker.ts),
- * with the defaults of shared/slicing/defaults.ts and `options`. Never rejects but for `signal`: a model it can't
- * slice resolves with the reason. Loaded only when something is sliced; Twists can slice through it too.
+ * with the settings chosen over the defaults (decision 0047). Never rejects but for `signal`: a model it can't slice
+ * resolves with the reason. Loaded only when something is sliced; Twists can slice through it too.
  */
 export function sliceModel(
   file: Blob,
   name: string,
-  options: SliceOptions = {},
+  ask: SliceAsk,
   handlers: SliceHandlers = {},
   signal?: AbortSignal,
 ): Promise<SliceOutcome> {
-  if (!engine.base) return Promise.resolve(failed("engine", options));
+  if (!engine.base) return Promise.resolve(failed("engine", ask));
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./slice-worker.ts", import.meta.url), { type: "module", name: "slicing" });
     let settled = false;
@@ -114,13 +122,14 @@ export function sliceModel(
     worker.onerror = (event) => {
       if (settled) return;
       end();
-      resolve(failed(/memory/i.test(event.message ?? "") ? "memory" : "engine", options));
+      resolve(failed(/memory/i.test(event.message ?? "") ? "memory" : "engine", ask));
     };
     const base = new URL(engine.base as string, location.href).href;
     worker.postMessage({
       file,
       name,
-      options,
+      chosen: ask.chosen,
+      defaults: ask.defaults,
       engine: { base, host: engine.host, version: engine.version },
     } satisfies SliceRequest);
   });

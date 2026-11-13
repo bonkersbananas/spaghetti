@@ -21,7 +21,7 @@ export function PlateCover({
   return (
     <figure className={cn("relative", className)}>
       <Photo
-        src={fileThumbSrc(file.id)}
+        src={fileThumbSrc(file)}
         alt={alt}
         fit="contain"
         frame="deep"

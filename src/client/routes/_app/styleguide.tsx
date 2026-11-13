@@ -32,6 +32,7 @@ import { SearchSection } from "./-styleguide/search";
 import { SheetSection } from "./-styleguide/sheets";
 import { SigningInSection } from "./-styleguide/signing-in";
 import { SkeletonSection } from "./-styleguide/skeletons";
+import { SlicingSection } from "./-styleguide/slicing";
 import { SpaceSection } from "./-styleguide/space";
 import { StepsSection } from "./-styleguide/steps";
 import { TodaySection } from "./-styleguide/today";
@@ -68,6 +69,7 @@ const toc = [
   ["photos", "Photos"],
   ["builds", "Builds & attempts"],
   ["pantry", "Pantry & printer"],
+  ["slicing", "Slicing"],
   ["recipes", "Recipes"],
   ["twists", "Twists"],
   ["year", "Year so far"],
@@ -127,6 +129,7 @@ function Styleguide() {
           <PhotoSection />
           <BuildsSection />
           <PantrySection />
+          <SlicingSection />
           <RecipesSection />
           <TwistsSection />
           <YearSection />
