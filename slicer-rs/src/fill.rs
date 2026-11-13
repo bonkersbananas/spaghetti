@@ -303,9 +303,9 @@ fn one_period(z_cos: f64, z_sin: f64, vertical: bool, flip: bool, tolerance: f64
     points
 }
 
-/// Sorts entries by their keys, then by their index. The module's only sort: each sort Rust instantiates costs some
-/// ten kilobytes of WebAssembly.
-fn sort_keyed(entries: &mut [([f64; 4], usize)]) {
+/// Sorts entries by their keys, then by their index. The infill's and the surfaces' only sort: each sort Rust
+/// instantiates costs some ten kilobytes of WebAssembly.
+pub(crate) fn sort_keyed(entries: &mut [([f64; 4], usize)]) {
     entries.sort_unstable_by(|a, b| {
         for k in 0..4 {
             match a.0[k].total_cmp(&b.0[k]) {
@@ -618,6 +618,18 @@ fn clip(lines: &[Vec<(f64, f64)>], grid: &EdgeGrid) -> Vec<Piece> {
     }
     out.retain(|p| p.points.len() >= 2);
     out
+}
+
+/// The parts of polylines inside an area (Clipper's `intersection_pl`).
+pub fn clip_polylines(lines: &[Vec<Pt>], area: &Shapes) -> Vec<Vec<Pt>> {
+    let contours: Vec<Contour> = area.iter().flatten().cloned().collect();
+    if contours.is_empty() || lines.is_empty() {
+        return Vec::new();
+    }
+    let grid = EdgeGrid::new(&contours, 2.0 * geom::SCALE, 0.0);
+    let lines: Vec<Vec<(f64, f64)>> =
+        lines.iter().map(|l| l.iter().map(|q| (q.x as f64, q.y as f64)).collect()).collect();
+    clip(&lines, &grid).into_iter().map(|piece| piece.points).collect()
 }
 
 fn length(points: &[Pt]) -> f64 {

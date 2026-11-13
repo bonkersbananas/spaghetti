@@ -4,19 +4,19 @@ Status: a first version in [`slicer-rs/`](../../slicer-rs), measured against Orc
 
 ## 1. What it is
 
-A self-contained crate, about 10,000 lines of Rust on six small crates (polygon booleans, a Voronoi diagram, deflate, CRC32, MD5, and threads natively). It turns STL and plain 3MF files into a `.gcode.3mf`, with the defaults the app slices with (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI) or with the slicing settings people choose (below). Its files open in Spaghetti as Orca's do: the reader finds the estimate, weight, filament, settings and plate picture, and the 3D view shows every layer by feature. Around the toolpaths they carry the printer's own G-code, from the presets the app's engine ships (copied into `slicer-rs/profiles/x2d/`): the X2D's start and end, and its layer change and timelapse G-code, filled as Orca fills them (`src/template.rs` ports Orca's placeholder language).
+A self-contained crate, about 11,000 lines of Rust on six small crates (polygon booleans, a Voronoi diagram, deflate, CRC32, MD5, and threads natively). It turns STL and plain 3MF files into a `.gcode.3mf`, with the defaults the app slices with (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI) or with the slicing settings people choose (below). Its files open in Spaghetti as Orca's do: the reader finds the estimate, weight, filament, settings and plate picture, and the 3D view shows every layer by feature. Around the toolpaths they carry the printer's own G-code, from the presets the app's engine ships (copied into `slicer-rs/profiles/x2d/`): the X2D's start and end, and its layer change and timelapse G-code, filled as Orca fills them (`src/template.rs` ports Orca's placeholder language).
 
 The same code builds two ways:
 
-- **Native**: a 1.8 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
-- **WebAssembly**: a 1.4 MB module (441 kB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
+- **Native**: a 1.9 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
+- **WebAssembly**: a 1.5 MB module (493 kB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
 
 What it does, in order:
 
 1. **Read**: binary and text STL; 3MF with units, components, transforms and Bambu's object names (a sliced 3MF is refused). Corners are welded, and an inside-out model is turned right way out.
 2. **Lay out**: arranged on the plate as the app's `arrange.ts` does, or kept where a Bambu project placed it. A model that is too big, too tall, or one too many is refused.
 3. **Slice** every layer at its middle into outlines, in integer coordinates of 0.1 µm.
-4. **Regions**, as Orca's classic walls: two walls, the outer one placed precisely; gap fill along the middle of what is too narrow for a wall (the medial axis of a Voronoi diagram, as Orca); 5 top and 3 bottom layers; bridges over air and internal bridges over sparse infill; 15 % sparse infill, with small sparse areas made solid.
+4. **Regions**, as Orca's classic walls: two walls, the outer one placed precisely; gap fill along the middle of what is too narrow for a wall (the medial axis of a Voronoi diagram, as Orca). Then Orca's own passes over a layer's surfaces: 5 top and 3 bottom layers, and solid infill wherever a slope would leave the shell thin ("ensure vertical shell thickness"); every top surface, bottom surface and bridge grown into the infill beside it, bridges spanning the way Orca's bridge detection picks (`src/surfaces.rs`); internal bridges where Orca makes them, across the sparse lines below and reaching to the nearest of them (`src/bridges.rs`); 15 % sparse infill, with small sparse areas made solid.
 5. **Toolpaths and G-code**, every layer in parallel. Objects are printed one after the other in each layer, their islands nearest first, walls from the inside out. Sparse infill is Orca's crosshatch (or its gyroid, when asked) on each object's own grid, cut to the area and joined along the walls as Orca joins it (`src/fill.rs`); solid infill zig-zags. Retractions wipe as Orca's do, lifts are Orca's spirals, speeds and accelerations are the X2D's for each feature, and short layers slow down. Between the layers come what Orca writes there: the printer's layer change G-code, a timelapse photo at the spot Orca's picker would choose, and the fans; around each object's moves, the labels (`M624`/`M625`) that let the printer skip it. The file carries Orca's markers (`; FEATURE:`, `; CHANGE_LAYER`, `M73` progress), so readers of Bambu files follow it.
 6. **Estimate and pack**: the print time comes from a port of Orca's move planner (acceleration, jerk, the X2D's limits). The plate picture is the app's `render.ts`, ported. The package is deflated in parallel.
 
@@ -34,29 +34,29 @@ Every runner slices the same placed models with the app's defaults; the Orca run
 
 | Runner | 3DBenchy (225,154 triangles) | Steampunk glasses (30,080) | UOBF text with clips (1,354) | 12 Benchies on one plate (2,701,848) |
 | --- | --- | --- | --- | --- |
-| **Rust, native, 4 threads** | **0.26 s, 34 MB** | **0.41 s, 37 MB** | **0.04 s, 21 MB** | **2.91 s, 229 MB** |
-| Rust, native, 1 thread | 0.93 s, 33 MB | 1.53 s, 35 MB | 0.11 s, 21 MB | 10.4 s, 219 MB |
-| Rust, WebAssembly, Node | 1.44 s, 120 MB | 2.22 s, 109 MB | 0.23 s, 102 MB | 17.0 s, 385 MB |
-| **Rust, WebAssembly, Chromium** | **1.42 s, 79 MB** | **2.18 s, 54 MB** | **0.22 s, 45 MB** | **17.0 s, 499 MB** |
+| **Rust, native, 4 threads** | **0.38 s, 36 MB** | **0.47 s, 42 MB** | **0.06 s, 21 MB** | **4.17 s, 244 MB** |
+| Rust, native, 1 thread | 1.20 s, 34 MB | 1.64 s, 38 MB | 0.14 s, 21 MB | 13.5 s, 215 MB |
+| Rust, WebAssembly, Node | 1.79 s, 122 MB | 2.30 s, 118 MB | 0.29 s, 126 MB | 21.1 s, 400 MB |
+| **Rust, WebAssembly, Chromium** | **1.77 s, 78 MB** | **2.29 s, 56 MB** | **0.27 s, 38 MB** | **21.2 s, 507 MB** |
 | OrcaSlicer 2.5.0, native, 4 threads | 1.42 s, 208 MB | 1.48 s, 256 MB | 0.35 s, 112 MB | 16.3 s, 964 MB |
 | Orca's engine, WebAssembly, Node | 8.65 s, 597 MB | 7.68 s, 626 MB | 1.75 s, 483 MB | 93.4 s, 1,927 MB |
 | Orca's engine, WebAssembly, Chromium (the app today) | 8.81 s, 489 MB | 8.36 s, 458 MB | 1.72 s, 351 MB | 97.2 s, 2,050 MB |
 
-- **Native, it is 3.5 to 9 times faster than OrcaSlicer** on the same four cores, in a quarter to a seventh of the memory.
-- **In the browser, it is 4 to 8 times faster than the engine the app runs today**, in a quarter of the memory or less, from a module an eighth the size. In Chromium, on one thread, it slices a Benchy about as fast as native OrcaSlicer does on four cores.
-- **Its own memory is small**: the WebAssembly heap ends at 30 MB for a Benchy or the glasses and 170 MB for the plate; the rest of the Node figures is Node itself and the model files. Orca's engine starts at a 256 MB heap.
-- **Most of the time is spent on regions**: the polygon booleans and offsets of walls, shells and gap fill. For the plate, natively, that is 1.6 s of 2.8 s; toolpaths and G-code take 0.6 s, slicing into outlines 0.25 s, reading 0.1 s, the picture 0.1 s and packing 0.13 s. One thread is 2.8 to 3.7 times slower than four, and WebAssembly another 1.4 to 2 times. Orca's infill, joined along the walls, costs about 3 % of the toolpaths' time against straight lines.
+- **Native, it is 3 to 6 times faster than OrcaSlicer** on the same four cores, in a quarter to a sixth of the memory.
+- **In the browser, it is 3.7 to 6.4 times faster than the engine the app runs today**, in a quarter of the memory or less, from a module a seventh the size. In Chromium, on one thread, it slices a Benchy in little more time than native OrcaSlicer takes on four cores.
+- **Its own memory is small**: the WebAssembly heap ends at 30 MB for a Benchy or the glasses and 178 MB for the plate; the rest of the Node figures is Node itself and the model files. Orca's engine starts at a 256 MB heap.
+- **Most of the time is spent on regions**: the polygon booleans and offsets of walls, shells and gap fill, and since Orca's surface passes came in, of the shells on slopes and the surfaces grown into the infill beside them, which made the four models 15 to 45 % slower to slice. For the plate, natively, regions take 2.9 s of 4.1 s; toolpaths and G-code 0.65 s, slicing into outlines 0.25 s, reading 0.1 s, the picture 0.1 s and packing 0.12 s. One thread is 2.4 to 3.5 times slower than four, and WebAssembly another 1.4 to 2 times. Orca's infill, joined along the walls, costs about 3 % of the toolpaths' time against straight lines.
 
 ### Output size
 
 | Model | Rust `.gcode.3mf` | Orca's G-code, packed as the app packs it | Rust G-code | Orca's G-code |
 | --- | --- | --- | --- | --- |
-| 3DBenchy | 903 kB | 653 kB | 3.33 MB | 2.61 MB |
+| 3DBenchy | 972 kB | 653 kB | 3.55 MB | 2.61 MB |
 | Steampunk glasses | 1.41 MB | 1.46 MB | 6.01 MB | 6.59 MB |
-| UOBF text with clips | 171 kB | 148 kB | 886 kB | 845 kB |
-| 12 Benchies on one plate | 9.02 MB | 5.66 MB | 37.85 MB | 29.35 MB |
+| UOBF text with clips | 186 kB | 148 kB | 921 kB | 845 kB |
+| 12 Benchies on one plate | 9.93 MB | 5.66 MB | 40.48 MB | 29.35 MB |
 
-Our G-code runs from 9 % shorter than Orca's to 29 % longer: Orca fits arcs to curves (its gyroid and crosshatch waves among them), we write them as short lines, and we retract more, each retraction a wipe and a spiral lift. Packed, ours ranges from 3 % smaller to 59 % larger. We deflate at level 4 in parallel chunks, for speed, and our G-code packs less tightly: at level 6 in one stream, as Orca's above, the plate's would be 8.4 MB against 5.7 MB.
+Our G-code runs from 9 % shorter than Orca's to 38 % longer: Orca fits arcs to curves (its gyroid and crosshatch waves among them), we write them as short lines, we retract more, each retraction a wipe and a spiral lift, and our zig-zag solid infill takes many short strokes. Packed, ours ranges from 3 % smaller to 75 % larger. We deflate at level 4 in parallel chunks, for speed, and our G-code packs less tightly: at level 6 in one stream, as Orca's above, the plate's would be 9.3 MB against 5.7 MB.
 
 ## 3. Quality against Orca
 
@@ -64,26 +64,27 @@ The same models in native OrcaSlicer 2.5.0, with the same settings and placement
 
 | Model | Layers, Rust / Orca | Filament, Rust / Orca | Estimate, Rust / Orca | Extruding, Rust / Orca | Travel, retractions and lifts, Rust / Orca | Retractions, Rust / Orca |
 | --- | --- | --- | --- | --- | --- | --- |
-| 3DBenchy | 240 / 240 | 11.02 g / 11.32 g (−2.6 %) | 41.0 / 37.8 min (+8.7 %) | 24.0 / 24.2 min (−1.0 %) | 11.9 / 8.4 min (+41.8 %) | 2,307 / 1,445 |
-| Steampunk glasses | 253 / 253 | 7.59 g / 7.66 g (−0.9 %) | 79.5 / 76.4 min (+4.0 %) | 25.8 / 27.9 min (−7.7 %) | 48.6 / 43.4 min (+12.0 %) | 10,023 / 8,665 |
-| UOBF text with clips | 68 / 68 | 4.22 g / 4.02 g (+5.0 %) | 19.6 / 18.8 min (+4.4 %) | 9.8 / 9.6 min (+1.6 %) | 4.7 / 4.0 min (+17.1 %) | 914 / 686 |
-| 12 Benchies on one plate | 240 / 240 | 132.29 g / 135.77 g (−2.6 %) | 394.8 / 361.6 min (+9.2 %) | 243.2 / 252.9 min (−3.8 %) | 146.5 / 103.5 min (+41.5 %) | 27,647 / 17,401 |
+| 3DBenchy | 240 / 240 | 11.80 g / 11.32 g (+4.3 %) | 43.9 / 37.8 min (+16.4 %) | 25.6 / 24.2 min (+5.7 %) | 13.2 / 8.4 min (+57.3 %) | 2,548 / 1,445 |
+| Steampunk glasses | 253 / 253 | 7.59 g / 7.66 g (−0.9 %) | 79.6 / 76.4 min (+4.2 %) | 25.9 / 27.9 min (−7.4 %) | 48.6 / 43.4 min (+12.1 %) | 10,033 / 8,665 |
+| UOBF text with clips | 68 / 68 | 4.30 g / 4.02 g (+7.1 %) | 19.9 / 18.8 min (+6.0 %) | 10.1 / 9.6 min (+4.6 %) | 4.7 / 4.0 min (+17.2 %) | 911 / 686 |
+| 12 Benchies on one plate | 240 / 240 | 141.66 g / 135.77 g (+4.3 %) | 433.3 / 361.6 min (+19.8 %) | 266.2 / 252.9 min (+5.2 %) | 162.0 / 103.5 min (+56.5 %) | 30,517 / 17,401 |
 
 The estimate is the whole print. Both count its start alike, 5 min 8 s: the X2D's allowance for levelling the bed and the moves of its start G-code, timed as Orca times them. The rest is split the same way for both: the time spent extruding (every feature's), and everything else after the start (travel, retractions, wipes and lifts).
 
-A Benchy's filament by feature, in mm³ (Rust / Orca): outer wall 2,441 / 2,410, inner wall 2,374 / 2,343, sparse infill 1,541 / 1,381, internal solid infill 1,180 / 1,476, gap infill 467 / 574, internal bridge 462 / 370, top surface 175 / 261, bridge 68 / 114, bottom surface 41 / 38, overhang wall 0 / 13.
+A Benchy's filament by feature, in mm³ (Rust / Orca): outer wall 2,426 / 2,410, inner wall 2,358 / 2,343, sparse infill 1,385 / 1,381, internal solid infill 1,867 / 1,476, gap infill 467 / 574, internal bridge 405 / 370, top surface 293 / 261, bridge 123 / 114, bottom surface 41 / 38, overhang wall 0 / 13.
 
 ![The same Benchy in Spaghetti's 3D view, coloured by feature: OrcaSlicer 2.5.0 on the left, the Rust slicer on the right; the whole print above, layer 30 below](images/rust-slicer-benchy.jpg)
 
-In the 3D view the two Benchys look alike from outside (the picture is of the first version, whose sparse infill was still straight lines). The differences are inside and on top:
+In the 3D view the two Benchys look alike from outside (the picture is of the first version, whose sparse infill was still straight lines and whose slopes had no extra solid infill). The differences are inside and on top:
 
 - **Walls** match on a Benchy to about 1 %. On the glasses and the text, ours have 6 to 11 % more inner wall. Orca puts only one wall around a top surface, and counts part of the outer wall as overhang wall.
 - **Gap fill** follows Orca's rules for which gaps to fill and how wide, but comes out 15 to 23 % lighter.
-- **Sparse infill** is Orca's: its crosshatch, which turns its direction over a few millimetres of height (the waves at layer 30), and its gyroid when asked, on the same grid as Orca's (each object's own, from the middle of its bounding box), so the lines lie where Orca's do. As Orca, the lines are joined along the walls into a few long paths, and an end that joins nothing hooks onto the wall (Orca's `connect_infill` and its anchors, ported). A Benchy's is 12 % heavier, as Orca makes more of the inside solid (next).
-- **Solid infill** on a Benchy is 20 % short. Orca adds solid infill wherever a slope would leave the shell thin ("ensure vertical shell thickness"), and we don't yet: those are the teal patches by Orca's walls at layer 30. On the glasses and the text, ours has more solid infill than Orca's (12 to 58 % more), for reasons not yet pinned down.
-- **Top surfaces** are a fifth to a third smaller than Orca's. Orca puts one wall around a top surface instead of two, and prints it monotonic, every line in the same direction. Ours zig-zag, and the roof shows more gap fill along its edges.
-- **The estimate's gap is retractions.** Ours is 4 to 9 % over Orca's, all of it in moving: each retraction takes about 0.2 s (retract, wipe, spiral lift, travel, lower, push back), and we retract 1.2 to 1.6 times as often. Extruding is within 8 % of Orca's, from 2 % more to 8 % less: we print less solid infill, top surface and gap fill (above) and don't slow down for overhangs (about 2 of the glasses' minutes).
-- **Retractions**: 1.2 to 1.6 times as many as Orca's (1.8 before the infill was joined along the walls, as Orca joins it). Both skip retracting for travels under 1 mm and within infill, but we haven't matched how Orca decides when a travel needs one.
+- **Sparse infill** is Orca's: its crosshatch, which turns its direction over a few millimetres of height (the waves at layer 30), and its gyroid when asked, on the same grid as Orca's (each object's own, from the middle of its bounding box), so the lines lie where Orca's do. As Orca, the lines are joined along the walls into a few long paths, and an end that joins nothing hooks onto the wall (Orca's `connect_infill` and its anchors, ported). A Benchy's is within 1 % of Orca's.
+- **Solid infill goes where Orca's goes**, from Orca's own passes over a layer's surfaces, ported: as many shells under a top and over a bottom as Orca, and more wherever a slope would leave the shell thin ("ensure vertical shell thickness": the teal patches by Orca's walls at layer 30); every top, bottom and bridge grown into the infill beside it as far as Orca grows them (one and a half walls' width into solid infill, a wall's spacing into sparse); and solid infill resting on sparse infill made an internal bridge only where Orca makes one, where enough of it has nothing but sparse infill under it. On a Benchy the areas come within a few percent of Orca's: 7,560 mm² of internal solid infill against the 7,380 Orca's plastic covers, and internal bridges, top surfaces and bridges within 10 %. What still differs is how they are filled. Orca prints the narrow bands along sloping walls as loops that follow the band, and the rest in lines all one way (monotonic); ours zig-zag, which in a band two lines wide takes about 1.7 times the plastic, in short, slow strokes. So a Benchy's internal solid infill weighs 26 % more than Orca's (section 5, next).
+- **Bridges** span the direction Orca's bridge detection picks (across the gap, from the edges that hold them), at this profile's flow (flat lines a nozzle wide, as `thick_bridges` is off), and bridges whose growth meets print as one. Internal bridges cross the sparse lines below and reach to the nearest of them at both ends, as Orca's do. A Benchy's bridges come within 8 % of Orca's, its internal bridges within 10 %.
+- **Top surfaces** are as large as Orca's now, grown into the infill beside them as Orca grows them, but zig-zag: Orca prints them monotonic, every line in the same direction, and puts one wall around them instead of two. A Benchy's come out 12 % heavier than Orca's; the text's 15 % lighter, its second wall taking the difference.
+- **The estimate's gap is mostly moving.** Ours is 16 to 20 % over Orca's on a Benchy and the plate, 4 to 6 % on the glasses and the text. On a Benchy and the plate, four fifths of it is moving: each retraction takes about 0.2 s (retract, wipe, spiral lift, travel, lower, push back), and we retract 1.2 to 1.8 times as often, more since slopes get solid infill, each patch its own run. The rest is extruding, 5 % more on a Benchy: the narrow solid bands' short zig-zag strokes (above). We also don't slow down for overhangs (about 2 of the glasses' minutes).
+- **Retractions**: 1.2 to 1.8 times as many as Orca's. Both skip retracting for travels under 1 mm and within infill, but we haven't matched how Orca decides when a travel needs one, nor the order it prints paths in.
 
 ## 4. The printer's G-code, against Orca's
 
@@ -108,12 +109,11 @@ In order of what matters for a good print with the default profile. A small item
 | What | Why | Size |
 | --- | --- | --- |
 | A first test print of a Benchy, watched | The start and end G-code are Orca's (section 4), but nothing has printed yet | A print |
-| Ensure vertical shell thickness | Shells on slopes come out thin (20 % less solid infill on a Benchy): weaker, with infill showing through | Medium |
+| Monotonic top, bottom and solid infill, and narrow solid infill in loops | Orca's look for this profile's top surfaces (every line in the same direction); and the narrow bands of solid infill along slopes, which our zig-zag fills with about 1.7 times the plastic in short, slow strokes (a quarter more solid infill on a Benchy, and part of the estimate's gap) | Medium |
 | Overhang walls: detect them, slow down, more fan | Overhangs droop without it | Medium |
-| Travel as Orca does it: its order of paths, and when to retract | Up to 1.6 times Orca's retractions, which means more strings, and the estimate's whole gap (4 to 9 % over Orca's; each retraction takes about 0.2 s) | Medium |
-| Monotonic top, bottom and solid infill | Orca's look for this profile's top surfaces: every line printed in the same direction | Medium |
+| Travel as Orca does it: its order of paths, and when to retract | Up to 1.8 times Orca's retractions, which means more strings, and most of the estimate's gap (16 to 20 % over Orca's on a Benchy and the plate; each retraction takes about 0.2 s) | Medium |
 | The app's other sparse patterns: grid, cubic, honeycomb, lightning | The Light strength is lightning (Standard's crosshatch and Strong's gyroid are Orca's already); until then they print as straight lines, and the file says so | Medium |
-| One wall on top surfaces; bridge direction and anchoring; aligned seams | Smoother tops, stronger bridges, the seam in one line | Medium each |
+| One wall on top surfaces; aligned seams | Smoother tops, the seam in one line | Medium each |
 | Auto brim, then a brim people turn on | Orca's default: a brim where a footprint is small for the height (the glasses get 4.7 mm); a setup that asks for a brim is refused | Small |
 | Slope lifts (Orca's `Auto Lift`: a slope, or a spiral where the travel sets off over an overhang) | The X2D's generic filaments lift so; Bambu's PLA lifts in spirals, as this does | Small |
 | Arc fitting | Orca's default: smaller files and smoother curves | Small |
@@ -126,9 +126,9 @@ The estimate will follow once the features above are in: the planner already mod
 
 ## 6. Where it could run
 
-- **On a bridge-like host, as an offline slicing proxy.** A 1.8 MB program, slicing a Benchy in a quarter of a second and a full plate in under 3 s, in 230 MB. It needs nothing installed, and nothing from Bambu or the internet.
-- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 0.44 MB gzip, a Benchy is ready in under a second and a half instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
-- **In the Worker itself**, for single models: a Benchy needs 30 MB of WebAssembly memory and 1.4 s of CPU. That fits in a Worker's 128 MB, if the account's CPU limit allows a few seconds a request. Orca's engine can't run there (its heap starts at 256 MB). A plate of many models would not fit.
+- **On a bridge-like host, as an offline slicing proxy.** A 1.9 MB program, slicing a Benchy in under 0.4 s and a full plate in about 4 s, in 245 MB. It needs nothing installed, and nothing from Bambu or the internet.
+- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 0.49 MB gzip, a Benchy is ready in under two seconds instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
+- **In the Worker itself**, for single models: a Benchy needs 30 MB of WebAssembly memory and 1.8 s of CPU. That fits in a Worker's 128 MB, if the account's CPU limit allows a few seconds a request. Orca's engine can't run there (its heap starts at 256 MB). A plate of many models would not fit.
 
 ## 7. Recommendation
 
