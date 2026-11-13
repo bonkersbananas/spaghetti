@@ -3182,6 +3182,23 @@ export const shots: Shot[] = [
       await page.request.put("/api/printer", { headers, data: { slicing: null } });
     },
   },
+  {
+    // Offline the defaults still open, to read: their tiles, More and the way back dimmed (lib/read-only.ts).
+    name: "printer-slicing-offline",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      // Their code, before the connection goes.
+      await openSlicingDefaults(page);
+    },
+    beforeShot: async (page) => {
+      await goOffline(page);
+      await openSlicingDefaults(page);
+    },
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
+    },
+  },
   // Upkeep: the list with its meters, and the Done sheet of the most due task.
   { name: "printer-upkeep", path: "/printer", selector: "section[aria-labelledby=printer-upkeep]" },
   {
