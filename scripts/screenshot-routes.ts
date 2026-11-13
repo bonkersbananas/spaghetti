@@ -1324,8 +1324,14 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const sheet = await buildWithModel(page);
       // Once sliced, the sheet reads the sliced file and the settings open with what it says, with an animation that
-      // changes the sheet's height: scroll once it has finished, the whole card at the top.
+      // changes the sheet's height: scroll once it has finished, the whole card at the top. (The fixed clock of the
+      // shots makes the settings fade in about a second late: wait until they're shown.)
       await sheet.getByLabel("Layer height").waitFor();
+      const panel = await sheet.getByRole("button", { name: /^Settings/ }).getAttribute("aria-controls");
+      await page.waitForFunction((id) => {
+        const element = id ? document.getElementById(id) : null;
+        return !!element && getComputedStyle(element).opacity === "1";
+      }, panel);
       await page.waitForTimeout(900);
       await sheet.getByText(FUSILLI.name).evaluate((element) => {
         const card = element.closest(".grid") ?? element;
