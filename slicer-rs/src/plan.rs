@@ -39,7 +39,7 @@ const FILL_ORDER: [Role; 6] =
 
 /// Layer `i`'s extrusions in print order: object by object, the nearest island first and the rest of its object's
 /// islands nearest first, so each object's moves come together (the printer can skip an object only so).
-pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, objects: &[crate::Object], s: &Settings) -> LayerPlan {
+pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, s: &Settings) -> LayerPlan {
     let z = layers.top[i];
     let h = layers.height[i];
     // Alternate the corner each layer starts from, so a layer begins near where the last one likely ended.
@@ -51,7 +51,7 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, objects: &[crate:
         .enumerate()
         .map(|(k, (island, fills))| island_paths(k as u32, island, fills, i, h, s))
         .collect();
-    let owner: Vec<u32> = per_island.iter().map(|paths| island_object(paths, objects)).collect();
+    let owner: Vec<u32> = r.islands.iter().map(|island| island.object).collect();
     let mut order = Vec::with_capacity(per_island.len());
     let mut done = vec![false; per_island.len()];
     let mut at = start;
@@ -87,28 +87,6 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, objects: &[crate:
         paths.append(&mut per_island[k]);
     }
     LayerPlan { index: i, z, height: h, paths }
-}
-
-/// The object an island belongs to: the one whose footprint holds the middle of the island's paths, else the
-/// nearest one.
-fn island_object(paths: &[Path], objects: &[crate::Object]) -> u32 {
-    if objects.len() <= 1 || paths.is_empty() {
-        return 0;
-    }
-    let mut b = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
-    for q in paths.iter().flat_map(|p| &p.points) {
-        b = [b[0].min(q.x), b[1].min(q.y), b[2].max(q.x), b[3].max(q.y)];
-    }
-    let (x, y) = ((geom::unsc(b[0]) + geom::unsc(b[2])) / 2.0, (geom::unsc(b[1]) + geom::unsc(b[3])) / 2.0);
-    let mut best = (0, f64::INFINITY);
-    for (k, o) in objects.iter().enumerate() {
-        let dx = (o.min[0] - x).max(x - o.max[0]).max(0.0);
-        let dy = (o.min[1] - y).max(y - o.max[1]).max(0.0);
-        if dx.hypot(dy) < best.1 {
-            best = (k, dx.hypot(dy));
-        }
-    }
-    best.0 as u32
 }
 
 fn island_paths(index: u32, island: &Island, fills: &Fills, layer: usize, h: f64, s: &Settings) -> Vec<Path> {

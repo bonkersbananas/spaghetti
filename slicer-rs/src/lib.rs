@@ -62,20 +62,13 @@ impl Object {
     }
 }
 
-/// Gives each object the parts of the first layer's outline that lie on it: their extent and area.
-fn first_layers(objects: &mut [Object], first: &geom::Shapes) {
+/// Gives each object the parts of the first layer's outline cut from it (`owners`): their extent and area.
+fn first_layers(objects: &mut [Object], first: &geom::Shapes, owners: &[u32]) {
     let mut seen = vec![false; objects.len()];
-    for shape in first {
+    for (shape, &k) in first.iter().zip(owners) {
+        let Some(o) = objects.get_mut(k as usize) else { continue };
         let b = geom::bbox_of(shape).map(geom::unsc);
-        let (x, y) = ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
-        let distance =
-            |o: &Object| (o.min[0] - x).max(x - o.max[0]).max(0.0).hypot((o.min[1] - y).max(y - o.max[1]).max(0.0));
-        let Some(k) = (0..objects.len()).min_by(|&a, &b| distance(&objects[a]).total_cmp(&distance(&objects[b])))
-        else {
-            return;
-        };
-        let o = &mut objects[k];
-        o.first_layer = if seen[k] {
+        o.first_layer = if seen[k as usize] {
             [
                 o.first_layer[0].min(b[0]),
                 o.first_layer[1].min(b[1]),
@@ -86,7 +79,7 @@ fn first_layers(objects: &mut [Object], first: &geom::Shapes) {
             b
         };
         o.first_layer_area += geom::shape_area_mm2(shape);
-        seen[k] = true;
+        seen[k as usize] = true;
     }
 }
 
@@ -204,15 +197,15 @@ impl Plate {
         }
         let t1 = now();
         let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
-        let slices = section::slice(&meshes, &layers, settings.resolution);
+        let (slices, owners) = section::slice(&meshes, &layers, settings.resolution);
         let t2 = now();
         let facts = first_layer_facts(&slices, &layers, settings);
         let mut objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
         if let Some(first) = slices.first() {
-            first_layers(&mut objects, first);
+            first_layers(&mut objects, first, &owners[0]);
         }
-        let regions = region::regions(&slices, &layers, settings);
-        drop(slices);
+        let regions = region::regions(&slices, &owners, &layers, settings);
+        drop((slices, owners));
         let t3 = now();
         let frame = bambu::Frame::new(profile::x2d(), &facts);
         let photos = timelapse_spots(&objects, &layers, settings);
@@ -220,7 +213,7 @@ impl Plate {
             gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
         // Each layer from its regions to its G-code in one go, so only the text stays.
         let texts = par::map_range(regions.len(), |i| {
-            let plan = plan::plan_layer(&regions[i], i, &layers, &objects, settings);
+            let plan = plan::plan_layer(&regions[i], i, &layers, settings);
             gcode::layer(&plan, &regions[i], &job, gcode::travel_z(&layers, i, settings, job.start[2]))
         });
         drop(regions);

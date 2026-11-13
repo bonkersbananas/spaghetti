@@ -337,3 +337,92 @@ fn each_object_on_a_plate_has_its_own_label() {
     assert!(info.contains(r#"<object identify_id="1" name="small.stl" skipped="false"/>"#));
     assert!(info.contains(r#"<object identify_id="2" name="tall.stl" skipped="false"/>"#));
 }
+
+/// Boxes (lowest corner, highest corner) as one text STL.
+fn boxes_stl(boxes: &[([f32; 3], [f32; 3])]) -> Vec<u8> {
+    let mut text = String::from("solid boxes\n");
+    for &(lo, hi) in boxes {
+        let one = String::from_utf8(cube_stl(1.0)).unwrap();
+        for line in one.lines().filter(|l| l.trim_start().starts_with("vertex")) {
+            let v: Vec<f32> = line.split_whitespace().skip(1).map(|n| n.parse().unwrap()).collect();
+            let p: Vec<f32> = (0..3).map(|k| lo[k] + v[k] * (hi[k] - lo[k])).collect();
+            text.push_str(&format!("   vertex {} {} {}\n", p[0], p[1], p[2]));
+        }
+    }
+    // Back into facets of three vertices each.
+    let vertices: Vec<&str> = text.lines().skip(1).collect();
+    let mut out = String::from("solid boxes\n");
+    for facet in vertices.chunks(3) {
+        out.push_str(" facet normal 0 0 0\n  outer loop\n");
+        for v in facet {
+            out.push_str(v);
+            out.push('\n');
+        }
+        out.push_str("  endloop\n endfacet\n");
+    }
+    out.push_str("endsolid boxes\n");
+    out.into_bytes()
+}
+
+#[test]
+fn a_part_standing_in_a_frames_opening_keeps_its_own_label() {
+    // A square frame (40 mm, 8 mm walls, 4 mm tall) and a 12 mm block 6 mm tall in its opening: the block's
+    // bounding box lies inside the frame's, so only the slices say which moves are whose.
+    let frame = boxes_stl(&[
+        ([100., 100., 0.], [108., 140., 4.]),
+        ([132., 100., 0.], [140., 140., 4.]),
+        ([100., 100., 0.], [140., 108., 4.]),
+        ([100., 132., 0.], [140., 140., 4.]),
+    ]);
+    let block = boxes_stl(&[([114., 114., 0.], [126., 126., 6.])]);
+    let inputs = [Input { name: "frame.stl", bytes: &frame }, Input { name: "block.stl", bytes: &block }];
+    let settings = Settings::default();
+    let options = Options { arrange: false, thumbnail: false };
+    let out = slice(&inputs, &settings, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers = check_moves(&gcode, &settings);
+    assert_eq!(layers.len(), 30);
+    for (i, labels) in layers.iter().enumerate() {
+        let mut sorted = labels.clone();
+        sorted.sort();
+        assert_eq!(sorted, if i < 20 { vec![1, 2] } else { vec![2] }, "layer {}", i + 1);
+    }
+    // Every extrusion under the frame's label is on the frame, and every one under the block's on the block.
+    let mut label = None;
+    let mut printed = [0usize; 2];
+    for line in gcode.lines() {
+        if let Some(id) = line.strip_prefix("; start printing object, unique label id: ") {
+            label = id.parse::<u32>().ok();
+        } else if line.starts_with("; stop printing object, unique label id: ") {
+            label = None;
+        } else if let (Some(label), Some(rest)) = (label, line.strip_prefix("G1 X")) {
+            let words: Vec<&str> = rest.split(' ').collect();
+            let e: f64 = words.iter().find_map(|w| w.strip_prefix('E')).and_then(|e| e.parse().ok()).unwrap_or(0.0);
+            if e <= 0.0 {
+                continue;
+            }
+            let x: f64 = words[0].parse().unwrap();
+            let y: f64 = words.iter().find_map(|w| w.strip_prefix('Y')).unwrap().parse().unwrap();
+            let in_block = (113.9..=126.1).contains(&x) && (113.9..=126.1).contains(&y);
+            let in_opening = (108.1..=131.9).contains(&x) && (108.1..=131.9).contains(&y);
+            match label {
+                1 => assert!(!in_opening, "the frame's label prints in its opening, at {x} {y}"),
+                2 => assert!(in_block, "the block's label prints outside the block, at {x} {y}"),
+                _ => panic!("label {label}"),
+            }
+            printed[label as usize - 1] += 1;
+        }
+    }
+    assert!(printed[0] > 100 && printed[1] > 100, "{printed:?}");
+    // The plate's description gives each object its own first layer.
+    let plate = String::from_utf8(entry(&out.file, "Metadata/plate_1.json")).unwrap();
+    let bbox_of = |id: u32| -> Vec<f64> {
+        let at = plate.find(&format!(r#""id":{id},"#)).unwrap();
+        let start = plate[..at].rfind(r#""bbox":["#).unwrap() + 8;
+        let end = start + plate[start..].find(']').unwrap();
+        plate[start..end].split(',').map(|n| n.parse().unwrap()).collect()
+    };
+    let near = |a: &[f64], b: [f64; 4]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.01);
+    assert!(near(&bbox_of(1), [100., 100., 140., 140.]), "{:?}", bbox_of(1));
+    assert!(near(&bbox_of(2), [114., 114., 126., 126.]), "{:?}", bbox_of(2));
+}
