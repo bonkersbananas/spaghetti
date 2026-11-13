@@ -237,3 +237,7 @@ export const PHONE_FILE_BYTES = 100 * 1024 * 1024;
 /** Whether a file of `size` bytes is more than this device can slice or draw: a phone (a touch screen) and over the line. */
 export const tooBigForPhone = (size: number) =>
   size > PHONE_FILE_BYTES && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+
+/** A finished upload whose row was refused (or never saved): the server removes the bytes, if no row owns them. */
+export const discardUpload = (id: string) =>
+  api(`/uploads/${id}/file`, { method: "DELETE", keepalive: false }).catch(() => undefined);

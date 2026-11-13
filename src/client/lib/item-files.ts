@@ -3,7 +3,7 @@ import type { FileKind } from "@shared/slicing/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
-import { dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
+import { discardUpload, dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
 import { patchCachedItem } from "./items";
 import { setPreview } from "./previews";
 import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft } from "./slicer-files";
@@ -74,6 +74,8 @@ function keepItemFile(
         return;
       }
       setUpload(id, null);
+      // The bytes may be whole on the server with no row: take them off.
+      if (big) void discardUpload(id);
       after.giveUp();
     }
   };
@@ -172,6 +174,7 @@ export function removeItemFile(queryClient: QueryClient, itemId: string, file: A
   // A big file still on its way (or stuck) is let go of, with what the server holds of it.
   setUpload(file.id, null);
   void dropUpload(file.id);
+  if ("pending" in file && file.pending) void discardUpload(file.id);
   withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== file.id));
   // A model still slicing stops: brought back, it offers "Slice it".
   if (file.kind === "model") void import("./slicing/jobs").then(({ cancelSlice }) => cancelSlice(file.id));

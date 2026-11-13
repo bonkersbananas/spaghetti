@@ -14,7 +14,7 @@ import type { AttemptPart } from "@shared/parts";
 import type { FileKind } from "@shared/slicing/types.ts";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
-import { dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
+import { discardUpload, dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
 import { isOnline, reportReachable, reportUnreachable, subscribeConnection } from "./connection";
 import { openStore } from "./idb";
 import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
@@ -630,11 +630,9 @@ class Outbox {
           onProgress: (fraction) => setUpload(pending.id, { fraction, failed: false }),
         });
       } catch (error) {
-        // Refused or gone: drop it. Anything else waits and tries again by itself, and the card offers a tap.
-        if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
-          setUpload(pending.id, null);
-          if (error.status === 404) return this.dropFile(entry.itemId, pending.id);
-        } else if (isRefusal(error)) {
+        // Refused: drop it. Anything else (a 404 from the parts included: only the row's answer says the attempt is
+        // gone) waits and tries again by itself, and the card offers a tap.
+        if (isRefusal(error)) {
           setUpload(pending.id, null);
           this.dropFile(entry.itemId, pending.id);
           this.handlers.photoDropped?.("The slicer file was refused by the server and couldn't be kept.");
@@ -660,6 +658,8 @@ class Outbox {
     const response = await send(`/api/attempts/${pending.attemptId}/file`, form, () => undefined);
     const dropFile = () => {
       setUpload(pending.id, null);
+      // Its bytes may be whole on the server with no row to own them.
+      if (big) void discardUpload(pending.id);
       this.dropFile(entry.itemId, pending.id);
     };
     if (response.status === 404) return dropFile();

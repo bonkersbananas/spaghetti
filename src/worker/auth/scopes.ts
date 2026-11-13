@@ -30,6 +30,7 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["PUT", new RegExp(`^/uploads/${id}/${id}/${id}/${id}$`), ["capture", "attempts"]],
   ["POST", new RegExp(`^/uploads/${id}/${id}/${id}/complete$`), ["capture", "attempts"]],
   ["DELETE", new RegExp(`^/uploads/${id}/${id}/${id}$`), ["capture", "attempts"]],
+  ["DELETE", new RegExp(`^/uploads/${id}/file$`), ["capture", "attempts"]],
   ["POST", new RegExp(`^/items/${id}/attempts$`), ["attempts"]],
   // Comments: agents write and edit their own (through their owner's name); deleting is for people.
   ["POST", new RegExp(`^/items/${id}/comments$`), ["capture", "attempts"]],

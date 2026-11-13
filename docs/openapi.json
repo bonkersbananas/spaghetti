@@ -10280,6 +10280,73 @@
         ]
       }
     },
+    "/api/uploads/{id}/file": {
+      "delete": {
+        "operationId": "deleteUploadsByIdFile",
+        "summary": "Removes the bytes of a finished upload whose file row was refused. Does nothing for a file that has a row.",
+        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "tags": [
+          "uploads"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done; nothing comes back."
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": [
+          "capture",
+          "attempts"
+        ]
+      }
+    },
     "/api/uploads/{id}/{part}/{uploadId}": {
       "delete": {
         "operationId": "deleteUploadsByIdByPartByUploadId",

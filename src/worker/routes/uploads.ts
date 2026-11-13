@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -7,6 +8,7 @@ import {
   UPLOAD_PART_BYTES,
 } from "../../shared/api.ts";
 import { isStlName } from "../../shared/slicing/files.ts";
+import { attemptFiles, itemFiles } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { fileKey } from "../photos.ts";
@@ -87,9 +89,12 @@ export const uploadRoutes = new Hono<AppEnv>()
       const upload = c.env.PHOTOS.resumeMultipartUpload(fileKey(id, part), uploadId);
       const uploaded = await upload.uploadPart(n, c.req.raw.body);
       return c.json({ n, etag: uploaded.etag });
-    } catch {
-      // Unknown or finished upload: the browser starts a new one.
-      return apiError(c, 404, "not_found", "That upload isn't open any more.");
+    } catch (error) {
+      // Unknown or finished upload: the browser starts a new one. Anything else (R2 hiccuping) is worth another try.
+      if (/no.?such.?upload|10024/i.test(String(error))) {
+        return apiError(c, 404, "not_found", "That upload isn't open any more.");
+      }
+      return apiError(c, 502, "storage", "The part couldn't be stored. Try again.");
     }
   })
 
@@ -128,6 +133,22 @@ export const uploadRoutes = new Hono<AppEnv>()
       );
     }
     return c.json({ size });
+  })
+
+  /**
+   * Removes the bytes of a finished upload whose row was refused (a file with no row of its own is the only one
+   * removed: a saved file's bytes never go this way). Harmless when there is nothing.
+   */
+  .delete("/:id/file", async (c) => {
+    const id = c.req.param("id");
+    if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    const db = c.var.db;
+    const [onAttempt, onItem] = await Promise.all([
+      db.select({ id: attemptFiles.id }).from(attemptFiles).where(eq(attemptFiles.id, id)).get(),
+      db.select({ id: itemFiles.id }).from(itemFiles).where(eq(itemFiles.id, id)).get(),
+    ]);
+    if (!onAttempt && !onItem) await c.env.PHOTOS.delete(fileKey(id, "file"));
+    return c.body(null, 204);
   })
 
   /** Drops an upload that failed or was cancelled. Harmless when it is already gone. */

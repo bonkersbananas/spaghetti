@@ -225,4 +225,24 @@ describe("uploads in parts", () => {
     expect(head?.size).toBe(9 * MIB);
     expect(head?.httpMetadata?.contentType).toBe("application/vnd.ms-package.3dmanufacturing-3dmodel+xml");
   });
+
+  it("removes the bytes of a finished upload whose row was refused, but never a saved file's", async () => {
+    const item = await idea();
+    const orphan = uuid();
+    const bytes = bytesOf(6 * MIB, 5);
+    const { uploadId } = await (await start(orphan, bytes.length)).json<StartUploadResponse>();
+    const part = await (await sendPart(orphan, uploadId, 1, bytes)).json<{ etag: string }>();
+    expect((await complete(orphan, uploadId, bytes.length, [{ n: 1, etag: part.etag }])).status).toBe(200);
+    expect(await env.PHOTOS.head(`files/${orphan}/file`)).not.toBeNull();
+    expect((await request(`/api/uploads/${orphan}/file`, { method: "DELETE", cookie })).status).toBe(204);
+    expect(await env.PHOTOS.head(`files/${orphan}/file`)).toBeNull();
+
+    // A file with a row keeps its bytes.
+    const kept = uuid();
+    const body = rowForm(5, false);
+    body.set("file", new File([new Uint8Array(5)], "Big.stl"));
+    expect((await request(`/api/items/${item.id}/files/${kept}`, { method: "PUT", body, cookie })).status).toBe(201);
+    expect((await request(`/api/uploads/${kept}/file`, { method: "DELETE", cookie })).status).toBe(204);
+    expect(await env.PHOTOS.head(`files/${kept}/file`)).not.toBeNull();
+  });
 });

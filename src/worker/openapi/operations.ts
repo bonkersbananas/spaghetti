@@ -745,6 +745,12 @@ export const operations: Record<string, Operation> = {
     response: z.object({ size: z.number().int() }),
     errors: { 409: "conflict: the parts didn't make a file of that size." },
   },
+  "DELETE /uploads/:id/file": {
+    summary:
+      "Removes the bytes of a finished upload whose file row was refused. Does nothing for a file that has a row.",
+    response: "empty",
+    status: 204,
+  },
   "DELETE /uploads/:id/:part/:uploadId": {
     summary: "Drops an upload that failed or was given up. Harmless when it is already gone.",
     response: "empty",
