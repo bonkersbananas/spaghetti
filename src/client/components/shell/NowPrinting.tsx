@@ -20,7 +20,7 @@ import { itemName } from "../journal/JournalEntry";
 function shortLabel(progress: { state: string; label: string }): string {
   if (progress.state === "due") return "Done by now";
   if (progress.state === "unknown") return "On the bed";
-  // The printer's own words ("Layer 112 of 240 · about 38 min left") shrink to the part about time.
+  // The printer's own words ("Layer 112 of 240 · 38 min left") shrink to the part about time.
   return (progress.label.split(" · ").at(-1) ?? progress.label).replace(/^[Aa]bout /, "");
 }
 

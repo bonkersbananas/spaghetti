@@ -86,7 +86,7 @@ describe("the printer's own progress", () => {
     expect(livePrintProgress(live, 1_000_000 + 30_000)).toEqual({
       fraction: 0.47,
       state: "running",
-      label: "Layer 112 of 240 · about 38 min left",
+      label: "Layer 112 of 240 · 38 min left",
     });
   });
 
