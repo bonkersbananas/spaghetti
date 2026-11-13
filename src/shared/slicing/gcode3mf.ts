@@ -216,6 +216,7 @@ export function summarizeGcode(gcode: Uint8Array): GcodeSummary {
   const list = (pattern: RegExp) =>
     (pattern.exec(tail)?.[1] ?? "")
       .split(",")
+      .filter((value) => value.trim() !== "")
       .map((value) => Number(value.trim()))
       .filter(Number.isFinite);
   return {

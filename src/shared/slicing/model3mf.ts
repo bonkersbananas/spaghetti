@@ -71,7 +71,8 @@ function attributes(tag: string): Record<string, string> {
 
 interface Mesh {
   vertices: Float64Array;
-  triangles: Uint32Array;
+  /** Corner indices, three a triangle (NaN where a file wrote something else). */
+  triangles: Float64Array;
 }
 
 interface ObjectDef {
@@ -122,25 +123,23 @@ function readMesh(body: string): Mesh {
     const from = at + name.length + 3;
     return Number(tag.slice(from, tag.indexOf('"', from)));
   };
-  let at = 0;
-  for (;;) {
-    const v = body.indexOf("<vertex", at);
-    if (v < 0) break;
-    const end = body.indexOf(">", v);
-    const tag = body.slice(v, end);
-    vertices.push(number(tag, "x"), number(tag, "y"), number(tag, "z"));
-    at = end;
-  }
-  at = 0;
-  for (;;) {
-    const t = body.indexOf("<triangle", at);
-    if (t < 0) break;
-    const end = body.indexOf(">", t);
-    const tag = body.slice(t, end);
-    triangles.push(number(tag, "v1"), number(tag, "v2"), number(tag, "v3"));
-    at = end;
-  }
-  return { vertices: Float64Array.from(vertices), triangles: Uint32Array.from(triangles) };
+  /** Each `<name …>` element (not `<names>`: the list around them starts the same). */
+  const each = (name: string, visit: (tag: string) => void) => {
+    let at = 0;
+    for (;;) {
+      const start = body.indexOf(`<${name}`, at);
+      if (start < 0) break;
+      const end = body.indexOf(">", start);
+      if (end < 0) break;
+      const next = body.charAt(start + name.length + 1);
+      if (next === " " || next === "\t" || next === "\n" || next === "\r" || next === "/")
+        visit(body.slice(start, end));
+      at = end;
+    }
+  };
+  each("vertex", (tag) => vertices.push(number(tag, "x"), number(tag, "y"), number(tag, "z")));
+  each("triangle", (tag) => triangles.push(number(tag, "v1"), number(tag, "v2"), number(tag, "v3")));
+  return { vertices: Float64Array.from(vertices), triangles: Float64Array.from(triangles) };
 }
 
 export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
@@ -269,7 +268,8 @@ function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[]) {
     const a = t[i] as number;
     const b = t[i + 1] as number;
     const c = t[i + 2] as number;
-    if (a >= count || b >= count || c >= count) continue;
+    // A corner that isn't one of the mesh's vertices leaves the triangle out.
+    if (![a, b, c].every((index) => Number.isInteger(index) && index >= 0 && index < count)) continue;
     for (const index of [a, b, c]) {
       const x = (v[index * 3] as number) * scale;
       const y = (v[index * 3 + 1] as number) * scale;

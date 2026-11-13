@@ -20,10 +20,10 @@ export function boxStl(width: number, depth = width, height = width): Uint8Array
   const view = new DataView(out.buffer);
   out.set(new TextEncoder().encode("box"), 0);
   view.setUint32(80, faces.length, true);
-  faces.forEach((face, index) => {
+  for (const [index, face] of faces.entries()) {
     const at = 84 + index * 50 + 12;
-    face.flat().forEach((value, k) => view.setFloat32(at + k * 4, value, true));
-  });
+    for (const [k, value] of face.flat().entries()) view.setFloat32(at + k * 4, value, true);
+  }
   return out;
 }
 
@@ -57,9 +57,9 @@ export function fusilliStl({ radius = 14, height = 60, turns = 1.25, around = 96
   const view = new DataView(out.buffer);
   out.set(new TextEncoder().encode("fusilli"), 0);
   view.setUint32(80, triangles.length, true);
-  triangles.forEach((triangle, index) => {
+  for (const [index, triangle] of triangles.entries()) {
     const at = 84 + index * 50 + 12;
-    triangle.flat().forEach((value, k) => view.setFloat32(at + k * 4, value, true));
-  });
+    for (const [k, value] of triangle.flat().entries()) view.setFloat32(at + k * 4, value, true);
+  }
   return out;
 }
