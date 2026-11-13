@@ -10,6 +10,8 @@ export interface ChoiceTile<T extends string> {
   effect?: string;
   /** A small picture of it (ui/SlicingGlyphs.tsx, a SpoolDisc), drawn in the tile's ink. */
   glyph?: ReactNode;
+  /** A picture of it, big (a plate picture: the model lying on its side), instead of a glyph: the tile grows to show it. */
+  picture?: ReactNode;
   disabled?: boolean;
 }
 
@@ -103,6 +105,11 @@ export function ChoiceTiles<T extends string>({
                 onChange={() => onChange(option.value)}
                 className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
               />
+              {option.picture && (
+                <span className="flex aspect-square w-full items-center justify-center" aria-hidden>
+                  {option.picture}
+                </span>
+              )}
               {option.glyph && (
                 <span className={cn("flex h-7 items-center", !selected && "text-ink-faint")} aria-hidden>
                   {option.glyph}

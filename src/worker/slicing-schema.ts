@@ -69,6 +69,12 @@ export const slicingSettingsShape = z
     plate: z.enum(SLICING_PLATES as [string, ...string[]]),
     nozzle: z.union([z.literal(0.2), z.literal(0.4), z.literal(0.6), z.literal(0.8)]).describe("mm"),
     scale: z.number().int().min(LIMITS.scale.min).max(LIMITS.scale.max).describe("Percent of the model's own size."),
+    orientation: z
+      .tuple([z.number(), z.number(), z.number()])
+      .nullable()
+      .describe(
+        "The face the model rests on, as the direction in the model's own axes [x, y, z] that points down; null lays it as the file does.",
+      ),
   })
   .strict()
   .meta({ id: "SlicingSettings" });
@@ -81,7 +87,7 @@ export const slicingSettings = slicingSettingsShape
   .transform((value): SlicingSettings => normalizeSlicing(value));
 
 /**
- * A workspace's defaults (the Printer page, decision 0050): how a model nobody set up prints. The filament, plate
+ * A workspace's defaults (the Printer page, decision 0051): how a model nobody set up prints. The filament, plate
  * and nozzle aren't among them: they come from the Pantry and the setup.
  */
 export const slicingDefaults = slicingSettingsShape

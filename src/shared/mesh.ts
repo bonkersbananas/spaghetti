@@ -207,3 +207,395 @@ export function describeAdaptation(a: Adaptation): Array<{ kind: "scale" | "othe
   if (turned.length) lines.push({ kind: "other", label: "Turned", value: turned.join(", ") });
   return lines;
 }
+
+/* Lying on a face ------------------------------------------------------------------------------------------- */
+
+type Vec3 = [number, number, number];
+
+/** A face a model can rest on. */
+export interface RestingFace {
+  /** The face's outward normal, a unit vector in the mesh's own axes: the way the model points when it rests on it. */
+  down: Vec3;
+  /** mm² of the model's convex hull that lies on this face (its coplanar neighbours counted in). */
+  area: number;
+}
+
+/** Hull faces whose normals differ by less than this are one face. */
+const COPLANAR_DEGREES = 4;
+/** A face the model touches over less than this part of the hull's surface is a rounded edge, not somewhere to rest. */
+const MIN_FACE_SHARE = 0.04;
+/** Above this many points the hull is built from the extreme ones in many directions: the same hull, much quicker. */
+/** Faces whose contact is measured, the biggest hull faces first: more is more than anyone is offered. */
+const MOST_CANDIDATES = 24;
+const HULL_POINT_LIMIT = 60_000;
+
+const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a: Vec3, b: Vec3): Vec3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/** The mesh's distinct corners as one flat array, thinned to the extreme ones when there are very many. */
+function hullPoints(mesh: Mesh): Float64Array {
+  const p = mesh.positions;
+  const count = p.length / 3;
+  if (count <= HULL_POINT_LIMIT) return Float64Array.from(p);
+  // The corner furthest along each of ~2000 evenly spread directions: every face of the hull that matters has one.
+  const directions = 2000;
+  const best = new Int32Array(directions).fill(-1);
+  const bestValue = new Float64Array(directions).fill(-Infinity);
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const dirs = new Float64Array(directions * 3);
+  for (let d = 0; d < directions; d++) {
+    const z = 1 - (2 * (d + 0.5)) / directions;
+    const r = Math.sqrt(1 - z * z);
+    dirs[d * 3] = Math.cos(d * golden) * r;
+    dirs[d * 3 + 1] = Math.sin(d * golden) * r;
+    dirs[d * 3 + 2] = z;
+  }
+  for (let i = 0; i < count; i++) {
+    const x = p[i * 3] as number;
+    const y = p[i * 3 + 1] as number;
+    const z = p[i * 3 + 2] as number;
+    for (let d = 0; d < directions; d++) {
+      const value = x * (dirs[d * 3] as number) + y * (dirs[d * 3 + 1] as number) + z * (dirs[d * 3 + 2] as number);
+      if (value > (bestValue[d] as number)) {
+        bestValue[d] = value;
+        best[d] = i;
+      }
+    }
+  }
+  const picked = [...new Set(best)].filter((i) => i >= 0);
+  const out = new Float64Array(picked.length * 3);
+  for (const [k, i] of picked.entries()) {
+    out[k * 3] = p[i * 3] as number;
+    out[k * 3 + 1] = p[i * 3 + 1] as number;
+    out[k * 3 + 2] = p[i * 3 + 2] as number;
+  }
+  return out;
+}
+
+interface HullFace {
+  a: number;
+  b: number;
+  c: number;
+  normal: Vec3;
+  offset: number;
+  /** The points still outside it, to be wrapped in. */
+  outside: number[];
+}
+
+/** The hull search gives up after this long (ms): a model that takes more gets no choices rather than a hung tab. */
+const HULL_BUDGET_MS = 4000;
+
+/** The triangles of the convex hull of the points (quickhull, outward-facing), or [] when they are flat or fewer than four. */
+function convexHull(points: Float64Array, tolerance: number): HullFace[] {
+  const n = points.length / 3;
+  if (n < 4) return [];
+  const at = (i: number): Vec3 => [points[i * 3] as number, points[i * 3 + 1] as number, points[i * 3 + 2] as number];
+  // A first tetrahedron from points far apart.
+  let lo = 0;
+  let hi = 0;
+  for (let i = 1; i < n; i++) {
+    if ((points[i * 3] as number) < (points[lo * 3] as number)) lo = i;
+    if ((points[i * 3] as number) > (points[hi * 3] as number)) hi = i;
+  }
+  let far = 0;
+  let farValue = -1;
+  for (let i = 0; i < n; i++) {
+    const d = sub(at(i), at(lo));
+    const value = dot(d, d);
+    if (value > farValue) {
+      farValue = value;
+      far = i;
+    }
+  }
+  const p0 = lo;
+  const p1 = far;
+  if (farValue < tolerance * tolerance) return [];
+  const axis = sub(at(p1), at(p0));
+  let p2 = -1;
+  let best = -1;
+  for (let i = 0; i < n; i++) {
+    const c = cross(axis, sub(at(i), at(p0)));
+    const value = dot(c, c);
+    if (value > best) {
+      best = value;
+      p2 = i;
+    }
+  }
+  const base = cross(axis, sub(at(p2), at(p0)));
+  const baseLength = Math.hypot(...base);
+  if (baseLength < tolerance * Math.hypot(...axis)) return [];
+  let p3 = -1;
+  let height = 0;
+  for (let i = 0; i < n; i++) {
+    const value = Math.abs(dot(base, sub(at(i), at(p0)))) / baseLength;
+    if (value > height) {
+      height = value;
+      p3 = i;
+    }
+  }
+  if (p3 < 0 || height < tolerance) return [];
+
+  const faceOf = (a: number, b: number, c: number, inside: Vec3): HullFace => {
+    const pa = at(a);
+    let normal = cross(sub(at(b), pa), sub(at(c), pa));
+    const length = Math.hypot(...normal) || 1;
+    normal = [normal[0] / length, normal[1] / length, normal[2] / length];
+    const face: HullFace = { a, b, c, normal, offset: dot(normal, pa), outside: [] };
+    // Wound so that it faces away from a point inside the hull.
+    if (dot(normal, inside) - face.offset > 0) {
+      return { a, b: c, c: b, normal: [-normal[0], -normal[1], -normal[2]], offset: -face.offset, outside: [] };
+    }
+    return face;
+  };
+  const inside: Vec3 = [0, 1, 2, 3].reduce(
+    (sum, k) => {
+      const q = at([p0, p1, p2, p3][k] as number);
+      return [sum[0] + q[0] / 4, sum[1] + q[1] / 4, sum[2] + q[2] / 4] as Vec3;
+    },
+    [0, 0, 0] as Vec3,
+  );
+  const initial: HullFace[] = [
+    faceOf(p0, p1, p2, inside),
+    faceOf(p0, p1, p3, inside),
+    faceOf(p0, p2, p3, inside),
+    faceOf(p1, p2, p3, inside),
+  ];
+  const used = new Set([p0, p1, p2, p3]);
+  const spread = (candidates: Iterable<number>, among: HullFace[]) => {
+    for (const i of candidates) {
+      if (used.has(i)) continue;
+      const q = at(i);
+      for (const face of among) {
+        if (dot(face.normal, q) - face.offset > tolerance) {
+          face.outside.push(i);
+          break;
+        }
+      }
+    }
+  };
+  spread(
+    (function* () {
+      for (let i = 0; i < n; i++) yield i;
+    })(),
+    initial,
+  );
+  // The live faces, and who owns each directed edge, so the faces a point sees are found by walking from one.
+  const alive = new Set<HullFace>();
+  const owner = new Map<number, HullFace>();
+  const edgeKey = (from: number, to: number) => from * n + to;
+  const edgesOf = (face: HullFace): Array<[number, number]> => [
+    [face.a, face.b],
+    [face.b, face.c],
+    [face.c, face.a],
+  ];
+  const add = (face: HullFace) => {
+    alive.add(face);
+    for (const [from, to] of edgesOf(face)) owner.set(edgeKey(from, to), face);
+  };
+  for (const face of initial) add(face);
+  const pending = initial.filter((face) => face.outside.length);
+  const deadline = Date.now() + HULL_BUDGET_MS;
+  // Each pass takes the point furthest outside a face that still has some, and wraps the hull round it.
+  for (let next = pending.pop(); next; next = pending.pop()) {
+    if (!alive.has(next) || !next.outside.length) continue;
+    if (Date.now() > deadline) return [];
+    let far_ = next.outside[0] as number;
+    let reach = -Infinity;
+    for (const i of next.outside) {
+      const out = dot(next.normal, at(i)) - next.offset;
+      if (out > reach) {
+        reach = out;
+        far_ = i;
+      }
+    }
+    used.add(far_);
+    const q = at(far_);
+    // The faces it sees: walk out from the face it is outside of.
+    const visible = new Set<HullFace>([next]);
+    const walk = [next];
+    for (let face = walk.pop(); face; face = walk.pop()) {
+      for (const [from, to] of edgesOf(face)) {
+        const across = owner.get(edgeKey(to, from));
+        if (across && !visible.has(across) && dot(across.normal, q) - across.offset > tolerance) {
+          visible.add(across);
+          walk.push(across);
+        }
+      }
+    }
+    // The horizon: edges of the visible faces whose neighbour isn't visible.
+    const horizon: Array<[number, number]> = [];
+    for (const face of visible) {
+      for (const [from, to] of edgesOf(face)) {
+        const across = owner.get(edgeKey(to, from));
+        if (!across || !visible.has(across)) horizon.push([from, to]);
+      }
+    }
+    const freed: number[] = [];
+    for (const face of visible) {
+      for (const [from, to] of edgesOf(face)) owner.delete(edgeKey(from, to));
+      alive.delete(face);
+      for (const i of face.outside) freed.push(i);
+    }
+    const made = horizon.map(([from, to]) => faceOf(from, to, far_, inside));
+    spread(freed, made);
+    for (const face of made) {
+      add(face);
+      if (face.outside.length) pending.push(face);
+    }
+  }
+  const faces = [...alive];
+  return faces;
+}
+
+/** The mesh's centre of mass (even density): by volume when the mesh is closed, else by surface. */
+export function centreOfMass(mesh: Mesh): Vec3 {
+  const p = mesh.positions;
+  let volume = 0;
+  const weighted: Vec3 = [0, 0, 0];
+  let area = 0;
+  const surface: Vec3 = [0, 0, 0];
+  for (let t = 0; t < p.length; t += 9) {
+    const a: Vec3 = [p[t] as number, p[t + 1] as number, p[t + 2] as number];
+    const b: Vec3 = [p[t + 3] as number, p[t + 4] as number, p[t + 5] as number];
+    const c: Vec3 = [p[t + 6] as number, p[t + 7] as number, p[t + 8] as number];
+    const v = dot(a, cross(b, c)) / 6;
+    volume += v;
+    const sa = Math.hypot(...cross(sub(b, a), sub(c, a))) / 2;
+    area += sa;
+    for (let k = 0; k < 3; k++) {
+      weighted[k] = (weighted[k] as number) + (v * ((a[k] as number) + (b[k] as number) + (c[k] as number))) / 4;
+      surface[k] = (surface[k] as number) + (sa * ((a[k] as number) + (b[k] as number) + (c[k] as number))) / 3;
+    }
+  }
+  if (Math.abs(volume) > 1e-9) return [weighted[0] / volume, weighted[1] / volume, weighted[2] / volume];
+  return area > 0 ? [surface[0] / area, surface[1] / area, surface[2] / area] : [0, 0, 0];
+}
+
+/**
+ * The faces a model can rest on, largest first: the faces of its convex hull (the model lying on a table, wrapped in
+ * cling film) that its centre of mass sits over, with nearly coplanar ones merged into one and rounded-off slivers
+ * left out. A box has six, and a cylinder its two ends. At most `max`; none for a mesh with no volume.
+ */
+export function restingFaces(mesh: Mesh, max = 6): RestingFace[] {
+  if (mesh.positions.length < 36) return [];
+  const size = boundsOf(mesh).size;
+  const extent = Math.max(...size);
+  if (!(extent > 0)) return [];
+  const hullPointsFlat = hullPoints(mesh);
+  const faces = convexHull(hullPointsFlat, extent * 1e-6);
+  if (!faces.length) return [];
+
+  // Hull triangles with their areas, their corners looked up in the hull's own points.
+  const triangles = faces.map((face) => {
+    const corner = (i: number): Vec3 => [
+      hullPointsFlat[i * 3] as number,
+      hullPointsFlat[i * 3 + 1] as number,
+      hullPointsFlat[i * 3 + 2] as number,
+    ];
+    const a = corner(face.a);
+    const b = corner(face.b);
+    const c = corner(face.c);
+    return { a, b, c, normal: face.normal, area: Math.hypot(...cross(sub(b, a), sub(c, a))) / 2 };
+  });
+  const total = triangles.reduce((sum, triangle) => sum + triangle.area, 0);
+  if (!(total > 0)) return [];
+
+  // Merge by normal, the biggest triangle first.
+  const order = triangles.map((_, i) => i).sort((x, y) => (triangles[y]?.area ?? 0) - (triangles[x]?.area ?? 0));
+  const limit = Math.cos((COPLANAR_DEGREES * Math.PI) / 180);
+  const taken = new Set<number>();
+  const centre = centreOfMass(mesh);
+  const found: Array<RestingFace & { members: typeof triangles }> = [];
+  for (const seed of order) {
+    if (taken.has(seed)) continue;
+    const base = (triangles[seed] as (typeof triangles)[number]).normal;
+    const members: typeof triangles = [];
+    const sum: Vec3 = [0, 0, 0];
+    let area = 0;
+    for (const other of order) {
+      if (taken.has(other)) continue;
+      const triangle = triangles[other] as (typeof triangles)[number];
+      if (dot(triangle.normal, base) < limit) continue;
+      taken.add(other);
+      members.push(triangle);
+      area += triangle.area;
+      for (let k = 0; k < 3; k++) sum[k] = (sum[k] as number) + (triangle.normal[k] as number) * triangle.area;
+    }
+    const length = Math.hypot(...sum) || 1;
+    found.push({ down: [sum[0] / length, sum[1] / length, sum[2] / length], area, members });
+  }
+
+  const stable = found.filter((face) => {
+    if (face.area < total * MIN_FACE_SHARE) return false;
+    // The centre of mass, dropped straight onto the face, has to land on it (or this tips over onto a neighbour).
+    const n = face.down;
+    const margin = extent * 1e-4;
+    return face.members.some((t) => {
+      // Test in the plane: the point is inside when it is on the inner side of all three edges.
+      const height = dot(n, sub(centre, t.a));
+      const q = sub(centre, [n[0] * height, n[1] * height, n[2] * height]);
+      const sides = [
+        dot(cross(sub(t.b, t.a), sub(q, t.a)), n),
+        dot(cross(sub(t.c, t.b), sub(q, t.b)), n),
+        dot(cross(sub(t.a, t.c), sub(q, t.c)), n),
+      ];
+      return sides.every((s) => s >= -margin * extent);
+    });
+  });
+  // It has to touch the plate: the model's own flat triangles lie in the face's plane (a bracket's hull has a face
+  // across the hollow of its L, which only its two edges touch). Its area is what the model rests on.
+  const p = mesh.positions;
+  const tolerance = extent * 2e-3;
+  const resting = stable
+    .sort((x, y) => y.area - x.area)
+    .slice(0, MOST_CANDIDATES)
+    .map((face) => {
+      const n = face.down;
+      let top = -Infinity;
+      for (let i = 0; i < p.length; i += 3) {
+        top = Math.max(top, n[0] * (p[i] as number) + n[1] * (p[i + 1] as number) + n[2] * (p[i + 2] as number));
+      }
+      let contact = 0;
+      for (let t = 0; t < p.length; t += 9) {
+        const at = (k: number) =>
+          n[0] * (p[t + k] as number) + n[1] * (p[t + k + 1] as number) + n[2] * (p[t + k + 2] as number);
+        if (top - at(0) > tolerance || top - at(3) > tolerance || top - at(6) > tolerance) continue;
+        const a: Vec3 = [p[t] as number, p[t + 1] as number, p[t + 2] as number];
+        const b: Vec3 = [p[t + 3] as number, p[t + 4] as number, p[t + 5] as number];
+        const c: Vec3 = [p[t + 6] as number, p[t + 7] as number, p[t + 8] as number];
+        contact += Math.hypot(...cross(sub(b, a), sub(c, a))) / 2;
+      }
+      return { down: face.down, area: contact };
+    })
+    .filter((face) => face.area >= total * MIN_FACE_SHARE);
+  return resting
+    .sort((x, y) => y.area - x.area)
+    .slice(0, max)
+    .map(({ down, area }) => ({ down: down.map((v) => Math.round(v * 1e4) / 1e4) as Vec3, area }));
+}
+
+/**
+ * The mesh turned so that the direction `down` (a unit vector in its own axes) points straight down, then set on
+ * the plate (its lowest point at z 0), with the existing turns about z and y. The mesh keeps its x and y position
+ * only roughly: a slicer places it after.
+ */
+export function layMeshDown(mesh: Mesh, down: Vec3): Mesh {
+  const length = Math.hypot(...down);
+  if (!(length > 0)) return mesh;
+  const [dx, dy, dz] = [down[0] / length, down[1] / length, down[2] / length];
+  const toDegrees = (radians: number) => (radians * 180) / Math.PI;
+  // First about z, so the direction lies in the x–z plane with x ≥ 0; then about y until it points to −z.
+  const flat = Math.hypot(dx, dy);
+  let out = flat > 1e-9 ? rotateMesh(mesh, "z", toDegrees(-Math.atan2(dy, dx))) : mesh;
+  out = rotateMesh(out, "y", toDegrees(Math.atan2(flat, -dz)));
+  const low = boundsOf(out).min[2];
+  if (low === 0) return out;
+  const positions = new Float32Array(out.positions);
+  for (let i = 2; i < positions.length; i += 3) positions[i] = (positions[i] as number) - low;
+  return { positions };
+}

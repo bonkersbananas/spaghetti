@@ -421,6 +421,19 @@ const RACK = {
 };
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
 
+/** A shelf bracket, an L: it can lie on its base or on its side, which the "Lay it down" tiles show. */
+const BRACKET = {
+  name: "shelf-bracket.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [60, 30, 6] },
+    { at: [0, 0, 6], size: [6, 30, 40] },
+  ]),
+};
+const BRACKET_IDEA = {
+  title: "Shelf bracket",
+  note: "Holds the pasta shelf up. Takes a load, so it matters which way it prints.",
+};
+
 /** An idea with a model the server keeps but nobody sliced (its tab closed while it waited). */
 async function ideaWithUnslicedModel(page: Page) {
   const id = crypto.randomUUID();
@@ -467,8 +480,8 @@ async function modelInView(page: Page) {
  * An idea with the fusilli knob sliced, its settings open ("Slice with…"): the popover on desktop, the sheet on a
  * phone. Returns them.
  */
-async function openSliceSettings(page: Page) {
-  const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+async function openSliceSettings(page: Page, model = { idea: FUSILLI_IDEA, file: FUSILLI }) {
+  const files = await ideaWithModel(page, model.idea, model.file, /Sliced by Spaghetti/);
   await sliceSaved(page);
   await modelInView(page);
   await files.getByRole("button", { name: "Slice with…" }).click();
@@ -494,7 +507,7 @@ async function closeSliceSettings(page: Page) {
   await removeModelItems(page);
 }
 
-/** The Printer page's slicing defaults (decision 0050). */
+/** The Printer page's slicing defaults (decision 0051). */
 const slicingDefaults = (page: Page) => page.locator("section[aria-labelledby=printer-slicing]");
 
 /** The slicing defaults, unfolded, their tiles in place. Returns the section. */
@@ -1498,6 +1511,47 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // Lay it down (decision 0050): the faces a bracket can rest on, each a plate picture of it lying so, "As designed"
+    // first and picked. A phone's sheet is scrolled to them.
+    name: "slice-settings-lay",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: BRACKET_IDEA, file: BRACKET });
+      const lay = settings.getByRole("group", { name: "Lay it down" });
+      await lay.getByRole("radio").nth(1).waitFor();
+      // The pictures are drawn in a worker: wait until they have loaded.
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('[role="dialog"] fieldset img')).every(
+          (img) => (img as HTMLImageElement).complete,
+        ),
+      );
+      await lay.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The bracket laid on its side: sliced again in the background, then what the change did and its undo, the
+    // card's line saying "on its side".
+    name: "slice-settings-laid",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: BRACKET_IDEA, file: BRACKET });
+      const lay = settings.getByRole("group", { name: "Lay it down" });
+      await lay
+        .getByRole("radio", { name: /^On side/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+      await page.keyboard.press("Escape");
+      await settings.waitFor({ state: "hidden" });
+      await page.waitForTimeout(200);
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
     // Quality changed to Fine: the model slices again in the background, the slice there (its plate, its figures)
     // kept in view until the new one is ready, with Stop.
     name: "slice-settings-reslicing",
@@ -1566,7 +1620,7 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
-    // Slicing with a recipe (decision 0050): what worked before, in one tap, and the model sliced again with it.
+    // Slicing with a recipe (decision 0051): what worked before, in one tap, and the model sliced again with it.
     name: "slice-settings-recipe",
     path: "/ideas",
     prepare: async (page) => {
@@ -3144,7 +3198,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The workspace's slicing defaults (decision 0050), folded as "Staying dry" is: what they are, in the model
+    // The workspace's slicing defaults (decision 0051), folded as "Staying dry" is: what they are, in the model
     // card's words.
     name: "printer-slicing-folded",
     path: "/printer",

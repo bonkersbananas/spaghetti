@@ -39,7 +39,7 @@ function defaultsWords(value: Defaults | null): string[] {
 }
 
 /**
- * The workspace's slicing defaults on the Printer page (decision 0050): how a model nobody set up is sliced here.
+ * The workspace's slicing defaults on the Printer page (decision 0051): how a model nobody set up is sliced here.
  * Set once and seldom changed, they are folded, as "Staying dry" is, their summary in the model card's words; open,
  * the same tiles as a model's settings. It reads the printer's setup and saves only its `slicing` (null: Spaghetti's
  * own), with its own save status, so the page can place it anywhere. It suspends until the setup is here: the page

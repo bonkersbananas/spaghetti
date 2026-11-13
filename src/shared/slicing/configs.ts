@@ -199,6 +199,7 @@ export function sliceSetup(
     plate: pick("plate"),
     nozzle,
     scale: chosen.scale ?? defaults.scale,
+    orientation: chosen.orientation !== undefined ? chosen.orientation : defaults.orientation,
   };
   applySlicing({ machine, process }, target);
   // The presets' names go into the sliced file's settings, where Orca, Bambu Studio and Spaghetti's reader look.

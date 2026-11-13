@@ -575,7 +575,7 @@ export default function ModelFileCard({
   const anchor = useRef<HTMLDivElement>(null);
   const { data: spools = [] } = useQuery(spoolsQuery);
   const { data: printer } = useQuery(printerQuery);
-  // Recipes to slice with, once the settings can open (decision 0050).
+  // Recipes to slice with, once the settings can open (decision 0051).
   const { data: recipes = [] } = useQuery({ ...recipesQuery, enabled: !!owner });
   const setup = printer?.setup ?? DEFAULT_PRINTER;
   const defaults = useMemo(() => workshopDefaults({ spools, setup }), [spools, setup]);
@@ -624,7 +624,7 @@ export default function ModelFileCard({
   const thumbSrc = file.hasThumb || job?.picture ? fileThumbSrc(file) : undefined;
   const prefill = job?.outcome?.ok && !job.again ? job.outcome.prefill : file.prefill;
   const panel = target && {
-    file: { id: file.id, name: file.name, url: fileUrl(file.id) },
+    file: { id: file.id, name: file.name, url: fileUrl(file.id), size: file.size },
     settings,
     onChange: (next: SlicingSettings) => change_(next),
     spools,

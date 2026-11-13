@@ -34,7 +34,7 @@ import { useIdle } from "@/lib/use-idle";
 const Upkeep = lazy(() => import("@/components/printer/Upkeep").then((m) => ({ default: m.Upkeep })));
 // Below the fold, or only after a tap: their own chunks, not part of the first load.
 const DryingTable = lazy(() => import("@/components/printer/DryingTable").then((m) => ({ default: m.DryingTable })));
-// The workspace's slicing defaults (decision 0050), which load the slicing settings' tiles in turn.
+// The workspace's slicing defaults (decision 0051), which load the slicing settings' tiles in turn.
 const SlicingDefaults = lazy(() =>
   import("@/components/printer/SlicingDefaults").then((m) => ({ default: m.SlicingDefaults })),
 );

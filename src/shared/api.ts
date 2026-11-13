@@ -569,7 +569,7 @@ export interface Recipe {
   finish: string | null;
   settings: AttemptSettings;
   /**
-   * The slicing settings that worked, when the attempt's model was sliced by Spaghetti (decision 0050): what "Slice
+   * The slicing settings that worked, when the attempt's model was sliced by Spaghetti (decision 0051): what "Slice
    * with a recipe" uses whole. Null for a recipe from a slicer's own file.
    */
   slicing: SlicingSettings | null;
@@ -771,7 +771,7 @@ export interface UpdatePrinterRequest {
   amsUnits?: number;
   /** Days each material stays dry; sent whole, and a material not listed goes back to its starting value. */
   dryingDays?: Record<string, number>;
-  /** How a model nobody set up is sliced here (decision 0050), sent whole; null goes back to Spaghetti's own. */
+  /** How a model nobody set up is sliced here (decision 0051), sent whole; null goes back to Spaghetti's own. */
   slicing?: SlicingDefaults | null;
 }
 

@@ -1,5 +1,7 @@
+import { layMeshDown, type Mesh, restingFaces } from "@shared/mesh";
 import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { filamentOfSpool } from "@shared/slicing/pantry.ts";
+import { renderPlate } from "@shared/slicing/render.ts";
 import {
   QUALITIES,
   type QualityId,
@@ -10,19 +12,90 @@ import {
 } from "@shared/slicing/settings.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import type { SpoolLike } from "@shared/spools";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ModelCard, type ModelState, SliceResult } from "@/components/builds/ModelFile";
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import type { AttemptFileView } from "@/lib/items";
+import type { LyingState } from "@/lib/slicing/orientations";
 import { Label, Panel, Section } from "./shared";
 
 const ORANGE = "#f2754e"; // design-lint-ignore: a filament color is data
 const BLACK = "#1d1d1f"; // design-lint-ignore: a filament color is data
 const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
+
+type Vec = [number, number, number];
+
+/** A box's twelve triangles, corners counter-clockwise from outside. */
+function box([x, y, z]: Vec, [w, d, h]: Vec): number[] {
+  const c = (i: number, j: number, k: number): number[] => [x + i * w, y + j * d, z + k * h];
+  const tri = (a: number[], b: number[], e: number[]) => [...a, ...b, ...e];
+  return [
+    ...tri(c(0, 0, 0), c(0, 1, 0), c(1, 1, 0)),
+    ...tri(c(0, 0, 0), c(1, 1, 0), c(1, 0, 0)),
+    ...tri(c(0, 0, 1), c(1, 0, 1), c(1, 1, 1)),
+    ...tri(c(0, 0, 1), c(1, 1, 1), c(0, 1, 1)),
+    ...tri(c(0, 0, 0), c(1, 0, 0), c(1, 0, 1)),
+    ...tri(c(0, 0, 0), c(1, 0, 1), c(0, 0, 1)),
+    ...tri(c(0, 1, 0), c(0, 1, 1), c(1, 1, 1)),
+    ...tri(c(0, 1, 0), c(1, 1, 1), c(1, 1, 0)),
+    ...tri(c(0, 0, 0), c(0, 0, 1), c(0, 1, 1)),
+    ...tri(c(0, 0, 0), c(0, 1, 1), c(0, 1, 0)),
+    ...tri(c(1, 0, 0), c(1, 1, 0), c(1, 1, 1)),
+    ...tri(c(1, 0, 0), c(1, 1, 1), c(1, 0, 1)),
+  ];
+}
+
+/** A shelf bracket (an L): the model the "Lay it down" tiles show, found and drawn by the app's own code. */
+const BRACKET: Mesh = {
+  positions: Float32Array.from([...box([0, 0, 0], [50, 30, 8]), ...box([0, 0, 8], [8, 30, 40])]),
+};
+
+/** The tiles' pictures for the bracket, drawn here (the app draws them in a worker, orient-worker.ts). */
+function useBracketLying(colour: string): LyingState {
+  const [state, setState] = useState<LyingState>({ status: "loading" });
+  useEffect(() => {
+    const draw = (mesh: Mesh) => {
+      const size = 192;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      canvas
+        .getContext("2d")
+        ?.putImageData(
+          new ImageData(new Uint8ClampedArray(renderPlate([mesh.positions], { size, colour })), size, size),
+          0,
+          0,
+        );
+      return canvas.toDataURL();
+    };
+    const height = (mesh: Mesh) => {
+      let max = 0;
+      for (let i = 2; i < mesh.positions.length; i += 3) max = Math.max(max, mesh.positions[i] as number);
+      return max;
+    };
+    const options = [
+      { down: null, area: 0, mesh: layMeshDown(BRACKET, [0, 0, -1]) },
+      ...restingFaces(BRACKET, 6)
+        .filter((face) => face.down[2] > -0.99)
+        .slice(0, 3)
+        .map((face) => ({ down: face.down, area: face.area, mesh: layMeshDown(BRACKET, face.down) })),
+    ];
+    setState({
+      status: "ready",
+      options: options.map((option) => ({
+        down: option.down,
+        area: option.area,
+        height: height(option.mesh),
+        src: draw(option.mesh),
+      })),
+    });
+  }, [colour]);
+  return state;
+}
 
 const spool = (id: string, change: Partial<SpoolLike>): SpoolLike => ({
   id,
@@ -150,6 +223,7 @@ export function SlicingSection() {
   const [quality, setQuality] = useState<QualityId>("fine");
   const [settings, setSettings] = useState(SETTINGS);
   const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
+  const lying = useBracketLying(ORANGE);
   return (
     <Section
       id="slicing"
@@ -323,7 +397,8 @@ export function SlicingSection() {
           {/* As the popover draws it: lifted, floating, its padding the panel's own. */}
           <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">
             <SliceSettingsPanel
-              file={{ id: "styleguide-model", name: "fusilli-knob.stl", url: "#" }}
+              file={{ id: "styleguide-model", name: "fusilli-knob.stl", url: "#", size: 1 }}
+              lying={lying}
               settings={settings}
               onChange={setSettings}
               spools={SPOOLS}
@@ -365,7 +440,8 @@ export function SlicingSection() {
           <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
           <div className="bg-lifted shadow-float w-full max-w-md rounded-xl p-4">
             <SliceSettingsPanel
-              file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#" }}
+              file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#", size: 1 }}
+              lying={{ status: "none" }}
               settings={{ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }}
               onChange={setSettings}
               spools={[]}

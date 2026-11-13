@@ -126,7 +126,7 @@ export interface PrinterSetup {
   amsUnits: number;
   /** Days a dried spool stays dry, per material, where people changed the starting values (shared/drying.ts). */
   dryingDays?: Record<string, number>;
-  /** How a model nobody set up is sliced here (decision 0050); Spaghetti's own defaults when there are none. */
+  /** How a model nobody set up is sliced here (decision 0051); Spaghetti's own defaults when there are none. */
   slicing?: SlicingDefaults;
 }
 

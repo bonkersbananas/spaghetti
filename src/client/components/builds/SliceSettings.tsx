@@ -2,6 +2,7 @@ import engine from "virtual:slicer-engine";
 import { plateName } from "@shared/attempts";
 import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { slicedName } from "@shared/slicing/files.ts";
+import { STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { engineSlices, filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
 import { recipeSlicing, type SlicingRecipe } from "@shared/slicing/recipe.ts";
 import {
@@ -12,6 +13,7 @@ import {
   LIMITS,
   layerMillimetres,
   layerRange,
+  type Orientation,
   PATTERNS,
   patternWords,
   QUALITIES,
@@ -44,11 +46,13 @@ import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "
 import { MetaList } from "@/components/ui/MetaList";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
-import { LayersGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { LayersGlyph, PlatePicture, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
+import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
 
 /**
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
@@ -74,12 +78,14 @@ export interface SlicingChoicesProps {
   /** More open from the start (the styleguide). */
   moreOpen?: boolean;
   /**
-   * A model's settings, or the workspace's defaults (the Printer page, decision 0050): how a model prints, without
-   * the filament, plate, nozzle or size, which are each model's.
+   * A model's settings, or the workspace's defaults (the Printer page, decision 0051): how a model prints, without
+   * the filament, plate, nozzle, size or the way it lies, which are each model's.
    */
   scope?: "model" | "workspace";
-  /** Recipes to slice with (decision 0050), those for its filament (`fits`) first. */
+  /** Recipes to slice with (decision 0051), those for its filament (`fits`) first. */
   recipes?: readonly OfferedRecipe[];
+  /** How the model can lie (lib/slicing/orientations.ts): the "Lay it down" tiles show when it can lie more than one way. */
+  lying?: LyingState;
 }
 
 /** A recipe as a model's settings offer it: `fits` when it is for the filament the model had (recipesFor). */
@@ -96,6 +102,7 @@ export function SlicingChoices({
   moreOpen,
   scope = "model",
   recipes = [],
+  lying,
 }: SlicingChoicesProps) {
   const set = (change: Partial<SlicingSettings>) => onChange(slicingFor(change, settings));
   const model = scope === "model";
@@ -171,6 +178,9 @@ export function SlicingChoices({
         onChange={(supports) => set({ supports })}
         caption={floating ? <>Parts of it float in the air: {strong("Where needed")} holds them up.</> : undefined}
       />
+      {model && lying && lying.status !== "none" && (
+        <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
+      )}
       {model && <FilamentChoice settings={settings} spools={spools} onChange={(filaments) => set({ filaments })} />}
       <MoreSettings
         settings={settings}
@@ -186,7 +196,7 @@ export function SlicingChoices({
 }
 
 /**
- * Slicing with a recipe (decision 0050): what worked before, in one tap, over the model's settings. Those for the
+ * Slicing with a recipe (decision 0051): what worked before, in one tap, over the model's settings. Those for the
  * model's filament come first, set apart on a phone; the one it is sliced with now is picked, and its note says why
  * it is the way it is (the chip already says its name), with the filament when the recipe brought another.
  */
@@ -239,6 +249,82 @@ function RecipeChoice({
         )}
       </p>
     </div>
+  );
+}
+
+/** Two directions are the same face when they are within this many degrees. */
+const SAME_FACE_DEGREES = 2;
+
+const sameFace = (a: Orientation | null, b: Orientation | null) =>
+  a === b || (!!a && !!b && a[0] * b[0] + a[1] * b[1] + a[2] * b[2] > Math.cos((SAME_FACE_DEGREES * Math.PI) / 180));
+
+/** "On its side", "Upside down"; with several sides, "On side 2". */
+function lyingLabel(option: Lying, index: number, sides: number): string {
+  if (!option.down) return "As designed";
+  if (option.down[2] > 0.9) return "Upside down";
+  return sides > 1 ? `On side ${index}` : "On its side";
+}
+
+/**
+ * The faces the model can rest on, each a picture of it lying so (shared/mesh.ts finds them): "As designed" first.
+ * Turning it is for strength (a part is strongest across its layers) or for less to support; the original file stays
+ * as it is, only the slice is turned.
+ */
+function LayItDown({
+  state,
+  value,
+  onChange,
+}: {
+  state: LyingState;
+  value: Orientation | null;
+  onChange: (orientation: Orientation | null) => void;
+}) {
+  if (state.status === "loading") {
+    return (
+      <div className="flex flex-col gap-2.5" aria-busy="true">
+        <Skeleton className="h-3 w-24 rounded-xs" />
+        <div className="grid grid-cols-3 gap-2">
+          {["a", "b", "c"].map((tile) => (
+            <Skeleton key={tile} className="aspect-4/5 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (state.status !== "ready") return null;
+  const sides = state.options.filter((option) => option.down && option.down[2] <= 0.9).length;
+  let side = 0;
+  const options: ChoiceTile<string>[] = state.options.map((option, index) => {
+    if (option.down && option.down[2] <= 0.9) side++;
+    return {
+      value: option.down ? `face-${index}` : "designed",
+      label: lyingLabel(option, side, sides),
+      detail: `${Math.round(option.height)} mm tall`,
+      effect: option.down ? `laid on a ${Math.round(option.area / 100)} cm² face` : "the way the file lies",
+      picture: <PlatePicture src={option.src} />,
+    };
+  });
+  const picked = state.options.findIndex((option) => sameFace(option.down, value));
+  return (
+    <ChoiceTiles
+      label="Lay it down"
+      // Four make a square of two by two, not three and one left over.
+      columns={options.length === 4 ? 2 : 3}
+      wideColumns={options.length === 4 ? 2 : 3}
+      options={options}
+      value={picked < 0 ? null : (options[picked]?.value ?? null)}
+      onChange={(id) => {
+        const option = state.options[options.findIndex((candidate) => candidate.value === id)];
+        if (option) onChange(option.down);
+      }}
+      caption={
+        picked < 0 ? (
+          <>
+            <span className="text-ink font-semibold">Turned another way</span> · as the settings have it
+          </>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -565,7 +651,7 @@ export function SliceAbout({
 }
 
 export interface SliceSettingsProps extends SlicingChoicesProps {
-  file: { id: string; name: string; url: string };
+  file: { id: string; name: string; url: string; size: number };
   sliced?: string;
 }
 
@@ -574,10 +660,11 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
  * lets them be. The popover's own padding is the scroller's, so the fade at its edges reaches the corners.
  */
 export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsProps) {
+  const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], !choices.lying);
   return (
     <div className="scroll-fade -m-4 max-h-(--radix-popover-content-available-height) overflow-y-auto overscroll-contain p-5">
       <div className="flex flex-col gap-7">
-        <SlicingChoices {...choices} />
+        <SlicingChoices {...choices} lying={choices.lying ?? found} />
         <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
       </div>
     </div>
@@ -598,6 +685,7 @@ export default function SliceSettingsSheet({
   /** Where the slice stands, with what helps: the plate, its figures, progress, before → after and its undo. */
   result: ReactNode;
 }) {
+  const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], open && !choices.lying);
   return (
     <Sheet
       open={open}
@@ -608,7 +696,7 @@ export default function SliceSettingsSheet({
       footer={<div className="min-w-0 flex-1">{result}</div>}
     >
       <div className="flex flex-col gap-7 pb-2">
-        <SlicingChoices {...choices} />
+        <SlicingChoices {...choices} lying={choices.lying ?? found} />
         <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />
       </div>
     </Sheet>
@@ -616,7 +704,7 @@ export default function SliceSettingsSheet({
 }
 
 /**
- * The workspace's defaults, on the Printer page (decision 0050): how a model nobody set up is sliced here. The same
+ * The workspace's defaults, on the Printer page (decision 0051): how a model nobody set up is sliced here. The same
  * choices as a model's, without the filament (the Pantry's first loaded spool) and what is each model's own.
  */
 export function WorkspaceSlicing({
