@@ -62,7 +62,7 @@ test("changing a model's quality slices it again in the background, says what ch
   if (isMobile) {
     // Every control in the sheet, More's too, has a thumb's target.
     await settings.getByRole("button", { name: /^More/ }).click();
-    await expect(settings.getByRole("group", { name: "How supports are built" })).toBeVisible();
+    await expect(settings.getByRole("group", { name: "Infill pattern" })).toBeVisible();
     expect(await smallTargets(page, "[role=dialog]")).toEqual([]);
   }
   await quality.getByRole("radio", { name: /^Extra draft/ }).click();
@@ -106,7 +106,7 @@ test("changing a model's quality slices it again in the background, says what ch
   await page.reload();
   await expect(files.getByText(`About ${before} min`)).toBeVisible();
   // (Each piece of the card's line carries its dot: it is matched at its end.)
-  await expect(files.getByText(/Standard quality$/)).toBeVisible();
+  await expect(files.getByRole("button", { name: /^Slice with… Standard,/ })).toBeVisible();
   await files.getByRole("button", { name: "Slice with…" }).click();
   await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
 });
@@ -214,7 +214,7 @@ test("the Printer page's defaults are how a model nobody set up is sliced, until
 
     // A new model slices Fine.
     const { id, files } = await slicedCube(page);
-    await expect(files.getByText(/Fine$/)).toBeVisible();
+    await expect(files.getByRole("button", { name: /^Slice with… Fine,/ })).toBeVisible();
     expect((await fileOf(page, id)).slice.settings.slicing.layerHeight).toBe(0.12);
 
     await page.goto("/printer");
@@ -259,6 +259,7 @@ test("a recipe slices a model the way it worked, in one tap", async ({ page }) =
     const { id, files } = await slicedCube(page);
     await files.getByRole("button", { name: "Slice with…" }).click();
     const settings = page.getByRole("dialog", { name: "How to slice it" });
+    await settings.getByRole("button", { name: /^From a recipe/ }).click();
     const recipe = settings.getByRole("button", { name: "Quick bins" });
     await expect(recipe).toHaveAttribute("aria-pressed", "false");
     await recipe.click();

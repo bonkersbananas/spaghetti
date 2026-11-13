@@ -1674,6 +1674,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page);
+      await settings.getByRole("button", { name: /^From a recipe/ }).click();
       await settings.getByRole("button", { name: "PLA bins, fast and square" }).click();
       // In the sheet's result on a phone, on the card below the popover on desktop.
       await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
@@ -1688,6 +1689,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page);
+      await settings.getByRole("button", { name: /^From a recipe/ }).click();
       await settings.getByRole("button", { name: "PETG, dried and 245 °C" }).click();
       // In the sheet's result on a phone, on the card below the popover on desktop.
       await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
@@ -1701,6 +1703,11 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page);
+      // The kind of supports shows once supports are on.
+      await settings
+        .getByRole("group", { name: "Supports" })
+        .getByRole("radio", { name: /^Where needed/ })
+        .click();
       const more = settings.getByRole("button", { name: /^More/ });
       await more.click();
       await settings.getByRole("group", { name: "How supports are built" }).waitFor();

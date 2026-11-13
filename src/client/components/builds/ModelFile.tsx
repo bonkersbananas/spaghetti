@@ -412,6 +412,12 @@ function statusOf(
                   )}
                 </span>
               </span>
+            ) : change && onUndo && line ? (
+              // What the change did, with its way back at the end of that line: quiet, and apart from the settings row.
+              <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                {line}
+                {button("Undo", onUndo, UndoIcon, "quiet")}
+              </span>
             ) : (
               line
             )}
@@ -428,7 +434,7 @@ function statusOf(
             {ahead && !again && onSlice && button("Slice it", () => onSlice({}))}
           </>
         ),
-        quiet: change && !again && onUndo ? button("Undo", onUndo, UndoIcon, "quiet") : null,
+        quiet: change && !again && onUndo && !line ? button("Undo", onUndo, UndoIcon, "quiet") : null,
       };
     }
     case "failed": {
