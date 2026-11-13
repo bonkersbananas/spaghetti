@@ -13,6 +13,7 @@ import {
   durationWords,
   fallbackOf,
   fallbackWords,
+  nameParts,
   notesOf,
   pacedFraction,
   RUST_UNSUPPORTED,
@@ -110,6 +111,19 @@ describe("who sliced it", () => {
       "Sliced by OrcaSlicer",
     );
     expect(fallbackWords({ why: "unsupported" })).toBe("our own slicer can't do these settings yet");
+  });
+
+  it("keeps a slicer's name whole where its line wraps", () => {
+    expect(nameParts("Sliced by OrcaSlicer: our own slicer can't do tree supports yet")).toEqual([
+      { text: "Sliced by OrcaSlicer: ", name: false },
+      { text: "our own slicer", name: true },
+      { text: " can't do tree supports yet", name: false },
+    ]);
+    expect(nameParts("Sliced by Spaghetti's own slicer")).toEqual([
+      { text: "Sliced by ", name: false },
+      { text: "Spaghetti's own slicer", name: true },
+    ]);
+    expect(nameParts("Sliced by Spaghetti")).toEqual([{ text: "Sliced by Spaghetti", name: false }]);
   });
 
   it("says how long it took the way people say it", () => {

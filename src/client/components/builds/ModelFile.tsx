@@ -5,7 +5,7 @@ import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
 import { type SlicingSettings, slicingFor, slicingSummary } from "@shared/slicing/settings.ts";
-import { slicedBy } from "@shared/slicing/slicers.ts";
+import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import { finishesOnComputer, problemSentence, sliceSummary, worthRetrying } from "@shared/slicing/words.ts";
 import { DEFAULT_PRINTER } from "@shared/spools";
@@ -199,6 +199,23 @@ export function changeSentence(change: SliceChange, what?: string): string {
  * settings row says the rest.
  */
 const slicedPieces = (slice: FileSlice) => [slicedBy(slice, { short: true }), ...sliceSummary(slice.settings)];
+
+/** Words that may wrap, a slicer's name in them kept whole: "our own / slicer" never splits. */
+function NamesWhole({ words }: { words: string }) {
+  return (
+    <span>
+      {nameParts(words).map((part) =>
+        part.name ? (
+          <span key={part.text} className="whitespace-nowrap">
+            {part.text}
+          </span>
+        ) : (
+          part.text
+        ),
+      )}
+    </span>
+  );
+}
 
 /**
  * A story card's "Sliced by Spaghetti" (or by which slicer, when it isn't the usual one), under the file's name, that
@@ -542,7 +559,7 @@ export function ModelCard({
         {change && !change.failed
           ? [changeSentence(change, changed)]
           : details
-            ? [slicedBy(slice)]
+            ? [<NamesWhole key="by" words={slicedBy(slice)} />]
             : slicedPieces(slice)}
       </MetaList>
     ) : null;

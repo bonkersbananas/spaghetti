@@ -60,6 +60,16 @@ export function fallbackWords(fallback: SliceFallback): string {
   }
 }
 
+/**
+ * The words split around the slicers' names, so a line that wraps can keep a name whole: "Sliced by OrcaSlicer: our
+ * own slicer can't …" breaks before or after "our own slicer", never inside it.
+ */
+export const nameParts = (words: string): { text: string; name: boolean }[] =>
+  words
+    .split(/(our own slicer|Spaghetti's own slicer)/)
+    .map((text, index) => ({ text, name: index % 2 === 1 }))
+    .filter((part) => part.text);
+
 /** The slicer that made a slice: its record's, else OrcaSlicer's engine (every slice from before there was a choice). */
 export const slicerOf = (slice: Pick<FileSlice, "settings">): SlicerId => slice.settings.slicer ?? "orca";
 
