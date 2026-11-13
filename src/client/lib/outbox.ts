@@ -8,11 +8,13 @@ import type {
   Photo,
   PhotoResponse,
 } from "@shared/api";
+import { ONE_REQUEST_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings, Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import type { FileKind } from "@shared/slicing/types.ts";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
+import { dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
 import { isOnline, reportReachable, reportUnreachable, subscribeConnection } from "./connection";
 import { openStore } from "./idb";
 import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
@@ -614,6 +616,34 @@ class Outbox {
   }
 
   private async uploadFile(entry: OutboxEntry, pending: PendingFile) {
+    const big = !!pending.file && pending.file.size > ONE_REQUEST_FILE_BYTES;
+    if (big && pending.file) {
+      // A big file goes in parts first (lib/big-upload.ts); the form then says so instead of carrying it.
+      try {
+        setUpload(pending.id, { fraction: 0, failed: false });
+        await uploadInParts({
+          id: pending.id,
+          part: "file",
+          kind: pending.kind ?? "slicer",
+          name: pending.name,
+          blob: pending.file,
+          onProgress: (fraction) => setUpload(pending.id, { fraction, failed: false }),
+        });
+      } catch (error) {
+        // Refused or gone: drop it. Anything else waits and tries again by itself, and the card offers a tap.
+        if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+          setUpload(pending.id, null);
+          if (error.status === 404) return this.dropFile(entry.itemId, pending.id);
+        } else if (isRefusal(error)) {
+          setUpload(pending.id, null);
+          this.dropFile(entry.itemId, pending.id);
+          this.handlers.photoDropped?.("The slicer file was refused by the server and couldn't be kept.");
+          return;
+        }
+        setUpload(pending.id, { fraction: 0, failed: true, retry: () => this.retryNow() });
+        throw new RetryLater();
+      }
+    }
     const form = new FormData();
     form.set("id", pending.id);
     form.set("name", pending.name);
@@ -625,13 +655,23 @@ class Outbox {
     if (pending.objects?.length) form.set("objects", JSON.stringify(pending.objects));
     if (pending.kind) form.set("kind", pending.kind);
     if (pending.thumb) form.set("thumb", pending.thumb, "thumb.png");
-    if (pending.file) form.set("file", pending.file, pending.name);
+    if (big) form.set("uploaded", "1");
+    else if (pending.file) form.set("file", pending.file, pending.name);
     const response = await send(`/api/attempts/${pending.attemptId}/file`, form, () => undefined);
     const dropFile = () => {
-      const latest = this.entry(entry.itemId);
-      if (latest) void this.save({ ...latest, files: latest.files?.filter((file) => file.id !== pending.id) });
+      setUpload(pending.id, null);
+      this.dropFile(entry.itemId, pending.id);
     };
-    if (response.status === 404 || response.status === 409) return dropFile();
+    if (response.status === 404) return dropFile();
+    // The bytes aren't whole on the server: they go again.
+    if (response.status === 409 && big) {
+      const body = JSON.parse(response.body || "{}") as { error?: { code?: string } };
+      if (body.error?.code === "upload_incomplete") {
+        await dropUpload(pending.id);
+        throw new RetryLater();
+      }
+    }
+    if (response.status === 409) return dropFile();
     if ([400, 413, 415].includes(response.status)) {
       dropFile();
       this.handlers.photoDropped?.("The slicer file was refused by the server and couldn't be kept.");
@@ -645,6 +685,11 @@ class Outbox {
       this.handlers.fileSaved?.(attempt);
     }
     dropFile();
+  }
+
+  private dropFile(itemId: string, fileId: string) {
+    const latest = this.entry(itemId);
+    if (latest) void this.save({ ...latest, files: latest.files?.filter((file) => file.id !== fileId) });
   }
 
   private async uploadPhoto(entry: OutboxEntry, pending: PendingPhoto) {

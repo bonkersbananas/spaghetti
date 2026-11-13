@@ -35,6 +35,7 @@ import { createSpool, readLabelBody, spoolPhotoFields, updateSpool, weighBody, w
 import { createTag } from "../routes/tags.ts";
 import { createTwist, updateTwist } from "../routes/twists.ts";
 import { createTask, logBody, updateTask, upkeepPhotoFields } from "../routes/upkeep.ts";
+import { finishUpload, startUpload } from "../routes/uploads.ts";
 import { createWebhook } from "../routes/webhooks.ts";
 import { addToWishlist, updateWishlist, wishlistOrder } from "../routes/wishlists.ts";
 import {
@@ -661,7 +662,7 @@ export const operations: Record<string, Operation> = {
     multipart: {
       fields: fileFields,
       files: {
-        file: "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB.",
+        file: "The .3mf or .gcode.3mf, kept up to 32 MB in this request (a bigger one, up to 250 MB, goes in parts first: POST /uploads, then `uploaded`); a model's .stl or .3mf is required, one way or the other.",
         thumb: "The plate's picture.",
       },
     },
@@ -680,7 +681,7 @@ export const operations: Record<string, Operation> = {
     multipart: {
       fields: fileFields.omit({ id: true }),
       files: {
-        file: "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB.",
+        file: "The .3mf or .gcode.3mf, kept up to 32 MB in this request (a bigger one, up to 250 MB, goes in parts first: POST /uploads, then `uploaded`); a model's .stl or .3mf is required, one way or the other.",
         thumb: "The plate's picture.",
       },
     },
@@ -709,7 +710,8 @@ export const operations: Record<string, Operation> = {
     multipart: {
       fields: slicedFields,
       files: {
-        sliced: "The .gcode.3mf, up to 25 MB: required when slice.status is sliced.",
+        sliced:
+          "The .gcode.3mf, up to 32 MB in this request (a bigger one, up to 250 MB, goes in parts first: POST /uploads, then `uploaded`): required one way or the other when slice.status is sliced.",
         thumb: "The plate's picture.",
       },
     },
@@ -719,6 +721,34 @@ export const operations: Record<string, Operation> = {
       409: "conflict: only a model is sliced.",
       415: "unsupported: not a picture.",
     },
+  },
+
+  // Big files, in parts.
+  "POST /uploads": {
+    summary:
+      "Starts sending a big file (over 32 MB, up to 250 MB) in parts: answers an uploadId and the part size. Send each part with PUT /uploads/{id}/{part}/{uploadId}/{n}, then complete it, then save the file's row with `uploaded` in place of its bytes. part sliced is a model's sliced file (people only).",
+    body: startUpload,
+    response: z.object({ uploadId: z.string(), partSize: z.number().int() }),
+    status: 201,
+    errors: { 413: "too_large: over 250 MB.", 404: notFound("file") },
+  },
+  "PUT /uploads/:id/:part/:uploadId/:n": {
+    summary:
+      "One part of a big upload: the raw bytes as the body (content-length required), numbered from 1, each exactly the part size but the last. The same part again replaces it. Answers the part's etag.",
+    response: z.object({ n: z.number().int(), etag: z.string() }),
+    errors: { 413: "too_large: more than a part.", 404: "not_found: the upload isn't open any more." },
+  },
+  "POST /uploads/:id/:part/:uploadId/complete": {
+    summary:
+      "Puts the parts together once all are sent. Safe to ask again. The size must be the file's whole size, or the file is removed again.",
+    body: finishUpload,
+    response: z.object({ size: z.number().int() }),
+    errors: { 409: "conflict: the parts didn't make a file of that size." },
+  },
+  "DELETE /uploads/:id/:part/:uploadId": {
+    summary: "Drops an upload that failed or was given up. Harmless when it is already gone.",
+    response: "empty",
+    status: 204,
   },
 
   // Spools.

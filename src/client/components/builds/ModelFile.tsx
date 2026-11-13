@@ -22,6 +22,7 @@ import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
+import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
 import { fileThumbSrc } from "@/lib/previews";
@@ -42,14 +43,22 @@ import { formatMinutes } from "./settings";
 
 /** Where a model's slicing is, from its row and this device's job. */
 export type ModelState =
-  | { kind: "saving" }
+  /** On its way to the server; a big file shows how far (`fraction`, 0-1). */
+  | { kind: "saving"; fraction?: number }
+  /** A big file stopped on the way: one tap sends it again. */
+  | { kind: "notSaved"; retry: () => void }
   | { kind: "waiting" }
   | { kind: "slicing"; fraction: number }
   | { kind: "sliced"; slice: FileSlice; saved: boolean }
   | { kind: "failed"; slice: FileSlice }
   | { kind: "unsliced" };
 
-export function modelState(file: AttemptFileView, job: SliceJob | undefined): ModelState {
+export function modelState(file: AttemptFileView, job: SliceJob | undefined, upload?: UploadState): ModelState {
+  if (file.pending && upload) {
+    return upload.failed && upload.retry
+      ? { kind: "notSaved", retry: upload.retry }
+      : { kind: "saving", fraction: upload.fraction };
+  }
   if (job?.status === "waiting") return { kind: "waiting" };
   if (job?.status === "slicing") return { kind: "slicing", fraction: job.fraction };
   const outcome = job?.outcome;
@@ -157,8 +166,31 @@ export function ModelStatus({
   line?: ReactNode;
 }) {
   switch (state.kind) {
-    case "saving":
-      return <span className="text-small text-ink-faint">Saving the model…</span>;
+    case "saving": {
+      if (state.fraction === undefined) return <span className="text-small text-ink-faint">Saving the model…</span>;
+      const percent = Math.round(state.fraction * 100);
+      return (
+        <span
+          className="text-small text-ink-soft tabular inline-flex items-center gap-1.5"
+          role="progressbar"
+          aria-label="Saving the model"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          aria-valuetext={`Saving ${percent}%`}
+        >
+          <ProgressRing value={state.fraction} className="text-semolina" />
+          Saving {percent}%
+        </span>
+      );
+    }
+    case "notSaved":
+      return (
+        <>
+          <Caution className="px-0">Didn't finish saving. Your file is still here.</Caution>
+          <LineAction onClick={state.retry}>Try again</LineAction>
+        </>
+      );
     case "waiting":
     case "slicing": {
       const percent = state.kind === "slicing" ? Math.round(state.fraction * 100) : null;
@@ -320,7 +352,8 @@ export default function ModelFileCard({
   const job = useSliceJob(file.id);
   const isDesktop = useIsDesktop();
   const [sheet, setSheet] = useState(false);
-  const state = modelState(file, job);
+  const upload = useUpload(file.id);
+  const state = modelState(file, job, upload);
   const slice = owner
     ? (options: SliceOptions) =>
         void startSlice(queryClient, {

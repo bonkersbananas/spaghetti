@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { boxesStl, boxStl, fusilliStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
@@ -379,6 +381,27 @@ async function ideaWithModel(
   // The plate picture is drawn before slicing starts: wait for it to be on screen.
   await files.locator("img").first().waitFor();
   return files;
+}
+
+/** A new idea with a 48 MB model dropped on it (a file on disk: a buffer that big is more than Playwright takes). */
+async function ideaWithBigModel(page: Page, until: RegExp) {
+  const dir = mkdtempSync(join(tmpdir(), "spaghetti-shot-"));
+  try {
+    const file = join(dir, "dragon-scale-armour.stl");
+    writeFileSync(file, Buffer.alloc(48 * 1024 * 1024, 7));
+    const id = crypto.randomUUID();
+    modelItems.push(id);
+    await page.request.post("/api/items", {
+      headers: { Origin: new URL(page.url()).origin },
+      data: { id, title: "Dragon scale armour", note: "Printed in pieces, joined with pins." },
+    });
+    await openIdea(page, id);
+    await page.getByTestId("idea-file-input").setInputFiles(file);
+    const files = page.getByRole("region", { name: /^Files/ });
+    await files.getByText(until).first().waitFor({ timeout: 60_000 });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
@@ -1316,6 +1339,36 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.route("**/slicer/*/engine-st.wasm", () => undefined);
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Slicing \d+%/);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
+    // A big model (48 MB, over what one request carries) on its way in parts, held after the first (decision 0048).
+    name: "idea-big-model-saving",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route("**/slicer/*/engine-st.wasm", (route) => route.abort());
+      await page.route(/\/api\/uploads\/[^/]+\/file\/[^/]+\/2$/, () => undefined);
+      await ideaWithBigModel(page, /Saving \d+%/);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The same file when the network let go: it says so, keeps the file, and offers another go.
+    name: "idea-big-model-stuck",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route("**/slicer/*/engine-st.wasm", (route) => route.abort());
+      await page.route(/\/api\/uploads\/[^/]+\/file\/[^/]+\/2$/, (route) => route.abort("connectionfailed"));
+      await ideaWithBigModel(page, /Didn't finish saving/);
     },
     beforeShot: modelInView,
     cleanup: async (page) => {
