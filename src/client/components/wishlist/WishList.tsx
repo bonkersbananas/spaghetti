@@ -5,7 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Reorder, useDragControls } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { itemName } from "@/components/journal/JournalEntry";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
 import { DragHandle, RankRow } from "@/components/ui/RankRow";
 import { startBuild } from "@/lib/builds";
@@ -52,17 +52,15 @@ function StartButton({ item, name }: { item: ItemView; name: string }) {
       Start building
     </Button>
   ) : (
-    // A word, not the cube: that glyph is the Builds tab right below.
-    <Button
+    // The cube, as on Today: the same action looks the same everywhere. It is named for screen readers, and
+    // the title gets the width the word "Build" took.
+    <IconButton
+      icon={BuildsIcon}
+      label={`Start building ${name}`}
       variant="quiet"
-      size="sm"
       onClick={start}
       disabled={readOnly}
-      aria-label={`Start building ${name}`}
-      className="touch-target relative"
-    >
-      Build
-    </Button>
+    />
   );
 }
 

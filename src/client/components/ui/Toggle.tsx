@@ -7,13 +7,15 @@ export interface ToggleProps extends Omit<ComponentPropsWithRef<"button">, "onCh
   label: string;
   /** One quiet line under the label: what it does, or why it can't be turned on. */
   hint?: ReactNode;
+  /** One line: the hint is read aloud but not drawn. Only for a hint that repeats what the switch and label already show; a reason the switch can't be turned on must stay drawn. */
+  oneLine?: boolean;
 }
 
 /**
  * An on/off setting that takes effect at once (no save button). The whole row is the switch, so it is a
  * big target on a phone; name it by its visible label.
  */
-export function Toggle({ checked, onChange, label, hint, disabled, className, ...props }: ToggleProps) {
+export function Toggle({ checked, onChange, label, hint, oneLine, disabled, className, ...props }: ToggleProps) {
   return (
     <button
       type="button"
@@ -29,7 +31,7 @@ export function Toggle({ checked, onChange, label, hint, disabled, className, ..
     >
       <span className="min-w-0 flex-1">
         <span className="text-body text-ink group-disabled:text-ink-faint block font-semibold">{label}</span>
-        {hint && <span className="text-small text-ink-faint mt-0.5 block">{hint}</span>}
+        {hint && <span className={oneLine ? "sr-only" : "text-small text-ink-faint mt-0.5 block"}>{hint}</span>}
       </span>
       <span
         aria-hidden
