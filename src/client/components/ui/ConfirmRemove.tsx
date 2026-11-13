@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { CloseIcon, TrashIcon } from "./icons";
@@ -77,7 +77,7 @@ export function ConfirmRemove({ what, onRemove, size = "md", className }: Confir
       >
         <AnimatePresence mode="popLayout" initial={false}>
           {asking ? (
-            <motion.span
+            <m.span
               key="ask"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -87,9 +87,9 @@ export function ConfirmRemove({ what, onRemove, size = "md", className }: Confir
             >
               <TrashIcon size={14} weight="bold" aria-hidden />
               Remove
-            </motion.span>
+            </m.span>
           ) : (
-            <motion.span
+            <m.span
               key="x"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -98,7 +98,7 @@ export function ConfirmRemove({ what, onRemove, size = "md", className }: Confir
               className="flex"
             >
               <CloseIcon size={small ? 14 : 16} weight="bold" aria-hidden />
-            </motion.span>
+            </m.span>
           )}
         </AnimatePresence>
       </button>
