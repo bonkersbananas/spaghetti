@@ -130,7 +130,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
             <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
             <span className="text-caption text-ink-faint inline-flex items-center gap-1 font-semibold">
               <SlicerFileIcon size={12} weight="fill" aria-hidden />
-              Not a photo
+              From the model
             </span>
             <Meta at={attempt.printedAt} time={time} person={person} via={via} />
           </div>
