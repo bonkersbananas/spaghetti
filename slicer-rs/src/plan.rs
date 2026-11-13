@@ -1,7 +1,8 @@
-//! Each layer's extrusions in print order: object by object and island by island (nearest first), inner walls,
-//! then the outer wall, then the infill (bridges, bottom, solid, sparse, top), every group nearest first. Walls are
-//! counter-clockwise loops that start at the island's rear (a seam that lines up layer to layer). Widths, flows,
-//! speeds and accelerations are Orca's for the role; speeds are capped by the filament's volumetric limit.
+//! Each layer's extrusions in Orca's print order: its islands on a tour that ends next to the plate's origin, each
+//! island's walls (around each hole and then the outline, the deepest loop first), then its infill and gap fill
+//! chained together as Orca chains them (`order.rs`). Outlines run counter-clockwise and holes clockwise, from the
+//! island's rear (a seam that lines up layer to layer). Widths, flows, speeds and accelerations are Orca's for the
+//! role; speeds are capped by the filament's volumetric limit.
 
 use crate::config::Settings;
 use crate::fill;
@@ -9,6 +10,7 @@ use crate::geom::{self, Contour, Pt, Shapes};
 use crate::infill;
 use crate::medial;
 use crate::monotonic;
+use crate::order;
 use crate::region::{self, Fills, Island, LayerRegions, Role};
 use crate::section::Layers;
 use crate::solid;
@@ -40,14 +42,13 @@ pub struct LayerPlan {
 const FILL_ORDER: [Role; 6] =
     [Role::Bridge, Role::InternalBridge, Role::BottomSurface, Role::SolidInfill, Role::SparseInfill, Role::TopSurface];
 
-/// Layer `i`'s extrusions in print order: object by object, the nearest island first and the rest of its object's
-/// islands nearest first, so each object's moves come together (the printer can skip an object only so). `centres`
-/// are the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored.
+/// Layer `i`'s extrusions in print order: the islands that print anything on Orca's tour of their outlines' middles
+/// (rounded to the millimetre), which starts next to the wipe tower's position, read as nanometres, so next to the
+/// plate's origin, and runs backwards so the layer ends there; an object can come round more than once. `centres` are
+/// the middles of the objects' bounding boxes on the plate (units), where their infill patterns are anchored.
 pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, centres: &[(f64, f64)], s: &Settings) -> LayerPlan {
     let z = layers.top[i];
     let h = layers.height[i];
-    // Alternate the corner each layer starts from, so a layer begins near where the last one likely ended.
-    let start = if i.is_multiple_of(2) { geom::pt(0, 0) } else { geom::pt(geom::sc(s.bed[0]), geom::sc(s.bed[1])) };
     let mut per_island: Vec<Vec<Path>> = r
         .islands
         .iter()
@@ -58,42 +59,36 @@ pub fn plan_layer(r: &LayerRegions, i: usize, layers: &Layers, centres: &[(f64, 
             island_paths(k as u32, island, fills, i, (z, h), centre, s)
         })
         .collect();
-    let owner: Vec<u32> = r.islands.iter().map(|island| island.object).collect();
-    let mut order = Vec::with_capacity(per_island.len());
-    let mut done = vec![false; per_island.len()];
-    let mut at = start;
-    let mut object: Option<u32> = None;
-    for _ in 0..per_island.len() {
-        // The nearest island of the object being printed, else the nearest of any.
-        let nearest = |of: Option<u32>| {
-            let mut best: Option<(usize, f64)> = None;
-            for (k, paths) in per_island.iter().enumerate() {
-                if done[k] || paths.is_empty() || of.is_some_and(|o| owner[k] != o) {
-                    continue;
-                }
-                let d = geom::dist(at, paths[0].points[0]);
-                if best.is_none_or(|(_, bd)| d < bd) {
-                    best = Some((k, d));
-                }
-            }
-            best
-        };
-        let Some((k, _)) = nearest(object).or_else(|| nearest(None)) else { break };
-        done[k] = true;
-        order.push(k);
-        object = Some(owner[k]);
-        if let Some(last) = per_island[k].last() {
-            at = *last.points.last().unwrap();
-        }
-    }
+    let nodes: Vec<usize> = (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).collect();
+    let mm = geom::SCALE as i32;
+    let to_mm = |c: i32| (if c >= 0 { c + mm / 2 } else { c - mm / 2 }) / mm * mm;
+    let points: Vec<Pt> = nodes
+        .iter()
+        .map(|&k| {
+            let c = r.islands[k].outline.first().map_or(geom::pt(0, 0), |c| geom::centroid(c));
+            geom::pt(to_mm(c.x), to_mm(c.y))
+        })
+        .collect();
+    let mut tour = order::tour(&points, Some(geom::pt(0, 2)));
+    tour.reverse();
     let mut paths = Vec::new();
-    for k in order {
+    for t in tour {
+        let k = nodes[t];
+        let object = r.islands[k].object;
         for p in &mut per_island[k] {
-            p.object = owner[k];
+            p.object = object;
         }
         paths.append(&mut per_island[k]);
     }
     LayerPlan { index: i, z, height: h, paths }
+}
+
+/// An infill extrusion collection, as Orca makes them: a fill region's lines, or one gap fill path. Fixed ones
+/// (monotonic fills, the narrow loops) print as they come; the others may print backwards, and their paths are
+/// chained again from where the nozzle is when they start.
+struct Group {
+    paths: Vec<Path>,
+    sortable: bool,
 }
 
 fn island_paths(
@@ -109,26 +104,23 @@ fn island_paths(
     let (walls, gaps) = (&island.walls, &island.gaps);
     let island_inner = &island.inner;
     let mut out: Vec<Path> = Vec::new();
-    let mut at: Option<Pt> = None;
     let island = index;
 
-    // Inner walls, innermost first, then the outer walls.
-    for depth in (0..walls.len()).rev() {
+    // Walls in Orca's order: around each hole and then the outline, the deepest loop first, each level's loops chained
+    // from the object's centre.
+    let centre_pt = geom::pt(centre.0.round() as i32, centre.1.round() as i32);
+    for (contour, depth, outline) in wall_order(walls, centre_pt) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
-        let mut loops: Vec<Vec<Pt>> = walls[depth].iter().map(seam_loop).collect();
-        order_loops(&mut loops, &mut at);
-        for points in loops {
-            out.push(path(role, points, true, island, first, h, s));
-        }
+        out.push(path(role, seam_loop(contour, outline), true, island, first, h, s));
     }
 
-    // Gap fill along the middle of the gaps between walls, as wide as each gap is there.
+    // Gap fill along the middle of the gaps between walls, as wide as each gap is there: each path on its own.
+    let mut groups: Vec<Group> = Vec::new();
     let (gap_min, gap_max) = region::gap_widths(layer, h, s);
-    let mut lines: Vec<medial::ThickLine> =
-        gaps.iter().flat_map(|shape| medial::axis(shape, gap_min, gap_max)).collect();
-    order_thick(&mut lines, &mut at);
-    for line in lines {
-        out.extend(thick_paths(Role::GapFill, &line.points, &line.widths, island, first, h, s));
+    for line in gaps.iter().flat_map(|shape| medial::axis(shape, gap_min, gap_max)) {
+        for p in thick_paths(Role::GapFill, &line.points, &line.widths, island, first, h, s) {
+            groups.push(Group { paths: vec![p], sortable: true });
+        }
     }
 
     // The infill reaches into the innermost wall, but not into the infill of other kinds beside it.
@@ -160,11 +152,15 @@ fn island_paths(
             continue;
         }
         if role == Role::SparseInfill {
-            let mut runs = sparse_lines(region, layer, z, h, centre, s);
-            order_runs(&mut runs, &mut at);
-            for points in runs {
-                if points.len() >= 2 {
-                    out.push(path(role, points, false, island, first, h, s));
+            // A collection for each region, as Orca fills them one by one.
+            for shape in region {
+                let paths: Vec<Path> = sparse_lines(&vec![shape.clone()], layer, z, h, centre, s)
+                    .into_iter()
+                    .filter(|points| points.len() >= 2)
+                    .map(|points| path(role, points, false, island, first, h, s))
+                    .collect();
+                if !paths.is_empty() {
+                    groups.push(Group { paths, sortable: true });
                 }
             }
             continue;
@@ -189,8 +185,8 @@ fn island_paths(
         let spacing =
             if bridge { s.bridge_flow(role == Role::InternalBridge, h).2 } else { Settings::spacing(width, h) };
         let style = solid_style(role, s);
-        // Orca keeps each region's lines in the order its fill makes them, and starts with the nearest region.
-        let mut groups: Vec<Vec<Path>> = Vec::new();
+        // Orca keeps a monotonic region's lines in the order its fill makes them.
+        let sortable = style == SolidStyle::ZigZag;
         for (part, angle) in parts {
             for shape in &into_walls(&part) {
                 if role == Role::SolidInfill
@@ -198,36 +194,161 @@ fn island_paths(
                     && let Some((normal, narrow)) = solid::split_narrow(shape, spacing, angle.to_radians())
                 {
                     for n in &normal {
-                        groups.push(solid_lines(n, role, style, angle, spacing, origin, island, first, h, s));
+                        let paths = solid_lines(n, role, style, angle, spacing, origin, island, first, h, s);
+                        groups.push(Group { paths, sortable });
                     }
-                    // Loops fill the narrow part inside the walls (Orca fills it without the overlap).
+                    // Loops fill the narrow part inside the walls (Orca fills it without the overlap), in an order
+                    // of their own.
                     let room = geom::intersection(&narrow, &geom::local(island_inner, geom::bbox_of(shape)));
                     let near = geom::pt(origin.0.round() as i32, origin.1.round() as i32);
-                    let mut group = Vec::new();
+                    let mut paths = Vec::new();
                     for p in solid::narrow_loops(&room, spacing, s.nozzle_diameter, near) {
-                        group.extend(thick_paths(role, &p.points, &p.widths, island, first, h, s));
+                        paths.extend(thick_paths(role, &p.points, &p.widths, island, first, h, s));
                     }
-                    groups.push(group);
+                    groups.push(Group { paths, sortable: false });
                     continue;
                 }
-                groups.push(solid_lines(shape, role, style, angle, spacing, origin, island, first, h, s));
+                let paths = solid_lines(shape, role, style, angle, spacing, origin, island, first, h, s);
+                groups.push(Group { paths, sortable });
             }
         }
-        groups.retain(|g| !g.is_empty());
-        let mut cur = at.unwrap_or(groups.first().map_or(geom::pt(0, 0), |g| g[0].points[0]));
-        while !groups.is_empty() {
-            let k = (0..groups.len())
-                .min_by(|&a, &b| {
-                    geom::dist(cur, groups[a][0].points[0]).total_cmp(&geom::dist(cur, groups[b][0].points[0]))
-                })
-                .unwrap();
-            let group = groups.swap_remove(k);
-            cur = *group.last().unwrap().points.last().unwrap();
-            out.extend(group);
-            at = Some(cur);
+    }
+
+    // The infill and gap fill as Orca's `extrude_infill` prints them: chained from where the walls end, each
+    // collection that may be re-sorted chained again from where the nozzle is when it starts.
+    groups.retain(|g| !g.paths.is_empty());
+    let mut at: Option<Pt> = out.last().and_then(|p| p.points.last().copied());
+    let ends: Vec<(Pt, Pt)> =
+        groups.iter().map(|g| (g.paths[0].points[0], *g.paths[g.paths.len() - 1].points.last().unwrap())).collect();
+    let reversible: Vec<bool> = groups.iter().map(|g| g.sortable).collect();
+    let chained = order::chain(&ends, &reversible, at, true);
+    let mut groups: Vec<Option<Group>> = groups.into_iter().map(Some).collect();
+    for (k, flip) in chained {
+        let Some(mut g) = groups[k].take() else { continue };
+        if flip {
+            g.paths.reverse();
+            for p in &mut g.paths {
+                p.points.reverse();
+            }
         }
+        if g.sortable && g.paths.len() > 1 {
+            let ends: Vec<(Pt, Pt)> = g.paths.iter().map(|p| (p.points[0], *p.points.last().unwrap())).collect();
+            let order = order::chain(&ends, &vec![true; ends.len()], at, true);
+            let mut taken: Vec<Option<Path>> = g.paths.into_iter().map(Some).collect();
+            g.paths = order
+                .into_iter()
+                .filter_map(|(i, back)| {
+                    let mut p = taken[i].take()?;
+                    if back {
+                        p.points.reverse();
+                    }
+                    Some(p)
+                })
+                .collect();
+        }
+        at = g.paths.last().and_then(|p| p.points.last().copied());
+        out.extend(g.paths);
     }
     out
+}
+
+/// The walls' loops in Orca's order (`traverse_loops`): each hole's loops nest in the loop beyond them, the
+/// outermost in the innermost loop of the outline that holds it, and each outline loop in the one outside it; a
+/// level's loops are chained from `start` (the object's centre), each outline loop printed after what it holds, each
+/// hole's loop before. With each loop, its depth (0 the outer wall) and whether it goes round an outline.
+fn wall_order(walls: &[Vec<Contour>], start: Pt) -> Vec<(&Contour, usize, bool)> {
+    let mut at: Vec<(usize, usize, bool)> = Vec::new();
+    let mut contours: Vec<Vec<usize>> = vec![Vec::new(); walls.len()];
+    let mut holes: Vec<Vec<usize>> = vec![Vec::new(); walls.len()];
+    for (d, level) in walls.iter().enumerate() {
+        for (k, c) in level.iter().enumerate() {
+            let outline = geom::area2(c) > 0;
+            if outline {
+                contours[d].push(at.len());
+            } else {
+                holes[d].push(at.len());
+            }
+            at.push((d, k, outline));
+        }
+    }
+    let contour = |id: usize| &walls[at[id].0][at[id].1];
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); at.len()];
+    let boxes: Vec<[i32; 4]> = (0..at.len())
+        .map(|id| {
+            contour(id).iter().fold([i32::MAX, i32::MAX, i32::MIN, i32::MIN], |b, p| {
+                [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]
+            })
+        })
+        .collect();
+    let holds = |parent: usize, child: usize| {
+        let (b, p) = (&boxes[parent], contour(child)[0]);
+        p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3] && geom::contour_contains(contour(parent), p)
+    };
+    let deepest = walls.len().saturating_sub(1);
+    // Holes first: in a hole loop further from the hole, else in the innermost outline loop that holds them.
+    for d in 0..walls.len() {
+        let mut i = 0;
+        while i < holes[d].len() {
+            let l = holes[d][i];
+            let parent = (d + 1..walls.len())
+                .find_map(|t| holes[t].iter().copied().find(|&c| holds(c, l)))
+                .or_else(|| (0..=deepest).rev().find_map(|t| contours[t].iter().copied().find(|&c| holds(c, l))));
+            match parent {
+                Some(p) => {
+                    children[p].push(l);
+                    holes[d].remove(i);
+                }
+                None => i += 1,
+            }
+        }
+    }
+    // Then each outline loop in the nearest outline loop outside it.
+    for d in (1..walls.len()).rev() {
+        let mut i = 0;
+        while i < contours[d].len() {
+            let l = contours[d][i];
+            let parent = (0..d).rev().find_map(|t| contours[t].iter().copied().find(|&c| holds(c, l)));
+            match parent {
+                Some(p) => {
+                    children[p].push(l);
+                    contours[d].remove(i);
+                }
+                None => i += 1,
+            }
+        }
+    }
+    fn traverse(
+        level: &[usize],
+        children: &[Vec<usize>],
+        first: &dyn Fn(usize) -> Pt,
+        outline: &dyn Fn(usize) -> bool,
+        start: Pt,
+        out: &mut Vec<usize>,
+    ) {
+        let ends: Vec<(Pt, Pt)> = level.iter().map(|&l| (first(l), first(l))).collect();
+        for (k, _) in order::chain(&ends, &vec![true; ends.len()], Some(start), false) {
+            let l = level[k];
+            if !outline(l) {
+                out.push(l);
+            }
+            traverse(&children[l], children, first, outline, start, out);
+            if outline(l) {
+                out.push(l);
+            }
+        }
+    }
+    let mut order = Vec::with_capacity(at.len());
+    let first = |l: usize| contour(l)[0];
+    let outline = |l: usize| at[l].2;
+    // Loops nested in nothing (Orca drops these; a wall is never dropped here) come after the rest, level by level.
+    let mut top: Vec<usize> = contours.first().cloned().unwrap_or_default();
+    for level in contours.iter().skip(1).chain(holes.iter()) {
+        top.extend(level.iter().copied());
+    }
+    let (nested, loose): (Vec<usize>, Vec<usize>) = top.into_iter().partition(|&l| at[l].0 == 0 && at[l].2);
+    traverse(&nested, &children, &first, &outline, start, &mut order);
+    traverse(&loose, &children, &first, &outline, start, &mut order);
+    order.into_iter().map(|l| (contour(l), at[l].0, at[l].2)).collect()
 }
 
 /// How a kind of solid infill is laid: Orca's monotonic lines (joined along the edge, or for its "monotonic line"
@@ -493,36 +614,6 @@ fn simplify_thick(points: &[Pt], widths: &[f64], resolution: f64) -> (Vec<Pt>, V
     (pts, ws)
 }
 
-/// Gap lines nearest first, each entered from its nearer end.
-fn order_thick(lines: &mut Vec<medial::ThickLine>, at: &mut Option<Pt>) {
-    if lines.is_empty() {
-        return;
-    }
-    let mut rest = std::mem::take(lines);
-    let mut cur = at.unwrap_or(rest[0].points[0]);
-    while !rest.is_empty() {
-        let mut best = (0usize, f64::INFINITY, false);
-        for (k, l) in rest.iter().enumerate() {
-            let d0 = geom::dist(cur, l.points[0]);
-            let d1 = geom::dist(cur, *l.points.last().unwrap());
-            if d0 < best.1 {
-                best = (k, d0, false);
-            }
-            if d1 < best.1 {
-                best = (k, d1, true);
-            }
-        }
-        let mut l = rest.swap_remove(best.0);
-        if best.2 {
-            l.points.reverse();
-            l.widths.reverse();
-        }
-        cur = *l.points.last().unwrap();
-        lines.push(l);
-    }
-    *at = Some(cur);
-}
-
 /// Width, mm³ per mm and nominal speed of a role on this layer.
 pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
     if first {
@@ -567,9 +658,10 @@ fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: 
 }
 
 /// A wall loop as printed: counter-clockwise, from the rearmost point (largest y, then smallest x), closed.
-fn seam_loop(contour: &Contour) -> Vec<Pt> {
+fn seam_loop(contour: &Contour, outline: bool) -> Vec<Pt> {
     let mut points: Vec<Pt> = contour.clone();
-    if geom::area2(&points) < 0 {
+    // Outlines counter-clockwise, holes clockwise (Orca's `wall_direction` ccw).
+    if (geom::area2(&points) < 0) == outline {
         points.reverse();
     }
     let seam = points
@@ -581,30 +673,6 @@ fn seam_loop(contour: &Contour) -> Vec<Pt> {
     points.rotate_left(seam);
     points.push(points[0]);
     points
-}
-
-/// Loops nearest first (a loop is entered at its seam).
-fn order_loops(loops: &mut Vec<Vec<Pt>>, at: &mut Option<Pt>) {
-    if loops.len() <= 1 {
-        if let Some(l) = loops.last() {
-            *at = l.last().copied();
-        }
-        return;
-    }
-    let mut rest = std::mem::take(loops);
-    let mut cur = at.unwrap_or(rest[0][0]);
-    while !rest.is_empty() {
-        let (k, _) = rest
-            .iter()
-            .enumerate()
-            .map(|(k, l)| (k, geom::dist(cur, l[0])))
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .unwrap();
-        let l = rest.swap_remove(k);
-        cur = *l.last().unwrap();
-        loops.push(l);
-    }
-    *at = Some(cur);
 }
 
 /// Open runs nearest first, each entered from whichever end is nearer.
@@ -634,4 +702,48 @@ fn order_runs(runs: &mut Vec<Vec<Pt>>, at: &mut Option<Pt>) {
         runs.push(r);
     }
     *at = Some(cur);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(x0: f64, y0: f64, x1: f64, y1: f64, clockwise: bool) -> Contour {
+        let mut c = vec![
+            geom::pt(geom::sc(x0), geom::sc(y0)),
+            geom::pt(geom::sc(x1), geom::sc(y0)),
+            geom::pt(geom::sc(x1), geom::sc(y1)),
+            geom::pt(geom::sc(x0), geom::sc(y1)),
+        ];
+        if clockwise {
+            c.reverse();
+        }
+        c
+    }
+
+    #[test]
+    fn walls_go_round_each_hole_and_then_the_outline_deepest_first() {
+        // Two walls round a 20 mm square with two holes: depth 0 the outer walls, depth 1 the inner ones.
+        let walls = vec![
+            vec![
+                square(0.0, 0.0, 20.0, 20.0, false),
+                square(3.0, 3.0, 7.0, 7.0, true),
+                square(13.0, 13.0, 17.0, 17.0, true),
+            ],
+            vec![
+                square(0.5, 0.5, 19.5, 19.5, false),
+                square(2.5, 2.5, 7.5, 7.5, true),
+                square(12.5, 12.5, 17.5, 17.5, true),
+            ],
+        ];
+        let order = wall_order(&walls, geom::pt(0, 0));
+        let got: Vec<(usize, bool)> = order.iter().map(|&(_, depth, outline)| (depth, outline)).collect();
+        // Each hole's inner wall, then its outer wall, the nearer hole first; then the outline's, inside out.
+        assert_eq!(got, vec![(1, false), (0, false), (1, false), (0, false), (1, true), (0, true)]);
+        assert_eq!(order[0].0[0], walls[1][1][0], "the hole nearest the start comes first");
+        // Outlines run counter-clockwise, holes clockwise.
+        for &(contour, _, outline) in &order {
+            assert_eq!(geom::area2(&seam_loop(contour, outline)) > 0, outline);
+        }
+    }
 }

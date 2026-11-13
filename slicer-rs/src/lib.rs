@@ -13,6 +13,7 @@ pub mod json;
 pub mod medial;
 pub mod mesh;
 pub mod monotonic;
+pub mod order;
 pub mod pack;
 pub mod plan;
 pub mod png;

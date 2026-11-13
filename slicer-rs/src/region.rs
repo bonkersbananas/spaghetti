@@ -67,6 +67,8 @@ pub struct Island {
     pub gaps: Shapes,
     /// Which of the plate's objects it is a slice of (an index into them).
     pub object: u32,
+    /// The shape of the slice it is (on the first layer, pulled in against elephant's foot).
+    pub outline: geom::Shape,
 }
 
 /// The infill areas of one island, by kind.
@@ -87,6 +89,10 @@ pub struct Fills {
 pub struct LayerRegions {
     pub islands: Vec<Island>,
     pub fills: Vec<Fills>,
+    /// The layer's top and bottom surfaces (from the whole slice, walls included): a travel to infill that stays
+    /// within an island's outline and off these needs no retraction (Orca's test against its internal surfaces, the
+    /// slice but its tops and bottoms).
+    pub surfaces: Shapes,
 }
 
 /// Walls and fills for every layer, from its slice and the object each of the slice's shapes belongs to.
@@ -110,8 +116,9 @@ pub fn regions(
             (slices[i].clone(), owners[i].clone())
         };
         let mut islands = walls(&slice, i, layers.height[i], s);
-        for (island, object) in islands.iter_mut().zip(objects) {
+        for ((island, object), shape) in islands.iter_mut().zip(objects).zip(slice) {
             island.object = object;
+            island.outline = shape;
         }
         islands
     });
@@ -145,6 +152,8 @@ pub fn regions(
     let exposed: Vec<(Shapes, Shapes)> =
         par::map_range(n, |i| one_kind(&tops[i], &bottoms[i], i > 0, 1.5 * outer_width(i)));
     drop((tops, bottoms));
+    let surfaces: Vec<Shapes> =
+        exposed.iter().map(|(top, bottom)| [top.as_slice(), bottom.as_slice()].concat()).collect();
 
     // Solid shells (Orca's `discover_vertical_shells`, ensuring the shells' thickness everywhere): solid infill
     // under a top surface and over a bottom, as many layers as the shells take, and wherever a layer within that
@@ -286,7 +295,12 @@ pub fn regions(
     };
     let fills = bridges::bridge_over_infill(&islands, fills, layers, &lines, s);
 
-    islands.into_iter().zip(fills).map(|(islands, fills)| LayerRegions { islands, fills }).collect()
+    islands
+        .into_iter()
+        .zip(fills)
+        .zip(surfaces)
+        .map(|((islands, fills), surfaces)| LayerRegions { islands, fills, surfaces })
+        .collect()
 }
 
 /// A layer's top and bottom surfaces with no part in both (Orca's crack rule): a part both is a bottom, unless it

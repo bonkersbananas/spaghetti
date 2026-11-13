@@ -126,6 +126,8 @@ pub struct Settings {
     pub retract_speed: f64,
     pub deretract_speed: f64,
     pub retract_min_travel: f64,
+    /// No retraction on travels to infill that stay inside the object (Orca's `reduce_infill_retraction`).
+    pub reduce_infill_retraction: bool,
     pub z_hop: f64,
     /// Degrees: how steeply a spiral lift climbs (its turn's radius is the z-hop over 2π·atan of it).
     pub travel_slope: f64,
@@ -338,6 +340,7 @@ impl Settings {
             },
             retract_min_travel: p
                 .filament_or_machine("filament_retraction_minimum_travel", "retraction_minimum_travel"),
+            reduce_infill_retraction: p.bool("reduce_infill_retraction"),
             z_hop: p.filament_or_machine("filament_z_hop", "z_hop"),
             travel_slope: at("travel_slope"),
             wipe_distance: p.filament_or_machine("filament_wipe_distance", "wipe_distance"),

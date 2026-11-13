@@ -265,7 +265,7 @@ fn farthest(points: &[Pt], a: usize, b: usize, at: impl Fn(usize) -> usize) -> (
 }
 
 /// Whether a point is inside the shapes (non-zero winding over every contour, so holes count).
-pub fn contains(shapes: &Shapes, p: Pt) -> bool {
+pub fn contains(shapes: &[Shape], p: Pt) -> bool {
     let mut winding = 0i32;
     for shape in shapes {
         for contour in shape {
@@ -273,6 +273,30 @@ pub fn contains(shapes: &Shapes, p: Pt) -> bool {
         }
     }
     winding != 0
+}
+
+/// Whether a point lies inside a contour, either way round.
+pub fn contour_contains(contour: &[Pt], p: Pt) -> bool {
+    winding_number(contour, p) != 0
+}
+
+/// A contour's centroid by area (Orca's `Polygon::centroid`, truncated to whole units as its point is).
+pub fn centroid(contour: &[Pt]) -> Pt {
+    let (mut area, mut cx, mut cy) = (0.0f64, 0.0f64, 0.0f64);
+    if contour.len() >= 3 {
+        let mut p1 = contour[contour.len() - 1];
+        for &p2 in contour {
+            let a = p1.x as f64 * p2.y as f64 - p2.x as f64 * p1.y as f64;
+            area += a;
+            cx += (p1.x as f64 + p2.x as f64) * a;
+            cy += (p1.y as f64 + p2.y as f64) * a;
+            p1 = p2;
+        }
+    }
+    if area == 0.0 {
+        return contour.first().copied().unwrap_or(pt(0, 0));
+    }
+    pt((cx / (3.0 * area)) as i32, (cy / (3.0 * area)) as i32)
 }
 
 fn winding_number(contour: &[Pt], p: Pt) -> i32 {
@@ -293,27 +317,30 @@ fn winding_number(contour: &[Pt], p: Pt) -> i32 {
 }
 
 /// Whether the segment a–b stays inside the shapes: `a` is inside and the segment crosses no contour.
-pub fn segment_inside(shapes: &Shapes, a: Pt, b: Pt) -> bool {
-    if !contains(shapes, a) {
-        return false;
-    }
+pub fn segment_inside(shapes: &[Shape], a: Pt, b: Pt) -> bool {
+    contains(shapes, a) && !segment_crosses(shapes, a, b)
+}
+
+/// Whether the segment a–b crosses or touches any of the shapes' contours.
+pub fn segment_crosses(shapes: &[Shape], a: Pt, b: Pt) -> bool {
+    shapes.iter().flatten().any(|contour| contour_crosses(contour, a, b))
+}
+
+/// Whether the segment a–b crosses or touches a contour.
+pub fn contour_crosses(contour: &[Pt], a: Pt, b: Pt) -> bool {
     let (lo_x, hi_x) = (a.x.min(b.x), a.x.max(b.x));
     let (lo_y, hi_y) = (a.y.min(b.y), a.y.max(b.y));
-    for shape in shapes {
-        for contour in shape {
-            let n = contour.len();
-            for i in 0..n {
-                let (c, d) = (contour[i], contour[(i + 1) % n]);
-                if c.x.max(d.x) < lo_x || c.x.min(d.x) > hi_x || c.y.max(d.y) < lo_y || c.y.min(d.y) > hi_y {
-                    continue;
-                }
-                if segments_cross(a, b, c, d) {
-                    return false;
-                }
-            }
+    let n = contour.len();
+    for i in 0..n {
+        let (c, d) = (contour[i], contour[(i + 1) % n]);
+        if c.x.max(d.x) < lo_x || c.x.min(d.x) > hi_x || c.y.max(d.y) < lo_y || c.y.min(d.y) > hi_y {
+            continue;
+        }
+        if segments_cross(a, b, c, d) {
+            return true;
         }
     }
-    true
+    false
 }
 
 /// Whether two segments cross or touch.
