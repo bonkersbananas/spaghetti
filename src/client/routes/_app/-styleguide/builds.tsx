@@ -293,8 +293,8 @@ export function BuildsSection() {
             }
           />
           <p className="text-small text-ink-faint">
-            "Layer 112 of 240 · 38 min left" replaces the slicer's estimate while the bridge's last report is
-            under three minutes old, and quietly gives way to it again when the bridge goes silent.
+            "Layer 112 of 240 · 38 min left" replaces the slicer's estimate while the bridge's last report is under
+            three minutes old, and quietly gives way to it again when the bridge goes silent.
           </p>
           <Label>Off the bed: stopped, no verdict yet</Label>
           <OffTheBed endedAt={Date.now() - 20 * MINUTE} onPick={(picked) => toast.message(`Opens with ${picked}`)} />
