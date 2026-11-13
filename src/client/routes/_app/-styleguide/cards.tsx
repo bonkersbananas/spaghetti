@@ -1,7 +1,7 @@
 import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
-import { Card, PhotoCountBadge } from "@/components/ui/Card";
+import { Card, PhotoDots } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
@@ -53,9 +53,27 @@ export function CardSection() {
           meta="Just now"
           person={people[0]}
           aspect="portrait"
-          badge={<PhotoCountBadge count={3} />}
+          photos={[
+            { src: vasePhoto, alt: "A gold silk-PLA vase" },
+            { src: planterPhoto, alt: "" },
+            { src: dragonPhoto, alt: "" },
+          ]}
           chips={<UploadBadge state="uploading" progress={0.64} />}
         />
+      </div>
+      <div className="mt-10">
+        <Label>
+          Several photos: a card swipes between them (arrows on hover with a mouse), and PhotoDots say which shows. Past
+          five the row slides and the edge dots shrink.
+        </Label>
+        <div className="bg-paper-deep flex flex-wrap items-center gap-4 rounded-lg p-4">
+          <PhotoDots count={2} index={0} />
+          <PhotoDots count={3} index={1} />
+          <PhotoDots count={5} index={4} />
+          <PhotoDots count={9} index={0} />
+          <PhotoDots count={9} index={4} />
+          <PhotoDots count={9} index={8} />
+        </div>
       </div>
       <div className="mt-10">
         <Label>Note cards: the shorter the note, the larger it is set (NoteFace, by length)</Label>

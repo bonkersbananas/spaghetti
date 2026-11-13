@@ -35,14 +35,18 @@ function canTravel(): boolean {
 
 /**
  * Put on a card's link as `onClick`: names the card's photo frame (the first
- * image's parent) and remembers which photo the next page should name.
- * Skipped for a modified click (a new tab) and where nothing would animate.
+ * image's parent, or `frame`: the photo showing in a card that swipes) and
+ * remembers which photo the next page should name. Skipped for a modified
+ * click (a new tab) and where nothing would animate.
  */
-export function heroClick(event: MouseEvent<HTMLElement>, photoId: string | null | undefined) {
+export function heroClick(
+  event: MouseEvent<HTMLElement>,
+  photoId: string | null | undefined,
+  frame: Element | null = event.currentTarget.querySelector("img")?.parentElement ?? null,
+) {
   if (!photoId || event.defaultPrevented || event.button !== 0) return;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !canTravel()) return;
-  const frame = event.currentTarget.querySelector("img")?.parentElement;
-  if (!frame) return;
+  if (!(frame instanceof HTMLElement)) return;
   frame.style.viewTransitionName = HERO_NAME;
   publish(photoId);
   setTimeout(() => {
