@@ -1,4 +1,4 @@
-import type { Person } from "@shared/api";
+import type { AttemptFile, Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
 import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
@@ -12,7 +12,7 @@ import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
-import { photoSrc } from "@/lib/previews";
+import { fileThumbSrc, hasPreview, photoSrc } from "@/lib/previews";
 import { useUnreadCount } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
@@ -22,6 +22,25 @@ const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardM
 export function photoAlt(item: Pick<ItemView, "title" | "note">): string {
   const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
   return text ? `Photo: ${text}` : "Photo of an idea";
+}
+
+/**
+ * The newest of an idea's files with a plate picture (a slicer's file, or a model Spaghetti sliced): the idea's cover
+ * while it has no photo of its own. A photo always wins. A model being sliced here has its picture on this device
+ * before the server does.
+ */
+export function plateCover(item: Pick<ItemView, "files">): AttemptFile | undefined {
+  let newest: AttemptFile | undefined;
+  for (const file of item.files ?? []) {
+    if ((file.hasThumb || hasPreview(file.id)) && (!newest || file.createdAt >= newest.createdAt)) newest = file;
+  }
+  return newest;
+}
+
+/** What a plate picture shows, for screen readers. */
+export function plateAlt(item: Pick<ItemView, "title" | "note">): string {
+  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
+  return text ? `Slicer preview: ${text}` : "Slicer preview of an idea";
 }
 
 /** Where an idea's uploads stand, summed up for its card. */
@@ -76,6 +95,7 @@ interface IdeaCardProps {
 
 export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2, ref }: IdeaCardProps) {
   const cover = item.photos[0];
+  const plate = cover ? undefined : plateCover(item);
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
   const model = modelOf(item);
@@ -120,7 +140,9 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
           photo={
             cover
               ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
-              : undefined
+              : plate
+                ? { src: fileThumbSrc(plate.id), alt: plateAlt(item), fit: "contain" }
+                : undefined
           }
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
           // Links read better short on a card: printables.com/model/123.

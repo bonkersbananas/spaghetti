@@ -8917,7 +8917,7 @@
     "/api/attempts/{id}/file": {
       "put": {
         "operationId": "putAttemptsByIdFile",
-        "summary": "Attaches the slicer file an attempt was printed from, with its plate thumbnail.",
+        "summary": "Attaches the file an attempt was printed from, with its plate thumbnail: a slicer file, or a model (kind model: an .stl or plain .3mf the app slices).",
         "description": "Needs the \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "attempts"
@@ -8976,11 +8976,19 @@
                     "type": "string",
                     "maxLength": 64000
                   },
+                  "kind": {
+                    "default": "slicer",
+                    "type": "string",
+                    "enum": [
+                      "slicer",
+                      "model"
+                    ]
+                  },
                   "file": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB."
+                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB."
                   },
                   "thumb": {
                     "type": "string",
@@ -9204,7 +9212,7 @@
     "/api/items/{id}/files/{fileId}": {
       "put": {
         "operationId": "putItemsByIdFilesByFileId",
-        "summary": "Keeps a slicer file (.3mf or .gcode.3mf) with an idea or build, with its plate thumbnail. Several may be kept; the same id again changes it.",
+        "summary": "Keeps a file with an idea or build, with its plate thumbnail: a slicer file (.3mf or .gcode.3mf), or a model (kind model: an .stl or plain .3mf the app slices). Several may be kept; the same id again changes it.",
         "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "items"
@@ -9266,11 +9274,19 @@
                     "type": "string",
                     "maxLength": 64000
                   },
+                  "kind": {
+                    "default": "slicer",
+                    "type": "string",
+                    "enum": [
+                      "slicer",
+                      "model"
+                    ]
+                  },
                   "file": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB."
+                    "description": "The .3mf or .gcode.3mf, kept up to 25 MB; a model's .stl or .3mf, required, up to 50 MB."
                   },
                   "thumb": {
                     "type": "string",
@@ -9520,7 +9536,7 @@
     "/api/files/{id}": {
       "get": {
         "operationId": "getFilesById",
-        "summary": "A slicer file's bytes, or its plate thumbnail with `/thumb`.",
+        "summary": "A file's bytes (a model's original), its plate thumbnail with `/thumb`, or a model's sliced .gcode.3mf with `/sliced`.",
         "description": "Needs the \"read\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "files"
@@ -9594,7 +9610,7 @@
     "/api/files/{id}/{part}": {
       "get": {
         "operationId": "getFilesByIdByPart",
-        "summary": "A slicer file's bytes, or its plate thumbnail with `/thumb`.",
+        "summary": "A file's bytes (a model's original), its plate thumbnail with `/thumb`, or a model's sliced .gcode.3mf with `/sliced`.",
         "description": "Needs the \"read\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "files"
@@ -9671,6 +9687,146 @@
         "x-scopes": [
           "read"
         ]
+      }
+    },
+    "/api/files/{id}/sliced": {
+      "put": {
+        "operationId": "putFilesByIdSliced",
+        "summary": "Keeps how a model was sliced (or why it couldn't be), with the sliced .gcode.3mf and its plate picture. The app slices in the browser; slicing again replaces it.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slice": {
+                    "type": "string",
+                    "maxLength": 64000
+                  },
+                  "prefill": {
+                    "type": "string",
+                    "maxLength": 64000
+                  },
+                  "objects": {
+                    "type": "string",
+                    "maxLength": 64000
+                  },
+                  "slicer": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "sliced": {
+                    "type": "string",
+                    "contentEncoding": "base64",
+                    "contentMediaType": "application/octet-stream",
+                    "description": "The .gcode.3mf, up to 25 MB: required when slice.status is sliced."
+                  },
+                  "thumb": {
+                    "type": "string",
+                    "contentEncoding": "base64",
+                    "contentMediaType": "application/octet-stream",
+                    "description": "The plate's picture."
+                  }
+                },
+                "required": [
+                  "slice"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "$ref": "#/components/schemas/AttemptFile"
+                    }
+                  },
+                  "required": [
+                    "file"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid: the request couldn't be read; the message says what is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict: only a model is sliced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported: not a picture.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
       }
     },
     "/api/spools": {
@@ -17096,6 +17252,210 @@
               "type": "string"
             }
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slicer",
+              "model"
+            ],
+            "description": "slicer: a slicer's own .3mf or .gcode.3mf. model: an .stl or plain .3mf that the app slices in the browser; the file is the original, and the sliced .gcode.3mf is GET /files/{id}/sliced once slice.status is sliced."
+          },
+          "slice": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "sliced",
+                      "failed"
+                    ]
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "machine": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "process": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "filaments": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 120
+                        }
+                      },
+                      "layerHeight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10
+                      },
+                      "materials": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 40
+                        }
+                      },
+                      "bedType": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "supports": {
+                        "type": "boolean"
+                      },
+                      "scale": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "project": {
+                        "type": "string",
+                        "enum": [
+                          "own",
+                          "some"
+                        ]
+                      },
+                      "engine": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      "orca": {
+                        "type": "string",
+                        "maxLength": 40
+                      }
+                    },
+                    "required": [
+                      "machine",
+                      "process",
+                      "filaments",
+                      "layerHeight",
+                      "materials",
+                      "bedType",
+                      "supports",
+                      "scale",
+                      "engine",
+                      "orca"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 26214400
+                  },
+                  "cautions": {
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "floating"
+                      ]
+                    }
+                  },
+                  "problem": {
+                    "type": "string",
+                    "enum": [
+                      "too-big",
+                      "too-tall",
+                      "too-many",
+                      "no-model",
+                      "unreadable",
+                      "memory",
+                      "engine",
+                      "orca",
+                      "too-large"
+                    ]
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "dimensions": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "volume": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "fitScale": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "device": {
+                    "type": "string",
+                    "enum": [
+                      "phone",
+                      "computer"
+                    ]
+                  },
+                  "at": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "status",
+                  "settings",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A model's slicing: how it was sliced (printer, process and filament presets, layer height, supports, scale, the engine's release and OrcaSlicer's version) or why it couldn't be (problem). Null until it is sliced or fails."
+          },
           "createdAt": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -17114,6 +17474,8 @@
           "slicer",
           "prefill",
           "objects",
+          "kind",
+          "slice",
           "createdAt"
         ],
         "additionalProperties": false

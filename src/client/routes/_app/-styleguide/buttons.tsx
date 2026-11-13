@@ -1,4 +1,4 @@
-import { Button, IconButton } from "@/components/ui/Button";
+import { Button, ButtonLink, IconButton } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Panel, Section } from "./shared";
@@ -8,7 +8,7 @@ export function ButtonSection() {
     <Section
       id="buttons"
       title="Buttons"
-      note="Primary (tomato) for the one main action on a screen; secondary for the rest; quiet in toolbars and lists. Tap targets are 44 px on phones."
+      note="Primary (tomato) for the one main action on a screen; secondary for the rest; quiet in toolbars and lists. ButtonLink is the same face on a link (a download). Tap targets are 44 px on phones."
     >
       <Panel className="flex flex-col gap-6">
         <div className="flex flex-wrap items-center gap-3">
@@ -22,6 +22,9 @@ export function ButtonSection() {
           <Button variant="danger" icon={Icons.TrashIcon}>
             Delete
           </Button>
+          <ButtonLink href="#buttons" variant="secondary" icon={Icons.DownloadIcon}>
+            Download the original
+          </ButtonLink>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" size="sm">

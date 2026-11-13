@@ -83,7 +83,7 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes";
-import { useSlicerDropTarget } from "@/lib/slicer-files";
+import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { twistFromBuild, useTwists } from "@/lib/twists";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -685,6 +685,7 @@ function Build({ item }: { item: ItemView }) {
                           partsLabel={attemptPartsLabel(attempt, item.parts)}
                           photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
                           onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
+                          readOnly={readOnly || attempt.pending}
                           person={byId.get(attempt.createdBy)}
                           via={via(attempt.createdVia)}
                           selected={attempt.id === selected}

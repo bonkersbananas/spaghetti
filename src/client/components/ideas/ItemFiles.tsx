@@ -5,8 +5,9 @@ import { Overline } from "@/components/ui/Overline";
 import { removeItemFile } from "@/lib/item-files";
 
 /**
- * The slicer files kept with an idea (and its build): the plate picture, name, size and estimate, Download, the 3D
- * view on a sliced one, and Remove (with Undo). Loaded only once there is a file to show.
+ * The files kept with an idea (and its build): slicer files and models (sliced in the browser, ModelFile.tsx), each
+ * with its plate picture, name, size and estimate, Download, the 3D view on a sliced one, and Remove (with Undo).
+ * Loaded only once there is a file to show.
  */
 export default function ItemFiles({
   itemId,
@@ -30,6 +31,7 @@ export default function ItemFiles({
             <SavedFileCard
               raised
               file={file}
+              owner={readOnly ? undefined : { itemId, attemptId: null }}
               onRemove={
                 readOnly || (file as { pending?: boolean }).pending
                   ? undefined

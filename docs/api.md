@@ -120,6 +120,7 @@ A build may be made of parts ("Hull half" ×2, "Deck" ×1); most builds have non
 - `GET /search` finds builds by part name, and each attempt hit has a `partsLabel` ("Hull half ×2, Deck"). `GET /builds/:id/story.md` has a Parts section and names parts on attempts.
 - An attempt's slicer file keeps the object names of its plate (`file.objects`, sent as the `objects` JSON field of `PUT /attempts/:id/file`); the app offers them as parts.
 - An idea or build keeps slicer files of its own: `PUT /items/:id/files/:fileId` (the same multipart fields as an attempt's file, scope `capture` or `attempts`; several at once, at most 20), `DELETE` and `POST …/restore` (people only), listed as `item.files`; `GET /files/:id` serves them like an attempt's ([0045](decisions/0045-ideas-keep-slicer-files.md)).
+- A file's `kind` is `slicer` (a slicer's own file) or `model` (an `.stl` or a `.3mf` with no G-code, sent with `kind=model` and its bytes, up to 50 MB), which the app slices in the browser ([0046](decisions/0046-models-are-sliced-in-the-browser.md)). A model's `slice` says how that went: `status` "sliced" with the `settings` it used (printer, process and filament presets, layer height, materials, plate, supports, scale), or "failed" with a `problem`. `GET /files/:id/sliced` serves the sliced `.gcode.3mf`; `PUT /files/:id/sliced` (multipart: `slice`, and when sliced the `sliced` file up to 25 MB with `prefill`, `objects`, `slicer` and the plate's `thumb`) is for people only, so agents can read models and their slices but not slice.
 
 ## Insights
 

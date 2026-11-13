@@ -18,8 +18,9 @@ interface SettingsLineProps {
 }
 
 /**
- * An attempt's settings in one quiet line: each filament with its swatch,
- * then the rest, dot-separated (a MetaList, so no dot begins or ends a line).
+ * An attempt's settings in one quiet line: each filament with its swatch (none
+ * when it has no colour: an empty ring would read as a radio button), then the
+ * rest, dot-separated (a MetaList, so no dot begins or ends a line).
  */
 export function SettingsLine({
   filaments,
@@ -34,7 +35,7 @@ export function SettingsLine({
       {filaments.map((filament, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: filaments are their position.
         <span key={`f${index}`} className={cn("inline-flex items-center gap-1.5 font-medium", filamentClassName)}>
-          <Swatch color={filament.colorHex} />
+          {filament.colorHex && <Swatch color={filament.colorHex} />}
           {renderText(name(filament))}
         </span>
       ))}

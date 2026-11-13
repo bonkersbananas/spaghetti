@@ -141,7 +141,7 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
       const name = meta.get("plater_name");
       if (name) p.name = name;
       const bed = meta.get("bed_type");
-      if (bed) p.bedType = bed;
+      if (bed) p.bedType = bedTypeName(bed);
       const thumb = meta.get("thumbnail_file");
       if (thumb) thumbFiles.set(index, thumb.replace(/^\/+/, ""));
       const used = new Set<number>();
@@ -218,7 +218,7 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
         const j: unknown = JSON.parse(json);
         if (j && typeof j === "object") {
           const o = j as Record<string, unknown>;
-          if (typeof o.bed_type === "string" && o.bed_type && !p.bedType) p.bedType = o.bed_type;
+          if (typeof o.bed_type === "string" && o.bed_type && !p.bedType) p.bedType = bedTypeName(o.bed_type);
           const nd = toNum(o.nozzle_diameter);
           if (nd !== undefined && p.nozzleDiameter === undefined) p.nozzleDiameter = round(nd);
         }
@@ -273,8 +273,8 @@ function readSlicer(head: string | undefined): { name: string; version?: string 
   const m = /<metadata\s+name="Application"[^>]*>([^<]*)</.exec(head);
   const app = m?.[1]?.trim();
   if (!app) return undefined;
-  // "BambuStudio-02.01.00.00", "OrcaSlicer-2.3.0"
-  const v = /^(.*?)[-\s]v?(\d+(?:\.\d+)+\w*)$/.exec(app);
+  // "BambuStudio-02.01.00.00", "OrcaSlicer-2.3.0", "OrcaSlicer-2.5.0-dev"
+  const v = /^(.*?)[-\s]v?(\d+(?:\.\d+)+[\w.-]*)$/.exec(app);
   return v?.[1] ? { name: v[1], version: v[2] } : { name: app };
 }
 
@@ -312,6 +312,20 @@ export function sniffImage(b: Uint8Array): ImageMediaType | undefined {
     return "image/webp";
   return undefined;
 }
+
+/**
+ * A plate's bed type as the settings name it ("Textured PEI Plate"): plate_N.json and a plate's metadata write the
+ * short key ("textured_plate") instead.
+ */
+const BED_TYPE_NAMES: Record<string, string> = {
+  cool_plate: "Cool Plate",
+  eng_plate: "Engineering Plate",
+  hot_plate: "High Temp Plate",
+  textured_plate: "Textured PEI Plate",
+  supertack_plate: "Supertack Plate",
+  textured_cool_plate: "Textured Cool Plate",
+};
+const bedTypeName = (value: string) => BED_TYPE_NAMES[value] ?? value;
 
 // Bed temperature key per bed type name (PrintConfig.cpp, s_keys_map_BedType).
 const BED_TEMP_KEYS: Record<string, string> = {

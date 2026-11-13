@@ -454,7 +454,14 @@ export class PrintScene {
     const fov = (this.camera.fov * Math.PI) / 180;
     const aspect = this.width / this.height;
     const fitFov = aspect < 1 ? 2 * Math.atan(Math.tan(fov / 2) * aspect) : fov;
-    const distance = Math.max(50, (radius * (aspect > 1 ? 0.8 : 0.98)) / Math.sin(fitFov / 2));
+    // A tall print fills the view's height before its width: back off until its height (seen from a little above,
+    // with its depth below it) fits with a margin.
+    const tall = (((b[5] - b[2]) * 0.93 + (b[4] - b[1]) * 0.36) / 2) * 1.15;
+    const distance = Math.max(
+      50,
+      (radius * (aspect > 1 ? 0.8 : 0.98)) / Math.sin(fitFov / 2),
+      tall / Math.tan(fov / 2),
+    );
     // three's frame: x → x, z → −y, y → z.
     this.controls.target.set(cx, cz, -cy);
     this.camera.position.set(cx + distance * 0.4, cz + distance * 0.36, -cy + distance * 0.84);

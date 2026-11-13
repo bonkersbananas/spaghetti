@@ -2,7 +2,7 @@ import { AnimatePresence, m } from "motion/react";
 import { useSyncExternalStore } from "react";
 import { DropIcon } from "@/components/ui/icons";
 import { duration, ease } from "@/lib/motion";
-import { hasSlicerDropTarget, subscribeSlicerDropTargets } from "@/lib/slicer-files";
+import { hasSlicerDropTarget, subscribeSlicerDropTargets } from "@/lib/slicer-drop";
 
 /** Shown while photos are dragged over the window: let go anywhere to capture them. */
 export function DropOverlay({ visible }: { visible: boolean }) {
@@ -33,7 +33,7 @@ export function DropOverlay({ visible }: { visible: boolean }) {
             </p>
             <p className="text-small text-ink-faint max-w-64">
               {slicer
-                ? "A .3mf from Bambu Studio or Orca fills in an attempt. Photos are captured as usual."
+                ? "A slicer's .gcode.3mf is kept as it is; an .stl or .3mf is sliced here. Photos are captured as usual."
                 : "The photos start a new idea."}
             </p>
           </m.div>

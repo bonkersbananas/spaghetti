@@ -64,6 +64,17 @@ endsolid t`;
     expect(parseStl(bytes).ok && (parseStl(bytes) as { format: string }).format).toBe("binary");
   });
 
+  it("takes a binary file with a few stray bytes after its last triangle, but not a file that only claims to be one", () => {
+    const written = writeStl({ positions: new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0]) });
+    const padded = new Uint8Array(written.length + 3);
+    padded.set(written);
+    const read = parseStl(padded);
+    expect(read.ok && [...read.mesh.positions]).toEqual([0, 0, 0, 10, 0, 0, 0, 10, 0]);
+    const photo = new Uint8Array(4096);
+    new DataView(photo.buffer).setUint32(80, 12, true);
+    expect(parseStl(photo).ok).toBe(false);
+  });
+
   it("says why a file isn't an STL, without throwing", () => {
     expect(parseStl(new TextEncoder().encode("hello, this is not a model at all")).ok).toBe(false);
     expect(parseStl(new Uint8Array(4)).ok).toBe(false);

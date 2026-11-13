@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { boxesStl, boxStl, fusilliStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { commentId } from "./seed/comments.ts";
@@ -352,6 +353,140 @@ async function openIdea(page: Page, id: string) {
   await page.goto(`/ideas/${id}`);
   await page.locator("h1").first().waitFor({ state: "attached" });
   await page.getByRole("button", { name: "Start building" }).first().waitFor();
+}
+
+/**
+ * A new idea with a model kept on it, as it would be dropped there: an .stl that slices in the browser (decision 0046).
+ * `until` is the card's line to wait for: "Slicing", "Sliced by Spaghetti" or a sentence of why it couldn't be.
+ */
+async function ideaWithModel(
+  page: Page,
+  idea: { title: string; note: string },
+  file: { name: string; bytes: Uint8Array },
+  until: RegExp,
+) {
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", { headers: { Origin: new URL(page.url()).origin }, data: { id, ...idea } });
+  await openIdea(page, id);
+  await page.getByTestId("idea-file-input").setInputFiles({
+    name: file.name,
+    mimeType: "model/stl",
+    buffer: Buffer.from(file.bytes),
+  });
+  const files = page.getByRole("region", { name: /^Files/ });
+  await files.getByText(until).first().waitFor({ timeout: 90_000 });
+  // The plate picture is drawn before slicing starts: wait for it to be on screen.
+  await files.locator("img").first().waitFor();
+  return files;
+}
+
+const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
+const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the pasta jar lid: twist to open." };
+/**
+ * A drying rack whose arm starts in the air beside its post (one mesh, so the arm isn't dropped to the bed): its
+ * first layers have nothing under them, and Orca asks for supports. (A part above an empty gap fails instead: Orca
+ * won't print empty layers.)
+ */
+const RACK = {
+  name: "pasta-drying-rack.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [36, 36, 4] },
+    { at: [12, 12, 4], size: [12, 12, 46] },
+    { at: [30, 15, 34], size: [26, 6, 4] },
+  ]),
+};
+const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
+
+/** An idea with a model the server keeps but nobody sliced (its tab closed while it waited). */
+async function ideaWithUnslicedModel(page: Page) {
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id, ...FUSILLI_IDEA } });
+  await page.request.put(`/api/items/${id}/files/${crypto.randomUUID()}`, {
+    headers,
+    multipart: {
+      name: FUSILLI.name,
+      size: String(FUSILLI.bytes.length),
+      plate: "1",
+      plateCount: "1",
+      prefill: "{}",
+      kind: "model",
+      file: { name: FUSILLI.name, mimeType: "model/stl", buffer: Buffer.from(FUSILLI.bytes) },
+    },
+  });
+  await openIdea(page, id);
+  await page
+    .getByRole("region", { name: /^Files/ })
+    .getByText("Not sliced yet")
+    .waitFor();
+}
+
+/** Until the server has the newest model idea's slice, with its picture (what the Ideas list reads). */
+async function sliceSaved(page: Page) {
+  const id = modelItems.at(-1);
+  for (let tries = 0; tries < 120; tries++) {
+    const { item } = await (await page.request.get(`/api/items/${id}`)).json();
+    if (item?.files?.some((file: { hasThumb?: boolean }) => file.hasThumb)) return;
+    await page.waitForTimeout(500);
+  }
+  throw new Error("The model's slice never reached the server");
+}
+
+/** Waits for a sliced model's card and brings it into view. */
+async function modelInView(page: Page) {
+  await page.getByRole("region", { name: /^Files/ }).evaluate((region) => region.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
+}
+
+/** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
+const modelItems: string[] = [];
+
+async function removeModelItems(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of modelItems.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+}
+
+/**
+ * Once a model in the attempt sheet is sliced, the sheet reads the sliced file and the settings open with what it
+ * says, with an animation that changes the sheet's height. The shots' fixed clock starts the settings' fade late, more
+ * so as a run goes on: finish it rather than wait for it.
+ */
+async function sheetSettled(page: Page, sheet: Locator) {
+  await sheet.getByLabel("Layer height").waitFor();
+  const panel = await sheet.getByRole("button", { name: /^Settings/ }).getAttribute("aria-controls");
+  await page.waitForFunction((id) => {
+    const element = id ? document.getElementById(id) : null;
+    if (!element) return false;
+    for (const animation of element.getAnimations()) animation.finish();
+    return getComputedStyle(element).opacity === "1";
+  }, panel);
+  await page.waitForTimeout(900);
+}
+
+/**
+ * A new build with its first attempt's sheet open and the fusilli knob's .stl dropped in it, sliced there: what the
+ * slice says fills in the attempt, which isn't logged yet. Returns the sheet.
+ */
+async function buildWithModel(page: Page) {
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { id, ...FUSILLI_IDEA, stage: "building" },
+  });
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).first().click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await sheet.waitFor();
+  await page.getByTestId("slicer-file-input").setInputFiles({
+    name: FUSILLI.name,
+    mimeType: "model/stl",
+    buffer: Buffer.from(FUSILLI.bytes),
+  });
+  await sheet.getByText("Sliced by Spaghetti").waitFor({ timeout: 90_000 });
+  return sheet;
 }
 
 /** The spools the label shots make (removed again by their cleanup). */
@@ -1172,6 +1307,198 @@ export const shots: Shot[] = [
       });
       await page.waitForTimeout(300);
     },
+  },
+  {
+    // A model (.stl) dropped on an idea, slicing in the browser: its picture is drawn, the engine is on its way (held
+    // here, so the shot always finds it slicing).
+    name: "idea-model-slicing",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route("**/slicer/*/engine-st.wasm", () => undefined);
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Slicing \d+%/);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The model sliced, on an idea with no photo: its plate picture is the cover, the add-photo wells smaller under
+    // it; on desktop the card beside it leads with the print (about how long, how many grams), then the file and how
+    // Spaghetti sliced it.
+    name: "idea-model",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await page.getByRole("img", { name: `Slicer preview: ${FUSILLI_IDEA.title}` }).waitFor();
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    // The same idea's model card on a phone, further down the page.
+    name: "idea-model-card",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // An idea with a model and no photo, in the Ideas list: the model's plate picture is its card's picture.
+    name: "ideas-model-cover",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      // The list shows its saved copy first (the shots before this one left their ideas in it): wait for the fresh one.
+      await page.goto("/ideas", { waitUntil: "networkidle" });
+      const alt = `Slicer preview: ${FUSILLI_IDEA.title}`;
+      await page.waitForFunction((name) => document.querySelectorAll(`img[alt="${name}"]`).length === 1, alt);
+      const cover = page.getByRole("img", { name: alt });
+      await cover.evaluate((img) => img.closest("li")?.scrollIntoView({ block: "center", behavior: "instant" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    // How it was sliced: a popover on desktop, a sheet on phones, with the engine's source and the original.
+    name: "idea-model-details",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await modelInView(page);
+      await files.getByRole("button", { name: /Sliced by Spaghetti/ }).click();
+      await page.getByRole("dialog").getByText("Download the original").waitFor();
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The sliced model in the 3D view: the G-code Spaghetti made, layer by layer.
+    name: "idea-model-viewer",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await files.getByRole("button", { name: `See ${FUSILLI.name} in 3D` }).click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // A model too long for the plate: one sentence, and the one thing that helps.
+    name: "idea-model-too-big",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(
+        page,
+        { title: "Lasagne wall art", note: "A whole lasagne sheet, life size, for the kitchen wall." },
+        { name: "lasagne-sheet.stl", bytes: boxStl(320, 100, 4) },
+        /Too big for the plate/,
+      );
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // A model with a part that starts in the air: sliced as it is, with one caution and the one thing that helps.
+    name: "idea-model-floating",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, RACK_IDEA, RACK, /Parts of it float/);
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // A model kept but never sliced (its slicing stopped with its tab): "Not sliced yet", and "Slice it".
+    name: "idea-model-unsliced",
+    path: "/ideas",
+    prepare: ideaWithUnslicedModel,
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // The top of the attempt sheet on a phone right after a model is dropped in it: the outcome to pick, then the
+    // model, sliced there.
+    name: "build-model-drop",
+    path: "/builds",
+    width: 390,
+    prepare: async (page) => {
+      const sheet = await buildWithModel(page);
+      await sheetSettled(page, sheet);
+      await sheet.evaluate((dialog) => {
+        for (const element of Array.from(dialog.querySelectorAll<HTMLElement>("*"))) {
+          if (element.scrollHeight > element.clientHeight + 1) element.scrollTop = 0;
+        }
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+      await page.reload();
+    },
+  },
+  {
+    // A model dropped in the attempt sheet: sliced there, and what its slice says (estimate, filament) fills in the
+    // attempt, as a slicer's own file would.
+    name: "build-model-sheet",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildWithModel(page);
+      // Scrolled once the settings have opened, the whole card at the top.
+      await sheetSettled(page, sheet);
+      await sheet.getByText(FUSILLI.name).evaluate((element) => {
+        const card = element.closest(".grid") ?? element;
+        card.scrollIntoView({ block: "start", behavior: "instant" });
+        let scroller = card.parentElement;
+        while (scroller && scroller.scrollHeight <= scroller.clientHeight) scroller = scroller.parentElement;
+        scroller?.scrollBy({ top: -12, behavior: "instant" });
+      });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+      await page.reload();
+    },
+  },
+  {
+    // The model on its attempt, on the build's page: logged as it worked, with the plate Spaghetti drew, the estimate
+    // and the 3D view, like any slicer file.
+    name: "build-model",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildWithModel(page);
+      await sheet.getByRole("radio", { name: "Worked" }).click();
+      await sheet.getByRole("button", { name: "Log attempt" }).click();
+      await sheet.waitFor({ state: "hidden" });
+      // The model goes with the attempt through the outbox, and its slice follows: the 3D control shows once the
+      // server has both.
+      await page.getByRole("button", { name: `See ${FUSILLI.name} in 3D` }).waitFor({ timeout: 90_000 });
+      await page
+        .getByRole("button", { name: /Sliced by Spaghetti/ })
+        .first()
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: removeModelItems,
   },
   {
     // The 3D view opened from the idea's own file.
@@ -2387,6 +2714,7 @@ export const shots: Shot[] = [
       await page.waitForTimeout(300);
     },
   },
+  { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },

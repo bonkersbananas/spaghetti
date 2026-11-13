@@ -12,7 +12,7 @@ import { outbox } from "./outbox";
 import { setPreview } from "./previews";
 import { sessionQuery } from "./queries";
 import { canEdit } from "./read-only";
-import { isSlicerFile, takeSlicerDrop } from "./slicer-files";
+import { isSlicerFile, takeSlicerDrop } from "./slicer-drop";
 
 /** A photo in the capture sheet, resized in the background while you type. */
 export interface DraftPhoto {
@@ -492,7 +492,10 @@ export function useGlobalCapture(): boolean {
       if (slicer) {
         const onAttempt = event.target instanceof Element ? event.target.closest("[data-attempt-id]") : null;
         if (takeSlicerDrop(slicer, onAttempt?.getAttribute("data-attempt-id") ?? null)) return;
-        toast.message("Open a build to add a slicer file", "Drop the .3mf on a build or an attempt.");
+        toast.message(
+          "Open an idea or a build to add it",
+          "Drop .stl and .3mf files on an idea, a build or an attempt.",
+        );
         return;
       }
       const files = imageFiles(dropped);

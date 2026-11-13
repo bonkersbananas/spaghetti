@@ -91,7 +91,10 @@ export function LogAttempt({
     if (!user) return;
     const attemptId = logAttempt(item, { ...draft, outcome, printedAt: when ?? Date.now(), photos }, user.id);
     const file = slicer.state;
-    if (file?.prefill) queueSlicerFile(item.id, attemptId, file.draft, file.plate, file.prefill);
+    // A model goes with the attempt as soon as it is logged, sliced or not: its slice follows it (lib/slicing/jobs).
+    if (file && (file.prefill || file.draft.kind === "model")) {
+      queueSlicerFile(item.id, attemptId, file.draft, file.plate, file.prefill ?? {});
+    }
     slicer.clear();
     clear();
     setDirty(false);
@@ -175,10 +178,15 @@ export function LogAttempt({
               ideaFiles={previous ? undefined : item.files}
               onUseIdeaFile={async (kept) => {
                 const file = await fetchKeptFile(kept);
-                if (file) void slicer.take(file);
+                // A kept model gives its sliced file, and what its slice said (no stand-in filament claimed).
+                if (file) void slicer.take(file, kept.kind === "model" ? kept.prefill : undefined);
               }}
               unknown={slicer.unknownFilaments}
-              card={slicer.state?.prefill ? <DraftFile state={slicer.state} onRemove={slicer.clear} /> : null}
+              card={
+                slicer.state && (slicer.state.prefill || slicer.state.draft.kind === "model") ? (
+                  <DraftFile state={slicer.state} onRemove={slicer.remove} onSlice={slicer.reslice} />
+                ) : null
+              }
             />
           }
           onEnter={() => {

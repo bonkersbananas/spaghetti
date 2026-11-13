@@ -15,6 +15,8 @@ export interface CardProps {
     alt: string;
     color?: string /** The photo's id, so it can travel to the page this opens. */;
     id?: string;
+    /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the well, not cropped. */
+    fit?: "cover" | "contain";
   };
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
@@ -98,7 +100,8 @@ export function Card({
             src={photo.src}
             alt={photo.alt}
             color={photo.color}
-            className="size-full"
+            fit={photo.fit}
+            className={cn("size-full", photo.fit === "contain" && "p-3")}
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
         ) : noteCard ? (

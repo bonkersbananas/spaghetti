@@ -3,7 +3,8 @@ import { cn } from "@/lib/cn";
 /**
  * A small ring: filled to `value` (0–1), or spinning when it isn't known.
  * 16 px by default; give it a `size-*` class to resize. It takes its color
- * from the text color.
+ * from the text color; its track is heavy enough that a light color (semolina
+ * on cream) still reads as a ring at 5%.
  */
 export function ProgressRing({ value, className }: { value: number | null; className?: string }) {
   const radius = 6;
@@ -15,7 +16,7 @@ export function ProgressRing({ value, className }: { value: number | null; class
       className={cn("size-4 -rotate-90", value === null && "animate-spin", className)}
       aria-hidden
     >
-      <circle cx="8" cy="8" r={radius} fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+      <circle cx="8" cy="8" r={radius} fill="none" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2" />
       <circle
         cx="8"
         cy="8"

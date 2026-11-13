@@ -10,6 +10,7 @@ import type {
 } from "@shared/api";
 import type { AttemptSettings, Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
+import type { FileKind } from "@shared/slicing/types.ts";
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "./api";
 import { isOnline, reportReachable, reportUnreachable, subscribeConnection } from "./connection";
@@ -61,6 +62,8 @@ export interface PendingFile {
   prefill: AttemptSettings;
   /** The object names on the plate (for parts). */
   objects?: string[];
+  /** "model": an .stl or plain .3mf, sliced by lib/slicing/jobs.ts, which sends its slice once this is saved. */
+  kind?: FileKind;
   queuedAt: number;
 }
 
@@ -620,6 +623,7 @@ class Outbox {
     if (pending.slicer) form.set("slicer", pending.slicer);
     form.set("prefill", JSON.stringify(pending.prefill));
     if (pending.objects?.length) form.set("objects", JSON.stringify(pending.objects));
+    if (pending.kind) form.set("kind", pending.kind);
     if (pending.thumb) form.set("thumb", pending.thumb, "thumb.png");
     if (pending.file) form.set("file", pending.file, pending.name);
     const response = await send(`/api/attempts/${pending.attemptId}/file`, form, () => undefined);

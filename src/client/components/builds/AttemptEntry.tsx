@@ -50,6 +50,8 @@ interface AttemptEntryProps {
   onSaveRecipe?: () => void;
   /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
   reserveExtras?: boolean;
+  /** Offline (or a pending attempt): its model can't be sliced again from here. */
+  readOnly?: boolean;
 }
 
 // Claude's ideas for the next try load after the build page: they only exist for a failed attempt.
@@ -76,6 +78,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     onCompare,
     onSaveRecipe,
     reserveExtras,
+    readOnly,
   },
   ref,
 ) {
@@ -208,11 +211,13 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             <AttemptTags attempt={attempt} />
 
             {attempt.file && (
-              // Above the open button, so its download link works.
-              <div className="pointer-events-auto relative z-10 md:max-w-md">
+              // Above the open button, so its controls work; the card's width, so the download lines up with the
+              // attempt's menu above it. Between its controls a tap still opens the attempt.
+              <div className="relative z-10 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
                 <SavedFileCard
                   compact
                   file={attempt.file}
+                  owner={readOnly ? undefined : { itemId: attempt.itemId, attemptId: attempt.id }}
                   filaments={attempt.settings.filaments}
                   printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
                 />

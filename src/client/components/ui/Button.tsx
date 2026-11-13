@@ -85,6 +85,38 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
+export interface ButtonLinkProps extends ComponentPropsWithRef<"a"> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  icon?: Icon;
+  fullWidth?: boolean;
+  children?: ReactNode;
+}
+
+/** A link that looks like a button: for a download or a page elsewhere that is an action, not a line of text. */
+export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(function ButtonLink(
+  { variant = "secondary", size = "md", icon: IconComponent, fullWidth = false, className, children, ...props },
+  ref,
+) {
+  return (
+    <a
+      ref={ref}
+      className={cn(
+        "pressable focus-ring inline-flex shrink-0 items-center justify-center whitespace-nowrap select-none",
+        variants[variant],
+        sizes[size],
+        hitArea(size, className),
+        fullWidth && "w-full",
+        className,
+      )}
+      {...props}
+    >
+      {IconComponent && <IconComponent size={iconSizes[size]} weight="bold" aria-hidden />}
+      {children}
+    </a>
+  );
+});
+
 export interface IconButtonProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
   icon: Icon;
   /** Required: icon buttons have no visible text. */

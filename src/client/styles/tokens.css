@@ -246,8 +246,12 @@
   --sg-semolina-ink: #eccb7f;
   --sg-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 236 214 / 0.045);
   --sg-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 236 214 / 0.07);
-  --sg-shadow-key: var(--sg-shadow-soft);
-  --sg-shadow-key-hover: var(--sg-shadow-raised);
+  /* Cream on cream at night needs its hair of edge too: a faint lit one. */
+  --sg-shadow-key:
+    0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 236 214 / 0.045), 0 0 0 1px rgb(255 236 214 / 0.08);
+  --sg-shadow-key-hover:
+    0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 236 214 / 0.07),
+    0 0 0 1px rgb(255 236 214 / 0.12);
   --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.3), 0 20px 56px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 236 214 / 0.08);
   --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
   --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);

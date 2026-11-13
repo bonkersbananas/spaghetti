@@ -1,43 +1,66 @@
-import { type AttemptFile, MAX_SLICER_FILE_BYTES, type Spool } from "@shared/api";
+import { type AttemptFile, MAX_MODEL_FILE_BYTES, MAX_SLICER_FILE_BYTES, type Spool } from "@shared/api";
 import type { AttemptFilament, AttemptSettings } from "@shared/attempts";
+import { isStlName } from "@shared/slicing/files.ts";
+import type { FileKind } from "@shared/slicing/types.ts";
 import { filamentFromSpool, matchFilaments } from "@shared/spools";
 import { printablePlates, settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import type { Plate, ThreeMfResult } from "@shared/threemf/types.ts";
 import type { QueryClient } from "@tanstack/react-query";
-import { type RefObject, useEffect, useRef } from "react";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { type AttemptView, patchCachedItem } from "./items";
 import { outbox } from "./outbox";
 
-/** Bambu Studio and Orca Slicer files: project .3mf and sliced .gcode.3mf. */
-export const SLICER_ACCEPT = ".3mf,model/3mf,application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
-export const isSlicerFile = (file: File) => /\.3mf$/i.test(file.name);
-
-/** A slicer file read in the browser, before it is on an attempt. */
+/** A file read in the browser, before it is on an attempt: a slicer's file, or a model that Spaghetti slices. */
 export interface SlicerFileDraft {
   id: string;
   file: File;
+  /** What the file says; for a model, what its slice says, once it is sliced (empty until then). */
   result: ThreeMfResult;
   /** The plates worth asking about (the sliced ones, in a .gcode.3mf). */
   plates: Plate[];
   slicer?: string;
+  /** "model": an .stl or plain .3mf, kept as it is and sliced in the browser (lib/slicing). */
+  kind: FileKind;
+  /** A model's plate picture, once its slicing has drawn it. */
+  picture?: Blob;
 }
 
+const NOTHING_READ: ThreeMfResult = { kind: "unknown", plates: [], settings: {}, warnings: [] };
+
 /**
- * Reads a dropped or picked file, with no network. Null (with a toast) when
- * it isn't a Bambu Studio or Orca Slicer file.
+ * Reads a dropped or picked file, with no network. A sliced .gcode.3mf is read as before; an .stl or a .3mf with
+ * no G-code is a model to slice. Null (with a toast) when it is neither, or a model too large to keep.
  */
 export async function readSlicerFile(file: File): Promise<SlicerFileDraft | null> {
+  const model = (): SlicerFileDraft | null => {
+    if (file.size > MAX_MODEL_FILE_BYTES) {
+      toast.error(
+        "That model is too large to keep",
+        `Spaghetti keeps models up to ${formatBytes(MAX_MODEL_FILE_BYTES)}.`,
+      );
+      return null;
+    }
+    return { id: crypto.randomUUID(), file, result: NOTHING_READ, plates: [], kind: "model" };
+  };
+  if (isStlName(file.name)) return model();
+  // A 3MF is a zip; anything else under that name isn't one.
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (head[0] !== 0x50 || head[1] !== 0x4b || head[2] !== 0x03 || head[3] !== 0x04) {
+    toast.error("Couldn't read that file", "Spaghetti reads .stl and .3mf files, and sliced .gcode.3mf files.");
+    return null;
+  }
   // The reader (and its unzip) loads the first time someone drops a file, not with the app.
   const { readThreeMfFile } = await import("@shared/threemf/read.ts");
   const result = await readThreeMfFile(file);
+  // No G-code in it: a model to slice (a Bambu Studio or Orca project, or a plain 3MF from anywhere).
+  if (result.kind !== "sliced") return model();
   const plates = printablePlates(result);
-  if (result.kind === "unknown" || (!plates.length && !Object.keys(result.settings).length)) {
-    toast.error("Couldn't read that file", "Spaghetti reads .3mf files from Bambu Studio and Orca Slicer.");
+  if (!plates.length && !Object.keys(result.settings).length) {
+    toast.error("Couldn't read that file", "Spaghetti reads .stl and .3mf files, and sliced .gcode.3mf files.");
     return null;
   }
-  return { id: crypto.randomUUID(), file, result, plates, slicer: slicerName(result) };
+  return { id: crypto.randomUUID(), file, result, plates, slicer: slicerName(result), kind: "slicer" };
 }
 
 export const plateOf = (draft: SlicerFileDraft, index: number | null) =>
@@ -92,8 +115,10 @@ export function queueSlicerFile(
   plate: number | null,
   prefill: AttemptSettings,
 ) {
+  const model = draft.kind === "model";
   const chosen = plateOf(draft, plate);
-  const thumb = plateThumb(chosen);
+  // A model's picture is the one its slicing drew (lib/slicing/jobs.ts), when it has drawn it.
+  const thumb = model ? draft.picture : plateThumb(chosen);
   void outbox.add({
     itemId,
     files: [
@@ -102,19 +127,23 @@ export function queueSlicerFile(
         attemptId,
         name: draft.file.name,
         size: draft.file.size,
-        ...(draft.file.size <= MAX_SLICER_FILE_BYTES ? { file: draft.file } : {}),
+        ...(model || draft.file.size <= MAX_SLICER_FILE_BYTES ? { file: draft.file } : {}),
         ...(thumb ? { thumb } : {}),
-        plate: chosen?.index ?? 1,
-        plateCount: Math.max(draft.result.plates.length, 1),
-        ...(draft.slicer ? { slicer: draft.slicer } : {}),
-        prefill,
-        objects: (chosen?.objects ?? []).map((object) => object.name),
+        plate: model ? 1 : (chosen?.index ?? 1),
+        plateCount: model ? 1 : Math.max(draft.result.plates.length, 1),
+        ...(draft.slicer && !model ? { slicer: draft.slicer } : {}),
+        prefill: model ? {} : prefill,
+        objects: model ? [] : (chosen?.objects ?? []).map((object) => object.name),
+        ...(model ? { kind: "model" as const } : {}),
         queuedAt: Date.now(),
       },
     ],
     photos: [],
     queuedAt: Date.now(),
   });
+  // What slicing makes (now or later) goes on the attempt once the outbox has brought the model there. The jobs'
+  // code comes with the first model, not with the app.
+  if (model) void import("./slicing/jobs").then(({ attachSlice }) => attachSlice(draft.id, { itemId, attemptId }));
 }
 
 /**
@@ -155,45 +184,4 @@ export function removeSlicerFile(queryClient: QueryClient, itemId: string, attem
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-/* Dropping a file on a build or an attempt ---------------------------------- */
-
-/** Where a dropped .3mf goes: the open attempt sheet first, else the build on screen. */
-type DropHandler = (file: File, attemptId: string | null) => void;
-const targets: Array<{ handler: RefObject<DropHandler> }> = [];
-const listeners = new Set<() => void>();
-
-/** While mounted (and enabled), a dropped .3mf goes to `handler`; the latest registered wins. */
-export function useSlicerDropTarget(handler: DropHandler, enabled = true) {
-  const ref = useRef(handler);
-  ref.current = handler;
-  useEffect(() => {
-    if (!enabled) return;
-    const entry = { handler: ref };
-    targets.push(entry);
-    for (const listener of listeners) listener();
-    return () => {
-      targets.splice(targets.indexOf(entry), 1);
-      for (const listener of listeners) listener();
-    };
-  }, [enabled]);
-}
-
-/** Whether a dropped .3mf has somewhere to go on this screen. */
-export function hasSlicerDropTarget(): boolean {
-  return targets.length > 0;
-}
-
-export function subscribeSlicerDropTargets(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-/** Hands a dropped .3mf to the screen; false when nothing on screen takes one. */
-export function takeSlicerDrop(file: File, attemptId: string | null): boolean {
-  const target = targets.at(-1);
-  if (!target) return false;
-  target.handler.current(file, attemptId);
-  return true;
 }

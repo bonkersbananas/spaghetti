@@ -155,6 +155,8 @@ function fromPendingFile(file: PendingFile): AttemptFileView {
     slicer: file.slicer ?? null,
     prefill: file.prefill,
     objects: file.objects ?? [],
+    kind: file.kind ?? "slicer",
+    slice: null,
     createdAt: file.queuedAt,
     pending: true,
   };
