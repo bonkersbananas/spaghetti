@@ -116,6 +116,25 @@ describe("restingFaces", () => {
     expect(faces.map((face) => Math.abs(face.down[2]))).toEqual([1, 1].map((v) => expect.closeTo(v, 2)));
   });
 
+  it("finds the hull of a smooth, finely meshed model quickly, and no flat face on it", () => {
+    const rings = 80;
+    const around = 120;
+    const at = (i: number, j: number) => {
+      const theta = (Math.PI * i) / rings;
+      const phi = (2 * Math.PI * j) / around;
+      return [30 * Math.sin(theta) * Math.cos(phi), 30 * Math.sin(theta) * Math.sin(phi), 30 * Math.cos(theta)];
+    };
+    const out: number[] = [];
+    for (let i = 0; i < rings; i++) {
+      for (let j = 0; j < around; j++) {
+        out.push(...at(i, j), ...at(i + 1, j), ...at(i + 1, j + 1), ...at(i, j), ...at(i + 1, j + 1), ...at(i, j + 1));
+      }
+    }
+    const started = Date.now();
+    expect(restingFaces({ positions: Float32Array.from(out) })).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(4000);
+  });
+
   it("finds none in a mesh without volume", () => {
     expect(restingFaces({ positions: new Float32Array(0) })).toEqual([]);
     expect(restingFaces({ positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]) })).toEqual([]);

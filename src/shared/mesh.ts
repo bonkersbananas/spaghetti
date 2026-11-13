@@ -283,7 +283,12 @@ interface HullFace {
   c: number;
   normal: Vec3;
   offset: number;
+  /** The points still outside it, to be wrapped in. */
+  outside: number[];
 }
+
+/** The hull search gives up after this long (ms): a model that takes more gets no choices rather than a hung tab. */
+const HULL_BUDGET_MS = 4000;
 
 /** The triangles of the convex hull of the points (quickhull, outward-facing), or [] when they are flat or fewer than four. */
 function convexHull(points: Float64Array, tolerance: number): HullFace[] {
@@ -340,10 +345,10 @@ function convexHull(points: Float64Array, tolerance: number): HullFace[] {
     let normal = cross(sub(at(b), pa), sub(at(c), pa));
     const length = Math.hypot(...normal) || 1;
     normal = [normal[0] / length, normal[1] / length, normal[2] / length];
-    const face: HullFace = { a, b, c, normal, offset: dot(normal, pa) };
+    const face: HullFace = { a, b, c, normal, offset: dot(normal, pa), outside: [] };
     // Wound so that it faces away from a point inside the hull.
     if (dot(normal, inside) - face.offset > 0) {
-      return { a, b: c, c: b, normal: [-normal[0], -normal[1], -normal[2]], offset: -face.offset };
+      return { a, b: c, c: b, normal: [-normal[0], -normal[1], -normal[2]], offset: -face.offset, outside: [] };
     }
     return face;
   };
@@ -361,24 +366,40 @@ function convexHull(points: Float64Array, tolerance: number): HullFace[] {
     faceOf(p1, p2, p3, inside),
   ];
   const used = new Set([p0, p1, p2, p3]);
-  // Each pass takes the point furthest outside any face and wraps the hull round it.
-  for (let guard = 0; guard < n + 8; guard++) {
-    let next = -1;
-    let reach = tolerance;
-    for (let i = 0; i < n; i++) {
+  const spread = (candidates: Iterable<number>, among: HullFace[]) => {
+    for (const i of candidates) {
       if (used.has(i)) continue;
       const q = at(i);
-      for (const face of faces) {
-        const out = dot(face.normal, q) - face.offset;
-        if (out > reach) {
-          reach = out;
-          next = i;
+      for (const face of among) {
+        if (dot(face.normal, q) - face.offset > tolerance) {
+          face.outside.push(i);
+          break;
         }
       }
     }
-    if (next < 0) break;
-    used.add(next);
-    const q = at(next);
+  };
+  spread(
+    (function* () {
+      for (let i = 0; i < n; i++) yield i;
+    })(),
+    faces,
+  );
+  const deadline = Date.now() + HULL_BUDGET_MS;
+  // Each pass takes the point furthest outside a face that still has some, and wraps the hull round it. A point
+  // inside the hull is never looked at again once the faces it was outside of are gone.
+  for (let next = faces.find((face) => face.outside.length); next; next = faces.find((face) => face.outside.length)) {
+    if (Date.now() > deadline) return [];
+    let far_ = next.outside[0] as number;
+    let reach = -Infinity;
+    for (const i of next.outside) {
+      const out = dot(next.normal, at(i)) - next.offset;
+      if (out > reach) {
+        reach = out;
+        far_ = i;
+      }
+    }
+    used.add(far_);
+    const q = at(far_);
     const visible = faces.filter((face) => dot(face.normal, q) - face.offset > tolerance);
     const kept = faces.filter((face) => !visible.includes(face));
     // The horizon: edges of the visible faces that no other visible face walks the other way.
@@ -394,8 +415,13 @@ function convexHull(points: Float64Array, tolerance: number): HullFace[] {
         else edges.set(`${from}:${to}`, [from, to]);
       }
     }
-    for (const [from, to] of edges.values()) kept.push(faceOf(from, to, next, inside));
-    faces = kept;
+    const made: HullFace[] = [];
+    for (const [from, to] of edges.values()) made.push(faceOf(from, to, far_, inside));
+    spread(
+      visible.flatMap((face) => face.outside),
+      made,
+    );
+    faces = kept.concat(made);
   }
   return faces;
 }
