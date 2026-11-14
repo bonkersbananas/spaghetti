@@ -524,7 +524,7 @@ fn island_paths(
                     let room = geom::intersection(&narrow, &geom::local(island_inner, geom::bbox_of(shape)));
                     let near = geom::pt(origin.0.round() as i32, origin.1.round() as i32);
                     let mut paths = Vec::new();
-                    for p in solid::narrow_loops(&room, spacing, s.nozzle_diameter, near) {
+                    for p in solid::narrow_loops(&room, spacing, s.nozzle_diameter, h, near) {
                         let (points, widths) = simplify_thick(&p.points, &p.widths, s.resolution);
                         paths.extend(thick_paths(role, &points, &widths, island, first, h, s));
                     }
