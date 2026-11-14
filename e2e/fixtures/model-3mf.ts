@@ -90,6 +90,14 @@ export function vaseProject(): Uint8Array {
   return boxProject({ spiral_mode: "1" });
 }
 
+/**
+ * The same block in a project that asks for its seams `position` (`seam_position`: "nearest" or "random"), which our
+ * own slicer places as aligned ones since release 13, saying so.
+ */
+export function seamProject(position: string): Uint8Array {
+  return boxProject({ seam_position: position });
+}
+
 /** A 24 × 24 × 10 mm block in a project for the X2D, its settings Orca's defaults but `settings`. */
 function boxProject(settings: Record<string, string>): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
