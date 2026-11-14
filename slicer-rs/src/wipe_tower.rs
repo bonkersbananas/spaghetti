@@ -872,7 +872,7 @@ fn rounding_polygon(polygon: &[arc_fit::P], rounding: f64) -> Vec<arc_fit::P> {
     if n < 3 {
         return polygon.to_vec();
     }
-    let cos_tol = (30.0 / 180.0 * PI).cos().abs();
+    let cos_tol = libm::cos(30.0 / 180.0 * PI).abs();
     let unscaled = |p: arc_fit::P| [p[0] as f64 * 1e-6, p[1] as f64 * 1e-6];
     let scaled = |q: [f64; 2]| [(q[0] / 1e-6) as i64, (q[1] / 1e-6) as i64];
     let mut res: Vec<arc_fit::P> = Vec::with_capacity(n * 2);
@@ -892,23 +892,23 @@ fn rounding_polygon(polygon: &[arc_fit::P], rounding: f64) -> Vec<arc_fit::P> {
         let real = real_f32 as f64;
         let left = [b[0] - ab[0] * real, b[1] - ab[1] * real];
         let right = [b[0] + bc[0] * real, b[1] + bc[1] * real];
-        // Orca's `std::acos` and `sin` of floats, in single precision (each rounded from double precision here, so
-        // that native and WebAssembly agree).
-        let half_angle = cosangle.acos() / 2.0;
+        // Orca's `std::acos` and `sin` of floats, in single precision. Here and below the `libm` crate's, which
+        // WebAssembly's standard library uses too, so that native and WebAssembly agree to the last bit.
+        let half_angle = libm::acosf(cosangle) / 2.0;
         let mut dir = [right[0] - left[0], right[1] - left[1]];
         let len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
         dir = [-dir[1] / len, dir[0] / len];
         if !is_ccw {
             dir = [-dir[0], -dir[1]];
         }
-        let dis = (real_f32 / half_angle.sin()) as f64;
+        let dis = (real_f32 / libm::sinf(half_angle)) as f64;
         let center = [b[0] + dir[0] * dis, b[1] + dir[1] * dis];
         let radius =
             ((left[0] - center[0]) * (left[0] - center[0]) + (left[1] - center[1]) * (left[1] - center[1])).sqrt();
         // Orca's `ArcSegment` from the cut-down points: its polar angles round the whole-nanometre centre.
         let (c_nm, r_nm, l_nm, r_pt) = (scaled(center), (radius / 1e-6) as i64 as f64, scaled(left), scaled(right));
         let polar = |q: arc_fit::P| {
-            let t = ((q[1] - c_nm[1]) as f64).atan2((q[0] - c_nm[0]) as f64);
+            let t = libm::atan2((q[1] - c_nm[1]) as f64, (q[0] - c_nm[0]) as f64);
             if t < 0.0 { 2.0 * PI + t } else { t }
         };
         let (mut start, mut sweep) = (0.0, 0.0);
@@ -928,8 +928,8 @@ fn rounding_polygon(polygon: &[arc_fit::P], rounding: f64) -> Vec<arc_fit::P> {
             } else if angle < 0.0 {
                 angle = (angle as f64 + 2.0 * PI) as f32;
             }
-            // `std::cos` of a float, rounded to a float.
-            let (cos, sin) = (angle.cos(), angle.sin());
+            // `std::cos` and `std::sin` of a float.
+            let (cos, sin) = (libm::cosf(angle), libm::sinf(angle));
             res.push([c_nm[0] + (r_nm * cos as f64).round() as i64, c_nm[1] + (r_nm * sin as f64).round() as i64]);
         }
         res.push(r_pt);

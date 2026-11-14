@@ -87,7 +87,8 @@ impl Circle {
 
     /// `get_polar_radians`, in [0, 2π).
     fn polar(&self, p: P) -> f64 {
-        let a = ((p[1] - self.center[1]) as f64).atan2((p[0] - self.center[0]) as f64);
+        // The `libm` crate's, as WebAssembly's, so that native and WebAssembly agree to the last bit.
+        let a = libm::atan2((p[1] - self.center[1]) as f64, (p[0] - self.center[0]) as f64);
         if a < 0.0 { 2.0 * PI + a } else { a }
     }
 

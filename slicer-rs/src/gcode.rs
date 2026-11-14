@@ -1292,7 +1292,7 @@ pub(crate) fn arc_pieces(from: [f64; 3], to: [f64; 3], i: f64, j: f64, clockwise
     let angle = if (to[0] - from[0]).abs() < 1e-4 && (to[1] - from[1]).abs() < 1e-4 {
         2.0 * PI
     } else {
-        let mut a = (rs[0] * re[1] - rs[1] * re[0]).atan2(rs[0] * re[0] + rs[1] * re[1]);
+        let mut a = libm::atan2(rs[0] * re[1] - rs[1] * re[0], rs[0] * re[0] + rs[1] * re[1]);
         if a < 0.0 {
             a += 2.0 * PI;
         }
@@ -1309,7 +1309,7 @@ pub(crate) fn arc_pieces(from: [f64; 3], to: [f64; 3], i: f64, j: f64, clockwise
                 return to;
             }
             let t = k as f64 / n as f64;
-            let (sin, cos) = (angle * t).sin_cos();
+            let (sin, cos) = (libm::sin(angle * t), libm::cos(angle * t));
             [c[0] + rs[0] * cos - rs[1] * sin, c[1] + rs[0] * sin + rs[1] * cos, from[2] + dz * t]
         })
         .collect()
