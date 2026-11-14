@@ -189,6 +189,104 @@ export function paintBetween(paint: ModelPaint, from: number, to: number): Model
 }
 
 /**
+ * Orca's code for a whole triangle in `state` (a filament, from 1; 0 the object's own): one digit up to 2 ("4", "8"),
+ * the state less 3 and C up to 17 ("0C" is 3), the state less 18, F and C up to 32 ("0FC" is 18).
+ */
+export function paintCode(state: number): string {
+  if (state <= 2) return String(state * 4);
+  if (state <= 17) return `${(state - 3).toString(16).toUpperCase()}C`;
+  return `${(state - 18).toString(16).toUpperCase()}FC`;
+}
+
+/**
+ * A painted triangle's code with its unpainted leaves (state 0, the object's own filament) in `state` instead: the
+ * paint of a part that prints in another filament than its object. A code that isn't one stays as it is.
+ */
+export function paintUnpaintedAs(code: string, state: number): string {
+  if (state === 0 || paintCodeStates(code) === null) return code;
+  // The digits as they are read, from the last one: a state-0 leaf ("0") becomes the state's leaf.
+  const leaf = [...paintCode(state)].reverse();
+  const read: string[] = [];
+  let pos = code.length;
+  let open = 1;
+  while (open > 0) {
+    const char = code.charAt(--pos);
+    const head = digit(char.charCodeAt(0));
+    open--;
+    if (head === 0) {
+      read.push(...leaf);
+      continue;
+    }
+    read.push(char);
+    if ((head & 3) !== 0) {
+      open += (head & 3) + 1;
+    } else if (head >> 2 === 3) {
+      // A leaf of state 3 and up: one more digit, or F and one more.
+      const more = code.charAt(--pos);
+      read.push(more);
+      if (more === "F") read.push(code.charAt(--pos));
+    }
+  }
+  return read.reverse().join("");
+}
+
+/** Triangles `from` (the first) `to` (past the last) of an object that print in filament `extruder` (from 1). */
+export interface PaintPart {
+  from: number;
+  to: number;
+  extruder: number;
+}
+
+/**
+ * An object's paint for OrcaSlicer's engine, which gets an object made of parts whole, in its own filament (`own`): a
+ * part in another filament has its triangles painted in it, those the object's paint leaves whole and the unpainted
+ * leaves of those it paints, so the engine's segmentation prints the part in its filament; the rest of the paint stays
+ * as it was. Null when nothing is painted.
+ */
+export function paintParts(
+  paint: ModelPaint | null | undefined,
+  parts: readonly PaintPart[],
+  own: number,
+): ModelPaint | null {
+  const triangles: number[] = [];
+  const ends: number[] = [];
+  let codes = "";
+  const push = (triangle: number, code: string) => {
+    triangles.push(triangle);
+    codes += code;
+    ends.push(codes.length);
+  };
+  // The object's painted triangles, read alongside: the next one, and where its code starts.
+  let next = 0;
+  let start = 0;
+  const count = paint?.triangles.length ?? 0;
+  /** The painted triangles before `end`, their unpainted leaves in `filament`. */
+  const copy = (end: number, filament: number) => {
+    while (paint && next < count && (paint.triangles[next] as number) < end) {
+      const stop = paint.ends[next] as number;
+      const code = paint.codes.slice(start, stop);
+      push(paint.triangles[next] as number, filament === own ? code : paintUnpaintedAs(code, filament));
+      start = stop;
+      next++;
+    }
+  };
+  for (const part of [...parts].sort((a, b) => a.from - b.from)) {
+    copy(part.from, own);
+    if (part.extruder === own) {
+      copy(part.to, own);
+      continue;
+    }
+    for (let triangle = part.from; triangle < part.to; triangle++) {
+      if (paint && next < count && paint.triangles[next] === triangle) copy(triangle + 1, part.extruder);
+      else push(triangle, paintCode(part.extruder));
+    }
+  }
+  copy(Number.POSITIVE_INFINITY, own);
+  if (!triangles.length) return null;
+  return { triangles: Uint32Array.from(triangles), codes, ends: Uint32Array.from(ends) };
+}
+
+/**
  * Paint as our own slicer's module takes it (`paint`, slicer-rs's `Paint::from_bytes`): the number of painted
  * triangles n, the n triangles, the n ends of their codes (each a little-endian u32), then the codes, in ASCII.
  */

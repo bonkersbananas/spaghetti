@@ -121,6 +121,19 @@ const IDENTITY_KEYS = new Set([
 const list = (value: ConfigValue | undefined): string[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
 
+/** The most filaments a plate is sliced in. */
+export const MAX_FILAMENTS = 16;
+
+/**
+ * How many filaments a model's objects, parts and paint can print in: those its project's settings list (one past
+ * them prints in the first), else, for a file that lists none (a 3MF another program wrote with Bambu's
+ * `model_settings.config` but no project settings), as many as it names, up to `MAX_FILAMENTS`, as Bambu Studio takes
+ * them.
+ */
+export function filamentsNamed(project: Config | undefined): number {
+  return list(project?.filament_type).length || MAX_FILAMENTS;
+}
+
 /** Whether a project was made for the printer and nozzle the presets are for (its own settings then apply whole). */
 export function projectIsFor(project: Config, machine: Config): boolean {
   const model = first(project.printer_model);
@@ -200,8 +213,10 @@ export function sliceSetup(
   const pick = <K extends keyof typeof ORCA_KEYS>(key: K): SlicingSettings[K] =>
     (chosen[key] as SlicingSettings[K] | undefined) ?? (says(key) ? fromProject[key] : defaults[key]);
 
-  // The filaments: chosen ones (a spool for filament 1), else the project's own (material and colour), else defaults.
-  const count = Math.max(1, Math.min(16, input.filaments ?? 1));
+  // The filaments: chosen ones (a spool for filament 1), else the project's own (material and colour), else defaults;
+  // one that nothing names (a file that lists none of the filaments its parts print in) a stand-in of the first's
+  // material, in a stand-in's colour for its place, until someone picks a spool for it.
+  const count = Math.max(1, Math.min(MAX_FILAMENTS, input.filaments ?? 1));
   const types = list(project?.filament_type);
   const projectColours = list(project?.filament_colour);
   const filaments: SlicingFilament[] = [];
@@ -212,7 +227,9 @@ export function sliceSetup(
       chosen.filaments?.[index] ??
         (type ? { material: type, ...(colorHex ? { colorHex } : {}) } : undefined) ??
         defaults.filaments[index] ??
-        (defaults.filaments[0] as SlicingFilament),
+        (index === 0
+          ? (defaults.filaments[0] as SlicingFilament)
+          : { material: (filaments[0] as SlicingFilament).material }),
     );
   }
 
