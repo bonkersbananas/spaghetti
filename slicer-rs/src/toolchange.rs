@@ -1322,6 +1322,7 @@ fn tower_params(s: &Settings, per: &[Settings], extruder_of: &[usize]) -> wipe_t
         extra_rib_length: f("wipe_tower_extra_rib_length"),
         rib_width: f("wipe_tower_rib_width"),
         used_fillet: p.bool("wipe_tower_fillet_wall"),
+        arc_fitting: matches!(p.text("enable_arc_fitting").to_ascii_lowercase().as_str(), "1" | "true" | "enabled"),
         extra_spacing: p.float("prime_tower_infill_gap") as f32 / 100.0,
         tower_framework: p.bool("prime_tower_enable_framework"),
         max_speed: f("wipe_tower_max_purge_speed") * 60.0,

@@ -19,10 +19,9 @@
 //! The lines move nothing and come after the estimate, as Orca's do, so it stays as it was.
 
 use crate::config::Settings;
-use crate::gcode::{Kind, Move, arc_steps, timing_and_turns};
+use crate::gcode::{Kind, Move, arc_pieces, timing_and_turns};
 use crate::region::Role;
 use crate::toolchange::Colours;
-use std::f64::consts::PI;
 
 /// A line no marker has named (Orca's `(unsigned int)-1`).
 const UNSET: u32 = u32::MAX;
@@ -794,35 +793,18 @@ impl<'a> Clock<'a> {
             return;
         }
         let (end, e, e_abs) = self.target(words);
-        let start = self.at;
-        let c = [start[0] + i.unwrap_or(0.0), start[1] + j.unwrap_or(0.0)];
-        let (rs, re) = ([start[0] - c[0], start[1] - c[1]], [end[0] - c[0], end[1] - c[1]]);
-        let r = rs[0].hypot(rs[1]);
-        let angle = if (end[0] - start[0]).abs() < 1e-4 && (end[1] - start[1]).abs() < 1e-4 {
-            2.0 * PI
-        } else {
-            let mut a = (rs[0] * re[1] - rs[1] * re[0]).atan2(rs[0] * re[0] + rs[1] * re[1]);
-            if a < 0.0 {
-                a += 2.0 * PI;
-            }
-            if clockwise { a - 2.0 * PI } else { a }
-        };
-        let dz = end[2] - start[2];
-        if (angle * r).hypot(dz) < 0.001 {
+        let pieces = arc_pieces(self.at, end, i.unwrap_or(0.0), j.unwrap_or(0.0), clockwise);
+        if pieces.is_empty() {
             return;
         }
         if let Some(f) = words.get(b'F') {
             self.feed = f / 60.0;
         }
         self.e = e_abs;
-        let n = arc_steps(r, angle.abs());
-        for k in 1..n {
-            let t = k as f64 / n as f64;
-            let (sin, cos) = (angle * t).sin_cos();
-            let to = [c[0] + rs[0] * cos - rs[1] * sin, c[1] + rs[0] * sin + rs[1] * cos, start[2] + dz * t];
-            self.go(id, to, e / n as f64, true);
+        let share = e / pieces.len() as f64;
+        for to in pieces {
+            self.go(id, to, share, true);
         }
-        self.go(id, end, e / n as f64, true);
     }
 
     /// A straight move (`process_G1`): a block for the planner and, unless it is the printer's own, a move of the

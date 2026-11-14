@@ -1157,6 +1157,90 @@ fn two_filaments_change_once_a_layer_over_a_prime_tower() {
     assert!(!String::from_utf8(one.gcode).unwrap().contains("; FEATURE: Prime tower"));
 }
 
+/// The moves of each layer's prime tower: the lines of its `; FEATURE: Prime tower` sections.
+fn tower_moves(gcode: &str) -> Vec<Vec<&str>> {
+    gcode
+        .split("; CHANGE_LAYER\n")
+        .skip(1)
+        .map(|layer| {
+            let mut on = false;
+            let mut moves = Vec::new();
+            for line in layer.lines() {
+                if let Some(feature) = line.strip_prefix("; FEATURE: ") {
+                    on = feature == "Prime tower";
+                } else if on && line.starts_with('G') {
+                    moves.push(line);
+                }
+            }
+            moves
+        })
+        .collect()
+}
+
+/// Where an arc (`G2` clockwise, `G3` counter-clockwise) from (x, y) round the centre (x + i, y + j) to (tx, ty)
+/// reaches: its ends, and each axis' extreme its sweep passes.
+fn arc_extent(from: [f64; 2], to: [f64; 2], i: f64, j: f64, clockwise: bool) -> [f64; 4] {
+    let c = [from[0] + i, from[1] + j];
+    let r = i.hypot(j);
+    let (a0, a1) = ((from[1] - c[1]).atan2(from[0] - c[0]), (to[1] - c[1]).atan2(to[0] - c[0]));
+    let tau = std::f64::consts::TAU;
+    // The sweep counter-clockwise from `lo` to `hi`.
+    let (lo, hi) = if clockwise { (a1, a0) } else { (a0, a1) };
+    let span = (hi - lo).rem_euclid(tau);
+    let mut b = [from[0].min(to[0]), from[1].min(to[1]), from[0].max(to[0]), from[1].max(to[1])];
+    for (k, q) in [[c[0] + r, c[1]], [c[0], c[1] + r], [c[0] - r, c[1]], [c[0], c[1] - r]].iter().enumerate() {
+        if (k as f64 * tau / 4.0 - lo).rem_euclid(tau) <= span {
+            b = [b[0].min(q[0]), b[1].min(q[1]), b[2].max(q[0]), b[3].max(q[1])];
+        }
+    }
+    b
+}
+
+#[test]
+fn the_towers_curved_walls_are_arcs_as_orcas_unless_arc_fitting_is_off() {
+    let input = || Input { name: "two-colours.3mf", bytes: TWO_COLOURS };
+    let tower = |setup: &str| {
+        let settings = setup::read(setup).unwrap().settings;
+        let out = slice(&[input()], &settings, &Options::default()).unwrap();
+        (settings, String::from_utf8(out.gcode).unwrap())
+    };
+    let extrudes = |l: &str| word(l, 'E').is_some_and(|e| e > 0.0);
+    // The X2D's process fits arcs, and Orca's tower takes them: every layer's filleted wall, and on the first layer
+    // its brim, in arcs (`G2`/`G3` with a centre), each sweeping only over the plate.
+    let (settings, gcode) = tower(TWO_FILAMENTS);
+    let layers = tower_moves(&gcode);
+    assert_eq!(layers.len(), 20);
+    let arcs: Vec<usize> = layers
+        .iter()
+        .map(|moves| moves.iter().filter(|l| (l.starts_with("G2 ") || l.starts_with("G3 ")) && extrudes(l)).count())
+        .collect();
+    assert!(arcs.iter().all(|&n| n >= 16), "{arcs:?}");
+    assert!(arcs[0] > 2 * arcs[1], "the first layer's brim in arcs too: {arcs:?}");
+    let (mut x, mut y) = (f64::NAN, f64::NAN);
+    for line in gcode.lines() {
+        let code = line.split(';').next().unwrap_or("").trim();
+        let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+        if (code.starts_with("G2 ") || code.starts_with("G3 ")) && word(code, 'P').is_none() && extrudes(code) {
+            let (i, j) = (word(code, 'I').unwrap(), word(code, 'J').unwrap());
+            let b = arc_extent([x, y], [nx, ny], i, j, code.starts_with("G2"));
+            assert!(b[0] >= 0.0 && b[1] >= 0.0 && b[2] <= settings.bed[0] && b[3] <= settings.bed[1], "{line}: {b:?}");
+        }
+        if code.starts_with('G') {
+            (x, y) = (nx, ny);
+        }
+    }
+    // With arc fitting off, the same walls in straight lines.
+    let (_, lines) = tower(
+        r##"{"filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"], "process": {"enable_arc_fitting": "0"}}"##,
+    );
+    let off = tower_moves(&lines);
+    assert_eq!(off.len(), 20);
+    for (k, moves) in off.iter().enumerate() {
+        assert!(!moves.iter().any(|l| (l.starts_with("G2 ") || l.starts_with("G3 ")) && extrudes(l)), "layer {k}");
+        assert!(moves.iter().filter(|l| l.starts_with("G1 ") && extrudes(l)).count() > arcs[k], "layer {k}");
+    }
+}
+
 #[test]
 fn the_waiting_nozzle_cools_and_heats_again_as_orcas_does() {
     let settings = setup::read(TWO_FILAMENTS).unwrap().settings;

@@ -1282,6 +1282,39 @@ pub(crate) fn arc_steps(r: f64, angle: f64) -> usize {
     ((angle / (2.0 * (d / r).acos())).ceil() as usize).max(1)
 }
 
+/// The straight pieces Orca's estimator splits an arc into (`process_G2_G3`, Marlin's legacy flavour): from `from`
+/// round the centre `i`, `j` mm away to `to`, where each piece ends; none for an arc shorter than a micron, which
+/// Orca's estimator skips.
+pub(crate) fn arc_pieces(from: [f64; 3], to: [f64; 3], i: f64, j: f64, clockwise: bool) -> Vec<[f64; 3]> {
+    let c = [from[0] + i, from[1] + j];
+    let (rs, re) = ([from[0] - c[0], from[1] - c[1]], [to[0] - c[0], to[1] - c[1]]);
+    let r = rs[0].hypot(rs[1]);
+    let angle = if (to[0] - from[0]).abs() < 1e-4 && (to[1] - from[1]).abs() < 1e-4 {
+        2.0 * PI
+    } else {
+        let mut a = libm::atan2(rs[0] * re[1] - rs[1] * re[0], rs[0] * re[0] + rs[1] * re[1]);
+        if a < 0.0 {
+            a += 2.0 * PI;
+        }
+        if clockwise { a - 2.0 * PI } else { a }
+    };
+    let dz = to[2] - from[2];
+    if (angle * r).hypot(dz) < 0.001 {
+        return Vec::new();
+    }
+    let n = arc_steps(r, angle.abs());
+    (1..=n)
+        .map(|k| {
+            if k == n {
+                return to;
+            }
+            let t = k as f64 / n as f64;
+            let (sin, cos) = (libm::sin(angle * t), libm::cos(angle * t));
+            [c[0] + rs[0] * cos - rs[1] * sin, c[1] + rs[0] * sin + rs[1] * cos, from[2] + dz * t]
+        })
+        .collect()
+}
+
 /// The planner's blocks as moves are added, with what the junction to the next block needs to know.
 struct Planner<'a> {
     s: &'a Settings,
@@ -2146,6 +2179,46 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                     out.end = Some(to);
                 }
                 at = to;
+            }
+            "G2" | "G3" if value(b'I').is_some() || value(b'J').is_some() => {
+                // An arc (the tower's walls, fitted as Orca fits them), in the pieces Orca's estimator splits it into.
+                let mut to = at;
+                for (a, letter) in b"XYZ".iter().copied().enumerate() {
+                    if let Some(v) = value(letter) {
+                        to[a] = v;
+                    }
+                }
+                let e = value(b'E').unwrap_or(0.0);
+                let (i, j) = (value(b'I').unwrap_or(0.0), value(b'J').unwrap_or(0.0));
+                let pieces = arc_pieces(at, to, i, j, cmd == "G2");
+                if !pieces.is_empty() {
+                    feed = value(b'F').map_or(feed, |f| f / 60.0);
+                    let kind = if e > 0.0 { Kind::Extrude(Role::PrimeTower) } else { Kind::Travel };
+                    let share = e / pieces.len() as f64;
+                    let mut from = at;
+                    for p in pieces {
+                        if e <= 0.0 {
+                            out.travel += (p[0] - from[0]).hypot(p[1] - from[1]);
+                        }
+                        moves.push(Move {
+                            x: p[0],
+                            y: p[1],
+                            z: p[2],
+                            e: share,
+                            f: feed,
+                            accel,
+                            kind,
+                            width: 0.0,
+                            height: 0.0,
+                        });
+                        from = p;
+                    }
+                    if e > 0.0 {
+                        out.mm += e;
+                    }
+                    out.end = Some(to);
+                    at = to;
+                }
             }
             "G4" | "M400" if value(b'S').is_some() || value(b'P').is_some() => {
                 (pause, sync) = (value(b'S').unwrap_or(0.0) + value(b'P').unwrap_or(0.0) / 1000.0, true);

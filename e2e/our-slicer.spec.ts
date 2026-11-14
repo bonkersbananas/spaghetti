@@ -189,6 +189,14 @@ test("a plate in two colours is sliced by ours, each object in its own filament"
     expect(/key="filament_maps" value="([^"]*)"/.exec(info)?.[1]?.split(" ")).toHaveLength(2);
     // Both filaments print: two lines of filament in the plate's description, each with what it uses.
     expect(info.match(/<filament id="/g)).toHaveLength(2);
+    // The prime tower's walls are arcs where they curve, as Orca writes them (since release 8).
+    const gcode = strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
+    const tower = gcode
+      .split("; FEATURE: Prime tower")
+      .slice(1)
+      .map((part) => part.split("; FEATURE:")[0])
+      .join("\n");
+    expect(tower).toMatch(/^G[23] +X[\d.]+ +Y[\d.]+ +I-?[\d.]+ +J-?[\d.]+ +E/m);
   } finally {
     await setDefaults(page, null);
   }
