@@ -383,3 +383,24 @@ describe("a model's own nozzle size (decision 0057)", () => {
     expect(sameSlicing(picked, withNozzle(DEFAULT_SLICING, 0.2))).toBe(true);
   });
 });
+
+describe("the plate of a project (modelPlate)", () => {
+  it("is kept when it is a plate number, and left out otherwise", () => {
+    expect(normalizeSlicing({ ...DEFAULT_SLICING, modelPlate: 3 }).modelPlate).toBe(3);
+    for (const bad of [0, -1, 100, 2.5, "2", null]) {
+      expect(normalizeSlicing({ ...DEFAULT_SLICING, modelPlate: bad }).modelPlate).toBeUndefined();
+      expect(slicingProblems({ ...DEFAULT_SLICING, modelPlate: bad })).toHaveLength(1);
+    }
+    expect(slicingProblems({ ...DEFAULT_SLICING, modelPlate: 2 })).toEqual([]);
+  });
+
+  it("slices the same as the first plate when absent, and differently for another", () => {
+    expect(sameSlicing(DEFAULT_SLICING, { ...DEFAULT_SLICING, modelPlate: 1 })).toBe(true);
+    expect(changedSlicing(DEFAULT_SLICING, { ...DEFAULT_SLICING, modelPlate: 2 })).toEqual(["modelPlate"]);
+  });
+
+  it("starts the card's summary with the plate chosen", () => {
+    expect(slicingSummary({ ...DEFAULT_SLICING, modelPlate: 3 })[0]).toBe("Plate 3");
+    expect(slicingSummary(DEFAULT_SLICING)[0]).not.toMatch(/^Plate/);
+  });
+});

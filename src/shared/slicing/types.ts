@@ -123,6 +123,8 @@ export interface FileSlice {
   colours?: SliceColour[];
   /** The plate's picture in the model's own colours is kept too (`/api/files/:id/original-thumb`), for the before/after. */
   originalPicture?: boolean;
+  /** A 3MF project with several plates: which one this is of how many, and how tall its tallest object stands (mm). */
+  plate?: { index: number; count: number; height: number };
   /** How long the slicer took, in ms, on the device that sliced it: from the placed model to the packed file. */
   ms?: number;
   /** When it was sliced or failed (epoch ms). */

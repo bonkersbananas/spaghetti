@@ -24,9 +24,11 @@ interface ChoiceTilesProps<T extends string> {
   onChange: (value: T) => void;
   /**
    * How the tiles sit: "grid" (equal columns, `columns` on phones and `wideColumns` from md) or "scroll" (a row that
-   * scrolls sideways on phones, for a list that can be long: the Pantry's spools; it wraps from md)
+   * scrolls sideways on phones, for a list that can be long: the Pantry's spools; it wraps from md), or "strip"
+   * (only the pictures, small, in one row that scrolls sideways at every width, for a sheet's header: the plates of
+   * a project; the label and detail are said to screen readers, and by whatever is beside it)
    */
-  layout?: "grid" | "scroll";
+  layout?: "grid" | "scroll" | "strip";
   columns?: 2 | 3 | 4;
   wideColumns?: 2 | 3 | 4;
   /** Closer tiles for a row of four on a phone: less padding, so "Extra draft" and "Where needed" fit two lines wide. */
@@ -61,27 +63,33 @@ export function ChoiceTiles<T extends string>({
 }: ChoiceTilesProps<T>) {
   const name = useId();
   const picked = options.find((option) => option.value === value);
-  const said =
-    caption === undefined ? (
-      picked?.effect ? (
-        <>
-          <span className="text-ink font-semibold">{picked.label}</span> · {picked.effect}
-        </>
-      ) : null
-    ) : (
-      caption
-    );
+  const strip = layout === "strip";
+  const said = strip ? null : caption === undefined ? (
+    picked?.effect ? (
+      <>
+        <span className="text-ink font-semibold">{picked.label}</span> · {picked.effect}
+      </>
+    ) : null
+  ) : (
+    caption
+  );
   return (
     <fieldset disabled={disabled} className={cn("flex min-w-0 flex-col gap-2.5", className)}>
-      <legend className="text-caption text-ink-faint mb-2.5 font-sans font-semibold tracking-wider uppercase">
+      <legend
+        className={
+          strip ? "sr-only" : "text-caption text-ink-faint mb-2.5 font-sans font-semibold tracking-wider uppercase"
+        }
+      >
         {label}
       </legend>
       <div
         className={cn(
-          layout === "grid"
-            ? cn("grid gap-2", COLUMNS[columns], WIDE_COLUMNS[wideColumns])
-            : // Edge to edge on a phone's sheet, so the row scrolls under the thumb; wrapped from md.
-              "-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0",
+          strip
+            ? "flex snap-x gap-1.5 overflow-x-auto p-1"
+            : layout === "grid"
+              ? cn("grid gap-2", COLUMNS[columns], WIDE_COLUMNS[wideColumns])
+              : // Edge to edge on a phone's sheet, so the row scrolls under the thumb; wrapped from md.
+                "-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0",
         )}
       >
         {options.map((option) => {
@@ -90,8 +98,10 @@ export function ChoiceTiles<T extends string>({
             <label
               key={option.value}
               className={cn(
-                "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg text-center",
-                dense ? "px-0.5 py-2" : "px-2 py-2.5",
+                "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-lg text-center",
+                // A picture's tile starts at the top, so tiles with a line more or less keep their pictures level.
+                option.picture ? "justify-start" : "justify-center",
+                strip ? "size-13 shrink-0 snap-start p-1" : dense ? "px-0.5 py-2" : "px-2 py-2.5",
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
@@ -114,21 +124,34 @@ export function ChoiceTiles<T extends string>({
                   {option.picture}
                 </span>
               )}
-              {option.glyph && (
+              {strip && (
+                <span className="sr-only">
+                  {option.label}
+                  {option.detail ? `, ${option.detail}` : ""}
+                </span>
+              )}
+              {option.glyph && !strip && (
                 <span className={cn("flex h-7 items-center", !selected && "text-ink-faint")} aria-hidden>
                   {option.glyph}
                 </span>
               )}
-              <span
-                className={cn(
-                  "line-clamp-2 w-full font-semibold text-balance",
-                  dense ? "text-caption tracking-tight" : "text-small",
-                )}
-              >
-                {option.label}
-              </span>
-              {option.detail && (
-                <span className={cn("text-caption tabular w-full text-balance", !selected && "text-ink-faint")}>
+              {!strip && (
+                <span
+                  className={cn(
+                    "line-clamp-2 w-full font-semibold text-balance",
+                    dense ? "text-caption tracking-tight" : "text-small",
+                  )}
+                >
+                  {option.label}
+                </span>
+              )}
+              {option.detail && !strip && (
+                <span
+                  className={cn(
+                    "text-caption tabular w-full text-balance whitespace-pre-line",
+                    !selected && "text-ink-faint",
+                  )}
+                >
                   {/* Never cut with an ellipsis: it wraps in balanced lines, at the dot first (a figure and its unit stay together). */}
                   {option.detail.replace(/(\d) (?=[^\d\s])/g, "$1\u00a0")}
                 </span>

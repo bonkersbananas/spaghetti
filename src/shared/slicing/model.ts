@@ -75,6 +75,8 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
       return `${after.scale}%`;
     case "orientation":
       return orientationWords(after) || "the model as designed";
+    case "modelPlate":
+      return `plate ${after.modelPlate ?? 1}`;
     case "slicer":
       return slicerWords(after.slicer);
     default:

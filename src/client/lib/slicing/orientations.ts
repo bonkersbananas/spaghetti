@@ -27,8 +27,8 @@ export type LyingState = { status: "loading" } | { status: "ready"; options: Lyi
 
 const found = new Map<string, Promise<Lying[] | null>>();
 
-function lyingOf(fileId: string, name: string, size: number, colour: string): Promise<Lying[] | null> {
-  const key = `${fileId}:${size}:${colour}`;
+function lyingOf(fileId: string, name: string, size: number, colour: string, plate?: number): Promise<Lying[] | null> {
+  const key = `${fileId}:${size}:${colour}:${plate ?? 1}`;
   const kept = found.get(key);
   if (kept) return kept;
   const job = (async () => {
@@ -52,7 +52,7 @@ function lyingOf(fileId: string, name: string, size: number, colour: string): Pr
         );
       };
       worker.onerror = () => end(null);
-      worker.postMessage({ file, name, colour, size: 192 } satisfies OrientRequest);
+      worker.postMessage({ file, name, colour, size: 192, ...(plate ? { plate } : {}) } satisfies OrientRequest);
     });
   })().catch(() => null);
   found.set(key, job);
@@ -64,19 +64,24 @@ function lyingOf(fileId: string, name: string, size: number, colour: string): Pr
 }
 
 /** How a model can lie, once found. `enabled` waits for the settings to open. */
-export function useLying(file: { id: string; name: string; size: number }, colour: string, enabled = true): LyingState {
+export function useLying(
+  file: { id: string; name: string; size: number },
+  colour: string,
+  enabled = true,
+  plate?: number,
+): LyingState {
   const skip = !enabled || tooBigForPhone(file.size);
   const [state, setState] = useState<LyingState>({ status: skip ? "none" : "loading" });
   useEffect(() => {
     if (skip) return setState({ status: "none" });
     let current = true;
     setState((was) => (was.status === "ready" ? was : { status: "loading" }));
-    void lyingOf(file.id, file.name, file.size, colour).then((options) => {
+    void lyingOf(file.id, file.name, file.size, colour, plate).then((options) => {
       if (current) setState(options && options.length > 1 ? { status: "ready", options } : { status: "none" });
     });
     return () => {
       current = false;
     };
-  }, [skip, file.id, file.name, file.size, colour]);
+  }, [skip, file.id, file.name, file.size, colour, plate]);
   return state;
 }

@@ -154,6 +154,14 @@ const fileSlice = z.object({
     .max(16)
     .optional()
     .describe("A model with colours of its own: each, and the filament that printed it."),
+  plate: z
+    .object({
+      index: z.number().int().min(1).max(99),
+      count: z.number().int().min(2).max(99),
+      height: z.number().min(0).max(10_000),
+    })
+    .optional()
+    .describe("A 3MF project with several plates: the plate this slice is of, how many it has, and its height in mm."),
   ms: z
     .number()
     .int()
