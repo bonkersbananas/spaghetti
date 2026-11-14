@@ -449,7 +449,7 @@ const TWO_TONE_IDEA = {
   title: "Two-tone coaster",
   note: "One coaster, half white and half tomato red: the project's two parts, each in its own filament.",
 };
-/** A project with painted colours, which our own slicer prints since release 22 (OrcaSlicer's engine before). */
+/** A project with painted colours, which our own slicer prints since release 23 (OrcaSlicer's engine before). */
 const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
 const FARFALLE_IDEA = {
   title: "Farfalle coaster",
@@ -2322,7 +2322,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked for a project with painted colours, which it prints (before release 22, OrcaSlicer's engine did,
+    // Ours picked for a project with painted colours, which it prints (before release 23, OrcaSlicer's engine did,
     // and the card said why).
     name: "idea-model-painted",
     path: "/ideas",
