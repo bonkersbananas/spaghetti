@@ -138,7 +138,7 @@ export function ChoiceTiles<T extends string>({
               {strip && (
                 <span className="sr-only">
                   {option.label}
-                  {option.detail ? `, ${option.detail}` : ""}
+                  {option.detail ? `, ${option.detail.replace(/\n/g, ", ")}` : ""}
                 </span>
               )}
               {option.glyph && !strip && (

@@ -50,6 +50,15 @@ export function formatDuration(minutes: number): string {
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
 
+/**
+ * The compact form of `formatDuration`, only where a figure has about 40 px (a caption under a small picture): 222 →
+ * "3 h 42", 35 → "35 min". Whoever shows it also gives the full time in the element's accessible label.
+ */
+export function formatDurationShort(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours} h ${Math.round(minutes % 60)}` : `${Math.max(1, Math.round(minutes))} min`;
+}
+
 /** How long ago something was, in whole days, for a spool's "dried 12 d ago": "today", "1 d ago", "12 d ago". */
 export function daysAgo(time: number, now = Date.now()): string {
   const days = Math.floor(Math.max(0, now - time) / DAY);

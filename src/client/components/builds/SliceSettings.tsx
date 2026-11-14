@@ -42,16 +42,17 @@ import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { standInSentence } from "@shared/slicing/words.ts";
 import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
-import { formatDuration } from "@shared/time";
+import { formatDuration, formatDurationShort } from "@shared/time";
 import { Fragment, type ReactNode, useMemo, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
-import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
+import { DownloadIcon, ExternalIcon, LayersIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
+import { PulseDot } from "@/components/ui/PulseDot";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -937,12 +938,6 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
   compare?: { state: PlateComparison | undefined; run: (plates: number[]) => void };
 }
 
-/** "1 h 44", "35 min": a duration in as few characters as read. */
-const shortMinutes = (minutes: number) =>
-  minutes >= 60
-    ? `${Math.floor(minutes / 60)} h ${Math.round(minutes % 60)}`
-    : `${Math.max(1, Math.round(minutes))} min`;
-
 /** A plate's figures in words: "1 h 44 min · 75.5 g", or that it can't be sliced. */
 const plateFigureWords = (figure: PlateFigure) =>
   figure.failed
@@ -982,7 +977,11 @@ function useProjectPlates(
         ...(figure
           ? {
               detail: plateFigureWords(figure),
-              note: figure.failed ? "–" : figure.minutes !== undefined ? shortMinutes(figure.minutes) : undefined,
+              note: figure.failed
+                ? "–"
+                : figure.minutes !== undefined
+                  ? formatDurationShort(figure.minutes)
+                  : undefined,
             }
           : figures && plate.index === sliced
             ? { detail: figures }
@@ -1060,20 +1059,6 @@ export default function SliceSettingsSheet({
                 {part}
               </span>
             ))}
-            {compare && !compare.state ? (
-              // Every plate sliced with these settings, only to compare how long each takes.
-              <button
-                type="button"
-                onClick={() => compare.run(projectPlates.map((plate) => plate.index))}
-                className="text-ink-soft hover:text-ink focus-visible:shadow-ring rounded-xs font-semibold whitespace-nowrap underline decoration-current/30 underline-offset-2"
-              >
-                Slice all {projectPlates.length}
-              </button>
-            ) : compare?.state?.status === "running" ? (
-              <span className="whitespace-nowrap" role="status">
-                Slicing {Math.min(compare.state.done + 1, compare.state.of)} of {compare.state.of}…
-              </span>
-            ) : null}
           </MetaList>
         ) : (
           file.name
@@ -1083,13 +1068,34 @@ export default function SliceSettingsSheet({
       // first choices down.
       headerActions={
         projectPlates && projectPlates.length > 1 ? (
-          <PlatePicker
-            inSheet
-            plates={projectPlates}
-            value={choices.settings.modelPlate ?? projectPlates[0]?.index ?? 1}
-            // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
-            onChange={(modelPlate) => choices.onChange(slicingFor({ modelPlate, orientation: null }, choices.settings))}
-          />
+          <div className="flex min-w-0 flex-col items-end">
+            <PlatePicker
+              inSheet
+              plates={projectPlates}
+              value={choices.settings.modelPlate ?? projectPlates[0]?.index ?? 1}
+              // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
+              onChange={(modelPlate) =>
+                choices.onChange(slicingFor({ modelPlate, orientation: null }, choices.settings))
+              }
+            />
+            {compare && !compare.state ? (
+              // Every plate sliced with these settings, only to compare how long each takes.
+              <Button
+                variant="quiet"
+                size="sm"
+                icon={LayersIcon}
+                onClick={() => compare.run(projectPlates.map((plate) => plate.index))}
+                className="-mr-1"
+              >
+                Slice all {projectPlates.length}
+              </Button>
+            ) : compare?.state?.status === "running" ? (
+              <span role="status" className="text-small text-ink-soft inline-flex h-8 items-center gap-2 px-3">
+                <PulseDot />
+                Slicing {Math.min(compare.state.done + 1, compare.state.of)} of {compare.state.of}…
+              </span>
+            ) : null}
+          </div>
         ) : undefined
       }
       tall
