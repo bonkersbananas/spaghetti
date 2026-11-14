@@ -8,7 +8,8 @@ import type { SliceFallback } from "@shared/slicing/types.ts";
  * from where the app serves it (/slicer/rust-<version>/, docs/slicer.md) and spoken to through its plain C interface
  * (slicer-rs/src/wasm.rs). It gets what OrcaSlicer's engine gets: the setup the app made (`sliceSetup`) and the
  * objects as the worker laid them on the plate, turned, scaled and with their fins, so it keeps their places (flag 1)
- * and their size (the setup's scale is 100), each with its filament on a plate in several. It answers with the packed
+ * and their size (the setup's scale is 100), each with its filament on a plate in several (an object made of parts
+ * in different filaments, part by part, each with its own). It answers with the packed
  * .gcode.3mf and what it warns of (Orca's warnings: an object that needs supports), or why OrcaSlicer's engine slices
  * it instead.
  */
@@ -21,6 +22,11 @@ interface Exports {
   add(name: number, nameLen: number, data: number, dataLen: number): number;
   /** As `add`, with the filament the object prints in (from 1); in releases from slicer-rs-v4 on. */
   add_in?(name: number, nameLen: number, data: number, dataLen: number, filament: number): number;
+  /**
+   * A part of an object made of parts, in its filament (from 1): `first` (not 0) starts the object, else the part
+   * joins the one added just before. Where parts overlap, the later one prints. In releases from slicer-rs-v16 on.
+   */
+  add_part?(name: number, nameLen: number, data: number, dataLen: number, filament: number, first: number): number;
   slice(flags: number): number;
   output_ptr(): number;
   output_len(): number;
@@ -47,11 +53,15 @@ async function load(url: URL): Promise<Exports> {
   return instance.exports as unknown as Exports;
 }
 
-/** An object as the worker laid it on the plate; on a plate in several filaments, the one it prints in (from 1). */
+/**
+ * An object as the worker laid it on the plate; on a plate in several filaments, the one it prints in (from 1), and
+ * when it is made of parts in different filaments, each part with its own.
+ */
 export interface OurObject {
   name: string;
   positions: Float32Array;
   filament?: number;
+  parts?: { positions: Float32Array; filament: number }[];
 }
 
 /**
@@ -90,6 +100,21 @@ export async function sliceOurs(
     for (const object of objects) {
       if (code) break;
       const name = encoder.encode(object.name);
+      // An object made of parts in different filaments goes in part by part. A module from before add_part takes it
+      // whole, in the object's filament.
+      if (object.parts && module.add_part) {
+        const addPart = module.add_part;
+        for (const [index, part] of object.parts.entries()) {
+          if (code) break;
+          const stl = writeStl({ positions: part.positions }, object.name);
+          code = withBytes(name, (namePtr) =>
+            withBytes(stl, (stlPtr) =>
+              addPart(namePtr, name.length, stlPtr, stl.length, part.filament, index === 0 ? 1 : 0),
+            ),
+          );
+        }
+        continue;
+      }
       const stl = writeStl({ positions: object.positions }, object.name);
       // An object of a plate in several filaments says which it prints in. A module from before add_in can't be told,
       // and refuses such a plate (code 8), which OrcaSlicer's engine then slices.

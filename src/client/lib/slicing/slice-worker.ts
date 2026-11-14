@@ -75,6 +75,12 @@ interface Placed {
   positions: Float32Array;
   /** Filament number, from 1. */
   extruder: number;
+  /**
+   * A project's object made of parts in different filaments: each part's triangles of `positions` (`from` the first,
+   * `to` past the last) and its filament. Turning, scaling and placing keep the triangles in order; fins are added
+   * after the last part.
+   */
+  parts?: { from: number; to: number; extruder: number }[];
 }
 
 class Problem extends Error {
@@ -152,6 +158,21 @@ async function run(request: SliceRequest) {
     });
     settings = setup.settings;
     slicing = setup.slicing;
+    // Ours prints each part of an object made of parts in its own filament (add_part), so its setup has every
+    // filament the parts use; OrcaSlicer's engine gets each object whole, in the object's filament, as before.
+    const partFilaments = Math.max(
+      filamentCount,
+      ...read.objects.flatMap((object) => object.parts?.map((part) => part.extruder) ?? []),
+    );
+    const oursSetup =
+      slicing.slicer === "spaghetti" && partFilaments > filamentCount
+        ? sliceSetup(presets, {
+            settings: chosen,
+            defaults,
+            ...(read.settings ? { project: { settings: read.settings } } : {}),
+            filaments: partFilaments,
+          })
+        : setup;
     const plate = plateArea(setup.machine.printable_area, first(setup.machine.printable_height));
     const volume: [number, number, number] = [plate.maxX - plate.minX, plate.maxY - plate.minY, plate.height];
 
@@ -166,7 +187,7 @@ async function run(request: SliceRequest) {
       place(objects, plate, volume, read.project && scale === 100 && !down, scale);
     } catch (error) {
       // A model that doesn't fit still gets its picture, as it is.
-      png = await picture(objects, setup);
+      png = await picture(objects, oursSetup, oursSetup !== setup);
       throw error;
     }
     // Fins are the model's own walls: built on the part as it lies on the plate, appended to it.
@@ -180,17 +201,28 @@ async function run(request: SliceRequest) {
     }
     progress("reading", 1);
 
-    png = await picture(objects, setup);
+    // The picture in what ours would print: an object's parts each in its filament's colour.
+    png = await picture(objects, oursSetup, oursSetup !== setup);
     if (png) post({ type: "picture", png });
 
-    const tower = objects.length && setup.filaments.length > 1 ? towerSpot(objects, plate, setup) : null;
-    if (tower) {
-      setup.process.wipe_tower_x = [String(Math.round(tower.x))];
-      setup.process.wipe_tower_y = [String(Math.round(tower.y))];
+    for (const each of new Set([setup, oursSetup])) {
+      const tower = objects.length && each.filaments.length > 1 ? towerSpot(objects, plate, each) : null;
+      if (tower) {
+        each.process.wipe_tower_x = [String(Math.round(tower.x))];
+        each.process.wipe_tower_y = [String(Math.round(tower.y))];
+      }
     }
     // Spaghetti's own slicer when it is asked for; OrcaSlicer's engine for what ours can't slice yet (decision 0055).
-    const ours = slicing.slicer === "spaghetti" ? await withOurs(request, setup, objects, slicing) : null;
+    const ours = slicing.slicer === "spaghetti" ? await withOurs(request, oursSetup, objects, slicing) : null;
     if (ours && !ours.ok) fallback = ours.fallback;
+    if (ours?.ok && oursSetup !== setup) {
+      settings = oursSetup.settings;
+      slicing = oursSetup.slicing;
+    } else if (ours && !ours.ok && oursSetup !== setup) {
+      // The engine prints each object in its own filament: so does the picture.
+      png = await picture(objects, setup, false);
+      if (png) post({ type: "picture", png });
+    }
     let sliced: Uint8Array;
     let ms: number;
     let cautions: SliceCaution[] = [];
@@ -239,7 +271,7 @@ async function run(request: SliceRequest) {
           ...(ours?.ok && ours.notes.length ? { notes: ours.notes } : {}),
           ms: Math.round(ms),
         }),
-        prefill: withoutStandIns(settingsFromFile(reading, 1), setup.chosen),
+        prefill: withoutStandIns(settingsFromFile(reading, 1), (ours?.ok ? oursSetup : setup).chosen),
         objects: objects.map((object) => object.name),
         slicer: slicerName(reading) ?? null,
       },
@@ -297,13 +329,18 @@ async function withOurs(
     colours: setup.colours,
     slicing: { ...setup.slicing, scale: 100 },
   });
-  // On a plate in several filaments each object says which it prints in, as Orca's engine is told (`extruder`).
+  // On a plate in several filaments each object says which it prints in, as Orca's engine is told (`extruder`), and
+  // an object made of parts in different filaments goes in part by part, each in its own.
   const several = setup.filaments.length > 1;
-  const ours: OurObject[] = objects.map(({ name, positions, extruder }) => ({
-    name,
-    positions,
-    ...(several ? { filament: extruder } : {}),
-  }));
+  const ours: OurObject[] = objects.map((object) => {
+    const parts = several ? partsOf(object) : null;
+    return {
+      name: object.name,
+      positions: object.positions,
+      ...(several ? { filament: object.extruder } : {}),
+      ...(parts ? { parts } : {}),
+    };
+  });
   return sliceOurs(new URL(rust.wasm, rust.base), json, ours, () => {
     // Its one call can't say how far it is: the page paces the ring by about how long it takes.
     const layers = objects.reduce((sum, object) => sum + boundsOf(object.positions).max[2] / slicing.layerHeight, 0);
@@ -312,7 +349,23 @@ async function withOurs(
   });
 }
 
-/** The objects of an .stl or a .3mf, each with its filament. */
+/**
+ * An object's parts as meshes of their own, each with its filament, when they print in more than one (else null):
+ * the triangles after the last part (its fins) print with the object's filament.
+ */
+function partsOf(object: Placed): { positions: Float32Array; filament: number }[] | null {
+  const parts = object.parts;
+  if (!parts?.length || new Set(parts.map((part) => part.extruder)).size < 2) return null;
+  const out = parts.map((part) => ({
+    positions: object.positions.subarray(part.from * 9, part.to * 9),
+    filament: part.extruder,
+  }));
+  const end = Math.max(...parts.map((part) => part.to)) * 9;
+  if (end < object.positions.length) out.push({ positions: object.positions.subarray(end), filament: object.extruder });
+  return out;
+}
+
+/** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
 function readModel(bytes: Uint8Array, name: string) {
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
   if (!zip) {
@@ -327,12 +380,25 @@ function readModel(bytes: Uint8Array, name: string) {
   if (model === "no-objects") throw new Problem("no-model");
   // Filaments beyond what the project lists fall back to its first.
   const listed = model.settings ? [model.settings.filament_type ?? []].flat().length : 0;
+  const filament = (extruder: number | undefined) => (extruder && extruder <= Math.max(1, listed) ? extruder : 1);
   return {
-    objects: model.objects.map((object) => ({
-      name: object.name,
-      positions: object.positions,
-      extruder: object.extruder && object.extruder <= Math.max(1, listed) ? object.extruder : 1,
-    })),
+    objects: model.objects.map((object): Placed => {
+      const extruder = filament(object.extruder);
+      return {
+        name: object.name,
+        positions: object.positions,
+        extruder,
+        ...(object.parts
+          ? {
+              parts: object.parts.map((part) => ({
+                from: part.from,
+                to: part.to,
+                extruder: part.extruder ? filament(part.extruder) : extruder,
+              })),
+            }
+          : {}),
+      };
+    }),
     project: model.project,
     settings: model.settings,
   };
@@ -425,16 +491,23 @@ function towerSpot(objects: Placed[], plate: ReturnType<typeof plateArea>, setup
   return corners.find(clear) ?? corners[0];
 }
 
-/** The plate picture as a PNG, in the filaments' colours; null where the browser can't encode one in a worker. */
-async function picture(objects: Placed[], setup: SliceSetup): Promise<Blob | null> {
+/**
+ * The plate picture as a PNG, in the filaments' colours (with `parts`, an object made of parts in different filaments
+ * in theirs); null where the browser can't encode one in a worker.
+ */
+async function picture(objects: Placed[], setup: SliceSetup, parts: boolean): Promise<Blob | null> {
   if (typeof OffscreenCanvas !== "function") return null;
   try {
+    const meshes = objects.flatMap(
+      (object) =>
+        (parts && partsOf(object)?.map((part) => ({ positions: part.positions, extruder: part.filament }))) || [object],
+    );
     const pixels = renderPlate(
-      objects.map((object) => object.positions),
+      meshes.map((mesh) => mesh.positions),
       {
         size: PICTURE,
         colour: setup.colours[0] ?? FALLBACK_COLOUR,
-        colours: objects.map((object) => setup.colours[object.extruder - 1]),
+        colours: meshes.map((mesh) => setup.colours[mesh.extruder - 1]),
       },
     );
     const canvas = new OffscreenCanvas(PICTURE, PICTURE);
