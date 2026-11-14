@@ -147,6 +147,32 @@ pub struct Output {
     pub triangles: usize,
     /// What the settings ask for that this printed otherwise (`Settings::fallbacks`).
     pub fallbacks: Vec<String>,
+    /// What Orca would warn of: for now, objects sliced without supports that need them (`Warning`).
+    pub warnings: Vec<Warning>,
+}
+
+/// A warning about the print, as Orca's engine gives it: its kind and its words.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Warning {
+    /// Orca's: `need_support_on` (an object sliced without supports needs them).
+    pub kind: &'static str,
+    pub message: String,
+}
+
+impl Warning {
+    /// Orca's warning for an object sliced without supports that needs them (`PrintObject::is_support_necessary`).
+    fn needs_support(object: &str, why: tree::overhangs::Necessity) -> Warning {
+        let what = match why {
+            tree::overhangs::Necessity::FloatingRegions => "has floating regions",
+            tree::overhangs::Necessity::FloatingCantilever => "has a floating cantilever",
+        };
+        Warning {
+            kind: "need_support_on",
+            message: format!(
+                "It seems object {object} {what}. Please re-orient the object or enable support generation."
+            ),
+        }
+    }
 }
 
 /// A clock that works natively and in WebAssembly (where the host tells the time).
@@ -313,6 +339,9 @@ impl Plate {
         } else {
             Vec::new()
         };
+        // Without supports, whether an object needs them, as Orca checks it and warns.
+        let warnings =
+            if settings.enable_support { Vec::new() } else { support_warnings(&regions, &layers, &objects, settings) };
         // Each object's brim, round its first layer as sliced and out of what the supports' lowest layers print.
         let heights: Vec<f64> = objects.iter().map(|o| o.max[2] - o.min[2]).collect();
         let support_cover: Vec<geom::Shapes> =
@@ -505,6 +534,7 @@ impl Plate {
             },
             triangles: meshes.iter().map(|m| m.triangles.len()).sum(),
             fallbacks: settings.fallbacks(),
+            warnings,
         })
     }
 }
@@ -556,6 +586,39 @@ fn timelapse_spots(objects: &[Object], zs: &[f64], s: &Settings) -> Vec<Option<[
     spots
 }
 
+/// Each object's highest layer, if it has any.
+fn last_layers(regions: &[region::LayerRegions], objects: usize) -> Vec<Option<usize>> {
+    let mut last = vec![None; objects];
+    for (l, r) in regions.iter().enumerate() {
+        for island in &r.islands {
+            if let Some(last) = last.get_mut(island.object as usize) {
+                *last = Some(l);
+            }
+        }
+    }
+    last
+}
+
+/// Orca's warning for each object sliced without supports that needs them (`PrintObject::is_support_necessary`, which
+/// runs its trees' overhang detection on the object whatever the support settings).
+fn support_warnings(
+    regions: &[region::LayerRegions],
+    layers: &section::Layers,
+    objects: &[Object],
+    s: &Settings,
+) -> Vec<Warning> {
+    let last = last_layers(regions, objects.len());
+    objects
+        .iter()
+        .enumerate()
+        .filter_map(|(o, object)| {
+            let top = last[o]?;
+            let slices: Vec<geom::Shapes> = regions[..=top].iter().map(|r| r.slice_of(o as u32)).collect();
+            tree::necessity(&slices, &layers.height[..=top], s).map(|why| Warning::needs_support(&object.name, why))
+        })
+        .collect()
+}
+
 /// Each object's normal supports (`support.rs`), from its slices and top surfaces up to its last layer.
 fn object_supports(
     regions: &[region::LayerRegions],
@@ -565,14 +628,7 @@ fn object_supports(
     s: &Settings,
 ) -> Vec<Vec<support::Layer>> {
     let params = support::Params::new(s);
-    let mut last = vec![None; objects];
-    for (l, r) in regions.iter().enumerate() {
-        for island in &r.islands {
-            if let Some(last) = last.get_mut(island.object as usize) {
-                *last = Some(l);
-            }
-        }
-    }
+    let last = last_layers(regions, objects);
     (0..objects)
         .map(|o| {
             let Some(top) = last[o] else { return Vec::new() };
