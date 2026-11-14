@@ -50,7 +50,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
 import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { type PlateOption, PlatePicker } from "@/components/ui/PlatePicker";
+import { type PlateOption, PlatePicker, plateWords } from "@/components/ui/PlatePicker";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -113,8 +113,6 @@ export interface SlicingChoicesProps {
   onReset?: () => void;
   /** Under the last group: the engine's licence and the files (a model's settings). */
   after?: ReactNode;
-  /** A 3MF project's plates, when it has several (lib/slicing/plates.ts): the one to slice is picked at the top. */
-  projectPlates?: readonly PlateOption[];
 }
 
 /** A recipe as a model's settings offer it: `fits` when it is for the filament the model had (recipesFor). */
@@ -136,7 +134,6 @@ export function SlicingChoices({
   twoColumns,
   onReset,
   after,
-  projectPlates,
 }: SlicingChoicesProps) {
   const set = (change: Partial<SlicingSettings>) => onChange(slicingFor(change, settings));
   // Another nozzle keeps the quality's name: its tiles' heights are that nozzle's own.
@@ -155,16 +152,6 @@ export function SlicingChoices({
   const floating = slice?.status === "sliced" && !!slice.cautions?.includes("floating") && settings.supports === "off";
   const strong = (words: ReactNode) => <span className="text-ink font-semibold">{words}</span>;
 
-  // A project with several plates: which one it slices, first, since it decides what the rest is about.
-  const plateGroup = model && projectPlates && projectPlates.length > 1 && (
-    <PlatePicker
-      dense
-      plates={projectPlates}
-      value={settings.modelPlate ?? projectPlates[0]?.index ?? 1}
-      // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
-      onChange={(modelPlate) => set({ modelPlate, orientation: null })}
-    />
-  );
   const recipeGroup = model && recipes.length > 0 && (
     <RecipeChoice settings={settings} spools={spools} recipes={recipes} onChange={onChange} />
   );
@@ -328,7 +315,6 @@ export function SlicingChoices({
     // the first.
     return (
       <div className="flex flex-col gap-7">
-        {plateGroup}
         <div className="grid grid-cols-2 items-start gap-x-6">
           <div className="flex min-w-0 flex-col gap-7">
             {recipeGroup}
@@ -353,7 +339,6 @@ export function SlicingChoices({
   }
   return (
     <div className="flex flex-col gap-7">
-      {plateGroup}
       {recipeGroup}
       {qualityGroup}
       {strengthGroup}
@@ -942,7 +927,7 @@ export function SliceAbout({
 export interface SliceSettingsProps extends SlicingChoicesProps {
   file: { id: string; name: string; url: string; size: number };
   sliced?: string;
-  /** What the slice there says of its plate, "1 h 20 · 34 g": shown on the plate it is of. */
+  /** What the slice there says of its plate, "1 h 20 min · 34 g": shown on the plate it is of. */
   figures?: string;
   /** The plate those figures are of: the one the slice there was made for (the first when absent). */
   figuresPlate?: number;
@@ -968,8 +953,8 @@ function useProjectPlates(
       index: plate.index,
       name: plate.name,
       height: plate.height,
-      src: plate.src,
-      placeholder: plate.placeholder,
+      // The project's own picture until ours is drawn (or where it can't be).
+      src: plate.src ?? plate.placeholder,
       ...(figures && plate.index === sliced ? { detail: figures } : {}),
     }));
   }, [found, figuresPlate, figures]);
@@ -979,18 +964,16 @@ function useProjectPlates(
  * The settings of a model as a desktop panel's body: two columns, so everything shows at once at 1440×900 with no
  * scrolling (the phone's sheet scrolls one column, in the same order).
  */
-export function SliceSettingsPanel({ file, sliced, figures, figuresPlate, ...choices }: SliceSettingsProps) {
+export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsProps) {
   const found = useLying(
     file,
     choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0],
     !choices.lying,
     choices.settings.modelPlate,
   );
-  const projectPlates = useProjectPlates(file, choices.settings, figures, figuresPlate);
   return (
     <SlicingChoices
       {...choices}
-      projectPlates={choices.projectPlates ?? projectPlates}
       lying={choices.lying ?? found}
       twoColumns
       after={<SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />}
@@ -1034,7 +1017,22 @@ export default function SliceSettingsSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="How to slice it"
-      description={file.name}
+      description={
+        projectPlates ? `${file.name} · ${plateWords(projectPlates, choices.settings.modelPlate ?? 1)}` : file.name
+      }
+      // A project's plates, small, beside the title: no sheet over this sheet, and no line of its own to push the
+      // first choices down.
+      headerActions={
+        projectPlates && projectPlates.length > 1 ? (
+          <PlatePicker
+            inSheet
+            plates={projectPlates}
+            value={choices.settings.modelPlate ?? projectPlates[0]?.index ?? 1}
+            // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
+            onChange={(modelPlate) => choices.onChange(slicingFor({ modelPlate, orientation: null }, choices.settings))}
+          />
+        ) : undefined
+      }
       tall
       desktop="panel"
       wide
@@ -1042,13 +1040,7 @@ export default function SliceSettingsSheet({
       footer={<div className="min-w-0 flex-1">{result}</div>}
     >
       <div className="flex flex-col gap-7 pb-2">
-        <SlicingChoices
-          {...choices}
-          projectPlates={choices.projectPlates ?? projectPlates}
-          lying={choices.lying ?? found}
-          twoColumns={isDesktop}
-          after={about}
-        />
+        <SlicingChoices {...choices} lying={choices.lying ?? found} twoColumns={isDesktop} after={about} />
       </div>
     </Sheet>
   );

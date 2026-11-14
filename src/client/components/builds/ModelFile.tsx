@@ -584,11 +584,17 @@ export function ModelCard({
   raised,
   className,
   changed,
+  plateNote,
   ...actions
 }: Omit<ModelActions, "settings"> & {
   name: string;
   /** What the last change was ("Fine"), to say what it did in words. */
   changed?: string;
+  /**
+   * The last change was to another plate of the project: a different model on the bed, so no before and after, only
+   * the new plate's own figures and this line ("Now plate 3 of 3, the 58 mm bin").
+   */
+  plateNote?: string;
   state: ModelState;
   thumbSrc?: string;
   /** What the slice said: its estimate and weight lead the card. */
@@ -609,7 +615,7 @@ export function ModelCard({
 }) {
   const slice = state.kind === "sliced" ? state.slice : null;
   const change = state.kind === "sliced" ? state.change : undefined;
-  const figures = change ? changeFigures(change) : [];
+  const figures = change && !plateNote ? changeFigures(change) : [];
   const again = state.kind === "sliced" && !!state.again;
   const busy = state.kind === "sliced" && (again || !!state.ahead);
   // Under the print: what the last change did, else who sliced it (and why OrcaSlicer's engine did, where it stepped
@@ -619,7 +625,7 @@ export function ModelCard({
     slice && !compact ? (
       <MetaList className="text-small text-ink-faint text-pretty">
         {change && !change.failed
-          ? [changeSentence(change, changed)]
+          ? [plateNote ?? changeSentence(change, changed)]
           : details
             ? [<NamesWhole key="by" words={slicedBy(slice)} />]
             : slicedPieces(slice)}
@@ -672,15 +678,18 @@ export function SliceResult({
   thumbSrc,
   prefill,
   phone,
+  plateNote,
   ...actions
 }: Omit<ModelActions, "settings"> & {
   state: ModelState;
+  /** The last change was to another plate: its own figures, not a before and after (see ModelCard). */
+  plateNote?: string;
   thumbSrc?: string;
   prefill?: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams">;
   phone: boolean;
 }) {
   const change = state.kind === "sliced" ? state.change : undefined;
-  const figures = change ? changeFigures(change) : [];
+  const figures = change && !plateNote ? changeFigures(change) : [];
   const lead = state.kind === "sliced" ? sliceLead(prefill) : [];
   // Sliced again, the figures are the slice being replaced: quieter, so they don't read as the new settings'.
   const stale = state.kind === "sliced" && !!state.again;
@@ -705,7 +714,7 @@ export function SliceResult({
 /** What a slice says of its plate, "1 h 20 · 34 g", for the plate picker. */
 function plateFigures(prefill: { estimatedMinutes?: number; weightGrams?: number } | undefined): string | undefined {
   if (!prefill?.estimatedMinutes) return undefined;
-  return [formatDuration(prefill.estimatedMinutes), prefill.weightGrams ? `${Math.round(prefill.weightGrams)} g` : ""]
+  return [formatDuration(prefill.estimatedMinutes), prefill.weightGrams ? grams(prefill.weightGrams) : ""]
     .filter(Boolean)
     .join(" · ");
 }
@@ -817,7 +826,14 @@ export default function ModelFileCard({
     ...(figuresPlate ? { figuresPlate } : {}),
   };
   // Its settings: a sheet on phones, a panel beside the page on desktop (but not over the attempt's sheet).
-  const summary = slicingSummary(settings);
+  // A project with several plates says which this is of how many, first (the settings' own "Plate 3" gives way).
+  const plate = file.slice?.status === "sliced" ? file.slice.plate : undefined;
+  const summary = plate
+    ? [
+        `Plate ${plate.index} of ${plate.count}`,
+        ...slicingSummary(settings).filter((piece) => !/^Plate \d/.test(piece)),
+      ]
+    : slicingSummary(settings);
   const details: SettingsOpener | undefined =
     !panel || inSheet
       ? undefined
@@ -837,6 +853,13 @@ export default function ModelFileCard({
           return words === "the new settings" ? undefined : words;
         })()
       : undefined;
+  // A change of plate is no saving: the new plate's own figures and which it is, not a before and after.
+  const plateNote =
+    change && file.previous && file.slice?.status === "sliced" && plate
+      ? (slicingOfSlice(file.previous.slice).modelPlate ?? 1) !== (slicingOfSlice(file.slice).modelPlate ?? 1)
+        ? `Now plate ${plate.index} of ${plate.count} · ${Math.round(plate.height)} mm tall`
+        : undefined
+      : undefined;
   const card = (
     <ModelCard
       name={file.name}
@@ -853,6 +876,7 @@ export default function ModelFileCard({
       onRemove={onRemove}
       details={details}
       changed={changed}
+      plateNote={plateNote}
       phone={!isDesktop}
       compact={compact}
       raised={raised}
@@ -873,7 +897,16 @@ export default function ModelFileCard({
             {...panel}
             // The result is its foot: under the thumb on a phone, where the sheet covers the card; on desktop the
             // panel's foot says it too, beside the card, with its Undo and Stop.
-            result={<SliceResult state={state} thumbSrc={thumbSrc} prefill={prefill} phone {...actions} />}
+            result={
+              <SliceResult
+                state={state}
+                thumbSrc={thumbSrc}
+                prefill={prefill}
+                phone
+                plateNote={plateNote}
+                {...actions}
+              />
+            }
           />
         </Suspense>
       )}

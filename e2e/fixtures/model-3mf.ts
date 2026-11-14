@@ -288,13 +288,12 @@ const PLATE_PICTURE = Uint8Array.from(
  * on Bambu's plate grid (1.2 bed sizes apart: plate 2 at x + 307.2, plate 3 at y - 307.2) with the project's own
  * pictures. Every bin is 70 mm square and stands where its plate's middle is.
  */
-export function platesProject(): Uint8Array {
-  const heights = [120, 96, 57.6];
-  const spots: [number, number][] = [
-    [0, 0],
-    [307.2, 0],
-    [0, -307.2],
-  ];
+export function platesProject(count = 3): Uint8Array {
+  const heights = [120, 96, 57.6, 80, 40, 108, 70].slice(0, count);
+  // Bambu's grid: round(sqrt(plates)) columns (one more if that fell short), 1.2 beds apart, rows going down.
+  const root = Math.sqrt(count);
+  const columns = Math.max(1, root > Math.round(root) ? Math.round(root) + 1 : Math.round(root));
+  const spots: [number, number][] = heights.map((_, n) => [(n % columns) * 307.2, -Math.floor(n / columns) * 307.2]);
   const objects = heights
     .map((h, n) => `<object id="${n * 2 + 2}" type="model">${boxMesh([-35, -35, 0], [70, 70, h])}</object>`)
     .join("");
@@ -309,7 +308,7 @@ export function platesProject(): Uint8Array {
 <resources>${objects}</resources>
 <build>${items}</build>
 </model>`;
-  const names = ["Bin tall", "Bin medium", "Bin low"];
+  const names = heights.map((_, n) => `Bin ${n + 1}`);
   const plates = heights
     .map(
       (_, n) => `<plate>
@@ -332,8 +331,6 @@ export function platesProject(): Uint8Array {
     "3D/3dmodel.model": strToU8(model),
     "Metadata/model_settings.config": strToU8(settings),
     "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
-    "Metadata/plate_1.png": PLATE_PICTURE,
-    "Metadata/plate_2.png": PLATE_PICTURE,
-    "Metadata/plate_3.png": PLATE_PICTURE,
+    ...Object.fromEntries(heights.map((_, n) => [`Metadata/plate_${n + 1}.png`, PLATE_PICTURE])),
   });
 }

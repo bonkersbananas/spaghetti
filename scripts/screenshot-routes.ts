@@ -463,6 +463,7 @@ const FARFALLE_IDEA = {
 };
 /** A project of three plates, a bin of another height on each (the MakerWorld storage-bin set). */
 const BINS = { name: "stackable-bins.3mf", bytes: platesProject() };
+const MANY_BINS = { name: "bin-set.3mf", bytes: platesProject(7) };
 const BINS_IDEA = {
   title: "Stackable bins",
   note: "Storage bins in three heights, a plate each.",
@@ -1950,16 +1951,32 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
-    // A project with three plates, its settings open: the plates at the top, as pictures of what sits on each.
+    // A project with three plates, its settings open: the plates' pictures in the header, beside the title.
     name: "slice-settings-plates",
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: BINS_IDEA, file: BINS });
       await settings
-        .getByRole("radiogroup", { name: "Plates" })
-        .or(settings.getByRole("button", { name: /^Plate 1 of 3/ }))
+        .getByRole("radiogroup")
+        .or(settings.getByRole("group", { name: "Plates" }))
         .first()
         .waitFor();
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('[role="dialog"] fieldset img')).every(
+          (img) => (img as HTMLImageElement).complete,
+        ),
+      );
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A set of seven plates: more than fit beside the title, so the row scrolls sideways.
+    name: "slice-settings-plates-many",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: { ...BINS_IDEA, title: "Bin set" }, file: MANY_BINS });
+      await settings.getByRole("group", { name: "Plates" }).waitFor();
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
@@ -1970,14 +1987,7 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: BINS_IDEA, file: BINS });
-      // A phone's picker is one line that opens a sheet; a desktop's is the row itself.
-      if ((page.viewportSize()?.width ?? 1440) < 768) {
-        await settings.getByRole("button", { name: /^Plate 1 of 3/ }).click();
-        await page.getByRole("dialog", { name: "Choose a plate" }).waitFor();
-      }
-      const third = page.getByRole("radio", { name: /Plate 3/ });
-      await third.evaluate((radio) => radio.scrollIntoView({ block: "center", behavior: "instant" }));
-      await third.click({ force: true });
+      await settings.getByRole("radio", { name: /^Plate 3/ }).click({ force: true });
       await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
       await page.keyboard.press("Escape");
       await page.waitForTimeout(300);
@@ -3896,6 +3906,7 @@ export const shots: Shot[] = [
     },
   },
   { name: "styleguide-plate-picker", path: "/styleguide", selector: "#plate-picker" },
+  { name: "styleguide-plate-picker-header", path: "/styleguide", selector: "#plate-picker-header" },
   {
     name: "styleguide-plate-picker-sheet",
     path: "/styleguide",

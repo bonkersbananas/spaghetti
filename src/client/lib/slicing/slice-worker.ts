@@ -143,10 +143,12 @@ async function run(request: SliceRequest) {
   let by: SlicerId | null = null;
   let fallback: SliceFallback | undefined;
   let colourRows: SliceColour[] | undefined;
+  let plateOf: FileSlice["plate"];
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
     ...(fallback ? { fallback } : {}),
     ...(colourRows ? { colours: colourRows } : {}),
+    ...(plateOf ? { plate: plateOf } : {}),
     settings: {
       ...settings,
       scale,
@@ -165,6 +167,7 @@ async function run(request: SliceRequest) {
     // A model with colours of its own prints each in the filament matched to it.
     const matched = read.project ? null : matchColours(read.objects, request.spools, chosen);
     colourRows = matched?.rows;
+    plateOf = read.plate;
     const asked: SliceOptions = matched ? { ...chosen, filaments: matched.filaments } : chosen;
     progress("reading", 0.5);
 
@@ -507,7 +510,13 @@ function readModel(bytes: Uint8Array, name: string, plate?: number) {
     const positions = parsed.ok ? finiteTriangles(parsed.mesh.positions) : null;
     if (!positions) throw new Problem("unreadable");
     if (!positions.length) throw new Problem("no-model");
-    return { objects: [{ name, positions, extruder: 1 }], project: false, settings: undefined, painted: 0 };
+    return {
+      objects: [{ name, positions, extruder: 1 }],
+      project: false,
+      settings: undefined,
+      painted: 0,
+      plate: undefined,
+    };
   }
   const model = readModel3mf(bytes, { plate });
   if (model === "not-3mf") throw new Problem("unreadable");
@@ -542,6 +551,17 @@ function readModel(bytes: Uint8Array, name: string, plate?: number) {
     project: model.project,
     settings: model.settings,
     painted,
+    // Which plate of how many, when the project has several.
+    ...(model.plates.length > 1
+      ? {
+          plate: {
+            index: model.plate,
+            count: model.plates.length,
+            height:
+              Math.round((model.plates.find((candidate) => candidate.index === model.plate)?.height ?? 0) * 10) / 10,
+          },
+        }
+      : {}),
   };
 }
 
