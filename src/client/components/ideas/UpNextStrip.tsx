@@ -1,3 +1,4 @@
+import { relativeTime } from "@shared/time";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { MiniCard, type MiniDrag } from "@/components/ui/MiniCard";
@@ -74,6 +75,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 }
                 note={item.note || undefined}
                 title={item.title || undefined}
+                meta={relativeTime(item.createdAt)}
                 corner={
                   item.pending ? undefined : (
                     <Suspense fallback={null}>

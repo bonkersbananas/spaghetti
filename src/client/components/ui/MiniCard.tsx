@@ -25,6 +25,8 @@ interface MiniCardProps {
   /** Stands in for a missing photo, as a small note face. */
   note?: string;
   title?: string;
+  /** Under the cover when there is no title to show (as on Card): the time. */
+  meta?: string;
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
   corner?: ReactNode;
   landing?: boolean;
@@ -39,7 +41,7 @@ interface MiniCardProps {
  * A small card for a strip: the cover photo, square, with its title (two lines at most) under it, about 7 rem wide.
  * It is the compact sibling of Card, for rows that scroll sideways (Up next on phones) and give way to what is below.
  */
-export function MiniCard({ link, photo, note, title, corner, landing, id, drag, ref, className }: MiniCardProps) {
+export function MiniCard({ link, photo, note, title, corner, landing, id, drag, meta, ref, className }: MiniCardProps) {
   const heading = title || (photo ? note : undefined);
   return (
     <m.li
@@ -104,18 +106,22 @@ export function MiniCard({ link, photo, note, title, corner, landing, id, drag, 
               </div>
             )}
           </div>
-          {(heading || !note) && (
+          {(heading || ((photo || !note) && meta)) && (
             // The padding is on the wrapper: a clamped heading shows its next line in its own padding.
             <div className="px-1.5 pt-1.5 pb-1">
-              <h3
-                className={cn(
-                  "text-small line-clamp-2 min-h-[2lh] leading-snug break-words",
-                  // A note standing in for a title is set as on Card: plain Figtree, not a title.
-                  title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
-                )}
-              >
-                {heading || "Untitled"}
-              </h3>
+              {heading ? (
+                <h3
+                  className={cn(
+                    "text-small line-clamp-2 min-h-[2lh] leading-snug break-words",
+                    // A note standing in for a title is set as on Card: plain Figtree, not a title.
+                    title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
+                  )}
+                >
+                  {heading}
+                </h3>
+              ) : (
+                <p className="text-small text-ink-faint min-h-[2lh] leading-snug">{meta}</p>
+              )}
             </div>
           )}
         </Link>
