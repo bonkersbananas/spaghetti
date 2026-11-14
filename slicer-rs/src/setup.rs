@@ -100,12 +100,7 @@ pub fn read_over(text: &str, base: &Profile) -> Result<Setup, Error> {
     let filament = filaments.into_iter().next().unwrap_or_default();
     let profile = Arc::new(Profile::over(base, machine, process, filament));
     let mut settings = Settings::from_profile(profile, colour.as_deref());
-    // Several filaments print a prime tower, and with one Orca turns the support's own layer heights off
-    // (`normalize_fdm_2`): its layers follow the object's.
-    if palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
-        settings.support.independent_layer_height = false;
-    }
-    settings.palette = palette;
+    settings.set_palette(palette);
     if let Some(what) = settings.unsupported() {
         return Err(Error::Unsupported(what));
     }
@@ -232,6 +227,11 @@ mod tests {
             Some(Error::Unsupported("normal supports in several filaments"))
         );
         assert!(read(&normal("")).is_ok_and(|s| s.settings.support.independent_layer_height));
+        // The command line's stand-in filaments too.
+        let mut s = read(&normal("")).unwrap().settings;
+        s.set_palette(Some(Arc::new(crate::filaments::palette_of(&s, 2))));
+        assert!(!s.support.independent_layer_height);
+        assert_eq!(s.unsupported(), Some("normal supports in several filaments"));
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))

@@ -141,7 +141,8 @@ fn main() -> ExitCode {
     // Models in several filaments with no setup to say what they are: the presets' filament for each.
     let count = args.filaments.iter().copied().max().unwrap_or(1);
     if count > 1 && settings.palette.as_ref().is_none_or(|p| p.profiles.len() < count) {
-        settings.palette = Some(std::sync::Arc::new(spaghetti_slicer::filaments::palette_of(&settings, count)));
+        let palette = spaghetti_slicer::filaments::palette_of(&settings, count);
+        settings.set_palette(Some(std::sync::Arc::new(palette)));
     }
     if let (Some(map), Some(palette)) = (&args.filament_map, &mut settings.palette) {
         std::sync::Arc::make_mut(palette).manual_map = Some(map.iter().map(|n| n - 1).collect());

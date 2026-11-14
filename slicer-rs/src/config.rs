@@ -898,6 +898,16 @@ impl Settings {
         }
         out
     }
+    /// Gives the settings the plate's filaments (`setup.rs`, or the command line's stand-ins). With several a prime
+    /// tower prints, and with one Orca turns the support's own layer heights off (`normalize_fdm_2`): its supports'
+    /// layers follow the object's.
+    pub fn set_palette(&mut self, palette: Option<Arc<crate::filaments::Palette>>) {
+        if palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+            self.support.independent_layer_height = false;
+        }
+        self.palette = palette;
+    }
+
     /// The support's gaps under the object and over it, mm (Orca's `gap_support_object` and `gap_object_support`): as
     /// set, or in whole layers where the support's layers follow the object's (no independent support layer height,
     /// as with several filaments).
