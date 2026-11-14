@@ -33,6 +33,7 @@ pub mod surfaces;
 pub mod template;
 pub mod threemf;
 pub mod toolchange;
+pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 pub mod wipe_tower;
@@ -189,6 +190,8 @@ pub struct Plate {
     project: bool,
     /// Whether an object's parts print in different filaments (a project's).
     mixed_parts: bool,
+    /// Whether a model came with no word of its filament (an STL, or a 3MF that isn't a project, added without one).
+    unassigned: bool,
     title: Option<String>,
     read_ms: f64,
 }
@@ -207,10 +210,12 @@ impl Plate {
             let model = threemf::read(input.bytes)?;
             self.project |= model.project;
             self.mixed_parts |= model.mixed_parts;
+            self.unassigned |= filament.is_none() && !model.project;
             self.filaments.extend(model.filaments.iter().map(|&f| filament.unwrap_or(f)));
             self.meshes.extend(model.meshes);
         } else {
             self.meshes.push(mesh::read_stl(name, input.bytes)?);
+            self.unassigned |= filament.is_none();
             self.filaments.push(filament.unwrap_or(0));
         }
         self.title.get_or_insert_with(|| name.to_string());
@@ -220,16 +225,22 @@ impl Plate {
 
     /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
-        let Plate { mut meshes, mut filaments, project, mixed_parts, title, read_ms } = self;
+        let Plate { mut meshes, mut filaments, project, mixed_parts, unassigned, title, read_ms } = self;
         filaments.resize(meshes.len(), 0);
         let t0 = now();
         if let Some(what) = settings.unsupported() {
             return Err(Error::Unsupported(what));
         }
-        // With several filaments, an object prints in one of them: parts of it in others it can't print yet (with one,
-        // everything prints in it, as Orca prints it).
-        if mixed_parts && settings.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
-            return Err(Error::Unsupported("parts of one object in different filaments"));
+        // With several filaments, each object prints in the one its file or its caller gives it: parts of it in others
+        // it can't print yet, and models that say nothing would all print in the first (with one filament, everything
+        // prints in it, as Orca prints it).
+        if settings.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+            if mixed_parts {
+                return Err(Error::Unsupported("parts of one object in different filaments"));
+            }
+            if unassigned {
+                return Err(Error::Unsupported("several filaments for models that don't say which they print in"));
+            }
         }
         if meshes.iter().all(|m| m.triangles.is_empty()) {
             return Err(Error::NoModel);
@@ -566,7 +577,12 @@ fn object_supports(
                 tops,
                 origin: centres[o],
             };
-            support::generate(&object, &params)
+            if s.support.organic() {
+                tree::supports(&object.slices, object.height, s, object.origin, s.bed)
+                    .map_or_else(Vec::new, |t| support::generate_tree(&object, &params, t))
+            } else {
+                support::generate(&object, &params)
+            }
         })
         .collect()
 }
@@ -719,6 +735,18 @@ pub mod par {
     #[cfg(not(feature = "parallel"))]
     pub fn map_range<T, F: Fn(usize) -> T>(n: usize, f: F) -> Vec<T> {
         (0..n).map(f).collect()
+    }
+
+    /// Each item's result, in order (on every core where there are threads).
+    #[cfg(feature = "parallel")]
+    pub fn map_vec<T: Send, R: Send, F: Fn(T) -> R + Sync + Send>(items: Vec<T>, f: F) -> Vec<R> {
+        use rayon::prelude::*;
+        items.into_par_iter().map(f).collect()
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn map_vec<T, R, F: Fn(T) -> R>(items: Vec<T>, f: F) -> Vec<R> {
+        items.into_iter().map(f).collect()
     }
 
     #[cfg(feature = "parallel")]

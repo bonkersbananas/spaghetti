@@ -554,10 +554,49 @@ async function settleSliceSettings(page: Page) {
   await page.waitForTimeout(400);
 }
 
+/**
+ * The fusilli knob's settings open, More open and Spaghetti's own slicer picked there (decision 0055), once ours has
+ * sliced it again. Returns the Slicer group.
+ */
+async function pickOurSlicer(page: Page) {
+  const settings = await openSliceSettings(page);
+  await settings.getByRole("button", { name: /^More/ }).click();
+  const slicer = settings.getByRole("group", { name: "Slicer" });
+  await slicer.getByRole("radio", { name: "Spaghetti's own" }).click();
+  await settings
+    .getByText(/^Sliced in this browser in [\d.]+ s by Spaghetti's own slicer/)
+    .waitFor({ timeout: 90_000 });
+  await page.waitForTimeout(400);
+  return { slicer };
+}
+
 async function closeSliceSettings(page: Page) {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   await removeModelItems(page);
+}
+
+/**
+ * The workspace's slicing defaults set by the API (the Printer page's, decision 0051): Spaghetti's own with `change`
+ * over them, or Spaghetti's again with null. Spaghetti's own slicer (decision 0055) is picked there for the shots of
+ * models it slices.
+ */
+async function setSlicingDefaults(page: Page, change: Record<string, unknown> | null) {
+  await page.request.put("/api/printer", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: {
+      slicing: change && {
+        layerHeight: 0.2,
+        walls: 2,
+        infill: 15,
+        pattern: "crosshatch",
+        supports: "off",
+        supportStyle: "tree",
+        brim: "auto",
+        ...change,
+      },
+    },
+  });
 }
 
 /** The Printer page's slicing defaults (decision 0051). */
@@ -1869,6 +1908,49 @@ export const shots: Shot[] = [
     },
     beforeShot: modelInView,
     cleanup: removeModelItems,
+  },
+  {
+    // Sliced by Spaghetti's own slicer (decision 0055), picked as the workspace's: the card names it.
+    name: "idea-model-ours",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setSlicingDefaults(page, { slicer: "spaghetti" });
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti's own slicer/);
+      await sliceSaved(page);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await setSlicingDefaults(page, null);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Ours picked, with tree supports where needed, which it can't build yet: OrcaSlicer's engine sliced it, and the
+    // card says why in one line.
+    name: "idea-model-stepped-in",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setSlicingDefaults(page, { slicer: "spaghetti", supports: "where-needed" });
+      await ideaWithModel(page, RACK_IDEA, RACK, /Sliced by OrcaSlicer: our own slicer/);
+      await sliceSaved(page);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await setSlicingDefaults(page, null);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // More, at its end: which slicer slices it, Spaghetti's own picked and sliced by it, and under it who sliced it
+    // and in how long.
+    name: "slice-settings-slicer",
+    path: "/ideas",
+    prepare: async (page) => {
+      const { slicer } = await pickOurSlicer(page);
+      await slicer.evaluate((group) => group.scrollIntoView({ block: "center", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
   },
   {
     // A model kept but never sliced (its slicing stopped with its tab): "Not sliced yet", and "Slice it".
@@ -3398,14 +3480,14 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The defaults changed (Fine): saved, with the way back to Spaghetti's own beside the caption.
+    // The defaults changed (Fine): saved, with the way back to the usual settings beside the caption.
     name: "printer-slicing-own",
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
       const section = await openSlicingDefaults(page);
       await section.getByRole("group", { name: "Quality" }).getByRole("radio", { name: /^Fine/ }).click();
-      await section.getByRole("button", { name: "Back to Spaghetti's own" }).waitFor();
+      await section.getByRole("button", { name: "Back to the usual settings" }).waitFor();
       // "Saving…" fades out before "Saved" comes in, late under the shots' fixed clock: finish its fades as they come.
       await section.evaluate(
         (element) =>
@@ -3424,6 +3506,37 @@ export const shots: Shot[] = [
     cleanup: async (page) => {
       const headers = { Origin: new URL(page.url()).origin };
       await page.request.put("/api/printer", { headers, data: { slicing: null } });
+    },
+  },
+  {
+    // Which slicer slices new models (decision 0055), at the end of the defaults' More: Spaghetti's own picked, what
+    // it does, and the way back to the usual settings.
+    name: "printer-slicer",
+    path: "/printer",
+    selector: "section[aria-labelledby=printer-slicing]",
+    prepare: async (page) => {
+      const section = await openSlicingDefaults(page);
+      await section.getByRole("button", { name: /^More/ }).click();
+      const slicer = section.getByRole("group", { name: "Slicer" });
+      await slicer.getByRole("radio", { name: "Spaghetti's own" }).click();
+      await section.getByRole("button", { name: "Back to the usual settings" }).waitFor();
+      // No hover left on the section's controls.
+      await page.mouse.move(0, 0);
+      await section.evaluate(
+        (element) =>
+          new Promise<void>((resolve) => {
+            const done = () => {
+              for (const animation of element.getAnimations({ subtree: true })) animation.finish();
+              if (element.textContent?.includes("Saved")) resolve();
+              else setTimeout(done, 50);
+            };
+            done();
+          }),
+      );
+      await settleSection(page, section);
+    },
+    cleanup: async (page) => {
+      await setSlicingDefaults(page, null);
     },
   },
   {

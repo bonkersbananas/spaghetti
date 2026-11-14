@@ -11,6 +11,7 @@ import { liveCoachItems } from "./coach.ts";
 import type { Comment } from "./comments.ts";
 import { allPartsPrinted, attemptPartsLabel, partProgress, progressLabel } from "./parts.ts";
 import { slicingAhead } from "./slicing/model.ts";
+import { fallbackWords, slicerOf } from "./slicing/slicers.ts";
 import { printerName, problemSentence, sliceSummary, slicingDetail } from "./slicing/words.ts";
 import { formatDuration } from "./time.ts";
 
@@ -20,12 +21,18 @@ function fileLine(file: AttemptFile): string {
     file.prefill.estimatedMinutes !== undefined ? `est. ${formatDuration(file.prefill.estimatedMinutes)}` : "";
   if (file.kind === "model") {
     const slice = file.slice;
+    // Who made it (decision 0055): Spaghetti's own slicer, or OrcaSlicer's engine (and why, where it stepped in).
+    const who = !slice
+      ? ""
+      : slicerOf(slice) === "spaghetti"
+        ? "sliced by Spaghetti's own slicer"
+        : `sliced by Spaghetti with OrcaSlicer ${slice.settings.orca}${slice.fallback ? ` (${fallbackWords(slice.fallback)})` : ""}`;
     const how = !slice
       ? "not sliced yet"
       : slice.status === "failed"
         ? `couldn't be sliced: ${problemSentence(slice)}`
         : [
-            `sliced by Spaghetti with OrcaSlicer ${slice.settings.orca} for the ${printerName(slice.settings.machine)}${slice.settings.slicing ? `: ${slicingDetail(slice.settings.slicing)}` : ""}`,
+            `${who} for the ${printerName(slice.settings.machine)}${slice.settings.slicing ? `: ${slicingDetail(slice.settings.slicing, { slicer: false })}` : ""}`,
             ...(slice.settings.slicing ? [] : sliceSummary(slice.settings)),
             estimate,
             slice.cautions?.includes("floating") ? "parts of it float in the air (it needs supports)" : "",

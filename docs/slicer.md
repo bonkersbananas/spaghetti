@@ -1,6 +1,6 @@
-# The slicing engine
+# The slicing engines
 
-Spaghetti slices `.stl` and plain `.3mf` files in the browser with OrcaSlicer's own slicing core, compiled to WebAssembly (the proposal with the measurements is [pull request #205](https://github.com/bonkersbananas/spaghetti/pull/205), which keeps them in `docs/proposals/slicing.md`). This page is about the engine: what it is, where it comes from, how it is built and released, and how the app gets it.
+Spaghetti slices `.stl` and plain `.3mf` files in the browser with OrcaSlicer's own slicing core, compiled to WebAssembly (the proposal with the measurements is [pull request #205](https://github.com/bonkersbananas/spaghetti/pull/205), which keeps them in `docs/proposals/slicing.md`), or with Spaghetti's own slicer, written in Rust, when a model picks it ([below](#spaghettis-own-slicer)). This page is about the engines: what they are, where they come from, how they are built and released, and how the app gets them.
 
 ## What it is
 
@@ -55,3 +55,32 @@ What the feature does is [decision 0046](decisions/0046-models-are-sliced-in-the
 4. The job sends it to `PUT /api/files/:id/sliced` once the model is on the server. A failure is the engine's code mapped to a `problem` (2 is out of memory; a model larger than the plate fails before the engine runs, with the scale at which it would fit).
 
 `pnpm test` covers the pure parts (`test/unit/slicing/`), `test/worker/model-files.test.ts` the API, and `e2e/model-files.spec.ts` slices a small STL with the real engine in Chromium (also at phone width) and opens it in 3D.
+
+## Spaghetti's own slicer
+
+`slicer-rs/` is a slicer of our own, in Rust, that slices the X2D's prints the way OrcaSlicer 2.5 does, on the same presets ([proposals/rust-slicer.md](proposals/rust-slicer.md) says how close it is, and what it can't slice yet). Its WebAssembly module slices a Benchy in about 2.5 s in Chromium where OrcaSlicer's engine takes about 8.7 s, from a 2.3 MB file (0.7 MB gzip) where the engine's is 11.1 MB. A model slices with it when its settings say so (`slicer`, under More: "Spaghetti's own" or "OrcaSlicer"), and OrcaSlicer's engine slices what ours can't yet ([decision 0055](decisions/0055-spaghettis-own-slicer-beside-orcaslicers-engine.md)). OrcaSlicer's engine stays the default until a print from ours has come out right on the X2D: `DEFAULT_SLICER` in `src/shared/slicing/defaults.ts` is the one line to change.
+
+### Releasing it
+
+It is released as the engine is, so neither `pnpm build`, the container nor CI needs Rust:
+
+1. Merge what the release should hold, then tag the commit on main `slicer-rs-vN` (the next number) and push the tag. A release is always cut from main, never from a pull request's branch, so it matches merged code: the workflow fails for a tagged commit that isn't on main. `.github/workflows/slicer-rs-release.yml` builds the module with Rust stable (`cargo rustc --lib --crate-type cdylib --target wasm32-unknown-unknown --no-default-features`), slices a test model with it, plain and with normal supports, packs it (`scripts/slicer-rs/pack.ts`: the module, the AGPL's text, `SPAGHETTI.md` and a manifest, `spaghetti-slicer-rs.json`, with the commit and the files' hashes) and publishes `spaghetti-slicer-rs-N.zip` with the Corresponding Source: the crate at that commit and every crate it is built from, vendored, and `SHA256SUMS`. It isn't marked as the repository's latest release.
+2. Put the zip's URL, sha256 and version in `scripts/slicer-rs/release.json` in the pull request that needs it.
+
+A pull request that changes the packing (`scripts/slicer-rs/` but `release.json`, or the workflow) builds and tests it without publishing. The release is the crate as it is at its commit: whatever changes in `slicer-rs/` reaches the app only through a new release and a moved pin.
+
+### How the app gets it
+
+The same Vite plugin (`scripts/vite-slicer.ts`) reads `release.json`, fetches the zip once into `node_modules/.cache/spaghetti-slicer-rs/`, checks its sha256, reads its manifest, and serves the files at `/slicer/rust-<version>/` (copied into `dist/client/slicer/` by `pnpm build`): like the engine's, they are in no first load and no precache, and immutable. `virtual:slicer-engine` says where they are (`rust.base`, `rust.wasm`) and what they are (`rust.version`, `rust.commit`, `rust.source`). `SLICER_RS_ARCHIVE=<zip>` uses a local zip, for one built from a branch; without the files `pnpm dev` runs on and every model slices with OrcaSlicer's engine.
+
+### How the app slices with it
+
+The slice worker does everything as for OrcaSlicer's engine (reading the model, laying it out, the plate picture, fins), then, when the model's settings pick ours, `lib/slicing/ours.ts` loads the module and hands it the setup (`orca.ts`'s presets and the settings, with `slicing.scale` 100, the meshes being scaled already) and the meshes as placed, sliced with flag 1 (keep placement). Its `.gcode.3mf` is used as it comes: the plate picture, estimate, filaments and toolpaths are read from it as from any other. OrcaSlicer's engine slices instead, and the card says why in one line ("Sliced by OrcaSlicer: our own slicer can't do tree supports yet", `shared/slicing/slicers.ts`), when:
+
+- ours answers that it can't slice a setting yet (code 8, `can't slice with … yet`: tree supports, nozzles other than 0.4 mm, several filaments, …);
+- the model has no supports and a part of it may start in the air (`shared/slicing/floating.ts`): OrcaSlicer's engine warns of it (the card's "Parts of it float in the air") and ours can't yet. The check looks at the mesh; Orca's other warning, an arm reaching out more than 12 mm, isn't looked for;
+- the module doesn't load, or answers anything else (a model it can't read, a crash).
+
+What ours prints otherwise than asked (its notes, such as "Auto Lift printed as spiral lifts") is kept with the slice, and said under the settings. The slice records which slicer made it (`settings.slicer`, and `settings.rust`, the release), why OrcaSlicer's engine stepped in (`fallback`), the notes, and how long the slicer took (`ms`, said under the settings: "Sliced in this browser in 2.6 s by Spaghetti's own slicer").
+
+`test/unit/slicing/slicers.test.ts` and `floating.test.ts` cover the choices, `test/worker/model-files.test.ts` the record, and `e2e/our-slicer.spec.ts` slices a cube with the module in Chromium, opens it in 3D, and falls back for tree supports and for a part in the air.

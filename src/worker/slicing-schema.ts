@@ -9,6 +9,7 @@ import {
   INFILL_PATTERNS,
   LIMITS,
   normalizeSlicing,
+  SLICER_IDS,
   SLICING_PLATES,
   type SlicingDefaults,
   type SlicingSettings,
@@ -76,6 +77,12 @@ export const slicingSettingsShape = z
       .describe(
         "The face the model rests on, as the direction in the model's own axes [x, y, z] that points down; null lays it as the file does.",
       ),
+    slicer: z
+      .enum(SLICER_IDS)
+      .optional()
+      .describe(
+        "Which slicer slices it (decision 0055): spaghetti, Spaghetti's own (OrcaSlicer's engine steps in for what it can't slice yet); orca, OrcaSlicer's engine. Absent: the default, OrcaSlicer's engine for now.",
+      ),
   })
   .strict()
   .meta({ id: "SlicingSettings" });
@@ -92,7 +99,16 @@ export const slicingSettings = slicingSettingsShape
  * and nozzle aren't among them: they come from the Pantry and the setup.
  */
 export const slicingDefaults = slicingSettingsShape
-  .pick({ layerHeight: true, walls: true, infill: true, pattern: true, supports: true, supportStyle: true, brim: true })
+  .pick({
+    layerHeight: true,
+    walls: true,
+    infill: true,
+    pattern: true,
+    supports: true,
+    supportStyle: true,
+    brim: true,
+    slicer: true,
+  })
   .strict()
   .superRefine((value, ctx) => {
     for (const problem of slicingProblems({ ...DEFAULT_SLICING, ...value })) {

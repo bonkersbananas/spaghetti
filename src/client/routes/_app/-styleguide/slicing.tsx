@@ -152,6 +152,19 @@ const FLOATING: FileSlice = {
   cautions: ["floating"],
   settings: { ...SAMPLE_SLICE.settings, supports: false, slicing: { ...SETTINGS, supports: "off" } },
 };
+/** Sliced by Spaghetti's own slicer (decision 0055), with how long it took. */
+const OURS: FileSlice = {
+  ...SAMPLE_SLICE,
+  settings: { ...SAMPLE_SLICE.settings, slicer: "spaghetti", rust: "1", slicing: { ...SETTINGS, slicer: "spaghetti" } },
+  ms: 2_560,
+};
+/** Ours was asked for, but it can't build tree supports yet: OrcaSlicer's engine sliced it. */
+const STEPPED_IN: FileSlice = {
+  ...SAMPLE_SLICE,
+  settings: { ...SAMPLE_SLICE.settings, slicer: "orca", slicing: { ...SETTINGS, slicer: "spaghetti" } },
+  fallback: { why: "unsupported", what: "tree supports" },
+  ms: 8_770,
+};
 const TOO_BIG: FileSlice = {
   ...SAMPLE_SLICE,
   status: "failed",
@@ -369,6 +382,26 @@ export function SlicingSection() {
             phone={false}
           />
           <Label>
+            Which slicer made it (decision 0055): Spaghetti's own, named while OrcaSlicer is the usual one; OrcaSlicer
+            stepping in for what ours can't do yet, and why, in one line
+          </Label>
+          <ModelCard
+            name="fusilli-knob.stl"
+            state={sliced({ slice: OURS })}
+            prefill={PREFILL}
+            download="#"
+            details={{ open: noop, summary: SUMMARY }}
+            phone={false}
+          />
+          <ModelCard
+            name="fusilli-knob.stl"
+            state={sliced({ slice: STEPPED_IN })}
+            prefill={PREFILL}
+            download="#"
+            details={{ open: noop, summary: SUMMARY }}
+            phone={false}
+          />
+          <Label>
             On an idea (raised: a 96 px plate with the 3D pill, its actions in the top corner); on a story card
             (compact: the 3D control a corner glyph, and only "Sliced by Spaghetti", which opens the settings); in an
             attempt's sheet on phones the settings don't open
@@ -420,7 +453,10 @@ export function SlicingSection() {
             />
           </div>
 
-          <Label>More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size</Label>
+          <Label>
+            More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size, and which
+            slicer; under it, which slicer slices it and its source
+          </Label>
           <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#", size: 1 }}

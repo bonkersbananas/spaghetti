@@ -150,8 +150,17 @@ mod tests {
     #[test]
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
-        // The X2D's supports are trees; normal ones slice, but not snug ones or those on the plate only.
-        assert_eq!(refused(r#"{"process": {"enable_support": "1"}}"#), Some(Error::Unsupported("tree supports")));
+        // The X2D's supports are organic trees, which slice, as normal ones do; not the other styles of tree, nor
+        // snug normal ones or those on the plate only.
+        assert!(read(r#"{"process": {"enable_support": "1"}}"#).is_ok());
+        assert_eq!(
+            refused(r#"{"process": {"enable_support": "1", "support_style": "tree_hybrid"}}"#),
+            Some(Error::Unsupported("this style of tree support"))
+        );
+        assert_eq!(
+            refused(r#"{"process": {"enable_support": "1", "support_base_pattern": "rectilinear"}}"#),
+            Some(Error::Unsupported("this support pattern"))
+        );
         let normal =
             |more: &str| format!(r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)"{more}}}}}"#);
         assert!(read(&normal("")).is_ok());
