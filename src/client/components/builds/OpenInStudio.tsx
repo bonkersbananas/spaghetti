@@ -1,25 +1,27 @@
 import { fileUrl } from "@shared/api";
-import { type OpenPart, openTarget } from "@shared/open-link";
+import { type OpenChoice, openChoices } from "@shared/open-link";
 import { useEffect } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
-import { OpenInAppIcon } from "@/components/ui/icons";
+import { ExpandIcon, ModelIcon, OpenInAppIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { MenuGroup, MenuItem } from "@/components/ui/Menu";
+import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { toast } from "@/components/ui/Toast";
-import { cn } from "@/lib/cn";
 import { useCanOpenInStudio, useOpenInStudio } from "@/lib/open-in-studio";
 
 type OpenableFile = Parameters<typeof useOpenInStudio>[0];
 
-/** What it opens, said once in the button's tooltip: the sliced file is what you would print. */
-const WHAT: Record<OpenPart, string> = {
-  sliced: "Opens the sliced file in Bambu Studio, ready to print",
-  file: "Opens the file in Bambu Studio",
-};
+/** What one choice opens, said once in the tooltip. */
+const WHAT = (choice: OpenChoice) =>
+  choice.part === "sliced"
+    ? "Opens the sliced file in Bambu Studio, ready to print"
+    : "Opens the file in Bambu Studio, to slice or tweak";
 
 /**
- * "Open in Bambu Studio" for one kept file, on a computer only (decision 0058): one quiet button. A sliced model
- * opens its sliced file; otherwise the file itself. A browser can't tell whether the app opened, so for a few
- * seconds the button gives way to "Nothing opened? Download it instead". Nothing shows where Bambu Studio can't run
- * or there is nothing it can open (an .stl that isn't sliced).
+ * "Open in Bambu Studio" for one kept file, on a computer only (decisions 0058 and 0059): one quiet button. With one
+ * thing to open (an unsliced model, a slicer file) a tap opens it; a sliced model has two, its sliced file (ready to
+ * print) and its original model (to slice or tweak), so the button opens a small menu of those two, the sliced file
+ * first. A browser can't tell whether the app opened, so afterwards "Nothing opened? Download it instead" shows for
+ * a few seconds. Nothing shows where Bambu Studio can't run or there is nothing it can open.
  */
 export function OpenInStudio({
   file,
@@ -34,47 +36,37 @@ export function OpenInStudio({
   className?: string;
 }) {
   const allowed = useCanOpenInStudio();
-  const { target, state, open } = useOpenInStudio(file);
+  const { choices, state, open } = useOpenInStudio(file);
   const asked = state.phase === "tried" || state.phase === "failed";
+  const asking = state.phase === "asking";
+  const download = (choice: OpenChoice) => fileUrl(file.id, choice.part);
   // On a card the icon stays put; the fallback comes as a quiet toast, with the plain download in it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per tap.
   useEffect(() => {
-    if (!icon || !target || !asked) return;
+    if (!icon || !asked) return;
+    const choice = state.choice;
     toast.action(state.phase === "failed" ? "Couldn't open it just now." : "Nothing opened?", {
       label: "Download it instead",
       onClick: () => {
         const link = document.createElement("a");
-        link.href = fileUrl(file.id, target.part);
-        link.download = target.name;
+        link.href = download(choice);
+        link.download = choice.download;
         document.body.append(link);
         link.click();
         link.remove();
       },
     });
   }, [state.phase]);
-  if (!allowed || !target) return null;
-  if (icon) {
-    return (
-      <IconButton
-        icon={OpenInAppIcon}
-        size="sm"
-        label="Open in Bambu Studio"
-        title={WHAT[target.part]}
-        aria-busy={state.phase === "asking" || undefined}
-        data-testid="open-in-studio"
-        className={className}
-        onClick={() => void open()}
-      />
-    );
-  }
-  if (state.phase === "tried" || state.phase === "failed") {
+  const first = choices[0];
+  if (!allowed || !first) return null;
+  if (!icon && asked) {
     const failed = state.phase === "failed";
     return (
       <p role="status" className="text-small text-ink-soft py-2 text-pretty">
         {failed ? "Couldn't open it just now. " : "Opening in Bambu Studio… Nothing opened? "}
         <a
-          href={fileUrl(file.id, target.part)}
-          download={target.name}
+          href={download(state.choice)}
+          download={state.choice.download}
           className="focus-ring text-ink hover:text-tomato rounded-xs font-semibold underline underline-offset-2"
         >
           Download it instead
@@ -82,25 +74,57 @@ export function OpenInStudio({
       </p>
     );
   }
-  return (
+  const several = choices.length > 1;
+  const trigger = icon ? (
+    <IconButton
+      icon={OpenInAppIcon}
+      size="sm"
+      label="Open in Bambu Studio"
+      title={several ? "Open in Bambu Studio: the sliced file or the original model" : WHAT(first)}
+      aria-busy={asking || undefined}
+      data-testid="open-in-studio"
+      className={className}
+      onClick={several ? undefined : () => void open(first)}
+    />
+  ) : (
     <Button
       variant="quiet"
       size={size}
       icon={OpenInAppIcon}
-      loading={state.phase === "asking"}
-      title={WHAT[target.part]}
+      loading={asking}
+      title={several ? "Open the sliced file or the original model in Bambu Studio" : WHAT(first)}
       data-testid="open-in-studio"
       className={className}
-      onClick={() => void open()}
+      onClick={several ? undefined : () => void open(first)}
     >
       Open in Bambu Studio
+      {several && <ExpandIcon size={14} className="-mr-1 shrink-0" aria-hidden />}
     </Button>
+  );
+  if (!several) return trigger;
+  return (
+    <Popover trigger={trigger} side="bottom" align="end" label="Open in Bambu Studio" className="w-64 p-2">
+      <MenuGroup size="sm" className="mx-0">
+        {choices.map((choice) => (
+          <PopoverClose asChild key={choice.part}>
+            <MenuItem
+              icon={choice.part === "sliced" ? SlicerFileIcon : ModelIcon}
+              hint={choice.hint}
+              data-testid={`open-in-studio-${choice.part}`}
+              onClick={() => void open(choice)}
+            >
+              {choice.label}
+            </MenuItem>
+          </PopoverClose>
+        ))}
+      </MenuGroup>
+    </Popover>
   );
 }
 
 /** The one file of an idea or build that Bambu Studio can open, when it has exactly one: the page's way in. */
 export function onlyOpenable<F extends OpenableFile>(files: readonly F[] | undefined): F | undefined {
-  const openable = (files ?? []).filter((file) => openTarget(file));
+  const openable = (files ?? []).filter((file) => openChoices(file).length > 0);
   return openable.length === 1 ? openable[0] : undefined;
 }
 
