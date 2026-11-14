@@ -14,7 +14,18 @@ import type { UpNextMenu } from "./IdeaCard";
 const MoveToBuildSheet = lazy(() => import("./MoveToBuildSheet").then((m) => ({ default: m.MoveToBuildSheet })));
 
 /** The card's "…" button: Up next, where it stands in the queue, your wishlist and adding it to a build. A link can't hold a button, so it sits over the card. */
-export function CardMenu({ menu, name, item }: { menu: UpNextMenu; name: string; item: ItemView }) {
+export function CardMenu({
+  menu,
+  name,
+  item,
+  compact,
+}: {
+  menu: UpNextMenu;
+  name: string;
+  item: ItemView;
+  /** On a mini card: a small round button over the photo's top-right corner, not under the card. */
+  compact?: boolean;
+}) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
   // A closed phone sheet still costs a vaul root with its scroll and resize listeners, and every card has one:
@@ -94,9 +105,13 @@ export function CardMenu({ menu, name, item }: { menu: UpNextMenu; name: string;
               setOpen(true);
             }
       }
-      className="pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
+      className={
+        compact
+          ? "pressable focus-ring touch-target bg-cream/85 text-ink shadow-soft absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-sm"
+          : "pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
+      }
     >
-      <MoreIcon size={20} weight="bold" aria-hidden />
+      <MoreIcon size={compact ? 16 : 20} weight="bold" aria-hidden />
     </button>
   );
   if (!isDesktop) {
