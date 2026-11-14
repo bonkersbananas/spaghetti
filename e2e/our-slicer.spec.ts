@@ -1,4 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
+import { strFromU8, unzipSync } from "fflate";
+import { twoColourProject } from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -11,15 +13,16 @@ test.afterEach(async ({ page }) => {
 
 const SLICED = 60_000;
 
-/** An idea with an STL kept on it; returns its id and the files' region once the STL shows. */
-async function ideaWithModel(page: Page, title: string, name: string, stl: Uint8Array) {
+/** An idea with a model (.stl or .3mf) kept on it; returns its id and the files' region once the model shows. */
+async function ideaWithModel(page: Page, title: string, name: string, model: Uint8Array) {
   const id = crypto.randomUUID();
   await page.request.post("/api/items", {
     headers: { Origin: new URL(page.url()).origin },
     data: { id, title, note: "" },
   });
   await page.goto(`/ideas/${id}`);
-  await page.getByTestId("idea-file-input").setInputFiles({ name, mimeType: "model/stl", buffer: Buffer.from(stl) });
+  const mimeType = name.endsWith(".3mf") ? "model/3mf" : "model/stl";
+  await page.getByTestId("idea-file-input").setInputFiles({ name, mimeType, buffer: Buffer.from(model) });
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText(name)).toBeVisible();
   return { id, files };
@@ -138,6 +141,31 @@ test("what ours can't slice yet, OrcaSlicer's engine slices, and the card says w
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
   } finally {
     // The worker's database is shared with the specs after this one.
+    await setDefaults(page, null);
+  }
+});
+
+test("a plate in two colours is sliced by ours, each object in its own filament", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    // A Bambu Studio project: a white coaster in filament 1, a red one in filament 2.
+    const { id, files } = await ideaWithModel(page, "Coasters", "coasters.3mf", twoColourProject());
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const file = await fileOf(page, id);
+    expect(file.slice.settings.slicer).toBe("spaghetti");
+    expect(file.slice.fallback).toBeUndefined();
+    expect(file.slice.settings.filaments).toHaveLength(2);
+    // The file says which nozzle each of its two filaments prints with, as Orca's does for the printer.
+    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+    expect(sliced.ok()).toBe(true);
+    const zip = unzipSync(new Uint8Array(await sliced.body()));
+    const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
+    expect(/key="filament_maps" value="([^"]*)"/.exec(info)?.[1]?.split(" ")).toHaveLength(2);
+    // Both filaments print: two lines of filament in the plate's description, each with what it uses.
+    expect(info.match(/<filament id="/g)).toHaveLength(2);
+  } finally {
     await setDefaults(page, null);
   }
 });
