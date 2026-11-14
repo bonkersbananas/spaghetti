@@ -1,8 +1,7 @@
 /**
  * Packs Spaghetti's own slicer (slicer-rs, docs/proposals/rust-slicer.md) for a release: its WebAssembly module as
- * cargo built it, the licence it is shipped under (the AGPL-3.0's text, as the slicing engine's release carries it:
- * the slicer follows OrcaSlicer's algorithms, which are under it) and Spaghetti's manifest and notes (what it is,
- * where its source is). Run by .github/workflows/slicer-rs-release.yml; the app pins the zip in
+ * cargo built it, the licence it is shipped under (slicer-rs/LICENSE, the AGPL-3.0's text: the slicer follows
+ * OrcaSlicer's algorithms, which are under it) and Spaghetti's manifest and notes (what it is, where its source is). Run by .github/workflows/slicer-rs-release.yml; the app pins the zip in
  * scripts/slicer-rs/release.json and serves its files at /slicer/rust-<version>/ (docs/slicer.md).
  *
  *   node scripts/slicer-rs/pack.ts <spaghetti_slicer.wasm> <out dir> <version>
@@ -12,7 +11,6 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { zipSync } from "fflate";
-import { ensureSlicer } from "../vite-slicer.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const [wasm, out, version] = process.argv.slice(2);
@@ -53,8 +51,8 @@ for (const name of [
 
 const files: Record<string, Uint8Array> = {
   "spaghetti_slicer.wasm": module,
-  // The AGPL-3.0's text, from the slicing engine's release that the app pins (checked by its sha256 there).
-  LICENSE: new Uint8Array(readFileSync(join(await ensureSlicer(), "LICENSE"))),
+  // The crate's licence, the AGPL-3.0's text (the same bytes as OrcaSlicer's and its engine's).
+  LICENSE: new Uint8Array(readFileSync(join(ROOT, "slicer-rs/LICENSE"))),
 };
 files["SPAGHETTI.md"] = new TextEncoder().encode(
   [

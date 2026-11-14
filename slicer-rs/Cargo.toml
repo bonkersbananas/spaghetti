@@ -2,7 +2,9 @@
 name = "spaghetti-slicer"
 version = "0.1.0"
 edition = "2024"
-description = "A fast slicer for Spaghetti: STL and plain 3MF in, a Bambu-flavoured .gcode.3mf out (an experiment, not wired into the app)."
+description = "Spaghetti's own slicer: STL and 3MF in, a Bambu-flavoured .gcode.3mf out, following OrcaSlicer's algorithms. The app slices with it in the browser (WebAssembly) and falls back to OrcaSlicer's engine for what it can't slice yet."
+# The AGPL-3.0, as OrcaSlicer licenses its own code (version 3 only): the crate follows its algorithms closely.
+license = "AGPL-3.0-only"
 publish = false
 
 # The WebAssembly module is the library built as a cdylib:

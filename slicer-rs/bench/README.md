@@ -44,7 +44,7 @@ target/release/spaghetti-slicer --setup abs.json model.stl -o model.gcode.3mf
 node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm model.gcode.3mf --setup abs.json model.stl   # in WebAssembly
 ```
 
-A setup it can't slice yet (slim or hybrid trees, brim ears…) is refused by name; what it prints otherwise than asked (other infill patterns as straight lines…) it notes, on stderr natively and in the summary's `fallbacks` in WebAssembly. Without supports, it warns of each object that needs them as Orca does ("It seems object rack.stl has floating regions. Please re-orient the object or enable support generation."), on stderr natively and in the summary's `warnings` in WebAssembly, each with Orca's kind (`need_support_on`) and words. `tests/setups/` keeps one setup made this way, which the tests and CI slice.
+A setup it can't slice yet (rafts, brim ears…) is refused by name; what it prints otherwise than asked (other infill patterns as straight lines…) it notes, on stderr natively and in the summary's `fallbacks` in WebAssembly. Without supports, it warns of each object that needs them as Orca does ("It seems object rack.stl has floating regions. Please re-orient the object or enable support generation."), on stderr natively and in the summary's `warnings` in WebAssembly, each with Orca's kind (`need_support_on`) and words. `tests/setups/` keeps one setup made this way, which the tests and CI slice.
 
 ## Several filaments
 
