@@ -55,6 +55,16 @@ target/release/spaghetti-slicer --keep-placement --filaments 1,2 $BENCH_MODELS/c
 python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models colour,colour-one-nozzle
 ```
 
+## Other nozzles
+
+`--nozzle 0.2` (or 0.6, 0.8) slices for another of the X2D's nozzles with Bambu's presets for it (`profiles/x2d-0.2/` and the others, from the engine's release 2: the nozzle's machine, its Standard process and Bambu PLA Basic), which a setup is laid over. It is the command line's only: the WebAssembly module slices what the app's setup brings, a nozzle's presets whole. `run.py` slices a Benchy for each (`benchy-0.2`, `benchy-0.6`, `benchy-0.8`), every runner with those presets, on the Textured PEI plate; `table.py` prints their tables after the others:
+
+```sh
+target/release/spaghetti-slicer --nozzle 0.2 --keep-placement $BENCH_MODELS/benchy.stl -o benchy-0.2.gcode.3mf
+python3 -I bench/run.py --runs 3 --models benchy-0.2
+python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models benchy-0.6,benchy-0.8
+```
+
 ## Comparing files
 
 To compare what the two write around the toolpaths, diff the head (everything before the first printed line: header, settings, the printer's start G-code, the first layer change) and the tail (everything after the last printed line: the last lift and photo, the end G-code, the totals) of the same model's G-code, line by line:

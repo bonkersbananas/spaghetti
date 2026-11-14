@@ -6,7 +6,9 @@ and the quality facts (layers, filament, estimated time, per feature) next to na
 Models are placed STLs (see place.py) in $BENCH_MODELS (default /home/agent/build/bench-in): benchy.stl,
 glasses.stl, uobf.stl and plate/benchy-1…12.stl, and a plate in two filaments (colour.py): colour/block.stl and
 colour/letter.stl, each on a nozzle of its own as Orca groups them ("colour") or both on the left one, flushing
-between them ("colour-one-nozzle"). Runners whose tools are missing are skipped:
+between them ("colour-one-nozzle"); and a Benchy for each of the X2D's other nozzles ("benchy-0.2", "benchy-0.6",
+"benchy-0.8"), with Bambu's presets for it (../profiles/x2d-<mm>/: its Standard process and Bambu PLA Basic), which
+every runner slices with. Runners whose tools are missing are skipped:
 - rust-native, rust-native-1t: ../target/release/spaghetti-slicer (cargo build --release)
 - rust-wasm-node, rust-wasm-chromium: ../target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm
 - orca-wasm-node, orca-wasm-chromium: the OrcaSlicer engine Spaghetti runs today, from $ORCA_SPIKE (a folder with
@@ -45,12 +47,17 @@ MODELS = {
     "plate": [f"plate/benchy-{k}.stl" for k in range(1, 13)],
     "colour": ["colour/block.stl", "colour/letter.stl"],
     "colour-one-nozzle": ["colour/block.stl", "colour/letter.stl"],
+    "benchy-0.2": ["benchy.stl"],
+    "benchy-0.6": ["benchy.stl"],
+    "benchy-0.8": ["benchy.stl"],
 }
 # Plates in several filaments: each file's filament (1-based), in the app's stand-in colours; and where a plate's
 # filaments go on nozzles of Orca's manual grouping (1 the left), the map.
 FILAMENTS = {"colour": [1, 2], "colour-one-nozzle": [1, 2]}
 COLOURS = ["#F2754E", "#4F7FC7"]
 FILAMENT_MAP = {"colour-one-nozzle": [1, 1]}
+# Models for another nozzle: its width in mm, which names its presets' folder.
+NOZZLES = {"benchy-0.2": "0.2", "benchy-0.6": "0.6", "benchy-0.8": "0.8"}
 BED = 256.0
 
 
@@ -77,8 +84,25 @@ def tower_spot(files, width):
     return round(x), round(y)
 
 
+def nozzle_presets(model, d):
+    """A model for another nozzle: its presets (machine, process, filament), on the Textured PEI plate as the others,
+    written to `d` for the Orca runners, and the same as a slice setup for ours."""
+    folder = os.path.join(CRATE, "profiles", f"x2d-{NOZZLES[model]}")
+    machine, process, filament = (json.load(open(f"{folder}/{kind}.json")) for kind in ("machine", "process", "filament"))
+    machine["curr_bed_type"] = "Textured PEI Plate"
+    os.makedirs(d, exist_ok=True)
+    for kind, preset in (("machine", machine), ("process", process), ("filament", filament)):
+        json.dump(preset, open(f"{d}/{kind}.json", "w"))
+    json.dump({"machine": machine, "process": process, "filaments": [filament]}, open(f"{d}/presets-pin.json", "w"))
+    json.dump({"machine": machine, "process": process, "filaments": [filament]}, open(f"{d}/setup.json", "w"))
+    return d
+
+
 def rust_setup(model, d):
-    """The slice setup for a plate in several filaments (the app's sliceSetup gives one), and the arguments for it."""
+    """The slice setup for a plate in several filaments (the app's sliceSetup gives one) or for another nozzle, and
+    the arguments for it."""
+    if model in NOZZLES:
+        return ["--setup", f"{nozzle_presets(model, d)}/setup.json"]
     if model not in FILAMENTS:
         return []
     setup = {"filaments": [{} for _ in COLOURS], "colours": COLOURS}
@@ -165,8 +189,12 @@ def rust_wasm_node(model, files, run):
 
 
 def rust_wasm_browser(model, files, runs, browser):
+    d = os.path.join(OUT, f"rust-wasm-{browser}-{model}")
+    os.makedirs(d, exist_ok=True)
     out = subprocess.run(
-        ["node", os.path.join(HERE, "wasm-browser.mjs"), browser, os.path.dirname(WASM), str(runs), "--keep-placement"] + files,
+        ["node", os.path.join(HERE, "wasm-browser.mjs"), browser, os.path.dirname(WASM), str(runs), "--keep-placement"]
+        + rust_setup(model, d)
+        + files,
         stdout=subprocess.PIPE,
         check=True,
     )
@@ -188,7 +216,8 @@ def rust_wasm_browser(model, files, runs, browser):
 def orca_wasm_node(model, files, run):
     d = os.path.join(OUT, f"orca-wasm-node-{model}")
     os.makedirs(d, exist_ok=True)
-    m = measure(["node", "slice-node.mjs", "engine-0.6.1", "presets-pin.json", f"{d}/out.gcode"] + files, cwd=SPIKE)
+    presets = f"{nozzle_presets(model, d + '-presets')}/presets-pin.json" if model in NOZZLES else "presets-pin.json"
+    m = measure(["node", "slice-node.mjs", "engine-0.6.1", presets, f"{d}/out.gcode"] + files, cwd=SPIKE)
     r = json.loads(m["stdout"].strip().splitlines()[-1])
     if "error" in r:
         return {"error": r["error"], "wall_ms": m["wall_ms"], "peak_mb": m["peak_mb"]}
@@ -209,7 +238,10 @@ def orca_wasm_browser(model, files, runs, browser):
     if not os.path.exists(link):
         os.symlink(MODELS_DIR, link)
     rel = [os.path.relpath(f, MODELS_DIR) for f in files]
-    server = subprocess.Popen(["node", "serve.mjs", "8787", "engine-0.6.1", "presets-pin.json"], cwd=SPIKE, stdout=subprocess.DEVNULL)
+    presets = "presets-pin.json"
+    if model in NOZZLES:
+        presets = f"{nozzle_presets(model, os.path.join(OUT, f'orca-wasm-{browser}-{model}-presets'))}/presets-pin.json"
+    server = subprocess.Popen(["node", "serve.mjs", "8787", "engine-0.6.1", presets], cwd=SPIKE, stdout=subprocess.DEVNULL)
     time.sleep(1.0)
     try:
         out = subprocess.run(
@@ -254,7 +286,10 @@ def orca_native(model, files, run):
         "XDG_RUNTIME_DIR": "/tmp/xdg",
         "LD_LIBRARY_PATH": f"{NATIVE}/stubs:{root}/lib:{root}/usr/lib",
     }
-    process, filaments, extra = f"{PRESETS}/process.json", f"{PRESETS}/filament.json", []
+    machine, process, filaments, extra = f"{PRESETS}/machine.json", f"{PRESETS}/process.json", f"{PRESETS}/filament.json", []
+    if model in NOZZLES:
+        work = nozzle_presets(model, os.path.join(OUT, f"orca-native-{model}-presets"))
+        machine, process, filaments = f"{work}/machine.json", f"{work}/process.json", f"{work}/filament.json"
     if model in FILAMENTS:
         # Each filament the presets' in its colour, each file in its filament, and the tower where the app puts it.
         work = os.path.join(OUT, f"orca-native-{model}-presets")
@@ -282,7 +317,7 @@ def orca_native(model, files, run):
             "--arrange",
             "0",
             "--load-settings",
-            f"{PRESETS}/machine.json;{process}",
+            f"{machine};{process}",
             "--load-filaments",
             filaments,
             "--slice",
