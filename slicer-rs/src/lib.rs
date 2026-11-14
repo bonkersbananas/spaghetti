@@ -34,6 +34,7 @@ pub mod region;
 pub mod seam;
 pub mod seam_mesh;
 pub mod section;
+pub mod segment;
 pub mod setup;
 pub mod solid;
 pub mod spiral;
@@ -132,11 +133,14 @@ pub struct Options {
     /// Percent of the models' own size, scaled about their origin before they are laid out (as the app scales);
     /// scaled models are always arranged.
     pub scale: f64,
+    /// Prints painted colours on the objects' sides, as Orca's segmentation by paint splits them (`segment.rs`); the
+    /// painted tops and bottoms are still to be ported. Off, painted projects are refused, as the app slices them.
+    pub paint: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { arrange: true, thumbnail: true, scale: 100.0 }
+        Options { arrange: true, thumbnail: true, scale: 100.0, paint: false }
     }
 }
 
@@ -220,7 +224,16 @@ pub fn slice(inputs: &[Input], settings: &Settings, options: &Options) -> Result
 }
 
 /// Keeps the meshes (and their filaments and objects) where `keep` says, the objects then numbered from 0 again.
-fn retain_by(meshes: &mut Vec<Mesh>, filaments: &mut Vec<usize>, groups: &mut Vec<usize>, keep: &[bool]) {
+fn retain_by(
+    meshes: &mut Vec<Mesh>,
+    filaments: &mut Vec<usize>,
+    groups: &mut Vec<usize>,
+    paints: &mut Vec<Option<paint::Paint>>,
+    keep: &[bool],
+) {
+    paints.resize(meshes.len(), None);
+    let mut k = keep.iter();
+    paints.retain(|_| k.next().copied().unwrap_or(true));
     let mut k = keep.iter();
     meshes.retain(|_| k.next().copied().unwrap_or(true));
     let mut k = keep.iter();
@@ -233,6 +246,73 @@ fn retain_by(meshes: &mut Vec<Mesh>, filaments: &mut Vec<usize>, groups: &mut Ve
             seen.push(*g);
             seen.len() - 1
         });
+    }
+}
+
+/// Each painted object's layers re-split by its paint, as Orca applies it (`segment::apply`): the painted parts of
+/// its regions go to the region of the filament they are painted in (made where the object has none).
+fn paint_regions(
+    parts: &mut parts::Regions,
+    slices: &mut [geom::Shapes],
+    owners: &mut [Vec<u32>],
+    meshes: &[Mesh],
+    paints: &[Option<paint::Paint>],
+    slice_z: &[f64],
+    settings: &Settings,
+) {
+    // The filaments the setup has: paint in any past them prints in the object's own.
+    let filaments = settings.palette.as_ref().map_or(1, |p| p.profiles.len());
+    // What Orca's walls simplify each region to first: a fifth of the resolution, with arc fitting.
+    let tolerance = 0.2 * settings.resolution;
+    for g in 0..parts.members.len() {
+        let painted: Vec<(&Mesh, &paint::Paint)> = parts.members[g]
+            .iter()
+            .filter_map(|&m| paints.get(m).and_then(Option::as_ref).map(|p| (&meshes[m], p)))
+            .collect();
+        if painted.is_empty() {
+            continue;
+        }
+        let facets = segment::facets(&painted);
+        // The object's regions: those it has now, and any made for it below.
+        let before: Vec<bool> = parts.group.iter().map(|&rg| rg as usize == g).collect();
+        let is_mine = |r: u32| before.get(r as usize).copied().unwrap_or(true);
+        let layers: Vec<geom::Shapes> = slices
+            .iter()
+            .zip(owners.iter())
+            .map(|(s, o)| s.iter().zip(o).filter(|&(_, &r)| is_mine(r)).map(|(s, _)| s.clone()).collect())
+            .collect();
+        let by_layer = segment::painted_regions(slice_z, &layers, &facets, filaments);
+        for (l, painted) in by_layer.iter().enumerate() {
+            if painted.iter().all(Vec::is_empty) {
+                continue;
+            }
+            // The object's regions on the layer, by filament, in the order of its regions.
+            let mut regions: Vec<(usize, geom::Shapes)> = Vec::new();
+            for (shape, &r) in slices[l].iter().zip(&owners[l]) {
+                if !is_mine(r) {
+                    continue;
+                }
+                let f = parts.filament[r as usize];
+                match regions.iter_mut().find(|x| x.0 == f) {
+                    Some(x) => x.1.push(shape.clone()),
+                    None => regions.push((f, vec![shape.clone()])),
+                }
+            }
+            let split = segment::apply(&regions, painted);
+            let (mut shapes, mut own): (geom::Shapes, Vec<u32>) =
+                slices[l].iter().cloned().zip(owners[l].iter().copied()).filter(|&(_, r)| !is_mine(r)).unzip();
+            for (f, region_shapes) in split {
+                let r = parts.region_of(g, f);
+                // Simplified as Orca's walls simplify each region first: the split leaves points a hair apart, which
+                // would make a flat of an inner corner.
+                for shape in geom::simplify_polygons(&region_shapes, tolerance) {
+                    shapes.push(shape);
+                    own.push(r);
+                }
+            }
+            slices[l] = shapes;
+            owners[l] = own;
+        }
     }
 }
 
@@ -347,7 +427,7 @@ impl Plate {
 
     /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
-        let Plate { mut meshes, mut filaments, mut groups, paints, project, unassigned, title, read_ms, .. } = self;
+        let Plate { mut meshes, mut filaments, mut groups, mut paints, project, unassigned, title, read_ms, .. } = self;
         filaments.resize(meshes.len(), 0);
         if groups.len() != meshes.len() {
             groups = (0..meshes.len()).collect();
@@ -356,8 +436,10 @@ impl Plate {
         if let Some(what) = settings.unsupported() {
             return Err(Error::Unsupported(what));
         }
-        // Painted colours: Orca's segmentation by paint isn't ported yet (OrcaSlicer's engine prints them).
-        if paints.iter().flatten().any(|p| p.states() > 1) {
+        // Painted colours: Orca's segmentation by paint is being ported (OrcaSlicer's engine prints them); with
+        // `options.paint`, the sides print as it splits them, the tops and bottoms not yet.
+        let painting = options.paint;
+        if paints.iter().flatten().any(|p| p.states() > 1) && !painting {
             return Err(Error::Unsupported("painted colours"));
         }
         // With several filaments, each object prints in the one its file or its caller gives it (a project's object
@@ -371,9 +453,14 @@ impl Plate {
             return Err(Error::NoModel);
         }
         let keep: Vec<bool> = meshes.iter().map(|m| !m.triangles.is_empty()).collect();
-        retain_by(&mut meshes, &mut filaments, &mut groups, &keep);
+        retain_by(&mut meshes, &mut filaments, &mut groups, &mut paints, &keep);
         let scaled = options.scale > 0.0 && (options.scale - 100.0).abs() > 1e-9;
-        for m in &mut meshes {
+        paints.resize(meshes.len(), None);
+        for (m, paint) in meshes.iter_mut().zip(&mut paints) {
+            // A mesh turned right way out has its corners in the other order: its paint goes by the file's still.
+            if let Some(paint) = paint.as_mut().filter(|_| m.signed_volume() < 0.0) {
+                paint.turned.iter_mut().for_each(|t| *t = !*t);
+            }
             m.orient();
             if scaled {
                 m.scale(options.scale / 100.0);
@@ -396,14 +483,20 @@ impl Plate {
                 return Err(Error::OffPlate);
             }
             let keep: Vec<bool> = places.iter().map(|p| *p == mesh::OnPlate::Inside).collect();
-            retain_by(&mut meshes, &mut filaments, &mut groups, &keep);
+            retain_by(&mut meshes, &mut filaments, &mut groups, &mut paints, &keep);
             if meshes.is_empty() {
                 return Err(Error::OffPlate);
             }
         }
         // Orca's settings for as many filaments as the plate prints in: with more than one, a prime tower.
+        let palette_len = settings.palette.as_ref().map_or(1, |p| p.profiles.len());
         let used = if several {
             let mut used = filaments.clone();
+            // Painted filaments print too (those the setup has).
+            for paint in paints.iter().flatten() {
+                let states = paint.states();
+                used.extend((1..=palette_len).filter(|&s| states & (1 << s) != 0).map(|s| s - 1));
+            }
             used.sort_unstable();
             used.dedup();
             used.len()
@@ -426,7 +519,7 @@ impl Plate {
         }
         // Each object prints as a region for each filament its parts print in (with one filament, one region).
         let region_filaments: Vec<usize> = if several { filaments.clone() } else { vec![0; meshes.len()] };
-        let parts = parts::Regions::new(&groups, &region_filaments);
+        let mut parts = parts::Regions::new(&groups, &region_filaments);
         let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
         if height > settings.max_height {
             return Err(Error::TooTall);
@@ -447,6 +540,10 @@ impl Plate {
         // An object's parts in different filaments: each part clipped by the parts after it, those of one filament
         // merged into a region (`parts.rs`); from here on each region is an object of its own, of its group.
         parts.assign(&mut slices, &mut owners, &meshes);
+        // Painted objects: their regions re-split by their paint (`segment.rs`), each painted filament a region.
+        if painting && several {
+            paint_regions(&mut parts, &mut slices, &mut owners, &meshes, &paints, &layers.slice_z(), settings);
+        }
         let t2 = now();
         // The plate's objects, and one for each region (an object's own, unless its parts print in several filaments).
         let mut group_objects: Vec<Object> = parts
