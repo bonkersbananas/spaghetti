@@ -212,7 +212,7 @@ With Orca's older trees, the app's "Slim tree", "Strong tree" and "Hybrid" (`tre
 | A ledge over a step: branches standing on the model | 181 / 181 | −0.4 %, 0.0 %, +0.3 % | −0.4 %, 0.0 %, −0.3 % | −0.4 %, 0.0 %, 0.0 % |
 | The T and a shelf on one plate | 258 / 258 | −0.5 %, 0.0 %, +0.3 % | −0.4 %, 0.0 %, +0.3 % | 0.0 %, 0.0 %, +0.1 % |
 | A fin with an arm | 234 / 234 | −0.6 %, 0.0 %, 0.0 % | −0.6 %, 0.0 %, +0.1 % | −0.5 %, 0.0 %, +0.2 % |
-| 3DBenchy | 346 / 335 | −8.5 %, +7.4 %, −2.8 % | +0.8 %, +9.0 %, −1.3 % | −4.9 %, +7.4 %, −2.4 % |
+| 3DBenchy | 346 / 335 | −8.5 %, +7.4 %, −2.7 % | +0.8 %, +9.0 %, −1.2 % | −4.9 %, +7.4 %, −2.3 % |
 
 On the box models the trees are Orca's: every node of every branch stands where Orca's does, to the nanometre, in all three styles (held to Orca's own log of its nodes), under the same roofs and interface. That took placing the tips as Orca places them, along each overhang's outline in Orca's nanometres rather than our 0.1 µm: Orca orders the tips by a hash of their positions, and that order decides where branches meet, so a tip a few nanometres off grew another tree. Each outline also starts where Clipper2 starts it, which sets where the first tip goes. Hybrid holds up a broad overhang with Orca's normal support, so the T, the shelf and the plate of both come out the same to the line. Elsewhere the support is 0.4 to 0.6 % lighter than Orca's because Orca writes each branch's loop as arcs and we write it as chords, simplified to the same 0.0375 mm; with chords at the circles' own points the box models come within 0.2 % (section 5's arc fitting). With supports only where needed, the T gets the same trees and a Benchy none, from Orca or from us.
 
