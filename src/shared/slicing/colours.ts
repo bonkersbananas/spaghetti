@@ -3,7 +3,7 @@
  * matched to the Pantry spool that looks nearest (or a stand-in, when nothing does). Pure: the 3MF reader says the
  * colours (model3mf.ts), the slice worker prints with the plan, the Filament section shows it.
  */
-import type { SpoolLike } from "../spools.ts";
+import { materialKey, type SpoolLike, spoolColors } from "../spools.ts";
 import { filamentOfSpool, slicingSpools } from "./pantry.ts";
 import type { SlicingFilament } from "./settings.ts";
 
@@ -112,24 +112,41 @@ export interface ColourMatch {
   inPantry: boolean;
 }
 
-/** The Pantry spool that looks nearest a colour, if any is close enough; else a PLA stand-in in the colour. */
-export function matchColour(group: Pick<ColourGroup, "hex" | "name">, spools: readonly SpoolLike[]): ColourMatch {
+/**
+ * The Pantry spool that looks nearest a colour, if any is close enough; else a stand-in in the colour (PLA, or the
+ * `material` a project's filament is). A multi-colour spool is never matched, only offered (the rows list every
+ * spool); a spool of another material than the one asked for (a project's PETG) has to look better to win.
+ */
+export function matchColour(
+  group: Pick<ColourGroup, "hex" | "name">,
+  spools: readonly SpoolLike[],
+  material?: string,
+): ColourMatch {
   let best: { spool: SpoolLike; score: number; distance: number } | null = null;
   for (const spool of slicingSpools(spools)) {
-    if (!spool.colorHex || !/^#[0-9a-f]{6}$/i.test(spool.colorHex)) continue;
+    if (!spool.colorHex || !/^#[0-9a-f]{6}$/i.test(spool.colorHex) || spoolColors(spool).length > 1) continue;
     const distance = colourDistance(group.hex, spool.colorHex.toLowerCase());
-    // PLA over other materials when two look alike, and a loaded spool over one on the shelf (slicingSpools' order).
-    const score = distance + (spool.material.toUpperCase() === "PLA" ? 0 : 0.02);
+    // The asked material over others when two look alike (PLA by default), and a loaded spool over one on the shelf
+    // (slicingSpools' order).
+    const wanted = material ?? "PLA";
+    const score = distance + (materialKey(spool.material) === materialKey(wanted) ? 0 : material ? 0.15 : 0.02);
     if (!best || score < best.score - 1e-9) best = { spool, score, distance };
   }
   if (best && best.distance <= CLOSE_ENOUGH) return { filament: filamentOfSpool(best.spool), inPantry: true };
   return {
-    filament: { material: "PLA", colorHex: group.hex, ...(group.name ? { colorName: group.name } : {}) },
+    filament: {
+      material: material ?? "PLA",
+      colorHex: group.hex,
+      ...(group.name ? { colorName: group.name } : {}),
+    },
     inPantry: false,
   };
 }
 
-/** What someone chose to print one of the model's colours in: the group's `from` colour, and the filament. */
+/**
+ * What someone chose to print one of the model's colours in: the group's `from` colour (or, for a project's own
+ * filament, `f1`, `f2`…: its number), and the filament.
+ */
 export interface ColourChoice {
   from: string;
   filament: SlicingFilament;
@@ -167,4 +184,45 @@ export function planColours(
     return { ...group, ...match, chosen: !!choice };
   });
   return { groups, filaments, filamentOf };
+}
+
+/** A project's filament as its settings list it: its number (from 1), its colour (when it says one) and type. */
+export interface ProjectFilament {
+  slot: number;
+  hex?: string;
+  material: string;
+}
+
+/** The key of a choice for a project's filament. */
+export const slotKey = (slot: number) => `f${slot}`;
+
+/**
+ * Each of a project's filaments matched to the nearest Pantry spool (of its own material first), a choice winning,
+ * and what the plate prints with: the filaments in the project's order, so every object, part and painted triangle
+ * keeps its filament number. Filaments the project lists but no object uses keep their own.
+ */
+export function planProject(
+  filaments: readonly ProjectFilament[],
+  used: ReadonlySet<number>,
+  spools: readonly SpoolLike[],
+  choices: readonly ColourChoice[] = [],
+) {
+  const out: SlicingFilament[] = [];
+  const rows: { slot: number; hex?: string; material: string; match: ColourMatch; chosen: boolean }[] = [];
+  for (const project of filaments) {
+    const own: SlicingFilament = { material: project.material, ...(project.hex ? { colorHex: project.hex } : {}) };
+    if (!used.has(project.slot)) {
+      out[project.slot - 1] = own;
+      continue;
+    }
+    const choice = choices.find((c) => c.from === slotKey(project.slot));
+    const match: ColourMatch = choice
+      ? { filament: choice.filament, inPantry: !!choice.filament.spoolId }
+      : project.hex
+        ? matchColour({ hex: project.hex }, spools, project.material)
+        : { filament: own, inPantry: false };
+    out[project.slot - 1] = match.filament;
+    rows.push({ ...project, match, chosen: !!choice });
+  }
+  return { filaments: out, rows };
 }

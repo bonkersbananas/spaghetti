@@ -220,6 +220,44 @@ export function paintedProject(): Uint8Array {
 }
 
 /**
+ * A project as MakerWorld hands them out: four filaments (white, red and yellow PLA, black PETG), a base in filament 1,
+ * a body in 2 whose top is painted in 4, and a plate of letters in 3: each object's `extruder` in model_settings.config,
+ * the painted triangles' `paint_color` codes ("1C" is the fourth filament), the filaments in project_settings.config.
+ */
+export function makerworldProject(): Uint8Array {
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>
+<object id="1" type="model">${boxMesh([80, 118, 0], [40, 24, 3])}</object>
+<object id="2" type="model">${boxMesh([130, 118, 0], [24, 24, 8], { 2: "1C", 3: "1C" })}</object>
+<object id="3" type="model">${boxMesh([170, 118, 0], [30, 24, 2])}</object>
+</resources>
+<build><item objectid="1"/><item objectid="2"/><item objectid="3"/></build>
+</model>`;
+  const settings = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="1"><metadata key="name" value="Base"/><metadata key="extruder" value="1"/></object>
+  <object id="2"><metadata key="name" value="Body"/><metadata key="extruder" value="2"/></object>
+  <object id="3"><metadata key="name" value="Letters"/><metadata key="extruder" value="3"/></object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <model_instance><metadata key="object_id" value="1"/></model_instance>
+    <model_instance><metadata key="object_id" value="2"/></model_instance>
+    <model_instance><metadata key="object_id" value="3"/></model_instance>
+  </plate>
+</config>`;
+  const project = {
+    filament_type: ["PLA", "PLA", "PETG", "PLA"],
+    filament_colour: ["#F2EEE4", "#C2412D", "#1D1D1F", "#F0B323"],
+  };
+  return zipSync({
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(settings),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+  });
+}
+
+/**
  * A Bambu Studio or OrcaSlicer project made for the X2D with its 0.4 mm nozzle, a block on its plate, that asks for a
  * raft of two layers (`raft_layers`) and for `settings` besides: a project for the printer in use says all its
  * settings. Our own slicer refused rafts until release 17, under organic trees until release 20, and still refuses

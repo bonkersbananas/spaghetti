@@ -85,6 +85,9 @@ export interface SliceColour {
   hex: string;
   /** The file's name for it ("Ketchup Red"). */
   name?: string;
+  /** A project's own filament (its number from 1, and its type): the row is for that filament, not a model colour. */
+  slot?: number;
+  material?: string;
   /** The names of the other colours merged into this one. */
   merged?: string[];
   /** Percent of the model's surface, whole. */
