@@ -1365,6 +1365,53 @@ export const shots: Shot[] = [
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
   {
+    // A photo tile with a long title: two lines, then cut.
+    name: "ideas-up-next-long",
+    path: "/ideas",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await setQueue(page, 4);
+      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+        headers,
+        data: { title: "Desk tidy-up with clips, a drawer bin and a phone stand in blue PETG" },
+      });
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*4$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { title: "Desk tidy-up" },
+      });
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // The menu opened from a tile in the strip (a sheet on phones; the popover on desktop's full cards).
+    name: "ideas-up-next-menu",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setQueue(page, 4);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*4$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+      await page.getByRole("button", { name: "Options for Desk tidy-up" }).click();
+      await page.getByRole("button", { name: "Take off Up next" }).waitFor();
+      await page.waitForTimeout(900);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await setQueue(page, 2);
+    },
+  },
+  {
     // Up next with 1 queued idea: a strip on phones, the featured grid on desktop.
     name: "ideas-up-next-1",
     path: "/ideas",

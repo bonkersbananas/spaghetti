@@ -26,7 +26,7 @@ export function UpNextStrip({ queue, menuFor, landed }: UpNextStripProps) {
       data-strip
       aria-label="Up next"
       // A sideways swipe stays in the strip: it never pulls the page, or goes back in the browser's history.
-      className="no-scrollbar relative -mx-5 flex snap-x snap-proximity scroll-px-5 items-start gap-2.5 overflow-x-auto overscroll-x-contain px-5 pb-1"
+      className="no-scrollbar relative -mx-5 -my-2 flex snap-x snap-proximity scroll-px-5 gap-3 overflow-x-auto overscroll-x-contain px-5 py-2"
     >
       <Reflow>
         {queue.map((item, index) => {

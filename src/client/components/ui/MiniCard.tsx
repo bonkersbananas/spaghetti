@@ -29,12 +29,21 @@ interface MiniCardProps {
 export function MiniCard({ link, photo, note, title, corner, landing, ref, className }: MiniCardProps) {
   const heading = title || (photo ? note : undefined);
   return (
-    <m.li {...useReflow(landing)} ref={ref} className={cn("relative w-28 shrink-0 snap-start list-none", className)}>
+    <m.li
+      {...useReflow(landing)}
+      ref={ref}
+      className={cn("relative w-[6.125rem] shrink-0 snap-start list-none", className)}
+    >
       <Link
         {...link}
-        className="group pressable focus-ring bg-cream shadow-soft hover:bg-lifted flex w-full flex-col rounded-lg p-1"
+        className="group pressable focus-ring bg-cream shadow-soft hover:bg-lifted flex h-full w-full flex-col rounded-lg p-1"
       >
-        <div className="relative aspect-square w-full overflow-hidden rounded-md">
+        <div
+          className={cn(
+            "relative w-full overflow-hidden rounded-md",
+            photo || !note ? "aspect-square" : "min-h-[5.625rem] flex-1",
+          )}
+        >
           {photo ? (
             <Photo
               src={photo.src}
@@ -44,7 +53,7 @@ export function MiniCard({ link, photo, note, title, corner, landing, ref, class
               className={cn("size-full", photo.fit === "contain" && "p-2")}
             />
           ) : note ? (
-            <NoteFace note={note} compact className="pr-4" />
+            <NoteFace note={note} compact className="pt-7" />
           ) : (
             <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
               <ImageIcon size={24} weight="light" aria-hidden />
@@ -52,14 +61,18 @@ export function MiniCard({ link, photo, note, title, corner, landing, ref, class
           )}
         </div>
         {(heading || !note) && (
-          <h3
-            className={cn(
-              "text-small line-clamp-2 min-h-10 px-1.5 pt-1.5 pb-1 leading-snug break-words",
-              title ? "text-ink font-semibold" : "text-ink-faint font-sans font-medium italic",
-            )}
-          >
-            {heading || "Untitled"}
-          </h3>
+          // The padding is on the wrapper: a clamped heading shows its next line in its own padding.
+          <div className="px-1.5 pt-1.5 pb-1">
+            <h3
+              className={cn(
+                "text-small line-clamp-2 min-h-[2lh] leading-snug break-words",
+                // A note standing in for a title is set as on Card: plain Figtree, not a title.
+                title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
+              )}
+            >
+              {heading || "Untitled"}
+            </h3>
+          </div>
         )}
       </Link>
       {corner}
