@@ -7,8 +7,12 @@ import type { SpoolLike } from "../spools.ts";
 import { slicingSpools } from "./pantry.ts";
 import type { SlicingFilament } from "./settings.ts";
 
-/** Filaments a plate prints in at most: the X2D's AMS holds eight. */
-export const MAX_COLOURS = 8;
+/**
+ * Filaments a model's colours are simplified to. The X2D's AMS holds eight, but OrcaSlicer's engine says a prime tower
+ * for seven or more "is partially outside the printable area" wherever it is put (tried at the back right and the front
+ * left), so six is what a plate in several filaments slices with.
+ */
+export const MAX_COLOURS = 6;
 /** Two colours this near (OKLab, 1 is black to white) are one: a dye lot apart, not another colour. */
 export const MERGE_BELOW = 0.045;
 /** A spool this near a colour passes for it; further and the colour is "not in the Pantry yet". */
