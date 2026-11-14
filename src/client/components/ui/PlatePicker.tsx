@@ -53,7 +53,8 @@ const tiles = (plates: readonly PlateOption[]): ChoiceTile<string>[] =>
   plates.map((plate) => ({
     value: String(plate.index),
     label: plateLabel(plate),
-    detail: [plateHeight(plate.height), plate.detail].filter(Boolean).join(" · "),
+    // The height, then the sliced figures on a line of their own (their words kept together).
+    detail: [plateHeight(plate.height), plate.detail?.replace(/ /g, "\u00a0")].filter(Boolean).join("\n"),
     picture: <PlatePicture src={plate.src} />,
   }));
 

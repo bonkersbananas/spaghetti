@@ -146,7 +146,7 @@ export function ChoiceTiles<T extends string>({
                 </span>
               )}
               {option.detail && !strip && (
-                <span className={cn("text-caption tabular w-full text-balance", !selected && "text-ink-faint")}>
+                <span className={cn("text-caption tabular w-full text-balance whitespace-pre-line", !selected && "text-ink-faint")}>
                   {/* Never cut with an ellipsis: it wraps in balanced lines, at the dot first (a figure and its unit stay together). */}
                   {option.detail.replace(/(\d) (?=[^\d\s])/g, "$1\u00a0")}
                 </span>
