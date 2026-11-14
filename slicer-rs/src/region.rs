@@ -98,6 +98,9 @@ pub struct Island {
     /// mm its infill reaches into its innermost wall: Orca's share (`infill_wall_overlap`; on the first layer and an
     /// object's last, `top_bottom_infill_wall_overlap`) of half the last wall's spacing and half a solid line's.
     pub overlap: f64,
+    /// Small and too narrow for its outer wall: that wall prints as a thinner line (`narrow_wall_width`), as Bambu's
+    /// narrow loops in Orca's classic walls, and nothing prints inside it.
+    pub narrow: bool,
 }
 
 /// The infill areas of one island, by kind.
@@ -696,6 +699,23 @@ fn owner_within(shape: &geom::Shape, slice: &Shapes, owners: &[u32]) -> u32 {
 /// many tiny segments that the printer gains nothing from.
 const PATH_RESOLUTION: f64 = 0.0125;
 
+/// Orca's allowance for the outer wall of a narrow island (Bambu's `SMALLER_EXT_INSET_OVERLAP_TOLERANCE`).
+const SMALLER_EXT_INSET_OVERLAP_TOLERANCE: f64 = 0.22;
+
+/// mm: how long a band too narrow for an outer wall may be for Orca to print it as one thinner loop
+/// (`narrow_loop_length_threshold`).
+const NARROW_LOOP_LENGTH: f64 = 10.0;
+
+/// The width of the outer wall Orca prints round a narrow island (Bambu's `smaller_ext_perimeter_flow`), for outer
+/// walls `w` wide on a layer `h` high: narrower by a ninth of their spacing, give or take (0.42 mm becomes 0.38).
+/// Worked out as Orca does, in whole nanometres from its single-precision width and spacing (0.42 mm is 419,999 nm
+/// there), so that the width it writes is Orca's.
+pub fn narrow_wall_width(w: f64, h: f64) -> f64 {
+    let nm = |mm: f32| (f64::from(mm) * 1e6).trunc();
+    let spacing = (w as f32) - (h as f32) * (1.0 - 0.25 * std::f64::consts::PI) as f32;
+    (nm(w as f32) - 0.5 * SMALLER_EXT_INSET_OVERLAP_TOLERANCE * nm(spacing)) * 1e-6
+}
+
 /// Orca's allowance for walls overlapping where a region narrows (`INSET_OVERLAP_TOLERANCE`).
 const INSET_OVERLAP_TOLERANCE: f64 = 0.4;
 
@@ -863,6 +883,23 @@ fn wall_group(
     // A hair more than nothing: keeps touching edges from counting as gaps (Orca's safety offset).
     let safety = 1.0 / geom::SCALE;
 
+    // Bambu's narrow loops: an island with no room for the outer wall and most of a spacing beside it, and small (a
+    // band of that width 10 mm long at most), gets one outer wall of a thinner line instead, and nothing inside it.
+    if loops > 0 {
+        let room = sp_outer * (1.0 - SMALLER_EXT_INSET_OVERLAP_TOLERANCE);
+        let small = (w_outer + room) * NARROW_LOOP_LENGTH;
+        let narrow: Vec<bool> = slice
+            .iter()
+            .map(|shape| {
+                geom::shape_area_mm2(shape) < small
+                    && geom::offset(&vec![shape.clone()], -(w_outer + room) / 2.0).is_empty()
+            })
+            .collect();
+        if narrow.contains(&true) {
+            return narrow_islands(slice, &narrow, loops, last, layer, height, around, s);
+        }
+    }
+
     let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), PATH_RESOLUTION);
     if around.largest && region.len() > 1 {
         crate::section::keep_largest(&mut region);
@@ -985,6 +1022,51 @@ fn wall_group(
     out
 }
 
+/// `wall_group` for a slice some of whose islands are `narrow`: those get their thinner outer wall alone, the others
+/// their walls as usual. A spiral vase's layer keeps the largest loop of the wide ones, or else of the narrow ones.
+#[allow(clippy::too_many_arguments)]
+fn narrow_islands(
+    slice: &Shapes,
+    narrow: &[bool],
+    loops: usize,
+    last: bool,
+    layer: usize,
+    height: f64,
+    around: &Around,
+    s: &Settings,
+) -> Vec<Island> {
+    let wide: Shapes = slice.iter().zip(narrow).filter(|&(_, &n)| !n).map(|(shape, _)| shape.clone()).collect();
+    let mut wide_islands = wall_group(&wide, loops, last, layer, height, around, s).into_iter();
+    let first = s.on_plate(layer);
+    let w_outer = if first { s.first_layer_width } else { s.outer_wall_width };
+    let half = narrow_wall_width(w_outer, height) / 2.0;
+    let mut out: Vec<Island> = slice
+        .iter()
+        .zip(narrow)
+        .map(|(shape, &n)| {
+            if !n {
+                return wide_islands.next().unwrap_or_default();
+            }
+            let inset = geom::simplify_shapes(&geom::offset(&vec![shape.clone()], -half), PATH_RESOLUTION);
+            let walls: Vec<Contour> = inset.into_iter().flatten().filter(|c| c.len() >= 3).collect();
+            Island { walls: if walls.is_empty() { Vec::new() } else { vec![walls] }, narrow: true, ..Island::default() }
+        })
+        .collect();
+    if around.largest {
+        // Orca's spiral vase keeps one loop: the largest wide one if there is any, else the largest narrow one.
+        let area = |island: &Island| island.walls.first().map_or(0, |w| w.iter().map(|c| geom::area2(c).abs()).sum());
+        let any_wide = out.iter().zip(narrow).any(|(island, &n)| !n && !island.walls.is_empty());
+        let keep = out.iter().enumerate().filter(|(k, _)| !any_wide && narrow[*k]).max_by_key(|(_, i)| area(i));
+        let keep = keep.map(|(k, _)| k);
+        for (k, island) in out.iter_mut().enumerate() {
+            if narrow[k] && Some(k) != keep {
+                island.walls.clear();
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1032,5 +1114,34 @@ mod tests {
         assert!(!geom::contains(&below.inner, geom::pt(sc(0.6), sc(10.0))));
         // The small block's last layer has one wall.
         assert_eq!(regions[n - 1].islands[0].walls.len(), 1);
+    }
+
+    #[test]
+    fn a_small_narrow_island_gets_one_thinner_outer_wall_as_orcas_narrow_loops() {
+        // Ribs 3 mm tall, 0.6 mm wide: 5 mm long, one wall of a 0.38 mm line (Bambu's narrow loop), half that line in
+        // from each side and nothing inside it; 15 mm long, over the area for it, a wall of the usual width. A rib
+        // 0.35 mm wide has no room for even the thinner one.
+        let s = Settings::default();
+        let layers = Layers::plan(3.0, 0.2, 0.2);
+        let ribs = vec![square(0.0, 0.0, 0.6, 5.0), square(4.0, 0.0, 4.6, 15.0), square(8.0, 0.0, 8.35, 4.0)];
+        let slices: Vec<Shapes> = (0..layers.top.len()).map(|_| ribs.clone()).collect();
+        let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
+        let regions = regions(&slices, &owners, &[], &layers, &[(0.0, 0.0)], &s);
+        let thinner = narrow_wall_width(s.outer_wall_width, 0.2);
+        assert!((thinner - 0.3785).abs() < 1e-3, "{thinner}");
+        let islands = &regions[5].islands;
+        let (short, long, thin) = (&islands[0], &islands[1], &islands[2]);
+        assert!(short.narrow && !long.narrow && thin.narrow);
+        assert_eq!(short.walls.len(), 1);
+        assert!(short.inner.is_empty() && short.gaps.is_empty());
+        let xs = |island: &Island| {
+            let b = geom::bbox(&vec![island.walls[0].clone()]).unwrap();
+            (geom::unsc(b[0]), geom::unsc(b[2]))
+        };
+        let (x0, x1) = xs(short);
+        assert!((x0 - thinner / 2.0).abs() < 1e-3 && (x1 - (0.6 - thinner / 2.0)).abs() < 1e-3, "{x0} {x1}");
+        let (x0, _) = xs(long);
+        assert!((x0 - (4.0 + s.outer_wall_width / 2.0)).abs() < 1e-3, "{x0}");
+        assert!(thin.walls.is_empty());
     }
 }
