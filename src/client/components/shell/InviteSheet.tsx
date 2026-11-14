@@ -78,7 +78,7 @@ export function InviteSheet({ open, onOpenChange }: { open: boolean; onOpenChang
       }
     >
       {fresh && (
-        <div className="bg-paper mb-4 rounded-lg p-4">
+        <div className="bg-ink/4 mb-4 rounded-lg p-4">
           <p className="text-small text-ink-faint mb-2 font-semibold">Your invite link</p>
           <p className="text-small text-ink-soft font-mono break-all select-all">{fresh.url}</p>
           <p className="text-small text-ink-faint mt-2">
