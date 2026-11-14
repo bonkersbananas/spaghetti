@@ -61,6 +61,12 @@ The lines that cool a waiting nozzle and heat it again (`;Multi extruder pre coo
 ORCA_GCODE=bench/out/orca-native-colour/plate_1.gcode cargo test --release --test slice -- --ignored --nocapture preheat
 ```
 
+`groups.py` holds the grouping of three filaments or more to Orca's: it lays out plates of 15 mm blocks in random colours and heights, one filament each, slices them with native Orca and ours, and compares the filament maps, every tool change with its flush, each filament's grams and the estimate. With `--x0 20` (the default) the first column of blocks reaches into the strip the right nozzle can't print; `--x0 80` stands them clear of it:
+
+```sh
+python3 -I bench/groups.py --plates 30 --seed 23 --filaments 2,3,4,5,6,7,8
+```
+
 ## Other nozzles
 
 `--nozzle 0.2` (or 0.6, 0.8) slices for another of the X2D's nozzles with Bambu's presets for it (`profiles/x2d-0.2/` and the others, from the engine's release 2: the nozzle's machine, its Standard process and Bambu PLA Basic), which a setup is laid over. It is the command line's only: the WebAssembly module slices what the app's setup brings, a nozzle's presets whole. `run.py` slices a Benchy for each (`benchy-0.2`, `benchy-0.6`, `benchy-0.8`), every runner with those presets, on the Textured PEI plate; `table.py` prints their tables after the others:
