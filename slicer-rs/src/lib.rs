@@ -745,7 +745,9 @@ fn schedule(layers: &section::Layers, supports: &[Vec<support::Layer>], objects:
             let l = layers.top.partition_point(|&z| z < layer.print_z - EPSILON);
             if l < n && layers.top[l] <= layer.print_z + EPSILON {
                 slots[l].supports[o] = Some(k);
-            } else {
+            } else if !layer.items.is_empty() {
+                // A layer of the support's own with nothing to print (an area too thin to fill) is left out: Orca
+                // writes nothing for a layer with nothing to extrude, not even its layer change.
                 own.push((layer.print_z, o, k));
             }
         }

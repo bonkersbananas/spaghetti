@@ -844,6 +844,28 @@ fn normal_supports_hold_up_a_slab_from_layers_of_their_own() {
 }
 
 #[test]
+fn snug_supports_hug_the_slab_and_take_less_plastic() {
+    // The T again, with Orca's snug style of normal supports: they follow the overhang, closed and rounded off,
+    // rather than the support grid.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let s =
+        setup::read(r#"{"process": {"enable_support": "1", "support_type": "normal(auto)", "support_style": "snug"}}"#)
+            .unwrap()
+            .settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &s, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers = check_moves(&gcode, &s);
+    // Native OrcaSlicer 2.5.0 with these settings (Nov 14): 181 layers, 1221.3 mm³ of support and 74.4 mm³ of
+    // interface (on the grid, 1358.6 and 90.7).
+    assert_eq!(layers.len(), 181);
+    let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()];
+    let near = |got: f64, want: f64| (got - want).abs() < want * 0.005;
+    assert!(near(feature(Role::Support).volume, 1221.3), "{} mm³ of support", feature(Role::Support).volume);
+    assert!(near(feature(Role::SupportInterface).volume, 74.4), "{} mm³", feature(Role::SupportInterface).volume);
+}
+
+#[test]
 fn organic_trees_hold_up_a_slab_on_two_trunks() {
     // The T again, with the X2D's own supports: Orca's organic trees.
     let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
