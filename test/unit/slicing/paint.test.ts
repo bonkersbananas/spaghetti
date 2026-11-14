@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { hasState, paintCodeStates, paintLeaves, paintWithin } from "../../../src/shared/slicing/paint.ts";
+import {
+  hasState,
+  paintBetween,
+  paintBytes,
+  paintCodeStates,
+  paintLeaves,
+  paintWithin,
+} from "../../../src/shared/slicing/paint.ts";
 
 type Vec = [number, number, number];
 const A: Vec = [0, 0, 0];
@@ -87,5 +94,26 @@ describe("paint codes", () => {
     expect(two?.highest).toBe(2);
     expect(paintWithin(paint, 4)?.highest).toBe(3);
     expect(paintWithin({ triangles: Uint32Array.from([0]), codes: "0C", ends: Uint32Array.from([2]) }, 2)).toBeNull();
+  });
+
+  it("gives a part the paint of its triangles, each by its place in the part", () => {
+    const paint = {
+      triangles: Uint32Array.from([1, 4, 5, 8]),
+      codes: `8${"0C"}48`,
+      ends: Uint32Array.from([1, 3, 4, 5]),
+    };
+    const part = paintBetween(paint, 4, 8);
+    expect([...(part?.triangles ?? [])]).toEqual([0, 1]);
+    expect(part?.codes).toBe("0C4");
+    expect([...(part?.ends ?? [])]).toEqual([2, 3]);
+    expect(paintBetween(paint, 2, 4)).toBeNull();
+  });
+
+  it("writes paint as our own slicer's module reads it", () => {
+    const bytes = paintBytes({ triangles: Uint32Array.from([3, 260]), codes: "80C", ends: Uint32Array.from([1, 3]) });
+    const view = new DataView(bytes.buffer);
+    expect(bytes).toHaveLength(4 + 2 * 8 + 3);
+    expect([0, 4, 8, 12, 16].map((at) => view.getUint32(at, true))).toEqual([2, 3, 260, 1, 3]);
+    expect(new TextDecoder().decode(bytes.subarray(20))).toBe("80C");
   });
 });
