@@ -7,6 +7,7 @@ import {
   patternProject,
   raftProject,
   seamProject,
+  tPartsProject,
   twoColourProject,
   vaseProject,
 } from "./fixtures/model-3mf";
@@ -225,6 +226,43 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     const engineFile = await slicedFile(engine.id);
     expect(engineFile.info.match(/<filament id="/g)).toHaveLength(1);
     expect(engineFile.gcode).not.toContain("; FEATURE: Prime tower");
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("an object made of parts in two filaments gets its supports from ours, each layer's in the filament it starts with", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    // A T whose column is half white, half red, its bar white: the arms need supports, which ours left to
+    // OrcaSlicer's engine until release 18.
+    await setDefaults(page, { slicer: "spaghetti", supports: "where-needed" });
+    const { id, files } = await ideaWithModel(page, "Two-tone T", "two-tone-t.3mf", tPartsProject());
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const ours = await fileOf(page, id);
+    expect(ours.slice.settings.slicer).toBe("spaghetti");
+    expect(ours.slice.fallback).toBeUndefined();
+    expect(ours.slice.settings.filaments).toHaveLength(2);
+    const sliced = await page.request.get(`/api/files/${ours.id}/sliced`);
+    expect(sliced.ok()).toBe(true);
+    const gcode = strFromU8(
+      unzipSync(new Uint8Array(await sliced.body()))["Metadata/plate_1.gcode"] ?? new Uint8Array(),
+    );
+    // Supports print under the arms, in no filament of their own: on each layer in the one it starts with, which
+    // alternates, so both filaments print some.
+    const supportTools = new Set<string>();
+    let tool = "T0";
+    let feature = "";
+    for (const line of gcode.split("\n")) {
+      const change = /^T\d\b/.exec(line);
+      if (change) tool = change[0];
+      if (line.startsWith("; FEATURE: ")) feature = line.slice("; FEATURE: ".length);
+      if (feature === "Support" && /^G[123] .* E\.?\d/.test(line)) supportTools.add(tool);
+    }
+    expect([...supportTools].sort()).toEqual(["T0", "T1"]);
   } finally {
     await setDefaults(page, null);
   }
