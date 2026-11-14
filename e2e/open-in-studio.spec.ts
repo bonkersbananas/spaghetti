@@ -13,6 +13,8 @@ test("Open in Bambu Studio builds the bambustudio:// address of a signed link th
   browser,
 }) => {
   await signIn(page);
+  // Built once: the fixture isn't byte-identical from one call to the next.
+  const bytes = Buffer.from(tugboatFile());
   const id = crypto.randomUUID();
   await page.request.post("/api/items", {
     headers: { Origin: origin(page) },
@@ -22,7 +24,7 @@ test("Open in Bambu Studio builds the bambustudio:// address of a signed link th
   await page.getByTestId("idea-file-input").setInputFiles({
     name: TUGBOAT_FILE_NAME,
     mimeType: "application/octet-stream",
-    buffer: Buffer.from(tugboatFile()),
+    buffer: bytes,
   });
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText(TUGBOAT_FILE_NAME)).toBeVisible();
@@ -57,7 +59,7 @@ test("Open in Bambu Studio builds the bambustudio:// address of a signed link th
   const stranger = await browser.newContext();
   const download = await stranger.request.get(signed);
   expect(download.status()).toBe(200);
-  expect(Buffer.from(await download.body()).equals(Buffer.from(tugboatFile()))).toBe(true);
+  expect(Buffer.from(await download.body()).equals(bytes)).toBe(true);
   // A link with the signature changed, or the same path under another file's name, still only gives the one file.
   const bad = signed.replace(/\.[A-Za-z0-9_-]{43}\//, ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/");
   expect((await stranger.request.get(bad)).status()).toBe(404);
