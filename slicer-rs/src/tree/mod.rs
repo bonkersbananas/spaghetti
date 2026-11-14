@@ -109,12 +109,14 @@ impl Config {
         let support_bottom_enable = bottom_layers > 0;
         let support_xy_distance = scaled(sp.xy_distance);
         let support_xy_distance_overhang = support_xy_distance.min(scaled(0.5 * (s.outer_wall_width as f32 as f64)));
-        let clamp = |degrees: f64, max: f64| (degrees * std::f64::consts::PI / 180.0).clamp(0.0, max);
+        // As `std::clamp` computes it, `min(max(v, lo), hi)`, which doesn't panic where the bound falls below 0: with
+        // a branch angle of 0 (Orca allows it) the slow angle's is −1e-4, which Orca takes as it comes.
+        let clamp = |degrees: f64, max: f64| (degrees * std::f64::consts::PI / 180.0).max(0.0).min(max);
         let half_pi = 0.5 * std::f64::consts::PI;
         let tree_angle = clamp(sp.tree_branch_angle, half_pi - 1e-4);
         let tree_angle_slow = clamp(sp.tree_angle_slow, tree_angle - 1e-4);
         let branch_diameter = scaled(sp.tree_branch_diameter);
-        let tip_diameter = scaled(sp.tree_tip_diameter).clamp(0, branch_diameter);
+        let tip_diameter = scaled(sp.tree_tip_diameter).max(0).min(branch_diameter);
         let branch_radius = branch_diameter / 2;
         let min_radius = tip_diameter / 2;
         let move_distance = |angle: f64| {
@@ -312,6 +314,18 @@ mod tests {
             .collect();
         let profile = Profile::over_x2d(BTreeMap::new(), process, BTreeMap::new());
         Settings::from_profile(std::sync::Arc::new(profile), None)
+    }
+
+    #[test]
+    fn a_branch_angle_of_0_is_taken_as_orca_takes_it() {
+        // Orca allows 0 (`tree_support_branch_angle_organic`); the slow angle's bound then falls below 0, which
+        // `std::clamp` takes as it comes, where Rust's clamp panics.
+        let mut s = tree_settings();
+        s.support.tree_branch_angle = 0.0;
+        let c = Config::new(&s);
+        assert_eq!(c.tree_angle, 0.0);
+        assert_eq!(c.tree_angle_slow, -1e-4);
+        assert_eq!(c.maximum_move_distance, 0);
     }
 
     #[test]
