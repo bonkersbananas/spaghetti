@@ -65,6 +65,18 @@ describe("a model's settings", () => {
       supports: "where-needed",
     });
   });
+
+  it("aren't ahead for the colour a slice gave a filament that names none (a project's for its place)", () => {
+    // A project's filament 1 in its own beige: chosen as plain PLA, the slice records the project's colour.
+    const chosen = { ...DEFAULT_SLICING, filaments: [{ material: "PLA" }] };
+    const sliced = { ...chosen, filaments: [{ material: "PLA", colorHex: "#e8dbb7" }] };
+    expect(slicingAhead({ slicing: chosen, slice: slice(sliced) })).toBeNull();
+    // Another material, or a colour of its own that the slice didn't print, is still a change.
+    const petg = { ...DEFAULT_SLICING, filaments: [{ material: "PETG" }] };
+    expect(slicingAhead({ slicing: petg, slice: slice(sliced) })).toEqual(petg);
+    const blue = { ...DEFAULT_SLICING, filaments: [{ material: "PLA", colorHex: "#4f7fc7" }] };
+    expect(slicingAhead({ slicing: blue, slice: slice(sliced) })).toEqual(blue);
+  });
 });
 
 describe('what a change is, after "Slicing with"', () => {

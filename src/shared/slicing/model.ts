@@ -34,7 +34,23 @@ export function modelSlicing(file: Pick<AttemptFile, "slicing" | "slice">, defau
 /** Settings chosen for a model that its slice wasn't made with yet: a change still being sliced, or never sliced. */
 export function slicingAhead(file: Pick<AttemptFile, "slicing" | "slice">): SlicingSettings | null {
   if (!file.slicing || !file.slice) return null;
-  return changedSlicing(slicingOfSlice(file.slice), file.slicing).length ? file.slicing : null;
+  const sliced = slicingOfSlice(file.slice);
+  return changedSlicing(sliced, asSliced(file.slicing, sliced)).length ? file.slicing : null;
+}
+
+/**
+ * Chosen settings as a slice made with them records them: a filament that names no colour of its own was sliced in
+ * the colour the slice gave it (a project's for its place, else a stand-in's), which is no change of anyone's.
+ */
+function asSliced(chosen: SlicingSettings, sliced: SlicingSettings): SlicingSettings {
+  return {
+    ...chosen,
+    filaments: chosen.filaments.map((filament, index) => {
+      const made = sliced.filaments[index];
+      if (filament.colorHex || !made?.colorHex || made.material !== filament.material) return filament;
+      return { ...filament, colorHex: made.colorHex, ...(made.colorName ? { colorName: made.colorName } : {}) };
+    }),
+  };
 }
 
 /**
