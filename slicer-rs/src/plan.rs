@@ -81,6 +81,10 @@ pub struct LayerPlan {
     pub support_islands: Vec<(u32, Shapes)>,
     /// With several filaments, where the prime tower is visited (and the filament changed) between the paths.
     pub visits: Vec<crate::toolchange::Visit>,
+    /// A spiral vase's layer that is one wall loop and nothing else: it rises as it goes round (`spiral.rs`).
+    pub spiral: bool,
+    /// In spiral vase mode, where the nozzle comes from and how the layer's loop rises (`spiral.rs`).
+    pub course: Option<crate::spiral::Course>,
 }
 
 /// The kind of each infill region, in the order they print.
@@ -95,6 +99,9 @@ const FILL_ORDER: [Role; 6] =
 /// each object's support layer printed with this one, if any: an object with support and no islands here is a stop
 /// on the tour at its middle, and its support prints when the tour first comes to it, before its islands, chained as
 /// Orca chains it. A layer of the support's own, between the objects' layers, is planned as one with no islands.
+/// In spiral vase mode `start` is where the nozzle is when the layer begins (the layer before's end; the plate's
+/// origin, where Orca's writer reckons it, for the first): each loop starts at the point on it nearest where the
+/// nozzle is then, as Orca's `extrude_loop` splits loops in that mode.
 #[allow(clippy::too_many_arguments)]
 pub fn plan_layer(
     r: &LayerRegions,
@@ -104,9 +111,10 @@ pub fn plan_layer(
     centres: &[(f64, f64)],
     brims: &[Vec<Contour>],
     supports: &[Option<&support::Layer>],
+    start: Option<Pt>,
     s: &Settings,
 ) -> LayerPlan {
-    plan_layer_of(None, r, lower, i, (z, h), centres, brims, supports, s)
+    plan_layer_of(None, r, lower, i, (z, h), centres, brims, supports, start, s)
 }
 
 /// `plan_layer` for some of the objects only (`only[o]`, all when None): those printing with one filament.
@@ -120,6 +128,7 @@ pub fn plan_layer_of(
     centres: &[(f64, f64)],
     brims: &[Vec<Contour>],
     supports: &[Option<&support::Layer>],
+    start: Option<Pt>,
     s: &Settings,
 ) -> LayerPlan {
     let takes = |o: u32| only.is_none_or(|only| only.get(o as usize).copied().unwrap_or(false));
@@ -141,21 +150,24 @@ pub fn plan_layer_of(
             })
             .collect();
     }
-    let mut per_island: Vec<Vec<Path>> = r
-        .islands
-        .iter()
-        .zip(&r.fills)
-        .enumerate()
-        .map(|(k, (island, fills))| {
-            if !takes(island.object) {
-                return Vec::new();
-            }
-            let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
-            let under = below.get(island.object as usize).and_then(Option::as_ref);
-            let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
-            island_paths(k as u32, island, fills, under, i, (z, h), centre, trees, s)
-        })
-        .collect();
+    let island_at = |k: usize, at: Option<Pt>, rising: bool| -> Vec<Path> {
+        let island = &r.islands[k];
+        if !takes(island.object) {
+            return Vec::new();
+        }
+        let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
+        let under = below.get(island.object as usize).and_then(Option::as_ref);
+        let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
+        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, trees, (at, rising), s)
+    };
+    let mut per_island: Vec<Vec<Path>> = (0..r.islands.len()).map(|k| island_at(k, None, false)).collect();
+    // In spiral vase mode, a layer that is one island's wall loop and nothing else rises as it goes round, as Orca's
+    // spiral takes a layer of one loop, above the bottom layers and the skirt, with no support (`process_layer`).
+    let rising = start.is_some()
+        && i >= s.bottom_shell_layers.max(s.skirt_height).max(1)
+        && supports.iter().all(|l| l.is_none_or(|l| l.items.is_empty()))
+        && per_island.iter().filter(|p| !p.is_empty()).count() == 1
+        && per_island.iter().flatten().all(|p| matches!(p.role, Role::OuterWall | Role::InnerWall));
     // The tour's stops: the islands that print anything, then each object with support and nothing else here.
     let mut nodes: Vec<(Option<usize>, u32)> =
         (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).map(|k| (Some(k), r.islands[k].object)).collect();
@@ -186,6 +198,9 @@ pub fn plan_layer_of(
     tour.reverse();
     let mut paths: Vec<Path> = Vec::new();
     let mut visited = vec![false; supports.len()];
+    // Spiral vase mode: the first layer's brims print first, so its loops start where they end.
+    let spiral_brims = start.is_some() && i == 0;
+    let mut brims_done = vec![false; brims.len()];
     for t in tour {
         let (k, object) = nodes[t];
         if let Some(Some(layer)) = supports.get(object as usize)
@@ -193,21 +208,31 @@ pub fn plan_layer_of(
             && takes(object)
         {
             // Orca reckons the nozzle at the layer's start where the layer before ended, which is planned apart:
-            // the plate's origin, where the tour ends, stands in for it.
-            let at = paths.last().map_or(geom::pt(0, 0), |p: &Path| p.points[p.points.len() - 1]);
+            // the plate's origin, where the tour ends, stands in for it (in spiral vase mode, where it ended).
+            let at = paths.last().map_or(start.unwrap_or(geom::pt(0, 0)), |p: &Path| p.points[p.points.len() - 1]);
             paths.extend(support_paths(layer, object, at, s));
         }
         if let Some(v) = visited.get_mut(object as usize) {
             *v = true;
         }
         if let Some(k) = k {
+            if let Some(start) = start {
+                let o = object as usize;
+                if spiral_brims && o < brims.len() && !brims_done[o] && takes(object) {
+                    brims_done[o] = true;
+                    let at = paths.last().map_or(start, |p: &Path| p.points[p.points.len() - 1]);
+                    paths.extend(brim_paths(&brims[o], object, at, h, s));
+                }
+                let at = paths.last().map_or(start, |p: &Path| p.points[p.points.len() - 1]);
+                per_island[k] = island_at(k, Some(at), rising);
+            }
             for p in &mut per_island[k] {
                 p.object = object;
             }
             paths.append(&mut per_island[k]);
         }
     }
-    if i == 0 && brims.iter().enumerate().any(|(o, b)| takes(o as u32) && !b.is_empty()) {
+    if i == 0 && !spiral_brims && brims.iter().enumerate().any(|(o, b)| takes(o as u32) && !b.is_empty()) {
         match only {
             None => paths = with_brims(paths, brims, h, s),
             Some(_) => {
@@ -222,7 +247,18 @@ pub fn plan_layer_of(
     }
     let support_islands =
         supports.iter().enumerate().filter_map(|(o, l)| l.map(|l| (o as u32, l.islands.clone()))).collect();
-    LayerPlan { index: i, id: i, z, height: h, header_height: h as f32, paths, support_islands, visits: Vec::new() }
+    LayerPlan {
+        index: i,
+        id: i,
+        z,
+        height: h,
+        header_height: h as f32,
+        paths,
+        support_islands,
+        visits: Vec::new(),
+        spiral: rising,
+        course: None,
+    }
 }
 
 /// A support layer's extrusions as Orca prints them on an object's first visit (`extrude_support`): chained from
@@ -285,8 +321,6 @@ fn support_paths(layer: &support::Layer, object: u32, at: Pt, s: &Settings) -> V
 /// plate's origin for the layer's first, where Orca's writer reckons it is) and stops the seam gap short of that
 /// point, as Orca's `extrude_loop` splits and clips loops other than walls.
 fn with_brims(paths: Vec<Path>, brims: &[Vec<Contour>], h: f64, s: &Settings) -> Vec<Path> {
-    let (width, mm3_per_mm, speed) = flow(Role::Brim, true, h, s);
-    let speed = speed.min(s.speed_cap(mm3_per_mm));
     let mut out = Vec::with_capacity(paths.len() + brims.iter().map(Vec::len).sum::<usize>());
     let mut done = vec![false; brims.len()];
     let mut at = geom::pt(0, 0);
@@ -294,26 +328,36 @@ fn with_brims(paths: Vec<Path>, brims: &[Vec<Contour>], h: f64, s: &Settings) ->
         let o = p.object as usize;
         if o < brims.len() && !done[o] {
             done[o] = true;
-            for contour in &brims[o] {
-                let Some(points) = brim_loop(contour, at, s.seam_gap) else { continue };
-                at = points[points.len() - 1];
-                out.push(Path {
-                    role: Role::Brim,
-                    points,
-                    closed: true,
-                    width,
-                    height: h,
-                    mm3_per_mm,
-                    speed,
-                    accel: accel(Role::Brim, true, s),
-                    island: u32::MAX,
-                    object: p.object,
-                    parts: Vec::new(),
-                });
-            }
+            out.extend(brim_paths(&brims[o], p.object, at, h, s));
         }
         at = p.points[p.points.len() - 1];
         out.push(p);
+    }
+    out
+}
+
+/// An object's brim loops as they print, the first from the point on it nearest `at`, each next from where the one
+/// before ended.
+fn brim_paths(brims: &[Contour], object: u32, mut at: Pt, h: f64, s: &Settings) -> Vec<Path> {
+    let (width, mm3_per_mm, speed) = flow(Role::Brim, true, h, s);
+    let speed = speed.min(s.speed_cap(mm3_per_mm));
+    let mut out = Vec::with_capacity(brims.len());
+    for contour in brims {
+        let Some(points) = brim_loop(contour, at, s.seam_gap) else { continue };
+        at = points[points.len() - 1];
+        out.push(Path {
+            role: Role::Brim,
+            points,
+            closed: true,
+            width,
+            height: h,
+            mm3_per_mm,
+            speed,
+            accel: accel(Role::Brim, true, s),
+            island: u32::MAX,
+            object,
+            parts: Vec::new(),
+        });
     }
     out
 }
@@ -348,6 +392,51 @@ fn brim_loop(contour: &Contour, at: Pt, gap: f64) -> Option<Vec<Pt>> {
         points.push(f);
     }
     clip_end(&mut points, &mut Vec::new(), gap).then_some(points)
+}
+
+/// Starts a loop (closed: its last point its first) at the point on it nearest `at`, on a segment if need be, as
+/// Orca's `ExtrusionLoop::split_at` does: the first segment whose nearest point is nearest, that point snapped to the
+/// segment's nearer end within a micrometre.
+fn split_loop(points: &mut Vec<Pt>, at: Pt) {
+    let n = points.len();
+    if n < 3 {
+        return;
+    }
+    let d2 = |q: Pt| {
+        let (dx, dy) = ((q.x - at.x) as f64, (q.y - at.y) as f64);
+        dx * dx + dy * dy
+    };
+    let mut best = (f64::INFINITY, 0usize, points[0]);
+    for k in 0..n - 1 {
+        let f = foot(at, points[k], points[k + 1]);
+        let d = d2(f);
+        if d < best.0 {
+            best = (d, k, f);
+        }
+    }
+    let (_, k, mut f) = best;
+    let snap = (0.001 * geom::SCALE).powi(2);
+    let (a, b) = (points[k], points[k + 1]);
+    let (da, db) = (d2(a), d2(b));
+    if da < db {
+        if da < snap {
+            f = a;
+        }
+    } else if db < snap {
+        f = b;
+    }
+    // From f round to f: the rest of segment k, the loop's points after it, its first ones up to segment k.
+    let mut out = Vec::with_capacity(n + 2);
+    out.push(f);
+    for &q in points[k + 1..n - 1].iter().chain(&points[..=k]) {
+        if q != out[out.len() - 1] {
+            out.push(q);
+        }
+    }
+    if f != out[out.len() - 1] {
+        out.push(f);
+    }
+    *points = out;
 }
 
 /// Takes `gap` mm off the end of a loop, and off its segments' parts, so that it stops short of where it started
@@ -401,6 +490,9 @@ struct Group {
     sortable: bool,
 }
 
+/// An island's paths in the order they print. In spiral vase mode `at` is where the nozzle is as the island starts:
+/// each loop starts at the point on it nearest where the nozzle is then; on a layer that `rises` (one wall loop and
+/// nothing else) it goes all the way round, without the seam gap, as Orca turns loop clipping off there.
 #[allow(clippy::too_many_arguments)]
 fn island_paths(
     index: u32,
@@ -411,6 +503,7 @@ fn island_paths(
     (z, h): (f64, f64),
     centre: (f64, f64),
     trees: &[Vec<Pt>],
+    (mut at, rises): (Option<Pt>, bool),
     s: &Settings,
 ) -> Vec<Path> {
     let first = layer == 0;
@@ -426,13 +519,19 @@ fn island_paths(
     let overhang = overhang_flow(first, h, s);
     for (contour, depth, outline) in wall_order(walls, centre_pt) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
-        let wall = path(role, seam_loop(contour, outline), true, island, first, h, s);
+        let mut wall = path(role, seam_loop(contour, outline), true, island, first, h, s);
+        if let Some(p) = at {
+            split_loop(&mut wall.points, p);
+        }
         let mut wall = match below {
             Some(below) => below.wall(wall, overhang, s),
             None => wall,
         };
         // It stops the seam gap short of where it started, as Orca's walls do.
-        if clip_end(&mut wall.points, &mut wall.parts, s.seam_gap) {
+        if rises || clip_end(&mut wall.points, &mut wall.parts, s.seam_gap) {
+            if at.is_some() {
+                at = wall.points.last().copied();
+            }
             out.push(wall);
         }
     }
@@ -766,6 +865,10 @@ pub fn sparse_lines(
     trees: &[Vec<Pt>],
     s: &Settings,
 ) -> Vec<Vec<Pt>> {
+    // No sparse infill at all (spiral vase mode's): Orca fills nothing there.
+    if s.sparse_density <= 0.0 {
+        return Vec::new();
+    }
     if let Some(pattern) = fill::Pattern::of(&s.sparse_infill_pattern) {
         return sparse_runs(region, pattern, layer, (z, h), centre, trees, s);
     }

@@ -31,6 +31,7 @@ pub mod region;
 pub mod section;
 pub mod setup;
 pub mod solid;
+pub mod spiral;
 pub mod support;
 pub mod surfaces;
 pub mod template;
@@ -302,6 +303,11 @@ impl Plate {
                 return Err(Error::OffPlate);
             }
         }
+        // In spiral vase mode Orca prints one object, and stops the slice when the plate has more: so the app's
+        // fallback, Orca's engine, says why.
+        if settings.spiral_mode && meshes.len() > 1 {
+            return Err(Error::Unsupported("several objects in spiral vase mode"));
+        }
         let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
         if height > settings.max_height {
             return Err(Error::TooTall);
@@ -310,8 +316,10 @@ impl Plate {
         let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
         // Slices simplified to half the profile's resolution, as before: Orca simplifies its own to 0.0025 mm, which
         // comes a little closer to its supports on a Benchy and makes every later step a third slower.
+        // A spiral vase's layers above its bottom keep their outline's largest loop alone.
+        let largest_from = if settings.spiral_mode { spiral::first_layer(&layers, settings) } else { usize::MAX };
         let (slices, owners) =
-            section::slice(&meshes, &layers, settings.resolution / 2.0, settings.slice_closing_radius);
+            section::slice(&meshes, &layers, settings.resolution / 2.0, settings.slice_closing_radius, largest_from);
         let t2 = now();
         let mut objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
         if let Some(first) = slices.first() {
@@ -450,7 +458,8 @@ impl Plate {
                 groups.push(groups.last().map_or(0, |r| r.end)..g + 1);
             }
         }
-        let texts = par::map_range(groups.len(), |k| {
+        // In spiral vase mode each layer starts where the one before ended, so the layers go one after another.
+        let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>| -> Vec<gcode::LayerGcode> {
             let plans: Vec<(plan::LayerPlan, &region::LayerRegions, f64)> = groups[k]
                 .clone()
                 .map(|g| {
@@ -481,6 +490,7 @@ impl Plate {
                                         &centres,
                                         &brims.loops,
                                         &here,
+                                        spiral.as_ref().map(|st| st.at),
                                         s,
                                     );
                                     (f, plan)
@@ -496,18 +506,36 @@ impl Plate {
                             &centres,
                             &brims.loops,
                             &here,
+                            spiral.as_ref().map(|st| st.at),
                             settings,
                         ),
                     };
                     (plan.index, plan.id, plan.header_height) = (g, slot.id, slot.header_height);
                     let from_z = if g == 0 { job.start[2] } else { schedule[g - 1].z + settings.z_hop };
+                    let from_z = match spiral.as_deref_mut() {
+                        Some(st) => {
+                            plan.spiral &= plan.visits.is_empty();
+                            st.course(&mut plan, slot.z, g + 1 == schedule.len(), settings)
+                        }
+                        None => from_z,
+                    };
                     (plan, regions_here, from_z)
                 })
                 .collect();
             let group: Vec<(&plan::LayerPlan, &region::LayerRegions, f64)> =
                 plans.iter().map(|(plan, r, z)| (plan, *r, *z)).collect();
-            gcode::layers(&group, &job)
-        });
+            let texts = gcode::layers(&group, &job);
+            if let Some(st) = spiral {
+                st.turned(&texts);
+            }
+            texts
+        };
+        let texts: Vec<Vec<gcode::LayerGcode>> = if settings.spiral_mode {
+            let mut st = spiral::State::new(job.start);
+            (0..groups.len()).map(|k| group_texts(k, Some(&mut st))).collect()
+        } else {
+            par::map_range(groups.len(), |k| group_texts(k, None))
+        };
         let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         drop(regions);
         let t5 = now();

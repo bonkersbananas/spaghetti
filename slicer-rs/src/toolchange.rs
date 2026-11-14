@@ -428,6 +428,8 @@ impl Colours {
         runs.push((first_f, 0));
         for (f, plan) in it {
             runs.push((f, out.paths.len()));
+            // A spiral vase's layer rises when its one loop is all it prints, whichever filament's plan has it.
+            out.spiral = if out.paths.is_empty() { plan.spiral } else { out.spiral && plan.paths.is_empty() };
             out.paths.extend(plan.paths);
             for (o, isl) in plan.support_islands {
                 if !out.support_islands.iter().any(|(k, _)| *k == o) {
