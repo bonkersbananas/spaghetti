@@ -200,3 +200,91 @@ describe("readModel3mf", () => {
     ).toBe("no-objects");
   });
 });
+
+describe("readModel3mf plates", () => {
+  /** A project of `count` plates with one 10 mm prism each, laid out on Bambu's grid (1.2 × a 256 mm bed). */
+  const project = (count: number, names: string[] = []) => {
+    const columns =
+      Math.round(Math.sqrt(count)) < Math.sqrt(count) ? Math.round(Math.sqrt(count)) + 1 : Math.round(Math.sqrt(count));
+    const ids = Array.from({ length: count }, (_, n) => n * 2 + 2);
+    const items = ids.map((id, n) => {
+      const x = 128 + (n % columns) * 307.2;
+      const y = 128 - Math.floor(n / columns) * 307.2;
+      return `<item objectid="${id}" transform="1 0 0 0 1 0 0 0 1 ${x} ${y} 0"/>`;
+    });
+    const objects = ids.map(
+      (id) => `<object id="${id}" type="model">${MESH.replace('z="10"', `z="${id * 10}"`)}</object>`,
+    );
+    const plates = ids.map(
+      (
+        id,
+        n,
+      ) => `<plate><metadata key="plater_id" value="${n + 1}"/><metadata key="plater_name" value="${names[n] ?? ""}"/>
+        <metadata key="thumbnail_file" value="Metadata/plate_${n + 1}.png"/>
+        <model_instance><metadata key="object_id" value="${id}"/><metadata key="instance_id" value="0"/></model_instance></plate>`,
+    );
+    const settings = ids.map((id) => `<object id="${id}"><metadata key="name" value="Bin ${id}"/></object>`);
+    return zip({
+      "3D/3dmodel.model": model(`<resources>${objects.join("")}</resources><build>${items.join("")}</build>`),
+      "Metadata/model_settings.config": `<config>${settings.join("")}${plates.join("")}</config>`,
+    });
+  };
+  const read = (bytes: Uint8Array, plate?: number) => {
+    const out = readModel3mf(bytes, { plate });
+    if (typeof out === "string") throw new Error(out);
+    return out;
+  };
+
+  it("lists the plates, each with its objects, height and picture, and reads the first by default", () => {
+    const got = read(project(3, ["", "Tall", ""]));
+    expect(got.plate).toBe(1);
+    expect(got.plates.map((p) => [p.index, p.name, p.objects, p.picture])).toEqual([
+      [1, "", ["Bin 2"], "Metadata/plate_1.png"],
+      [2, "Tall", ["Bin 4"], "Metadata/plate_2.png"],
+      [3, "", ["Bin 6"], "Metadata/plate_3.png"],
+    ]);
+    expect(got.plates.map((p) => p.height)).toEqual([20, 40, 60]);
+    expect(got.objects.map((o) => o.name)).toEqual(["Bin 2"]);
+  });
+
+  it("moves a chosen plate's objects from its grid spot onto the bed, where they sit on that plate", () => {
+    for (const [plate, name] of [
+      [2, "Bin 4"],
+      [3, "Bin 6"],
+    ] as const) {
+      const got = read(project(3), plate);
+      expect(got.plate).toBe(plate);
+      expect(got.objects.map((o) => o.name)).toEqual([name]);
+      // The prism's corner (0, 0) lands where plate 1's would: the file's centre at 128, 128 less 5 of the mesh's 10.
+      expect(
+        boundsOf(got.objects[0]?.positions ?? new Float32Array())
+          .min.slice(0, 2)
+          .map((v) => Math.round(v)),
+      ).toEqual([128, 128]);
+    }
+  });
+
+  it("reads the first plate for a plate the file doesn't have, and plates in a grid of four or five", () => {
+    expect(read(project(3), 9).plate).toBe(1);
+    for (const count of [4, 5, 7]) {
+      const got = read(project(count), count);
+      expect(
+        boundsOf(got.objects[0]?.positions ?? new Float32Array())
+          .min.slice(0, 2)
+          .map((v) => Math.round(v)),
+      ).toEqual([128, 128]);
+    }
+  });
+
+  it("gives a file without plates none", () => {
+    const got = read(
+      zip({
+        "3D/3dmodel.model": model(
+          `<resources><object id="1">${MESH}</object></resources><build><item objectid="1"/></build>`,
+        ),
+      }),
+    );
+    expect(got.plates).toEqual([]);
+    expect(got.plate).toBe(0);
+  });
+});
