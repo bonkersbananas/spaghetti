@@ -794,6 +794,12 @@ export default function ModelFileCard({
   const saved = state.kind === "sliced" && state.saved;
   const thumbSrc = file.hasThumb || job?.picture ? fileThumbSrc(file) : undefined;
   const prefill = job?.outcome?.ok && !job.again ? job.outcome.prefill : file.prefill;
+  const jobShown = !!job?.outcome?.ok && !job.again;
+  const figuresPlate = jobShown
+    ? settings.modelPlate
+    : file.slice?.status === "sliced"
+      ? slicingOfSlice(file.slice).modelPlate
+      : undefined;
   const panel = target && {
     file: { id: file.id, name: file.name, url: fileUrl(file.id), size: file.size },
     settings,
@@ -807,10 +813,8 @@ export default function ModelFileCard({
     recipes: offered,
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
     ...(plateFigures(prefill) ? { figures: plateFigures(prefill) } : {}),
-    // The figures are of the plate the slice there was made for, not the one just picked.
-    ...(file.slice?.status === "sliced" && slicingOfSlice(file.slice).modelPlate
-      ? { figuresPlate: slicingOfSlice(file.slice).modelPlate }
-      : {}),
+    // The figures are of the plate they were made for: the job's, when it is the one shown, else the saved slice's.
+    ...(figuresPlate ? { figuresPlate } : {}),
   };
   // Its settings: a sheet on phones, a panel beside the page on desktop (but not over the attempt's sheet).
   const summary = slicingSummary(settings);
