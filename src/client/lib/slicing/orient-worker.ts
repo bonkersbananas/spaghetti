@@ -18,6 +18,8 @@ export interface OrientRequest {
   colour: string;
   /** Pixels, square. */
   size: number;
+  /** The plate of a 3MF project with several that is sliced (the first when absent). */
+  plate?: number;
 }
 
 export interface OrientOption {
@@ -44,10 +46,10 @@ self.onmessage = (event: MessageEvent<OrientRequest>) => {
 };
 
 /** All of the model's triangles in one mesh; null when it can't be read. */
-async function readMesh(file: Blob): Promise<Mesh | null> {
+async function readMesh(file: Blob, plate?: number): Promise<Mesh | null> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
-    const model = readModel3mf(bytes);
+    const model = readModel3mf(bytes, { plate });
     if (typeof model === "string") return null;
     const parts = model.objects.map((object) => object.positions);
     const positions = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0));
@@ -78,7 +80,7 @@ async function picture(mesh: Mesh, request: OrientRequest): Promise<Blob | null>
 }
 
 async function run(request: OrientRequest) {
-  const mesh = await readMesh(request.file);
+  const mesh = await readMesh(request.file, request.plate);
   if (!mesh || !mesh.positions.length) return self.postMessage({ type: "failed" } satisfies OrientMessage);
   const limit = Math.cos((SAME_AS_FILE_DEGREES * Math.PI) / 180);
   const faces = restingFaces(mesh, MOST + 1).filter((face) => -face.down[2] < limit);

@@ -42,7 +42,7 @@ import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { standInSentence } from "@shared/slicing/words.ts";
 import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
-import { Fragment, type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useMemo, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
@@ -50,6 +50,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
 import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -59,6 +60,7 @@ import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
+import { usePlates } from "@/lib/slicing/plates";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { ColourMatches, spoolTile } from "./ColourMatches";
 
@@ -925,6 +927,37 @@ export function SliceAbout({
 export interface SliceSettingsProps extends SlicingChoicesProps {
   file: { id: string; name: string; url: string; size: number };
   sliced?: string;
+  /** What the slice there says of its plate, "1 h 20 min · 34 g": shown on the plate it is of. */
+  figures?: string;
+  /** The plate those figures are of: the one the slice there was made for (the first when absent). */
+  figuresPlate?: number;
+}
+
+/** The plates of a model's 3MF, with their pictures, for the picker (none for a file with one plate, or that isn't a 3MF). */
+function useProjectPlates(
+  file: { id: string; name: string; size: number },
+  settings: SlicingSettings,
+  figures?: string,
+  figuresPlate?: number,
+  enabled = true,
+): PlateOption[] | undefined {
+  const found = usePlates(
+    file,
+    settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0],
+    enabled && /\.3mf$/i.test(file.name),
+  );
+  return useMemo(() => {
+    if (found.status !== "ready") return undefined;
+    const sliced = figuresPlate ?? found.plates[0]?.index;
+    return found.plates.map((plate) => ({
+      index: plate.index,
+      name: plate.name,
+      height: plate.height,
+      // The project's own picture until ours is drawn (or where it can't be).
+      src: plate.src ?? plate.placeholder,
+      ...(figures && plate.index === sliced ? { detail: figures } : {}),
+    }));
+  }, [found, figuresPlate, figures]);
 }
 
 /**
@@ -932,7 +965,12 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
  * scrolling (the phone's sheet scrolls one column, in the same order).
  */
 export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsProps) {
-  const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], !choices.lying);
+  const found = useLying(
+    file,
+    choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0],
+    !choices.lying,
+    choices.settings.modelPlate,
+  );
   return (
     <SlicingChoices
       {...choices}
@@ -954,6 +992,8 @@ export default function SliceSettingsSheet({
   file,
   result,
   sliced,
+  figures,
+  figuresPlate,
   ...choices
 }: SliceSettingsProps & {
   open: boolean;
@@ -962,7 +1002,13 @@ export default function SliceSettingsSheet({
   result: ReactNode;
 }) {
   const isDesktop = useIsDesktop();
-  const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], open && !choices.lying);
+  const found = useLying(
+    file,
+    choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0],
+    open && !choices.lying,
+    choices.settings.modelPlate,
+  );
+  const projectPlates = useProjectPlates(file, choices.settings, figures, figuresPlate, open);
   const about = (
     <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />
   );
@@ -971,7 +1017,34 @@ export default function SliceSettingsSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="How to slice it"
-      description={file.name}
+      description={
+        projectPlates ? (
+          // Each piece wraps whole: "Plate 1 of 3" and "120 mm tall" never split, and no dot starts a line.
+          <MetaList>
+            {file.name}
+            {plateParts(projectPlates, choices.settings.modelPlate ?? 1).map((part) => (
+              <span key={part} className="whitespace-nowrap">
+                {part}
+              </span>
+            ))}
+          </MetaList>
+        ) : (
+          file.name
+        )
+      }
+      // A project's plates, small, beside the title: no sheet over this sheet, and no line of its own to push the
+      // first choices down.
+      headerActions={
+        projectPlates && projectPlates.length > 1 ? (
+          <PlatePicker
+            inSheet
+            plates={projectPlates}
+            value={choices.settings.modelPlate ?? projectPlates[0]?.index ?? 1}
+            // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
+            onChange={(modelPlate) => choices.onChange(slicingFor({ modelPlate, orientation: null }, choices.settings))}
+          />
+        ) : undefined
+      }
       tall
       desktop="panel"
       wide

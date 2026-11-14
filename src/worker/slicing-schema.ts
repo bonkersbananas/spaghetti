@@ -92,6 +92,15 @@ export const slicingSettingsShape = z
       .describe(
         "What prints each of a model's own colours, where someone chose: the colour (#rrggbb, as the slice lists it) and the filament. A colour not listed prints in the Pantry spool nearest it.",
       ),
+    modelPlate: z
+      .number()
+      .int()
+      .min(1)
+      .max(99)
+      .optional()
+      .describe(
+        "Which plate of a 3MF project with several it slices (the project's own number for it); absent: the first.",
+      ),
     scale: z.number().int().min(LIMITS.scale.min).max(LIMITS.scale.max).describe("Percent of the model's own size."),
     orientation: z
       .tuple([z.number(), z.number(), z.number()])

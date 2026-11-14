@@ -276,3 +276,61 @@ function boxProject(settings: Record<string, string>): Uint8Array {
     "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
   });
 }
+
+/** A one-pixel grey-green picture standing in for the plate renders Bambu Studio puts in a project (Metadata/plate_N.png). */
+const PLATE_PICTURE = Uint8Array.from(
+  atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOYtmwGAAOqAdVTRFctAAAAAElFTkSuQmCC"),
+  (char) => char.charCodeAt(0),
+);
+
+/**
+ * A MakerWorld-style Bambu project of stackable bins in three heights, a plate each (120, 96 and 57.6 mm), laid out
+ * on Bambu's plate grid (1.2 bed sizes apart: plate 2 at x + 307.2, plate 3 at y - 307.2) with the project's own
+ * pictures. Every bin is 70 mm square and stands where its plate's middle is.
+ */
+export function platesProject(count = 3): Uint8Array {
+  const heights = [120, 96, 57.6, 80, 40, 108, 70].slice(0, count);
+  // Bambu's grid: round(sqrt(plates)) columns (one more if that fell short), 1.2 beds apart, rows going down.
+  const root = Math.sqrt(count);
+  const columns = Math.max(1, root > Math.round(root) ? Math.round(root) + 1 : Math.round(root));
+  const spots: [number, number][] = heights.map((_, n) => [(n % columns) * 307.2, -Math.floor(n / columns) * 307.2]);
+  const objects = heights
+    .map((h, n) => `<object id="${n * 2 + 2}" type="model">${boxMesh([-35, -35, 0], [70, 70, h])}</object>`)
+    .join("");
+  const items = spots
+    .map(
+      ([x, y], n) =>
+        `<item objectid="${n * 2 + 2}" transform="1 0 0 0 1 0 0 0 1 ${128 + x} ${128 + y} 0" printable="1"/>`,
+    )
+    .join("");
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>${objects}</resources>
+<build>${items}</build>
+</model>`;
+  const names = heights.map((_, n) => `Bin ${n + 1}`);
+  const plates = heights
+    .map(
+      (_, n) => `<plate>
+    <metadata key="plater_id" value="${n + 1}"/>
+    <metadata key="plater_name" value=""/>
+    <metadata key="thumbnail_file" value="Metadata/plate_${n + 1}.png"/>
+    <model_instance><metadata key="object_id" value="${n * 2 + 2}"/><metadata key="instance_id" value="0"/></model_instance>
+  </plate>`,
+    )
+    .join("");
+  const settings = `<?xml version="1.0" encoding="UTF-8"?>
+<config>${names
+    .map(
+      (name, n) =>
+        `<object id="${n * 2 + 2}"><metadata key="name" value="${name}"/><metadata key="extruder" value="1"/></object>`,
+    )
+    .join("")}${plates}</config>`;
+  const project = { printer_model: "Bambu Lab X2D", nozzle_diameter: ["0.4", "0.4"] };
+  return zipSync({
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(settings),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+    ...Object.fromEntries(heights.map((_, n) => [`Metadata/plate_${n + 1}.png`, PLATE_PICTURE])),
+  });
+}

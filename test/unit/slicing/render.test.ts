@@ -40,4 +40,27 @@ describe("renderPlate", () => {
     expect(red).toBeGreaterThan(0);
     expect(coverage(renderPlate([], { size: 16, colour: "#F2754E" })).drawn).toBe(0);
   });
+
+  it("frames pictures by what they are given to fit, so plates share one scale and one ground line", () => {
+    const size = 64;
+    const tall = box([0, 0, 0], [40, 40, 120]);
+    const short = box([0, 0, 0], [40, 40, 30]);
+    const rows = (pixels: Uint8ClampedArray) => {
+      const drawn: number[] = [];
+      for (let y = 0; y < size; y++) {
+        if (pixels.slice(y * size * 4, (y + 1) * size * 4).some((_, at) => at % 4 === 3 && pixels[y * size * 4 + at]))
+          drawn.push(y);
+      }
+      return { top: drawn[0] ?? -1, bottom: drawn[drawn.length - 1] ?? -1 };
+    };
+    // Alone, each fills its frame: the short box is as tall in the picture as the tall one.
+    const alone = rows(renderPlate([short], { size, colour: "#F2754E" }));
+    const aloneTall = rows(renderPlate([tall], { size, colour: "#F2754E" }));
+    expect(alone.bottom - alone.top).toBeGreaterThan((aloneTall.bottom - aloneTall.top) * 0.8);
+    // Framed together, the short one is shorter, and both stand on the same line.
+    const together = rows(renderPlate([short], { size, colour: "#F2754E", fit: [tall, short] }));
+    const togetherTall = rows(renderPlate([tall], { size, colour: "#F2754E", fit: [tall, short] }));
+    expect(together.bottom - together.top).toBeLessThan((togetherTall.bottom - togetherTall.top) * 0.6);
+    expect(Math.abs(together.bottom - togetherTall.bottom)).toBeLessThanOrEqual(1);
+  });
 });
