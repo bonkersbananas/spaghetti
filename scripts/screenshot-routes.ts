@@ -2139,7 +2139,6 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await loadMultiColourSpools(page);
-      await page.reload();
       const settings = await openSliceSettings(page);
       const filament = settings.getByRole("group", { name: "Filament" });
       await filament.waitFor();
@@ -3942,7 +3941,10 @@ export const shots: Shot[] = [
     name: "spool-add-multicolour",
     path: "/pantry",
     prepare: async (page) => {
-      await page.getByRole("button", { name: "Add a spool" }).first().click();
+      await page
+        .getByRole("button", { name: /^Add (a )?spool/ })
+        .first()
+        .click();
       const sheet = page.getByRole("dialog", { name: "New spool" });
       await sheet.waitFor();
       await sheet.getByRole("button", { name: /^SUNLU PLA\+ Silk tri-colour/ }).click();

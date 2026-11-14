@@ -115,7 +115,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
             spool ? "text-ink" : "text-ink-faint",
           )}
         >
-          {spool ? (name?.title ?? spool.material) : unknown ? "Which spool?" : "Empty"}
+          {spool ? (name?.title ?? spool.material).replaceAll("/", "/\u200b") : unknown ? "Which spool?" : "Empty"}
         </span>
         {!spool && unknown && (
           <span className="text-caption text-ink-soft block w-full min-w-0 font-medium">
