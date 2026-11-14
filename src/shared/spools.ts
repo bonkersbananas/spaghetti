@@ -29,6 +29,8 @@ export const FINISHES = [
   "translucent",
   "metal",
   "wood",
+  "silk+",
+  "pure",
 ] as const;
 
 export const FINISH_LABELS: Record<string, string> = {
@@ -41,6 +43,8 @@ export const FINISH_LABELS: Record<string, string> = {
   translucent: "Translucent",
   metal: "Metal",
   wood: "Wood",
+  "silk+": "Silk+",
+  pure: "Pure",
 };
 
 export const finishLabel = (finish: string) =>
@@ -61,6 +65,47 @@ export const QUICK_COLORS: ReadonlyArray<{ name: string; hex: string }> = [
   { name: "Terracotta", hex: "#9d4f2d" },
   { name: "Beige", hex: "#d8c3a0" },
 ];
+
+/** Most colours one co-extruded spool carries: two (dual colour) or three (tri-colour). */
+export const MAX_SPOOL_COLORS = 3;
+
+/** How a spool's colour is drawn: one colour, a split of two or of three, or none set. */
+export type ColourKind = "none" | "single" | "dual" | "tri";
+
+/** What a spool's colours need: its single colour, or the two or three of a co-extruded one. */
+export interface SpoolColours {
+  colorHex?: string | null;
+  colors?: readonly string[] | null;
+}
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** Two or three valid colours as lowercase #rrggbb, else null (a spool with one colour has none to list). */
+export function normalizeColors(value: readonly string[] | null | undefined): string[] | null {
+  if (!value) return null;
+  const list = value.filter((hex) => HEX.test(hex)).map((hex) => hex.toLowerCase());
+  return list.length >= 2 ? list.slice(0, MAX_SPOOL_COLORS) : null;
+}
+
+/** A spool's colours, in order: the two or three of a multi-colour one, its one colour, or none. */
+export function spoolColors(spool: SpoolColours): string[] {
+  const many = normalizeColors(spool.colors);
+  if (many) return many;
+  return spool.colorHex && HEX.test(spool.colorHex) ? [spool.colorHex.toLowerCase()] : [];
+}
+
+export function colourKind(spool: SpoolColours): ColourKind {
+  const count = spoolColors(spool).length;
+  return count === 0 ? "none" : count === 1 ? "single" : count === 2 ? "dual" : "tri";
+}
+
+/** "dual colour", "tri-colour": how a label says it; nothing for one colour. */
+export const COLOUR_KIND_WORDS: Record<ColourKind, string> = {
+  none: "",
+  single: "",
+  dual: "dual colour",
+  tri: "tri-colour",
+};
 
 export type ColorTone = "light" | "mid" | "dark";
 
@@ -92,11 +137,62 @@ export function colorTone(hex: string): ColorTone {
   return "mid";
 }
 
+/** The tone of a set of colours: dark or light when any of them would melt into a surface (dark first), else mid. */
+export function colorsTone(colors: readonly string[]): ColorTone {
+  const tones = colors.map(colorTone);
+  return tones.includes("dark") ? "dark" : tones.includes("light") ? "light" : "mid";
+}
+
 /** Materials offered as chips when adding a spool, most common first. */
 export const SPOOL_MATERIALS = ["PLA", "PETG", "ABS", "ASA", "TPU", "PLA-CF", "PETG-CF", "PA", "PC", "PVA"] as const;
 
-/** Brands people are likely to type, offered as suggestions. */
-export const BRANDS = ["Bambu", "Polymaker", "eSun", "Elegoo", "Sunlu", "Prusament", "Overture", "Jayo"] as const;
+/** Brands people are likely to type, spelled as the makers spell them, offered as suggestions. */
+export const BRANDS = [
+  "Bambu Lab",
+  "Anycubic",
+  "Elegoo",
+  "Polymaker",
+  "SUNLU",
+  "eSUN",
+  "Prusament",
+  "Overture",
+  "Jayo",
+] as const;
+
+/** How makers spell their names, by what people type ("bambu", "Sunlu"): shown that way, whatever was saved. */
+const BRAND_SPELLINGS: Record<string, string> = {
+  bambu: "Bambu Lab",
+  "bambu lab": "Bambu Lab",
+  bambulab: "Bambu Lab",
+  sunlu: "SUNLU",
+  esun: "eSUN",
+  elegoo: "Elegoo",
+  anycubic: "Anycubic",
+  polymaker: "Polymaker",
+  prusament: "Prusament",
+  overture: "Overture",
+  jayo: "Jayo",
+};
+
+/** A brand as its maker spells it ("Bambu" → "Bambu Lab", "Sunlu" → "SUNLU"); anything else as it was typed. */
+export function brandLabel(brand: string | null | undefined): string {
+  const text = (brand ?? "").trim();
+  return BRAND_SPELLINGS[text.toLowerCase()] ?? text;
+}
+
+/** Product lines makers print before the material ("Polymaker PolyTerra PLA"), offered once a brand is typed. */
+export const PRODUCT_LINES: ReadonlyArray<{ brand: string; line: string }> = [
+  { brand: "Polymaker", line: "PolyTerra" },
+  { brand: "Polymaker", line: "Panchroma" },
+  { brand: "Polymaker", line: "PolyLite" },
+];
+
+/** The lines to offer for a brand: its own, or every known one while no brand is typed. */
+export function linesFor(brand: string | null | undefined): string[] {
+  const label = brandLabel(brand);
+  const own = PRODUCT_LINES.filter((entry) => !label || entry.brand === label);
+  return [...new Set((own.length ? own : PRODUCT_LINES).map((entry) => entry.line))];
+}
 
 /** The printer, as docs/printer.md has it. Build volumes in mm, temperatures in °C. */
 export const X2D = {
@@ -167,9 +263,17 @@ export interface SpoolLike {
   id: string;
   material: string;
   brand?: string | null;
+  /** The product line said before the material: "PolyTerra". */
+  line?: string | null;
+  /** One colour. Null for a multi-colour spool, so nothing matches it as a single colour: see `colors`. */
   colorHex?: string | null;
+  /** The two or three colours of a co-extruded spool. */
+  colors?: readonly string[] | null;
   colorName?: string | null;
   finish?: string | null;
+  /** The maker's printing range in °C, as the spool has it. */
+  nozzleTempMin?: number | null;
+  nozzleTempMax?: number | null;
   remaining?: Remaining;
   /** Where it is loaded, if anywhere. */
   slot?: string | null;
@@ -255,8 +359,14 @@ export function matchFilaments<S extends SpoolLike>(
 /** An attempt filament for a spool: its plain values (so the attempt reads well without it) and its id. */
 export function filamentFromSpool(spool: SpoolLike, keep: AttemptFilament = {}): AttemptFilament {
   const filament: AttemptFilament = { ...keep, spoolId: spool.id, type: spool.material };
+  // A multi-colour spool shows its first colour where an attempt keeps one.
+  const values = {
+    brand: spool.brand ? brandLabel(spool.brand) : null,
+    colorHex: spoolColors(spool)[0],
+    colorName: spool.colorName,
+  };
   for (const key of ["brand", "colorHex", "colorName"] as const) {
-    const value = spool[key];
+    const value = values[key];
     if (value) filament[key] = value;
     else delete filament[key];
   }
@@ -319,19 +429,52 @@ export function spoolFromFilament(filament: AttemptFilament): Omit<SpoolLike, "i
   };
 }
 
-/** "Jade white", "Bambu PLA Matte": a spool's name, in two lines. */
-export function spoolName(spool: Pick<SpoolLike, "colorName" | "material" | "brand" | "finish">): {
-  title: string;
-  detail: string;
-} {
-  const kind = [
-    spool.brand,
+/** The parts of what a spool is, as its label says it: brand, product line, material, finish. */
+function spoolKind(spool: Pick<SpoolLike, "material" | "brand" | "line" | "finish">): string {
+  return [
+    spool.brand ? brandLabel(spool.brand) : null,
+    spool.line,
     spool.material,
-    spool.finish && spool.finish !== "basic" ? finishLabel(spool.finish) : null,
+    // "Basic" only says something next to a brand ("Elegoo PLA Basic"); on its own it is the plain default.
+    spool.finish && (spool.finish !== "basic" || spool.brand) ? finishLabel(spool.finish) : null,
   ]
     .filter(Boolean)
     .join(" ");
-  return spool.colorName ? { title: spool.colorName, detail: kind } : { title: kind || spool.material, detail: "" };
+}
+
+/** A colour's plain name for each of a multi-colour spool's colours: "Black/Purple". */
+export function colorsName(colors: readonly string[]): string {
+  const names = colors.map((hex) => nearestColorName(hex)).filter((name): name is string => !!name);
+  return [...new Set(names)].join("/");
+}
+
+/** "Black/Purple dual colour", "Forest Green": the colour part of a spool's label. */
+function colourPart(spool: Pick<SpoolLike, "colorName" | "colorHex" | "colors">): string {
+  const colors = spoolColors(spool);
+  const word = COLOUR_KIND_WORDS[colourKind(spool)];
+  const name = spool.colorName || (colors.length > 1 ? colorsName(colors) : "");
+  return [name, word].filter(Boolean).join(" ");
+}
+
+/** "Jade white", "Bambu Lab PLA Matte": a spool's name, in two lines. A multi-colour one says so in the second. */
+export function spoolName(
+  spool: Pick<SpoolLike, "colorName" | "material" | "brand" | "line" | "finish" | "colorHex" | "colors">,
+): {
+  title: string;
+  detail: string;
+} {
+  const kind = spoolKind(spool);
+  const word = COLOUR_KIND_WORDS[colourKind(spool)];
+  const title = spool.colorName || (spoolColors(spool).length > 1 ? colorsName(spoolColors(spool)) : "");
+  const detail = [kind, word].filter(Boolean).join(" · ");
+  return title ? { title, detail } : { title: kind || spool.material, detail: word };
+}
+
+/** The whole label in one line, as it reads on the spool: "Anycubic PLA Silk · Black/Purple dual colour". */
+export function spoolLabel(
+  spool: Pick<SpoolLike, "colorName" | "material" | "brand" | "line" | "finish" | "colorHex" | "colors">,
+): string {
+  return [spoolKind(spool), colourPart(spool)].filter(Boolean).join(" · ");
 }
 
 /** One gentle check: a line beside a field, never a blocking dialog. */

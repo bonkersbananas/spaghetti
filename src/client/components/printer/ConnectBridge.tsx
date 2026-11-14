@@ -155,7 +155,7 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-3" aria-label="Spools it sees in the AMS">
                   {loaded.map(({ slot, spool }) => (
                     <li key={slot} className="flex items-center gap-2">
-                      <SpoolDisc color={spool.colorHex} size="sm" />
+                      <SpoolDisc color={spool.colorHex} colors={spool.colors} size="sm" />
                       <span className="text-small min-w-0">
                         <span className="text-ink font-semibold">{slot}</span> {spoolName(spool).title}
                       </span>

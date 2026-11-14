@@ -91,6 +91,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
     >
       <SpoolDisc
         color={spool?.colorHex ?? unknown?.colorHex}
+        colors={spool?.colors}
         empty={!spool && !unknown}
         size={shape === "bay" ? "lg" : "md"}
       />

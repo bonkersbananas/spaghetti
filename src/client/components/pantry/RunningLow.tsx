@@ -70,7 +70,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
                 params={{ spoolId: spool.id }}
                 className="focus-ring-inset hover:bg-ink/4 duration-fast flex min-h-16 items-center gap-3.5 px-4 py-2.5 transition-colors"
               >
-                <SpoolDisc color={spool.colorHex} size="md" />
+                <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" />
                 <span className="min-w-0 flex-1">
                   <span className="text-body text-ink block truncate font-semibold">{name.title}</span>
                   <span className="text-small text-ink-faint block truncate">{name.detail || spool.material}</span>

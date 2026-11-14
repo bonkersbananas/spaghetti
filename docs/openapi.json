@@ -11131,6 +11131,33 @@
                       }
                     ]
                   },
+                  "colors": {
+                    "anyOf": [
+                      {
+                        "minItems": 2,
+                        "maxItems": 3,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "finish": {
                     "anyOf": [
                       {
@@ -11512,6 +11539,33 @@
                       {
                         "type": "string",
                         "pattern": "^#[0-9a-f]{6}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "colors": {
+                    "anyOf": [
+                      {
+                        "minItems": 2,
+                        "maxItems": 3,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
                       },
                       {
                         "type": "null"
@@ -20434,6 +20488,28 @@
             ]
           },
           "colorHex": {
+            "description": "Null for a dual- or tri-colour spool: see colors.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "colors": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Two or three #rrggbb for a multi-colour spool, else null."
+          },
+          "line": {
+            "description": "The product line before the material: PolyTerra, Panchroma.",
             "type": [
               "string",
               "null"
@@ -20731,6 +20807,8 @@
           "brand",
           "colorName",
           "colorHex",
+          "colors",
+          "line",
           "finish",
           "remaining",
           "netGrams",

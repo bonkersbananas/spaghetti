@@ -113,17 +113,24 @@ export function processPreset(presets: PresetSet, machine: string, layerHeight: 
   return ranked[0]?.name;
 }
 
+/** What picks a filament's preset: its material, and the words that make it one of Bambu's own lines. */
+type PresetFilament = Pick<SlicingFilament, "material" | "brand" | "finish">;
+
+const isBambu = (brand: string | undefined) => !!brand && /^bambu/i.test(brand);
+const isSilk = (filament: PresetFilament) =>
+  /^silk/i.test(filament.finish ?? "") || /\bSILK\b/i.test(filament.material);
+
 /**
  * The kind of preset a filament slices with, without its nozzle: Bambu's own PLA Basic for Bambu's PLA (and a PLA
  * nobody named a brand for), Orca's generic preset for the rest (silk PLA has its own), and generic PLA for a
  * material it doesn't know.
  */
-function filamentKind(filament: Pick<SlicingFilament, "material" | "brand" | "finish">): string {
+function filamentKind(filament: PresetFilament): string {
   const key = materialKey(filament.material);
-  const silk = filament.finish === "silk" || /\bSILK\b/i.test(filament.material);
+  const silk = isSilk(filament);
   if (!key || key === "PLA") {
     if (silk) return "Generic PLA Silk";
-    const bambu = !filament.brand || /^bambu/i.test(filament.brand);
+    const bambu = !filament.brand || isBambu(filament.brand);
     return bambu ? "Bambu PLA Basic" : "Generic PLA";
   }
   if (key.startsWith("PLA")) return key.includes("CF") ? "Generic PLA-CF" : silk ? "Generic PLA Silk" : "Generic PLA";
@@ -142,13 +149,60 @@ function filamentKind(filament: Pick<SlicingFilament, "material" | "brand" | "fi
 }
 
 /**
- * The filament preset for a filament on a nozzle (filamentKind's, for that nozzle). On the 0.2 mm nozzle, a material
- * Bambu has no preset for slices with its nearest kin (`filamentStandIn` says which).
+ * Bambu's own preset for a Bambu PLA line the X2D has one for (Matte, Silk, Silk+, Pure), which is tuned for that
+ * filament; nothing for any other filament, which the generic preset serves (Orca has no X2D preset for Polymaker,
+ * Elegoo, Anycubic or SUNLU).
  */
-export function filamentPreset(filament: Pick<SlicingFilament, "material" | "brand" | "finish">, nozzle: number) {
+function bambuLine(filament: PresetFilament): string | undefined {
+  if (!isBambu(filament.brand)) return undefined;
+  const key = materialKey(filament.material);
+  if (key && key !== "PLA") return undefined;
+  switch ((filament.finish ?? "").toLowerCase()) {
+    case "matte":
+      return "Bambu PLA Matte";
+    case "silk+":
+      return "Bambu PLA Silk+";
+    case "silk":
+      return "Bambu PLA Silk";
+    case "pure":
+      return "Bambu PLA Pure";
+    default:
+      return undefined;
+  }
+}
+
+/** The names a preset has on a nozzle: its own for the size, then the one the 0.6 and 0.8 mm share. */
+const onNozzle = (name: string, nozzle: number) =>
+  nozzle === 0.6 || nozzle === 0.8
+    ? [`${name} @BBL X2D ${nozzle} nozzle`, `${name} @BBL X2D`]
+    : [`${name} @BBL X2D ${nozzle} nozzle`];
+
+/**
+ * The filament presets a filament may slice with on a nozzle, best first: Bambu's own line where it is one of
+ * theirs, then the generic kind (`filamentKind`'s, for that nozzle). Presets the engine's release doesn't have are
+ * skipped by `pickFilamentPreset`, so a release without the Bambu lines still slices with the generic one.
+ */
+export function filamentPresetChoices(filament: PresetFilament, nozzle: number): string[] {
   const kind = filamentKind(filament);
+  // On the 0.2 mm nozzle, a material Bambu has no preset for slices with its nearest kin (`filamentStandIn`).
   const preset = nozzle === 0.2 ? (SMALL_NOZZLE_STAND_INS[kind]?.preset ?? kind) : kind;
-  return `${preset} ${filamentSuffix(nozzle)}`;
+  const named = bambuLine(filament);
+  return [...(named ? onNozzle(named, nozzle) : []), `${preset} ${filamentSuffix(nozzle)}`];
+}
+
+/** The best filament preset for a filament on a nozzle, whether or not the engine's release has it. */
+export function filamentPreset(filament: PresetFilament, nozzle: number) {
+  return filamentPresetChoices(filament, nozzle)[0] as string;
+}
+
+/** The best of `filamentPresetChoices` that `presets` has, else the stand-in filament's (Bambu PLA Basic). */
+export function pickFilamentPreset(
+  presets: Pick<PresetSet, "filament">,
+  filament: PresetFilament,
+  nozzle: number,
+  fallback: string,
+): string {
+  return filamentPresetChoices(filament, nozzle).find((name) => presets.filament[name]) ?? fallback;
 }
 
 /**

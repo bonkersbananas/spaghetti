@@ -12,6 +12,8 @@ const spool = (fields: Partial<Spool>): Spool => ({
   brand: null,
   colorName: null,
   colorHex: null,
+  colors: null,
+  line: null,
   finish: null,
   remaining: "full",
   netGrams: null,

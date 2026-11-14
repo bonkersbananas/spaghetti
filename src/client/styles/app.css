@@ -256,7 +256,7 @@
 .spool-wound {
   background-image:
     radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.32), transparent 46%),
-    repeating-radial-gradient(circle, rgb(0 0 0 / 0.07) 0 1px, transparent 1px 3px);
+    repeating-radial-gradient(circle, rgb(0 0 0 / 0.07) 0 1px, transparent 1px 3px), var(--spool-fill, none);
 }
 
 /*
@@ -268,12 +268,12 @@
 [data-theme="dark"] .spool-wound[data-tone="dark"] {
   background-image:
     radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.18), transparent 46%),
-    repeating-radial-gradient(circle, rgb(255 255 255 / 0.08) 0 1px, transparent 1px 3px);
+    repeating-radial-gradient(circle, rgb(255 255 255 / 0.08) 0 1px, transparent 1px 3px), var(--spool-fill, none);
 }
 :root:not([data-theme="dark"]) .spool-wound[data-tone="light"] {
   background-image:
     radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.32), transparent 46%),
-    repeating-radial-gradient(circle, rgb(0 0 0 / 0.12) 0 1px, transparent 1px 3px);
+    repeating-radial-gradient(circle, rgb(0 0 0 / 0.12) 0 1px, transparent 1px 3px), var(--spool-fill, none);
 }
 /* A flat swatch's rim, stronger where its color would vanish into the surface (see colorTone). */
 .swatch {

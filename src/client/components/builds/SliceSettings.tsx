@@ -546,7 +546,7 @@ function FilamentChoice({
           value: "own",
           label: filament.colorName || filament.material,
           detail: filament.colorHex ? (filament.colorName ? filament.material : "From the file") : "Stand-in",
-          glyph: <SpoolDisc color={filament.colorHex} size="sm" />,
+          glyph: <SpoolDisc color={filament.colorHex} colors={filament.colors} size="sm" />,
         }
       : null;
   const caption = !filament ? null : picked ? (

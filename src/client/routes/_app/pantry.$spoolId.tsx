@@ -4,6 +4,7 @@ import type { LabelField } from "@shared/label-read";
 import { gramsText } from "@shared/ledger";
 import { recipesFor } from "@shared/recipes";
 import {
+  brandLabel,
   FINISHES,
   finishLabel,
   REMAINING,
@@ -44,8 +45,8 @@ import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import { SpoolColourField } from "@/components/ui/SpoolColourField";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
-import { SwatchPicker } from "@/components/ui/Swatch";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto } from "@/lib/pantry";
@@ -108,6 +109,8 @@ type Editable = Pick<
   | "brand"
   | "colorName"
   | "colorHex"
+  | "colors"
+  | "line"
   | "finish"
   | "remaining"
   | "note"
@@ -141,6 +144,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
       brand: spool.brand,
       colorName: spool.colorName,
       colorHex: spool.colorHex,
+      colors: spool.colors,
+      line: spool.line,
       finish: spool.finish,
       remaining: spool.remaining,
       note: spool.note,
@@ -161,6 +166,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
       ...changes,
       ...(changes.material !== undefined && { material: changes.material.trim() || spool.material }),
       ...(changes.brand !== undefined && { brand: changes.brand?.trim() || null }),
+      ...(changes.line !== undefined && { line: changes.line?.trim() || null }),
       ...(changes.colorName !== undefined && { colorName: changes.colorName?.trim() || null }),
       ...(changes.productCode !== undefined && { productCode: changes.productCode?.trim() || null }),
     }),
@@ -226,7 +232,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
       open={detailsOpen}
       onOpenChange={setDetailsOpen}
       title="Details"
-      summary={[value.material, value.finish ? finishLabel(value.finish) : null, value.brand]
+      summary={[
+        value.material,
+        value.finish ? finishLabel(value.finish) : null,
+        value.brand ? brandLabel(value.brand) : null,
+      ]
         .filter(Boolean)
         .join(" · ")}
       icon={SettingsIcon}
@@ -257,17 +267,28 @@ function SpoolPage({ spool }: { spool: Spool }) {
               <span className="text-small text-ink-soft font-semibold">Color</span>
               {fromLabel("colorName", "colorHex")}
             </span>
-            <SwatchPicker
-              value={value.colorHex ?? undefined}
-              onChange={(colorHex) => change({ colorHex })}
-              label="Color"
+            <SpoolColourField
+              value={{ colorHex: value.colorHex, colors: value.colors }}
+              onChange={(next) => change(next)}
             />
           </div>
+        </div>
+
+        <div className="flex items-end gap-3">
+          <TextField
+            size="sm"
+            label="Product line"
+            placeholder="PolyTerra, Panchroma…"
+            maxLength={40}
+            value={value.line ?? ""}
+            onChange={(event) => change({ line: event.target.value || null })}
+            className="flex-1"
+          />
           <TextField
             size="sm"
             label="Brand"
             mark={fromLabel("brand")}
-            placeholder={waiting ? "" : "Bambu, Polymaker…"}
+            placeholder={waiting ? "" : "Bambu Lab, Polymaker…"}
             maxLength={60}
             value={value.brand ?? ""}
             onChange={(event) => change({ brand: event.target.value || null })}
@@ -333,7 +354,7 @@ function SpoolPage({ spool }: { spool: Spool }) {
               />
             ) : (
               <div className="flex size-full items-center justify-center">
-                <SpoolDisc color={value.colorHex} size="hero" />
+                <SpoolDisc color={value.colorHex} colors={value.colors} size="hero" />
               </div>
             )}
           </div>

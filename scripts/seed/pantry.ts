@@ -18,8 +18,12 @@ interface SeedSpool {
   id: string;
   material: string;
   brand?: string;
+  /** The product line before the material: "PolyTerra". */
+  line?: string;
   colorName: string;
-  colorHex: string;
+  /** One colour; a dual- or tri-colour spool has `colors` instead. */
+  colorHex?: string;
+  colors?: string[];
   finish?: string;
   remaining: Remaining;
   slot?: string;
@@ -42,6 +46,19 @@ export const SEED_SPOOL_IDS = {
   silkGold: id(5),
   bambuGreen: id(6),
   tealPetg: id(10),
+  // The first twelve spools ordered (decision 0060); the silks are dual and tri-colour.
+  blackPurple: id(21),
+  blackBlue: id(22),
+  pinkGold: id(23),
+  seaGreen: id(24),
+  arcticTeal: id(25),
+  forestGreen: id(26),
+  magenta: id(27),
+  charcoal: id(28),
+  candyRed: id(29),
+  blackGoldPurple: id(30),
+  pureWhite: id(31),
+  apricot: id(32),
 };
 
 export const SEED_SPOOLS: SeedSpool[] = [
@@ -177,6 +194,128 @@ export const SEED_SPOOLS: SeedSpool[] = [
     addedAgo: 15 * DAY,
     note: "95A. Main nozzle, external spool, slow.",
   },
+
+  // The twelve ordered: each as its label says it (shared/products.ts has their ranges).
+  {
+    id: SEED_SPOOL_IDS.blackPurple,
+    material: "PLA",
+    brand: "Anycubic",
+    colorName: "Black/Purple",
+    colors: ["#1a1a1a", "#7b2fbe"],
+    finish: "silk",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.blackBlue,
+    material: "PLA",
+    brand: "Anycubic",
+    colorName: "Black/Blue",
+    colors: ["#1a1a1a", "#1e5bd8"],
+    finish: "silk",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.pinkGold,
+    material: "PLA",
+    brand: "Anycubic",
+    colorName: "Pink/Gold",
+    colors: ["#f29bc0", "#d4af37"],
+    finish: "silk",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.seaGreen,
+    material: "PLA",
+    brand: "Elegoo",
+    colorName: "Sea Green",
+    colorHex: "#2e8b6e",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.arcticTeal,
+    material: "PLA",
+    brand: "Polymaker",
+    line: "Panchroma",
+    colorName: "Arctic Teal",
+    colorHex: "#3fa6a0",
+    finish: "matte",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.forestGreen,
+    material: "PLA",
+    brand: "Polymaker",
+    line: "PolyTerra",
+    colorName: "Forest Green",
+    colorHex: "#2f6b3a",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.magenta,
+    material: "PLA",
+    brand: "Elegoo",
+    colorName: "Magenta",
+    colorHex: "#d4237a",
+    finish: "basic",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.charcoal,
+    material: "PLA",
+    brand: "Bambu Lab",
+    colorName: "Charcoal",
+    colorHex: "#3a3a3c",
+    finish: "matte",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.candyRed,
+    material: "PLA",
+    brand: "Bambu Lab",
+    colorName: "Candy Red",
+    colorHex: "#c8102e",
+    finish: "silk+",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.blackGoldPurple,
+    material: "PLA+",
+    brand: "SUNLU",
+    colorName: "Black/Gold/Purple",
+    colors: ["#1a1a1a", "#d4af37", "#7b2fbe"],
+    finish: "silk",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.pureWhite,
+    material: "PLA",
+    brand: "Bambu Lab",
+    colorName: "Pure White",
+    colorHex: "#f5f5f2",
+    finish: "pure",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
+  {
+    id: SEED_SPOOL_IDS.apricot,
+    material: "PLA",
+    brand: "Bambu Lab",
+    colorName: "Apricot",
+    colorHex: "#f4a460",
+    finish: "pure",
+    remaining: "full",
+    addedAgo: 3 * DAY,
+  },
 ];
 
 /** The seeded attempts' filaments, linked to these spools (same material and color name). */
@@ -217,7 +356,9 @@ export async function seedPantry(
         material: spool.material,
         brand: spool.brand ?? null,
         colorName: spool.colorName,
-        colorHex: spool.colorHex,
+        colorHex: spool.colorHex ?? null,
+        ...(spool.colors ? { colors: spool.colors } : {}),
+        line: spool.line ?? null,
         finish: spool.finish ?? null,
         remaining: spool.remaining,
         netGrams: spool.grams?.net ?? null,
@@ -231,7 +372,7 @@ export async function seedPantry(
       const filled = svg
         .replaceAll("FIL_LIGHT", spool.photo.light)
         .replaceAll("FIL_DARK", spool.photo.dark)
-        .replaceAll("FIL", spool.colorHex);
+        .replaceAll("FIL", spool.colorHex ?? spool.colors?.[0] ?? "#c9a46b");
       const large = await render(browser, filled, 1600);
       const thumb = await render(browser, filled, 600);
       const uploaded = await request.put(`/api/spools/${spool.id}/photo/${crypto.randomUUID()}`, {

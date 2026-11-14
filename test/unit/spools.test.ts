@@ -98,7 +98,7 @@ describe("matching a file's filaments to spools", () => {
       profile: "Bambu PLA Basic",
       spoolId: "green",
       type: "PLA",
-      brand: "Bambu",
+      brand: "Bambu Lab",
       colorHex: "#00ae42",
       colorName: "Bambu green",
       amsSlot: "A2",
@@ -129,7 +129,7 @@ describe("matching a file's filaments to spools", () => {
   it("names a spool in two lines", () => {
     expect(spoolName({ colorName: "Jade white", brand: "Bambu", material: "PLA", finish: "matte" })).toEqual({
       title: "Jade white",
-      detail: "Bambu PLA Matte",
+      detail: "Bambu Lab PLA Matte",
     });
     expect(spoolName({ material: "PETG", finish: "basic" })).toEqual({ title: "PETG", detail: "" });
   });

@@ -67,7 +67,7 @@ export function SlotSheet({ slot, open, onOpenChange, spools, current, onPick, o
                     here ? "bg-semolina-soft/60" : "hover:bg-ink/4",
                   )}
                 >
-                  <SpoolDisc color={spool.colorHex} size="md" />
+                  <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="text-body text-ink truncate font-semibold">{name.title}</span>
                     {name.detail && <span className="text-small text-ink-faint truncate">{name.detail}</span>}
