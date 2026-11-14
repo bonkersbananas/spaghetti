@@ -29,18 +29,18 @@ test("a model with colours of its own prints each in a filament matched to it, a
   const fileOf = async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.files?.[0];
   await expect.poll(async () => (await fileOf())?.slice?.status, { timeout: SLICED }).toBe("sliced");
 
-  // Eight colours in the file, two pairs near each other: six to print, each with its own filament here (no spools).
+  // Nine colours in the file, two pairs near each other: seven to print, each with its own filament here (no spools).
   const slice = (await fileOf()).slice;
-  expect(slice.colours).toHaveLength(6);
+  expect(slice.colours).toHaveLength(7);
   expect(slice.colours.every((colour: { inPantry: boolean }) => !colour.inPantry)).toBe(true);
-  expect(slice.settings.filaments).toHaveLength(6);
+  expect(slice.settings.filaments).toHaveLength(7);
 
   // Every filament prints something: each object went to the slicer in the filament its colour was matched to.
   const file = await fileOf();
   const zip = unzipSync(new Uint8Array(await (await page.request.get(`/api/files/${file.id}/sliced`)).body()));
   const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
   const used = [...info.matchAll(/<filament id="(\d+)"[^>]*\bused_g="([\d.]+)"/g)].map((match) => Number(match[2]));
-  expect(used).toHaveLength(6);
+  expect(used).toHaveLength(7);
   for (const grams of used) expect(grams).toBeGreaterThan(0);
 
   await files.getByRole("button", { name: "Slice with…" }).click();

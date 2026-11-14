@@ -588,6 +588,13 @@ async function openSliceSettings(page: Page, model = { idea: FUSILLI_IDEA, file:
   return settings;
 }
 
+/** A colour's row in the settings, scrolled to the middle and opened. */
+async function openColour(settings: Locator, name: RegExp) {
+  const row = settings.getByRole("button", { name });
+  await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
+  await row.click({ force: true });
+}
+
 /** The settings' sheet or popover has finished opening (the shots' fixed clock starts its fade late: finish it). */
 async function settleSliceSettings(page: Page) {
   await page.waitForFunction(() => {
@@ -1856,18 +1863,53 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
-    // A model with colours of its own (issue #313): the Filament section lists each colour and the spool that prints
-    // it; the first is open, with the Pantry's spools to pick from.
+    // A model with colours of its own: the Filament section lists each colour and the spool that prints it, every row
+    // closed. A phone's sheet at its top (Colours under Quality, Strength and Supports); the desktop panel must fit.
     name: "slice-settings-colours",
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
-      const colours = settings.getByText("Colours", { exact: true });
-      await colours.waitFor();
-      const row = settings.getByRole("button", { name: /Ketchup Red/ });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The same with the first colour opened: the Pantry's spools in place, the picked one in view.
+    name: "slice-settings-colours-open",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(settings, /Ketchup Red/);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A colour no spool is near (the grape): a dashed ring and "Not in the Pantry yet", opened to its stand-in.
+    name: "slice-settings-colours-stand-in",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(settings, /Grape/);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Keyboard focus on a colour's row.
+    name: "slice-settings-colours-focus",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      const row = settings.getByRole("button", { name: /Mustard/ });
       await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
-      await row.click({ force: true });
-      await colours.evaluate((heading) => heading.scrollIntoView({ block: "start", behavior: "instant" }));
+      // A key first, so the focus ring shows as it does for the keyboard.
+      await page.keyboard.press("Shift");
+      await row.focus();
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,

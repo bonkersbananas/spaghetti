@@ -274,6 +274,22 @@ const DEMO_COLOURS: SliceColour[] = [
     inPantry: true,
   },
 ];
+const DEMO_MORE: SliceColour[] = [
+  {
+    hex: "#8f3b2a", // design-lint-ignore: a colour is data
+    name: "Sausage",
+    share: 12,
+    filament: { material: "PLA", colorHex: "#c0392b", colorName: "Red", spoolId: "s1" }, // design-lint-ignore: a colour is data
+    inPantry: true,
+  },
+  {
+    hex: "#6e32a0", // design-lint-ignore: a colour is data
+    name: "Grape",
+    share: 6,
+    filament: { material: "PLA", colorHex: "#6e32a0", colorName: "Grape" }, // design-lint-ignore: a colour is data
+    inPantry: false,
+  },
+];
 const DEMO_SPOOLS: SpoolLike[] = [
   { id: "s1", material: "PLA", colorHex: "#c0392b", colorName: "Red", slot: "A1" }, // design-lint-ignore: a colour is data
   { id: "s2", material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", slot: "A2" }, // design-lint-ignore: a colour is data
@@ -284,7 +300,7 @@ const DEMO_SPOOLS: SpoolLike[] = [
 /** The colour rows with a pick that sticks, as the sheet has them. */
 function ColourMatchesDemo() {
   const [choices, setChoices] = useState<ColourChoice[]>([]);
-  const colours = DEMO_COLOURS.map((colour) => {
+  const colours = [...DEMO_COLOURS, ...DEMO_MORE].map((colour) => {
     const choice = choices.find((c) => c.from === colour.hex);
     return choice
       ? { ...colour, filament: choice.filament, inPantry: !!choice.filament.spoolId, chosen: true }

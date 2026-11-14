@@ -60,7 +60,7 @@ import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { ColourMatches } from "./ColourMatches";
+import { ColourMatches, spoolTile } from "./ColourMatches";
 
 /**
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
@@ -520,16 +520,6 @@ function NozzleNote({ nozzle, main, workspace }: { nozzle: number; main: number;
       </div>
     </div>
   );
-}
-
-/** A spool's tile: its colour on the disc, its colour's name, and what it is and where. */
-function spoolTile(spool: SpoolLike): ChoiceTile<string> {
-  return {
-    value: spool.id,
-    label: spool.colorName || spool.material,
-    detail: [spool.colorName ? spool.material : "", spool.slot ?? ""].filter(Boolean).join(" · ") || "On the shelf",
-    glyph: <SpoolDisc color={spool.colorHex} size="sm" />,
-  };
 }
 
 /** The filament (each one, for a model of several): a spool from the Pantry, loaded ones first. */

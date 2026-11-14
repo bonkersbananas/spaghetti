@@ -14,8 +14,8 @@ const spool = (id: string, colorHex: string, extra = {}) => ({
 describe("simplifyColours", () => {
   it("merges colours that look the same, keeping the heavier one's", () => {
     const groups = simplifyColours(uses);
-    // Ketchup and Tomato Red, Cream and Ivory.
-    expect(groups).toHaveLength(6);
+    // Ketchup and Tomato Red, Cream and Ivory merge: seven to print.
+    expect(groups).toHaveLength(7);
     const red = groups.find((g) => g.name === "Ketchup Red");
     expect(red?.members.map((m) => m.name)).toEqual(["Ketchup Red", "Tomato Red"]);
     expect(red?.area).toBe(100 + 99);
