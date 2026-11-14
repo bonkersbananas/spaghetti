@@ -12,7 +12,8 @@ const setupAt = rest.indexOf("--setup");
 const setup = setupAt >= 0 ? fs.readFileSync(rest[setupAt + 1]) : null;
 const filamentsAt = rest.indexOf("--filaments");
 const filaments = filamentsAt >= 0 ? rest[filamentsAt + 1].split(",").map(Number) : [];
-const options = new Set([setupAt, setupAt + 1, filamentsAt, filamentsAt + 1].filter((i) => i >= 0));
+// An option's index and its value's, for the options given.
+const options = new Set([setupAt, filamentsAt].filter((i) => i >= 0).flatMap((i) => [i, i + 1]));
 const models = rest.filter((a, i) => a !== "--keep-placement" && !options.has(i));
 
 const t0 = performance.now();
