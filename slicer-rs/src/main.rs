@@ -22,6 +22,8 @@ Options:
                         filaments prints as the X2D does with the AMS, changing filament over a prime tower
       --filament-map <n,…> Which nozzle prints each filament (1 the left, 2 the right), as Orca's manual
                         grouping; by default Orca's own grouping chooses
+      --parts           Slice the models as the parts of one object (each in its --filaments filament), as Orca
+                        prints an object made of parts: where two overlap, the later one's
       --keep-placement  Keep the objects where the files put them instead of arranging them on the plate
       --no-thumbnail    Leave out the plate picture
       --timings         Print how long each step took
@@ -35,6 +37,8 @@ struct Args {
     gcode: Option<String>,
     stats: Option<String>,
     keep_placement: bool,
+    /// Whether the models are the parts of one object.
+    parts: bool,
     thumbnail: bool,
     timings: bool,
     /// Each input's filament (1-based), when given.
@@ -52,6 +56,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
         gcode: None,
         stats: None,
         keep_placement: false,
+        parts: false,
         thumbnail: true,
         timings: false,
         filaments: vec![],
@@ -66,6 +71,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
             "--keep-placement" => out.keep_placement = true,
+            "--parts" => out.parts = true,
             "--nozzle" => {
                 let mm = it.next().ok_or_else(|| "--nozzle needs a width in mm".to_string())?;
                 let width = mm.parse::<f64>().ok().filter(|&w| profile::x2d_nozzle(w).is_some());
@@ -158,7 +164,13 @@ fn main() -> ExitCode {
             }
         };
         let filament = args.filaments.get(k).map(|f| f - 1);
-        if let Err(e) = plate.add_with_filament(&Input { name: path, bytes: &bytes }, filament) {
+        let input = Input { name: path, bytes: &bytes };
+        let added = if args.parts {
+            plate.add_part(&input, filament.unwrap_or(0), k == 0)
+        } else {
+            plate.add_with_filament(&input, filament)
+        };
+        if let Err(e) = added {
             eprintln!("can't slice {path}: {e}");
             return ExitCode::FAILURE;
         }

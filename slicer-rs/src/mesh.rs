@@ -123,6 +123,20 @@ impl Mesh {
         Bounds { min, max }
     }
 
+    /// One mesh of several (an object's parts), their triangles in order, named as the first.
+    pub fn merged<'a>(parts: impl Iterator<Item = &'a Mesh>) -> Mesh {
+        let mut out = Mesh { name: String::new(), vertices: Vec::new(), triangles: Vec::new() };
+        for (k, m) in parts.enumerate() {
+            if k == 0 {
+                out.name = m.name.clone();
+            }
+            let base = out.vertices.len() as u32;
+            out.vertices.extend_from_slice(&m.vertices);
+            out.triangles.extend(m.triangles.iter().map(|t| t.map(|v| v + base)));
+        }
+        out
+    }
+
     pub fn translate(&mut self, d: [f64; 3]) {
         for v in &mut self.vertices {
             for k in 0..3 {
@@ -218,10 +232,26 @@ fn finish(name: &str, soup: &[f32]) -> Result<Mesh, Error> {
 /// How far apart objects are put, in mm (the app's ARRANGE_GAP).
 pub const ARRANGE_GAP: f64 = 6.0;
 
-/// Lays the objects out on the plate like the app: each on the bed, in rows from the back, centred. Errors when one
+/// Each object's bounding box, from the meshes of its parts (`groups[k]`: which object mesh `k` is a part of,
+/// numbered from 0).
+fn group_bounds(meshes: &[Mesh], groups: &[usize]) -> Vec<Bounds> {
+    let n = groups.iter().map(|&g| g + 1).max().unwrap_or(0);
+    let mut boxes = vec![Bounds { min: [f64::INFINITY; 3], max: [f64::NEG_INFINITY; 3] }; n];
+    for (m, &g) in meshes.iter().zip(groups) {
+        let b = m.bounds();
+        for k in 0..3 {
+            boxes[g].min[k] = boxes[g].min[k].min(b.min[k]);
+            boxes[g].max[k] = boxes[g].max[k].max(b.max[k]);
+        }
+    }
+    boxes
+}
+
+/// Lays the objects out on the plate like the app: each on the bed, in rows from the back, centred. An object made
+/// of several meshes (`groups[k]`: which object mesh `k` is a part of, numbered from 0) moves as one. Errors when one
 /// is too big or too tall, or they don't all fit.
-pub fn arrange(meshes: &mut [Mesh], bed: [f64; 2], height: f64) -> Result<(), Error> {
-    let boxes: Vec<Bounds> = meshes.iter().map(Mesh::bounds).collect();
+pub fn arrange(meshes: &mut [Mesh], groups: &[usize], bed: [f64; 2], height: f64) -> Result<(), Error> {
+    let boxes = group_bounds(meshes, groups);
     for b in &boxes {
         if b.max[0] - b.min[0] > bed[0] || b.max[1] - b.min[1] > bed[1] {
             return Err(Error::TooBig);
@@ -230,7 +260,7 @@ pub fn arrange(meshes: &mut [Mesh], bed: [f64; 2], height: f64) -> Result<(), Er
             return Err(Error::TooTall);
         }
     }
-    let mut order: Vec<usize> = (0..meshes.len()).collect();
+    let mut order: Vec<usize> = (0..boxes.len()).collect();
     // Deepest first, so each row is as shallow as it can be (a stable sort, as the app's).
     order.sort_by(|&a, &b| {
         let da = boxes[a].max[1] - boxes[a].min[1];
@@ -269,7 +299,10 @@ pub fn arrange(meshes: &mut [Mesh], bed: [f64; 2], height: f64) -> Result<(), Er
             let b = boxes[i];
             let w = b.max[0] - b.min[0];
             let d = b.max[1] - b.min[1];
-            meshes[i].translate([x - b.min[0], top - (r.depth + d) / 2.0 - b.min[1], -b.min[2]]);
+            let to = [x - b.min[0], top - (r.depth + d) / 2.0 - b.min[1], -b.min[2]];
+            for (m, _) in meshes.iter_mut().zip(groups).filter(|&(_, &g)| g == i) {
+                m.translate(to);
+            }
             x += w + ARRANGE_GAP;
         }
         top -= r.depth + ARRANGE_GAP;
@@ -278,11 +311,13 @@ pub fn arrange(meshes: &mut [Mesh], bed: [f64; 2], height: f64) -> Result<(), Er
 }
 
 /// Puts objects that already sit on the plate down on the bed (a project laid out by its slicer, or files placed
-/// for a benchmark): only the lowest point moves to z = 0, nothing else. One that `settle_heights` has put on the
-/// bed is on it to a float's step, and stays as Orca has it.
-pub fn drop_to_bed(meshes: &mut [Mesh]) {
-    for m in meshes {
-        let low = m.bounds().min[2];
+/// for a benchmark): only the lowest point moves to z = 0, nothing else, and an object's parts (`groups`, as for
+/// `arrange`) move together. One that `settle_heights` has put on the bed is on it to a float's step, and stays as
+/// Orca has it.
+pub fn drop_to_bed(meshes: &mut [Mesh], groups: &[usize]) {
+    let boxes = group_bounds(meshes, groups);
+    for (m, &g) in meshes.iter_mut().zip(groups) {
+        let low = boxes[g].min[2];
         if low.is_finite() && low.abs() > ON_BED {
             m.translate([0.0, 0.0, -low]);
         }
