@@ -16,6 +16,11 @@ export interface RenderOptions {
   azimuth?: number;
   /** Degrees above the plate. */
   elevation?: number;
+  /**
+   * More geometry to frame as if it were drawn too (not drawn): pictures of several plates framed by all of them
+   * share one scale and one ground line, so a tall bin and a short one read as such.
+   */
+  fit?: Float32Array[];
 }
 
 /** The view Orca's plate pictures use, more or less: from the front left, looking down at 35°. */
@@ -47,7 +52,7 @@ export function renderPlate(objects: Float32Array[], options: RenderOptions): Ui
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
-  for (const positions of objects) {
+  for (const positions of options.fit ? [...objects, ...options.fit] : objects) {
     for (let i = 0; i < positions.length; i += 3) {
       const x = positions[i] as number;
       const y = positions[i + 1] as number;

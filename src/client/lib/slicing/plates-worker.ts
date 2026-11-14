@@ -61,14 +61,17 @@ async function run(request: PlatesRequest) {
     };
   });
   self.postMessage({ type: "plates", plates, final: false } satisfies PlatesMessage);
-  for (const plate of plates) {
+  // Every plate is framed by all of them: one scale and one ground line, so heights read as they are.
+  const read = first.plates.map((plate) => {
+    const model = readModel3mf(bytes, { plate: plate.index });
+    return typeof model === "string" ? [] : model.objects.map((object) => object.positions);
+  });
+  const fit = read.flat();
+  for (const [at, plate] of plates.entries()) {
     try {
-      const model = readModel3mf(bytes, { plate: plate.index });
-      if (typeof model === "string") continue;
-      const pixels = renderPlate(
-        model.objects.map((object) => object.positions),
-        { size: request.size, colour: request.colour },
-      );
+      const objects = read[at] ?? [];
+      if (!objects.length) continue;
+      const pixels = renderPlate(objects, { size: request.size, colour: request.colour, fit });
       plate.png = await toPng(pixels, request.size);
     } catch {
       // Its placeholder stays.

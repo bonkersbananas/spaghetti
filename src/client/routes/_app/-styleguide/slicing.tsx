@@ -21,7 +21,8 @@ import { ModelCard, type ModelState, SliceResult } from "@/components/builds/Mod
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
-import { type PlateOption, PlatePicker } from "@/components/ui/PlatePicker";
+import { MetaList } from "@/components/ui/MetaList";
+import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { LayersGlyph, NozzleGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import type { AttemptFileView } from "@/lib/items";
 import type { LyingState } from "@/lib/slicing/orientations";
@@ -30,6 +31,7 @@ import { Label, Panel, Section } from "./shared";
 const ORANGE = "#f2754e"; // design-lint-ignore: a filament color is data
 const BLACK = "#1d1d1f"; // design-lint-ignore: a filament color is data
 const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
+const GREY = "#b4b0a8"; // design-lint-ignore: a filament color is data
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
 
 type Vec = [number, number, number];
@@ -108,37 +110,36 @@ function useBracketLying(colour: string): LyingState {
   return state;
 }
 
-/** A set of stackable bins in three heights, one a plate: the plate picker's pictures, drawn by the app's own code. */
-function usePlateOptions(colour: string): PlateOption[] {
+/** A set of stackable bins in three heights, one a plate: the plate picker's pictures, drawn by the app's own code at one scale. */
+function usePlateOptions(colour: string, count = 3): PlateOption[] {
   const [plates, setPlates] = useState<PlateOption[]>([]);
   useEffect(() => {
     const size = 256;
-    const draw = (mesh: number[]) => {
+    const heights = [120, 96, 57.6, 80, 40, 108, 70].slice(0, count);
+    const meshes = heights.map((height) => Float32Array.from(box([-35, -35, 0], [70, 70, height])));
+    const draw = (mesh: Float32Array) => {
       const canvas = document.createElement("canvas");
       canvas.width = size;
       canvas.height = size;
       canvas
         .getContext("2d")
         ?.putImageData(
-          new ImageData(new Uint8ClampedArray(renderPlate([Float32Array.from(mesh)], { size, colour })), size, size),
+          new ImageData(new Uint8ClampedArray(renderPlate([mesh], { size, colour, fit: meshes })), size, size),
           0,
           0,
         );
       return canvas.toDataURL();
     };
+    const sliced = ["3 h 5 min · 94 g", "2 h 40 min · 78 g", "1 h 35 min · 47 g"];
     setPlates(
-      [
-        { height: 120, detail: "3 h 5 · 94 g" },
-        { height: 96, detail: "2 h 40 · 78 g" },
-        { height: 57.6, detail: "1 h 35 · 47 g" },
-      ].map((plate, n) => ({
+      heights.map((height, n) => ({
         index: n + 1,
-        height: plate.height,
-        detail: plate.detail,
-        src: draw(box([-35, -35, 0], [70, 70, plate.height])),
+        height,
+        ...(sliced[n] && n < 3 ? { detail: sliced[n] } : {}),
+        src: draw(meshes[n] as Float32Array),
       })),
     );
-  }, [colour]);
+  }, [colour, count]);
   return plates;
 }
 
@@ -351,8 +352,10 @@ export function SlicingSection() {
   const [settings, setSettings] = useState(SETTINGS);
   const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
   const lying = useBracketLying(ORANGE);
-  const plates = usePlateOptions(ORANGE);
+  const plates = usePlateOptions(GREY);
+  const many = usePlateOptions(GREY, 7);
   const [plate, setPlate] = useState(2);
+  const [manyPlate, setManyPlate] = useState(1);
   return (
     <Section
       id="slicing"
@@ -362,12 +365,44 @@ export function SlicingSection() {
       <div className="grid gap-10 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
           <Label>
-            Plate picker: a project's plates as pictures of what sits on each, with height and (sliced) time and grams;
-            on a phone one line that opens a sheet of large tiles, on desktop a row stepped with [ and ]
+            Plate picker, outside a sheet: a project's plates as pictures of what sits on each, drawn at one scale, with
+            height and (sliced) time and grams; on a phone one line that opens a sheet of large tiles
           </Label>
           <div id="plate-picker">
             <Panel>
               <PlatePicker plates={plates} value={plate} onChange={setPlate} />
+            </Panel>
+          </div>
+          <Label>
+            Plate picker in a sheet's header: only the pictures, small, the one chosen ringed, scrolling sideways when
+            there are more than fit (no sheet over a sheet)
+          </Label>
+          <div id="plate-picker-header">
+            <Panel>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-title text-ink font-semibold">How to slice it</p>
+                  <MetaList className="text-small text-ink-faint mt-0.5">
+                    {"stackable-bins.3mf"}
+                    {plateParts(many, manyPlate).map((part) => (
+                      <span key={part} className="whitespace-nowrap">
+                        {part}
+                      </span>
+                    ))}
+                  </MetaList>
+                </div>
+                <PlatePicker inSheet plates={many} value={manyPlate} onChange={setManyPlate} className="max-w-[45%]" />
+              </div>
+            </Panel>
+          </div>
+          <Label>While the pictures are drawn: the stand-in keeps each tile's shape</Label>
+          <div id="plate-picker-loading">
+            <Panel>
+              <PlatePicker
+                plates={plates.map((plate) => ({ ...plate, src: null, detail: undefined }))}
+                value={plate}
+                onChange={setPlate}
+              />
             </Panel>
           </div>
           <Label>Choice tiles: a picture, a name, a figure, and what the picked one does</Label>

@@ -18757,6 +18757,33 @@
                       "additionalProperties": false
                     }
                   },
+                  "plate": {
+                    "description": "A 3MF project with several plates: the plate this slice is of, how many it has, and its height in mm.",
+                    "type": "object",
+                    "properties": {
+                      "index": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 99
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 99
+                      },
+                      "height": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10000
+                      }
+                    },
+                    "required": [
+                      "index",
+                      "count",
+                      "height"
+                    ],
+                    "additionalProperties": false
+                  },
                   "ms": {
                     "description": "How long the slicer took on the device that sliced it, in ms.",
                     "type": "integer",
@@ -19102,6 +19129,33 @@
                           ],
                           "additionalProperties": false
                         }
+                      },
+                      "plate": {
+                        "description": "A 3MF project with several plates: the plate this slice is of, how many it has, and its height in mm.",
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 99
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 99
+                          },
+                          "height": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 10000
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "count",
+                          "height"
+                        ],
+                        "additionalProperties": false
                       },
                       "ms": {
                         "description": "How long the slicer took on the device that sliced it, in ms.",
@@ -20354,6 +20408,12 @@
               ],
               "additionalProperties": false
             }
+          },
+          "modelPlate": {
+            "description": "Which plate of a 3MF project with several it slices (the project's own number for it); absent: the first.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
           },
           "scale": {
             "type": "integer",

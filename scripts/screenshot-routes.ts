@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { hotdogModel, paintedProject, partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
+import { hotdogModel, paintedProject, partsProject, platesProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -460,6 +460,13 @@ const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
 const FARFALLE_IDEA = {
   title: "Farfalle coaster",
   note: "A white coaster with a tomato-red bow tie painted on its top in Bambu Studio.",
+};
+/** A project of three plates, a bin of another height on each (the MakerWorld storage-bin set). */
+const BINS = { name: "stackable-bins.3mf", bytes: platesProject() };
+const MANY_BINS = { name: "bin-set.3mf", bytes: platesProject(7) };
+const BINS_IDEA = {
+  title: "Stackable bins",
+  note: "Storage bins in three heights, a plate each.",
 };
 const RAFT_IDEA = {
   title: "Ravioli stamp",
@@ -1942,6 +1949,51 @@ export const shots: Shot[] = [
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
+  },
+  {
+    // A project with three plates, its settings open: the plates' pictures in the header, beside the title.
+    name: "slice-settings-plates",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: BINS_IDEA, file: BINS });
+      await settings
+        .getByRole("radiogroup")
+        .or(settings.getByRole("group", { name: "Plates" }))
+        .first()
+        .waitFor();
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('[role="dialog"] fieldset img')).every(
+          (img) => (img as HTMLImageElement).complete,
+        ),
+      );
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A set of seven plates: more than fit beside the title, so the row scrolls sideways.
+    name: "slice-settings-plates-many",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: { ...BINS_IDEA, title: "Bin set" }, file: MANY_BINS });
+      await settings.getByRole("group", { name: "Plates" }).waitFor();
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The third plate chosen: sliced again, the card's summary saying "Plate 3".
+    name: "idea-model-plate-chosen",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: BINS_IDEA, file: BINS });
+      await settings.getByRole("radio", { name: /^Plate 3/ }).click({ force: true });
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
   },
   {
     // Lay it down on a model with no flat side (glasses on narrow rims): the side it stands on at a few spots, picked,
@@ -3855,6 +3907,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "styleguide-plate-picker", path: "/styleguide", selector: "#plate-picker" },
+  { name: "styleguide-plate-picker-header", path: "/styleguide", selector: "#plate-picker-header" },
+  { name: "styleguide-plate-picker-loading", path: "/styleguide", selector: "#plate-picker-loading" },
   {
     name: "styleguide-plate-picker-sheet",
     path: "/styleguide",
