@@ -1970,12 +1970,14 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: BINS_IDEA, file: BINS });
-      const phone = settings.getByRole("button", { name: /^Plate 1 of 3/ });
-      if (await phone.count()) {
-        await phone.click();
+      // A phone's picker is one line that opens a sheet; a desktop's is the row itself.
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await settings.getByRole("button", { name: /^Plate 1 of 3/ }).click();
         await page.getByRole("dialog", { name: "Choose a plate" }).waitFor();
       }
-      await page.getByRole("radio", { name: /Plate 3/ }).click({ force: true });
+      const third = page.getByRole("radio", { name: /Plate 3/ });
+      await third.evaluate((radio) => radio.scrollIntoView({ block: "center", behavior: "instant" }));
+      await third.click({ force: true });
       await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 90_000 });
       await page.keyboard.press("Escape");
       await page.waitForTimeout(300);

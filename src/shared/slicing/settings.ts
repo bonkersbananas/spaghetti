@@ -553,7 +553,6 @@ export function slicingLine(settings: SlicingSettings): string[] {
         ? ""
         : strength.label
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
-    settings.modelPlate ? `Plate ${settings.modelPlate}` : "",
     orientationWords(settings),
     settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);
@@ -570,6 +569,8 @@ export function slicingSummary(settings: SlicingSettings): string[] {
   const strength = strengthOf(settings);
   const supports = supportWords(settings);
   return [
+    // Which plate of a project, first: it is what the rest is about.
+    settings.modelPlate ? `Plate ${settings.modelPlate}` : "",
     qualityOf(settings.layerHeight, settings.nozzle)?.label ?? `${Number(settings.layerHeight.toFixed(2))} mm layers`,
     strength
       ? strengthWords(strength)
