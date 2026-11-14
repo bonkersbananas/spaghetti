@@ -6,9 +6,9 @@ export type HotkeyHandlers = Partial<Record<ShortcutId, (() => void) | undefined
 
 export function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  // A radio, tick box or button inside an input element takes no text: keys still work after it is clicked.
-  if (target instanceof HTMLInputElement && ["radio", "checkbox", "button", "range"].includes(target.type))
-    return false;
+  // An input that opts in (`data-hotkeys="through"`, the plate picker's radios) takes no text: the page's keys still
+  // work after it is clicked. Any other input, radios and sliders included, keeps its keys (arrows, Backspace).
+  if (target instanceof HTMLInputElement && target.dataset.hotkeys === "through") return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 

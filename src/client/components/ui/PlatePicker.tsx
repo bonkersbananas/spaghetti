@@ -78,6 +78,7 @@ function PlateTile({
     >
       <input
         type="radio"
+        data-hotkeys="through"
         name={name}
         checked={selected}
         disabled={disabled}
