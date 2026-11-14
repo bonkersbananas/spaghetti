@@ -708,6 +708,8 @@ describe("open in Bambu Studio: signed links (decision 0058)", () => {
       `${two.id}.${part}.${expires}.${signature}`,
       // The original instead of the sliced file.
       `${fileId}.file.${expires}.${signature}`,
+      `${fileId}.${part}.${expires}.${signature.startsWith("A") ? "B" : "A"}${signature.slice(1)}`,
+      // The last character carries only 4 bits: a non-canonical signature is refused too.
       `${fileId}.${part}.${expires}.${signature.slice(0, -1)}${signature.endsWith("A") ? "B" : "A"}`,
       `${fileId}.${part}.${expires}`,
       "garbage",
