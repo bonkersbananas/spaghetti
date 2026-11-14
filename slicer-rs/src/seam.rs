@@ -68,6 +68,10 @@ struct Candidate {
     visibility: f32,
     /// mm the wall hangs over the layer below, beyond what a 45° slope holds.
     overhang: f32,
+    /// Where an object prints as more than one region on the layer: how far inside its whole slice the point is
+    /// (negative), plus 0.65 of the wall's width (Orca's `embedded_distance`). A point well inside lies where another
+    /// region meets this one, hidden. 0 otherwise.
+    embedded: f32,
     /// Radians the wall turns there, counter-clockwise positive (concave corners negative).
     angle: f32,
 }
@@ -230,6 +234,9 @@ impl Comparator {
         if a.overhang > 0.0 || b.overhang > 0.0 {
             return a.overhang < b.overhang;
         }
+        if let Some(first) = hidden_first(a, b) {
+            return first;
+        }
         if self.rear && a.position[1] != b.position[1] {
             return a.position[1] > b.position[1];
         }
@@ -241,12 +248,27 @@ impl Comparator {
         if (a.overhang > 0.0 || b.overhang > 0.0) && (a.overhang - b.overhang).abs() > 0.1 * width {
             return a.overhang < b.overhang;
         }
+        if let Some(first) = hidden_first(a, b) {
+            return first;
+        }
         if self.rear {
             return a.position[1] + SCORE_TOLERANCE * 5.0 > b.position[1];
         }
         let (pa, pb) = (self.penalty(a), self.penalty(b));
         pa <= pb || pa - pb < SCORE_TOLERANCE
     }
+}
+
+/// Whether `a` comes before `b` for being hidden in a join between regions (more than half a millimetre inside the
+/// object's slice) where only one of them is; None when that doesn't tell them apart.
+fn hidden_first(a: &Candidate, b: &Candidate) -> Option<bool> {
+    if a.embedded < -0.5 && b.embedded > -0.5 {
+        return Some(true);
+    }
+    if b.embedded < -0.5 && a.embedded > -0.5 {
+        return Some(false);
+    }
+    None
 }
 
 /// Orca's `calculate_polygon_angles_at_vertices`: at each vertex, the angle between the arms reaching at least
@@ -288,7 +310,7 @@ fn angles(points: &[Pt], lengths: &[f32], min_arm: f32) -> Vec<f32> {
 /// an extrusion loop's points are), turned counter-clockwise.
 fn gather(regions: &LayerRegions, object: u32, z: f32, width: f32, nozzle: f32, s: &Settings) -> LayerSeams {
     let mut out = LayerSeams::default();
-    for island in regions.islands.iter().filter(|i| i.object == object) {
+    for island in regions.islands.iter().filter(|i| i.group == object) {
         let Some(outer) = island.walls.first() else { continue };
         for contour in outer {
             if contour.len() < 2 {
@@ -322,6 +344,7 @@ fn gather(regions: &LayerRegions, object: u32, z: f32, width: f32, nozzle: f32, 
                     perimeter: index,
                     visibility: 0.0,
                     overhang: 0.0,
+                    embedded: 0.0,
                     angle,
                 });
             }
@@ -424,18 +447,19 @@ fn segment_distance2(s: &[f64; 4], x: f64, y: f64) -> f64 {
     px * px + py * py
 }
 
-/// Places the seams of every object on every layer, into each layer's `seams` (indexed by object). `meshes` are the
-/// objects as sliced, `slice_z` and `heights` each layer's slicing plane and height.
-pub fn place(regions: &mut [LayerRegions], meshes: &[Mesh], slice_z: &[f64], heights: &[f64], s: &Settings) {
+/// Places the seams of every object on every layer, into each layer's `seams` (indexed by the islands' group: all of
+/// an object's regions together, as Orca places an object's seams). `meshes` are the objects as sliced, one for each
+/// group (an object made of parts, all of them), `slice_z` and `heights` each layer's slicing plane and height.
+pub fn place(regions: &mut [LayerRegions], meshes: &[&Mesh], slice_z: &[f64], heights: &[f64], s: &Settings) {
     let mode = Mode::of(&s.seam_position);
     let regions_ref: &[LayerRegions] = regions;
     // Each object's on its own: Orca places each object's seams apart from the others'.
     let objects: Vec<Vec<LayerSeams>> = crate::par::map_range(meshes.len(), |o| {
         let object = o as u32;
-        if !regions_ref.iter().any(|r| r.islands.iter().any(|i| i.object == object)) {
+        if !regions_ref.iter().any(|r| r.islands.iter().any(|i| i.group == object)) {
             return Vec::new();
         }
-        object_seams(regions_ref, object, &meshes[o], mode, slice_z, heights, s)
+        object_seams(regions_ref, object, meshes[o], mode, slice_z, heights, s)
     });
     for layer in regions.iter_mut() {
         layer.seams = vec![LayerSeams::default(); meshes.len()];
@@ -462,6 +486,23 @@ fn object_seams(
     let mut layers: Vec<LayerSeams> = crate::par::map_range(regions.len(), |l| {
         let width = crate::plan::flow(crate::region::Role::OuterWall, l == 0, heights[l], s).0 as f32;
         let mut seams = gather(&regions[l], object, slice_z[l] as f32, width, nozzle, s);
+        // Where the object prints as more than one region with walls on the layer, how far inside its slice each
+        // point is (Orca's `calculate_overhangs_and_layer_embedding`).
+        let mut walled: Vec<u32> = regions[l]
+            .islands
+            .iter()
+            .filter(|i| i.group == object && i.walls.first().is_some_and(|w| !w.is_empty()))
+            .map(|i| i.object)
+            .collect();
+        walled.sort_unstable();
+        walled.dedup();
+        if walled.len() > 1 && !seams.points.is_empty() {
+            let here = Distancer::new(&regions[l].slice_of(object));
+            for p in &mut seams.points {
+                let d = here.distance(f64::from(p.position[0]), f64::from(p.position[1]));
+                p.embedded = (d + f64::from(0.65 * seams.perimeters[p.perimeter].width)) as f32;
+            }
+        }
         // How far each point hangs over the layer below (Orca's `calculate_overhangs_and_layer_embedding`).
         if l > 0 && !seams.points.is_empty() {
             let below = Distancer::new(&regions[l - 1].slice_of(object));

@@ -86,8 +86,13 @@ pub struct Island {
     pub inner: Shapes,
     /// Between walls, too narrow for another wall or infill: gap fill goes along their middles.
     pub gaps: Shapes,
-    /// Which of the plate's objects it is a slice of (an index into them).
+    /// Which of the plate's objects it is a slice of (an index into them): a region of one, for an object whose parts
+    /// print in different filaments (`parts.rs`).
     pub object: u32,
+    /// Which object on the plate it is part of (its group): `object` itself unless the object prints as more than one
+    /// region. What Orca works out for a whole object (the layer below its walls hang over, its lightning trees, its
+    /// seams) goes by this.
+    pub group: u32,
     /// The shape of the slice it is (on the first layer, pulled in against elephant's foot).
     pub outline: geom::Shape,
     /// mm its infill reaches into its innermost wall: Orca's share (`infill_wall_overlap`; on the first layer and an
@@ -118,34 +123,40 @@ pub struct LayerRegions {
     /// within an island's outline and off these needs no retraction (Orca's test against its internal surfaces, the
     /// slice but its tops and bottoms).
     pub surfaces: Shapes,
-    /// The first layer's slice as it was before being pulled in against elephant's foot, each shape with its object:
-    /// what the second layer rests on (Orca keeps the first layer's `lslices` so). Empty on every other layer, whose
-    /// islands' outlines are its slice.
-    pub unpulled: Vec<(geom::Shape, u32)>,
-    /// Each object's lightning lines on the layer (`lightning.rs`), when its sparse infill is lightning.
+    /// The first layer's slice as it was before being pulled in against elephant's foot, each shape with its object
+    /// and group: what the second layer rests on (Orca keeps the first layer's `lslices` so). Empty on every other
+    /// layer, whose islands' outlines are its slice.
+    pub unpulled: Vec<(geom::Shape, u32, u32)>,
+    /// Each group's lightning lines on the layer (`lightning.rs`), when its sparse infill is lightning.
     pub lightning: Vec<Vec<Contour>>,
     /// The layer's top surfaces (Orca's `stTop` slices), kept when supports are on: their bottom contacts land there.
     pub tops: Shapes,
-    /// Where each object's wall loops start on this layer (`seam.rs`), by object; empty until placed.
+    /// Where each object's wall loops start on this layer (`seam.rs`), by group; empty until placed.
     pub seams: Vec<crate::seam::LayerSeams>,
 }
 
 impl LayerRegions {
-    /// An object's slice on this layer, as the layer above sees it (Orca's `lslices`).
-    pub fn slice_of(&self, object: u32) -> Shapes {
-        if self.unpulled.is_empty() {
-            self.islands.iter().filter(|i| i.object == object).map(|i| i.outline.clone()).collect()
+    /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
+    /// (Orca's `lslices`).
+    pub fn slice_of(&self, group: u32) -> Shapes {
+        let (shapes, objects): (Shapes, Vec<u32>) = if self.unpulled.is_empty() {
+            self.islands.iter().filter(|i| i.group == group).map(|i| (i.outline.clone(), i.object)).unzip()
         } else {
-            self.unpulled.iter().filter(|(_, o)| *o == object).map(|(shape, _)| shape.clone()).collect()
-        }
+            self.unpulled.iter().filter(|(_, _, g)| *g == group).map(|(shape, o, _)| (shape.clone(), *o)).unzip()
+        };
+        // Regions of one object meet: as one slice, they are one shape.
+        if objects.iter().any(|&o| o != objects[0]) { geom::union_all(&[&shapes]) } else { shapes }
     }
 }
 
 /// Walls and fills for every layer, from its slice and the object each of the slice's shapes belongs to.
-/// `centres` are the middles of the objects' bounding boxes (units), where their sparse infill is anchored.
+/// `centres` are the middles of the objects' bounding boxes (units), where their sparse infill is anchored. `group`
+/// gives each object's group (`parts.rs`): the object on the plate it is a region of, when its parts print in
+/// different filaments (empty: each object its own).
 pub fn regions(
     slices: &[Shapes],
     owners: &[Vec<u32>],
+    group: &[u32],
     layers: &Layers,
     centres: &[(f64, f64)],
     s: &Settings,
@@ -178,18 +189,31 @@ pub fn regions(
     if s.spiral_mode {
         crate::spiral::surfaces(&mut tops, &mut bottoms, slices, s);
     }
+    let group_of = |o: u32| group.get(o as usize).copied().unwrap_or(o);
+    let mixed = crate::parts::mixed(group);
     // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
-    // came from, and belongs to its object.
+    // came from, and belongs to its object (an object of several regions, round all of them, `parts::pull_first`).
+    let pull = |slice: &Shapes, owners: &[u32]| -> (Shapes, Vec<u32>) {
+        let pulled = geom::offset(slice, -s.elephant_foot);
+        let objects = pulled.iter().map(|shape| owner_within(shape, slice, owners)).collect();
+        (pulled, objects)
+    };
     let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
         let (slice, objects) = if i == 0 && s.elephant_foot > 0.0 {
-            let pulled = geom::offset(&slices[0], -s.elephant_foot);
-            let objects = pulled.iter().map(|shape| owner_within(shape, &slices[0], &owners[0])).collect();
-            (pulled, objects)
+            if mixed {
+                let closing = s.slice_closing_radius;
+                crate::parts::pull_first(&slices[0], &owners[0], group, s.elephant_foot, closing, pull)
+            } else {
+                pull(&slices[0], &owners[0])
+            }
         } else {
             (slices[i].clone(), owners[i].clone())
         };
-        // An object's last layer: nothing of it above.
+        // An object's last layer: nothing of it above (of any of its regions).
         let last: Vec<bool> = match owners.get(i + 1) {
+            Some(above) if mixed => {
+                objects.iter().map(|&o| !above.iter().any(|&a| group_of(a) == group_of(o))).collect()
+            }
             Some(above) => objects.iter().map(|o| !above.contains(o)).collect(),
             None => vec![true; objects.len()],
         };
@@ -203,6 +227,7 @@ pub fn regions(
         let mut islands = walls(&slice, i, layers.height[i], &around, s);
         for ((island, object), shape) in islands.iter_mut().zip(objects).zip(slice) {
             island.object = object;
+            island.group = group_of(object);
             island.outline = shape;
         }
         islands
@@ -384,7 +409,8 @@ pub fn regions(
     let lines = |layer: usize, island: usize, sparse: &Shapes| {
         let object = islands[layer][island].object as usize;
         let centre = centres.get(object).copied().unwrap_or((0.0, 0.0));
-        let trees = lightning.get(object).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
+        let g = islands[layer][island].group as usize;
+        let trees = lightning.get(g).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
         plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, trees, s)
     };
     let fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
@@ -404,13 +430,19 @@ pub fn regions(
     if let Some(first) = out.first_mut()
         && s.elephant_foot > 0.0
     {
-        first.unpulled = slices[0].iter().cloned().zip(owners[0].iter().copied()).collect();
+        first.unpulled = slices[0]
+            .iter()
+            .cloned()
+            .zip(owners[0].iter().copied())
+            .map(|(shape, o)| (shape, o, group_of(o)))
+            .collect();
     }
     out
 }
 
-/// Each object's lightning lines, layer by layer (`lightning.rs`), when the sparse infill is lightning. As Orca grows
-/// them: from the object's sparse infill area (reaching into the walls by Orca's overlap) before internal bridges
+/// Each object's lightning lines, layer by layer (`lightning.rs`), by group (all of an object's regions together, as
+/// Orca grows one object's trees), when the sparse infill is lightning. As Orca grows them: from the object's sparse
+/// infill area (reaching into the walls by Orca's overlap) before internal bridges
 /// take from it, less 3 mm round the solid infill worth bridging over the sparse infill of the layer below, so that
 /// the trees hold up those bridges' ends as well.
 fn lightning_lines(
@@ -425,7 +457,12 @@ fn lightning_lines(
         return Vec::new();
     }
     let n = fills.len();
-    let objects = islands.iter().flatten().map(|island| island.object as usize + 1).max().unwrap_or(0);
+    let objects = islands.iter().flatten().map(|island| island.group as usize + 1).max().unwrap_or(0);
+    // Each group's anchor: its regions share their object's.
+    let mut anchor = vec![(0.0, 0.0); objects];
+    for island in islands.iter().flatten() {
+        anchor[island.group as usize] = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
+    }
     let params = lightning::Params {
         line_width: s.sparse_infill_width,
         density_percent: (s.sparse_density * 100.0 * 1e6).round() / 1e6,
@@ -440,7 +477,7 @@ fn lightning_lines(
             islands[l]
                 .iter()
                 .zip(&fills[l])
-                .filter(|(island, _)| island.object as usize == o)
+                .filter(|(island, _)| island.group as usize == o)
                 .flat_map(|(_, f)| f.sparse.iter().cloned())
                 .collect()
         };
@@ -455,14 +492,14 @@ fn lightning_lines(
                     return here;
                 }
                 let worth: Vec<&Shapes> =
-                    candidates.on(l).filter(|c| islands[l][c.island].object as usize == o).map(|c| &c.area).collect();
+                    candidates.on(l).filter(|c| islands[l][c.island].group as usize == o).map(|c| &c.area).collect();
                 if worth.is_empty() || sparse(l - 1).is_empty() {
                     return here;
                 }
                 geom::difference(&here, &geom::offset(&geom::union_all(&worth), 3.0))
             })
             .collect();
-        lightning::grow(&areas, centres.get(o).copied().unwrap_or((0.0, 0.0)), &params)
+        lightning::grow(&areas, anchor[o], &params)
     })
 }
 
@@ -921,7 +958,7 @@ mod tests {
             })
             .collect();
         let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
-        let regions = regions(&slices, &owners, &layers, &[(sc(10.0) as f64, sc(10.0) as f64)], &s);
+        let regions = regions(&slices, &owners, &[], &layers, &[(sc(10.0) as f64, sc(10.0) as f64)], &s);
         let length = |loops: &[Contour]| loops.iter().map(|c| geom::length_mm(c, true)).sum::<f64>();
         let step = layers.top.iter().position(|&z| z > 2.0 + 1e-6).unwrap() - 1;
 

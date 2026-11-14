@@ -55,6 +55,14 @@ target/release/spaghetti-slicer --keep-placement --filaments 1,2 $BENCH_MODELS/c
 python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models colour,colour-one-nozzle
 ```
 
+An object whose parts print in different filaments: a project gives each part's filament, `--parts` slices the files as the parts of one object (each in its `--filaments` filament, the later part winning where two overlap), and so does the module's `add_part`. `bench/colour.py --project` also writes `block-and-s.3mf`, the block and the S as two parts of one object, which native Orca slices as it is:
+
+```sh
+python3 -I bench/colour.py $BENCH_MODELS/colour --project
+target/release/spaghetti-slicer --keep-placement $BENCH_MODELS/colour/block-and-s.3mf -o parts.gcode.3mf
+target/release/spaghetti-slicer --keep-placement --parts --filaments 1,2 $BENCH_MODELS/colour/block.stl $BENCH_MODELS/colour/letter.stl -o parts.gcode.3mf
+```
+
 The lines that cool a waiting nozzle and heat it again (`;Multi extruder pre cooling`, `pre heating`) come from a pass after the estimate, as in Orca's G-code processor. To hold ours to Orca's, run it on Orca's own G-code with Orca's lines taken out: it puts them back, each within a move and 1 °C, and says how many exactly (93 of 101 on the plate):
 
 ```sh

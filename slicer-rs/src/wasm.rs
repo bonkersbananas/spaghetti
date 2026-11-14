@@ -118,6 +118,29 @@ pub unsafe extern "C" fn add_in(
     PLATE.with(|p| p.borrow_mut().add_with_filament(&Input { name, bytes }, Some(filament))).map_or_else(code, |()| 0)
 }
 
+/// A part of an object made of parts (an STL), printing in the setup's filament `filament` (1-based): `first` (not 0)
+/// starts a new object, else the part joins the object of the part added just before (`Plate::add_part`). Parts of
+/// one object stay where they are against each other and print as Orca prints an object's parts.
+///
+/// # Safety
+/// As `add`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn add_part(
+    name: *const u8,
+    name_len: usize,
+    data: *const u8,
+    data_len: usize,
+    filament: u32,
+    first: u32,
+) -> u32 {
+    // SAFETY: the host wrote `name_len` bytes at `name`.
+    let Ok(name) = std::str::from_utf8(unsafe { std::slice::from_raw_parts(name, name_len) }) else { return 6 };
+    // SAFETY: the host wrote `data_len` bytes at `data`.
+    let bytes = unsafe { std::slice::from_raw_parts(data, data_len) };
+    let filament = (filament as usize).max(1) - 1;
+    PLATE.with(|p| p.borrow_mut().add_part(&Input { name, bytes }, filament, first != 0)).map_or_else(code, |()| 0)
+}
+
 /// Slices the models added since the last `slice` or `clear`. Flags: bit 0 keeps the objects where the files put
 /// them; bit 1 leaves out the picture. Returns 0 when it made a file, else an error code (see `code`).
 #[unsafe(no_mangle)]
