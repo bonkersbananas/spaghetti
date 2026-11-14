@@ -11,7 +11,7 @@ import {
   ONE_REQUEST_FILE_BYTES,
 } from "../../shared/api.ts";
 import { type OpenLinkResponse, openName } from "../../shared/open-link.ts";
-import { isStlName, slicedName } from "../../shared/slicing/files.ts";
+import { cleanFileName, isStlName, slicedName } from "../../shared/slicing/files.ts";
 import { SLICER_IDS } from "../../shared/slicing/settings.ts";
 import type { PreviousSlice } from "../../shared/slicing/types.ts";
 import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
@@ -156,7 +156,7 @@ const fileChange = z.object({ slicing: slicingSettings.nullable() });
 
 const fileFields = z.object({
   id: z.uuid(),
-  name: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(200).transform(cleanFileName),
   size: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   plate: z.coerce.number().int().min(1).max(1_000),
   plateCount: z.coerce.number().int().min(1).max(1_000),
@@ -650,7 +650,8 @@ function refuse(c: Parameters<typeof apiError>[0], refused: NonNullable<ReturnTy
 }
 
 /** "bracket v2.gcode.3mf" as a download name, safe in a header. */
-export function disposition(name: string): string {
+export function disposition(rawName: string): string {
+  const name = cleanFileName(rawName);
   const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
@@ -768,8 +769,8 @@ export const fileRoutes = new Hono<AppEnv>()
     const found = await openable(c, id, part);
     if (!found) return apiError(c, 404, "not_found", "There is no .3mf of that file to open.");
     const { token, expiresAt } = await signOpenLink(c.env, id, part);
-    const url = `${new URL(c.req.url).origin}/open/${token}/${openName(found.name)}`;
-    return c.json<OpenLinkResponse>({ url, name: found.name, expiresAt });
+    const url = `${new URL(c.req.url).origin}/open/${token}/${openName(cleanFileName(found.name))}`;
+    return c.json<OpenLinkResponse>({ url, name: cleanFileName(found.name), expiresAt });
   })
   .get("/:id/:part?", async (c) => {
     const part = c.req.param("part") ?? "file";
