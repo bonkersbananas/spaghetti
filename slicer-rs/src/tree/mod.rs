@@ -277,6 +277,12 @@ pub fn branches(
     grown(slices, heights, s, origin, bed).map(|(_, _, b)| b)
 }
 
+/// Whether an object sliced without supports needs them, as Orca checks it whatever the support settings
+/// (`PrintObject::is_support_necessary`, with its tree's overhang detection): `None` when it doesn't.
+pub fn necessity(slices: &[Shapes], heights: &[f64], s: &Settings) -> Option<overhangs::Necessity> {
+    overhangs::necessity(slices, heights, &Config::new(s), s)
+}
+
 /// An object's organic trees, drawn into the support's layers: each layer's branches, bottom contacts, and the
 /// roofs' contact and interface layers, for `support::generate_tree` to print.
 pub fn supports(

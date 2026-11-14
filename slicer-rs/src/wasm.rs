@@ -129,7 +129,7 @@ pub extern "C" fn slice(flags: u32) -> u32 {
         Ok(out) => {
             let t = &out.timings;
             let summary = format!(
-                r#"{{"triangles":{},"timings":{{"read":{:.3},"slice":{:.3},"regions":{:.3},"supports":{:.3},"toolpaths":{:.3},"gcode":{:.3},"thumbnail":{:.3},"pack":{:.3},"total":{:.3}}},"gcodeBytes":{},"fallbacks":[{}],"stats":{}}}"#,
+                r#"{{"triangles":{},"timings":{{"read":{:.3},"slice":{:.3},"regions":{:.3},"supports":{:.3},"toolpaths":{:.3},"gcode":{:.3},"thumbnail":{:.3},"pack":{:.3},"total":{:.3}}},"gcodeBytes":{},"fallbacks":[{}],"warnings":[{}],"stats":{}}}"#,
                 out.triangles,
                 t.read,
                 t.slice,
@@ -142,6 +142,15 @@ pub extern "C" fn slice(flags: u32) -> u32 {
                 t.total,
                 out.gcode.len(),
                 out.fallbacks.iter().map(|f| crate::pack::json(f)).collect::<Vec<_>>().join(","),
+                out.warnings
+                    .iter()
+                    .map(|w| format!(
+                        r#"{{"kind":{},"message":{}}}"#,
+                        crate::pack::json(w.kind),
+                        crate::pack::json(&w.message)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(","),
                 out.stats.json(&settings)
             );
             OUTPUT.with(|o| *o.borrow_mut() = out.file);

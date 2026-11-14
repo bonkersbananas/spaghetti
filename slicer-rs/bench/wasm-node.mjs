@@ -67,6 +67,7 @@ console.log(
     triangles: summary.triangles,
     gcodeBytes: summary.gcodeBytes,
     fallbacks: summary.fallbacks,
+    warnings: summary.warnings,
     stats: summary.stats.summary,
   }),
 );
