@@ -155,7 +155,7 @@ pub fn regions(
     // too): what the layer above doesn't cover and what the layer below doesn't hold up, opened by a tenth of the
     // outer wall's width against slivers. Both come from one boolean per pair of layers, and none when the two are
     // the same (a prism's layers). The first layer's whole slice is a bottom, the last one's a top.
-    let outer_width = |i: usize| if i == 0 { s.first_layer_width } else { s.outer_wall_width };
+    let outer_width = |i: usize| if s.on_plate(i) { s.first_layer_width } else { s.outer_wall_width };
     let pairs: Vec<(Shapes, Shapes)> = par::map_range(n.saturating_sub(1), |i| {
         if slices[i] == slices[i + 1] {
             return (Vec::new(), Vec::new());
@@ -179,9 +179,9 @@ pub fn regions(
         crate::spiral::surfaces(&mut tops, &mut bottoms, slices, s);
     }
     // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
-    // came from, and belongs to its object.
+    // came from, and belongs to its object. Not on a raft, as Orca's isn't.
     let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
-        let (slice, objects) = if i == 0 && s.elephant_foot > 0.0 {
+        let (slice, objects) = if s.on_plate(i) && s.elephant_foot > 0.0 {
             let pulled = geom::offset(&slices[0], -s.elephant_foot);
             let objects = pulled.iter().map(|shape| owner_within(shape, &slices[0], &owners[0])).collect();
             (pulled, objects)
@@ -222,8 +222,9 @@ pub fn regions(
     // under a top surface and over a bottom, as many layers as the shells take, and wherever a layer within that
     // reach has walls or nothing over or under this one's infill area, so that a sloping wall keeps its thickness.
     // Tops and bottoms reach a hair wider than they are (5 % of a solid line), to meet the infill beside them.
-    let solid_spacing =
-        |i: usize| Settings::spacing(if i == 0 { s.first_layer_width } else { s.solid_infill_width }, layers.height[i]);
+    let solid_spacing = |i: usize| {
+        Settings::spacing(if s.on_plate(i) { s.first_layer_width } else { s.solid_infill_width }, layers.height[i])
+    };
     let reaching: Vec<(Shapes, Shapes)> = par::map_range(n, |i| {
         let grow = 0.05 * solid_spacing(i);
         let (top, bottom) = &exposed[i];
@@ -521,7 +522,7 @@ fn one_kind(top: &Shapes, bottom: &Shapes, cracks_allowed: bool, margin: f64) ->
 /// infill, the walls' width (half the outer wall's, then the walls' spacings) times √2; into sparse infill, an inner
 /// wall's spacing; and gaps closed up to about 0.4 of a solid line.
 fn growth(layer: usize, h: f64, s: &Settings) -> surfaces::Growth {
-    let first = layer == 0;
+    let first = s.on_plate(layer);
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
     let w_solid = if first { s.first_layer_width } else { s.solid_infill_width };
@@ -627,7 +628,7 @@ fn split_top(region: &Shapes, around: &Around, layer: usize, height: f64, s: &Se
     if around.top.is_empty() {
         return None;
     }
-    let first = layer == 0;
+    let first = s.on_plate(layer);
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
     let (sp_outer, sp_inner) = (Settings::spacing(w_outer, height), Settings::spacing(w_inner, height));
@@ -697,8 +698,11 @@ fn split_top(region: &Shapes, around: &Around, layer: usize, height: f64, s: &Se
 /// How narrow and how wide gap fill's lines may be on a layer (mm), as Orca's: a fifth of the narrower wall's
 /// width less the overlap allowance, and two inner walls' spacing.
 pub fn gap_widths(layer: usize, height: f64, s: &Settings) -> (f64, f64) {
-    let (w_outer, w_inner) =
-        if layer == 0 { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    let (w_outer, w_inner) = if s.on_plate(layer) {
+        (s.first_layer_width, s.first_layer_width)
+    } else {
+        (s.outer_wall_width, s.inner_wall_width)
+    };
     (0.2 * w_outer.min(w_inner) * (1.0 - INSET_OVERLAP_TOLERANCE), 2.0 * Settings::spacing(w_inner, height))
 }
 
@@ -756,7 +760,7 @@ fn wall_group(
     around: &Around,
     s: &Settings,
 ) -> Vec<Island> {
-    let first = layer == 0;
+    let first = s.on_plate(layer);
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
     let w_solid = if first { s.first_layer_width } else { s.solid_infill_width };

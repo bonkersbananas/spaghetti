@@ -508,7 +508,7 @@ fn island_paths(
     (mut at, rises): (Option<Pt>, bool),
     s: &Settings,
 ) -> Vec<Path> {
-    let first = layer == 0;
+    let first = s.on_plate(layer);
     let (walls, gaps) = (&island.walls, &island.gaps);
     let island_inner = &island.inner;
     let overlap = island.overlap;
@@ -680,6 +680,17 @@ fn island_paths(
         }
         at = g.paths.last().and_then(|p| p.points.last().copied());
         out.extend(g.paths);
+    }
+    // The object's first layer on a raft prints at the first layer's speeds, at its own widths and accelerations
+    // (Orca's `object_layer_over_raft`): walls at the first layer's speed, the rest at its infill speed.
+    if layer == 0 && !first {
+        for p in &mut out {
+            let speed = match p.role {
+                Role::OuterWall | Role::InnerWall | Role::OverhangWall => s.first_layer_speed,
+                _ => s.first_layer_infill_speed,
+            };
+            p.speed = speed.min(s.speed_cap(p.mm3_per_mm));
+        }
     }
     out
 }
@@ -879,7 +890,7 @@ pub fn sparse_lines(
     if let Some(pattern) = fill::Pattern::of(&s.sparse_infill_pattern) {
         return sparse_runs(region, pattern, layer, (z, h), centre, trees, s);
     }
-    let (width, _, _) = flow(Role::SparseInfill, layer == 0, h, s);
+    let (width, _, _) = flow(Role::SparseInfill, s.on_plate(layer), h, s);
     let grown = geom::offset(region, s.infill_wall_overlap * width);
     let angle = if layer.is_multiple_of(2) { s.infill_direction } else { s.infill_direction + 90.0 };
     infill::fill(&grown, angle, Settings::spacing(width, h) / s.sparse_density, 0.0)
@@ -1064,7 +1075,8 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         Role::SparseInfill => (s.sparse_infill_width, s.sparse_infill_speed),
         Role::SolidInfill => (s.solid_infill_width, s.solid_infill_speed),
         Role::TopSurface => (s.top_surface_width, s.top_surface_speed),
-        Role::BottomSurface => (s.solid_infill_width, s.solid_infill_speed),
+        // Orca's speed for a bottom surface anywhere: there is none but on the first layer, or on a raft.
+        Role::BottomSurface => (s.solid_infill_width, s.first_layer_infill_speed),
         Role::Bridge | Role::InternalBridge => {
             let internal = role == Role::InternalBridge;
             let f = s.bridge_flow(internal, h);

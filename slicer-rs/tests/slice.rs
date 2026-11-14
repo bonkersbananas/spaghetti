@@ -222,8 +222,11 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
     let (mut x, mut y, mut z) = (f64::NAN, f64::NAN, 1.0);
     let mut layer_z = f64::NAN;
-    // Heights as the G-code writes them, to the micrometre (a layer of support may lie at 0.474286 mm).
-    let written = |z: f64| (z * 1000.0).round() / 1000.0;
+    // Heights as the G-code writes them, to the micrometre (a layer of support may lie at 0.474286 mm), next to the
+    // layer's own, which its header gives to six figures: above 10 mm, to a tenth of a micrometre, which may round
+    // the other way (11.5685 for a layer the moves put at 11.568).
+    let at_height =
+        |written: f64, z: f64| (written - (z * 1000.0).round() / 1000.0).abs() < 1e-6 || (written - z).abs() < 5.1e-4;
     let mut pulled: f64 = 0.0;
     let mut label: Option<u32> = None;
     let mut layers: Vec<Vec<u32>> = Vec::new();
@@ -275,10 +278,10 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             let moves_xy = (word(code, 'X').is_some() || word(code, 'Y').is_some()) && (nx != x || ny != y);
             if moves_xy {
                 assert!((0.0..=s.bed[0]).contains(&nx) && (0.0..=s.bed[1]).contains(&ny), "on the plate: {}", at());
-                assert!(nz >= written(layer_z) - 1e-6, "never below the layer while moving: {}", at());
+                assert!(nz > layer_z || at_height(nz, layer_z), "never below the layer while moving: {}", at());
             }
             if e > 0.0 && moves_xy {
-                assert!((nz - written(layer_z)).abs() < 1e-6, "prints at the layer's height: {}", at());
+                assert!(at_height(nz, layer_z), "prints at the layer's height: {}", at());
                 assert!(pulled.abs() < 1e-4, "prints only with the filament pushed back: {}", at());
                 if feature == "Brim" {
                     assert!(layers.len() == 1 && label.is_none(), "a brim prints first, outside the labels: {}", at());
@@ -294,7 +297,7 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             let (i, j) = (word(code, 'I').unwrap(), word(code, 'J').unwrap());
             let nz = word(code, 'Z').unwrap();
             assert!((i.hypot(j) - r).abs() < 0.002, "a spiral of the z-hop's radius: {}", at());
-            assert!((nz - written(layer_z + s.z_hop)).abs() < 1e-6, "lifts by the z-hop: {}", at());
+            assert!(at_height(nz, layer_z + s.z_hop), "lifts by the z-hop: {}", at());
             let (cx, cy) = (x + i, y + j);
             assert!(
                 cx - r >= 0.0 && cy - r >= 0.0 && cx + r <= s.bed[0] && cy + r <= s.bed[1],
@@ -1542,4 +1545,96 @@ fn a_vase_climbs_in_one_spiral_above_its_bottom_and_is_alone_on_its_plate() {
     let beside = boxes_stl(&[([150., 116., 0.], [160., 126., 10.])]);
     let two = [Input { name: "vase.stl", bytes: &block }, Input { name: "cup.stl", bytes: &beside }];
     assert_eq!(slice(&two, &settings, &options).err(), Some(Error::Unsupported("several objects in spiral vase mode")));
+}
+
+/// Each layer's features, in the order its extrusions first take them.
+fn layer_features(gcode: &str) -> Vec<Vec<&str>> {
+    let mut layers: Vec<Vec<&str>> = Vec::new();
+    let mut feature = "";
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        } else if line.starts_with("; CHANGE_LAYER") {
+            layers.push(Vec::new());
+        } else if line.starts_with("G1 X")
+            && word(line, 'E').is_some_and(|e| e > 0.0)
+            && let Some(layer) = layers.last_mut().filter(|l| !l.contains(&feature))
+        {
+            layer.push(feature);
+        }
+    }
+    layers
+}
+
+#[test]
+fn a_raft_lifts_a_model_off_the_plate_as_orcas_does() {
+    // Three layers of raft under a 24 mm block, with supports off: the X2D's organic trees make it, as Orca's do.
+    let block = boxes_stl(&[([116., 116., 0.], [140., 140., 10.])]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let s = setup::read(r#"{"process": {"raft_layers": "3"}}"#).unwrap().settings;
+    let out = slice(&[Input { name: "block.stl", bytes: &block }], &s, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    let layers = check_moves(&gcode, &s);
+    // Native OrcaSlicer 2.5.0 with these settings (Nov 14): 53 layers, the raft's at 0.2, 0.5 and 0.8 mm and the
+    // block's from 1.1 mm, 0.1 mm over it; 170.0 mm³ of support and 186.8 mm³ of interface.
+    assert_eq!(layers.len(), 53);
+    let zs: Vec<f64> =
+        gcode.lines().filter_map(|l| l.strip_prefix("; Z_HEIGHT: ")).map(|z| z.parse().unwrap()).collect();
+    assert_eq!(&zs[..5], &[0.2, 0.5, 0.8, 1.1, 1.3]);
+    let feature = |out: &spaghetti_slicer::Output, role: Role| {
+        out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume
+    };
+    let near = |got: f64, want: f64| (got - want).abs() < want * 0.005;
+    assert!(near(feature(&out, Role::Support), 169.96), "{} mm³ of support", feature(&out, Role::Support));
+    assert!(near(feature(&out, Role::SupportInterface), 186.85), "{} mm³", feature(&out, Role::SupportInterface));
+    // The raft's base, its interface and its contact layer; then the block, with no brim, its first layer as a
+    // first layer's speeds have it but not on the plate.
+    let features = layer_features(&gcode);
+    assert_eq!(features[..3], [vec!["Support"], vec!["Support interface"], vec!["Support interface"]]);
+    assert!(features[3].contains(&"Outer wall") && !features[3].iter().any(|f| f.starts_with("Support")));
+    assert!(!gcode.contains("; FEATURE: Brim"));
+    let first_object_layer = gcode.split("; CHANGE_LAYER").nth(4).unwrap();
+    let outer = first_object_layer.split("; FEATURE: Outer wall\n").nth(1).unwrap();
+    let speed = outer.lines().find_map(|l| l.strip_prefix("G1 F")).unwrap();
+    assert_eq!(speed.parse::<f64>().unwrap(), s.first_layer_speed * 60.0);
+    // Orca's normal supports put the raft on their grid, which takes a little more: 193.7 and 216.7 mm³ in Orca.
+    let s = setup::read(r#"{"process": {"raft_layers": "3", "support_type": "normal(auto)"}}"#).unwrap().settings;
+    let out = slice(&[Input { name: "block.stl", bytes: &block }], &s, &options).unwrap();
+    assert!(near(feature(&out, Role::Support), 193.71), "{} mm³ of support", feature(&out, Role::Support));
+    assert!(near(feature(&out, Role::SupportInterface), 216.70), "{} mm³", feature(&out, Role::SupportInterface));
+}
+
+#[test]
+fn normal_supports_stand_on_a_raft_as_orcas_do() {
+    // The T of `normal_supports_hold_up_a_slab_from_layers_of_their_own` on a raft of three layers.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let s = setup::read(r#"{"process": {"enable_support": "1", "support_type": "normal(auto)", "raft_layers": "3"}}"#)
+        .unwrap()
+        .settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &s, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers = check_moves(&gcode, &s);
+    // Native OrcaSlicer 2.5.0 (Nov 14): 200 layers, the columns' own from the raft's interface (0.5 mm) up between
+    // the raft's contact layer and the T's; 1444.4 mm³ of support and 172.9 mm³ of interface.
+    assert_eq!(layers.len(), 200);
+    let zs: Vec<f64> =
+        gcode.lines().filter_map(|l| l.strip_prefix("; Z_HEIGHT: ")).map(|z| z.parse().unwrap()).collect();
+    assert_eq!(&zs[..7], &[0.2, 0.5, 0.776712, 0.8, 1.05342, 1.1, 1.3]);
+    let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    let near = |got: f64, want: f64| (got - want).abs() < want * 0.005;
+    assert!(near(feature(Role::Support), 1444.4), "{} mm³ of support", feature(Role::Support));
+    assert!(near(feature(Role::SupportInterface), 172.9), "{} mm³", feature(Role::SupportInterface));
+    // Orca cools the first three support layers each on its own, the columns' first among them: too quick, it slows.
+    let columns = gcode.split("; Z_HEIGHT: 0.776712\n").nth(1).unwrap().split("; CHANGE_LAYER").next().unwrap();
+    let (mut f, mut speeds) = (0.0, Vec::new());
+    for line in columns.lines() {
+        if let Some(v) = line.strip_prefix("G1 F") {
+            f = v.parse().unwrap();
+        } else if line.starts_with("G1 X") && word(line, 'E').is_some_and(|e| e > 0.0) {
+            speeds.push(f);
+        }
+    }
+    assert!(!speeds.is_empty() && speeds.iter().all(|&f| f < 2100.0), "{speeds:?}");
 }

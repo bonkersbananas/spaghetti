@@ -139,7 +139,7 @@ pub fn bridge_over_infill(
 }
 
 fn solid_spacing(l: usize, layers: &Layers, s: &Settings) -> f64 {
-    Settings::spacing(if l == 0 { s.first_layer_width } else { s.solid_infill_width }, layers.height[l])
+    Settings::spacing(if s.on_plate(l) { s.first_layer_width } else { s.solid_infill_width }, layers.height[l])
 }
 
 /// The layer's solid infill worth bridging: where it rests on the layer below's sparse infill, a good way in from

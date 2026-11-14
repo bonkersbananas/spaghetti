@@ -27,6 +27,7 @@ pub mod plan;
 pub mod png;
 pub mod preheat;
 pub mod profile;
+pub mod raft;
 pub mod region;
 pub mod seam;
 pub mod seam_mesh;
@@ -315,7 +316,12 @@ impl Plate {
             return Err(Error::TooTall);
         }
         let t1 = now();
-        let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
+        // On a raft (`raft.rs`) the object starts over its contact layer, its first layer as thick as the others.
+        let raft = raft::Raft::of(settings);
+        let layers = match &raft {
+            Some(r) => section::Layers::on_raft(height, settings.layer_height, r.object_z),
+            None => section::Layers::plan(height, settings.first_layer_height, settings.layer_height),
+        };
         // Slices simplified to half the profile's resolution, as before: Orca simplifies its own to 0.0025 mm, which
         // comes a little closer to its supports on a Benchy and makes every later step a third slower.
         // A spiral vase's layers above its bottom keep their outline's largest loop alone.
@@ -354,7 +360,8 @@ impl Plate {
         };
         drop((slices, owners));
         let t3 = now();
-        let supports = if settings.enable_support {
+        // A raft is support too, which Orca builds whether or not supports are on.
+        let supports = if settings.enable_support || raft.is_some() {
             object_supports(&regions, &layers, &centres, &sizes, settings)
         } else {
             Vec::new()
@@ -457,11 +464,12 @@ impl Plate {
             lift_overhangs: &lift_overhangs,
         };
         // Each layer from its regions to its G-code in one go, so only the text stays; the support's own layers
-        // with the object layer above them, which they are cooled with.
+        // with the object layer above them, which they are cooled with, but for a raft's, each cooled on its own.
         let empty = region::LayerRegions::default();
         let mut groups: Vec<std::ops::Range<usize>> = Vec::new();
         for (g, slot) in schedule.iter().enumerate() {
-            if slot.layer.is_some() || g + 1 == schedule.len() {
+            let raft = slot.supports.iter().enumerate().any(|(o, k)| k.is_some_and(|k| supports[o][k].raft));
+            if slot.layer.is_some() || raft || g + 1 == schedule.len() {
                 groups.push(groups.last().map_or(0, |r| r.end)..g + 1);
             }
         }
@@ -713,7 +721,14 @@ fn object_supports(
                 origin: centres[o],
                 size: sizes[o],
             };
-            if s.support.classic().is_some() {
+            if !s.enable_support {
+                // Supports off: a raft alone, as the generator Orca takes for these supports makes it (`unsupported`
+                // refuses its classic trees').
+                match s.support.raft_maker() {
+                    config::RaftMaker::OrganicTrees => support::raft_alone(&object, &params),
+                    _ => support::generate(&object, &params),
+                }
+            } else if s.support.classic().is_some() {
                 tree::classic::supports(&object, s, &params)
             } else if s.support.organic() {
                 tree::supports(&object.slices, object.height, s, object.origin, s.bed)
@@ -843,7 +858,7 @@ pub enum Error {
     OffPlate,
     /// A slice setup that isn't one (`setup.rs`).
     Setup,
-    /// Settings this can't slice yet: what they ask for ("tree supports", "a raft"…).
+    /// Settings this can't slice yet: what they ask for ("a raft under tree supports"…).
     Unsupported(&'static str),
 }
 

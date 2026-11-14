@@ -155,7 +155,8 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, 
     let mut out = Brims { loops: vec![Vec::new(); objects], area: Vec::new() };
     let kind = Kind::of(s);
     let auto = kind.auto;
-    if !kind.outer && !kind.inner {
+    // An object on a raft has no brim (Orca's `has_brim`).
+    if !kind.outer && !kind.inner || s.support.raft_layers > 0 {
         return out;
     }
     let spacing = Settings::spacing(s.first_layer_width, s.first_layer_height);

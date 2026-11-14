@@ -460,7 +460,7 @@ fn object_seams(
     let comparator = Comparator { rear: mode == Mode::Rear };
     let nozzle = s.nozzle_diameter as f32;
     let mut layers: Vec<LayerSeams> = crate::par::map_range(regions.len(), |l| {
-        let width = crate::plan::flow(crate::region::Role::OuterWall, l == 0, heights[l], s).0 as f32;
+        let width = crate::plan::flow(crate::region::Role::OuterWall, s.on_plate(l), heights[l], s).0 as f32;
         let mut seams = gather(&regions[l], object, slice_z[l] as f32, width, nozzle, s);
         // How far each point hangs over the layer below (Orca's `calculate_overhangs_and_layer_embedding`).
         if l > 0 && !seams.points.is_empty() {

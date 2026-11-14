@@ -202,8 +202,16 @@ mod tests {
             && s.settings.wall_loops == 1
             && s.settings.top_shell_layers == 0
             && s.settings.sparse_density == 0.0));
-        // A raft prints with supports off too.
-        assert_eq!(refused(r#"{"process": {"raft_layers": "3"}}"#), Some(Error::Unsupported("a raft")));
+        // A raft slices (raft.rs) with supports off, as the generator Orca takes for the supports set makes it, and
+        // under normal supports; not yet under tree supports, nor with supports off where classic trees would make it.
+        assert!(read(r#"{"process": {"raft_layers": "3"}}"#).is_ok());
+        assert!(read(r#"{"process": {"raft_layers": "2", "support_type": "normal(auto)"}}"#).is_ok());
+        assert!(read(&normal(r#", "raft_layers": "2""#)).is_ok());
+        assert_eq!(refused(&tree(r#", "raft_layers": "2""#)), Some(Error::Unsupported("a raft under tree supports")));
+        assert_eq!(
+            refused(r#"{"process": {"raft_layers": "2", "support_style": "tree_hybrid"}}"#),
+            Some(Error::Unsupported("a raft in this style of tree support"))
+        );
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))
