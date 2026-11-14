@@ -59,7 +59,7 @@ import {
   useSliceChange,
   useSliceJob,
 } from "@/lib/slicing/jobs";
-import { comparePlates, comparisonKey, usePlateComparison } from "@/lib/slicing/plate-compare";
+import { comparePlates, comparisonKey, dropStaleComparison, usePlateComparison } from "@/lib/slicing/plate-compare";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useWarmSoon } from "@/lib/warm-soon";
 import { canView3d, type View3d } from "../viewer/ThreeDButton";
@@ -812,6 +812,10 @@ export default function ModelFileCard({
       : undefined;
   // "Slice every plate": the figures of each plate with these settings, for the plate tiles (nothing is saved).
   const comparison = usePlateComparison(file.id, settings);
+  // Settings that change under a comparison going stop it, so the model's own slice isn't kept waiting for it.
+  const comparisonSettings = comparisonKey(settings);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when what the figures hold for changes.
+  useEffect(() => dropStaleComparison(file.id, settings), [file.id, comparisonSettings]);
   const sliceNowFigures =
     file.slice?.status === "sliced" && comparisonKey(slicingOfSlice(file.slice)) === comparisonKey(settings)
       ? { [figuresPlate ?? 1]: figuresOf(prefill) }

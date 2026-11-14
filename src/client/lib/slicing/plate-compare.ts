@@ -26,6 +26,8 @@ export interface PlateComparison {
 }
 
 const comparisons = new Map<string, PlateComparison>();
+/** The run of each file that is going, to stop it. */
+const running = new Map<string, { key: string; controller: AbortController }>();
 const listeners = new Set<() => void>();
 let snapshot: ReadonlyMap<string, PlateComparison> = new Map();
 
@@ -38,6 +40,17 @@ function emit() {
 export function comparisonKey(settings: SlicingSettings): string {
   const { modelPlate: _plate, orientation: _orientation, ...rest } = settings;
   return JSON.stringify(rest);
+}
+
+/** Stops a file's comparison when it is for other settings than `settings` (they changed under it), and forgets it. */
+export function dropStaleComparison(fileId: string, settings: SlicingSettings) {
+  const run = running.get(fileId);
+  if (run && run.key !== comparisonKey(settings)) {
+    run.controller.abort();
+    running.delete(fileId);
+    comparisons.delete(fileId);
+    emit();
+  }
 }
 
 /** The comparison of a file's plates, if one was made with these settings. */
@@ -67,6 +80,11 @@ export function comparePlates(
   },
 ): Promise<void> {
   const key = comparisonKey(job.settings);
+  // One run of a file at a time: a new one takes the place of the one going.
+  running.get(job.fileId)?.controller.abort();
+  const controller = new AbortController();
+  running.set(job.fileId, { key, controller });
+  const current = () => !controller.signal.aborted && running.get(job.fileId)?.controller === controller;
   const figures: Record<number, PlateFigure> = { ...job.known };
   const todo = job.plates.filter((plate) => !figures[plate]);
   const state = (status: PlateComparison["status"], done: number): PlateComparison => ({
@@ -88,14 +106,22 @@ export function comparePlates(
       source = null;
     }
     for (const [at, plate] of todo.entries()) {
+      if (!current()) return;
       if (!source) {
         figures[plate] = { failed: true };
       } else {
-        const outcome = await sliceModel(source, job.name, {
-          chosen: { ...job.settings, modelPlate: plate, orientation: null },
-          defaults: pantry.defaults,
-          spools: pantry.spools,
-        });
+        const outcome = await sliceModel(
+          source,
+          job.name,
+          {
+            chosen: { ...job.settings, modelPlate: plate, orientation: null },
+            defaults: pantry.defaults,
+            spools: pantry.spools,
+          },
+          {},
+          controller.signal,
+        );
+        if (!current()) return;
         figures[plate] = outcome.ok
           ? {
               ...(outcome.prefill.estimatedMinutes !== undefined ? { minutes: outcome.prefill.estimatedMinutes } : {}),
@@ -106,9 +132,14 @@ export function comparePlates(
       comparisons.set(job.fileId, state("running", job.plates.length - todo.length + at + 1));
       emit();
     }
+    if (!current()) return;
+    running.delete(job.fileId);
     comparisons.set(job.fileId, state("done", job.plates.length));
     emit();
   }).catch(() => {
+    // Stopped (or replaced) runs leave what the newer one wrote; a failed one goes.
+    if (!current()) return;
+    running.delete(job.fileId);
     comparisons.delete(job.fileId);
     emit();
   });
