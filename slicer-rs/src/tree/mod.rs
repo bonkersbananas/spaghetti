@@ -24,6 +24,7 @@ pub mod util;
 pub mod volumes;
 
 use crate::config::Settings;
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shapes};
 
 /// mm from Orca's nanometres.
@@ -360,7 +361,7 @@ fn near_edge(area: &Shapes, p: Pt, reach: f64) -> bool {
             let (dx, dy) = (bx - ax, by - ay);
             let len2 = dx * dx + dy * dy;
             let t = if len2 > 0.0 { (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-            (px - ax - t * dx).hypot(py - ay - t * dy) <= reach
+            (px - ax - t * dx).hyp(py - ay - t * dy) <= reach
         })
     })
 }
