@@ -212,6 +212,10 @@ mod tests {
             refused(r#"{"process": {"raft_layers": "2", "support_style": "tree_hybrid"}}"#),
             Some(Error::Unsupported("a raft in this style of tree support"))
         );
+        assert_eq!(
+            refused(r#"{"process": {"raft_layers": "2"}, "filaments": [{}, {}]}"#),
+            Some(Error::Unsupported("a raft with several filaments"))
+        );
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))

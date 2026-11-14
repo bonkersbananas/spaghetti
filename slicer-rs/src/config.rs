@@ -824,6 +824,10 @@ impl Settings {
             && let Some(what) = self.support.unsupported(self)
         {
             Some(what)
+        } else if self.support.raft_layers > 0 && self.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+            // With a prime tower Orca turns the support's own layer heights off, which rounds the raft's gap to a
+            // layer, and prints the tower through that gap on layers of its own.
+            Some("a raft with several filaments")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
         } else if !matches!(
