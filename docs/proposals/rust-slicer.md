@@ -307,11 +307,11 @@ A project can ask for brim ears, or for its brim inside holes or on both sides. 
 | Plate with the star-shaped hole | Inside | 22 / 22 | 77.87 / 77.82 mm³ (+0.05 %) |
 | Plate with the star-shaped hole | Both sides | 32 / 32 | 270.37 / 270.31 mm³ (+0.02 %) |
 | 3DBenchy | Ears | 20 / 20 | 29.78 / 29.81 mm³ (−0.11 %) |
-| 3DBenchy | Inside | 10 / 10 | 11.37 / 11.37 mm³ (+0.06 %) |
+| 3DBenchy | Inside | 10 / 10 | 11.37 / 11.37 mm³ (+0.04 %) |
 | 3DBenchy | Both sides | 20 / 20 | 113.14 / 113.15 mm³ (−0.00 %) |
 | 12 Benchies on one plate | Ears | 240 / 240 | 357.42 / 357.71 mm³ (−0.08 %) |
 
-The ears go where Orca's go (none on a cylinder, none in the frame's square hole, whose corners point out of it; four outside the star plate and six in its hole), and a Benchy's brim loops start where Orca's do and print in its order, whichever kind. On the block, the triangle and the star plate, whose corners lie exactly alike, the ears print in another order than Orca's: chaining them, Orca's search breaks exact ties in distance otherwise than ours (`order.rs`). Which corners get ears depends on where the outline grown by the gap starts, since simplifying it keeps that point, so it is grown as Orca grows it, by Clipper2: grown by our other offset, the triangle got none. On the plate the first two Benchies print in the opposite order to Orca's, as they do with its auto brim (the first layer's tour, not the brims). The estimates stay within 1.2 % of Orca's, as without these brims.
+The ears go where Orca's go (none on a cylinder, none in the frame's square hole, whose corners point out of it; four outside the star plate and six in its hole), and a Benchy's brim loops start where Orca's do and print in its order, whichever kind. On the block, the triangle and the star plate, whose corners lie exactly alike, the ears print in another order than Orca's: chaining them, Orca's search breaks exact ties in distance otherwise than ours (`order.rs`). Which corners get ears depends on where the outline grown by the gap starts, since simplifying it keeps that point, so it is grown as Orca grows it, by Clipper2: grown by our other offset, the triangle got none. On the plate the first two Benchies print in the opposite order to Orca's, as they do with its auto brim (the first layer's tour, not the brims). The estimates stay within 1 % of Orca's, as without these brims.
 
 ## 4. The printer's G-code, against Orca's
 
