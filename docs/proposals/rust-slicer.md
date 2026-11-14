@@ -4,7 +4,7 @@ Status: a first version in [`slicer-rs/`](../../slicer-rs), measured against Orc
 
 ## 1. What it is
 
-A self-contained crate, about 35,000 lines of Rust on seven small crates (polygon booleans, a Voronoi diagram, deflate, CRC32, MD5, maths functions, and threads natively). It turns STL and plain 3MF files into a `.gcode.3mf`, with the defaults the app slices with (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI) or with the slicing settings people choose (below). Its files open in Spaghetti as Orca's do: the reader finds the estimate, weight, filament, settings and plate picture, and the 3D view shows every layer by feature. Around the toolpaths they carry the printer's own G-code, from the presets the app's engine ships (copied into `slicer-rs/profiles/x2d/`): the X2D's start and end, and its layer change and timelapse G-code, filled as Orca fills them (`src/template.rs` ports Orca's placeholder language).
+A self-contained crate, about 35,000 lines of Rust on seven small crates (polygon booleans, a Voronoi diagram, deflate, CRC32, MD5, maths functions, and threads natively). It turns STL and plain 3MF files into a `.gcode.3mf`, with the defaults the app slices with (Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI) or with the slicing settings people choose (below). Its files open in Spaghetti as Orca's do: the reader finds the estimate, weight, filament, settings and plate picture, and the 3D view shows every layer by feature. Around the toolpaths they carry the printer's own G-code, from the presets the app's engine ships (copied into `slicer-rs/profiles/x2d/`): the X2D's start and end, and its layer change and timelapse G-code, filled as Orca fills them (`src/template.rs` ports Orca's placeholder language). For the X2D's other nozzles, 0.2, 0.6 and 0.8 mm, the command line has Bambu's presets from the engine's release 2 too (`profiles/x2d-0.2/` and the others: each nozzle's machine, its Standard process and Bambu PLA Basic), and slices with them with `--nozzle 0.2`.
 
 The same code builds two ways:
 
@@ -26,7 +26,7 @@ Left for later: painted colours and objects whose parts are in different filamen
 
 ### Settings
 
-It slices from the same settings object as the app's engine (decision 0047). The app's `sliceSetup` turns people's slicing settings (`src/shared/slicing/settings.ts`: quality, walls, infill and pattern, supports, brim, filaments, plate, nozzle, scale) into OrcaSlicer configs through `orca.ts`, the one place that knows Orca's presets and keys, and hands them to Orca's engine. The Rust slicer takes that same setup, as JSON: `spaghetti-slicer --setup setup.json` natively, `setup()` in WebAssembly, and `node slicer-rs/bench/setup.mts presets.json '<settings>'` writes one with the app's own code. It reads every setting by Orca's own keys (`src/config.rs`), laid over the X2D's presets, so a layer height, a filament or a plate needs no code of its own: Fine at 0.12 mm takes Orca's 0.12 mm process, ABS takes Generic ABS, with its first-layer and later temperatures and its heated chamber. The fans follow Orca's cooling layer by layer: off for the filament's first layers, then by how long each layer takes. Without a setup it slices with the X2D's defaults, to the same file as before.
+It slices from the same settings object as the app's engine (decision 0047). The app's `sliceSetup` turns people's slicing settings (`src/shared/slicing/settings.ts`: quality, walls, infill and pattern, supports, brim, filaments, plate, nozzle, scale) into OrcaSlicer configs through `orca.ts`, the one place that knows Orca's presets and keys, and hands them to Orca's engine. The Rust slicer takes that same setup, as JSON: `spaghetti-slicer --setup setup.json` natively, `setup()` in WebAssembly, and `node slicer-rs/bench/setup.mts presets.json '<settings>'` writes one with the app's own code. It reads every setting by Orca's own keys (`src/config.rs`), laid over the X2D's presets, so a layer height, a filament or a plate needs no code of its own: Fine at 0.12 mm takes Orca's 0.12 mm process, ABS takes Generic ABS, with its first-layer and later temperatures and its heated chamber. The fans follow Orca's cooling layer by layer: off for the filament's first layers, then by how long each layer takes. A setup for another nozzle brings that nozzle's presets whole, as the app's `sliceSetup` takes Bambu's for the nozzle fitted (decision 0056), so the WebAssembly module slices for any nozzle without presets of its own. Without a setup it slices with the X2D's defaults, to the same file as before.
 
 What it can't do yet, it refuses by name ("can't slice with a raft yet"), so the app can slice those with Orca's engine: slim, strong and hybrid trees, snug and painted supports, rafts and supports only on the plate, objects whose parts are in different filaments (and, on a plate in several, models that don't say which they print in), spiral vase, printing one object after another, and brims other than one round the outside (ears, or inside holes). What it prints otherwise than the settings ask, it says with the file ("gyroid sparse infill printed as straight lines"): sparse infill patterns other than crosshatch, gyroid, grid, cubic, honeycomb, lightning and straight lines, solid infill patterns other than monotonic and straight lines (zig-zag), arachne walls (classic), ironing and fuzzy skin (none), and the slope lifts of generic filaments (spirals). Bambu's tray id goes in the plate's description only for Bambu PLA Basic (`GFA00`), as the engine's presets carry Orca's own ids.
 
@@ -75,6 +75,22 @@ A 36 mm block with an S cut through it in orange and the S in blue, 10 mm tall (
 
 The tower and the tool changes cost little: the plate slices 7 times faster than native Orca, and its WebAssembly memory ends at 21 MB. The module grew by 333 kB (111 kB gzip) for them, most of it the tower (116 kB of code) and the planning of the changes (87 kB). A plate in one filament slices to the same file as before, byte for byte.
 
+### On the other nozzles
+
+A Benchy for each of the X2D's other nozzles, with Bambu's presets for it, as above: on the 0.2 mm nozzle 0.10 mm layers (480 of them) and four walls, on the 0.6 mm 0.30 mm layers and on the 0.8 mm 0.40 mm, with two walls each. Every runner slices with the same presets (`bench/run.py` hands them to Orca's engine and native Orca too):
+
+| Runner | 0.2 mm nozzle, 0.10 mm layers | 0.6 mm nozzle, 0.30 mm layers | 0.8 mm nozzle, 0.40 mm layers |
+| --- | --- | --- | --- |
+| **Rust, native, 4 threads** | **1.20 s, 61 MB** | **0.37 s, 34 MB** | **0.34 s, 32 MB** |
+| Rust, native, 1 thread | 4.24 s, 56 MB | – | – |
+| Rust, WebAssembly, Node | 5.97 s, 159 MB | – | – |
+| **Rust, WebAssembly, Chromium** | **5.97 s, 105 MB** | – | – |
+| OrcaSlicer 2.5.0, native, 4 threads | 2.22 s, 301 MB | 1.17 s, 172 MB | 1.06 s, 161 MB |
+| Orca's engine, WebAssembly, Node | 15.1 s, 722 MB | – | – |
+| Orca's engine, WebAssembly, Chromium (the app today) | 14.7 s, 588 MB | – | – |
+
+The 0.2 mm nozzle's twice as many layers, of thinner lines, take a Benchy 2.5 times as long to slice as at 0.20 mm, natively and in the browser alike, and it stays 1.9 times faster than native Orca and 2.5 times faster than Orca's engine in Chromium, in a fifth of its memory. The larger nozzles slice 3.1 to 3.2 times faster than native Orca. Their presets are in the command line only: the WebAssembly module slices whatever presets the app's setup brings, so they cost it nothing, and Orca's bridging flow, which the 0.2 mm presets need (section 3), grew it by 2 kB (1 kB gzip). The 0.4 mm nozzle's files are the same as before, byte for byte.
+
 ### Output size
 
 | Model | Rust `.gcode.3mf` | Orca's G-code, packed as the app packs it | Rust G-code | Orca's G-code |
@@ -84,6 +100,9 @@ The tower and the tool changes cost little: the plate slices 7 times faster than
 | UOBF text with clips | 169 kB | 148 kB | 831 kB | 845 kB |
 | 12 Benchies on one plate | 8.35 MB | 5.66 MB | 35.52 MB | 29.35 MB |
 | Two colours, two nozzles | 136 kB | 122 kB | 873 kB | 938 kB |
+| 3DBenchy, 0.2 mm nozzle | 2.95 MB | 2.18 MB | 11.15 MB | 8.66 MB |
+| 3DBenchy, 0.6 mm nozzle | 503 kB | 383 kB | 1.72 MB | 1.53 MB |
+| 3DBenchy, 0.8 mm nozzle | 348 kB | 274 kB | 1.12 MB | 1.06 MB |
 
 Our G-code runs from 6 % shorter than Orca's (the glasses) to 21 % longer: both drop the points a path doesn't need, but Orca also fits arcs to curves (its gyroid and crosshatch waves among them), where we write short lines, and lines of varying width (gap fill, narrow solid infill) take a width line for each stretch; walls slowing down over an overhang take a speed for each stretch, as Orca's do. Packed, ours runs from the same size (the glasses) to 47 % larger. We deflate at level 4 in parallel chunks, for speed, and our G-code packs less tightly: at level 6 in one stream, as Orca's above, the plate's would be 7.7 MB against 5.7 MB.
 
@@ -166,6 +185,20 @@ A filament's grams are all it uses, flush included: Orca counts what the printer
 
 What differs: Orca writes the tower's walls as arcs, we as short lines; the tower stands 20 µm off Orca's (its rib offset, not pinned down yet); Orca's estimate of a tool change's travels round the tower differs a little from ours where it leaves the tower; Orca adds `M104 … ;Multi extruder pre cooling/pre heating` lines that cool an idle nozzle and heat it again before its next use, which we don't write yet (so the idle nozzle stays at printing temperature between its uses, as in Orca with `enable_pre_heating` off: nothing waits longer, but it may ooze more); and Orca groups three filaments or more on the two nozzles by an exhaustive search we approximate (exact for two, which is all the app's stand-ins and these plates use). A plate in one filament slices to the same file as before, byte for byte.
 
+### Other nozzles
+
+A Benchy on each of the X2D's other nozzles (section 2), against native OrcaSlicer 2.5.0 with the same presets:
+
+| Model | Layers, Rust / Orca | Filament, Rust / Orca | Estimate, Rust / Orca | Extruding, Rust / Orca | Travel, retractions and lifts, Rust / Orca | Retractions, Rust / Orca |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.2 mm nozzle, 0.10 mm layers | 480 / 480 | 11.12 g / 11.01 g (+1.0 %) | 151.0 / 145.7 min (+3.6 %) | 121.9 / 119.7 min (+1.9 %) | 23.9 / 20.9 min (+14.1 %) | 3,520 / 3,255 |
+| 0.6 mm nozzle, 0.30 mm layers | 160 / 160 | 12.42 g / 12.34 g (+0.7 %) | 26.3 / 26.6 min (−0.8 %) | 15.3 / 15.1 min (+1.2 %) | 5.9 / 6.3 min (−6.3 %) | 1,050 / 1,157 |
+| 0.8 mm nozzle, 0.40 mm layers | 120 / 120 | 13.77 g / 13.87 g (−0.7 %) | 21.3 / 21.8 min (−2.3 %) | 12.6 / 12.5 min (+0.8 %) | 3.5 / 4.1 min (−14.2 %) | 651 / 785 |
+
+Bambu's presets for the 0.2 mm nozzle lay bridges with half as much plastic again (`bridge_flow` 1.5), and Orca's bridging flow, now ported, gives the lines their shape: a bridge or an overhang wall is a flat line at the same spacing, half as tall again (0.15 mm on a 0.10 mm layer), and an internal bridge a round thread √1.5 times the nozzle's width (0.245 mm), its lines that and 0.05 mm apart. A Benchy's bridges, internal bridges and overhang walls now come within 1.1 % of Orca's plastic on the 0.2 mm; before, with the extra plastic left out, they had two thirds to three quarters of it. On every nozzle the walls, sparse infill, top surfaces and bridges come within 4 % of Orca's plastic, most within 1 %, and a 20 mm cube within 0.4 % of Orca's plastic and 1.2 % of its printing time (the tests hold each nozzle's cube to 2 %).
+
+What differs: internal solid infill takes 4 to 13 % more plastic than Orca's (4.6 % on the 0.2 mm, 12.9 % on the 0.6 mm, 4.1 % on the 0.8 mm) and gap fill 4 to 9 % less, where the narrow bands along slopes split into lines and loops otherwise than Orca's at these widths; the 0.6 mm's bottom surfaces come 12 % short. The 0.2 mm retracts 8 % more often than Orca's, which puts more than half of the 3.6 % on its estimate (the rest is its internal solid infill), and the 0.6 and 0.8 mm 9 and 17 % less often, so their travels take less time than Orca's. The head and tail of each file are Orca's as for the 0.4 mm nozzle (section 4), the settings block listing that nozzle's values.
+
 ## 4. The printer's G-code, against Orca's
 
 A bad start can drive the nozzle into the bed, so everything around the toolpaths is held to native OrcaSlicer's file for the same models in the same place. [`bench/headtail.py`](../../slicer-rs/bench/headtail.py) diffs the head of the two files (from the top to the first printed line: header, settings, the machine limits, the printer's start G-code, the first layer change and the travel down to the first path) and their tail (from the last printed line to the end: the last retraction and lift, the last timelapse photo, the end G-code and the totals), line by line. For the four benchmark models, besides the header's six lines that name the slicer, its estimate and the labels, of Orca's 452 to 529 head lines 7 to 10 differ, and of its 149 to 153 tail lines 6 to 16. Every difference is one of these:
@@ -192,6 +225,7 @@ In order of what matters for a good print with the default profile. A small item
 | A first test print of a Benchy, watched | The start and end G-code are Orca's (section 4), but nothing has printed yet | A print |
 | Aligned seams | The seam in one line, where Orca's would be: ours runs straight up the back. Orca's seam placer weighs each point's corner, overhang and how visible it is from outside (rays cast on the mesh), then lines the seams up layer to layer, 2,450 lines of it | Large |
 | The second wall in narrow parts, as Orca's | On the glasses, in some narrow parts ours runs on where Orca's stops short and leaves the rest to gap fill: 4 % more inner wall and 8 % less gap fill than Orca's, on layers without a top surface. Why isn't pinned down: the offsets that make the walls are Orca's | Small |
+| Solid infill, gap fill and retractions on the other nozzles | On a Benchy, internal solid infill takes 4 to 13 % more plastic than Orca's and gap fill 4 to 9 % less on the 0.2, 0.6 and 0.8 mm nozzles; the 0.2 mm retracts 8 % more often than Orca's, the 0.6 and 0.8 mm 9 and 17 % less (section 3) | Small |
 | Slope lifts (Orca's `Auto Lift`: a slope, or a spiral where the travel sets off over an overhang) | The X2D's generic filaments lift so; Bambu's PLA lifts in spirals, as this does | Small |
 | Arc fitting | Orca's default, a curve in one move: Orca writes the plate's walls in 342,000 moves, we in 564,000. Smaller files and smoother curves | Small |
 | The overhang fan: more fan over overhangs and bridges | With the default PLA the fan runs full from the second layer, so nothing changes; filaments that cool less (PETG, ABS) get no extra fan there yet | Small |
@@ -205,10 +239,10 @@ The estimate will follow once the features above are in: the planner already mod
 
 ### What keeps it from being the app's slicer
 
-What the app's "Slice with…" can ask for (`src/shared/slicing/settings.ts`), tried on Nov 13 with a Benchy and the setup the app makes (`bench/setup.mts`). The app hands a slicer the meshes it has laid down, scaled, arranged and given fins itself, so those already work with any slicer. The Rust slicer slices every layer height a 0.4 mm nozzle takes (0.08 to 0.28 mm, measured against Orca at 0.20 mm so far), 1 to 12 walls, 0 to 100 % infill, the six patterns people pick and zig-zag, normal and tree supports where needed or everywhere, auto, on and off brims, all seven plates, and filaments of any kind, one or several (each object in its own, section 3). What stops it, in the order of the work: a refusal makes the app fall back to Orca's engine; a note means it slices, but otherwise than asked.
+What the app's "Slice with…" can ask for (`src/shared/slicing/settings.ts`), tried on Nov 13 with a Benchy and the setup the app makes (`bench/setup.mts`). The app hands a slicer the meshes it has laid down, scaled, arranged and given fins itself, so those already work with any slicer. The Rust slicer slices for every nozzle the X2D takes (0.2, 0.4, 0.6 and 0.8 mm) at every layer height each takes, measured against Orca at each one's Standard (0.10, 0.20, 0.30 and 0.40 mm), 1 to 12 walls, 0 to 100 % infill, the six patterns people pick and zig-zag, normal and tree supports where needed or everywhere, auto, on and off brims, all seven plates, and filaments of any kind, one or several (each object in its own, section 3). What stops it, in the order of the work: a refusal makes the app fall back to Orca's engine; a note means it slices, but otherwise than asked.
 
 1. **Tree supports**, the app's support style unless people pick another: they slice, in the app since release 3, within 6 % of Orca's support (section 3). Left: their speed in the browser (section 2).
-2. **Nozzles other than 0.4 mm**: 0.2 first, then 0.6 and 0.8. Neither engine has their presets yet; ours needs Orca's X2D presets for each, checked against Orca at their own layer heights (a Benchy at 0.10 mm on the 0.2).
+2. **Nozzles other than 0.4 mm**: they slice with the presets the app's setup brings for each (Bambu's, decision 0056), within 1 % of Orca's plastic and 4 % of its estimate on a Benchy (section 3), the 0.2 mm's bridges with the extra plastic its presets ask for (with the next release in the app). Left: their internal solid infill, gap fill and retractions (section 5).
 3. **Filaments other than PLA**: they slice with a note. Orca lifts the nozzle along a slope between moves for the X2D's generic filaments ("Auto Lift"); ours lifts in Bambu PLA's spiral (small).
 4. **Several filaments**: they slice now, each object in its filament, on the X2D's two nozzles or one, with Orca's tool changes, tower and flushing (section 3). Left: the app hands the module each object's filament (`add_in`, as its engine gets `extruder` per object; until then a plate in several is refused and falls back to Orca's engine), and painted colours and objects made of parts in different filaments (refused, large).
 5. **The other supports**: slim, strong and hybrid trees (Orca's older tree code) and snug normal supports, refused (medium each).

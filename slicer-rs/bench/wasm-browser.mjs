@@ -1,6 +1,8 @@
 // Slices models with the WebAssembly build in a browser (Chromium or WebKit, through Playwright), on a fresh page
-// per run, sampling the browser's processes' memory every 100 ms. Prints one JSON line per run.
-//   node wasm-browser.mjs <chromium|webkit> <dir with spaghetti_slicer.wasm> <runs> [--keep-placement] <model…>
+// per run, sampling the browser's processes' memory every 100 ms. Prints one JSON line per run. A slice setup slices
+// with its settings, as in wasm-node.mjs.
+//   node wasm-browser.mjs <chromium|webkit> <dir with spaghetti_slicer.wasm> <runs> [--keep-placement]
+//     [--setup <setup.json>] <model…>
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -10,7 +12,11 @@ import { chromium, webkit } from "../../node_modules/@playwright/test/index.mjs"
 
 const [which, wasmDir, runsText, ...rest] = process.argv.slice(2);
 const keep = rest.includes("--keep-placement");
-const models = rest.filter((a) => a !== "--keep-placement").map((m) => path.resolve(m));
+const setupAt = rest.indexOf("--setup");
+const setup = setupAt >= 0 ? path.resolve(rest[setupAt + 1]) : null;
+const models = rest
+  .filter((a, i) => a !== "--keep-placement" && (setupAt < 0 || (i !== setupAt && i !== setupAt + 1)))
+  .map((m) => path.resolve(m));
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 // The page, the module and the models, each at its own fixed path: nothing else is served, and only to this machine.
@@ -18,6 +24,7 @@ const files = new Map([
   ["/", path.join(here, "web/index.html")],
   ["/wasm/spaghetti_slicer.wasm", path.join(wasmDir, "spaghetti_slicer.wasm")],
   ...models.map((model, i) => [`/model/${i}`, model]),
+  ...(setup ? [["/setup.json", setup]] : []),
 ]);
 const server = http.createServer((req, res) => {
   const file = files.get(new URL(req.url, "http://127.0.0.1").pathname);
@@ -62,8 +69,8 @@ for (let run = 0; run < Number(runsText); run++) {
     peakOne = Math.max(peakOne, ...now);
   }, 100);
   const result = await page.evaluate(
-    ([paths, k]) => window.runSlice(paths, k),
-    [models.map((_, i) => `/model/${i}`), keep],
+    ([paths, k, s]) => window.runSlice(paths, k, s),
+    [models.map((_, i) => `/model/${i}`), keep, setup ? "/setup.json" : null],
   );
   clearInterval(timer);
   const mb = (b) => Math.round(b / 1048576);
