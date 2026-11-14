@@ -276,8 +276,10 @@ impl Plate {
         }
         let t1 = now();
         let layers = section::Layers::plan(height, settings.first_layer_height, settings.layer_height);
-        let apart = settings.palette.is_some();
-        let (slices, owners) = section::slice_objects(&meshes, &layers, settings.resolution, apart);
+        // Slices simplified to half the profile's resolution, as before: Orca simplifies its own to 0.0025 mm, which
+        // comes a little closer to its supports on a Benchy and makes every later step a third slower.
+        let (slices, owners) =
+            section::slice(&meshes, &layers, settings.resolution / 2.0, settings.slice_closing_radius);
         let t2 = now();
         let mut objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
         if let Some(first) = slices.first() {

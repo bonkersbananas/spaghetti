@@ -53,12 +53,14 @@ jobs:
       - name: Build the module
         working-directory: slicer-rs
         run: cargo rustc --release --locked --lib --crate-type cdylib --target wasm32-unknown-unknown --no-default-features
-      - name: Slice a model with it, plain and with normal supports
+      - name: Slice a model with it, plain, with normal supports and with tree supports
         run: |
           wasm=slicer-rs/target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm
           node slicer-rs/bench/wasm-node.mjs "$wasm" /tmp/bridge.gcode.3mf slicer-rs/tests/models/bridge.stl
           echo '{"process": {"enable_support": "1", "support_type": "normal(auto)"}}' > /tmp/supports.json
           node slicer-rs/bench/wasm-node.mjs "$wasm" /tmp/supports.gcode.3mf --setup /tmp/supports.json slicer-rs/tests/models/bridge.stl
+          echo '{"process": {"enable_support": "1", "support_type": "tree(auto)"}}' > /tmp/trees.json
+          node slicer-rs/bench/wasm-node.mjs "$wasm" /tmp/trees.gcode.3mf --setup /tmp/trees.json slicer-rs/tests/models/bridge.stl
       - name: Pack it
         run: |
           export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
