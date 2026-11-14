@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { patternProject, raftProject, twoColourProject } from "./fixtures/model-3mf";
+import { patternProject, raftProject, twoColourProject, vaseProject } from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -303,6 +303,24 @@ test("a project's triangles, tri-hexagon or quarter cubic infill is sliced by ou
       // straight lines".
       expect(slice.notes ?? [], pattern).toEqual([]);
     }
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a project in spiral vase mode is sliced by ours", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    const { id } = await ideaWithModel(page, "Block vase", "vase.3mf", vaseProject());
+    await expect
+      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+      .toBe("spaghetti");
+    const slice = (await fileOf(page, id)).slice;
+    // Until release 12 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "spiral vase mode" }.
+    expect(slice.fallback).toBeUndefined();
+    expect(slice.notes ?? []).toEqual([]);
   } finally {
     await setDefaults(page, null);
   }
