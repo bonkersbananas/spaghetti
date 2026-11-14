@@ -1,3 +1,4 @@
+import { toBase64Url } from "../shared/base64url.ts";
 import { OPEN_LINK_MINUTES, type OpenPart } from "../shared/open-link.ts";
 import { secretKeySource } from "./webhooks/secrets.ts";
 
@@ -65,6 +66,8 @@ export async function verifyOpenLink(
   } catch {
     return null;
   }
+  // Refuse a non-canonical signature: the last character carries 4 bits, and atob drops its low 2.
+  if (toBase64Url(bytes) !== signature) return null;
   // crypto.subtle.verify compares in constant time.
   const ok = await crypto.subtle.verify(
     "HMAC",
