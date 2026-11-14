@@ -84,7 +84,7 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
     return root;
   };
 
-  const slicer = readSlicer(text(MODEL_HEAD));
+  const slicer = readGenerator(text(SLICE_INFO)) ?? readSlicer(text(MODEL_HEAD));
   if (slicer) out.slicer = slicer;
 
   // Settings (JSON).
@@ -266,6 +266,16 @@ function read(data: Uint8Array, out: ThreeMfResult): void {
   out.kind = kind;
   if (kind === "unknown" && warnings.length === 0)
     warnings.push("No Bambu Studio or Orca Slicer data found in this file");
+}
+
+/**
+ * Our own sliced files say "BambuStudio-…" in Application (Bambu Studio opens no other as sliced); who made the
+ * G-code is in slice_info's header: `Spaghetti-Slicer-Version` or `OrcaSlicer-Version`.
+ */
+function readGenerator(sliceInfo: string | undefined): { name: string; version?: string } | undefined {
+  const m = /<header_item\s+key="(Spaghetti-Slicer|OrcaSlicer)-Version"\s+value="([^"]*)"/.exec(sliceInfo ?? "");
+  if (!m?.[2]) return undefined;
+  return { name: m[1] === "OrcaSlicer" ? "OrcaSlicer" : "Spaghetti slicer", version: m[2] };
 }
 
 function readSlicer(head: string | undefined): { name: string; version?: string } | undefined {

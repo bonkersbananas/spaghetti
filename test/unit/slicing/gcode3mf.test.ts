@@ -1,9 +1,10 @@
-import { strFromU8, strToU8, unzipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { packGcode3mf, summarizeGcode } from "../../../src/shared/slicing/gcode3mf.ts";
 import { md5Hex } from "../../../src/shared/slicing/md5.ts";
 import { settingsFromFile, slicerName } from "../../../src/shared/threemf/prefill.ts";
 import { readThreeMf } from "../../../src/shared/threemf/read.ts";
+import { bambuStudioProblems } from "./bambu-rules.ts";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
 
@@ -83,6 +84,15 @@ describe("packGcode3mf", () => {
       filament_colors: ["#F2754E", "#4F7FC7"],
       nozzle_diameter: 0.4,
     });
+  });
+
+  it("holds to what Bambu Studio's reader needs to open it as a sliced plate (not 'no geometry data')", () => {
+    expect(bambuStudioProblems(packed())).toEqual([]);
+    // The rule has teeth: Orca's own name as the generator is what failed in Bambu Studio.
+    const files = unzipSync(packed());
+    const model = strFromU8(files["3D/3dmodel.model"] ?? new Uint8Array()).replace("BambuStudio-", "OrcaSlicer-");
+    files["3D/3dmodel.model"] = strToU8(model);
+    expect(bambuStudioProblems(zipSync(files))).toEqual([expect.stringContaining('not "BambuStudio-<version>"')]);
   });
 
   it("is read by the app's own reader as a sliced file: plate, estimate, weight, objects, filaments and settings", () => {

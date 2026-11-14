@@ -5,12 +5,18 @@
 
 use crate::Object;
 use crate::config::{Settings, Value};
-use crate::gcode::{NAME, Stats, VERSION};
+use crate::gcode::{Stats, VERSION};
 use crate::zip;
 use md5::{Digest, Md5};
 
 /// The Bambu Studio file version Orca 2.5 writes into its sliced files for the printers' sake.
 const BBL_CLIENT_VERSION: &str = "02.08.01.55";
+
+/// What Bambu Studio's reader needs in `Application`: only a generator starting with "BambuStudio-" is trusted with
+/// the file's config, G-code and slice info (`_handle_end_metadata`, then `dont_load_config`); with another name it
+/// loads no G-code and says "The file does not contain any geometry data." Who made the G-code is in slice_info's
+/// header and the G-code's first line. 2.0.0 is the oldest version it takes as current.
+const BAMBU_STUDIO_APPLICATION: &str = "BambuStudio-02.00.00.00";
 
 fn xml(value: &str) -> String {
     value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
@@ -112,7 +118,7 @@ pub fn gcode_3mf(
         [
             r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
             r#"<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">"#.into(),
-            format!(r#" <metadata name="Application">{}</metadata>"#, xml(&format!("{NAME}-{VERSION}"))),
+            format!(r#" <metadata name="Application">{BAMBU_STUDIO_APPLICATION}</metadata>"#),
             r#" <metadata name="BambuStudio:3mfVersion">1</metadata>"#.into(),
             format!(r#" <metadata name="Title">{}</metadata>"#, xml(title)),
             " <resources/>".into(),
