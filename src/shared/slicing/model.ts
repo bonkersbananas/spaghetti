@@ -45,10 +45,14 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
     const strength = strengthOf(after);
     return strength ? strengthWords(strength) : "other walls and infill";
   }
+  // Another nozzle moves the layer height with it (the same quality, at that nozzle's height): one change.
+  if (changed.length === 2 && changed.includes("nozzle") && changed.includes("layerHeight")) {
+    return `the ${after.nozzle} mm nozzle`;
+  }
   if (changed.length !== 1) return "the new settings";
   switch (changed[0]) {
     case "layerHeight":
-      return qualityWords(after.layerHeight);
+      return qualityWords(after.layerHeight, after.nozzle);
     case "supports":
       return supportWords(after) || "no supports";
     case "supportStyle":

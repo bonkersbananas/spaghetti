@@ -103,13 +103,43 @@ describe("chosen settings", () => {
     expect(setup.settings).toMatchObject({ process: "0.16mm Standard @BBL X2D", bedType: "Cool Plate" });
   });
 
-  it("refuse a nozzle the engine's presets don't have yet", () => {
+  it("refuse a nozzle the engine's presets don't have", () => {
     expect(() => sliceSetup(presets, { settings: { nozzle: 0.6 } })).toThrow(MissingPreset);
   });
 
   it("keep layer heights within the nozzle's range", () => {
     const setup = sliceSetup(presets, { settings: { layerHeight: 0.4 } });
     expect(setup.process.layer_height).toBe("0.28");
+  });
+});
+
+describe("another nozzle", () => {
+  it("slices with that nozzle's own presets, the defaults' quality by its name there", () => {
+    // Standard (0.20 mm on the 0.4 mm nozzle) for the 0.2 mm nozzle: its own Standard, 0.10 mm.
+    const setup = sliceSetup(presets, { settings: { nozzle: 0.2 } });
+    expect(setup.settings).toMatchObject({
+      machine: "Bambu Lab X2D 0.2 nozzle",
+      process: "0.10mm Standard @BBL X2D 0.2 nozzle",
+      filaments: ["Bambu PLA Basic @BBL X2D 0.2 nozzle"],
+      layerHeight: 0.1,
+    });
+    expect(setup.slicing).toMatchObject({ nozzle: 0.2, layerHeight: 0.1 });
+    expect(setup.process.layer_height).toBe("0.1");
+  });
+
+  it("takes each quality from the nozzle's nearest process", () => {
+    const sliced = (layerHeight: number) => sliceSetup(presets, { settings: { nozzle: 0.2, layerHeight } });
+    expect(sliced(0.08).settings.process).toBe("0.08mm High Quality @BBL X2D 0.2 nozzle");
+    expect(sliced(0.12).settings.process).toBe("0.12mm Balanced Quality @BBL X2D 0.2 nozzle");
+    // Extra draft is the 0.12 mm process at the tallest layer the 0.2 mm prints.
+    const extra = sliced(0.14);
+    expect(extra.settings).toMatchObject({ process: "0.12mm Balanced Quality @BBL X2D 0.2 nozzle", layerHeight: 0.14 });
+    expect(extra.process.layer_height).toBe("0.14");
+  });
+
+  it("slices a filament with no preset there as its nearest kin", () => {
+    const setup = sliceSetup(presets, { settings: { nozzle: 0.2, filaments: [{ material: "PETG-CF" }] } });
+    expect(setup.settings).toMatchObject({ filaments: ["Generic PETG @BBL X2D 0.2 nozzle"], materials: ["PETG"] });
   });
 });
 
