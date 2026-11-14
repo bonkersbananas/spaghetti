@@ -10,6 +10,7 @@ import {
   slicingSummary,
 } from "../../../src/shared/slicing/settings.ts";
 import {
+  cautionsOf,
   durationWords,
   fallbackOf,
   fallbackWords,
@@ -20,6 +21,7 @@ import {
   rustEstimateMs,
   slicedBy,
   slicerOf,
+  warningsOf,
 } from "../../../src/shared/slicing/slicers.ts";
 import type { FileSlice } from "../../../src/shared/slicing/types.ts";
 import { slicingDetail } from "../../../src/shared/slicing/words.ts";
@@ -79,6 +81,34 @@ describe("our slicer's answer", () => {
     expect(notesOf(Array.from({ length: 12 }, (_, i) => `note ${i}`))).toHaveLength(8);
     expect(notesOf(["x".repeat(200)])[0]).toHaveLength(120);
   });
+
+  it("keeps what it warns of as Orca's engine gives it, each well formed", () => {
+    const floating = {
+      kind: "need_support_on",
+      message:
+        "It seems object rack.stl has floating regions. Please re-orient the object or enable support generation.",
+    };
+    expect(warningsOf([floating])).toEqual([floating]);
+    // A module from before it warned (slicer-rs-v5 and older) says nothing of them.
+    expect(warningsOf(undefined)).toEqual([]);
+    expect(warningsOf([null, "floating", { kind: 1, message: "" }, { kind: "x" }, floating])).toEqual([floating]);
+    expect(warningsOf([{ kind: "x", message: "y".repeat(400) }])[0]?.message).toHaveLength(300);
+  });
+});
+
+describe("the card's cautions", () => {
+  const floating = { kind: "need_support_on", message: "It seems object rack.stl has floating regions." };
+  it("say parts float in the air when a model without supports needs them, whichever slicer warned", () => {
+    expect(cautionsOf([floating], "off")).toEqual(["floating"]);
+    expect(cautionsOf([], "off")).toEqual([]);
+    expect(cautionsOf([{ kind: "other", message: "" }], "off")).toEqual([]);
+  });
+
+  it("say nothing when it has supports, fins included, which the slicer's check doesn't count", () => {
+    for (const supports of ["where-needed", "everywhere", "fins"] as const) {
+      expect(cautionsOf([floating], supports)).toEqual([]);
+    }
+  });
 });
 
 describe("who sliced it", () => {
@@ -103,7 +133,8 @@ describe("who sliced it", () => {
     expect(fallback("unsupported", "tree supports")).toBe(
       "Sliced by OrcaSlicer: our own slicer can't do tree supports yet",
     );
-    expect(fallback("floating")).toBe("Sliced by OrcaSlicer: our own slicer can't check for floating parts yet");
+    // Only on slices from before ours warned of floating parts.
+    expect(fallback("floating")).toBe("Sliced by OrcaSlicer: our own slicer couldn't yet check for floating parts");
     expect(fallback("unloaded")).toBe("Sliced by OrcaSlicer: our own slicer couldn't start");
     expect(fallback("failed")).toBe("Sliced by OrcaSlicer: our own slicer couldn't slice this one");
     // A story card's button says only who.

@@ -6,13 +6,12 @@ import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate 
 import { MissingPreset, mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
-import { hasFloatingPart } from "@shared/slicing/floating.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
 import { type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
-import { rustEstimateMs } from "@shared/slicing/slicers.ts";
+import { cautionsOf, rustEstimateMs, type SlicerWarning } from "@shared/slicing/slicers.ts";
 import type {
   FileSlice,
   SliceCaution,
@@ -198,14 +197,11 @@ async function run(request: SliceRequest) {
     if (ours?.ok) {
       ({ sliced, ms } = ours);
       by = "spaghetti";
+      cautions = cautionsOf(ours.warnings, slicing.supports);
     } else {
       const result = await sliceWithEngine(engine, setup, objects);
       by = "orca";
-      // Orca can't see fins as supports (they are separate solids under a gap), so it warns of a floating part that
-      // the fins hold up: the caution is for a model with no supports at all.
-      if (slicing.supports === "off" && result.warnings.some((warning) => warning.kind === "need_support_on")) {
-        cautions = ["floating"];
-      }
+      cautions = cautionsOf(result.warnings, slicing.supports);
       progress("packing", 0);
       const packing = performance.now();
       const summary = summarizeGcode(result.gcode);
@@ -281,10 +277,9 @@ async function fetchJson<T>(url: URL): Promise<T> {
 }
 
 /**
- * Slices the placed objects with Spaghetti's own slicer, or says why the engine should (decision 0055): a model
- * without supports that may have a part starting in the air goes to the engine, which warns of it (ours can't yet;
- * shared/slicing/floating.ts), and so does what ours refuses or fails on. Ours keeps the objects where they were put
- * and at the size they are (the setup's scale is 100: they are scaled already).
+ * Slices the placed objects with Spaghetti's own slicer, or says why the engine should (decision 0055): what ours
+ * refuses or fails on. It warns of parts that float in the air as the engine does. Ours keeps the objects where they
+ * were put and at the size they are (the setup's scale is 100: they are scaled already).
  */
 async function withOurs(
   request: SliceRequest,
@@ -294,13 +289,6 @@ async function withOurs(
 ): Promise<OursAnswer> {
   const rust = request.rust;
   if (!rust) return { ok: false, fallback: { why: "unloaded" } };
-  if (slicing.supports === "off") {
-    const firstLayer = Number(first(setup.process.initial_layer_print_height)) || 0.2;
-    const positions = objects.map((object) => object.positions);
-    if (hasFloatingPart(positions, { above: firstLayer / 2, layer: slicing.layerHeight })) {
-      return { ok: false, fallback: { why: "floating" } };
-    }
-  }
   progress("engine", 0);
   const json = JSON.stringify({
     machine: setup.machine,
@@ -469,15 +457,10 @@ class EngineError extends Error {
   }
 }
 
-interface EngineWarning {
-  kind: string;
-  message: string;
-}
-
 interface EngineResult {
   gcode: Uint8Array;
   stats: { printTimeSeconds?: number; filamentG?: number };
-  warnings: EngineWarning[];
+  warnings: SlicerWarning[];
   /** How long the engine took to slice, in ms (its loading not counted). */
   ms: number;
 }
