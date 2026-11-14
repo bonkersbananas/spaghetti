@@ -770,8 +770,6 @@ fn tree_interface_layers(
     out
 }
 
-/// Orca's `detect_overhangs` for layer `l`: the parts beyond the layer below by more than the support angle allows,
-/// with sharp tails (small islands with nothing under them) and cantilevers (overhangs reaching over 3 mm out).
 /// Orca's `buildplate_covered`, for supports on the plate only: on each layer, the union of every layer below it,
 /// each grown by 0.01 mm so they join (none on the first layer).
 fn buildplate_covered(o: &Object) -> Vec<Shapes> {
@@ -784,9 +782,10 @@ fn buildplate_covered(o: &Object) -> Vec<Shapes> {
     covered
 }
 
-/// Orca's `detect_overhangs` for normal supports: where layer `l` reaches beyond the support angle past the layer
-/// below, and its sharp tails. On the plate only (`covered`), nothing over what the layers below cover: that is cut
-/// before the overhang grows back to its full size.
+/// Orca's `detect_overhangs` for layer `l`: the parts beyond the layer below by more than the support angle allows,
+/// with sharp tails (small islands with nothing under them) and cantilevers (overhangs reaching over 3 mm out). On
+/// the plate only (`covered`), nothing over what the layers below cover: that is cut before the overhang grows back
+/// to its full size.
 fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) -> Detected {
     let lower = &o.slices[l - 1];
     let region = &o.slices[l];
