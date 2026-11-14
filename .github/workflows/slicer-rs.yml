@@ -97,3 +97,10 @@ jobs:
           grep -q '^; LINE_WIDTH: 0.244949$' /tmp/nozzle.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/nozzle-wasm.gcode.3mf --setup /tmp/nozzle-0.2.json tests/models/bridge.stl
           cmp /tmp/nozzle.gcode.3mf /tmp/nozzle-wasm.gcode.3mf
+      - name: The same, with a generic filament's Auto Lift (slopes, and spirals over overhangs)
+        run: |
+          echo '{"filaments": [{"filament_z_hop_types": ["nil", "nil", "nil", "nil"]}]}' > /tmp/lift.json
+          ./target/release/spaghetti-slicer --setup /tmp/lift.json tests/models/bridge.stl -o /tmp/lift.gcode.3mf --gcode /tmp/lift.gcode
+          grep -qE '^G1 X[0-9.]+ Y[0-9.]+ Z[0-9.]+ F60000$' /tmp/lift.gcode
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/lift-wasm.gcode.3mf --setup /tmp/lift.json tests/models/bridge.stl
+          cmp /tmp/lift.gcode.3mf /tmp/lift-wasm.gcode.3mf

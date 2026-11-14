@@ -14,6 +14,7 @@ pub mod geom;
 pub mod grid;
 pub mod infill;
 pub mod json;
+pub mod lift;
 pub mod lightning;
 pub mod medial;
 pub mod mesh;
@@ -294,6 +295,16 @@ impl Plate {
             .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
             .collect();
         let regions = region::regions(&slices, &owners, &layers, &centres, settings);
+        // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
+        let auto_lift = match &settings.palette {
+            Some(p) if p.profiles.len() > 1 => p.profiles.iter().any(|f| config::Settings::auto_lifts(f)),
+            _ => settings.z_hop_type == "Auto Lift",
+        };
+        let lift_overhangs = if auto_lift && settings.z_hop > 0.0 {
+            lift::Overhangs::find(&slices, &owners, &layers.top, settings.line_width)
+        } else {
+            lift::Overhangs::default()
+        };
         drop((slices, owners));
         let t3 = now();
         let supports = if settings.enable_support {
@@ -376,6 +387,7 @@ impl Plate {
             photos: &photos,
             start: frame.start_position(),
             colours: colours.as_ref(),
+            lift_overhangs: &lift_overhangs,
         };
         // Each layer from its regions to its G-code in one go, so only the text stays; the support's own layers
         // with the object layer above them, which they are cooled with.
