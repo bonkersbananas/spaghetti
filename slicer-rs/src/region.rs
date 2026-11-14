@@ -224,10 +224,17 @@ pub fn regions(
         let reach = |shapes: &Shapes| geom::simplify_shapes(&geom::offset(shapes, grow), PATH_RESOLUTION);
         (reach(top), reach(bottom))
     });
-    // Each layer's infill area; layers whose slices are alike (a prism's, past the first layer) share a run, and
-    // have the same infill area.
-    let holes: Vec<Shapes> =
-        islands.iter().map(|layer| layer.iter().flat_map(|island| island.inner.iter().cloned()).collect()).collect();
+    // Each layer's infill area as Orca's shells see it (its `fill_expolygons`): reaching into the walls by the
+    // overlap, so that a band where a wall above or below stands further in is narrower by that much. Layers whose
+    // slices are alike (a prism's, past the first layer) share a run, and have the same infill area.
+    let holes: Vec<Shapes> = par::map_range(n, |i| {
+        islands[i]
+            .iter()
+            .flat_map(|island| {
+                if island.overlap > 0.0 { geom::offset(&island.inner, island.overlap) } else { island.inner.clone() }
+            })
+            .collect()
+    });
     let mut run = vec![0usize; n];
     for i in 1..n {
         let alike = i > 1 && slices[i] == slices[i - 1] && layers.height[i] == layers.height[i - 1];
@@ -282,21 +289,34 @@ pub fn regions(
         islands[i]
             .iter()
             .map(|island| {
-                let Some(b) = geom::bbox(&island.inner) else { return Fills::default() };
+                let Some(inner_box) = geom::bbox(&island.inner) else { return Fills::default() };
+                // Orca finds the shells on its infill area as it is, reaching into the walls by the overlap: the
+                // shell is found and regularised on that, then cut back to ours (the planner adds the overlap).
+                let inner_ov = if island.overlap > 0.0 {
+                    geom::offset(&island.inner, island.overlap)
+                } else {
+                    island.inner.clone()
+                };
+                let b = geom::bbox(&inner_ov).unwrap_or(inner_box);
                 let (top, bottom) = (geom::near(top, b), geom::near(bottom, b));
                 let own_top = geom::intersection(&island.inner, &top);
                 let own_bottom = geom::intersection(&island.inner, &bottom);
                 let internal = geom::difference(&geom::difference(&island.inner, &own_top), &own_bottom);
+                let internal_ov = if island.overlap > 0.0 {
+                    geom::difference(&geom::difference(&inner_ov, &top), &bottom)
+                } else {
+                    internal.clone()
+                };
                 // Solid under the tops and over the bottoms within reach (only theirs near this island)…
                 let near: Vec<Shapes> =
                     shell.iter().map(|part| geom::near(part, b)).filter(|p| !p.is_empty()).collect();
                 let shelled = match near.len() {
                     0 => Vec::new(),
-                    1 => geom::intersection(&internal, &near[0]),
-                    _ => geom::intersection(&internal, &geom::union_all(&near.iter().collect::<Vec<_>>())),
+                    1 => geom::intersection(&internal_ov, &near[0]),
+                    _ => geom::intersection(&internal_ov, &geom::union_all(&near.iter().collect::<Vec<_>>())),
                 };
                 // …and where a layer within reach has no infill area over or under this one's.
-                let mut kept = internal.clone();
+                let mut kept = internal_ov.clone();
                 for &j in &reach {
                     let theirs = geom::near(&holes[j], b);
                     kept = if theirs.is_empty() { Vec::new() } else { geom::intersection(&kept, &theirs) };
@@ -304,7 +324,7 @@ pub fn regions(
                         break;
                     }
                 }
-                let vertical = if kept == internal { Vec::new() } else { geom::difference(&internal, &kept) };
+                let vertical = if kept == internal_ov { Vec::new() } else { geom::difference(&internal_ov, &kept) };
                 let wanted = match (shelled.is_empty(), vertical.is_empty()) {
                     (true, true) => Vec::new(),
                     (false, true) => shelled,
@@ -313,12 +333,12 @@ pub fn regions(
                 };
                 // Where the shells take all of the infill area, regularising leaves at most slivers of sparse
                 // infill, which turn solid anyway (they are far under the smallest sparse area).
-                let all = !wanted.is_empty() && geom::difference(&internal, &wanted).is_empty();
+                let all = !wanted.is_empty() && geom::difference(&internal_ov, &wanted).is_empty();
                 let (solid, sparse) = if all {
                     (internal, Vec::new())
                 } else {
                     let around = (i > 0 && i + 1 < n).then(|| (&slices[i - 1], &slices[i + 1]));
-                    let shell = regularise(&wanted, &internal, spacing, around);
+                    let shell = regularise(&wanted, &internal_ov, spacing, around);
                     if shell.is_empty() {
                         (Vec::new(), internal)
                     } else {
@@ -328,7 +348,15 @@ pub fn regions(
                 // The first layer's bottom is on the plate; any other bottom is a bridge over air. Then each grows
                 // into the infill beside it, as the tops do.
                 let (bottom, bridge) = if i == 0 { (own_bottom, Vec::new()) } else { (Vec::new(), own_bottom) };
-                let grown = surfaces::grow_surfaces(own_top, bottom, bridge, solid, sparse, &growth);
+                let grown = surfaces::grow_surfaces(
+                    own_top,
+                    bottom,
+                    bridge,
+                    solid,
+                    sparse,
+                    &growth,
+                    Some((&island.inner, island.overlap)),
+                );
                 Fills {
                     top: grown.top,
                     bottom: grown.bottom,
