@@ -202,7 +202,9 @@ fn neighbours(n_vertices: usize, indices: &[[u32; 3]]) -> Vec<[i32; 3]> {
 
 /// Orca's `its_short_edge_collpase`: edges collapse, shortest allowed first and their faces in Orca's shuffled
 /// order, until no more than `target` triangles are left; a collapse keeps the vertex whose faces turn away from
-/// its normal the most (it shapes the model more).
+/// its normal the most (it shapes the model more). Out of line, as are `Bvh::first_hit` and `Visibility::at`: inlined
+/// into the seam placer's one long function, they ran half as fast again in WebAssembly in V8.
+#[inline(never)]
 fn collapse_short_edges(vertices: &[V3], indices: &[[u32; 3]], target: usize) -> (Vec<V3>, Vec<[u32; 3]>) {
     let mut mapping: Vec<usize> = (0..vertices.len()).collect();
     let final_index = |mapping: &mut Vec<usize>, start: usize| {
@@ -507,6 +509,9 @@ struct Bvh {
     rank: Vec<u32>,
 }
 
+/// How deep the tree goes at most, so that what a ray has still to look into fits on a fixed stack.
+const DEPTH: usize = 62;
+
 #[derive(Clone, Copy)]
 struct Node {
     min: [f64; 3],
@@ -530,10 +535,10 @@ impl Bvh {
             .collect();
         let mut order: Vec<u32> = (0..indices.len() as u32).collect();
         let mut nodes = vec![Node { min: [0.0; 3], max: [0.0; 3], first: 0, count: 0 }];
-        let mut stack = vec![(0usize, 0usize, order.len())];
+        let mut stack = vec![(0usize, 0usize, order.len(), 0usize)];
         const BINS: usize = 12;
         let wide = |v: V3| v.map(f64::from);
-        while let Some((node, from, to)) = stack.pop() {
+        while let Some((node, from, to, depth)) = stack.pop() {
             let (mut min, mut max) = ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]);
             let (mut cmin, mut cmax) = ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]);
             for &t in &order[from..to] {
@@ -547,7 +552,7 @@ impl Bvh {
             }
             nodes[node].min = wide(min);
             nodes[node].max = wide(max);
-            if to - from <= 4 {
+            if to - from <= 4 || depth >= DEPTH {
                 nodes[node].first = from as u32;
                 nodes[node].count = (to - from) as u32;
                 continue;
@@ -626,8 +631,8 @@ impl Bvh {
             nodes.push(Node { min: [0.0; 3], max: [0.0; 3], first: 0, count: 0 });
             nodes.push(Node { min: [0.0; 3], max: [0.0; 3], first: 0, count: 0 });
             nodes[node].first = left as u32;
-            stack.push((left, from, mid));
-            stack.push((left + 1, mid, to));
+            stack.push((left, from, mid, depth + 1));
+            stack.push((left + 1, mid, to, depth + 1));
         }
         let corners = order
             .iter()
@@ -641,7 +646,9 @@ impl Bvh {
     }
 
     /// The triangle a ray from `origin` along `dir` meets first (at t > 0), as Orca's `intersect_ray_first_hit` with
-    /// its default epsilon finds it: the shortest distance in single precision, ties to the first in Orca's tree.
+    /// its default epsilon finds it: the shortest distance in single precision, ties to the first in Orca's tree. Out
+    /// of line: inlined into the seam placer, the walk took twice as long in WebAssembly in V8.
+    #[inline(never)]
     fn first_hit(&self, origin: [f64; 3], dir: [f64; 3]) -> Option<u32> {
         let inv = dir.map(|d| 1.0 / d);
         let neg = inv.map(|i| i < 0.0);
@@ -661,11 +668,16 @@ impl Bvh {
         // start to hold one as near: up to the next float.
         let mut best: Option<(f32, u32, u32)> = None;
         let mut limit = f64::INFINITY;
-        let mut stack: Vec<(u32, f64)> = Vec::with_capacity(64);
+        // The nodes still to look into, with where the ray enters them: no deeper than the tree.
+        let mut stack = [(0u32, 0.0f64); DEPTH + 2];
+        let mut top = 0;
         if let Some(t) = enter(&self.nodes[0], limit) {
-            stack.push((0, t));
+            stack[0] = (0, t);
+            top = 1;
         }
-        while let Some((n, t_in)) = stack.pop() {
+        while top > 0 {
+            top -= 1;
+            let (n, t_in) = stack[top];
             if t_in > limit {
                 continue;
             }
@@ -688,18 +700,22 @@ impl Bvh {
             let (l, r) = (node.first, node.first + 1);
             let tl = enter(&self.nodes[l as usize], limit);
             let tr = enter(&self.nodes[r as usize], limit);
+            let mut push = |entry: (u32, f64)| {
+                stack[top] = entry;
+                top += 1;
+            };
             match (tl, tr) {
                 (Some(a), Some(b)) => {
                     if a <= b {
-                        stack.push((r, b));
-                        stack.push((l, a));
+                        push((r, b));
+                        push((l, a));
                     } else {
-                        stack.push((l, a));
-                        stack.push((r, b));
+                        push((l, a));
+                        push((r, b));
                     }
                 }
-                (Some(a), None) => stack.push((l, a)),
-                (None, Some(b)) => stack.push((r, b)),
+                (Some(a), None) => push((l, a)),
+                (None, Some(b)) => push((r, b)),
                 (None, None) => {}
             }
         }
@@ -877,7 +893,9 @@ impl Visibility {
     }
 
     /// How visible the surface is at `p` (mm): the samples within the radius, each weighted by how close it is and
-    /// how close `p` is to its plane; fully visible where there are none.
+    /// how close `p` is to its plane; fully visible where there are none. Out of line, for WebAssembly
+    /// (`collapse_short_edges`).
+    #[inline(never)]
     pub fn at(&self, p: V3) -> f32 {
         let r = self.radius;
         let (mut total, mut weights) = (0.0f32, 0.0f32);

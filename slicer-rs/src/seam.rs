@@ -207,6 +207,12 @@ fn angle_penalty(angle: f32) -> f32 {
     gauss(angle, 0.0, 1.0, 3.0) + 1.0 / (2.0 + libm::expf(-angle))
 }
 
+/// The length of (x, y) as Eigen's `norm()` takes it, which Orca measures with: the square root of the sum of the
+/// squares (`hypot` rounds differently, and in WebAssembly is a slow library call).
+fn norm(x: f64, y: f64) -> f64 {
+    (x * x + y * y).sqrt()
+}
+
 /// Orca's `SeamComparator` for its aligned, aligned-back and back seams (no painted seams, so every candidate is
 /// neutral, and with one region no point hides inside the print).
 #[derive(Clone, Copy)]
@@ -300,11 +306,11 @@ fn gather(regions: &LayerRegions, object: u32, z: f32, width: f32, nozzle: f32, 
             let mut lengths: Vec<f32> = (0..n - 1)
                 .map(|i| {
                     let (a, b) = (mm(polygon[i]), mm(polygon[i + 1]));
-                    (a.0 - b.0).hypot(a.1 - b.1) as f32
+                    norm(a.0 - b.0, a.1 - b.1) as f32
                 })
                 .collect();
             let (a, b) = (mm(polygon[0]), mm(polygon[n - 1]));
-            lengths.push(((a.0 - b.0).hypot(a.1 - b.1)).max(0.1) as f32);
+            lengths.push(norm(a.0 - b.0, a.1 - b.1).max(0.1) as f32);
             let turns = angles(&polygon, &lengths, nozzle);
             let index = out.perimeters.len();
             let start = out.points.len();
@@ -540,7 +546,7 @@ struct Foot {
 fn box_distance(c: &Ring, p: [f64; 2]) -> f64 {
     let dx = (c.min[0] - p[0]).max(0.0) + (p[0] - c.max[0]).max(0.0);
     let dy = (c.min[1] - p[1]).max(0.0) + (p[1] - c.max[1]).max(0.0);
-    dx.hypot(dy)
+    norm(dx, dy)
 }
 
 /// The point of `c` nearest `p`; with `stop`, any vertex that close will do. With `source_normals`, only the sides
@@ -549,7 +555,7 @@ fn closest(c: &Ring, p: [f64; 2], stop: f64, source_normals: Option<&[[f64; 2]]>
     let mut result = Foot { point: [0.0, 0.0], distance: f64::INFINITY };
     if stop >= 0.0 && source_normals.is_none() {
         for v in &c.points {
-            let d = (v[0] - p[0]).hypot(v[1] - p[1]);
+            let d = norm(v[0] - p[0], v[1] - p[1]);
             if d <= stop {
                 return Foot { point: *v, distance: d };
             }
@@ -575,7 +581,7 @@ fn closest(c: &Ring, p: [f64; 2], stop: f64, source_normals: Option<&[[f64; 2]]>
         let t =
             if length2 > 0.0 { (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / length2).clamp(0.0, 1.0) } else { 0.0 };
         let q = [a[0] + t * d[0], a[1] + t * d[1]];
-        let distance = (q[0] - p[0]).hypot(q[1] - p[1]);
+        let distance = norm(q[0] - p[0], q[1] - p[1]);
         if distance < result.distance {
             result = Foot { point: q, distance };
         }
@@ -599,7 +605,7 @@ fn normals(c: &Ring, p: [f64; 2]) -> Vec<[f64; 2]> {
             continue;
         }
         let t = (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / l2).clamp(0.0, 1.0);
-        if (a[0] + t * d[0] - p[0]).hypot(a[1] + t * d[1] - p[1]) <= 1e-6 {
+        if norm(a[0] + t * d[0] - p[0], a[1] + t * d[1] - p[1]) <= 1e-6 {
             let len = l2.sqrt();
             let sign = if c.hole { -1.0 } else { 1.0 };
             out.push([sign * d[1] / len, sign * -d[0] / len]);
@@ -1046,15 +1052,21 @@ fn place_on_loop(points: &[Candidate], perimeter: &Perimeter, index: usize, targ
     };
     let edge_normal = |a: [f64; 2], b: [f64; 2]| {
         let d = [b[0] - a[0], b[1] - a[1]];
-        let l = d[0].hypot(d[1]);
+        let l = norm(d[0], d[1]);
         if l > 0.0 { [-d[1] / l, d[0] / l] } else { [0.0, 0.0] }
     };
     let vertex_normal = |i: usize| {
         let a = edge_normal(xy(distinct(i, false)), xy(i));
         let b = edge_normal(xy(i), xy(distinct(i, true)));
         let sum = [a[0] + b[0], a[1] + b[1]];
-        let l = sum[0].hypot(sum[1]);
-        if l * l > 0.0 { [sum[0] / l, sum[1] / l] } else { [0.0, 0.0] }
+        // Eigen's `normalized()`: over the square root of the squared norm, where that isn't 0.
+        let n2 = sum[0] * sum[0] + sum[1] * sum[1];
+        if n2 > 0.0 {
+            let l = n2.sqrt();
+            [sum[0] / l, sum[1] / l]
+        } else {
+            [0.0, 0.0]
+        }
     };
     let cross = |a: [f64; 2], b: [f64; 2]| a[0] * b[1] - a[1] * b[0];
     let p = [f64::from(target[0]), f64::from(target[1])];
@@ -1069,7 +1081,7 @@ fn place_on_loop(points: &[Candidate], perimeter: &Perimeter, index: usize, targ
         let j = if forward { next(i) } else { prev(i) };
         let (a, b) = if forward { (i, j) } else { (j, i) };
         let d = [xy(b)[0] - xy(a)[0], xy(b)[1] - xy(a)[1]];
-        let length = d[0].hypot(d[1]);
+        let length = norm(d[0], d[1]);
         let g = [p[0] - xy(a)[0], p[1] - xy(a)[1]];
         let u_closest =
             if length > 0.0 { ((g[0] * d[0] + g[1] * d[1]) / (length * length)).clamp(0.0, 1.0) } else { 0.0 };
