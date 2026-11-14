@@ -857,6 +857,8 @@ function engineProblem(error: EngineError): Pick<FileSlice, "problem" | "message
 
 async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup, objects: Placed[]) {
   progress("engine", 0);
+  // An engine from an attempt before this one (a retry with a wider prime tower) is let go: one at a time in memory.
+  host?.terminate();
   const worker = new Worker(new URL(engine.host, engine.base), { type: "module", name: "slicer-engine" });
   host = worker;
   const pending = new Map<

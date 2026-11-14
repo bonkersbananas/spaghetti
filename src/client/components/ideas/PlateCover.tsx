@@ -31,7 +31,7 @@ export function PlateCover({
         fit="contain"
         frame="deep"
         eager
-        className="aspect-4/3 max-h-[72dvh] w-full p-6 md:rounded-xl md:p-10"
+        className={cn("aspect-4/3 max-h-[72dvh] w-full p-6 md:rounded-xl md:p-10", original && "pb-16 md:pb-16")}
       />
       <span className="absolute top-3 left-3">
         <SlicerPreviewBadge />
