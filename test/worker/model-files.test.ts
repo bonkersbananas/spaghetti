@@ -102,6 +102,18 @@ describe("a model's picture in its own colours", () => {
     expect((await itemOf(item.id)).files?.[0]?.slice?.originalPicture).toBeUndefined();
     expect((await request(`/api/files/${id}/original-thumb`, { cookie })).status).toBe(404);
   });
+
+  it("is not claimed by a slice that comes back from an undo", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const first = slicedForm({ originalPicture: true });
+    first.set("originalThumb", new File([PNG], "o.png", { type: "image/png" }));
+    await putSliced(id, first);
+    await putSliced(id, slicedForm({}, { keep: true }));
+    expect((await request(`/api/files/${id}/sliced/restore`, { method: "POST", cookie })).status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slice?.originalPicture).toBeUndefined();
+  });
 });
 
 describe("models kept with an idea", () => {

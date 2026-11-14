@@ -962,14 +962,16 @@ export const fileRoutes = new Hono<AppEnv>()
         : c.env.PHOTOS.delete(fileKey(id, "sliced")),
       previous.hasThumb ? copyPart(c.env.PHOTOS, id, "previous-thumb", "thumb") : null,
     ]);
-    await c.env.PHOTOS.delete([fileKey(id, "previous"), fileKey(id, "previous-thumb")]);
+    // The picture in the model's colours isn't kept for an undo: the slice that comes back has none.
+    await c.env.PHOTOS.delete([fileKey(id, "previous"), fileKey(id, "previous-thumb"), fileKey(id, "original-thumb")]);
+    const { originalPicture: _gone, ...restored } = previous.slice;
     const db = c.var.db;
     const target = tableOf(found.table);
     await db.batch([
       db
         .update(target)
         .set({
-          slice: previous.slice,
+          slice: restored,
           prefill: previous.prefill,
           objects: previous.objects,
           slicer: previous.slicer,
