@@ -107,7 +107,7 @@ export function CardMenu({
       }
       className={
         compact
-          ? "pressable focus-ring touch-target bg-veil text-on-veil absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-md"
+          ? "pressable focus-ring touch-target bg-veil text-on-veil absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-md md:opacity-0 md:transition-opacity md:group-focus-within/mini:opacity-100 md:group-hover/mini:opacity-100 md:data-[state=open]:opacity-100"
           : "pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
       }
     >

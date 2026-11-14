@@ -182,20 +182,36 @@ test("on phones Up next is one compact strip, in queue order, above the inbox", 
   await expect.poll(() => serverQueue(page)).toEqual(["Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]);
 });
 
-test("on desktop Up next stays the featured grid of full cards", async ({ page, isMobile }) => {
-  test.skip(isMobile, "Phones have the strip.");
-  for (const title of ["One", "Two"]) {
+test("on desktop Up next is one compact row, and the inbox starts on the first screen", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones have their own check above.");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const title of ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]) {
     const id = await makeIdea(page, title);
     await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
   }
+  await makeIdea(page, "Plain inbox idea");
   await page.goto("/ideas");
-  await expect.poll(() => names(page)).toEqual(["One", "Two"]);
-  const list = upNext(page);
-  expect(await list.evaluate((el) => getComputedStyle(el).display)).toBe("grid");
-  expect(
-    await list
-      .getByRole("listitem")
-      .first()
-      .evaluate((el) => el.getBoundingClientRect().width),
-  ).toBeGreaterThan(200);
+  await expect.poll(() => names(page)).toHaveLength(9);
+  const strip = upNext(page);
+  const tops = await strip
+    .getByRole("listitem")
+    .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
+  const widths = await strip
+    .getByRole("listitem")
+    .first()
+    .evaluate((el) => el.getBoundingClientRect().width);
+  expect(widths).toBeLessThan(160);
+  // More than fit: it scrolls, and the arrow shows the rest.
+  expect(await strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await page.getByRole("button", { name: "Later in Up next" }).click();
+  await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
+  // The inbox's first card is on the first screen.
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toBeInViewport();
+
+  // Hovering a card shows its menu; it takes the idea off.
+  await strip.getByRole("link", { name: /Nine/ }).hover();
+  await page.getByRole("button", { name: "Options for Nine" }).click();
+  await page.getByRole("button", { name: "Take off Up next" }).click();
+  await expect.poll(() => serverQueue(page)).not.toContain("Nine");
 });

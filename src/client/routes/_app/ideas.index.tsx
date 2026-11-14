@@ -34,8 +34,6 @@ export const Route = createFileRoute("/_app/ideas/")({
   component: Ideas,
 });
 
-/** Up next on desktop is the featured row: fewer, wider cards than the inbox below it. Phones get UpNextStrip. */
-const upNextGrid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-5 lg:grid-cols-3";
 /** The inbox's grid: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
@@ -69,7 +67,7 @@ function Ideas() {
     onMoveDown: index >= 0 && index < queue.length - 1 ? () => moveUpNext(queryClient, queue, item.id, 1) : undefined,
     wish: item,
   });
-  const card = (item: (typeof items)[number], index: number) => (
+  const card = (item: (typeof items)[number]) => (
     <IdeaCard
       key={item.id}
       item={item}
@@ -77,27 +75,7 @@ function Ideas() {
       via={via(item.createdVia)}
       landing={item.id === landed || arrived.has(item.id)}
       headingLevel={queue.length > 0 ? 3 : 2}
-      featured={isDesktop && index >= 0}
-      menu={menuFor(item, index)}
-      drag={
-        isDesktop && index >= 0 && queue.length > 1
-          ? {
-              dragging: dragged === item.id,
-              over: over === item.id && dragged !== item.id,
-              onDragStart: () => setDragged(item.id),
-              onDragEnd: () => {
-                setDragged(null);
-                setOver(null);
-              },
-              onDragOver: () => setOver(item.id),
-              onDrop: () => {
-                if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
-                setDragged(null);
-                setOver(null);
-              },
-            }
-          : undefined
-      }
+      menu={menuFor(item, -1)}
     />
   );
 
@@ -143,37 +121,44 @@ function Ideas() {
             </p>
           )}
           {queue.length > 0 && (
-            <Section
-              id="up-next-heading"
-              title="Up next"
-              size={isDesktop ? "headline" : "title"}
-              count={queue.length}
-              className="mb-8 md:mb-16"
-            >
-              {isDesktop ? (
-                <ul data-picks className={`${upNextGrid} relative`} aria-label="Up next">
-                  <Reflow key={filter ?? "all"}>{queue.map((item, index) => card(item, index))}</Reflow>
-                </ul>
-              ) : (
-                <UpNextStrip
-                  key={filter ?? "all"}
-                  queue={queue}
-                  menuFor={menuFor}
-                  landed={(item) => item.id === landed || arrived.has(item.id)}
-                />
-              )}
+            <Section id="up-next-heading" title="Up next" size="title" count={queue.length} className="mb-8 md:mb-10">
+              <UpNextStrip
+                key={filter ?? "all"}
+                queue={queue}
+                menuFor={menuFor}
+                landed={(item) => item.id === landed || arrived.has(item.id)}
+                dragFor={(item) =>
+                  isDesktop && queue.length > 1
+                    ? {
+                        dragging: dragged === item.id,
+                        over: over === item.id && dragged !== item.id,
+                        onDragStart: () => setDragged(item.id),
+                        onDragEnd: () => {
+                          setDragged(null);
+                          setOver(null);
+                        },
+                        onDragOver: () => setOver(item.id),
+                        onDrop: () => {
+                          if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
+                          setDragged(null);
+                          setOver(null);
+                        },
+                      }
+                    : undefined
+                }
+              />
             </Section>
           )}
           {rest.length > 0 &&
             (queue.length > 0 ? (
-              <Section id="inbox-heading" title="The rest" size={isDesktop ? "headline" : "title"}>
+              <Section id="inbox-heading" title="The rest" size="title">
                 <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                  <Reflow key={filter ?? "all"}>{rest.map((item) => card(item, -1))}</Reflow>
+                  <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
                 </ul>
               </Section>
             ) : (
               <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                <Reflow key={filter ?? "all"}>{rest.map((item) => card(item, -1))}</Reflow>
+                <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
               </ul>
             ))}
           <StartedIdeas builds={builds} />
