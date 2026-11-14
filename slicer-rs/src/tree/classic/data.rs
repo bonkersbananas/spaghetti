@@ -36,6 +36,8 @@ pub fn union(shapes: Shapes) -> Shapes {
 }
 
 type Cache = Mutex<HashMap<(u64, usize), Arc<Shapes>>>;
+/// Collision (`false`) or avoidance (`true`) areas grown by a distance: keyed by those, the radius and the layer.
+type GrownCache = Mutex<HashMap<(bool, u64, usize, u64), Arc<Shapes>>>;
 
 pub struct Data {
     /// Each object layer's slices, simplified (`m_layer_outlines`), and those of it and every layer below
@@ -48,6 +50,7 @@ pub struct Data {
     xy_distance: f64,
     collision: Cache,
     avoidance: Cache,
+    grown: GrownCache,
 }
 
 impl Data {
@@ -73,6 +76,7 @@ impl Data {
             xy_distance,
             collision: Mutex::new(HashMap::new()),
             avoidance: Mutex::new(HashMap::new()),
+            grown: Mutex::new(HashMap::new()),
         }
     }
 
@@ -131,6 +135,47 @@ impl Data {
             from += 1;
         }
         result
+    }
+}
+
+impl Data {
+    /// A layer's collision (`avoidance` false) or avoidance areas for the radius, grown by `distance` mm as a branch
+    /// moving out of them grows them (Orca's `move_out_expolys`, which grows them each time it is asked).
+    pub fn grown(&self, avoidance: bool, radius: f64, l: usize, distance: f64) -> Arc<Shapes> {
+        let r = Self::ceil_radius(radius);
+        let key = (avoidance, r.to_bits(), l, distance.to_bits());
+        if let Some(g) = self.grown.lock().unwrap().get(&key) {
+            return g.clone();
+        }
+        let shapes = if avoidance { self.avoidance(r, l) } else { self.collision(r, l) };
+        let g = Arc::new(union(offset_ex(&shapes, scale(distance))));
+        self.grown.lock().unwrap().entry(key).or_insert(g).clone()
+    }
+
+    /// Works out ahead, on every core, the avoidance and collision areas the branches are likely to ask for (Orca's
+    /// "precalculate avoidance of all possible radii"): for each radius in `wanted` (layer, radii), the collisions of
+    /// every layer up to the highest it is wanted on, then its avoidances layer after layer, each radius at once;
+    /// and each wanted layer's collision for a radius of nothing. They come out the same as worked out when asked.
+    #[cfg(feature = "parallel")]
+    pub fn precompute(&self, wanted: &[(usize, Vec<f64>)]) {
+        let mut highest: HashMap<u64, usize> = HashMap::new();
+        for (l, radii) in wanted {
+            for &r in radii {
+                let top = highest.entry(Self::ceil_radius(r).to_bits()).or_insert(*l);
+                *top = (*top).max(*l);
+            }
+        }
+        let mut chains: Vec<(f64, usize)> = highest.into_iter().map(|(r, l)| (f64::from_bits(r), l)).collect();
+        chains.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut collisions: Vec<(f64, usize)> =
+            chains.iter().flat_map(|&(r, top)| (0..=top).map(move |l| (r, l))).collect();
+        collisions.extend(wanted.iter().map(|(l, _)| (0.0, *l)));
+        crate::par::map_range(collisions.len(), |k| {
+            self.collision(collisions[k].0, collisions[k].1);
+        });
+        crate::par::map_range(chains.len(), |k| {
+            self.avoidance(chains[k].0, chains[k].1);
+        });
     }
 }
 

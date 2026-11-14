@@ -919,7 +919,7 @@ fn organic_trees_hold_up_a_slab_on_two_trunks() {
 fn classic_trees_hold_up_a_slab_as_orcas_do() {
     // The T again, with Orca's classic trees in each of their styles. Native OrcaSlicer 2.5.0 (Nov 14): 181 layers
     // each; mm³ of branches and of interface. The trees are Orca's to the nanometre (every branch's every point, by
-    // Orca's own log); the branches' walls come out 0.4 % shorter.
+    // Orca's own log); their loops print 0.4 % less, as chords where Orca fits arcs.
     let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
     for (style, support, interface) in
         [("tree_slim", 604.9, 90.7), ("tree_strong", 747.9, 91.3), ("tree_hybrid", 1272.8, 84.5)]

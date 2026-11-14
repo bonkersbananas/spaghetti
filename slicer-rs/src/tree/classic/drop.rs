@@ -4,7 +4,7 @@
 //! close, and moved towards their neighbours and out of the object's way; last, each branch's path smoothed.
 
 use super::contact::Areas;
-use super::data::{Data, offset_ex, scale, union};
+use super::data::{Data, scale};
 use super::mst::{Mst, P, SCALING_FACTOR, vsize2};
 use super::order::StdMap;
 use super::{EPSILON, Frame, NewNode, NodeType, Nodes, Style};
@@ -248,17 +248,16 @@ pub fn projection_onto(shapes: &Shapes, frame: &Frame, from: P) -> P {
     best
 }
 
-/// Orca's `move_out_expolys`: moves `from` out of the shapes grown by `distance` mm, at most `max_move` mm; false
+/// Orca's `move_out_expolys`: moves `from` out of the shapes as grown (`dilated`), at most `max_move` mm; false
 /// when it can't get out of the shapes themselves.
-fn move_out(shapes: &Shapes, frame: &Frame, from: &mut P, distance: f64, max_move: f64) -> bool {
-    let dilated = union(offset_ex(shapes, scale(distance)));
-    let mut pt = projection_onto(&dilated, frame, *from);
+fn move_out(shapes: &Shapes, dilated: &Shapes, frame: &Frame, from: &mut P, max_move: f64) -> bool {
+    let mut pt = projection_onto(dilated, frame, *from);
     let outward = sub(pt, *from);
     let pt_max = add(*from, normal(outward, scale(max_move)));
     if vsize2(outward) > max_move * max_move {
         pt = pt_max;
     }
-    if !Areas::new(&dilated).contain(frame, *from) {
+    if !Areas::new(dilated).contain(frame, *from) {
         true
     } else if !Areas::new(shapes).contain(frame, *from) {
         *from = pt;
@@ -365,6 +364,28 @@ pub fn drop_nodes(
     };
     if layer_heights.is_empty() {
         return;
+    }
+    // Orca's "precalculate avoidance of all possible radii", on every core: the distances from the top that each
+    // layer's nodes may have, those of the nodes on it and of those above carried down, and the radii of those.
+    #[cfg(feature = "parallel")]
+    {
+        let n = contacts.len();
+        let mut dists: Vec<Vec<f64>> = vec![Vec::new(); n];
+        let mut wanted: Vec<(usize, Vec<f64>)> = Vec::new();
+        for layer_nr in (1..n).rev() {
+            let mut here = std::mem::take(&mut dists[layer_nr]);
+            here.extend(contacts[layer_nr].iter().map(|&id| nodes.all[id].dist_mm_to_top));
+            here.sort_by(f64::total_cmp);
+            here.dedup_by(|a, b| a.to_bits() == b.to_bits());
+            if layer_nr - 1 > 0 {
+                let height = layer_heights[layer_nr].height;
+                dists[layer_nr - 1] = here.iter().map(|d| d + height).collect();
+            }
+            if !here.is_empty() {
+                wanted.push((layer_heights[layer_nr].obj_layer_nr, here.iter().map(|&d| calc_radius(d)).collect()));
+            }
+        }
+        data.precompute(&wanted);
     }
 
     for layer_nr in (1..contacts.len()).rev() {
@@ -487,14 +508,10 @@ pub fn drop_nodes(
                     let next_radius = calc_radius(nodes.all[id].dist_mm_to_top + height_next);
                     if group_index == 0 {
                         let avoid = data.avoidance(next_radius, obj_layer_nr_next);
+                        let grown =
+                            data.grown(true, next_radius, obj_layer_nr_next, radius_sample_resolution + EPSILON);
                         let max_move_between_samples = max_move_distance + radius_sample_resolution + EPSILON;
-                        move_out(
-                            &avoid,
-                            frame,
-                            &mut next_position,
-                            radius_sample_resolution + EPSILON,
-                            max_move_between_samples,
-                        );
+                        move_out(&avoid, &grown, frame, &mut next_position, max_move_between_samples);
                     }
                     let nb = at(neighbours[0]);
                     let (a, b) = (&nodes.all[id], &nodes.all[nb]);
@@ -660,7 +677,8 @@ pub fn drop_nodes(
                     let mut candidate = position;
                     let max_move_between_samples = max_move_distance + radius_sample_resolution + EPSILON;
                     let collision = data.collision(next_radius, obj_layer_nr_next);
-                    if move_out(&collision, frame, &mut candidate, max_move_between_samples, max_move_between_samples) {
+                    let grown = data.grown(false, next_radius, obj_layer_nr_next, max_move_between_samples);
+                    if move_out(&collision, &grown, frame, &mut candidate, max_move_between_samples) {
                         direction_to_outer = sub(candidate, position);
                         dist2_to_outer = vsize2(direction_to_outer);
                     } else {

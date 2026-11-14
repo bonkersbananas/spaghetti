@@ -1657,7 +1657,7 @@ fn tree_paths(area: &Shapes, height: f64, p: &Params) -> Vec<Item> {
         if p.double_wall_area > 0.0 && geom::shape_area_mm2(e) > p.double_wall_area {
             let mut g = Vec::new();
             let level2 = geom::offset_c2(
-                &geom::offset_c2(&vec![e.clone()], -1.5 * w, geom::Join::Miter(3.0)),
+                &geom::offset_c2_folded(&vec![e.clone()], -1.5 * w, geom::Join::Miter(3.0)),
                 0.5 * w,
                 geom::Join::Miter(3.0),
             );
@@ -1784,7 +1784,7 @@ fn anchor_candidates(region: &Shape, w: f64) -> Vec<Vec<(Pt, i32)>> {
         c
     };
     let join = geom::Join::Miter(1.2);
-    let contours = geom::offset_c2(&vec![vec![ccw(&region[0])]], -w, join);
+    let contours = geom::offset_c2_folded(&vec![vec![ccw(&region[0])]], -w, join);
     if contours.is_empty() {
         return Vec::new();
     }
