@@ -4,8 +4,8 @@
  * slice worker, the cards and the tests share it.
  */
 import { DEFAULT_SLICER } from "./defaults.ts";
-import { type SlicerId, slicerWords } from "./settings.ts";
-import type { FileSlice, SliceFallback } from "./types.ts";
+import { type SlicerId, type SlicingSettings, slicerWords } from "./settings.ts";
+import type { FileSlice, SliceCaution, SliceFallback } from "./types.ts";
 
 /** Our slicer's answer for settings it can't slice yet (slicer-rs/src/wasm.rs `code`), with its words for what. */
 export const RUST_UNSUPPORTED = 8;
@@ -46,13 +46,45 @@ export function notesOf(fallbacks: unknown): string[] {
     .slice(0, 8);
 }
 
+/**
+ * A slicer's warning about a print, as OrcaSlicer's engine gives them and ours gives Orca's: its kind
+ * (`need_support_on`, an object sliced without supports needs them) and its words ("It seems object rack.stl has
+ * floating regions. Please re-orient the object or enable support generation.").
+ */
+export interface SlicerWarning {
+  kind: string;
+  message: string;
+}
+
+/** Our slicer's warnings as its summary gives them (`warnings`, from slicer-rs-v6 on): a few, each well formed. */
+export function warningsOf(warnings: unknown): SlicerWarning[] {
+  if (!Array.isArray(warnings)) return [];
+  return warnings
+    .filter(
+      (warning): warning is SlicerWarning =>
+        !!warning && typeof warning.kind === "string" && typeof warning.message === "string",
+    )
+    .map(({ kind, message }) => ({ kind, message: message.slice(0, 300) }))
+    .slice(0, 32);
+}
+
+/**
+ * The card's cautions from the slicer's warnings, whichever slicer made it: "floating" when an object needs supports
+ * and the model has none. Fins aren't supports to the slicer's check (they are separate solids a gap under the part),
+ * so it warns of a part that fins hold up: the caution is for a model with no supports at all.
+ */
+export function cautionsOf(warnings: readonly SlicerWarning[], supports: SlicingSettings["supports"]): SliceCaution[] {
+  return supports === "off" && warnings.some((warning) => warning.kind === "need_support_on") ? ["floating"] : [];
+}
+
 /** Why OrcaSlicer's engine stepped in, as the rest of "Sliced by OrcaSlicer: …". */
 export function fallbackWords(fallback: SliceFallback): string {
   switch (fallback.why) {
     case "unsupported":
       return `our own slicer can't do ${fallback.what ?? "these settings"} yet`;
     case "floating":
-      return "our own slicer can't check for floating parts yet";
+      // Slices from before ours warned of floating parts (slicer-rs-v6), which the engine sliced to warn of them.
+      return "our own slicer couldn't yet check for floating parts";
     case "unloaded":
       return "our own slicer couldn't start";
     default:
