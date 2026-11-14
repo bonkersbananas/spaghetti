@@ -566,6 +566,7 @@ fn island_paths(
 ) -> Vec<Path> {
     let first = s.on_plate(layer);
     let (walls, gaps) = (&island.walls, &island.gaps);
+    let narrow = island.narrow;
     let island_inner = &island.inner;
     let overlap = island.overlap;
     let mut out: Vec<Path> = Vec::new();
@@ -583,6 +584,11 @@ fn island_paths(
             .and_then(|seams| seams.wall_loop(contour, outline, depth == 0, s))
             .unwrap_or_else(|| seam_loop(contour, outline));
         let mut wall = path(role, points, true, island, first, h, s);
+        if narrow {
+            // A narrow island's one wall, as Bambu's narrow loops print it: a thinner line.
+            wall.width = region::narrow_wall_width(wall.width, h);
+            wall.mm3_per_mm = Settings::mm3_per_mm(wall.width, h);
+        }
         if let Some(p) = at {
             split_loop(&mut wall.points, p);
         }
