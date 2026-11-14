@@ -14,6 +14,23 @@ pub struct Mesh {
     pub triangles: Vec<[u32; 3]>,
 }
 
+/// Where a mesh's triangles went as it was read, triangles that collapsed dropped: for each triangle kept, its place
+/// as read (None: all kept, in place). Painted triangles go by their place as read (`paint.rs`).
+#[derive(Clone, Debug, Default)]
+pub struct Moves(Option<Vec<u32>>);
+
+impl Moves {
+    /// Each triangle's place now, from its place as read (None: dropped).
+    pub fn new_places(&self) -> impl Fn(u32) -> Option<u32> + '_ {
+        let back: Option<std::collections::HashMap<u32, u32>> =
+            self.0.as_ref().map(|kept| kept.iter().enumerate().map(|(now, &read)| (read, now as u32)).collect());
+        move |read| match &back {
+            None => Some(read),
+            Some(back) => back.get(&read).copied(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Bounds {
     pub min: [f64; 3],
@@ -31,6 +48,11 @@ impl Mesh {
     /// goes to the last of those still kept, as Orca's admesh drops them (`stl_check_facets_exact`): the order of
     /// the triangles is the order Orca's seam placer shuffles them in.
     fn weld(name: &str, count: usize, corner: impl Fn(usize, usize) -> [f32; 3]) -> Mesh {
+        Mesh::weld_moved(name, count, corner).0
+    }
+
+    /// `weld`, and where its triangles went (`Moves`).
+    fn weld_moved(name: &str, count: usize, corner: impl Fn(usize, usize) -> [f32; 3]) -> (Mesh, Moves) {
         let mut index: HashMap<[u32; 3], u32, BuildHasherDefault<FastHasher>> =
             HashMap::with_capacity_and_hasher(count / 2 + 16, Default::default());
         let mut vertices = Vec::with_capacity(count / 2 + 16);
@@ -49,20 +71,27 @@ impl Mesh {
         }
         // A triangle with two equal corners has no area and no edges worth following.
         let collapsed = |t: &[u32; 3]| t[0] == t[1] || t[1] == t[2] || t[0] == t[2];
+        let mut moves = Moves(None);
         let mut i = 0;
         while i < triangles.len() {
             if collapsed(&triangles[i]) {
                 triangles.swap_remove(i);
+                moves.0.get_or_insert_with(|| (0..count as u32).collect()).swap_remove(i);
             } else {
                 i += 1;
             }
         }
-        Mesh { name: name.into(), vertices, triangles }
+        (Mesh { name: name.into(), vertices, triangles }, moves)
     }
 
     /// The same mesh with corners at the same spot joined into one vertex (3MF writers don't always share them),
     /// and triangles that collapse dropped.
     pub fn welded(self) -> Mesh {
+        self.welded_moved().0
+    }
+
+    /// `welded`, and where its triangles went (`Moves`): the ones kept keep their order.
+    pub fn welded_moved(self) -> (Mesh, Moves) {
         let mut index: HashMap<[u32; 3], u32, BuildHasherDefault<FastHasher>> =
             HashMap::with_capacity_and_hasher(self.vertices.len() + 16, Default::default());
         let mut vertices = Vec::with_capacity(self.vertices.len());
@@ -77,13 +106,16 @@ impl Mesh {
                 })
             })
             .collect();
-        let triangles = self
-            .triangles
-            .iter()
-            .map(|t| t.map(|i| remap[i as usize]))
-            .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
-            .collect();
-        Mesh { name: self.name, vertices, triangles }
+        let collapsed = |t: &[u32; 3]| t[0] == t[1] || t[1] == t[2] || t[0] == t[2];
+        let welded: Vec<[u32; 3]> = self.triangles.iter().map(|t| t.map(|i| remap[i as usize])).collect();
+        let moves = Moves(
+            welded
+                .iter()
+                .any(collapsed)
+                .then(|| (0..welded.len() as u32).filter(|&t| !collapsed(&welded[t as usize])).collect()),
+        );
+        let triangles = welded.into_iter().filter(|t| !collapsed(t)).collect();
+        (Mesh { name: self.name, vertices, triangles }, moves)
     }
 
     /// The volume the triangles enclose, mm³: negative when the mesh is inside out (wound clockwise seen from
@@ -176,6 +208,11 @@ impl Mesh {
 /// Reads an STL, binary or ASCII. A binary file may have a few stray bytes after its triangles, as some exporters
 /// write (the app's `parseStl` accepts them too).
 pub fn read_stl(name: &str, bytes: &[u8]) -> Result<Mesh, Error> {
+    read_stl_moved(name, bytes).map(|(mesh, _)| mesh)
+}
+
+/// `read_stl`, and where its triangles went (`Moves`).
+pub fn read_stl_moved(name: &str, bytes: &[u8]) -> Result<(Mesh, Moves), Error> {
     if bytes.len() >= 84 {
         let count = u32::from_le_bytes([bytes[80], bytes[81], bytes[82], bytes[83]]) as usize;
         let needed = 84usize.saturating_add(count.saturating_mul(50));
@@ -188,14 +225,14 @@ pub fn read_stl(name: &str, bytes: &[u8]) -> Result<Mesh, Error> {
                 let o = 84 + t * 50 + 12 + k * 12;
                 [float(o), float(o + 4), float(o + 8)]
             };
-            let mesh = Mesh::weld(name, count, corner);
+            let (mesh, moves) = Mesh::weld_moved(name, count, corner);
             if mesh.vertices.iter().any(|v| !v.iter().all(|c| c.is_finite())) {
                 return Err(Error::Unreadable);
             }
             if mesh.triangles.is_empty() {
                 return Err(Error::NoModel);
             }
-            return Ok(mesh);
+            return Ok((mesh, moves));
         }
     }
     let text = std::str::from_utf8(bytes).map_err(|_| Error::Unreadable)?;
@@ -218,15 +255,17 @@ pub fn read_stl(name: &str, bytes: &[u8]) -> Result<Mesh, Error> {
     finish(name, &soup)
 }
 
-fn finish(name: &str, soup: &[f32]) -> Result<Mesh, Error> {
+fn finish(name: &str, soup: &[f32]) -> Result<(Mesh, Moves), Error> {
     if soup.iter().any(|v| !v.is_finite()) {
         return Err(Error::Unreadable);
     }
-    let mesh = Mesh::from_soup(name, soup);
+    let (mesh, moves) = Mesh::weld_moved(name, soup.len() / 9, |t, k| {
+        [soup[t * 9 + k * 3], soup[t * 9 + k * 3 + 1], soup[t * 9 + k * 3 + 2]]
+    });
     if mesh.triangles.is_empty() {
         return Err(Error::NoModel);
     }
-    Ok(mesh)
+    Ok((mesh, moves))
 }
 
 /// How far apart objects are put, in mm (the app's ARRANGE_GAP).
@@ -423,6 +462,37 @@ impl Hasher for FastHasher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_dropped_triangle_s_place_goes_to_the_last_and_the_moves_say_so() {
+        // Three triangles, the first collapsed: the weld drops it and moves the last into its place, as admesh does.
+        let soup: Vec<f32> = [
+            [0., 0., 0., 0., 0., 0., 1., 0., 0.],
+            [0., 0., 0., 1., 0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 1., 0., 0., 0., 1.],
+        ]
+        .concat();
+        let (mesh, moves) =
+            Mesh::weld_moved("m", 3, |t, k| [soup[t * 9 + k * 3], soup[t * 9 + k * 3 + 1], soup[t * 9 + k * 3 + 2]]);
+        assert_eq!(mesh.triangles.len(), 2);
+        let now = moves.new_places();
+        assert_eq!((now(0), now(1), now(2)), (None, Some(1), Some(0)));
+        // Nothing dropped: every triangle stays in place.
+        let (_, none) = Mesh::weld_moved("m", 2, |t, k| {
+            [soup[9 + t * 9 + k * 3], soup[9 + t * 9 + k * 3 + 1], soup[9 + t * 9 + k * 3 + 2]]
+        });
+        assert_eq!((none.new_places())(1), Some(1));
+        // `welded` keeps the order of the triangles it keeps.
+        let three = Mesh {
+            name: "m".into(),
+            vertices: vec![[0.; 3], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
+            triangles: vec![[0, 1, 2], [0, 0, 1], [0, 2, 3]],
+        };
+        let (welded, moves) = three.welded_moved();
+        assert_eq!(welded.triangles, vec![[0, 1, 2], [0, 2, 3]]);
+        let now = moves.new_places();
+        assert_eq!((now(0), now(1), now(2)), (Some(0), None, Some(1)));
+    }
 
     #[test]
     fn heights_take_orcas_float_round_trip() {
