@@ -265,6 +265,7 @@ pub fn supports(
             branch_angle: sp.classic_branch_angle,
             wall_count: sp.wall_count,
             top_interface_layers: sp.top_interface_layers as i32,
+            plate_only: sp.on_build_plate_only,
         },
     );
     drop::smooth_nodes(&layers, &mut nodes);
@@ -304,6 +305,7 @@ pub fn supports(
             first_layer_width: s.first_layer_width,
             with_infill: style == Style::Hybrid && matches!(sp.base_pattern.as_str(), "default" | ""),
             bed,
+            plate_only: sp.on_build_plate_only,
         },
     );
     crate::support::classic_layers(drawn, o.origin, sp.wall_count.max(0) as usize, params)

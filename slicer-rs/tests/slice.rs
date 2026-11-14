@@ -1191,6 +1191,90 @@ fn classic_trees_hold_up_a_slab_as_orcas_do() {
     }
 }
 
+/// Each support extrusion's height and ends (mm): `Support` and `Support interface` lines, as the G-code gives them.
+fn support_lines(gcode: &str) -> Vec<(f64, [f64; 2], [f64; 2])> {
+    let (mut z, mut feature, mut at, mut out) = (0.0, "", [0.0, 0.0], Vec::new());
+    for line in gcode.lines() {
+        if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            z = h.parse().unwrap();
+        } else if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        }
+        let code = line.split(';').next().unwrap_or("").trim();
+        if !code.starts_with("G1 ") {
+            continue;
+        }
+        let to = [word(code, 'X').unwrap_or(at[0]), word(code, 'Y').unwrap_or(at[1])];
+        if feature.starts_with("Support") && word(code, 'E').is_some_and(|e| e > 0.0) && to != at {
+            out.push((z, at, to));
+        }
+        at = to;
+    }
+    out
+}
+
+#[test]
+fn supports_on_the_plate_only_never_stand_on_the_object() {
+    // A table on a block: a slab 30 mm square on a post, over a block 40 mm square and 15 mm tall; and a ledge 16 mm
+    // out from a wall, 20 mm up, over a step 10 mm out and 5 mm tall at the wall's foot.
+    let table = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 15.]),
+        ([126., 126., 15.], [130., 130., 25.]),
+        ([113., 113., 25.], [143., 143., 28.]),
+    ]);
+    let step = boxes_stl(&[
+        ([110., 120., 0.], [120., 140., 30.]),
+        ([120., 120., 0.], [130., 140., 5.]),
+        ([120., 120., 20.], [136., 140., 24.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let on_plate = |more: &str| {
+        let json = format!(r#"{{"process": {{"enable_support": "1", "support_on_build_plate_only": "1"{more}}}}}"#);
+        setup::read(&json).unwrap().settings
+    };
+    let sliced = |model: &[u8], s: &Settings| {
+        let out = slice(&[Input { name: "model.stl", bytes: model }], s, &options).unwrap();
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        check_moves(&gcode, s);
+        let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+        (feature(Role::Support), feature(Role::SupportInterface), support_lines(&gcode))
+    };
+    let near = |got: f64, want: f64, share: f64| (got - want).abs() <= want * share;
+    // Each against native OrcaSlicer 2.5.0 with the same settings (Nov 14), in mm³ of support and interface.
+    // Normal supports: none under the table's slab, which lies wholly over the block, and under the ledge only
+    // beyond the step, from the plate up (Orca: 663.28 and 48.60), with no bottom interface on the step.
+    let normal = on_plate(r#", "support_type": "normal(auto)""#);
+    assert!(sliced(&table, &normal).2.is_empty(), "normal supports stand on the block");
+    let (support, interface, lines) = sliced(&step, &normal);
+    assert!(near(support, 663.28, 0.005) && near(interface, 48.60, 0.005), "{support} and {interface} mm³");
+    let over_step = |p: [f64; 2]| (120.5..129.5).contains(&p[0]) && (120.5..139.5).contains(&p[1]);
+    assert!(lines.iter().all(|&(_, a, b)| !over_step(a) && !over_step(b)), "support over the step");
+    // Snug ones the same way (Orca: 512.82 and 32.28).
+    let (support, interface, _) =
+        sliced(&step, &on_plate(r#", "support_type": "normal(auto)", "support_style": "snug""#));
+    assert!(near(support, 512.82, 0.005) && near(interface, 32.28, 0.005), "{support} and {interface} mm³");
+    // Organic trees lean out round the block to the plate (Orca: 2066.94 and 55.43, without plate-only 1334.63 and
+    // 202.38); slim trees too (Orca: 2519.50 and 50.03, without it 3263.33 and 324.29). Just over the block's top
+    // no branch stands on it: those beside it reach a little over its edge, as Orca's do, none further in.
+    for (style, want_support, want_interface, share) in
+        [("tree_organic", 2066.94, 55.43, 0.03), ("tree_slim", 2519.50, 50.03, 0.01)]
+    {
+        let style_json =
+            if style == "tree_organic" { String::new() } else { format!(r#", "support_style": "{style}""#) };
+        let (support, interface, lines) =
+            sliced(&table, &on_plate(&format!(r#", "support_type": "tree(auto)"{style_json}"#)));
+        assert!(near(support, want_support, share), "{style}: {support} mm³ of support");
+        assert!(near(interface, want_interface, 0.01), "{style}: {interface} mm³ of interface");
+        let over_block = |p: [f64; 2]| (112.0..144.0).contains(&p[0]) && (112.0..144.0).contains(&p[1]);
+        for &(z, a, b) in &lines {
+            assert!(
+                !(15.0..15.7).contains(&z) || !(over_block(a) || over_block(b)),
+                "{style}: on the block at {z}: {a:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn supports_leave_a_model_that_needs_none_as_it_was() {
     let cube = cube_stl(20.0);

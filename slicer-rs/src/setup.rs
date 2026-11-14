@@ -166,7 +166,7 @@ mod tests {
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
         // The X2D's supports are organic trees, which slice, as the classic slim, strong and hybrid ones do, and
-        // normal ones in their grid and snug styles; not supports on the plate only.
+        // normal ones in their grid and snug styles, on the plate only too.
         assert!(read(r#"{"process": {"enable_support": "1"}}"#).is_ok());
         let tree = |more: &str| format!(r#"{{"process": {{"enable_support": "1"{more}}}}}"#);
         for style in ["tree_slim", "tree_strong", "tree_hybrid"] {
@@ -194,10 +194,7 @@ mod tests {
         assert!(read(&normal("")).is_ok());
         assert!(read(&normal(r#", "support_critical_regions_only": "1""#)).is_ok());
         assert!(read(&normal(r#", "support_style": "snug""#)).is_ok());
-        assert_eq!(
-            read(&normal(r#", "support_on_build_plate_only": "1""#)).err(),
-            Some(Error::Unsupported("supports on the plate only"))
-        );
+        assert!(read(&normal(r#", "support_on_build_plate_only": "1""#)).is_ok());
         assert_eq!(
             read(r#"{"process": {"enable_support": "1", "support_type": "normal(manual)"}}"#).err(),
             Some(Error::Unsupported("supports painted on"))
