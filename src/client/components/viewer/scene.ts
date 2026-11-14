@@ -458,7 +458,7 @@ export class PrintScene {
       this.shadow.visible = false;
       return;
     }
-    this.shadow.visible = true;
+    this.shadow.visible = this.solidity > 0.5;
     const w = (b[3] - b[0]) * 1.5 + 14;
     const h = (b[4] - b[1]) * 1.5 + 14;
     this.shadow.scale.set(w, h, 1);
@@ -532,7 +532,7 @@ export class PrintScene {
       m.visible = solidity > 0.01;
     }
     if (this.plateGrid) (this.plateGrid.material as LineBasicMaterial).opacity = gridOpacity(solidity);
-    if (this.shadow) this.shadow.visible = solidity > 0.5;
+    this.placeShadow();
   }
 
   /** A still of the current view, as a data URL (for a hero without a photo). */
