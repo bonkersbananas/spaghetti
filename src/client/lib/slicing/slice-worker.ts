@@ -268,7 +268,7 @@ async function run(request: SliceRequest) {
       by = "spaghetti";
       cautions = cautionsOf(ours.warnings, slicing.supports);
     } else {
-      const result = await sliceWithEngine(engine, setup, objects);
+      const result = await sliceWithEngineFitted(engine, setup, objects, plate);
       by = "orca";
       cautions = cautionsOf(result.warnings, slicing.supports);
       progress("packing", 0);
@@ -800,6 +800,38 @@ function paintedMeshes(
 }
 
 /* The engine's host, spoken to with protocol v2 messages ---------------------------------------------------------- */
+
+/**
+ * Slices with the engine; when it says the prime tower is partly off the plate (many filaments, or ones that purge a
+ * lot, such as TPU beside PLA, make it deep), tries again with a wider one, which is shallower, put where it fits.
+ */
+async function sliceWithEngineFitted(
+  engine: SliceRequest["engine"],
+  setup: SliceSetup,
+  objects: Placed[],
+  plate: ReturnType<typeof plateArea>,
+) {
+  try {
+    return await sliceWithEngine(engine, setup, objects);
+  } catch (error) {
+    const outside = error instanceof Error && /prime tower is partially outside/i.test(error.message);
+    if (!outside || setup.tower || setup.filaments.length < 2) throw error;
+    let last: unknown = error;
+    for (const width of [60, 90]) {
+      setup.process.prime_tower_width = [String(width)];
+      const tower = towerSpot(objects, plate, setup);
+      if (!tower) break;
+      setup.process.wipe_tower_x = [String(Math.round(tower.x))];
+      setup.process.wipe_tower_y = [String(Math.round(tower.y))];
+      try {
+        return await sliceWithEngine(engine, setup, objects);
+      } catch (again) {
+        last = again;
+      }
+    }
+    throw last;
+  }
+}
 
 class EngineError extends Error {
   readonly code: number;
