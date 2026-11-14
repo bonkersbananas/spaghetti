@@ -4,7 +4,7 @@
 //! WebAssembly), but CORE-MATH's takes three fused multiply-adds, which WebAssembly lacks: each is a long call into
 //! software. [`Hyp::hyp`] takes CORE-MATH's fast path with each of them worked out exactly from Dekker's products
 //! instead, and hands what that path doesn't settle (special values, very different sizes, hard cases to round) to
-//! `f64::hypot` itself, so it gives the same bits, three to four times faster in WebAssembly.
+//! `f64::hypot` itself, so it gives the same bits, several times faster in WebAssembly.
 
 /// √(x² + y²) as `f64::hypot` gives it.
 pub trait Hyp {
