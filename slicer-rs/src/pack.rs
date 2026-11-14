@@ -18,6 +18,103 @@ const BBL_CLIENT_VERSION: &str = "02.08.01.55";
 /// header and the G-code's first line. 2.0.0 is the oldest version it takes as current.
 const BAMBU_STUDIO_APPLICATION: &str = "BambuStudio-02.00.00.00";
 
+/// Bambu Studio's `model_id` of the printer: what a file's `printer_model_id` must say for Studio's send dialog to
+/// take the file for the printer's (an empty one reads "incompatible with the print file configuration").
+fn printer_model_id(model: &str) -> &'static str {
+    match model {
+        "Bambu Lab X2D" => "N6",
+        _ => "",
+    }
+}
+
+/// The X2D's filaments' ids in Bambu Studio's own profiles (`filament_id`, by the preset's name without its
+/// "@BBL X2D …"): the id the AMS mapping and the printer match a file's filament to a tray's by, which the engine's
+/// presets (Orca's) don't carry. Kept equal to the app's `bambu-ids.ts` (a test there reads this table).
+const FILAMENT_IDS: &[(&str, &str)] = &[
+    ("Bambu ABS", "GFB00"),
+    ("Bambu ABS-GF", "GFB50"),
+    ("Bambu ASA", "GFB01"),
+    ("Bambu ASA-Aero", "GFB02"),
+    ("Bambu ASA-CF", "GFB51"),
+    ("Bambu PA-CF", "GFN03"),
+    ("Bambu PA6-CF", "GFN05"),
+    ("Bambu PA6-GF", "GFN08"),
+    ("Bambu PAHT-CF", "GFN04"),
+    ("Bambu PC", "GFC00"),
+    ("Bambu PC FR", "GFC01"),
+    ("Bambu PET-CF", "GFT01"),
+    ("Bambu PETG Basic", "GFG00"),
+    ("Bambu PETG HF", "GFG02"),
+    ("Bambu PETG Matte", "GFG03"),
+    ("Bambu PETG Translucent", "GFG01"),
+    ("Bambu PETG-CF", "GFG50"),
+    ("Bambu PLA Aero", "GFA11"),
+    ("Bambu PLA Basic", "GFA00"),
+    ("Bambu PLA Dynamic", "GFA13"),
+    ("Bambu PLA Galaxy", "GFA15"),
+    ("Bambu PLA Glow", "GFA12"),
+    ("Bambu PLA Lite", "GFA18"),
+    ("Bambu PLA Marble", "GFA07"),
+    ("Bambu PLA Matte", "GFA01"),
+    ("Bambu PLA Metal", "GFA02"),
+    ("Bambu PLA Palette", "GFA20"),
+    ("Bambu PLA Pure", "GFA19"),
+    ("Bambu PLA Silk", "GFA05"),
+    ("Bambu PLA Silk+", "GFA06"),
+    ("Bambu PLA Sparkle", "GFA08"),
+    ("Bambu PLA Tough", "GFA09"),
+    ("Bambu PLA Tough+", "GFA10"),
+    ("Bambu PLA Translucent", "GFA17"),
+    ("Bambu PLA Wood", "GFA16"),
+    ("Bambu PLA-CF", "GFA50"),
+    ("Bambu PPA-CF", "GFN06"),
+    ("Bambu PVA", "GFS04"),
+    ("Bambu Support For PA/PET", "GFS03"),
+    ("Bambu Support For PLA", "GFS02"),
+    ("Bambu Support For PLA/PETG", "GFS05"),
+    ("Bambu Support G", "GFS01"),
+    ("Bambu Support W", "GFS00"),
+    ("Bambu Support for ABS", "GFS06"),
+    ("Bambu TPU 85A", "GFU04"),
+    ("Bambu TPU 90A", "GFU03"),
+    ("Bambu TPU 95A", "GFU01"),
+    ("Bambu TPU 95A HF", "GFU00"),
+    ("Bambu TPU for AMS", "GFU02"),
+    ("Generic ABS", "GFB99"),
+    ("Generic ASA", "GFB98"),
+    ("Generic BVOH", "GFS97"),
+    ("Generic EVA", "GFR99"),
+    ("Generic HIPS", "GFS98"),
+    ("Generic PA", "GFN99"),
+    ("Generic PA-CF", "GFN98"),
+    ("Generic PC", "GFC99"),
+    ("Generic PCTG", "GFG97"),
+    ("Generic PE", "GFP99"),
+    ("Generic PE-CF", "GFP98"),
+    ("Generic PETG", "GFG99"),
+    ("Generic PETG HF", "GFG96"),
+    ("Generic PETG-CF", "GFG98"),
+    ("Generic PHA", "GFR98"),
+    ("Generic PLA", "GFL99"),
+    ("Generic PLA High Speed", "GFL95"),
+    ("Generic PLA Silk", "GFL96"),
+    ("Generic PLA-CF", "GFL98"),
+    ("Generic PP", "GFP97"),
+    ("Generic PP-CF", "GFP96"),
+    ("Generic PP-GF", "GFP95"),
+    ("Generic PPA-CF", "GFN97"),
+    ("Generic PPA-GF", "GFN96"),
+    ("Generic PVA", "GFS99"),
+    ("Generic TPU", "GFU99"),
+    ("Generic TPU for AMS", "GFU98"),
+];
+
+/// "Bambu PLA Basic @BBL X2D 0.4 nozzle" → "GFA00"; "" for a filament Studio has no id for.
+fn bambu_filament_id(preset: &str) -> &'static str {
+    let family = preset.split(" @BBL X2D").next().unwrap_or(preset);
+    FILAMENT_IDS.iter().find(|(name, _)| *name == family).map_or("", |(_, id)| id)
+}
+
 fn xml(value: &str) -> String {
     value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
@@ -55,10 +152,16 @@ pub fn gcode_3mf(
 ) -> Vec<u8> {
     // Level 4: within 5% of level 6's size at a third of its time (Benchy's 2.8 MB of G-code: 762 against 725 kB).
     let (packed, md5) = crate::par::join(|| zip::deflate(gcode, 4), || hex(&Md5::digest(gcode)));
-    let settings = match colours {
+    let mut settings = match colours {
         Some(c) => c.project_settings(s),
         None => s.project_settings(),
     };
+    // Bambu's id of each filament, as Studio's own project settings list them (`filament_ids`).
+    let filament_ids: Vec<String> = match colours {
+        Some(c) => c.settings.iter().map(|fs| bambu_filament_id(&fs.filament).to_string()).collect(),
+        None => vec![bambu_filament_id(&s.filament).to_string()],
+    };
+    settings.push(("filament_ids", Value::List(filament_ids)));
     let setting = |key: &str| settings.iter().find(|(k, _)| *k == key).map(|(_, v)| v.first().to_string());
     let nozzle = setting("nozzle_diameter").unwrap_or_else(|| "0.4".into());
     let bed_type = setting("curr_bed_type").unwrap_or_else(|| "Textured PEI Plate".into());
@@ -170,14 +273,14 @@ pub fn gcode_3mf(
         r#"    <metadata key="index" value="1"/>"#.into(),
         format!(r#"    <metadata key="extruder_type" value="{}"/>"#, extruder_types.join(" ")),
         r#"    <metadata key="nozzle_volume_type" value="0"/>"#.into(),
-        r#"    <metadata key="printer_model_id" value=""/>"#.into(),
+        format!(r#"    <metadata key="printer_model_id" value="{}"/>"#, printer_model_id(x2d.text("printer_model"))),
         format!(r#"    <metadata key="nozzle_diameters" value="{}"/>"#, xml(&nozzles)),
         format!(r#"    <metadata key="timelapse_type" value="{}"/>"#, xml(x2d.text("timelapse_type"))),
         format!(r#"    <metadata key="prediction" value="{}"/>"#, stats.total_time.round()),
         format!(r#"    <metadata key="weight" value="{grams:.2}"/>"#),
         format!(r#"    <metadata key="first_layer_time" value="{first_layer_time:.6}"/>"#),
         r#"    <metadata key="outside" value="false"/>"#.into(),
-        r#"    <metadata key="support_used" value="false"/>"#.into(),
+        format!(r#"    <metadata key="support_used" value="{}"/>"#, s.enable_support),
         format!(r#"    <metadata key="label_object_enabled" value="{}"/>"#, objects.len() < 64),
         r#"    <metadata key="enable_filament_dynamic_map" value="false"/>"#.into(),
         r#"    <metadata key="has_filament_switcher" value="false"/>"#.into(),
@@ -206,7 +309,7 @@ pub fn gcode_3mf(
         format!(
             r#"    <filament id="{}" tray_info_idx="{}" type="{}" color="{}" used_m="{metres:.2}" used_g="{grams:.2}" group_id="{group}" nozzle_diameter="{:.2}" volume_type="Standard" used_for_object="true" used_for_support="false"/>"#,
             id + 1,
-            xml(&fs.filament_tray),
+            xml(bambu_filament_id(&fs.filament)),
             xml(&fs.filament_type),
             xml(&fs.filament_colour),
             fs.nozzle_diameter,
@@ -344,7 +447,7 @@ pub fn gcode_3mf(
 }
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    bytes.iter().map(|b| format!("{b:02X}")).collect()
 }
 
 /// "Textured PEI Plate" → "textured_plate", as plate_N.json names bed types.
@@ -356,5 +459,26 @@ fn bed_type_key(bed_type: &str) -> &'static str {
         "Supertack Plate" => "supertack_plate",
         "Textured Cool Plate" => "textured_cool_plate",
         _ => "textured_plate",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bambu_knows_the_filaments_and_the_printer_by_its_own_ids() {
+        assert_eq!(bambu_filament_id("Bambu PLA Basic @BBL X2D 0.4 nozzle"), "GFA00");
+        assert_eq!(bambu_filament_id("Bambu PLA Silk+ @BBL X2D"), "GFA06");
+        assert_eq!(bambu_filament_id("Generic PETG @BBL X2D 0.2 nozzle"), "GFG99");
+        // A preset Studio has no id for gets none, rather than Orca's.
+        assert_eq!(bambu_filament_id("My own PLA"), "");
+        assert_eq!(printer_model_id("Bambu Lab X2D"), "N6");
+        assert_eq!(printer_model_id("Prusa MK4"), "");
+    }
+
+    #[test]
+    fn the_gcodes_md5_is_written_in_capitals_as_bambu_studio_writes_it() {
+        assert_eq!(hex(&Md5::digest(b"")), "D41D8CD98F00B204E9800998ECF8427E");
     }
 }

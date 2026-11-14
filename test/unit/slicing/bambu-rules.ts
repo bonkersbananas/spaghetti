@@ -154,7 +154,8 @@ export function bambuStudioProblems(zip: Uint8Array): string[] {
         problems.push(`slice_info filament ${k + 1}'s group_id is no <nozzle> id`);
     }
     const maps = (meta(plate, "filament_maps") ?? "").split(/\s+/).filter(Boolean);
-    if (maps.length !== filamentTags.length) problems.push("slice_info filament_maps isn't one extruder per filament");
+    // filament_maps (and plate json's filament_colors) cover the project's filaments, slice_info's <filament>s only those used.
+    if (maps.length !== filaments) problems.push("slice_info filament_maps isn't one extruder per project filament");
     if (maps.some((value) => !/^[12]$/.test(value)))
       problems.push("slice_info filament_maps names an extruder the X2D lacks");
     const objectTags = [...plate.matchAll(/<object\b[^>]*>/g)].map((m) => m[0]);
@@ -193,8 +194,8 @@ export function bambuStudioProblems(zip: Uint8Array): string[] {
           problems.push("plate json's bbox_all isn't four numbers");
         const jsonIds = (json.bbox_objects ?? []).map((object) => String(object.id));
         if (jsonIds.join(",") !== ids.join(",")) problems.push("plate json's objects aren't slice_info's (by id)");
-        if ((json.filament_colors ?? []).length !== filamentTags.length)
-          problems.push("plate json's filament_colors aren't one for each filament");
+        if ((json.filament_colors ?? []).length !== filaments)
+          problems.push("plate json's filament_colors aren't one for each project filament");
       } catch {
         problems.push(`plate_${i + 1}.json is not JSON`);
       }
