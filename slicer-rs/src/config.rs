@@ -122,6 +122,9 @@ pub struct Settings {
     /// `lightning_straightening_angle`): how far in the walls hold up the layer above, how far each layer cuts the
     /// trees' tips back, and how far it may move a node to straighten them, each as a slope over one layer.
     pub lightning_angles: [f64; 3],
+    /// Lateral lattice infill's two angles, degrees (Orca's `lateral_lattice_angle_1` and `_2`): how far from upright
+    /// each of its two sets of walls leans.
+    pub lateral_lattice_angles: [f64; 2],
     pub elephant_foot: f64,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
@@ -566,6 +569,8 @@ impl Settings {
             infill_anchor,
             lightning_angles: ["lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle"]
                 .map(|key| if p.text(key).is_empty() { 45.0 } else { p.float(key) }),
+            lateral_lattice_angles: [("lateral_lattice_angle_1", -45.0), ("lateral_lattice_angle_2", 45.0)]
+                .map(|(key, default)| if p.text(key).is_empty() { default } else { p.float(key) }),
             infill_anchor_max,
             elephant_foot: p.float("elefant_foot_compensation"),
             resolution: p.float("resolution"),
@@ -762,7 +767,19 @@ impl Settings {
         let mut out = Vec::new();
         if !matches!(
             self.sparse_infill_pattern.as_str(),
-            "zig-zag" | "rectilinear" | "crosshatch" | "gyroid" | "grid" | "cubic" | "honeycomb" | "lightning" | ""
+            "zig-zag"
+                | "rectilinear"
+                | "crosshatch"
+                | "gyroid"
+                | "grid"
+                | "cubic"
+                | "honeycomb"
+                | "lightning"
+                | "triangles"
+                | "tri-hexagon"
+                | "quartercubic"
+                | "lateral-lattice"
+                | ""
         ) {
             out.push(format!("{} sparse infill printed as straight lines", self.sparse_infill_pattern));
         }

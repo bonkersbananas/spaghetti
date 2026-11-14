@@ -811,6 +811,7 @@ fn sparse_runs(
         anchor: s.infill_anchor,
         anchor_max: s.infill_anchor_max,
         trees,
+        lattice_angles: s.lateral_lattice_angles,
     };
     fill::sparse(region, overlap - spacing / 2.0, &params)
 }
