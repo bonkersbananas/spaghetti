@@ -23,8 +23,8 @@ export function RemainingMeter({
   remaining: Remaining;
   /** Grams left, once the spool has gram data. */
   gramsLeft?: number | null;
-  /** The word beside the bars. "lg" shows it from the lg breakpoint (screen readers always hear it). */
-  showLabel?: boolean | "lg";
+  /** The word beside the bars. "wide" shows it in a container 3xl wide or more (the AMS unit card) (screen readers always hear it). */
+  showLabel?: boolean | "wide";
   className?: string;
 }) {
   const word = REMAINING_LABELS[remaining];
@@ -52,7 +52,7 @@ export function RemainingMeter({
           {grams && <span className="sr-only">, {word}</span>}
         </>
       ) : (
-        <span className={cn("sr-only", showLabel === "lg" && "lg:not-sr-only")}>{grams ?? word}</span>
+        <span className={cn("sr-only", showLabel === "wide" && "@3xl:not-sr-only")}>{grams ?? word}</span>
       )}
     </span>
   );

@@ -127,7 +127,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
             <span
               className={cn(
                 "text-caption text-ink-faint block w-full min-w-0 truncate",
-                // From lg, a dried spool says so beside its material (below).
+                // From a wide unit, a dried spool says so beside its material (below).
                 shape === "bay" && !!spool.driedAt && "@3xl:hidden",
               )}
             >
@@ -151,7 +151,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
                 remaining={spool.remaining}
                 gramsLeft={spool.gramsLeft}
                 // A spool that is still loaded but empty says so in words at every width, and grams always show.
-                showLabel={spool.remaining === "empty" || spool.gramsLeft !== null ? true : "lg"}
+                showLabel={spool.remaining === "empty" || spool.gramsLeft !== null ? true : "wide"}
                 // Pinned to the bottom of the tile, so the four meters sit on one line when a name wraps.
                 className="mt-auto self-center pt-1 @3xl:mt-0.5 @3xl:self-start @3xl:pt-0"
               />
@@ -159,9 +159,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
           </>
         )}
       </span>
-      {spool && shape === "row" && (
-        <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel="lg" />
-      )}
+      {spool && shape === "row" && <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel />}
     </button>
   );
 }
