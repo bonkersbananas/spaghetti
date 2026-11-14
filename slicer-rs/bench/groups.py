@@ -1,5 +1,6 @@
 """Plates in several filaments, against native Orca: how it puts the filaments on the X2D's two nozzles, and what
-follows from that (each tool change with its flush, each filament's grams, the estimate).
+follows from that (each tool change with its flush, each filament's grams, the estimate, the prime tower's every
+extrusion, arcs and all).
 
     python3 -I groups.py [--plates N] [--seed S] [--filaments 3,4,…] [--x0 MM]
 
@@ -46,9 +47,20 @@ def block(path, x, y, size, h):
 
 
 def facts(path):
-    """A G-code file's filament map, its tool changes (each one's filament and flush length), grams and estimate."""
+    """A G-code file's filament map, its tool changes (each one's filament and flush length), grams, estimate, and each
+    layer's tower extrusions (as written: lines and arcs, their ends, centres and filament)."""
     fmap, changes, pending, grams, estimate = None, [], None, None, None
+    tower, layer, in_tower = {}, 0, False
     for line in open(path):
+        if line.startswith("; CHANGE_LAYER"):
+            layer += 1
+        elif line.startswith("; FEATURE:"):
+            in_tower = line.split(":", 1)[1].strip() == "Prime tower"
+        elif in_tower and re.match(r"G[123] ", line):
+            words = line.split(";")[0].split()
+            values = {w[0]: float(w[1:]) for w in words[1:] if w[0] in "XYIJE"}
+            if values.get("E", 0) > 0 and ("X" in values or "Y" in values):
+                tower.setdefault(layer, []).append((words[0], sorted(values.items())))
         if line.startswith("; filament_map = ") and fmap is None:
             fmap = line.split("= ")[1].strip()
         m = re.match(r"M620 S(\d+)A", line)
@@ -64,7 +76,7 @@ def facts(path):
             words = line.split("total estimated time:")[1]
             estimate = sum(int(n) * s for n, s in ((m.group(1), {"h": 3600, "m": 60, "s": 1}[m.group(2)])
                                                    for m in re.finditer(r"(\d+)([hms])", words)))
-    return fmap, changes, grams, estimate
+    return fmap, changes, grams, estimate, tower
 
 
 def plate(name, colours, heights, x0):
@@ -112,7 +124,7 @@ def main():
     x0 = float(opt("--x0", "20"))
     random.seed(seed)
     same_maps = same_changes = 0
-    worst_grams, estimates = 0.0, []
+    worst_grams, estimates, tower_layers = 0.0, [], [0, 0]
     for k in range(plates):
         n = random.choice(sizes)
         colours, heights = random.sample(PALETTE, n), [random.choice([4, 6, 8, 10]) for _ in range(n)]
@@ -120,16 +132,21 @@ def main():
         if got is None:
             print(f"plate-{k}: Orca refused it")
             continue
-        (omap, ochanges, ograms, oest), (map_, changes, grams, est) = got
+        (omap, ochanges, ograms, oest, otower), (map_, changes, grams, est, tower) = got
         same_maps += omap == map_
         same_changes += ochanges == changes
         worst = max(abs(a - b) for a, b in zip(ograms, grams))
         worst_grams = max(worst_grams, worst)
         estimates.append(100 * (est - oest) / oest)
+        layers = sorted(set(otower) | set(tower))
+        same_tower = sum(otower.get(n_, []) == tower.get(n_, []) for n_ in layers)
+        tower_layers = [tower_layers[0] + same_tower, tower_layers[1] + len(layers)]
         print(f"plate-{k}: {n} filaments, map Orca {omap} ours {map_}, changes {'same' if ochanges == changes else 'differ'}"
-              f" ({len(changes)}), grams within {worst:.2f} g, estimate {estimates[-1]:+.2f} %")
+              f" ({len(changes)}), grams within {worst:.2f} g, estimate {estimates[-1]:+.2f} %, tower as Orca's on"
+              f" {same_tower} of {len(layers)} layers")
     print(f"{same_maps} of {plates} maps as Orca's, {same_changes} with every change and flush as Orca's; grams within"
-          f" {worst_grams:.2f} g; estimate {min(estimates):+.2f} to {max(estimates):+.2f} %")
+          f" {worst_grams:.2f} g; estimate {min(estimates):+.2f} to {max(estimates):+.2f} %; tower extrusions as Orca's on"
+          f" {tower_layers[0]} of {tower_layers[1]} layers")
 
 
 if __name__ == "__main__":
