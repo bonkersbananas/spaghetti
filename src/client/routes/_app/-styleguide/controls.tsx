@@ -61,6 +61,16 @@ export function ControlSection() {
               <Swatch color={color} /> Jade white PLA
             </span>
           </div>
+          <Label>
+            A model's own color is a flat swatch (a spool is a SpoolDisc); a color that would vanish into its surface, a
+            black at night or a cream by day, gets a stronger rim
+          </Label>
+          <div className="flex items-center gap-3">
+            <Swatch size="md" color="#1d1d1f" /> {/* design-lint-ignore: a color is data */}
+            <Swatch size="md" color="#f3e9d2" /> {/* design-lint-ignore: a color is data */}
+            <Swatch size="md" color="#d2281e" /> {/* design-lint-ignore: a color is data */}
+            <Swatch size="md" />
+          </div>
         </Panel>
         <Panel className="flex flex-col gap-5">
           <Label>Disclosure</Label>

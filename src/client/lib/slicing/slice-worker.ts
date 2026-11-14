@@ -3,11 +3,12 @@ import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { layMeshDown, parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
+import { type ColourUse, planColours } from "@shared/slicing/colours.ts";
 import { MissingPreset, mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
-import { readModel3mf } from "@shared/slicing/model3mf.ts";
+import { type ModelColourRun, readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { type ModelPaint, paintLeaves, paintWithin } from "@shared/slicing/paint.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
@@ -16,11 +17,13 @@ import { cautionsOf, rustEstimateMs, type SlicerWarning } from "@shared/slicing/
 import type {
   FileSlice,
   SliceCaution,
+  SliceColour,
   SliceFallback,
   SliceOptions,
   SliceProblem,
   SliceSettings,
 } from "@shared/slicing/types.ts";
+import type { SpoolLike } from "@shared/spools.ts";
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
 import { withFins } from "./fins";
@@ -41,6 +44,8 @@ export interface SliceRequest {
   chosen: SliceOptions;
   /** What the rest is sliced with: the workshop's defaults (shared/slicing/pantry.ts). */
   defaults: SlicingSettings;
+  /** The Pantry's spools: a model with colours of its own is matched to them. */
+  spools: SpoolLike[];
   /** Where the engine is (absolute `base`, the host's file name in it) and its release. */
   engine: { base: string; host: string; version: string };
   /** Where Spaghetti's own slicer is (absolute `base`, its module's file in it) and its release; null where it isn't served. */
@@ -87,6 +92,10 @@ interface Placed {
    * triangles are those of `positions`, which turning, scaling and placing keep in order.
    */
   paint?: ModelPaint;
+  /** The colours the model gives it, as runs of its triangles (a plain 3MF's, matched to filaments by `matchColours`). */
+  colours?: ModelColourRun[];
+  /** Its parts print in the filaments its colours were matched to: the engine gets each part as an object. */
+  byColour?: boolean;
 }
 
 class Problem extends Error {
@@ -133,9 +142,11 @@ async function run(request: SliceRequest) {
   // The slicer that made it, once one has; why the engine stepped in for ours, when it did.
   let by: SlicerId | null = null;
   let fallback: SliceFallback | undefined;
+  let colourRows: SliceColour[] | undefined;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
     ...(fallback ? { fallback } : {}),
+    ...(colourRows ? { colours: colourRows } : {}),
     settings: {
       ...settings,
       scale,
@@ -151,20 +162,28 @@ async function run(request: SliceRequest) {
     progress("reading", 0);
     const bytes = new Uint8Array(await request.file.arrayBuffer());
     const read = readModel(bytes, request.name);
+    // A model with colours of its own prints each in the filament matched to it.
+    const matched = read.project ? null : matchColours(read.objects, request.spools, chosen);
+    colourRows = matched?.rows;
+    const asked: SliceOptions = matched ? { ...chosen, filaments: matched.filaments } : chosen;
     progress("reading", 0.5);
 
     const presets = await fetchJson<PresetSet>(new URL("presets.json", engine.base));
     orca = presets.orca.version;
     // The filaments the objects print in, and those painted on them.
-    const filamentCount = Math.max(...read.objects.map((object) => object.extruder), read.painted);
+    const filamentCount = Math.max(
+      ...read.objects.map((object) => object.extruder),
+      read.painted,
+      matched?.filaments.length ?? 0,
+    );
     const setup = sliceSetup(presets, {
-      settings: chosen,
+      settings: asked,
       defaults,
       ...(read.settings ? { project: { settings: read.settings } } : {}),
       filaments: filamentCount,
     });
     settings = setup.settings;
-    slicing = setup.slicing;
+    slicing = withChoices(setup.slicing, chosen);
     // Ours can't do painted colours yet: OrcaSlicer's engine slices a plate with any, and the card says why.
     const painted = read.objects.some((object) => object.paint);
     const oursSlices = slicing.slicer === "spaghetti" && !painted;
@@ -177,7 +196,7 @@ async function run(request: SliceRequest) {
     const oursSetup =
       oursSlices && partFilaments > filamentCount
         ? sliceSetup(presets, {
-            settings: chosen,
+            settings: asked,
             defaults,
             ...(read.settings ? { project: { settings: read.settings } } : {}),
             filaments: partFilaments,
@@ -195,7 +214,7 @@ async function run(request: SliceRequest) {
     });
     // Ours prints an object made of parts in different filaments part by part, so its picture shows the parts in their
     // colours (the engine prints it whole: drawn again if it steps in).
-    const byParts = oursSlices && objects.some((object) => partsOf(object));
+    const byParts = (oursSlices || !!matched) && objects.some((object) => partsOf(object));
     try {
       place(objects, plate, volume, read.project && scale === 100 && !down, scale);
     } catch (error) {
@@ -231,8 +250,8 @@ async function run(request: SliceRequest) {
     else if (slicing.slicer === "spaghetti" && painted) fallback = { why: "unsupported", what: "painted colours" };
     if (ours?.ok && oursSetup !== setup) {
       settings = oursSetup.settings;
-      slicing = oursSetup.slicing;
-    } else if (ours && !ours.ok && byParts) {
+      slicing = withChoices(oursSetup.slicing, chosen);
+    } else if (ours && !ours.ok && byParts && !matched) {
       // The engine prints each object in its own filament: so does the picture.
       png = await picture(objects, setup, false);
       if (png) post({ type: "picture", png });
@@ -379,6 +398,103 @@ function partsOf(object: Placed): { positions: Float32Array; filament: number }[
   return out;
 }
 
+/**
+ * Matches the colours the objects bring to the Pantry's spools (or stand-ins) and sets each object's, and each run's,
+ * filament. Null, leaving the objects as they are, when the model has fewer than two colours after simplifying (an
+ * STL, a project, a one-colour model: it prints as it always did). A project keeps its own filaments.
+ */
+function matchColours(objects: Placed[], spools: readonly SpoolLike[], chosen: SliceOptions) {
+  const uses: ColourUse[] = [];
+  for (const object of objects) {
+    for (const run of object.colours ?? []) {
+      uses.push({
+        hex: run.colour.hex,
+        ...(run.colour.name ? { name: run.colour.name } : {}),
+        area: runArea(object.positions, run),
+      });
+    }
+  }
+  if (!uses.length) return null;
+  const plan = planColours(uses, spools, chosen.colours);
+  if (plan.groups.length < 2) return null;
+  for (const object of objects) {
+    const runs = object.colours;
+    if (!runs?.length) continue;
+    // The object's own filament: where most of it is. Triangles no run covers print in it.
+    const weight = new Map<number, number>();
+    for (const run of runs) {
+      const filament = (plan.filamentOf.get(run.colour.hex) ?? 0) + 1;
+      weight.set(filament, (weight.get(filament) ?? 0) + runArea(object.positions, run));
+    }
+    object.extruder = [...weight].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1;
+    const parts: { from: number; to: number; extruder: number }[] = [];
+    let at = 0;
+    const push = (from: number, to: number, extruder: number) => {
+      const last = parts[parts.length - 1];
+      if (last && last.extruder === extruder && last.to === from) last.to = to;
+      else if (to > from) parts.push({ from, to, extruder });
+    };
+    for (const run of runs) {
+      push(at, run.from, object.extruder);
+      push(run.from, run.to, (plan.filamentOf.get(run.colour.hex) ?? 0) + 1);
+      at = run.to;
+    }
+    push(at, object.positions.length / 9, object.extruder);
+    if (new Set(parts.map((part) => part.extruder)).size > 1) {
+      object.parts = parts;
+      object.byColour = true;
+    }
+  }
+  const total = plan.groups.reduce((sum, group) => sum + group.area, 0) || 1;
+  const rows: SliceColour[] = plan.groups.map((group) => {
+    const merged = group.members.slice(1).map((member) => member.name ?? member.hex);
+    return {
+      hex: group.hex,
+      ...(group.name ? { name: group.name } : {}),
+      ...(merged.length ? { merged } : {}),
+      share: Math.round((group.area / total) * 100),
+      filament: group.filament,
+      inPantry: group.inPantry,
+      ...(group.chosen ? { chosen: true } : {}),
+    };
+  });
+  return { filaments: plan.filaments, rows };
+}
+
+/** The surface of a run of an object's triangles, in mm². */
+function runArea(positions: Float32Array, run: { from: number; to: number }): number {
+  let area = 0;
+  for (let t = run.from; t < run.to; t++) {
+    const o = t * 9;
+    const p = (i: number) => positions[o + i] as number;
+    const ux = p(3) - p(0);
+    const uy = p(4) - p(1);
+    const uz = p(5) - p(2);
+    const vx = p(6) - p(0);
+    const vy = p(7) - p(1);
+    const vz = p(8) - p(2);
+    area += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+  }
+  return area;
+}
+
+/** The settings a slice is made with, and the colours someone chose (the setup's own don't keep them). */
+function withChoices(slicing: SlicingSettings, chosen: SliceOptions): SlicingSettings {
+  return chosen.colours?.length ? { ...slicing, colours: chosen.colours } : slicing;
+}
+
+/**
+ * What the engine is given: an object whose parts print in the filaments its colours were matched to goes in part by
+ * part, each its own object where it lies (the engine prints one filament an object).
+ */
+function engineObjects(objects: Placed[]): Placed[] {
+  return objects.flatMap((object) => {
+    const parts = object.byColour ? partsOf(object) : null;
+    if (!parts) return [object];
+    return parts.map(({ positions, filament }) => ({ name: object.name, positions, extruder: filament }));
+  });
+}
+
 /** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
 function readModel(bytes: Uint8Array, name: string) {
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
@@ -416,6 +532,7 @@ function readModel(bytes: Uint8Array, name: string) {
             }
           : {}),
         ...(paint ? { paint: paint.paint } : {}),
+        ...(object.colours ? { colours: object.colours } : {}),
       };
     }),
     project: model.project,
@@ -674,7 +791,7 @@ async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup
     "slice",
     {
       configs: { machine: setup.machine, process: setup.process, filaments: setup.filaments },
-      objects: objects.map((object) => ({
+      objects: engineObjects(objects).map((object) => ({
         name: object.name,
         mesh: { positions: object.positions },
         ...(multi ? { config: { extruder: String(object.extruder) } } : {}),

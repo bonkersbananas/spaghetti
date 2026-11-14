@@ -60,6 +60,7 @@ import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { ColourMatches, spoolTile } from "./ColourMatches";
 
 /**
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
@@ -242,14 +243,26 @@ export function SlicingChoices({
       <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
     </div>
   );
-  const filamentGroup = model && (
-    <FilamentChoice
-      settings={settings}
-      spools={spools}
-      onChange={(filaments) => set({ filaments })}
-      wrapped={!!twoColumns}
-    />
-  );
+  // A model with colours of its own: each colour and what prints it, in place of one filament to pick.
+  const colours = slice?.status === "sliced" ? slice.colours : undefined;
+  const filamentGroup =
+    model &&
+    (colours && colours.length > 1 ? (
+      <ColourMatches
+        colours={colours}
+        choices={settings.colours ?? []}
+        spools={spools}
+        onChange={(next) => set({ colours: next })}
+        wrapped={!!twoColumns}
+      />
+    ) : (
+      <FilamentChoice
+        settings={settings}
+        spools={spools}
+        onChange={(filaments) => set({ filaments })}
+        wrapped={!!twoColumns}
+      />
+    ));
   // The workspace's defaults carry no filament of their own: where the choice would be, it says where it comes from.
   const filamentRule = !model && (
     <div className="flex flex-col gap-2.5">
@@ -507,16 +520,6 @@ function NozzleNote({ nozzle, main, workspace }: { nozzle: number; main: number;
       </div>
     </div>
   );
-}
-
-/** A spool's tile: its colour on the disc, its colour's name, and what it is and where. */
-function spoolTile(spool: SpoolLike): ChoiceTile<string> {
-  return {
-    value: spool.id,
-    label: spool.colorName || spool.material,
-    detail: [spool.colorName ? spool.material : "", spool.slot ?? ""].filter(Boolean).join(" · ") || "On the shelf",
-    glyph: <SpoolDisc color={spool.colorHex} size="sm" />,
-  };
 }
 
 /** The filament (each one, for a model of several): a spool from the Pantry, loaded ones first. */

@@ -76,6 +76,13 @@ export const slicingSettingsShape = z
       .describe(
         "True when someone picked the nozzle size for this model (decision 0057); without it the model follows the main nozzle's size.",
       ),
+    colours: z
+      .array(z.object({ from: z.string().regex(/^#[0-9a-fA-F]{6}$/), filament: slicingFilament }).strict())
+      .max(16)
+      .optional()
+      .describe(
+        "What prints each of a model's own colours, where someone chose: the colour (#rrggbb, as the slice lists it) and the filament. A colour not listed prints in the Pantry spool nearest it.",
+      ),
     scale: z.number().int().min(LIMITS.scale.min).max(LIMITS.scale.max).describe("Percent of the model's own size."),
     orientation: z
       .tuple([z.number(), z.number(), z.number()])

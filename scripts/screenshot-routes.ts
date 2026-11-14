@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { paintedProject, partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
+import { hotdogModel, paintedProject, partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -449,6 +449,12 @@ const TWO_TONE_IDEA = {
   title: "Two-tone coaster",
   note: "One coaster, half white and half tomato red: the project's two parts, each in its own filament.",
 };
+/** A plain 3MF of thirteen parts in eight named colours (issue #313): matched to the Pantry's spools in the settings. */
+const HOTDOG = { name: "hotdog-hero.3mf", bytes: hotdogModel() };
+const HOTDOG_IDEA = {
+  title: "Hotdog hero",
+  note: "A model that brings its own colours: each is matched to a spool from the Pantry.",
+};
 /** A project with painted colours, which our own slicer can't do yet: OrcaSlicer's engine prints them. */
 const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
 const FARFALLE_IDEA = {
@@ -580,6 +586,16 @@ async function openSliceSettings(page: Page, model = { idea: FUSILLI_IDEA, file:
   const settings = page.getByRole("dialog", { name: "How to slice it" });
   await settings.getByRole("group", { name: "Quality" }).waitFor();
   return settings;
+}
+
+/** A colour's row in the settings, scrolled to the middle and opened. */
+async function openColour(page: Page, settings: Locator, name: RegExp) {
+  const row = settings.getByRole("button", { name }).first();
+  await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
+  await row.click({ force: true });
+  // Its spools are below it: the row up to the top of the view, so they show.
+  await page.waitForTimeout(400);
+  await row.evaluate((button) => button.scrollIntoView({ block: "start", behavior: "instant" }));
 }
 
 /** The settings' sheet or popover has finished opening (the shots' fixed clock starts its fade late: finish it). */
@@ -1845,6 +1861,64 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await openSliceSettings(page);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A model with colours of its own: the Filament section lists each colour and the spool that prints it, every row
+    // closed. A phone's sheet at its top (Colours under Quality, Strength and Supports); the desktop panel must fit.
+    name: "slice-settings-colours",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      // On a phone the sheet scrolls to Supports, so Colours is seen where it sits, under the other choices.
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await settings
+          .getByRole("group", { name: "Supports" })
+          .evaluate((group) => group.scrollIntoView({ block: "start", behavior: "instant" }));
+      }
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The same with the first colour opened: the Pantry's spools in place, the picked one in view.
+    name: "slice-settings-colours-open",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, /Ketchup Red/);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A colour no spool is near (the grape): a dashed ring and "Not in the Pantry yet", opened to its stand-in.
+    name: "slice-settings-colours-stand-in",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, /Grape/);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Keyboard focus on a colour's row.
+    name: "slice-settings-colours-focus",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      const row = settings.getByRole("button", { name: /Mustard/ }).first();
+      await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
+      // A key first, so the focus ring shows as it does for the keyboard.
+      await page.keyboard.press("Shift");
+      await row.focus();
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
