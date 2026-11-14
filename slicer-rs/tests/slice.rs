@@ -1727,6 +1727,56 @@ fn supports_for_an_object_in_parts_print_in_the_filament_each_layer_starts_with(
 }
 
 #[test]
+fn normal_supports_in_several_filaments_print_on_the_objects_layers() {
+    // A T in filament 1 and a ledge over a step in filament 2, the tower where the app puts it. With a prime tower
+    // Orca turns the support's own layer heights off (`independent_support_layer_height`): normal supports then print
+    // on the objects' layers, their gaps rounded to whole layers (`synchronize_layers`), and so do one filament's
+    // where a project turns them off.
+    let tee = boxes_stl(&[([70., 123., 0.], [80., 133., 20.]), ([55., 123., 20.], [95., 133., 25.])]);
+    let step = boxes_stl(&[
+        ([130., 120., 0.], [140., 140., 30.]),
+        ([140., 120., 0.], [150., 140., 5.]),
+        ([140., 120., 20.], [156., 140., 24.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let volume = |out: &spaghetti_slicer::Output, role: Role| {
+        out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume
+    };
+    let near = |got: f64, want: f64, share: f64| (got - want).abs() <= want * share;
+    let on_layers = |out: &spaghetti_slicer::Output| {
+        let lines = support_lines(&String::from_utf8(out.gcode.clone()).unwrap());
+        !lines.is_empty() && lines.iter().all(|&(z, _, _)| ((z / 0.2) - (z / 0.2).round()).abs() < 1e-6)
+    };
+    let two = setup::read(
+        r##"{"process": {"enable_support": "1", "support_type": "normal(auto)", "wipe_tower_x": ["211"],
+        "wipe_tower_y": ["196"]}, "filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}"##,
+    )
+    .unwrap()
+    .settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_with_filament(&Input { name: "tee.stl", bytes: &tee }, Some(0)).unwrap();
+    plate.add_with_filament(&Input { name: "step.stl", bytes: &step }, Some(1)).unwrap();
+    let out = plate.slice(&two, &options).unwrap();
+    // Native OrcaSlicer 2.5.0 (Nov 14): 150 layers, 2682.87 mm³ of support, 179.96 of interface and 6891.08 of tower.
+    assert_eq!(out.stats.layers, 150);
+    let (support, interface) = (volume(&out, Role::Support), volume(&out, Role::SupportInterface));
+    assert!(near(support, 2682.87, 1e-3) && near(interface, 179.96, 1e-3), "{support} and {interface} mm³");
+    assert!(near(volume(&out, Role::PrimeTower), 6891.08, 1e-4), "{}", volume(&out, Role::PrimeTower));
+    assert!(on_layers(&out), "support between the objects' layers");
+    // One filament with the support's own layer heights off, as a project may have them (Orca: 1429.38 and 67.90).
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let one = setup::read(
+        r#"{"process": {"enable_support": "1", "support_type": "normal(auto)", "independent_support_layer_height": "0"}}"#,
+    )
+    .unwrap()
+    .settings;
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &one, &options).unwrap();
+    let (support, interface) = (volume(&out, Role::Support), volume(&out, Role::SupportInterface));
+    assert!(near(support, 1429.38, 1e-3) && near(interface, 67.90, 1e-3), "{support} and {interface} mm³");
+    assert!(on_layers(&out), "support between the object's layers");
+}
+
+#[test]
 fn a_filament_change_flushes_into_the_supports_first() {
     // Three Ts in three filaments: two share a nozzle, and each layer's change between them flushes into the layer's
     // supports (`flush_into_support`), which then print right after the change in the filament flushed into, as
