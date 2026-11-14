@@ -27,6 +27,7 @@
   /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
   --sg-plate: #d8c4a0;
   --sg-plate-edge: #b59f78;
+  --sg-plate-grid: #9c8358;
   --sg-stage: #faf5ea;
   /* The studio's light on the print: the same warm lamp in both themes (a print under a lamp doesn't dim at night). */
   --sg-studio-light: #fff2de;
@@ -225,6 +226,7 @@
   --sg-tile: #38312b;
   --sg-plate: #4f4536;
   --sg-plate-edge: #382f25;
+  --sg-plate-grid: #8a7860;
   --sg-stage: #2b2520;
   --sg-ink: #ece4d9;
   --sg-ink-soft: #c6bab0;

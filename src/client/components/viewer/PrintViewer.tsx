@@ -111,6 +111,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
       ps.setTheme({
         plate: cssColor("--sg-plate"),
         plateEdge: cssColor("--sg-plate-edge"),
+        plateGrid: cssColor("--sg-plate-grid"),
         light: cssColor("--sg-studio-light"),
         sky: cssColor("--sg-studio-sky"),
         ground: cssColor("--sg-studio-ground"),

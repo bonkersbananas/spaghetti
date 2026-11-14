@@ -313,16 +313,24 @@ async function openViewer(page: Page) {
   await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
 }
 
-/** Drags up over the 3D view's canvas: the camera orbits under the plate. */
+/** Orbits the 3D view to about 30 degrees under the plate's horizon and backs off until the plate's edge is in view. */
 async function orbitBelow(page: Page) {
   const box = await page.getByRole("dialog", { name: "3D view" }).locator("canvas").boundingBox();
   if (!box) return;
   const x = box.x + box.width / 2;
-  await page.mouse.move(x, box.y + box.height * 0.8);
+  await page.mouse.move(x, box.y + box.height * 0.6);
   await page.mouse.down();
-  await page.mouse.move(x, box.y + box.height * 0.05, { steps: 12 });
+  await page.mouse.move(x, box.y + box.height * (0.6 - 0.16), { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(900);
+  await page.mouse.move(x, box.y + box.height / 2);
+  await page
+    .getByRole("dialog", { name: "3D view" })
+    .locator("canvas")
+    .evaluate((canvas) => {
+      for (let i = 0; i < 14; i++)
+        canvas.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+    });
+  await page.waitForTimeout(1200);
 }
 
 async function closeDialog(page: Page) {

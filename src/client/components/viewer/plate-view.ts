@@ -7,12 +7,20 @@ export const MAX_POLAR = Math.PI - 0.05;
  * How solid the plate is for a camera at `height` above its plane, `distance` from the target: 1 from above, 0 from
  * below, easing through the horizon with no jump at the plate's level.
  */
-export function plateSolidity(height: number, distance: number): number {
+export function plateSolidity(height: number, distance: number, reducedMotion = false): number {
+  // With reduced motion there is no easing: the plate switches at its own level.
+  if (reducedMotion) return height > 0 ? 1 : 0;
   const t = Math.min(1, Math.max(0, (height / Math.max(1, distance) + 0.12) / 0.2));
   return t * t * (3 - 2 * t);
 }
 
 /** Opacity of the plate's see-through grid: the other way round, and quiet. */
 export function gridOpacity(solidity: number): number {
-  return (1 - solidity) * 0.55;
+  return (1 - solidity) * 0.85;
 }
+
+/** The grid's lines: the plate's outline is heavier than the lines across it. Widths in CSS pixels. */
+export const GRID_OUTLINE_PX = 2.2;
+export const GRID_LINE_PX = 1.1;
+/** Mm between the lines across the plate. */
+export const GRID_STEP = 32;
