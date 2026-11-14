@@ -8,7 +8,7 @@ import type { SliceFallback } from "@shared/slicing/types.ts";
  * from where the app serves it (/slicer/rust-<version>/, docs/slicer.md) and spoken to through its plain C interface
  * (slicer-rs/src/wasm.rs). It gets what OrcaSlicer's engine gets: the setup the app made (`sliceSetup`) and the
  * objects as the worker laid them on the plate, turned, scaled and with their fins, so it keeps their places (flag 1)
- * and their size (the setup's scale is 100). It answers with the packed .gcode.3mf, or why OrcaSlicer's engine slices
+ * and their size (the setup's scale is 100), each with its filament on a plate in several. It answers with the packed .gcode.3mf, or why OrcaSlicer's engine slices
  * it instead.
  */
 
@@ -18,6 +18,8 @@ interface Exports {
   dealloc(ptr: number, len: number): void;
   setup(ptr: number, len: number): number;
   add(name: number, nameLen: number, data: number, dataLen: number): number;
+  /** As `add`, with the filament the object prints in (from 1); in releases from slicer-rs-v4 on. */
+  add_in?(name: number, nameLen: number, data: number, dataLen: number, filament: number): number;
   slice(flags: number): number;
   output_ptr(): number;
   output_len(): number;
@@ -44,6 +46,13 @@ async function load(url: URL): Promise<Exports> {
   return instance.exports as unknown as Exports;
 }
 
+/** An object as the worker laid it on the plate; on a plate in several filaments, the one it prints in (from 1). */
+export interface OurObject {
+  name: string;
+  positions: Float32Array;
+  filament?: number;
+}
+
 /**
  * Slices the placed objects with our slicer. `setup` is the app's setup as JSON (its scale 100); `beforeSlice` is
  * called just before the one long call, which can't report how far it is. Never throws: what it can't do is a fallback.
@@ -51,7 +60,7 @@ async function load(url: URL): Promise<Exports> {
 export async function sliceOurs(
   url: URL,
   setup: string,
-  objects: readonly { name: string; positions: Float32Array }[],
+  objects: readonly OurObject[],
   beforeSlice: () => void,
 ): Promise<OursAnswer> {
   let module: Exports;
@@ -81,8 +90,15 @@ export async function sliceOurs(
       if (code) break;
       const name = encoder.encode(object.name);
       const stl = writeStl({ positions: object.positions }, object.name);
+      // An object of a plate in several filaments says which it prints in. A module from before add_in can't be told,
+      // and refuses such a plate (code 8), which OrcaSlicer's engine then slices.
+      const { filament } = object;
       code = withBytes(name, (namePtr) =>
-        withBytes(stl, (stlPtr) => module.add(namePtr, name.length, stlPtr, stl.length)),
+        withBytes(stl, (stlPtr) =>
+          filament && module.add_in
+            ? module.add_in(namePtr, name.length, stlPtr, stl.length, filament)
+            : module.add(namePtr, name.length, stlPtr, stl.length),
+        ),
       );
     }
     if (code) return { ok: false, fallback: fallbackOf(code, said()) ?? { why: "failed" } };
