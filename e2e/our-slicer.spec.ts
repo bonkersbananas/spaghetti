@@ -115,10 +115,10 @@ const RACK = () =>
     { at: [30, 15, 34], size: [26, 6, 4] },
   ]);
 
-test("ours slices tree supports; what it can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({
+test("ours slices tree and snug supports; what it can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({
   page,
 }) => {
-  test.setTimeout(3 * SLICED);
+  test.setTimeout(4 * SLICED);
   await signIn(page);
   try {
     // The workspace slices with ours, with slim tree supports where needed, which ours can't build yet.
@@ -148,6 +148,18 @@ test("ours slices tree supports; what it can't slice yet, OrcaSlicer's engine sl
     expect(trees.settings.slicing.supportStyle).toBe("tree");
     expect(trees.settings.slicing.supports).toBe("where-needed");
     expect(trees.fallback).toBeUndefined();
+
+    // Snug normal supports, which hug the model, ours builds too (since release 7).
+    await settings
+      .getByRole("group", { name: "How supports are built" })
+      .getByRole("button", { name: "Snug", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.supportStyle, { timeout: SLICED })
+      .toBe("snug");
+    const snug = (await fileOf(page, id)).slice;
+    expect(snug.settings.slicer).toBe("spaghetti");
+    expect(snug.fallback).toBeUndefined();
     await page.keyboard.press("Escape");
     await page.reload();
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
