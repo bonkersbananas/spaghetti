@@ -16,10 +16,11 @@
 //!
 //! What it writes is the tower's own G-code, in the tower's coordinates (its front left corner at 0, 0), as Orca's
 //! `WipeTowerWriter` writes it; `toolchange.rs` moves it onto the plate and fills the placeholders, as Orca's
-//! `WipeTowerIntegration` does. Orca writes the curved walls as arcs when arc fitting is on (the X2D's default);
-//! this writes them as the straight lines Orca writes with it off, simplified to the same 0.1 mm.
+//! `WipeTowerIntegration` does. With arc fitting on (the X2D's default) the walls and the brim are fitted with arcs as
+//! Orca fits them (`arc_fit.rs`, to 0.1 mm) and written as `G2`/`G3`; with it off, as lines simplified to 0.1 mm.
 
-use crate::geom::{self, Contour, Pt};
+use crate::arc_fit;
+use crate::geom::{self, Contour};
 use std::collections::HashMap;
 use std::f32::consts::PI as PI_F32;
 use std::f64::consts::PI;
@@ -35,8 +36,12 @@ const MIN_DEPTH_PER_HEIGHT: [(f32, f32); 4] = [(5.0, 5.0), (100.0, 20.0), (250.0
 const FLAT_IRON_SPEED: f32 = 10.0 * 60.0;
 /// Points on each filleted corner (`arc_fit_size`).
 const ARC_FIT_SIZE: usize = 20;
-/// How far the wall's path may be simplified, mm (`WIPE_TOWER_RESOLUTION`).
-const RESOLUTION: f64 = 0.1;
+/// How far the walls' paths may be simplified or fitted, in Orca's nanometres (`SCALED_WIPE_TOWER_RESOLUTION`), and
+/// the finer simplification a loop gets first (`WT_SIMPLIFY_TOLERANCE_SCALED`).
+const RESOLUTION_NM: f64 = 0.1 / 1e-6;
+const SIMPLIFY_NM: f64 = 0.001 / 1e-6;
+/// Orca's `SCALING_FACTOR` in single precision (`unscaled<float>`).
+const NM_F32: f32 = 1e-6_f64 as f32;
 
 /// A point or vector in the tower's frame, mm, in single precision as Orca's `Vec2f`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -148,6 +153,8 @@ pub struct Params {
     pub extra_rib_length: f32,
     pub rib_width: f32,
     pub used_fillet: bool,
+    /// Whether the walls and the brim are fitted with arcs (`enable_arc_fitting` set to enabled).
+    pub arc_fitting: bool,
     /// `prime_tower_infill_gap`, as a share.
     pub extra_spacing: f32,
     pub tower_framework: bool,
@@ -473,6 +480,59 @@ impl Writer {
         self
     }
 
+    /// `extrude_arc_explicit`: along `arc` to its end at the writer's flow, `G3` counter-clockwise and `G2` clockwise,
+    /// the centre given from where the nozzle is.
+    fn extrude_arc(&mut self, arc: &arc_fit::Arc, f: f32, limit: LimitFlow) -> &mut Self {
+        let (x, y) = ((arc.end[0] as f64 * 1e-6) as f32, (arc.end[1] as f64 * 1e-6) as f32);
+        let len = arc.length as f32 * NM_F32;
+        let e = len * self.flow;
+        if len < EPSILON as f32 && e == 0.0 && (f == 0.0 || f == self.feedrate) {
+            return self;
+        }
+        let rotated_current = self.pos_rotated();
+        let rot = self.rotate(v(x, y));
+        let accel = self.acceleration(e == 0.0);
+        self.gcode += &accel;
+        let center = self.rotate(mm(arc.center)) - rotated_current;
+        self.gcode += &format!(
+            "{} X{} Y{} I{} J{}",
+            if arc.ccw { "G3" } else { "G2" },
+            fixed(rot.x as f64, 3),
+            fixed(rot.y as f64, 3),
+            fixed(center.x as f64, 3),
+            fixed(center.y as f64, 3)
+        );
+        if e != 0.0 {
+            self.gcode += &format!(" E{}", fixed(e as f64, 4));
+        }
+        let mut f = f;
+        if f != 0.0 && f != self.feedrate {
+            if limit != LimitFlow::None {
+                let e_speed = e / ((if len == 0.0 { e.abs() } else { len }) / f * 60.0);
+                let fp = &self.filpar[self.tool];
+                let most = match limit {
+                    LimitFlow::Ramming => fp.max_e_ramming_speed.0,
+                    LimitFlow::RammingNc => fp.max_e_ramming_speed.1,
+                    _ => fp.max_e_speed,
+                };
+                f /= (e_speed / most).max(1.0);
+            }
+            let text = self.format_f(f);
+            self.gcode += &text;
+        }
+        self.pos = v(x, y);
+        self.gcode += "\n";
+        self
+    }
+
+    /// A segment of a path: a line, or its arc.
+    fn extrude_segment(&mut self, s: &Segment, f: f32) -> &mut Self {
+        match &s.arc {
+            Some(arc) => self.extrude_arc(arc, f, LimitFlow::Print),
+            None => self.extrude_to(s.end, f),
+        }
+    }
+
     fn travel(&mut self, x: f32, y: f32, f: f32) -> &mut Self {
         self.extrude_explicit(x, y, 0.0, f, false, LimitFlow::Print)
     }
@@ -599,79 +659,71 @@ impl Writer {
     }
 
     /// `generate_path`: the wall's polylines from the one nearest the nozzle, retracting over the gaps between them.
-    fn generate_path(&mut self, polylines: &[Vec<V>], feedrate: f32, retract_length: f32, retract_speed: f32) {
-        let mut segments: Vec<(V, V)> = Vec::new();
+    /// Returns the least corner (nm) of what is left of them once fitted or simplified, which Orca's first layer
+    /// takes the tower's place from.
+    fn generate_path(
+        &mut self,
+        polylines: &[Vec<arc_fit::P>],
+        feedrate: f32,
+        retract_length: f32,
+        retract_speed: f32,
+    ) -> Option<arc_fit::P> {
+        let mut segments: Vec<Segment> = Vec::new();
+        let mut least: Option<arc_fit::P> = None;
         for pl in polylines {
-            let simplified = simplify_polyline(pl, RESOLUTION as f32);
-            if simplified.len() < 2 {
-                continue;
+            let mut points = pl.clone();
+            let runs = fit_path(&mut points, self.params.arc_fitting);
+            for p in &points {
+                least = Some(least.map_or(*p, |l| [l[0].min(p[0]), l[1].min(p[1])]));
             }
-            for w in simplified.windows(2) {
-                segments.push((w[0], w[1]));
+            if points.len() >= 2 {
+                push_segments(&points, &runs, &mut segments);
             }
         }
         if segments.is_empty() {
-            return;
+            return least;
         }
-        let anchor = self.pos;
-        let mut closest = 0;
-        let mut best = f32::MAX;
-        for (i, s) in segments.iter().enumerate() {
-            let d = (s.0 - anchor).squared_norm();
-            if d < best {
-                best = d;
-                closest = i;
-            }
-        }
+        let closest = closest_segment(&segments, self.pos);
         let mut i = closest;
-        self.travel_to(segments[i].0, 0.0);
-        self.extrude_to(segments[i].1, feedrate);
+        self.travel_to(segments[i].start, 0.0);
+        self.extrude_segment(&segments[i], feedrate);
         loop {
             i = (i + 1) % segments.len();
             if i == closest {
                 break;
             }
-            let (dx, dy) = (segments[i].0.x - self.pos.x, segments[i].0.y - self.pos.y);
+            let (dx, dy) = (segments[i].start.x - self.pos.x, segments[i].start.y - self.pos.y);
             let len = (dx * dx + dy * dy).sqrt();
             if len > EPSILON as f32 {
                 self.retract(retract_length, retract_speed);
-                self.travel_to(segments[i].0, 600.0);
+                self.travel_to(segments[i].start, 600.0);
                 self.retract(-retract_length, retract_speed);
             }
-            self.extrude_to(segments[i].1, feedrate);
+            self.extrude_segment(&segments[i], feedrate);
         }
+        least
     }
 
     /// `polygon`: a closed loop from its point nearest the nozzle.
-    fn polygon(&mut self, points: &[V], f: f32) -> &mut Self {
-        let mut closed = points.to_vec();
-        if let Some(&first) = points.first() {
-            closed.push(first);
-        }
-        let simplified = simplify_polyline(&simplify_polyline(&closed, 0.001), RESOLUTION as f32);
-        let segments: Vec<(V, V)> = simplified.windows(2).map(|w| (w[0], w[1])).collect();
+    fn polygon(&mut self, points: &[arc_fit::P], f: f32) -> &mut Self {
+        let mut closed: Vec<arc_fit::P> = points.iter().chain(points.first()).copied().collect();
+        closed = arc_fit::douglas_peucker(&closed, SIMPLIFY_NM);
+        let runs = fit_path(&mut closed, self.params.arc_fitting);
+        let mut segments: Vec<Segment> = Vec::new();
+        push_segments(&closed, &runs, &mut segments);
         if segments.is_empty() {
             return self;
         }
-        let anchor = self.pos;
-        let mut closest = 0;
-        let mut best = f32::MAX;
-        for (i, s) in segments.iter().enumerate() {
-            let d = (s.0 - anchor).squared_norm();
-            if d < best {
-                best = d;
-                closest = i;
-            }
-        }
+        let closest = closest_segment(&segments, self.pos);
         let mut i = closest;
-        self.travel_to(segments[i].0, 0.0);
-        self.extrude_to(segments[i].1, f);
+        self.travel_to(segments[i].start, 0.0);
+        self.extrude_segment(&segments[i], f);
         loop {
             i = (i + 1) % segments.len();
             if i == closest {
                 break;
             }
-            self.extrude_to(segments[i].1, f);
+            self.extrude_segment(&segments[i], f);
         }
         self
     }
@@ -747,6 +799,57 @@ impl Writer {
     }
 }
 
+/// A piece of a wall's path (`WipeTowerWriter`'s `Segment`): a line, or an arc where one was fitted.
+#[derive(Clone, Copy)]
+struct Segment {
+    start: V,
+    end: V,
+    arc: Option<arc_fit::Arc>,
+}
+
+/// Nanometres back to mm, as Orca's `unscaled<float>`.
+fn mm(p: arc_fit::P) -> V {
+    v(p[0] as f32 * NM_F32, p[1] as f32 * NM_F32)
+}
+
+/// A path as Orca's tower writer readies it (`simplify_by_fitting_arc` with arc fitting on, else `simplify` and
+/// `reset_to_linear_move`): its runs, `points` left with what it keeps.
+fn fit_path(points: &mut Vec<arc_fit::P>, arcs: bool) -> Vec<arc_fit::Run> {
+    if arcs {
+        return arc_fit::fit_and_simplify(points, RESOLUTION_NM);
+    }
+    *points = arc_fit::douglas_peucker(points, RESOLUTION_NM);
+    vec![arc_fit::Run { start: 0, end: points.len().saturating_sub(1), arc: None }]
+}
+
+/// The runs' segments: each line run point to point, each arc whole.
+fn push_segments(points: &[arc_fit::P], runs: &[arc_fit::Run], out: &mut Vec<Segment>) {
+    for run in runs {
+        match run.arc {
+            Some(arc) => out.push(Segment { start: mm(points[run.start]), end: mm(points[run.end]), arc: Some(arc) }),
+            None => {
+                for j in run.start..run.end {
+                    out.push(Segment { start: mm(points[j]), end: mm(points[j + 1]), arc: None });
+                }
+            }
+        }
+    }
+}
+
+/// The segment that starts nearest `to` (the first of equals).
+fn closest_segment(segments: &[Segment], to: V) -> usize {
+    let mut closest = 0;
+    let mut best = f32::MAX;
+    for (i, s) in segments.iter().enumerate() {
+        let d = (s.start - to).squared_norm();
+        if d < best {
+            best = d;
+            closest = i;
+        }
+    }
+    closest
+}
+
 fn closest_index(points: &[V], to: V) -> usize {
     // Orca compares in scaled integers; the order of the distances is the same.
     let mut best = 0;
@@ -761,124 +864,230 @@ fn closest_index(points: &[V], to: V) -> usize {
     best
 }
 
-/// Douglas–Peucker on an open polyline, to `tolerance` mm.
-fn simplify_polyline(points: &[V], tolerance: f32) -> Vec<V> {
-    if points.len() <= 2 {
-        return points.to_vec();
-    }
-    let pts: Vec<Pt> = points.iter().map(|p| geom::pt(geom::sc(p.x as f64), geom::sc(p.y as f64))).collect();
-    geom::simplify_line(&pts, tolerance as f64)
-        .into_iter()
-        .map(|p| v(geom::unsc(p.x) as f32, geom::unsc(p.y) as f32))
-        .collect()
-}
-
-/// `WipeTower::rounding_polygon`: every corner sharper than 30° off straight rounded, 2 mm (or less, on short
-/// edges) along each side, with `ARC_FIT_SIZE` points on the arc.
-fn rounding_polygon(polygon: &[V], rounding: f64) -> Vec<V> {
-    if polygon.len() < 3 {
+/// `WipeTower::rounding_polygon`, in Orca's nanometres and with its roundings: every corner sharper than 30° off
+/// straight rounded, 2 mm (or less, on short edges) along each side, with `ARC_FIT_SIZE` points on the arc, these at
+/// single-precision angles round a centre and radius cut to whole nanometres.
+fn rounding_polygon(polygon: &[arc_fit::P], rounding: f64) -> Vec<arc_fit::P> {
+    let n = polygon.len();
+    if n < 3 {
         return polygon.to_vec();
     }
-    let angle_tol = 30.0 / 180.0 * PI;
-    let cos_tol = angle_tol.cos().abs();
-    let n = polygon.len();
-    let mut res: Vec<V> = Vec::with_capacity(n * (ARC_FIT_SIZE + 1));
-    let d2 = |p: V| [p.x as f64, p.y as f64];
+    let cos_tol = libm::cos(30.0 / 180.0 * PI).abs();
+    let unscaled = |p: arc_fit::P| [p[0] as f64 * 1e-6, p[1] as f64 * 1e-6];
+    let scaled = |q: [f64; 2]| [(q[0] / 1e-6) as i64, (q[1] / 1e-6) as i64];
+    let mut res: Vec<arc_fit::P> = Vec::with_capacity(n * 2);
     for i in 0..n {
-        let a = d2(polygon[(i + n - 1) % n]);
-        let b = d2(polygon[i]);
-        let c = d2(polygon[(i + 1) % n]);
-        let ab_len = ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt();
-        let bc_len = ((b[0] - c[0]).powi(2) + (b[1] - c[1]).powi(2)).sqrt();
+        let (a, b, c) = (unscaled(polygon[(i + n - 1) % n]), unscaled(polygon[i]), unscaled(polygon[(i + 1) % n]));
+        let ab_len = ((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1])).sqrt();
+        let bc_len = ((b[0] - c[0]) * (b[0] - c[0]) + (b[1] - c[1]) * (b[1] - c[1])).sqrt();
         let ab = [(b[0] - a[0]) / ab_len, (b[1] - a[1]) / ab_len];
         let bc = [(c[0] - b[0]) / bc_len, (c[1] - b[1]) / bc_len];
         let cosangle = ((ab[0] * bc[0] + ab[1] * bc[1]) as f32).clamp(-1.0, 1.0);
         let is_ccw = ab[0] * bc[1] - ab[1] * bc[0] > 0.0;
-        if (cosangle as f64).abs() < cos_tol {
-            let real = rounding.min(ab_len / 2.1).min(bc_len / 2.1) as f32 as f64;
-            let left = [b[0] - ab[0] * real, b[1] - ab[1] * real];
-            let right = [b[0] + bc[0] * real, b[1] + bc[1] * real];
-            let half_angle = (cosangle.acos() / 2.0) as f64;
-            let mut dir = [right[0] - left[0], right[1] - left[1]];
-            let len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
-            dir = [dir[0] / len, dir[1] / len];
-            dir = [-dir[1], dir[0]];
-            if !is_ccw {
-                dir = [-dir[0], -dir[1]];
-            }
-            let dis = real / half_angle.sin();
-            let center = [b[0] + dir[0] * dis, b[1] + dir[1] * dis];
-            let radius = ((left[0] - center[0]).powi(2) + (left[1] - center[1]).powi(2)).sqrt();
-            // Orca's ArcSegment from left to right round the centre, in the turn's direction.
-            let start = (left[1] - center[1]).atan2(left[0] - center[0]);
-            let end = (right[1] - center[1]).atan2(right[0] - center[0]);
-            let mut sweep = end - start;
-            if is_ccw {
-                while sweep <= 0.0 {
-                    sweep += 2.0 * PI;
-                }
-            } else {
-                while sweep >= 0.0 {
-                    sweep -= 2.0 * PI;
-                }
-            }
-            for j in 0..ARC_FIT_SIZE {
-                let t = start + j as f64 / ARC_FIT_SIZE as f64 * sweep;
-                res.push(v((center[0] + radius * t.cos()) as f32, (center[1] + radius * t.sin()) as f32));
-            }
-            res.push(v(right[0] as f32, right[1] as f32));
-        } else {
+        if (cosangle.abs() as f64) >= cos_tol {
             res.push(polygon[i]);
+            continue;
         }
+        let real_f32 = rounding.min(ab_len / 2.1).min(bc_len / 2.1) as f32;
+        let real = real_f32 as f64;
+        let left = [b[0] - ab[0] * real, b[1] - ab[1] * real];
+        let right = [b[0] + bc[0] * real, b[1] + bc[1] * real];
+        // Orca's `std::acos` and `sin` of floats, in single precision. Here and below the `libm` crate's, which
+        // WebAssembly's standard library uses too, so that native and WebAssembly agree to the last bit.
+        let half_angle = libm::acosf(cosangle) / 2.0;
+        let mut dir = [right[0] - left[0], right[1] - left[1]];
+        let len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
+        dir = [-dir[1] / len, dir[0] / len];
+        if !is_ccw {
+            dir = [-dir[0], -dir[1]];
+        }
+        let dis = (real_f32 / libm::sinf(half_angle)) as f64;
+        let center = [b[0] + dir[0] * dis, b[1] + dir[1] * dis];
+        let radius =
+            ((left[0] - center[0]) * (left[0] - center[0]) + (left[1] - center[1]) * (left[1] - center[1])).sqrt();
+        // Orca's `ArcSegment` from the cut-down points: its polar angles round the whole-nanometre centre.
+        let (c_nm, r_nm, l_nm, r_pt) = (scaled(center), (radius / 1e-6) as i64 as f64, scaled(left), scaled(right));
+        let polar = |q: arc_fit::P| {
+            let t = libm::atan2((q[1] - c_nm[1]) as f64, (q[0] - c_nm[0]) as f64);
+            if t < 0.0 { 2.0 * PI + t } else { t }
+        };
+        let (mut start, mut sweep) = (0.0, 0.0);
+        if r_nm != 0.0 && l_nm != c_nm && r_pt != c_nm && l_nm != r_pt {
+            start = polar(l_nm);
+            sweep = polar(r_pt) - start;
+            if sweep < 0.0 && is_ccw {
+                sweep += 2.0 * PI;
+            } else if sweep > 0.0 && !is_ccw {
+                sweep -= 2.0 * PI;
+            }
+        }
+        for j in 0..ARC_FIT_SIZE {
+            let mut angle = (start + (j as f32 / ARC_FIT_SIZE as f32) as f64 * sweep) as f32;
+            if angle as f64 > 2.0 * PI {
+                angle = (angle as f64 - 2.0 * PI) as f32;
+            } else if angle < 0.0 {
+                angle = (angle as f64 + 2.0 * PI) as f32;
+            }
+            // `std::cos` and `std::sin` of a float.
+            let (cos, sin) = (libm::cosf(angle), libm::sinf(angle));
+            res.push([c_nm[0] + (r_nm * cos as f64).round() as i64, c_nm[1] + (r_nm * sin as f64).round() as i64]);
+        }
+        res.push(r_pt);
     }
-    res.dedup_by(|a, b| geom::sc(a.x as f64) == geom::sc(b.x as f64) && geom::sc(a.y as f64) == geom::sc(b.y as f64));
-    while res.len() > 1
-        && geom::sc(res[0].x as f64) == geom::sc(res[res.len() - 1].x as f64)
-        && geom::sc(res[0].y as f64) == geom::sc(res[res.len() - 1].y as f64)
-    {
-        res.pop();
-    }
+    res.dedup();
     res
 }
 
-/// A rectangle `offset` mm either side of the line from `a` to `b` (`generate_rectange`).
-fn rectangle_round_line(a: V, b: V, offset: f64) -> Vec<V> {
-    let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+/// `generate_rectange`: a rectangle `offset` nm either side of the line from `a` to `b`, its corners rounded to
+/// whole nanometres.
+fn rectangle_round_line(a: arc_fit::P, b: arc_fit::P, offset: i64) -> Vec<arc_fit::P> {
+    let (dx, dy) = ((b[0] - a[0]) as f64, (b[1] - a[1]) as f64);
     let length = (dx * dx + dy * dy).sqrt();
-    let (ux, uy) = (dx / length, dy / length);
-    let (ox, oy) = (-uy * offset, ux * offset);
-    let p = |x: f64, y: f64| v(x as f32, y as f32);
-    vec![
-        p(a.x as f64 + ox, a.y as f64 + oy),
-        p(a.x as f64 - ox, a.y as f64 - oy),
-        p(b.x as f64 - ox, b.y as f64 - oy),
-        p(b.x as f64 + ox, b.y as f64 + oy),
-    ]
+    let (ox, oy) = (-(dy / length) * offset as f64, (dx / length) * offset as f64);
+    let at = |p: arc_fit::P, sx: f64, sy: f64| [(p[0] as f64 + sx).round() as i64, (p[1] as f64 + sy).round() as i64];
+    vec![at(a, ox, oy), at(a, -ox, -oy), at(b, -ox, -oy), at(b, ox, oy)]
 }
 
-fn to_contour(points: &[V]) -> Contour {
-    let mut c: Contour = points.iter().map(|p| geom::pt(geom::sc(p.x as f64), geom::sc(p.y as f64))).collect();
-    if geom::area2(&c) < 0 {
-        c.reverse();
-    }
-    c
-}
-
-fn from_contour(c: &Contour) -> Vec<V> {
-    c.iter().map(|p| v(geom::unsc(p.x) as f32, geom::unsc(p.y) as f32)).collect()
-}
-
-/// The outer contour of the union of loops.
-fn union_outline(loops: &[Vec<V>]) -> Vec<V> {
-    let contours: Vec<Contour> = loops.iter().map(|l| to_contour(l)).collect();
+/// The outer contour of the union of loops in nanometres.
+fn union_outline(loops: &[Vec<arc_fit::P>]) -> Vec<arc_fit::P> {
+    let contours: Vec<Contour> = loops
+        .iter()
+        .map(|l| {
+            let mut c: Contour = l.iter().map(|p| geom::pt(p[0] as i32, p[1] as i32)).collect();
+            if geom::area2(&c) < 0 {
+                c.reverse();
+            }
+            c
+        })
+        .collect();
     let shapes = geom::union_contours(&contours);
     // The largest shape's outline (a tower's pieces always overlap into one).
     shapes
         .iter()
         .max_by_key(|s| s.first().map_or(0, |c| geom::area2(c)))
         .and_then(|s| s.first())
-        .map(from_contour)
+        .map(|c| c.iter().map(|p| [p.x as i64, p.y as i64]).collect())
         .unwrap_or_default()
+}
+
+/// The union's corners where edges of two loops cross, put where Clipper2 (Orca's union) puts them: on a horizontal
+/// edge at the other edge's `TopX` (to the nearest nanometre), else where `GetLineIntersectPt` cuts the crossing
+/// down to whole nanometres.
+fn snap_crossings(mut union: Vec<arc_fit::P>, loops: &[Vec<arc_fit::P>]) -> Vec<arc_fit::P> {
+    let edges: Vec<(usize, arc_fit::P, arc_fit::P)> = loops
+        .iter()
+        .enumerate()
+        .flat_map(|(k, l)| (0..l.len()).map(move |i| (k, l[i], l[(i + 1) % l.len()])))
+        .collect();
+    let near = |q: arc_fit::P, a: arc_fit::P, b: arc_fit::P| {
+        let (dx, dy) = ((b[0] - a[0]) as f64, (b[1] - a[1]) as f64);
+        let (px, py) = ((q[0] - a[0]) as f64, (q[1] - a[1]) as f64);
+        let len2 = dx * dx + dy * dy;
+        let t = ((px * dx + py * dy) / len2).clamp(0.0, 1.0);
+        len2 > 0.0 && (px - t * dx).hypot(py - t * dy) < 2.0
+    };
+    for q in union.iter_mut() {
+        if loops.iter().any(|l| l.contains(q)) {
+            continue;
+        }
+        let through: Vec<&(usize, arc_fit::P, arc_fit::P)> = edges.iter().filter(|e| near(*q, e.1, e.2)).collect();
+        let pair = through.iter().find_map(|e| through.iter().find(|f| f.0 != e.0).map(|f| (*e, *f)));
+        if let Some(c) = pair.and_then(|(e, f)| clipper_crossing((e.1, e.2), (f.1, f.2))) {
+            *q = c;
+        }
+    }
+    union
+}
+
+/// Clipper2's crossing of two edges (`TopX` on a horizontal one, else `GetLineIntersectPt`), each edge from its
+/// bottom (greater y) to its top as Clipper2 takes them.
+fn clipper_crossing(e: (arc_fit::P, arc_fit::P), f: (arc_fit::P, arc_fit::P)) -> Option<arc_fit::P> {
+    let bot_top = |s: (arc_fit::P, arc_fit::P)| if s.0[1] > s.1[1] { s } else { (s.1, s.0) };
+    let horizontal = |s: (arc_fit::P, arc_fit::P)| s.0[1] == s.1[1];
+    if horizontal(e) || horizontal(f) {
+        let (h, o) = if horizontal(e) { (e, f) } else { (f, e) };
+        if horizontal(o) {
+            return None;
+        }
+        let (y, (bot, top)) = (h.0[1], bot_top(o));
+        if y == top[1] || top[0] == bot[0] {
+            return Some([top[0], y]);
+        }
+        if y == bot[1] {
+            return Some([bot[0], y]);
+        }
+        let dx = (top[0] - bot[0]) as f64 / (top[1] - bot[1]) as f64;
+        return Some([bot[0] + (dx * (y - bot[1]) as f64).round_ties_even() as i64, y]);
+    }
+    let ((a1, b1), (a2, b2)) = (bot_top(e), bot_top(f));
+    let (dx1, dy1) = ((b1[0] - a1[0]) as f64, (b1[1] - a1[1]) as f64);
+    let (dx2, dy2) = ((b2[0] - a2[0]) as f64, (b2[1] - a2[1]) as f64);
+    let det = dy1 * dx2 - dy2 * dx1;
+    if det == 0.0 {
+        return None;
+    }
+    let t = ((a1[0] - a2[0]) as f64 * dy2 - (a1[1] - a2[1]) as f64 * dx2) / det;
+    Some(if t <= 0.0 {
+        a1
+    } else if t >= 1.0 {
+        b1
+    } else {
+        [(a1[0] as f64 + t * dx1) as i64, (a1[1] as f64 + t * dy1) as i64]
+    })
+}
+
+/// The union of the filleted wall and its box with each box corner a point of it where Orca's union (Clipper2) makes it
+/// one. Where a rib ends at the box's corner, the rib's end passes within a nanometre of the corner, and Clipper2
+/// keeps the corner only if, on the corner's scanline, the end's edge (`TopX`, rounded to the nearest nanometre)
+/// lies inside the box: then the box pokes out, else the corner counts as inside the rib. The arcs fitted to the wall
+/// break at such a corner.
+fn box_corners_as_clipper(
+    mut united: Vec<arc_fit::P>,
+    filleted: &[arc_fit::P],
+    square: &[arc_fit::P],
+) -> Vec<arc_fit::P> {
+    let (lo, hi) = bounding_box(square);
+    let n = filleted.len();
+    for &c in square {
+        // The filleted wall's edge across the corner's scanline, within a few nanometres of the corner.
+        let crossing = (0..n).find_map(|i| {
+            let (a, b) = (filleted[i], filleted[(i + 1) % n]);
+            if a[1] == b[1] || c[1] <= a[1].min(b[1]) || c[1] >= a[1].max(b[1]) {
+                return None;
+            }
+            let (bot, top) = if a[1] > b[1] { (a, b) } else { (b, a) };
+            let dx = (top[0] - bot[0]) as f64 / (top[1] - bot[1]) as f64;
+            let x = bot[0] + (dx * (c[1] - bot[1]) as f64).round_ties_even() as i64;
+            ((x - c[0]).abs() <= 4).then_some(x)
+        });
+        let Some(x) = crossing else { continue };
+        let pokes_out = if c[0] == lo[0] { x > c[0] } else { c[0] == hi[0] && x < c[0] };
+        let at = united.iter().position(|&p| p == c);
+        match (pokes_out, at) {
+            (false, Some(k)) => {
+                united.remove(k);
+            }
+            (true, None) => {
+                // On the edge of the union that passes nearest.
+                let m = united.len();
+                let nearest = (0..m).min_by(|&i, &j| {
+                    let d = |k: usize| {
+                        let (a, b) = (united[k], united[(k + 1) % m]);
+                        let (ex, ey) = ((b[0] - a[0]) as f64, (b[1] - a[1]) as f64);
+                        let (px, py) = ((c[0] - a[0]) as f64, (c[1] - a[1]) as f64);
+                        let t = ((px * ex + py * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
+                        (px - t * ex).hypot(py - t * ey)
+                    };
+                    d(i).total_cmp(&d(j))
+                });
+                if let Some(i) = nearest {
+                    united.insert(i + 1, c);
+                }
+            }
+            _ => {}
+        }
+    }
+    united
 }
 
 /// `move_point_along_polygon`: from `start` on edge `start_idx`, `offset` mm along the loop, forwards or back.
@@ -942,53 +1151,76 @@ fn ray_intersection(a: V, v1: V, b: V, c: V) -> Option<V> {
     (t1 >= 0.0 && (0.0..=1.0).contains(&t2)).then(|| a + v1 * t1 as f32)
 }
 
-/// `add_extra_point`: three points in the middle of the edge nearest the bottom middle of the loop, `range` apart,
-/// so a gap never has to cut across a corner there.
-fn add_extra_point(polygon: &[V], range: f32) -> Vec<V> {
-    if polygon.len() < 2 {
+/// `add_extra_point`: three points put on the loop's edge whose middle is nearest the middle of its bottom (its
+/// middle and `range` either side of it, kept within the edge), in Orca's numbers: nanometres held as floats, and
+/// rounded back.
+fn add_extra_point(polygon: &[arc_fit::P], scale_range: i32) -> Vec<arc_fit::P> {
+    let n = polygon.len();
+    if n < 2 {
         return polygon.to_vec();
     }
-    let (mut min_x, mut max_x, mut min_y) = (f32::MAX, f32::MIN, f32::MAX);
-    for p in polygon {
-        min_x = min_x.min(p.x);
-        max_x = max_x.max(p.x);
-        min_y = min_y.min(p.y);
-    }
-    let anchor = v((min_x + max_x) / 2.0, min_y);
-    let n = polygon.len();
+    let (lo, hi) = bounding_box(polygon);
+    let anchor = v(((lo[0] + hi[0]) / 2) as f32, lo[1] as f32);
+    let as_f32 = |p: arc_fit::P| v(p[0] as f32, p[1] as f32);
     let mut closest_edge = 0;
     let mut min_d = f32::MAX;
     for i in 0..n {
-        let mid = (polygon[i] + polygon[(i + 1) % n]) * 0.5;
+        let mid = (as_f32(polygon[i]) + as_f32(polygon[(i + 1) % n])) * 0.5;
         let d = (anchor - mid).squared_norm();
         if d < min_d {
             min_d = d;
             closest_edge = i;
         }
     }
-    let (a, b) = (polygon[closest_edge], polygon[(closest_edge + 1) % n]);
+    let (a, b) = (as_f32(polygon[closest_edge]), as_f32(polygon[(closest_edge + 1) % n]));
     let mid = (a + b) * 0.5;
     let (to_a, to_b) = (a - mid, b - mid);
     let (len_a, len_b) = (to_a.norm(), to_b.norm());
     if (len_a as f64) < EPSILON || (len_b as f64) < EPSILON {
         return polygon.to_vec();
     }
-    let range = range.min(len_a.min(len_b) * 0.9);
-    let pa = mid + to_a * (1.0 / len_a) * range;
-    let pb = mid + to_b * (1.0 / len_b) * range;
+    let (to_a, to_b) = (v(to_a.x / len_a, to_a.y / len_a), v(to_b.x / len_b, to_b.y / len_b));
+    let range = (scale_range as f32).min(len_a.min(len_b) * 0.9);
+    let round = |q: V| [(q.x as f64).round() as i64, (q.y as f64).round() as i64];
     let mut res = Vec::with_capacity(n + 3);
-    for (i, &p) in polygon.iter().enumerate() {
-        res.push(p);
+    for (i, &q) in polygon.iter().enumerate() {
+        res.push(q);
         if i == closest_edge {
-            res.extend([pa, mid, pb]);
+            res.extend([round(mid + to_a * range), round(mid), round(mid + to_b * range)]);
         }
     }
     res
 }
 
+/// The least and greatest corners of points (`get_extents`).
+fn bounding_box(points: &[arc_fit::P]) -> (arc_fit::P, arc_fit::P) {
+    let mut lo = [i64::MAX, i64::MAX];
+    let mut hi = [i64::MIN, i64::MIN];
+    for p in points {
+        lo = [lo[0].min(p[0]), lo[1].min(p[1])];
+        hi = [hi[0].max(p[0]), hi[1].max(p[1])];
+    }
+    (lo, hi)
+}
+
+/// `unscale(p).cast<float>()`: nanometres to mm, rounded once to single precision.
+fn unscale_f(p: arc_fit::P) -> V {
+    v((p[0] as f64 * 1e-6) as f32, (p[1] as f64 * 1e-6) as f32)
+}
+
+/// `scaled(Vec2f)`: mm to nanometres in single precision, cut down to whole ones.
+fn scaled_f(q: V) -> arc_fit::P {
+    [(q.x / NM_F32) as i64, (q.y / NM_F32) as i64]
+}
+
 /// `remove_points_from_polygon` (through `construct_gap_for_skip_points`): the wall loop cut open `range` mm either
 /// side of where each skip point's horizontal ray meets it; also the loop with the cut ends added (for the wipe).
-fn gap_for_skip_points(polygon: &[V], skip_points: &[V], wt_width: f32, range: f32) -> (Vec<Vec<V>>, Vec<V>) {
+fn gap_for_skip_points(
+    polygon: &[arc_fit::P],
+    skip_points: &[V],
+    wt_width: f32,
+    range: f32,
+) -> (Vec<Vec<arc_fit::P>>, Vec<arc_fit::P>) {
     if skip_points.is_empty() {
         let mut closed = polygon.to_vec();
         if let Some(&f) = polygon.first() {
@@ -996,19 +1228,23 @@ fn gap_for_skip_points(polygon: &[V], skip_points: &[V], wt_width: f32, range: f
         }
         return (vec![closed], polygon.to_vec());
     }
-    let polygon = add_extra_point(polygon, range);
+    let polygon = add_extra_point(polygon, (range as f64 / 1e-6) as i32);
     if polygon.len() < 2 {
         return (vec![polygon.clone()], polygon);
     }
-    let (mut min_x, mut max_x, mut min_y) = (f32::MAX, f32::MIN, f32::MAX);
-    for p in &polygon {
-        min_x = min_x.min(p.x);
-        max_x = max_x.max(p.x);
-        min_y = min_y.min(p.y);
-    }
-    let anchor = v(((min_x + max_x) / 2.0 * 1e6).trunc() / 1e6, min_y);
-    let start = closest_index(&polygon, anchor);
-    let points: Vec<V> = (0..polygon.len()).map(|k| polygon[(start + k) % polygon.len()]).collect();
+    // From the point nearest the middle of its bottom (`closest_point_index`, `split_at_index`), in mm.
+    let (lo, hi) = bounding_box(&polygon);
+    let anchor = [(lo[0] + hi[0]) / 2, lo[1]];
+    let start = (0..polygon.len())
+        .min_by(|&i, &j| {
+            let d = |k: usize| {
+                let (dx, dy) = ((polygon[k][0] - anchor[0]) as f64, (polygon[k][1] - anchor[1]) as f64);
+                dx * dx + dy * dy
+            };
+            d(i).total_cmp(&d(j))
+        })
+        .unwrap_or(0);
+    let points: Vec<V> = (0..polygon.len()).map(|k| unscale_f(polygon[(start + k) % polygon.len()])).collect();
 
     // (position, edge index, distance from the edge's start, pair, forward)
     let mut inter: Vec<(V, usize, f32, i64, bool)> = Vec::new();
@@ -1042,22 +1278,22 @@ fn gap_for_skip_points(polygon: &[V], skip_points: &[V], wt_width: f32, range: f
             new_pl.insert(idx + 1, (pos, pair, forward));
         }
     }
-    let with_cuts: Vec<V> = new_pl.iter().map(|p| p.0).collect();
+    let with_cuts: Vec<arc_fit::P> = new_pl.iter().map(|p| scaled_f(p.0)).collect();
 
-    let mut result: Vec<Vec<V>> = Vec::new();
+    let mut result: Vec<Vec<arc_fit::P>> = Vec::new();
     let beg = 0;
     let mut skip = true;
     let mut i = beg;
-    let mut pl: Vec<V> = Vec::new();
+    let mut pl: Vec<arc_fit::P> = Vec::new();
     let n = new_pl.len();
     loop {
         if skip || new_pl[i].1 == -1 {
-            pl.push(new_pl[i].0);
+            pl.push(scaled_f(new_pl[i].0));
             i = (i + 1) % n;
             skip = false;
         } else {
             if !pl.is_empty() {
-                pl.push(new_pl[i].0);
+                pl.push(scaled_f(new_pl[i].0));
                 result.push(std::mem::take(&mut pl));
             }
             let mut left = new_pl[i].1;
@@ -1077,7 +1313,7 @@ fn gap_for_skip_points(polygon: &[V], skip_points: &[V], wt_width: f32, range: f
     }
     if !pl.is_empty() {
         if new_pl[i].1 == -1 {
-            pl.push(new_pl[i].0);
+            pl.push(scaled_f(new_pl[i].0));
         }
         result.push(pl);
     }
@@ -2628,23 +2864,22 @@ impl WipeTower {
                 }
                 (vec![closed], wall.clone())
             };
-            w.generate_path(&paths, feedrate, retract_length, retract_speed);
+            let least = w.generate_path(&paths, feedrate, retract_length, retract_speed);
             if self.cur_layer_id == 0 {
-                let mut b = [f32::MAX, f32::MAX];
-                for p in paths.iter().flatten() {
-                    b = [b[0].min(p.x), b[1].min(p.y)];
+                // Orca takes it from the wall's path as its writer left it, fitted or simplified.
+                if let Some(b) = least {
+                    self.rib_offset = v(-(b[0] as f32 * NM_F32), -(b[1] as f32 * NM_F32));
                 }
-                self.rib_offset = v(-b[0], -b[1]);
             }
             outer = with_cuts;
-            walls_drawn.push(wall.iter().map(|p| *p + v(0.0, y_shift)).collect());
+            walls_drawn.push(wall.iter().map(|&p| unscale_f(p) + v(0.0, y_shift)).collect());
         }
         if loops_num > 0 {
             let mut ring = outer.clone();
             for _ in 0..loops_num {
-                ring = offset_loop(&ring, spacing as f64);
+                ring = offset_loop(&ring, spacing);
                 w.polygon(&ring, feedrate);
-                walls_drawn.push(ring.clone());
+                walls_drawn.push(ring.iter().map(|&p| unscale_f(p)).collect());
             }
             if first {
                 self.brim_width_real = loops_num as f32 * spacing + spacing / 2.0;
@@ -2652,6 +2887,7 @@ impl WipeTower {
             outer = ring;
         }
         if extrude_perimeter || loops_num > 0 {
+            let outer: Vec<V> = outer.iter().map(|&p| mm(p)).collect();
             w.add_wipe_path(&outer, wipe_dist);
         } else {
             let p = w.pos;
@@ -3084,40 +3320,52 @@ impl WipeTower {
     }
 
     /// The wall's loop for the box (`generate_support_wall_new` up to its path): the square with its ribs,
-    /// filleted, united with the box.
-    fn wall_polygon(&self, wt_box: &BoxC) -> Vec<V> {
-        let mut wall = if self.params.use_rib_wall { self.generate_rib_polygon(wt_box) } else { box_loop(wt_box) };
+    /// filleted, united with the box. Built in Orca's nanometres, with its roundings: the arcs fitted to the wall
+    /// keep or drop points by a few nanometres' difference, and the tower takes its place from those kept.
+    fn wall_polygon(&self, wt_box: &BoxC) -> Vec<arc_fit::P> {
+        let mut wall = if self.params.use_rib_wall { self.generate_rib_polygon(wt_box) } else { box_scaled(wt_box) };
         if self.params.used_fillet && (self.params.use_rib_wall || self.y_shift as f64 <= EPSILON) {
             if self.params.use_rib_wall {
                 wall = rounding_polygon(&wall, 2.0);
             }
-            wall = union_outline(&[wall, box_loop(wt_box)]);
+            let square = box_scaled(wt_box);
+            let united = union_outline(&[wall.clone(), square.clone()]);
+            wall = clipper_start(box_corners_as_clipper(united, &wall, &square));
         }
         wall
     }
 
-    fn generate_rib_polygon(&self, wt_box: &BoxC) -> Vec<V> {
-        let diagonal_width = self.rib_width as f64 / 2.0;
+    /// `generate_rib_polygon`: the box with a rib along each diagonal, the ribs as long as the layer's height leaves
+    /// them, in nanometres.
+    fn generate_rib_polygon(&self, wt_box: &BoxC) -> Vec<arc_fit::P> {
+        let new_scale = |p: V| -> arc_fit::P { [(p.x as f64 / 1e-6) as i64, (p.y as f64 / 1e-6) as i64] };
+        let diagonal_width = (self.rib_width / NM_F32) as i64 / 2;
         let (a, b) = (self.wipe_tower_width, self.wipe_tower_depth);
-        let line_len = ((a as f64).powi(2) + (b as f64).powi(2)).sqrt();
-        let mut extra = (self.rib_length - line_len as f32).max(0.0) / 2.0;
-        extra *= (self.wipe_tower_height - self.z_pos).abs() / self.wipe_tower_height;
-        let extend = |p: V, q: V| -> (V, V) {
-            let d = q - p;
-            let len = (d.x as f64).hypot(d.y as f64);
-            let u = [d.x as f64 / len, d.y as f64 / len];
-            let e = extra as f64;
-            (
-                v((p.x as f64 - u[0] * e) as f32, (p.y as f64 - u[1] * e) as f32),
-                v((q.x as f64 + u[0] * e) as f32, (q.y as f64 + u[1] * e) as f32),
-            )
+        let (mut l1a, mut l1b) = (new_scale(v(0.0, 0.0)), new_scale(v(a, b)));
+        let (mut l2a, mut l2b) = (new_scale(v(a, 0.0)), new_scale(v(0.0, b)));
+        let len1 = (((l1b[0] - l1a[0]) as f64).powi(2) + ((l1b[1] - l1a[1]) as f64).powi(2)).sqrt();
+        let extra = (self.rib_length - (len1 * 1e-6) as f32).max(0.0) / 2.0;
+        let extra = (((self.wipe_tower_height - self.z_pos).abs() / self.wipe_tower_height * extra) / NM_F32) as i64;
+        // `Line::extend`, by whole nanometres cut down.
+        let extend = |p: &mut arc_fit::P, q: &mut arc_fit::P| {
+            let (dx, dy) = ((q[0] - p[0]) as f64, (q[1] - p[1]) as f64);
+            let len = (dx * dx + dy * dy).sqrt();
+            let off = [(extra as f64 * (dx / len)) as i64, (extra as f64 * (dy / len)) as i64];
+            *p = [p[0] - off[0], p[1] - off[1]];
+            *q = [q[0] + off[0], q[1] + off[1]];
         };
-        let shift = v(0.0, self.y_shift);
-        let (l1a, l1b) = extend(v(0.0, 0.0), v(a, b));
-        let (l2a, l2b) = extend(v(a, 0.0), v(0.0, b));
-        let poly1 = rectangle_round_line(l1a - shift, l1b - shift, diagonal_width);
-        let poly2 = rectangle_round_line(l2a - shift, l2b - shift, diagonal_width);
-        union_outline(&[poly1, poly2, box_loop(wt_box)])
+        extend(&mut l1a, &mut l1b);
+        extend(&mut l2a, &mut l2b);
+        let shift = (self.y_shift / NM_F32) as i64;
+        for p in [&mut l1a, &mut l1b, &mut l2a, &mut l2b] {
+            p[1] -= shift;
+        }
+        let poly1 = rectangle_round_line(l1a, l1b, diagonal_width);
+        let poly2 = rectangle_round_line(l2a, l2b, diagonal_width);
+        let square = vec![new_scale(wt_box.ld), new_scale(wt_box.rd), new_scale(wt_box.ru), new_scale(wt_box.lu)];
+        let loops = [poly1, poly2, square];
+        let union = union_outline(&loops);
+        snap_crossings(union, &loops)
     }
 }
 
@@ -3141,16 +3389,37 @@ fn self_thick(
     pos_y > start && pos_y < end
 }
 
-fn box_loop(b: &BoxC) -> Vec<V> {
-    vec![b.ld, b.rd, b.ru, b.lu]
+/// `generate_rectange_polygon`: the box in nanometres (each corner scaled in single precision and cut down).
+fn box_scaled(b: &BoxC) -> Vec<arc_fit::P> {
+    let scaled = |p: V| -> arc_fit::P { [(p.x / NM_F32) as i64, (p.y / NM_F32) as i64] };
+    vec![scaled(b.ld), scaled(v(b.ru.x, b.ld.y)), scaled(b.ru), scaled(v(b.ld.x, b.ru.y))]
 }
 
-/// A closed loop grown by `delta` mm, mitred as Clipper's default offset (`offset(Polygon, delta)`).
-fn offset_loop(points: &[V], delta: f64) -> Vec<V> {
-    let shapes = vec![vec![to_contour(points)]];
-    let miter = 2.0 * (1.0f64 / 3.0).asin();
-    let grown = geom::offset_mitred(&shapes, delta, miter);
-    grown.first().and_then(|s| s.first()).map(from_contour).unwrap_or_default()
+/// A closed loop grown by `delta` mm as Orca's `offset(Polygon, delta)` grows it (Clipper2, mitred with its default
+/// limit of 3), in nanometres: the offset whole nanometres (`scaled`), the outline the largest piece's.
+fn offset_loop(points: &[arc_fit::P], delta: f32) -> Vec<arc_fit::P> {
+    let d = (delta / NM_F32) as i64 as f32;
+    let contour: Contour = points.iter().map(|p| geom::pt(p[0] as i32, p[1] as i32)).collect();
+    // geom works in tenths of a micron: these coordinates are nanometres, so the offset goes in as nanometres too.
+    let grown = geom::offset_c2(&vec![vec![contour]], d as f64 / geom::SCALE, geom::Join::Miter(3.0));
+    let outline: Vec<arc_fit::P> = grown
+        .iter()
+        .max_by_key(|s| s.first().map_or(0, |c| geom::area2(c)))
+        .and_then(|s| s.first())
+        .map(|c| c.iter().map(|p| [p.x as i64, p.y as i64]).collect())
+        .unwrap_or_default();
+    clipper_start(outline)
+}
+
+/// A counter-clockwise loop from where Clipper2's union output starts it: its sweep (from the greatest y down) closes
+/// the loop at its last local minimum in y, the lowest point (the rightmost of equals), and the path begins at the
+/// point after it. Arcs are fitted to a loop from its first point, so Orca's start decides where they break.
+fn clipper_start(mut loop_: Vec<arc_fit::P>) -> Vec<arc_fit::P> {
+    if let Some(lowest) = (0..loop_.len()).min_by_key(|&i| (loop_[i][1], -loop_[i][0])) {
+        let n = loop_.len();
+        loop_.rotate_left((lowest + 1) % n);
+    }
+    loop_
 }
 
 /// Whether text has a line that isn't a comment (`is_valid_gcode`).

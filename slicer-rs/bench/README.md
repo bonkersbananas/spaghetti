@@ -61,7 +61,7 @@ The lines that cool a waiting nozzle and heat it again (`;Multi extruder pre coo
 ORCA_GCODE=bench/out/orca-native-colour/plate_1.gcode cargo test --release --test slice -- --ignored --nocapture preheat
 ```
 
-`groups.py` holds the grouping of three filaments or more to Orca's: it lays out plates of 15 mm blocks in random colours and heights, one filament each, slices them with native Orca and ours, and compares the filament maps, every tool change with its flush, each filament's grams and the estimate. With `--x0 20` (the default) the first column of blocks reaches into the strip the right nozzle can't print; `--x0 80` stands them clear of it:
+`groups.py` holds the grouping of three filaments or more to Orca's: it lays out plates of 15 mm blocks in random colours and heights, one filament each, slices them with native Orca and ours, and compares the filament maps, every tool change with its flush, each filament's grams, the estimate and every extrusion of the prime tower, layer by layer (each line's and arc's end, centre and plastic, as the G-code gives them). With `--x0 20` (the default) the first column of blocks reaches into the strip the right nozzle can't print; `--x0 80` stands them clear of it:
 
 ```sh
 python3 -I bench/groups.py --plates 30 --seed 23 --filaments 2,3,4,5,6,7,8

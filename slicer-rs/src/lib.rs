@@ -2,6 +2,7 @@
 //! decision 0046. Built for speed: layers are sliced, walled and filled in parallel (one thread in WebAssembly), on
 //! exact integer geometry. See `docs/proposals/rust-slicer.md` for what it does, how fast, and what it lacks.
 
+pub mod arc_fit;
 pub mod bambu;
 pub mod base_support;
 pub mod bridges;
