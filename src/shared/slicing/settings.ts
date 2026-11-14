@@ -109,7 +109,7 @@ export interface SlicingSettings {
    */
   orientation: Orientation | null;
   /**
-   * What prints each of the model's own colours, where someone chose (issue #313): the colour (a group's `from`, as
+   * What prints each of the model's own colours, where someone chose: the colour (a group's `from`, as
    * the slice lists it) and the filament. A colour not listed prints in the Pantry spool nearest it. Only a model
    * with colours of its own has any; kept with its settings so a re-slice and a reprint keep them.
    */

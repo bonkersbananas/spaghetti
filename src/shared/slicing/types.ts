@@ -79,7 +79,7 @@ export interface SliceFallback {
 /** The slicer's cautions worth a line on the card: "floating", parts that start in the air while supports are off. */
 export type SliceCaution = "floating";
 
-/** One of a model's own colours as a slice printed it (issue #313): the colour, and the filament that printed it. */
+/** One of a model's own colours as a slice printed it: the colour, and the filament that printed it. */
 export interface SliceColour {
   /** "#rrggbb": the colour (the heaviest of those merged into it), and what a choice for it is keyed by. */
   hex: string;

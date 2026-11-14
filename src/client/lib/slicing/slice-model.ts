@@ -48,7 +48,7 @@ const PHASES: Record<SlicePhase, [number, number]> = {
 export interface SliceAsk {
   chosen: SliceOptions;
   defaults: SlicingSettings;
-  /** The Pantry's spools, for a model with colours of its own to match them to (issue #313). */
+  /** The Pantry's spools, for a model with colours of its own to match them to. */
   spools?: SpoolLike[];
 }
 

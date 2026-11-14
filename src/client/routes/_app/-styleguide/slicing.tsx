@@ -245,40 +245,40 @@ const sliced = (more: Partial<Extract<ModelState, { kind: "sliced" }>> = {}): Mo
 
 const DEMO_COLOURS: SliceColour[] = [
   {
-    hex: "#d2281e",
+    hex: "#d2281e", // design-lint-ignore: a colour is data
     name: "Ketchup Red",
     merged: ["Tomato Red"],
     share: 38,
-    filament: { material: "PLA", colorHex: "#c0392b", colorName: "Red", spoolId: "s1" },
+    filament: { material: "PLA", colorHex: "#c0392b", colorName: "Red", spoolId: "s1" }, // design-lint-ignore: a colour is data
     inPantry: true,
   },
   {
-    hex: "#e3b505",
+    hex: "#e3b505", // design-lint-ignore: a colour is data
     name: "Mustard",
     share: 24,
-    filament: { material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", spoolId: "s2" },
+    filament: { material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", spoolId: "s2" }, // design-lint-ignore: a colour is data
     inPantry: true,
   },
   {
-    hex: "#d9a25e",
+    hex: "#d9a25e", // design-lint-ignore: a colour is data
     name: "Bun",
     share: 22,
-    filament: { material: "PLA", colorHex: "#d9a25e", colorName: "Bun" },
+    filament: { material: "PLA", colorHex: "#d9a25e", colorName: "Bun" }, // design-lint-ignore: a colour is data
     inPantry: false,
   },
   {
-    hex: "#f3e9d2",
+    hex: "#f3e9d2", // design-lint-ignore: a colour is data
     name: "Cream",
     share: 16,
-    filament: { material: "PLA", colorHex: "#f4f1ea", colorName: "Jade white", spoolId: "s3" },
+    filament: { material: "PLA", colorHex: "#f4f1ea", colorName: "Jade white", spoolId: "s3" }, // design-lint-ignore: a colour is data
     inPantry: true,
   },
 ];
 const DEMO_SPOOLS: SpoolLike[] = [
-  { id: "s1", material: "PLA", colorHex: "#c0392b", colorName: "Red", slot: "A1" },
-  { id: "s2", material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", slot: "A2" },
-  { id: "s3", material: "PLA", colorHex: "#f4f1ea", colorName: "Jade white", slot: "A3" },
-  { id: "s4", material: "PETG", colorHex: "#2c8a87", colorName: "Teal" },
+  { id: "s1", material: "PLA", colorHex: "#c0392b", colorName: "Red", slot: "A1" }, // design-lint-ignore: a colour is data
+  { id: "s2", material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", slot: "A2" }, // design-lint-ignore: a colour is data
+  { id: "s3", material: "PLA", colorHex: "#f4f1ea", colorName: "Jade white", slot: "A3" }, // design-lint-ignore: a colour is data
+  { id: "s4", material: "PETG", colorHex: "#2c8a87", colorName: "Teal" }, // design-lint-ignore: a colour is data
 ];
 
 /** The colour rows with a pick that sticks, as the sheet has them. */

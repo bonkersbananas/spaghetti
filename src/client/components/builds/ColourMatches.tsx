@@ -15,7 +15,7 @@ const MAX_SPOOLS = 12;
 const STAND_IN = "stand-in";
 
 /**
- * A model that brings colours of its own (issue #313), in the Filament section of "Slice with…": one row for each
+ * A model that brings colours of its own, in the Filament section of "Slice with…": one row for each
  * colour, the model's on the left and the filament that prints it on the right, the nearest Pantry spool until
  * someone picks another. A colour no spool is near prints in a stand-in, said as "not in the Pantry yet". A tap on a
  * row opens the spools under it; a pick is kept with the model's settings (`choices`).

@@ -1,5 +1,5 @@
 /**
- * Colour matching (issue #313): the colours a model brings, simplified to as many as the printer takes, and each
+ * Colour matching: the colours a model brings, simplified to as many as the printer takes, and each
  * matched to the Pantry spool that looks nearest (or a stand-in, when nothing does). Pure: the 3MF reader says the
  * colours (model3mf.ts), the slice worker prints with the plan, the Filament section shows it.
  */

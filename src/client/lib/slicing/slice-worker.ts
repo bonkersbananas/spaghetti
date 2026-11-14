@@ -44,7 +44,7 @@ export interface SliceRequest {
   chosen: SliceOptions;
   /** What the rest is sliced with: the workshop's defaults (shared/slicing/pantry.ts). */
   defaults: SlicingSettings;
-  /** The Pantry's spools: a model with colours of its own is matched to them (issue #313). */
+  /** The Pantry's spools: a model with colours of its own is matched to them. */
   spools: SpoolLike[];
   /** Where the engine is (absolute `base`, the host's file name in it) and its release. */
   engine: { base: string; host: string; version: string };
@@ -162,7 +162,7 @@ async function run(request: SliceRequest) {
     progress("reading", 0);
     const bytes = new Uint8Array(await request.file.arrayBuffer());
     const read = readModel(bytes, request.name);
-    // A model with colours of its own prints each in the filament matched to it (issue #313).
+    // A model with colours of its own prints each in the filament matched to it.
     const matched = read.project ? null : matchColours(read.objects, request.spools, chosen);
     colourRows = matched?.rows;
     const asked: SliceOptions = matched ? { ...chosen, filaments: matched.filaments } : chosen;
