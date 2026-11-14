@@ -153,7 +153,8 @@ pub fn plan_layer_of(
             let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
             let under = below.get(island.object as usize).and_then(Option::as_ref);
             let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
-            island_paths(k as u32, island, fills, under, i, (z, h), centre, trees, s)
+            let seams = r.seams.get(island.object as usize);
+            island_paths(k as u32, island, fills, under, i, (z, h), centre, trees, seams, s)
         })
         .collect();
     // The tour's stops: the islands that print anything, then each object with support and nothing else here.
@@ -411,6 +412,7 @@ fn island_paths(
     (z, h): (f64, f64),
     centre: (f64, f64),
     trees: &[Vec<Pt>],
+    seams: Option<&crate::seam::LayerSeams>,
     s: &Settings,
 ) -> Vec<Path> {
     let first = layer == 0;
@@ -426,7 +428,11 @@ fn island_paths(
     let overhang = overhang_flow(first, h, s);
     for (contour, depth, outline) in wall_order(walls, centre_pt) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
-        let wall = path(role, seam_loop(contour, outline), true, island, first, h, s);
+        // From where the seam placer starts it (`seam.rs`), else from the back.
+        let points = seams
+            .and_then(|seams| seams.wall_loop(contour, outline, depth == 0, s))
+            .unwrap_or_else(|| seam_loop(contour, outline));
+        let wall = path(role, points, true, island, first, h, s);
         let mut wall = match below {
             Some(below) => below.wall(wall, overhang, s),
             None => wall,
