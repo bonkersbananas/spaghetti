@@ -64,6 +64,9 @@ pub struct Params {
     pub with_infill: bool,
     /// The bed (ours), which support stays on.
     pub bed: Shapes,
+    /// Supports on the plate only: no branch stands on the object, so none ends in a bottom interface, and a roof
+    /// isn't merged with its overhang (the nodes under it may have gone).
+    pub plate_only: bool,
 }
 
 /// The object as the drawing needs it: each layer's top and height, its top surfaces and its slices.
@@ -284,6 +287,7 @@ pub fn draw_circles(
                 // Merged with its overhang for a smoother interface.
                 if p.top_interface_layers > 0
                     && node.support_roof_layers_below > 0
+                    && !p.plate_only
                     && !node.is_sharp_tail
                     && let Some(o) = &node.overhang
                 {
@@ -336,7 +340,7 @@ pub fn draw_circles(
         // bottom interface layers.
         let mut floor_areas: Shapes = Vec::new();
         let bottom_gap = p.bottom_z_distance;
-        if !base_areas.is_empty() && (bottom_gap > EPSILON || p.bottom_interface_layers > 0) {
+        if !base_areas.is_empty() && !p.plate_only && (bottom_gap > EPSILON || p.bottom_interface_layers > 0) {
             let interface_height =
                 if p.bottom_interface_layers > 0 { p.bottom_interface_layers as f64 * p.layer_height } else { 0.0 };
             let (top_z, bottom_z) = (lh.print_z, lh.print_z - lh.height);

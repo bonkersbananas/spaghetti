@@ -9,7 +9,7 @@ use super::mst::{Mst, P, SCALING_FACTOR, vsize2};
 use super::order::StdMap;
 use super::{EPSILON, Frame, NewNode, NodeType, Nodes, Style};
 use crate::geom::Shapes;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 /// A support layer: its top and thickness (mm), and the object layer it is planned against.
 #[derive(Clone, Copy, Debug)]
@@ -145,6 +145,8 @@ pub struct Params {
     pub branch_angle: f64,
     pub wall_count: i64,
     pub top_interface_layers: i32,
+    /// Supports on the plate only (`support_on_build_plate_only`): a branch that can't reach the plate goes.
+    pub plate_only: bool,
 }
 
 impl Params {
@@ -414,8 +416,14 @@ pub fn drop_nodes(
         let parts = &data.outlines_below[obj_layer_nr];
         let part_areas: Vec<Areas> = parts.iter().map(|s| Areas::new(std::slice::from_ref(s))).collect();
         let mut nodes_per_part: Vec<StdMap<usize>> = (0..=parts.len()).map(|_| StdMap::default()).collect();
+        // The leaves of branches that can't reach the plate, on the plate only: pruned once the layer is done.
+        let mut unsupported_leaves: VecDeque<usize> = VecDeque::new();
         for &id in &contacts[layer_nr] {
             let node = &nodes.all[id];
+            if p.plate_only && !node.to_buildplate {
+                unsupported_leaves.push_front(id);
+                continue;
+            }
             if node.to_buildplate || parts.is_empty() {
                 nodes_per_part[0].put(node.position, id);
                 continue;
@@ -569,6 +577,7 @@ pub fn drop_nodes(
             // Then move every node left: towards its neighbours, out of the object's way.
             let mut pending: Vec<Vec<Pending>> = Vec::with_capacity(nodes_vec.len());
             let mut invalidate: Vec<bool> = vec![false; nodes_vec.len()];
+            let mut unsupported_leaf: Vec<bool> = vec![false; nodes_vec.len()];
             for (k, &id) in nodes_vec.iter().enumerate() {
                 let mut out: Vec<Pending> = Vec::new();
                 if !nodes.all[id].valid {
@@ -611,7 +620,11 @@ pub fn drop_nodes(
                         };
                         let to_outside = projection_onto(&collision, frame, position);
                         if vsize2(sub(position, to_outside)) >= branch_radius * branch_radius {
-                            invalidate[k] = true;
+                            if p.plate_only {
+                                unsupported_leaf[k] = true;
+                            } else {
+                                invalidate[k] = true;
+                            }
                             pending.push(out);
                             continue;
                         }
@@ -737,9 +750,50 @@ pub fn drop_nodes(
                     }
                     contacts[layer_nr_next].push(next);
                 }
+                if unsupported_leaf[k] {
+                    unsupported_leaves.push_front(nodes_vec[k]);
+                }
                 if invalidate[k] {
                     nodes.all[nodes_vec[k]].valid = false;
                 }
+            }
+        }
+
+        // Every branch that can't reach the plate goes, from each leaf up to its tip, with the branches merged into
+        // it (Orca's pruning of 'mid-air' branches).
+        if !unsupported_leaves.is_empty() {
+            while let Some(leaf) = unsupported_leaves.pop_back() {
+                let mut at = Some(leaf);
+                while let Some(id) = at {
+                    let (parent, child) = (nodes.all[id].parent, nodes.all[id].child);
+                    if let Some(parent) = parent {
+                        nodes.all[parent].child = child;
+                        for q in nodes.all[id].parents.clone() {
+                            if nodes.all[q].child == Some(id) {
+                                nodes.all[q].child = child;
+                            }
+                        }
+                    }
+                    if let Some(child) = child {
+                        nodes.all[child].parent = parent;
+                        let theirs = nodes.all[id].parents.clone();
+                        let list = &mut nodes.all[child].parents;
+                        if let Some(i) = list.iter().position(|&q| q == id) {
+                            list.remove(i);
+                        }
+                        list.extend(theirs);
+                    }
+                    nodes.all[id].is_processed = true;
+                    for nb in nodes.all[id].merged_neighbours.clone() {
+                        if !nodes.all[nb].is_processed {
+                            unsupported_leaves.push_front(nb);
+                        }
+                    }
+                    at = parent;
+                }
+            }
+            for layer in contacts.iter_mut() {
+                layer.retain(|&id| !nodes.all[id].is_processed);
             }
         }
     }
