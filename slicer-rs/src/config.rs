@@ -367,8 +367,13 @@ impl SupportSettings {
         self.kind == "tree(auto)" && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
     }
 
-    /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid style and its
-    /// organic trees, made where they are needed, with the settings Orca's presets give them.
+    /// Whether these are Orca's normal supports in their snug style, which follow the overhangs instead of the grid.
+    pub fn snug(&self) -> bool {
+        self.kind == "normal(auto)" && self.style == "snug"
+    }
+
+    /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid and snug styles and
+    /// its organic trees, made where they are needed, with the settings Orca's presets give them.
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
         // Each by its name in the app's settings, as the app says "our own slicer can't do … yet".
@@ -381,8 +386,8 @@ impl SupportSettings {
             })
         } else if kind != "normal(auto)" && kind != "tree(auto)" {
             Some("supports painted on")
-        } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "") {
-            Some(if self.style == "snug" { "snug supports" } else { "this style of support" })
+        } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "") {
+            Some("this style of support")
         } else if self.raft_layers > 0 {
             Some("a raft")
         } else if self.on_build_plate_only {

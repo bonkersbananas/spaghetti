@@ -155,8 +155,8 @@ mod tests {
     #[test]
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
-        // The X2D's supports are organic trees, which slice, as normal ones do; not the other styles of tree, nor
-        // snug normal ones or those on the plate only.
+        // The X2D's supports are organic trees, which slice, as normal ones do in their grid and snug styles; not the
+        // other styles of tree, nor supports on the plate only.
         assert!(read(r#"{"process": {"enable_support": "1"}}"#).is_ok());
         // By the names the app's settings give them, as the app says "our own slicer can't do … yet".
         for (style, what) in [
@@ -177,7 +177,7 @@ mod tests {
             |more: &str| format!(r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)"{more}}}}}"#);
         assert!(read(&normal("")).is_ok());
         assert!(read(&normal(r#", "support_critical_regions_only": "1""#)).is_ok());
-        assert_eq!(read(&normal(r#", "support_style": "snug""#)).err(), Some(Error::Unsupported("snug supports")));
+        assert!(read(&normal(r#", "support_style": "snug""#)).is_ok());
         assert_eq!(
             read(&normal(r#", "support_on_build_plate_only": "1""#)).err(),
             Some(Error::Unsupported("supports on the plate only"))
