@@ -1,5 +1,5 @@
-//! Sparse infill as OrcaSlicer 2.5 draws it (`libslic3r/Fill/`): the crosshatch, gyroid, grid, cubic and honeycomb
-//! patterns, laid out in the object's own frame (centred on its bounding box, turned by the infill direction), and
+//! Sparse infill as OrcaSlicer 2.5 draws it (`libslic3r/Fill/`): the crosshatch, gyroid, grid, cubic, honeycomb,
+//! triangles, tri-hexagon, quarter cubic and lateral lattice patterns, laid out in the object's own frame (centred on its bounding box, turned by the infill direction), and
 //! lightning's trees (grown for the whole object in `lightning.rs`), cut to
 //! the area (crosshatch's and gyroid's short bits dropped), then joined along the area's edge as Orca's `connect_infill` joins them: two lines whose ends are close
 //! along the edge become one path, and an end that joins nothing hooks a short anchor onto the edge. Lines whose ends
@@ -26,6 +26,17 @@ pub enum Pattern {
     Grid,
     /// Lines three ways, 60° apart, shifted with the height so they build cubes standing on a corner (`FillCubic`).
     Cubic,
+    /// Lines three ways, 60° apart, the same on every layer: triangles (`FillTriangles`).
+    Triangles,
+    /// Lines three ways, 60° apart, the third shifted by one and a half lines' spacing: six-pointed stars between
+    /// hexagons (Orca's "tri-hexagon", `FillStars`).
+    TriHexagon,
+    /// Lines two ways, a quarter turn apart, each way twice, the pairs drawn apart and together with the height so they
+    /// build half tetrahedra (`FillQuarterCubic`).
+    QuarterCubic,
+    /// Lines one way, in two sets that lean either way with the height, each set at its lattice angle from upright, so
+    /// the walls cross as a lattice seen from the side (`FillLateralLattice`).
+    LateralLattice,
     /// Hexagons, turned by 60° from layer to layer (`FillHoneycomb`).
     Honeycomb,
     /// Trees that hold up the top surfaces from inside and nothing else (`FillLightning`), from `Sparse::trees`.
@@ -39,6 +50,10 @@ impl Pattern {
             "gyroid" => Some(Pattern::Gyroid),
             "grid" => Some(Pattern::Grid),
             "cubic" => Some(Pattern::Cubic),
+            "triangles" => Some(Pattern::Triangles),
+            "tri-hexagon" => Some(Pattern::TriHexagon),
+            "quartercubic" => Some(Pattern::QuarterCubic),
+            "lateral-lattice" => Some(Pattern::LateralLattice),
             "honeycomb" => Some(Pattern::Honeycomb),
             "lightning" => Some(Pattern::Lightning),
             _ => None,
@@ -68,6 +83,8 @@ pub struct Sparse<'a> {
     pub anchor_max: f64,
     /// Lightning's lines on this layer for the whole object (units), each from a tip towards its tree's root.
     pub trees: &'a [Vec<Pt>],
+    /// Lateral lattice's two angles, degrees from upright.
+    pub lattice_angles: [f64; 2],
 }
 
 /// The infill of `area`, each of its shapes grown by `grow` mm first (Orca's overlap with the walls, less half a
@@ -92,7 +109,12 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
     }
     let lines: Vec<Vec<(f64, f64)>> = match p.pattern {
         Pattern::Crosshatch | Pattern::Gyroid => return waves(part, p),
-        Pattern::Grid | Pattern::Cubic => multilines(part, p),
+        Pattern::Grid
+        | Pattern::Cubic
+        | Pattern::Triangles
+        | Pattern::TriHexagon
+        | Pattern::QuarterCubic
+        | Pattern::LateralLattice => multilines(part, p),
         Pattern::Honeycomb => honeycomb(part, p),
         Pattern::Lightning => {
             p.trees.iter().map(|line| line.iter().map(|q| (q.x as f64, q.y as f64)).collect()).collect()
@@ -113,8 +135,8 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
             p.anchor_max * geom::SCALE,
         )
     };
-    // Orca's grid runs its lines the other way on odd layers.
-    if p.pattern == Pattern::Grid && p.layer % 2 == 1 {
+    // Orca's grid and lateral lattice run their lines the other way on odd layers.
+    if matches!(p.pattern, Pattern::Grid | Pattern::LateralLattice) && p.layer % 2 == 1 {
         for line in &mut joined {
             line.reverse();
         }
@@ -192,12 +214,28 @@ fn align(v: i64, step: i64) -> i64 {
 /// in the object's frame turned that way, lines across the part's box as far apart as the density shared between
 /// the directions asks, on a grid from the object's centre shifted by the direction's pattern shift.
 fn multilines(part: &Shape, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
-    // Orca's `_infill_direction` (floats): the infill angle and a quarter turn; neither pattern turns layer by layer.
+    // Orca's `_infill_direction` (floats): the infill angle and a quarter turn; no pattern here turns layer by layer.
     let base = p.angle.to_radians() as f32 + std::f32::consts::FRAC_PI_2;
+    // Each way's angle from that, and how far it is shifted across (mm): the patterns' `SweepParams`.
+    let (third, two_thirds) = (std::f32::consts::FRAC_PI_3, (std::f64::consts::PI * 2.0 / 3.0) as f32);
     let sweeps: Vec<(f32, f32)> = match p.pattern {
         Pattern::Cubic => {
             let dx = ((0.5f64).sqrt() * p.z) as f32;
-            vec![(0.0, dx), (std::f32::consts::FRAC_PI_3, -dx), ((std::f64::consts::PI * 2.0 / 3.0) as f32, dx)]
+            vec![(0.0, dx), (third, -dx), (two_thirds, dx)]
+        }
+        Pattern::Triangles => vec![(0.0, 0.0), (third, 0.0), (two_thirds, 0.0)],
+        Pattern::TriHexagon => {
+            vec![(0.0, 0.0), (third, 0.0), (two_thirds, ((3.0 / 2.0) * p.spacing / p.density) as f32)]
+        }
+        Pattern::QuarterCubic => {
+            let (dx1, dx2) = quarter_cubic_shifts(p);
+            let q = std::f32::consts::FRAC_PI_2;
+            vec![(0.0, dx1), (0.0, -dx1), (q, dx2), (q, -dx2)]
+        }
+        Pattern::LateralLattice => {
+            let dx = |deg: f64| (deg.to_radians().tan() * p.z) as f32;
+            let q = std::f32::consts::FRAC_PI_2;
+            vec![(q, dx(p.lattice_angles[0])), (q, dx(p.lattice_angles[1]))]
         }
         _ => vec![(0.0, 0.0), (std::f32::consts::FRAC_PI_2, 0.0)],
     };
@@ -238,6 +276,26 @@ fn multilines(part: &Shape, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
         }
     }
     out
+}
+
+/// Quarter cubic's two shifts (mm), each half of its tetrahedral fill drawn across by the height within a period of
+/// four lines, the second half a period's half behind: Orca's `FillQuarterCubic`, in its integers and floats.
+fn quarter_cubic_shifts(p: &Sparse) -> (f32, f32) {
+    let line_width = (p.spacing * 1e6) as i64;
+    let period = ((p.spacing * 1e6 / p.density) as i64) * 4;
+    if period <= 0 {
+        return (0.0, 0.0);
+    }
+    let shift = |pattern_z_shift: f64| {
+        let mut shift = (std::f32::consts::FRAC_1_SQRT_2 as f64 * (p.z * 1e6 + pattern_z_shift * period as f64 * 2.0))
+            as i64
+            % period;
+        shift = shift.min(period - shift);
+        shift = shift.min(period / 2 - line_width / 2);
+        shift = shift.max(line_width / 2);
+        (shift as f64 / 1e6) as f32
+    };
+    (shift(0.0), shift(0.5))
 }
 
 // ---- Honeycomb (FillHoneycomb.cpp) ----
@@ -1864,6 +1922,7 @@ mod tests {
             anchor: 4.0 * 0.407,
             anchor_max: 20.0,
             trees: &[],
+            lattice_angles: [-45.0, 45.0],
         }
     }
 
@@ -1978,6 +2037,39 @@ mod tests {
         let (l0, l1, l2, l3) = (layer(0), layer(1), layer(2), layer(3));
         assert!(l0 != l1 && l1 != l2 && l0 != l2);
         assert_eq!(l0, l3);
+    }
+
+    #[test]
+    fn triangles_tri_hexagon_quarter_cubic_and_lateral_lattice_run_their_ways() {
+        let area = square(20.0);
+        let at = |pattern: Pattern, z: f64| sparse(&area, -0.2, &params(pattern, z));
+        // The ways the lines run, but for the joins along the square's sides.
+        let headings = |paths: &[Contour]| {
+            let mut out: Vec<i64> = Vec::new();
+            for path in paths {
+                for w in path.windows(2) {
+                    if geom::dist(w[0], w[1]) >= sc(3.0) as f64 {
+                        let h = ((w[1].y - w[0].y) as f64).atan2((w[1].x - w[0].x) as f64).to_degrees();
+                        out.push(h.rem_euclid(180.0).round() as i64 % 180);
+                    }
+                }
+            }
+            out.retain(|&h| h != 0 && h != 90);
+            out.sort_unstable();
+            out.dedup();
+            out
+        };
+        // Triangles and tri-hexagon three ways, as cubic; quarter cubic two ways, as grid; lateral lattice one way.
+        assert_eq!(headings(&at(Pattern::Triangles, 1.0)), vec![45, 105, 165]);
+        assert_eq!(headings(&at(Pattern::TriHexagon, 1.0)), vec![45, 105, 165]);
+        assert_eq!(headings(&at(Pattern::QuarterCubic, 1.0)), vec![45, 135]);
+        assert_eq!(headings(&at(Pattern::LateralLattice, 1.0)), vec![135]);
+        // Triangles stay where they are from layer to layer; tri-hexagon shifts their third way; quarter cubic and
+        // lateral lattice move with the height.
+        assert_eq!(at(Pattern::Triangles, 1.0), at(Pattern::Triangles, 3.0));
+        assert_ne!(at(Pattern::Triangles, 1.0), at(Pattern::TriHexagon, 1.0));
+        assert_ne!(at(Pattern::QuarterCubic, 1.0), at(Pattern::QuarterCubic, 1.4));
+        assert_ne!(at(Pattern::LateralLattice, 1.0), at(Pattern::LateralLattice, 1.4));
     }
 
     #[test]
