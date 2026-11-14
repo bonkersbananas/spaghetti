@@ -371,3 +371,15 @@ describe("another nozzle", () => {
     expect(slicingSummary(DEFAULT_SLICING).join(" ")).not.toMatch(/nozzle/);
   });
 });
+
+describe("a model's own nozzle size (decision 0057)", () => {
+  it("is kept by normalizing and by a change, and is no setting that slices differently", () => {
+    const picked = { ...withNozzle(DEFAULT_SLICING, 0.2), nozzlePicked: true };
+    expect(normalizeSlicing(picked).nozzlePicked).toBe(true);
+    expect(slicingFor({ supports: "everywhere" }, picked).nozzlePicked).toBe(true);
+    expect(normalizeSlicing({ ...picked, nozzlePicked: false }).nozzlePicked).toBeUndefined();
+    expect(slicingProblems(picked)).toEqual([]);
+    expect(slicingProblems({ ...picked, nozzlePicked: "yes" })).toEqual(["nozzlePicked is true or false."]);
+    expect(sameSlicing(picked, withNozzle(DEFAULT_SLICING, 0.2))).toBe(true);
+  });
+});

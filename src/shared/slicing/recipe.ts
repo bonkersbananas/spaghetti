@@ -94,6 +94,15 @@ export function recipeSlicing(
   base: SlicingSettings,
   spools: readonly SpoolLike[] = [],
 ): SlicingSettings {
+  const made = recipeOverBase(recipe, base, spools);
+  // A recipe for another nozzle size than the model's is that size picked for the model (decision 0057); otherwise
+  // the model's own pick stays as it was.
+  if (made.nozzle !== base.nozzle) return { ...made, nozzlePicked: true };
+  const { nozzlePicked: _, ...rest } = made;
+  return base.nozzlePicked ? { ...rest, nozzlePicked: true } : rest;
+}
+
+function recipeOverBase(recipe: SlicingRecipe, base: SlicingSettings, spools: readonly SpoolLike[]): SlicingSettings {
   const filaments = pantryFilaments(recipeFilaments(recipe), recipe, base.filaments, spools);
   if (recipe.slicing) {
     return normalizeSlicing(

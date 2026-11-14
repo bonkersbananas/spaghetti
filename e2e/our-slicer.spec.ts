@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { twoColourProject } from "./fixtures/model-3mf";
+import { raftProject, twoColourProject } from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -115,54 +115,59 @@ const RACK = () =>
     { at: [30, 15, 34], size: [26, 6, 4] },
   ]);
 
-test("ours slices tree and snug supports; what it can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({
+test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({
   page,
 }) => {
-  test.setTimeout(4 * SLICED);
+  test.setTimeout(7 * SLICED);
   await signIn(page);
   try {
-    // The workspace slices with ours, with slim tree supports where needed, which ours can't build yet.
+    // The workspace slices with ours, with slim tree supports where needed: Orca's classic trees, which ours builds
+    // since release 9, under the arm, which would fall.
     await setDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
     const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
-    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do slim tree supports yet")).toBeVisible({
-      timeout: SLICED,
-    });
-    await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
-    const slice = (await fileOf(page, id)).slice;
-    expect(slice.fallback).toEqual({ why: "unsupported", what: "slim tree supports" });
-    // What was asked for stays: the next slice asks ours again.
-    expect(slice.settings.slicing.slicer).toBe("spaghetti");
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const slim = (await fileOf(page, id)).slice;
+    expect(slim.settings.slicer).toBe("spaghetti");
+    expect(slim.settings.slicing.supportStyle).toBe("tree-slim");
+    expect(slim.fallback).toBeUndefined();
 
-    // Tree supports, the usual kind, ours builds: under the arm, which would fall.
+    // Strong and hybrid trees, the organic trees that are the usual kind, and snug normal supports, which hug the
+    // model (since release 7): each sliced by ours.
     await files.getByRole("button", { name: "Slice with…" }).click();
     const settings = page.getByRole("dialog", { name: "How to slice it" });
     await settings.getByRole("button", { name: /^More/ }).click();
-    await settings
-      .getByRole("group", { name: "How supports are built" })
-      .getByRole("button", { name: "Tree", exact: true })
-      .click();
-    await expect
-      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
-      .toBe("spaghetti");
-    const trees = (await fileOf(page, id)).slice;
-    expect(trees.settings.slicing.supportStyle).toBe("tree");
-    expect(trees.settings.slicing.supports).toBe("where-needed");
-    expect(trees.fallback).toBeUndefined();
-
-    // Snug normal supports, which hug the model, ours builds too (since release 7).
-    await settings
-      .getByRole("group", { name: "How supports are built" })
-      .getByRole("button", { name: "Snug", exact: true })
-      .click();
-    await expect
-      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.supportStyle, { timeout: SLICED })
-      .toBe("snug");
-    const snug = (await fileOf(page, id)).slice;
-    expect(snug.settings.slicer).toBe("spaghetti");
-    expect(snug.fallback).toBeUndefined();
+    for (const [label, style] of [
+      ["Strong tree", "tree-strong"],
+      ["Hybrid", "tree-hybrid"],
+      ["Tree", "tree"],
+      ["Snug", "snug"],
+    ] as const) {
+      await settings
+        .getByRole("group", { name: "How supports are built" })
+        .getByRole("button", { name: label, exact: true })
+        .click();
+      await expect
+        .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.supportStyle, { timeout: SLICED })
+        .toBe(style);
+      const slice = (await fileOf(page, id)).slice;
+      expect(slice.settings.slicer, style).toBe("spaghetti");
+      expect(slice.settings.slicing.supports).toBe("where-needed");
+      expect(slice.fallback, style).toBeUndefined();
+    }
     await page.keyboard.press("Escape");
     await page.reload();
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
+
+    // A project made for the X2D that asks for a raft, which ours can't build yet: OrcaSlicer's engine slices it.
+    const raft = await ideaWithModel(page, "Block on a raft", "raft.3mf", raftProject());
+    await expect(raft.files.getByText("Sliced by OrcaSlicer: our own slicer can't do a raft yet")).toBeVisible({
+      timeout: SLICED,
+    });
+    const fallback = (await fileOf(page, raft.id)).slice;
+    expect(fallback.settings.slicer).toBe("orca");
+    expect(fallback.fallback).toEqual({ why: "unsupported", what: "a raft" });
+    // What was asked for stays: the next slice asks ours again.
+    expect(fallback.settings.slicing.slicer).toBe("spaghetti");
   } finally {
     // The worker's database is shared with the specs after this one.
     await setDefaults(page, null);

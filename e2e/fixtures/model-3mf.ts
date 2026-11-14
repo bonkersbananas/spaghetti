@@ -64,3 +64,23 @@ export function twoColourProject(): Uint8Array {
     "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
   });
 }
+
+/**
+ * A Bambu Studio or OrcaSlicer project made for the X2D with its 0.4 mm nozzle, a block on its plate, that asks for a
+ * raft of two layers (`raft_layers`): a project for the printer in use says all its settings, and our own slicer
+ * can't build a raft yet.
+ */
+export function raftProject(): Uint8Array {
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>
+<object id="1" type="model">${boxMesh([116, 116, 0], [24, 24, 10])}</object>
+</resources>
+<build><item objectid="1"/></build>
+</model>`;
+  const project = { printer_model: "Bambu Lab X2D", nozzle_diameter: ["0.4", "0.4"], raft_layers: "2" };
+  return zipSync({
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+  });
+}

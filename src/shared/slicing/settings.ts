@@ -94,6 +94,12 @@ export interface SlicingSettings {
   plate: string;
   /** The nozzle's diameter, in mm. */
   nozzle: number;
+  /**
+   * Someone picked this nozzle size for the model (decision 0057), whatever the main nozzle is: kept with its
+   * settings and cleared by "Back to the usual settings". Without it the model follows the main nozzle's size
+   * (`modelSlicing`). It never changes how a slice comes out, so it isn't one of the settings that are compared.
+   */
+  nozzlePicked?: boolean;
   /** Percent of the model's own size. */
   scale: number;
   /**
@@ -349,7 +355,10 @@ export function slicingProblems(value: unknown): string[] {
   }
   // Left out by a page from before there was a choice: the default's.
   if (value.slicer !== undefined && !oneOf(SLICER_IDS, value.slicer)) problems.push("slicer is spaghetti or orca.");
-  const known = new Set<string>(Object.keys(DEFAULT_SLICING));
+  if (value.nozzlePicked !== undefined && typeof value.nozzlePicked !== "boolean") {
+    problems.push("nozzlePicked is true or false.");
+  }
+  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked"]);
   for (const key of Object.keys(value)) if (!known.has(key)) problems.push(`${key} isn't a slicing setting.`);
   return problems;
 }
@@ -386,6 +395,7 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     filaments: filaments.length ? filaments : base.filaments,
     plate: oneOf(SLICING_PLATES, given.plate) ?? base.plate,
     nozzle: nozzleOk,
+    ...(given.nozzlePicked === true ? { nozzlePicked: true } : {}),
     scale: whole("scale"),
     orientation:
       orientationOf(given.orientation) === undefined ? base.orientation : (orientationOf(given.orientation) ?? null),

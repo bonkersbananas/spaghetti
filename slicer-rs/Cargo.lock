@@ -56,6 +56,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
+name = "clipper2-rs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcec664eb44f858cb6f8de11061eff20e50a8d2f32b0a84045c66e6c54d06e7e"
+
+[[package]]
 name = "const-oid"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -278,6 +284,7 @@ name = "spaghetti-slicer"
 version = "0.1.0"
 dependencies = [
  "boostvoronoi",
+ "clipper2-rs",
  "crc32fast",
  "i_overlay",
  "libm",

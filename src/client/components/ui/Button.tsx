@@ -82,9 +82,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...props}
     >
       {loading ? (
-        <LoadingIcon size={iconSizes[size]} className="animate-spin" aria-hidden />
+        <LoadingIcon size={iconSizes[size]} className="shrink-0 animate-spin" aria-hidden />
       ) : (
-        IconComponent && <IconComponent size={iconSizes[size]} weight="bold" aria-hidden />
+        IconComponent && <IconComponent size={iconSizes[size]} weight="bold" className="shrink-0" aria-hidden />
       )}
       {children}
       {shortcut && <Kbd keys={shortcut} tone={variant === "primary" ? "onAccent" : "default"} className="ml-1" />}
@@ -118,7 +118,7 @@ export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(functio
       )}
       {...props}
     >
-      {IconComponent && <IconComponent size={iconSizes[size]} weight="bold" aria-hidden />}
+      {IconComponent && <IconComponent size={iconSizes[size]} weight="bold" className="shrink-0" aria-hidden />}
       {children}
     </a>
   );

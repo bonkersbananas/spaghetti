@@ -1,6 +1,6 @@
 # 0056. Each nozzle slices with Bambu's own presets, its qualities keep their names, and every slice is for the main nozzle
 
-Status: Accepted
+Status: Accepted; the nozzle choice is amended by [0057](0057-a-model-tries-another-nozzle-size-on-its-own.md)
 
 **Decision:** Spaghetti slices for every nozzle size the X2D takes (0.2, 0.4, 0.6 and 0.8 mm) with Bambu's own X2D presets for it, in the engine's release since `slicer-v2` (`scripts/slicer/resolve-presets.mjs`): its machine, every process Bambu has for it, and a filament per material. The named qualities are each nozzle's own (`qualitiesFor` in `shared/slicing/settings.ts`): Fine and Standard are Bambu's processes (0.2 mm: Fine 0.08 High Quality, Standard 0.10 Standard, Draft 0.12 Balanced; 0.6 mm: 0.18 Balanced and 0.30 Standard; 0.8 mm: 0.24 Balanced and 0.40 Standard), Draft and Extra draft above Bambu's coarsest process are that process at a taller layer, Extra draft the tallest the nozzle prints (seven tenths of its width: 0.14, 0.28, 0.42, 0.56 mm). The settings keep a layer height in millimetres (decision 0047's shape); when the nozzle changes (`withNozzle`), a named height moves to the same name on the new nozzle (a model at 0.20 mm, Standard, slices at 0.10 mm for the 0.2 mm nozzle, and back), and a height without a name keeps its share of the nozzle's width (0.16 mm on the 0.4 mm is 0.08 mm on the 0.2 mm), within what the new nozzle prints.
 

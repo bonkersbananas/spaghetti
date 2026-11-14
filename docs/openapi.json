@@ -20046,6 +20046,10 @@
             ],
             "description": "mm"
           },
+          "nozzlePicked": {
+            "description": "True when someone picked the nozzle size for this model (decision 0057); without it the model follows the main nozzle's size.",
+            "type": "boolean"
+          },
           "scale": {
             "type": "integer",
             "minimum": 1,

@@ -76,3 +76,4 @@ Status: Accepted | Open | Superseded by NNNN
 | [0054](0054-removing-a-saved-photo-takes-two-taps.md) | Removing a saved photo takes two taps in place, still with Undo (an exception to 0006) | Accepted |
 | [0055](0055-spaghettis-own-slicer-beside-orcaslicers-engine.md) | Spaghetti's own slicer (Rust, released as WebAssembly) slices a model that picks it, and OrcaSlicer's engine steps in for what it can't do yet, the card saying why; OrcaSlicer stays the default for now | Accepted |
 | [0056](0056-each-nozzle-slices-with-its-own-presets-and-qualities.md) | Each nozzle size slices with Bambu's own presets and the qualities keep their names at each nozzle's heights; every slice is for the main nozzle, and a line says so when the two fitted differ | Accepted |
+| [0057](0057-a-model-tries-another-nozzle-size-on-its-own.md) | A model can try another nozzle size on its own, and a file still prints through the main nozzle | Accepted |

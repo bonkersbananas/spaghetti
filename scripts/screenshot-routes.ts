@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
+import { raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -373,7 +374,7 @@ async function ideaWithModel(
   await openIdea(page, id);
   await page.getByTestId("idea-file-input").setInputFiles({
     name: file.name,
-    mimeType: "model/stl",
+    mimeType: file.name.endsWith(".3mf") ? "model/3mf" : "model/stl",
     buffer: Buffer.from(file.bytes),
   });
   const files = page.getByRole("region", { name: /^Files/ });
@@ -420,6 +421,12 @@ const RACK = {
   ]),
 };
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
+/** A project made for the X2D that asks for a raft, which Spaghetti's own slicer can't build yet. */
+const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject() };
+const RAFT_IDEA = {
+  title: "Ravioli stamp",
+  note: "Square, on a raft as the project says, to see if it lifts cleaner.",
+};
 
 /** A shelf bracket, an L: it can lie on its base or on its side, which the "Lay it down" tiles show. */
 const BRACKET = {
@@ -1827,25 +1834,53 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
-    // A 0.2 mm nozzle fitted on the right (decision 0056): the engine prints every slice with the main nozzle, so there
-    // is no choice, only one line where it would be (after the filament on a phone, under the strength on desktop):
-    // it slices for the main 0.4 mm, and fitting the 0.2 mm as the main nozzle is how to slice for it.
+    // A model's nozzle size (decision 0057): first under More, the sizes fitted marked (a solid dot for the main 0.4 mm,
+    // a ring for the 0.2 mm fitted on the right), the legend under it.
     name: "slice-settings-nozzle",
     path: "/ideas",
     prepare: async (page) => {
       await fitSmallNozzle(page);
       const settings = await openSliceSettings(page);
-      const line = settings.getByText("Slices for the main nozzle (0.4 mm)");
-      await line.waitFor();
+      await settings.getByRole("button", { name: /^More/ }).click();
+      await settings.getByRole("group", { name: "Nozzle" }).waitFor();
+      await page.waitForTimeout(400);
     },
-    // After the filament: a big pantry's spools push it below the panel's fold on desktop too. Scrolled once the
-    // sheet has settled (its pictures still grow it while it opens).
+    // Scrolled once the sheet has settled (its pictures still grow it while it opens).
     beforeShot: async (page) => {
       await settleSliceSettings(page);
-      const line = page
-        .getByRole("dialog", { name: "How to slice it" })
-        .getByText("Slices for the main nozzle (0.4 mm)");
-      await line.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      const more = page.getByRole("dialog", { name: "How to slice it" }).getByRole("button", { name: /^More/ });
+      await more.evaluate((button) => button.scrollIntoView({ block: "start", behavior: "instant" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await closeSliceSettings(page);
+      await fitStockNozzles(page);
+    },
+  },
+  {
+    // 0.2 mm picked for the model (decision 0057), More folded again: the sheet's first screens with the Nozzle line after
+    // the filament, in the same words as the card and Print it.
+    name: "slice-settings-nozzle-picked",
+    path: "/ideas",
+    prepare: async (page) => {
+      await fitSmallNozzle(page);
+      const settings = await openSliceSettings(page);
+      const more = settings.getByRole("button", { name: /^More/ });
+      await more.click();
+      await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
+      await more.click();
+      await settings.getByText("Fit the 0.2 mm first.").waitFor();
+      await page
+        .getByText(/^Slicing with/)
+        .first()
+        .waitFor({ state: "hidden", timeout: 90_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(400);
+    },
+    beforeShot: async (page) => {
+      await settleSliceSettings(page);
+      const note = page.getByRole("dialog", { name: "How to slice it" }).getByText("Fit the 0.2 mm first.");
+      await note.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
       await page.waitForTimeout(300);
     },
     cleanup: async (page) => {
@@ -1885,7 +1920,9 @@ export const shots: Shot[] = [
       await settings.getByRole("button", { name: /^More/ }).click();
       await settings.getByRole("radio", { name: "0.6 mm" }).click();
       await page.keyboard.press("Escape");
-      await files.getByText("Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.").waitFor({ timeout: 90_000 });
+      await files
+        .getByText("Sliced for a 0.6 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.6 mm first.")
+        .waitFor({ timeout: 90_000 });
       // Closing the sheet hands focus back to the row: a tap leaves no ring.
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.waitForTimeout(400);
@@ -2056,13 +2093,13 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked, with slim tree supports where needed, which it can't build yet: OrcaSlicer's engine sliced it, and
-    // the card says why in one line.
+    // Ours picked, for a project that asks for a raft, which it can't build yet: OrcaSlicer's engine sliced it, and the
+    // card says why in one line.
     name: "idea-model-stepped-in",
     path: "/ideas",
     prepare: async (page) => {
-      await setSlicingDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
-      await ideaWithModel(page, RACK_IDEA, RACK, /Sliced by OrcaSlicer: our own slicer/);
+      await setSlicingDefaults(page, { slicer: "spaghetti" });
+      await ideaWithModel(page, RAFT_IDEA, RAFT, /Sliced by OrcaSlicer: our own slicer/);
       await sliceSaved(page);
     },
     beforeShot: modelInView,
@@ -3356,6 +3393,35 @@ export const shots: Shot[] = [
           .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
         await page.waitForTimeout(400);
       }
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // A twist's model sliced for a 0.2 mm nozzle that isn't fitted as the main one (decision 0057): its card says so, and
+    // "Print it" carries one calm line (above the button on a phone, beside it on desktop). Printing isn't blocked.
+    name: "twist-model-other-nozzle",
+    path: "/twists",
+    prepare: async (page) => {
+      await twistWithModel(page);
+      const model = page.getByRole("region", { name: "Model" });
+      await model.getByRole("button", { name: /^Slice with…/ }).click();
+      const settings = page.getByRole("dialog", { name: "How to slice it" });
+      await settings.getByRole("button", { name: /^More/ }).click();
+      await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
+      await page.keyboard.press("Escape");
+      await model
+        .getByText("Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.")
+        .first()
+        .waitFor({ timeout: 90_000 });
+      await page
+        .getByText("Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.")
+        .last()
+        .waitFor();
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await model.evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
+      }
+      await page.waitForTimeout(500);
     },
     cleanup: removeTwistModels,
   },
