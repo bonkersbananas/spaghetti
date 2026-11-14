@@ -1,4 +1,5 @@
 import { MoonIcon, SunIcon, SystemThemeIcon } from "@/components/ui/icons";
+import { Overline } from "@/components/ui/Overline";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { type ThemePreference, useTheme } from "@/lib/theme";
 
@@ -9,11 +10,11 @@ const options = [
 ] as const satisfies { value: ThemePreference; label: string; icon: typeof SunIcon }[];
 
 /** Light, dark or follow the system. Remembered on this device. */
-export function ThemeSwitch({ className }: { className?: string }) {
+export function ThemeSwitch({ className, overline }: { className?: string; overline?: boolean }) {
   const { preference, setPreference } = useTheme();
   return (
     <SegmentedControl
-      label="Appearance"
+      label={overline ? <Overline>Appearance</Overline> : "Appearance"}
       options={[...options]}
       value={preference}
       onChange={setPreference}

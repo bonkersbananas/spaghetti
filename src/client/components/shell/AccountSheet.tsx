@@ -109,7 +109,7 @@ export function AccountSheet({ open, onOpenChange }: { open: boolean; onOpenChan
         </div>
         {/* Loaded while the browser is idle (rarely changed, and not part of any screen's first load). */}
         <Suspense fallback={<Skeleton className="mt-6 h-20 w-full rounded-md" />}>
-          <ThemeSwitch className="mt-6" />
+          <ThemeSwitch className="mt-6" overline />
         </Suspense>
         <Button variant="secondary" icon={SignOutIcon} fullWidth onClick={signOut} className="mt-6">
           Sign out
