@@ -387,13 +387,15 @@ export function SlicingSection() {
             </Panel>
           </div>
           <Label>While the pictures are drawn: the stand-in keeps each tile's shape</Label>
-          <Panel>
-            <PlatePicker
-              plates={plates.map((plate) => ({ ...plate, src: null, detail: undefined }))}
-              value={plate}
-              onChange={setPlate}
-            />
-          </Panel>
+          <div id="plate-picker-loading">
+            <Panel>
+              <PlatePicker
+                plates={plates.map((plate) => ({ ...plate, src: null, detail: undefined }))}
+                value={plate}
+                onChange={setPlate}
+              />
+            </Panel>
+          </div>
           <Label>Choice tiles: a picture, a name, a figure, and what the picked one does</Label>
           <Panel>
             <ChoiceTiles<QualityId>

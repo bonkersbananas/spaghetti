@@ -3907,6 +3907,7 @@ export const shots: Shot[] = [
   },
   { name: "styleguide-plate-picker", path: "/styleguide", selector: "#plate-picker" },
   { name: "styleguide-plate-picker-header", path: "/styleguide", selector: "#plate-picker-header" },
+  { name: "styleguide-plate-picker-loading", path: "/styleguide", selector: "#plate-picker-loading" },
   {
     name: "styleguide-plate-picker-sheet",
     path: "/styleguide",
