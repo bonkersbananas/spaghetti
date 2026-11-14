@@ -8,6 +8,7 @@ import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
+import { toast } from "@/components/ui/Toast";
 import { type AttemptDraft, logAttempt } from "@/lib/builds";
 import { useDraftPhotos } from "@/lib/capture";
 import type { ItemView } from "@/lib/items";
@@ -23,6 +24,13 @@ import { WhenField } from "./WhenField";
 
 // Claude's ideas from the attempt before: only there when it went wrong.
 const CoachSuggestions = lazy(() => import("../Coach").then((m) => ({ default: m.CoachSuggestions })));
+
+/** What the notebook says after a print that went to spaghetti: kind, short, never cheerful about the failure itself. */
+const FAILED_LINES = [
+  ["Written down", "The next try starts from what this one taught."],
+  ["Noted, noodles and all", "Spaghetti is the best kind of note."],
+  ["Into the notebook", "You'll know exactly what to change."],
+] as const;
 
 export function LogAttempt({
   item,
@@ -102,6 +110,11 @@ export function LogAttempt({
     setRecipe(null);
     setDraft(blank());
     onOpenChange(false);
+    // A failed print is worth keeping: say so, in a different small way each time.
+    if (outcome === "failed") {
+      const line = FAILED_LINES[item.attempts.length % FAILED_LINES.length];
+      if (line) toast.message(line[0], line[1]);
+    }
   }
 
   const number = item.attempts.length + 1;
