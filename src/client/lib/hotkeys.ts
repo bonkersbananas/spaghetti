@@ -6,6 +6,9 @@ export type HotkeyHandlers = Partial<Record<ShortcutId, (() => void) | undefined
 
 export function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+  // A radio, tick box or button inside an input element takes no text: keys still work after it is clicked.
+  if (target instanceof HTMLInputElement && ["radio", "checkbox", "button", "range"].includes(target.type))
+    return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
@@ -39,7 +42,17 @@ export function comboOf(event: KeyboardEvent): string | null {
 let pending: string | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-export function useHotkeys(handlers: HotkeyHandlers) {
+export interface HotkeyOptions {
+  /**
+   * Work while a dialog is open, when this element is inside the one on top (a picker in a sheet's panel): shortcuts
+   * otherwise stay quiet under any dialog.
+   */
+  inDialog?: () => Element | null;
+}
+
+export function useHotkeys(handlers: HotkeyHandlers, options: HotkeyOptions = {}) {
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
 
@@ -56,7 +69,12 @@ export function useHotkeys(handlers: HotkeyHandlers) {
 
     function onKeyDown(event: KeyboardEvent) {
       const key = comboOf(event);
-      if (event.defaultPrevented || key === null || document.querySelector("[role=dialog]")) return;
+      if (event.defaultPrevented || key === null) return;
+      const dialogs = document.querySelectorAll("[role=dialog]");
+      if (dialogs.length) {
+        const own = optionsRef.current.inDialog?.();
+        if (!own || !dialogs[dialogs.length - 1]?.contains(own)) return;
+      }
       const modified = key.startsWith("mod+");
       if (!modified && isTyping(event.target)) return;
       const map = bound();
