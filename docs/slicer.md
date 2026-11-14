@@ -10,7 +10,7 @@ The [Muon3D Slicer Engine](https://github.com/Muon-3D/muon3d-slicer-engine): Orc
 | --- | --- |
 | Pin | `scripts/slicer/pin.env`: the engine's tag and commit, OrcaSlicer's commit (2.5.0-dev), the hashes our build must reproduce |
 | Our change | `scripts/slicer/host.patch`: the host checked `instanceof SharedArrayBuffer`, which throws on a page that isn't cross-origin isolated |
-| Presets | `presets.json` in the release: the X2D's machine for each nozzle size (0.2, 0.4, 0.6 and 0.8 mm), Bambu's processes for each, and a filament per material and nozzle (the 0.2 mm has fewer: no carbon fibre, TPU, PA, PP or PCTG), plus Bambu's own PLA Matte, Silk and Silk+ for Bambu's spools (decision 0060; they come with the next engine release, and until then those spools slice with the generic or Basic preset), flattened by Orca's own loader in the engine (`scripts/slicer/resolve-presets.mjs`; since release 2) |
+| Presets | `presets.json` in the release: the X2D's machine for each nozzle size (0.2, 0.4, 0.6 and 0.8 mm), Bambu's processes for each, and a filament per material and nozzle (the 0.2 mm has fewer: no carbon fibre, TPU, PA, PP or PCTG), plus Bambu's own PLA Matte, Silk and Silk+ for Bambu's spools (decision 0060; since release 3), flattened by Orca's own loader in the engine (`scripts/slicer/resolve-presets.mjs`; since release 2) |
 | Size | `engine-st.wasm` 11.1 MB (3.4 MB gzip, 2.3 MB brotli); the host and loader 0.2 MB |
 | Licence | AGPL-3.0, like OrcaSlicer: the release carries the Corresponding Source and the engine is served with its LICENSE, NOTICE and SOURCE |
 
