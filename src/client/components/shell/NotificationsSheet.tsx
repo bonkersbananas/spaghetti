@@ -21,7 +21,7 @@ const reasons: Partial<Record<PushStatus, string>> = {
 /** iOS only allows web push for a site added to the Home Screen: in Safari the switch is this, instead. */
 export function AddToHomeScreenHint() {
   return (
-    <p className="text-small text-ink-soft bg-paper rounded-md p-3.5">
+    <p className="text-small text-ink-soft bg-ink/4 rounded-md p-3.5">
       On iPhone, add Spaghetti to your Home Screen first: Share → Add to Home Screen, then open it from there.
     </p>
   );
