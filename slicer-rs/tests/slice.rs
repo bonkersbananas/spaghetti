@@ -394,6 +394,86 @@ fn each_nozzle_slices_a_cube_with_bambus_presets_for_it() {
     }
 }
 
+/// Settings as the X2D's generic filaments have them: no lift of the filament's own, so the printer's Auto Lift.
+fn auto_lift() -> Settings {
+    setup::read(r#"{"filaments": [{"filament_z_hop_types": ["nil", "nil", "nil", "nil"]}]}"#).unwrap().settings
+}
+
+/// Each layer's height (`; Z_HEIGHT:`) and its travels' lifts: "spiral" (`G17`, `G3 Z…`, then the travel), "slope"
+/// (a `G1 X Y Z F` up the slope, then the rest at that height) or "short" (one `G1 X Y Z F` to the travel's end),
+/// each with how far it went across before it reached the lifted height.
+fn lifts(gcode: &str) -> Vec<(f64, Vec<(&'static str, f64)>)> {
+    let mut layers: Vec<(f64, Vec<(&'static str, f64)>)> = Vec::new();
+    let lines: Vec<&str> = gcode.lines().collect();
+    let (mut x, mut y) = (f64::NAN, f64::NAN);
+    let mut k = 0;
+    while k < lines.len() {
+        let line = lines[k];
+        if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            layers.push((h.parse().unwrap(), Vec::new()));
+        }
+        let travel = |l: &str| l.starts_with("G1 X") && word(l, 'Z').is_some() && word(l, 'E').is_none();
+        if line == "G17" && lines.get(k + 2).is_some_and(|l| travel(l)) {
+            layers.last_mut().unwrap().1.push(("spiral", 0.0));
+        } else if travel(line) && word(line, 'F').is_some() && !layers.is_empty() {
+            let (tx, ty) = (word(line, 'X').unwrap(), word(line, 'Y').unwrap());
+            let across = (tx - x).hypot(ty - y);
+            let next = lines.get(k + 1).copied().unwrap_or("");
+            let kind = if travel(next) && word(next, 'F').is_none() { "slope" } else { "short" };
+            layers.last_mut().unwrap().1.push((kind, across));
+        }
+        if line.starts_with("G1 ") || line.starts_with("G0 ") {
+            (x, y) = (word(line, 'X').unwrap_or(x), word(line, 'Y').unwrap_or(y));
+        }
+        k += 1;
+    }
+    layers
+}
+
+#[test]
+fn generic_filaments_lift_along_a_slope_and_in_a_spiral_over_an_overhang_as_orcas_auto_lift_does() {
+    let settings = auto_lift();
+    assert_eq!(settings.z_hop_type, "Auto Lift");
+    // A block, and beside it a T: a 2 mm post holding up a slab 32 mm long from 6 mm, nearly all of it overhang.
+    let block = boxes_stl(&[([140.0, 100.0, 0.0], [150.0, 110.0, 8.0])]);
+    let tee = boxes_stl(&[([105.0, 100.0, 0.0], [107.0, 106.0, 6.0]), ([90.0, 100.0, 6.0], [122.0, 106.0, 8.0])]);
+    let inputs = [Input { name: "block.stl", bytes: &block }, Input { name: "tee.stl", bytes: &tee }];
+    let out = slice(&inputs, &settings, &Options { arrange: false, ..Options::default() }).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    check_moves(&gcode, &settings);
+    // A slope rises by the z-hop over 7.63 mm (Orca's 3° travel slope) and goes on at that height; a travel shorter
+    // than that rises all the way to its end.
+    let reach = settings.z_hop / settings.travel_slope.to_radians().tan();
+    let layers = lifts(&gcode);
+    let all: Vec<&(&str, f64)> = layers.iter().flat_map(|(_, l)| l).collect();
+    assert!(all.iter().any(|(k, _)| *k == "slope") && all.iter().any(|(k, _)| *k == "short"));
+    for (kind, across) in &all {
+        match *kind {
+            "slope" => assert!((across - reach).abs() < 0.002, "a slope {across} mm across"),
+            "short" => assert!(*across <= reach + 0.002, "a short slope {across} mm across"),
+            _ => {}
+        }
+    }
+    // Spirals only where the travel sets off over the slab's overhang, on its first layer (6.2 mm) and those
+    // within 0.4 mm above it, and there every travel between the two models.
+    for (z, l) in &layers {
+        let spirals = l.iter().filter(|(k, _)| *k == "spiral").count();
+        if *z < 6.2 - 1e-6 || *z > 6.6 + 1e-6 {
+            assert_eq!(spirals, 0, "{z} mm: {l:?}");
+        }
+    }
+    let over: Vec<usize> = layers
+        .iter()
+        .filter(|(z, _)| (6.2 - 1e-6..=6.4 + 1e-6).contains(z))
+        .map(|(_, l)| l.iter().filter(|(k, _)| *k == "spiral").count())
+        .collect();
+    assert!(over.len() == 2 && over.iter().all(|&n| n > 0), "{over:?}");
+    // Native OrcaSlicer 2.5.0 with the same filament lifts the same way on every layer of this plate, and prints it
+    // in 247.8 s (Nov 14).
+    assert!((out.stats.model_time / 247.8 - 1.0).abs() < 0.03, "{} s", out.stats.model_time);
+}
+
 #[test]
 fn each_object_on_a_plate_has_its_own_label() {
     let settings = Settings::default();
@@ -700,9 +780,11 @@ fn a_setup_made_from_the_apps_settings_slices_as_they_ask() {
     let fan_on = |part: &str| part.lines().any(|l| l.starts_with("M106 S") && l != "M106 S0");
     assert!(!by_layer[..3].iter().any(|part| fan_on(part)), "a fan before the fourth layer");
     assert!(fan_on(by_layer[3]), "no fan for the fourth layer");
-    // The gyroid and the monotonic surfaces are drawn as asked; what it printed otherwise, it says.
-    assert!(!out.fallbacks.iter().any(|f| f.contains("gyroid") || f.contains("monotonic")), "{:?}", out.fallbacks);
-    assert!(out.fallbacks.iter().any(|f| f == "Auto Lift printed as spiral lifts"), "{:?}", out.fallbacks);
+    // The gyroid and the monotonic surfaces are drawn as asked, and the nozzle lifts as Generic ABS asks, with
+    // Orca's Auto Lift: up the travel slope.
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let lifts = lifts(&gcode);
+    assert!(lifts.iter().flat_map(|(_, l)| l).any(|(k, _)| *k == "slope"));
     // The plate's description: ABS in its colour, and no Bambu tray id for a generic filament.
     let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
     assert!(info.contains(r##"<filament id="1" tray_info_idx="" type="ABS" color="#2B6CB0""##), "{info}");
