@@ -905,8 +905,10 @@ fn object_supports(
                 tree::classic::supports(&object, s, &params)
             } else if s.support.organic() {
                 // With nothing to hold up, a raft alone (Orca's `generate_raft_contact`), if there is one.
-                tree::supports(&object.slices, object.height, s, object.origin, s.bed)
-                    .map_or_else(|| support::raft_alone(&object, &params), |t| support::generate_tree(&object, &params, t))
+                tree::supports(&object.slices, object.height, s, object.origin, s.bed).map_or_else(
+                    || support::raft_alone(&object, &params),
+                    |t| support::generate_tree(&object, &params, t),
+                )
             } else {
                 support::generate(&object, &params)
             }
@@ -1038,7 +1040,7 @@ pub enum Error {
     OffPlate,
     /// A slice setup that isn't one (`setup.rs`).
     Setup,
-    /// Settings this can't slice yet: what they ask for ("a raft under tree supports"…).
+    /// Settings this can't slice yet: what they ask for ("a raft in this style of tree support"…).
     Unsupported(&'static str),
 }
 

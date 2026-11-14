@@ -202,16 +202,18 @@ mod tests {
             && s.settings.wall_loops == 1
             && s.settings.top_shell_layers == 0
             && s.settings.sparse_density == 0.0));
-        // A raft slices (raft.rs) with supports off, as the generator Orca takes for the supports set makes it, and
-        // under normal supports; not yet under tree supports, nor with supports off where classic trees would make it.
+        // A raft slices (raft.rs) with supports off, as the generator Orca takes for the supports set makes it, under
+        // normal supports and under organic trees; not yet where Orca's classic trees make it, with supports on or off.
         assert!(read(r#"{"process": {"raft_layers": "3"}}"#).is_ok());
         assert!(read(r#"{"process": {"raft_layers": "2", "support_type": "normal(auto)"}}"#).is_ok());
         assert!(read(&normal(r#", "raft_layers": "2""#)).is_ok());
-        assert_eq!(refused(&tree(r#", "raft_layers": "2""#)), Some(Error::Unsupported("a raft under tree supports")));
-        assert_eq!(
-            refused(r#"{"process": {"raft_layers": "2", "support_style": "tree_hybrid"}}"#),
-            Some(Error::Unsupported("a raft in this style of tree support"))
-        );
+        assert!(read(&tree(r#", "raft_layers": "2""#)).is_ok());
+        for json in [
+            r#"{"process": {"raft_layers": "2", "support_style": "tree_hybrid"}}"#,
+            &tree(r#", "raft_layers": "2", "support_style": "tree_slim""#),
+        ] {
+            assert_eq!(refused(json), Some(Error::Unsupported("a raft in this style of tree support")), "{json}");
+        }
         // Several filaments print a prime tower once the plate prints more than one of them (`Settings::for_filaments`),
         // and with it Orca's supports follow the object's layers: trees slice, normal supports and rafts don't yet.
         let several =
