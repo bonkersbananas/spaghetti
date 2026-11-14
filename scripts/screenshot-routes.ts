@@ -1837,11 +1837,17 @@ export const shots: Shot[] = [
       const settings = await openSliceSettings(page);
       const line = settings.getByText("Slices for the main nozzle (0.4 mm)");
       await line.waitFor();
-      if ((page.viewportSize()?.width ?? 0) < 768) {
-        await line.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
-      }
     },
-    beforeShot: settleSliceSettings,
+    // After the filament: a big pantry's spools push it below the panel's fold on desktop too. Scrolled once the
+    // sheet has settled (its pictures still grow it while it opens).
+    beforeShot: async (page) => {
+      await settleSliceSettings(page);
+      const line = page
+        .getByRole("dialog", { name: "How to slice it" })
+        .getByText("Slices for the main nozzle (0.4 mm)");
+      await line.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      await page.waitForTimeout(300);
+    },
     cleanup: async (page) => {
       await closeSliceSettings(page);
       await fitStockNozzles(page);
