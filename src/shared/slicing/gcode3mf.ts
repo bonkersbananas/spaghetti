@@ -43,6 +43,15 @@ export interface Gcode3mfInput {
 /** The Bambu Studio file version Orca 2.5 writes into its sliced files for the printers' sake. */
 const BBL_CLIENT_VERSION = "02.08.01.55";
 
+/**
+ * What Bambu Studio's reader needs in `Application`: only a file whose generator starts with "BambuStudio-" is
+ * trusted with its config, G-code and slice info (`_handle_end_metadata`, then `dont_load_config`); with any other
+ * name it loads no G-code, finds no model and says "The file does not contain any geometry data." Who really made
+ * the G-code is in slice_info's header and the G-code's own first line. 2.0.0 is the oldest version it takes as
+ * current, and no real version is older than it, so it never asks to update.
+ */
+export const BAMBU_STUDIO_APPLICATION = "BambuStudio-02.00.00.00";
+
 const xml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -96,7 +105,7 @@ export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">',
-        ` <metadata name="Application">${xml(`${input.slicer.name}-${input.slicer.version}`)}</metadata>`,
+        ` <metadata name="Application">${BAMBU_STUDIO_APPLICATION}</metadata>`,
         ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
         ` <metadata name="Title">${xml(input.title)}</metadata>`,
         " <resources/>",
