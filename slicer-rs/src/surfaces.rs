@@ -73,6 +73,7 @@ pub fn grow_surfaces(
     solid: Shapes,
     sparse: Shapes,
     g: &Growth,
+    walls: Option<(&Shapes, f64)>,
 ) -> Surfaces {
     let into_solid = Reach::new(g.into_solid, 0.1, 5);
     let into_sparse = Reach::new(g.into_sparse, 0.1, 5);
@@ -87,12 +88,26 @@ pub fn grow_surfaces(
     if let Some(min) = g.min_sparse_area
         && sparse.iter().any(|shape| geom::shape_area_mm2(shape) <= min)
     {
-        let (small, big): (Shapes, Shapes) = sparse.into_iter().partition(|shape| geom::shape_area_mm2(shape) <= min);
+        let (small, big): (Shapes, Shapes) = sparse.into_iter().partition(|shape| orca_area(shape, walls) <= min);
         sparse = big;
         solid = geom::union(&solid, &small);
     }
     let (bridge, bridge_angles) = bridges.into_iter().unzip();
     Surfaces { top, bottom, bridge, bridge_angles, solid, sparse }
+}
+
+/// mm²: a sparse piece's area as Orca measures it, its infill area reaching into the walls it touches by the overlap
+/// (`walls`: the island's infill area and the overlap), which ours leaves to the planner. Only a piece near the
+/// smallest sparse area needs it.
+fn orca_area(shape: &geom::Shape, walls: Option<(&Shapes, f64)>) -> f64 {
+    let area = geom::shape_area_mm2(shape);
+    let Some((inner, overlap)) = walls.filter(|&(_, overlap)| overlap > 0.0) else { return area };
+    let one = vec![shape.clone()];
+    let grown = geom::offset(&one, overlap);
+    let Some(b) = geom::bbox(&grown) else { return area };
+    // Grown into the walls only: not into the rest of the infill area beside it.
+    let others = geom::difference(&geom::clip_box(&geom::local(inner, b), b), &one);
+    geom::area_mm2(&geom::difference(&grown, &others))
 }
 
 fn boxes_meet(a: [i32; 4], b: [i32; 4]) -> bool {
@@ -433,7 +448,7 @@ mod tests {
         let solid = vec![rect(10.0, 0.0, 13.0, 10.0)];
         let sparse = vec![rect(13.0, 0.0, 30.0, 10.0)];
         let g = Growth { into_solid: 1.4, into_sparse: 0.4, closing: 0.15, min_sparse_area: Some(15.0) };
-        let out = grow_surfaces(top, Vec::new(), Vec::new(), solid, sparse, &g);
+        let out = grow_surfaces(top, Vec::new(), Vec::new(), solid, sparse, &g, None);
         let top_area: f64 = out.top.iter().map(geom::shape_area_mm2).sum();
         // It took 1.4 mm of the solid infill (10 mm long), and none of the sparse infill 3 mm away.
         assert!((top_area - 114.0).abs() < 0.5, "{top_area}");
@@ -447,7 +462,7 @@ mod tests {
         let bridge = vec![rect(0.0, 0.0, 12.0, 2.0)];
         let solid = geom::difference(&vec![rect(-3.0, -3.0, 15.0, 5.0)], &bridge);
         let g = Growth { into_solid: 1.4, into_sparse: 0.4, closing: 0.15, min_sparse_area: Some(15.0) };
-        let out = grow_surfaces(Vec::new(), Vec::new(), bridge, solid, Vec::new(), &g);
+        let out = grow_surfaces(Vec::new(), Vec::new(), bridge, solid, Vec::new(), &g, None);
         assert_eq!(out.bridge.len(), 1);
         let angle = out.bridge_angles[0].rem_euclid(180.0);
         assert!((angle - 90.0).abs() < 1.0, "{angle}");
@@ -462,7 +477,7 @@ mod tests {
         let bridge = vec![rect(0.0, 0.0, 3.0, 10.0)];
         let solid = vec![rect(-5.0, 0.0, 0.0, 10.0)];
         let g = Growth { into_solid: 1.4, into_sparse: 0.4, closing: 0.15, min_sparse_area: Some(15.0) };
-        let out = grow_surfaces(Vec::new(), Vec::new(), bridge, solid, Vec::new(), &g);
+        let out = grow_surfaces(Vec::new(), Vec::new(), bridge, solid, Vec::new(), &g, None);
         let angle = out.bridge_angles[0].rem_euclid(180.0);
         // Its free edges are the right side (10 mm) and the ends (3 mm each). They are shortest across the right
         // side's normal (6 mm, against 10 across the ends'), and Orca's lines then run square to that normal: along
@@ -478,7 +493,7 @@ mod tests {
         let bridge = vec![a.clone(), b.clone()];
         let solid = geom::difference(&vec![rect(-3.0, -3.0, 13.0, 8.0)], &bridge);
         let g = Growth { into_solid: 1.4, into_sparse: 0.4, closing: 0.15, min_sparse_area: Some(15.0) };
-        let out = grow_surfaces(Vec::new(), Vec::new(), bridge, solid, Vec::new(), &g);
+        let out = grow_surfaces(Vec::new(), Vec::new(), bridge, solid, Vec::new(), &g, None);
         assert_eq!(out.bridge.len(), 1);
         assert_eq!(out.bridge_angles.len(), 1);
     }
