@@ -7,7 +7,8 @@
 #   tested before, found apart, and is unchanged since.
 # - After a pass splits segments, it no longer sorts them all again: the ones not split are still in order, and the
 #   pieces are sorted and merged in (`SplitSolver::apply`).
-# Its tests, examples and README are left out.
+# Its tests, examples and README are left out. Spaghetti's tests check both changes against a pass over every pair
+# and a full sort (src/split/check.rs, in the `spaghetti_checks` feature, which only they turn on).
 [package]
 name = "i_overlay"
 version = "9.1.0"
@@ -32,3 +33,4 @@ glam = ["i_float/glam"]
 serde = ["i_float/serde", "i_shape/serde"]
 allow_multithreading = ["dep:rayon", "i_key_sort/allow_multithreading"]
 variable_stroke_debug = []
+spaghetti_checks = []

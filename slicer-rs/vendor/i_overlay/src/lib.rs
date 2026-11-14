@@ -217,5 +217,8 @@ pub(crate) mod geom;
 pub(crate) mod split;
 pub(crate) mod util;
 
+#[cfg(feature = "spaghetti_checks")]
+pub use split::check as spaghetti_checks;
+
 pub use i_float;
 pub use i_shape;

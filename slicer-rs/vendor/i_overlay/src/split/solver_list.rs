@@ -56,7 +56,11 @@ where
         any_intersection
     }
 
-    fn list_pass<C, D>(&mut self, segments: &[Segment<C, I, D>], radius_squared: I::WideUInt) -> bool {
+    pub(super) fn list_pass<C, D>(
+        &mut self,
+        segments: &[Segment<C, I, D>],
+        radius_squared: I::WideUInt,
+    ) -> bool {
         let mut need_to_fix = false;
         for (i, si) in segments.iter().enumerate() {
             let xsi = &si.x_segment;

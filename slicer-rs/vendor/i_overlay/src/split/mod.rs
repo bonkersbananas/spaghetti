@@ -1,5 +1,8 @@
 pub(crate) mod solver;
 
+#[cfg(feature = "spaghetti_checks")]
+pub mod check;
+
 mod cross_solver;
 mod fragment;
 mod grid_layout;
