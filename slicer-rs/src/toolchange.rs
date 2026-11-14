@@ -1037,6 +1037,11 @@ impl Colours {
         out
     }
 
+    /// The presets as given, with every extruder's values, and how many extruders the printer has.
+    pub fn printer(&self) -> (&crate::profile::Profile, usize) {
+        (&self.base, self.extruders)
+    }
+
     /// The physical extruder (the printer's numbering) of filament `f`.
     pub fn physical_of(&self, f: usize) -> i64 {
         self.physical.get(self.extruder_of.get(f).copied().unwrap_or(0)).copied().unwrap_or(0)
