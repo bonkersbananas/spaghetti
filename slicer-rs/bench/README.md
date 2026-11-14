@@ -55,6 +55,12 @@ target/release/spaghetti-slicer --keep-placement --filaments 1,2 $BENCH_MODELS/c
 python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models colour,colour-one-nozzle
 ```
 
+The lines that cool a waiting nozzle and heat it again (`;Multi extruder pre cooling`, `pre heating`) come from a pass after the estimate, as in Orca's G-code processor. To hold ours to Orca's, run it on Orca's own G-code with Orca's lines taken out: it puts them back, each within a move and 1 °C, and says how many exactly (93 of 101 on the plate):
+
+```sh
+ORCA_GCODE=bench/out/orca-native-colour/plate_1.gcode cargo test --release --test slice -- --ignored --nocapture preheat
+```
+
 ## Comparing files
 
 To compare what the two write around the toolpaths, diff the head (everything before the first printed line: header, settings, the printer's start G-code, the first layer change) and the tail (everything after the last printed line: the last lift and photo, the end G-code, the totals) of the same model's G-code, line by line:
