@@ -1,13 +1,15 @@
-//! Orca's normal supports (`PrintObjectSupportMaterial`, "normal(auto)" in its grid style), for one object at a time,
-//! ported from OrcaSlicer 2.5's `SupportMaterial.cpp` and `SupportCommon.cpp` in its steps:
+//! Orca's normal supports (`PrintObjectSupportMaterial`, "normal(auto)" in its grid and snug styles), for one object
+//! at a time, ported from OrcaSlicer 2.5's `SupportMaterial.cpp` and `SupportCommon.cpp` in its steps:
 //!
 //! 1. Overhangs: where a layer reaches more than the support angle beyond the layer below (31° for 30, as Orca makes
 //!    it inclusive), and "sharp tails", small islands that start in the air, grown up while they stay small. Small
 //!    clusters of overhang that are neither are dropped.
 //! 2. Top contacts: a layer of interface the top gap under each overhang, its area stretched onto the support grid
-//!    (`grid.rs`), dense only where the overhang is steep enough to need it.
-//! 3. Columns: the contacts projected down layer by layer, re-gridded and cut by each layer of the object, to the
-//!    plate or to the object's top surfaces, where a bottom contact layer of interface sits the bottom gap above.
+//!    (`grid.rs`), dense only where the overhang is steep enough to need it; or, snug, the area itself closed across
+//!    gaps and rounded off, all of it dense.
+//! 3. Columns: the contacts projected down layer by layer, re-gridded (or, snug, closed and rounded off again) and cut
+//!    by each layer of the object, to the plate or to the object's top surfaces, where a bottom contact layer of
+//!    interface sits the bottom gap above.
 //! 4. The support's own layers between those contacts, as thick as the printer allows (0.28 mm on the X2D) and
 //!    evened out, so most of them fall between the object's layers.
 //! 5. Every layer cut back from the object by the XY gap (less beside sharp tails and layers it doesn't overlap), one
@@ -78,6 +80,12 @@ pub struct Params {
     /// Orca's organic trees (`smsTreeOrganic`), whose layers come from `tree.rs`: their bottom contacts aren't printed,
     /// their interfaces are rounded off, and their branches print as anchored loops.
     organic: bool,
+    /// Orca's snug style of normal supports (`smsSnug`): the support follows the overhangs, closed and rounded off,
+    /// rather than snapping to the grid; its interfaces are rounded off too, and none is left out under gentle slopes.
+    snug: bool,
+    /// Radians added to the interfaces' direction: a quarter of a half turn back for snug supports whose interface
+    /// pattern is set to rectilinear (Orca's `support_interface_angle`), else none.
+    interface_turn: f64,
     /// mm²: a tree branch's island larger than this gets a second wall (`tree_branch_diameter_double_wall_area`).
     double_wall_area: f64,
 }
@@ -126,6 +134,12 @@ impl Params {
             },
             grid_resolution: support_spacing,
             organic: sp.organic(),
+            snug: sp.snug(),
+            interface_turn: if sp.snug() && sp.interface_pattern == "rectilinear" {
+                -(std::f32::consts::FRAC_PI_4 as f64)
+            } else {
+                0.0
+            },
             double_wall_area: match sp.wall_count {
                 0 => 0.25 * 25.0 * std::f64::consts::PI,
                 1 => f64::MAX,
@@ -255,9 +269,9 @@ fn grow(shapes: &Shapes, d: f64) -> Shapes {
     if shapes.is_empty() { Vec::new() } else { geom::offset(shapes, d) }
 }
 
-/// `grow` with square corners (Orca's `SUPPORT_SURFACES_OFFSET_PARAMETERS`, `jtSquare`).
+/// `grow` with square corners (Orca's `SUPPORT_SURFACES_OFFSET_PARAMETERS`, `jtSquare`), by Orca 2.5's own offsets.
 fn square(shapes: &Shapes, d: f64) -> Shapes {
-    if shapes.is_empty() { Vec::new() } else { geom::offset_square(shapes, d) }
+    if shapes.is_empty() { Vec::new() } else { geom::offset_c2(shapes, d, geom::Join::Square) }
 }
 
 fn one(shape: &Shape) -> Shapes {
@@ -276,6 +290,94 @@ fn overlaps(a: &Shapes, b: &Shapes) -> bool {
 
 fn size(shapes: &Shapes) -> (f64, f64) {
     geom::bbox(shapes).map_or((0.0, 0.0), |b| (geom::unsc(b[2] - b[0]), geom::unsc(b[3] - b[1])))
+}
+
+/// Orca's interfaces with smooth supports (snug ones and trees, `regularize` in `generate_interface_layers`): the
+/// areas grown by the islands' smallest radius for the interface's density, closed, and rounded off outward. Snug
+/// supports take Orca 2.5's own offsets (`offset_c2`); the trees, matched on box models, keep Clipper1's.
+fn regularize(polys: Shapes, density: f64, p: &Params) -> Shapes {
+    if polys.is_empty() {
+        return polys;
+    }
+    let smoothing = (p.spacing * 1e6) as i64 as f64 * 1.5;
+    let island = (p.spacing * 1e6) as i64 as f64 / density;
+    let (grow_by, shrink_by) = (((smoothing + island) as f32 as f64) / 1e6, (smoothing as f32 as f64) / 1e6);
+    let closed = if p.snug {
+        let grown = geom::offset_c2(&polys, grow_by, geom::Join::Square);
+        geom::offset_c2(&grown, -shrink_by, geom::Join::Square)
+    } else {
+        let grown =
+            geom::offset_square(&geom::union_nonzero(&polys.into_iter().flatten().collect::<Vec<_>>()), grow_by);
+        geom::offset_square(&grown, -shrink_by)
+    };
+    crate::tree::smooth::smooth_outward(&closed, smoothing as i64)
+}
+
+/// Orca's snug support area (`SupportGridPattern::extract_support` in its snug style): the areas closed by 2 mm
+/// (`support_closing_radius`), with square corners, and rounded off outward by a support line's spacing. Nothing is
+/// cut by the object here.
+fn snug(polys: &Shapes, p: &Params) -> Shapes {
+    if polys.is_empty() {
+        return Vec::new();
+    }
+    let closing = 2e6_f32 as f64 / 1e6;
+    let closed = geom::offset_c2(&geom::offset_c2(polys, closing, geom::Join::Square), -closing, geom::Join::Square);
+    crate::tree::smooth::smooth_outward(&closed, (p.spacing / 1e-6) as f32 as i64)
+}
+
+/// Orca's `remove_sticks` and `remove_degenerate` on a projection: points where an outline doubles straight back on
+/// itself, or repeats, go; an outline left with under three points goes, and a shape whose outer one went goes whole.
+fn remove_sticks(shapes: &mut Shapes) {
+    // Orca's `is_stick`: p3 turns straight back past p2 towards p1, or p2 repeats a neighbour.
+    let stick = |a: Pt, b: Pt, c: Pt| {
+        let (v1, v2) =
+            ((b.x as i64 - a.x as i64, b.y as i64 - a.y as i64), (c.x as i64 - b.x as i64, c.y as i64 - b.y as i64));
+        let dir = v1.0 * v2.0 + v1.1 * v2.1;
+        if dir > 0 {
+            return false;
+        }
+        let l1 = (v1.0 as f64).powi(2) + (v1.1 as f64).powi(2);
+        let l2 = (v2.0 as f64).powi(2) + (v2.1 as f64).powi(2);
+        if dir == 0 {
+            return l1 == 0.0 || l2 == 0.0;
+        }
+        let cross = v1.0 as f64 * v2.1 as f64 - v2.0 as f64 * v1.1 as f64;
+        // Orca's EPSILON² in nm², here in our units (0.1 µm): collinear to the last bit.
+        cross * cross / l1.max(l2) < (EPSILON / 100.0) * (EPSILON / 100.0)
+    };
+    for shape in shapes.iter_mut() {
+        for c in shape.iter_mut() {
+            if c.len() < 3 {
+                continue;
+            }
+            let mut j = 1;
+            for i in 1..c.len() - 1 {
+                if !stick(c[j - 1], c[i], c[i + 1]) {
+                    c[j] = c[i];
+                    j += 1;
+                }
+            }
+            j += 1;
+            if j < c.len() {
+                let last = *c.last().unwrap();
+                c[j - 1] = last;
+                c.truncate(j);
+            }
+            while c.len() >= 3 && stick(c[c.len() - 2], c[c.len() - 1], c[0]) {
+                c.pop();
+            }
+            while c.len() >= 3 && stick(c[c.len() - 1], c[0], c[1]) {
+                c.remove(0);
+            }
+        }
+        // `remove_degenerate`: outlines of under three points go.
+        if shape.first().is_some_and(|outer| outer.len() < 3) {
+            shape.clear();
+        } else {
+            shape.retain(|c| c.len() >= 3);
+        }
+    }
+    shapes.retain(|shape| !shape.is_empty());
 }
 
 /// The supports of one object, layer by layer, bottom up.
@@ -409,20 +511,6 @@ fn tree_interface_layers(
     if inter.is_empty() || (p.top_interfaces == 0 && p.bottom_interfaces == 0) {
         return Vec::new();
     }
-    // Grown by the islands' smallest radius, then rounded off (Orca's `regularize` with smooth supports).
-    let smoothing = (p.spacing * 1e6) as i64 as f64 * 1.5;
-    let regularize = |polys: Shapes, density: f64| -> Shapes {
-        if polys.is_empty() {
-            return polys;
-        }
-        let island = (p.spacing * 1e6) as i64 as f64 / density;
-        let grown = geom::offset_square(
-            &geom::union_nonzero(&polys.into_iter().flatten().collect::<Vec<_>>()),
-            ((smoothing + island) as f32 as f64) / 1e6,
-        );
-        let closed = geom::offset_square(&grown, -((smoothing as f32 as f64) / 1e6));
-        crate::tree::smooth::smooth_outward(&closed, smoothing as i64)
-    };
     let ni = inter.len();
     let made: Vec<Option<(Option<Gen>, Shapes, Shapes)>> = {
         let arena = &*arena;
@@ -458,8 +546,8 @@ fn tree_interface_layers(
                 return None;
             }
             let kind = if top_set.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
-            let mut both = regularize(bottom_set, p.bottom_interface_density);
-            both.extend(regularize(top_set, p.top_interface_density));
+            let mut both = regularize(bottom_set, p.bottom_interface_density, p);
+            both.extend(regularize(top_set, p.top_interface_density, p));
             let mut poly = if both.is_empty() { Vec::new() } else { geom::intersection(&both, &it.polygons) };
             if let Some(q) = same {
                 poly = geom::union(&arena[q].polygons, &poly);
@@ -683,6 +771,14 @@ fn contact_layer(o: &Object, l: usize, d: &Detected, p: &Params, gp: &grid::Para
     } else {
         Gen::new(Kind::TopContact, print_z, print_z, 0.0)
     };
+    if p.snug {
+        // Snug: the contact closed and rounded off, the same to project down and to print; every overhang gets dense
+        // interface.
+        g.contact = snug(&contact, p);
+        g.polygons = g.contact.clone();
+        g.overhang = overhangs;
+        return Some(g);
+    }
     g.contact = Grid::new(&contact, lower, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
     // Dense interface only under overhangs steep enough to need it: beyond the layer below, its thin parts opened
     // away and the rest grown by 60 % of a wall.
@@ -813,7 +909,15 @@ fn columns(
         }
         // The support near this layer, and the columns going on down.
         let trimming = grow(&o.slices[l], SCALED_EPSILON);
-        let below = geom::difference(&raw, &trimming);
+        let mut below = geom::difference(&raw, &trimming);
+        if p.snug {
+            // Snug: closed and rounded off, not cut by the object (its XY gap does that later), the same to print
+            // and to project on down.
+            remove_sticks(&mut below);
+            areas[l] = snug(&below, p);
+            projection = areas[l].clone();
+            continue;
+        }
         let grid = Grid::new(&below, &trimming, gp);
         areas[l] = grid.extract(gp.expansion_to_slice(), true);
         projection = grid.extract(grid::EXPANSION_TO_PROPAGATE, true);
@@ -1032,7 +1136,10 @@ fn interface_layers(
                     if arena[t].bottom_z - EPSILON > top_z {
                         break;
                     }
-                    top_set.extend(arena[t].polygons.iter().cloned());
+                    // Snug supports project the whole overhang, so that the interfaces meet the support of the
+                    // layers round them without a gap.
+                    let projected = if p.snug { &arena[t].overhang } else { &arena[t].polygons };
+                    top_set.extend(projected.iter().cloned());
                 }
             }
             if num_bottom > 0 {
@@ -1049,8 +1156,16 @@ fn interface_layers(
                 return None;
             }
             let kind = if top_set.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
-            let mut both = geom::union_all(&[&bottom_set]);
-            both.extend(geom::union_all(&[&top_set]));
+            let mut both = if p.snug {
+                regularize(bottom_set.clone(), p.bottom_interface_density, p)
+            } else {
+                geom::union_all(&[&bottom_set])
+            };
+            both.extend(if p.snug {
+                regularize(top_set.clone(), p.top_interface_density, p)
+            } else {
+                geom::union_all(&[&top_set])
+            });
             let poly = geom::intersection(&geom::union_all(&[&both]), &it.polygons);
             if poly.is_empty() {
                 return None;
@@ -1236,7 +1351,7 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
         height: h,
     };
     // Interfaces: the support pattern a quarter turn from the columns', denser.
-    let interface_angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
+    let interface_angle = (std::f32::consts::FRAC_PI_2 + p.interface_turn as f32 + std::f32::consts::FRAC_PI_2) as f64;
     let extrude_interface = |item: &mut Option<Item>, bottom_density: bool| {
         let Some(item) = item.as_mut() else { return };
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
@@ -1527,5 +1642,25 @@ fn clip_end(line: &mut Vec<Pt>, mut distance: f64) {
             return;
         }
         distance -= l2.sqrt();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sticks_and_repeated_points_leave_an_outline_and_a_bare_stick_goes() {
+        let p = |x: i32, y: i32| geom::pt(x * 1000, y * 1000);
+        // A square with a spike out of its top edge (out to x 15 and straight back) and a repeated corner.
+        let mut shapes: Shapes =
+            vec![vec![vec![p(0, 0), p(10, 0), p(10, 0), p(10, 10), p(5, 10), p(15, 10), p(5, 10), p(0, 10)]]];
+        remove_sticks(&mut shapes);
+        // The spike and the repeat go; the point where the spike left the edge stays, on the edge, as in Orca.
+        assert_eq!(shapes, vec![vec![vec![p(0, 0), p(10, 0), p(10, 10), p(5, 10), p(0, 10)]]]);
+        // An outline that is only a stick there and back goes, and its shape with it.
+        let mut stick: Shapes = vec![vec![vec![p(0, 0), p(5, 0), p(10, 0), p(5, 0)]]];
+        remove_sticks(&mut stick);
+        assert!(stick.is_empty());
     }
 }
