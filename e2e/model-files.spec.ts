@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { bambuStudioProblems } from "../test/unit/slicing/bambu-rules";
 import { boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -61,6 +62,8 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   await expect(download).toHaveAttribute("href", /\/sliced$/);
   const sliced = await page.request.get((await download.getAttribute("href")) ?? "");
   expect(sliced.headers()["content-disposition"]).toContain("cube.gcode.3mf");
+  // What Bambu Studio's own reader needs of a sliced file, from its source (test/unit/slicing/bambu-rules.ts).
+  expect(bambuStudioProblems(new Uint8Array(await sliced.body()))).toEqual([]);
   await expect(settings.getByRole("link", { name: "Its source" })).toHaveAttribute("href", /releases\/tag\/slicer-v/);
   await expect(settings.getByRole("link", { name: "The original" })).toHaveAttribute("href", /\/api\/files\/[^/]+$/);
   await page.keyboard.press("Escape");
