@@ -125,6 +125,10 @@ const fileSlice = z.object({
     .max(8)
     .optional()
     .describe("What Spaghetti's own slicer printed otherwise than asked, in its words."),
+  originalPicture: z
+    .boolean()
+    .optional()
+    .describe("The plate's picture in the model's own colours is kept too (`/api/files/:id/original-thumb`)."),
   colours: z
     .array(
       z.object({
@@ -799,7 +803,7 @@ export const fileRoutes = new Hono<AppEnv>()
   })
   .get("/:id/:part?", async (c) => {
     const part = c.req.param("part") ?? "file";
-    if (part !== "file" && part !== "thumb" && part !== "sliced") {
+    if (part !== "file" && part !== "thumb" && part !== "original-thumb" && part !== "sliced") {
       return apiError(c, 404, "not_found", "No such part.");
     }
     const file = (await liveFile(c, c.req.param("id")))?.row;
@@ -808,7 +812,9 @@ export const fileRoutes = new Hono<AppEnv>()
         ? file?.stored
         : part === "thumb"
           ? file?.hasThumb
-          : file?.kind === "model" && file.slice?.status === "sliced";
+          : part === "original-thumb"
+            ? file?.kind === "model" && file.slice?.originalPicture === true
+            : file?.kind === "model" && file.slice?.status === "sliced";
     if (!file || !kept) return apiError(c, 404, "not_found", "That file isn't here.");
     const object = await c.env.PHOTOS.get(fileKey(file.id, part), { onlyIf: c.req.raw.headers });
     if (!object) return apiError(c, 404, "not_found", "That file isn't here.");
@@ -847,6 +853,7 @@ export const fileRoutes = new Hono<AppEnv>()
     const fields = parsed.data;
     const sliced = form?.get("sliced");
     const thumb = form?.get("thumb");
+    const original = form?.get("originalThumb");
     const done = fields.slice.status === "sliced";
     // A big sliced file came in parts first: it is in the bucket already.
     const early = done && fields.uploaded ? await c.env.PHOTOS.head(fileKey(id, "sliced")) : null;
@@ -860,6 +867,9 @@ export const fileRoutes = new Hono<AppEnv>()
       return apiError(c, 413, "too_large", "That sliced file is too large to keep.");
     }
     if (thumb instanceof File && (thumb.size > MAX_FILE_THUMB_BYTES || !THUMB_TYPES.includes(thumb.type))) {
+      return apiError(c, 415, "unsupported", "The plate's picture couldn't be kept.");
+    }
+    if (original instanceof File && (original.size > MAX_FILE_THUMB_BYTES || !THUMB_TYPES.includes(original.type))) {
       return apiError(c, 415, "unsupported", "The plate's picture couldn't be kept.");
     }
     const { row, table } = found;
@@ -888,10 +898,17 @@ export const fileRoutes = new Hono<AppEnv>()
       thumb instanceof File
         ? c.env.PHOTOS.put(fileKey(id, "thumb"), thumb.stream(), { httpMetadata: { contentType: thumb.type } })
         : null,
+      // The picture in the model's own colours goes with this slice only: another slice has its own, or none.
+      original instanceof File
+        ? c.env.PHOTOS.put(fileKey(id, "original-thumb"), original.stream(), {
+            httpMetadata: { contentType: original.type },
+          })
+        : c.env.PHOTOS.delete(fileKey(id, "original-thumb")),
     ]);
     const values = {
       slice: {
         ...fields.slice,
+        ...(original instanceof File ? { originalPicture: true } : { originalPicture: undefined }),
         ...(done && sliced instanceof File ? { bytes: sliced.size } : done && early ? { bytes: early.size } : {}),
       },
       hasThumb: row.hasThumb || thumb instanceof File,

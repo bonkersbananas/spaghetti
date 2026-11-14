@@ -62,6 +62,8 @@ export type SliceMessage =
       type: "done";
       sliced: Uint8Array;
       png: Blob | null;
+      /** The plate in the model's own colours, when it has colours that were matched. */
+      originalPng?: Blob | null;
       slice: FileSlice;
       prefill: AttemptSettings;
       objects: string[];
@@ -143,10 +145,11 @@ async function run(request: SliceRequest) {
   let by: SlicerId | null = null;
   let fallback: SliceFallback | undefined;
   let colourRows: SliceColour[] | undefined;
+  let originalPng: Blob | null = null;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
     ...(fallback ? { fallback } : {}),
-    ...(colourRows ? { colours: colourRows } : {}),
+    ...(colourRows ? { colours: colourRows, ...(originalPng ? { originalPicture: true } : {}) } : {}),
     settings: {
       ...settings,
       scale,
@@ -236,6 +239,7 @@ async function run(request: SliceRequest) {
     // The picture as it will print: with ours, an object's parts each in its filament's colour.
     png = await picture(objects, oursSetup, byParts);
     if (png) post({ type: "picture", png });
+    if (matched) originalPng = await originalPicture(objects, oursSetup);
 
     for (const each of new Set([setup, oursSetup])) {
       const tower = objects.length && each.filaments.length > 1 ? towerSpot(objects, plate, each) : null;
@@ -297,6 +301,7 @@ async function run(request: SliceRequest) {
         type: "done",
         sliced,
         png,
+        ...(colourRows && originalPng ? { originalPng } : {}),
         slice: slice({
           status: "sliced",
           bytes: sliced.byteLength,
@@ -646,6 +651,44 @@ async function picture(objects: Placed[], setup: SliceSetup, parts: boolean): Pr
         size: PICTURE,
         colour: setup.colours[0] ?? FALLBACK_COLOUR,
         colours: meshes.map((mesh) => setup.colours[mesh.extruder - 1]),
+      },
+    );
+    const canvas = new OffscreenCanvas(PICTURE, PICTURE);
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.putImageData(new ImageData(new Uint8ClampedArray(pixels), PICTURE, PICTURE), 0, 0);
+    return await canvas.convertToBlob({ type: "image/png" });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The plate picture with the model's own colours, for the before and after of colour matching: each run of an
+ * object's triangles in the colour the file gives it (the rest, fins included, in the first filament's).
+ */
+async function originalPicture(objects: Placed[], setup: SliceSetup): Promise<Blob | null> {
+  if (typeof OffscreenCanvas !== "function") return null;
+  try {
+    const meshes: { positions: Float32Array; colour: string | undefined }[] = [];
+    for (const object of objects) {
+      let at = 0;
+      for (const run of object.colours ?? []) {
+        if (run.from > at)
+          meshes.push({ positions: object.positions.subarray(at * 9, run.from * 9), colour: undefined });
+        meshes.push({ positions: object.positions.subarray(run.from * 9, run.to * 9), colour: run.colour.hex });
+        at = run.to;
+      }
+      if (at * 9 < object.positions.length) {
+        meshes.push({ positions: object.positions.subarray(at * 9), colour: undefined });
+      }
+    }
+    const pixels = renderPlate(
+      meshes.map((mesh) => mesh.positions),
+      {
+        size: PICTURE,
+        colour: setup.colours[0] ?? FALLBACK_COLOUR,
+        colours: meshes.map((mesh) => mesh.colour),
       },
     );
     const canvas = new OffscreenCanvas(PICTURE, PICTURE);

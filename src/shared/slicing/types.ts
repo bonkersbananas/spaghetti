@@ -121,6 +121,8 @@ export interface FileSlice {
   notes?: string[];
   /** A model with colours of its own (more than one): each and what printed it, the heaviest first. */
   colours?: SliceColour[];
+  /** The plate's picture in the model's own colours is kept too (`/api/files/:id/original-thumb`), for the before/after. */
+  originalPicture?: boolean;
   /** How long the slicer took, in ms, on the device that sliced it: from the placed model to the packed file. */
   ms?: number;
   /** When it was sliced or failed (epoch ms). */

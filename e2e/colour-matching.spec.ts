@@ -43,6 +43,17 @@ test("a model with colours of its own prints each in a filament matched to it, a
   expect(used).toHaveLength(6);
   for (const grams of used) expect(grams).toBeGreaterThan(0);
 
+  // The plate's picture in the model's own colours is kept, and the idea's cover switches to it.
+  expect(slice.originalPicture).toBe(true);
+  expect((await page.request.get(`/api/files/${file.id}/original-thumb`)).status()).toBe(200);
+  await page.reload();
+  const cover = page.getByRole("img", { name: /Slicer preview/ });
+  const matchedSrc = await cover.getAttribute("src");
+  await page.getByRole("radio", { name: "Model's colours" }).click();
+  await expect(cover).toHaveAttribute("src", /original-thumb/);
+  await page.getByRole("radio", { name: "In our filaments" }).click();
+  await expect(cover).toHaveAttribute("src", matchedSrc ?? "");
+
   await files.getByRole("button", { name: "Slice with…" }).click();
   const settings = page.getByRole("dialog", { name: "How to slice it" });
   await expect(settings.getByText("Colours", { exact: true })).toBeVisible();

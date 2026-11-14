@@ -10,6 +10,7 @@ import { ArrowRightIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Swatch } from "@/components/ui/Swatch";
+import { cn } from "@/lib/cn";
 import { scrollBehavior } from "@/lib/motion";
 
 /** The Pantry's spools offered under a colour, at most: a pantry is rarely bigger. */
@@ -49,6 +50,7 @@ export function ColourMatches({
   spools,
   onChange,
   wrapped,
+  wide,
 }: {
   /** What the last slice printed each colour in. */
   colours: readonly SliceColour[];
@@ -58,6 +60,8 @@ export function ColourMatches({
   onChange: (choices: ColourChoice[]) => void;
   /** In a panel's column: the spools wrap in rows of four instead of scrolling sideways. */
   wrapped: boolean;
+  /** Across a panel's whole width (under its two columns): the rows sit two to a line. */
+  wide?: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
@@ -77,14 +81,17 @@ export function ColourMatches({
         <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Colours</span>
         <p className="text-small text-ink-soft text-pretty">Each colour in the model, and the spool that prints it.</p>
       </div>
-      <ul className="flex flex-col">
+      <ul className={wide ? "grid grid-cols-2 gap-x-6 gap-y-0" : "flex flex-col"}>
         {colours.map((colour) => {
           const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
           const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
           return (
             <li
               key={colour.hex}
-              className="not-first:before:bg-hairline relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-0 not-first:before:h-px"
+              className={cn(
+                "before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
+                wide ? "nth-[-n+2]:before:hidden" : "first:before:hidden",
+              )}
             >
               <Disclosure
                 appearance="plain"

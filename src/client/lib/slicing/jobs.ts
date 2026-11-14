@@ -308,6 +308,7 @@ async function save(entry: Entry) {
   const form = new FormData();
   form.set("slice", JSON.stringify(outcome.slice));
   if (outcome.png) form.set("thumb", outcome.png, "plate_1.png");
+  if (outcome.ok && outcome.originalPng) form.set("originalThumb", outcome.originalPng, "plate_1_original.png");
   // A big one goes in parts first (a request body may hold 100 MB at most; decision 0048).
   const inParts = outcome.ok && outcome.sliced.size > ONE_REQUEST_FILE_BYTES;
   if (outcome.ok) {

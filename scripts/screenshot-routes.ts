@@ -1908,6 +1908,32 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // A model with colours of its own, on an idea with no photo: its picture as it prints in our filaments (the
+    // Pantry's spools matched to each colour), with the switch to the model's own colours under it.
+    name: "idea-model-colours",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, HOTDOG_IDEA, HOTDOG, /Sliced by/);
+      await sliceSaved(page);
+      await page.getByRole("radio", { name: "In our filaments" }).waitFor();
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    // The same, on "Model's colours": the picture as the file has them.
+    name: "idea-model-colours-original",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, HOTDOG_IDEA, HOTDOG, /Sliced by/);
+      await sliceSaved(page);
+      await page.getByRole("radio", { name: "Model's colours" }).click();
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll("figure img")).every((img) => (img as HTMLImageElement).complete),
+      );
+    },
+    cleanup: removeModelItems,
+  },
+  {
     // Keyboard focus on a colour's row.
     name: "slice-settings-colours-focus",
     path: "/ideas",

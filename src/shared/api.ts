@@ -211,7 +211,7 @@ export interface UploadedPart {
 }
 
 /** A file's bytes (a model's original), its plate picture, or a model's sliced .gcode.3mf. */
-export function fileUrl(id: string, part: "file" | "thumb" | "sliced" = "file"): string {
+export function fileUrl(id: string, part: "file" | "thumb" | "original-thumb" | "sliced" = "file"): string {
   return part === "file" ? `/api/files/${id}` : `/api/files/${id}/${part}`;
 }
 
@@ -222,6 +222,14 @@ export function fileUrl(id: string, part: "file" | "thumb" | "sliced" = "file"):
 export function fileThumbUrl(file: { id: string; slice?: { at: number } | null }): string {
   const at = file.slice?.at;
   return `${fileUrl(file.id, "thumb")}${at ? `?v=${at}` : ""}`;
+}
+
+/**
+ * The plate's picture in a model's own colours (before the colours were matched to filaments), where its slice kept
+ * one (`slice.originalPicture`), at an address of its slice like `fileThumbUrl`.
+ */
+export function fileOriginalThumbUrl(file: { id: string; slice?: { at: number; originalPicture?: boolean } | null }) {
+  return file.slice?.originalPicture ? `${fileUrl(file.id, "original-thumb")}?v=${file.slice.at}` : null;
 }
 
 /** An idea, and the build it grows into: one record that moves through stages. Titles are optional. */

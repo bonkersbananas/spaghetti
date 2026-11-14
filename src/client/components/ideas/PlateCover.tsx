@@ -1,6 +1,8 @@
-import type { AttemptFile } from "@shared/api";
+import { type AttemptFile, fileOriginalThumbUrl } from "@shared/api";
+import { useState } from "react";
 import { SlicerPreviewBadge } from "@/components/ui/Card";
 import { Photo } from "@/components/ui/Photo";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cn } from "@/lib/cn";
 import { fileThumbSrc } from "@/lib/previews";
 
@@ -14,14 +16,17 @@ export function PlateCover({
   alt,
   className,
 }: {
-  file: Pick<AttemptFile, "id">;
+  file: Pick<AttemptFile, "id" | "slice">;
   alt: string;
   className?: string;
 }) {
+  // A model with colours of its own, matched to our filaments: the picture as it prints, or as the model has them.
+  const original = fileOriginalThumbUrl(file);
+  const [shown, setShown] = useState<"matched" | "original">("matched");
   return (
     <figure className={cn("relative", className)}>
       <Photo
-        src={fileThumbSrc(file)}
+        src={original && shown === "original" ? original : fileThumbSrc(file)}
         alt={alt}
         fit="contain"
         frame="deep"
@@ -31,6 +36,20 @@ export function PlateCover({
       <span className="absolute top-3 left-3">
         <SlicerPreviewBadge />
       </span>
+      {original && (
+        <div className="mt-3 px-5 md:px-0">
+          <SegmentedControl
+            label="Colours shown"
+            labelHidden
+            options={[
+              { value: "matched", label: "In our filaments" },
+              { value: "original", label: "Model's colours" },
+            ]}
+            value={shown}
+            onChange={setShown}
+          />
+        </div>
+      )}
     </figure>
   );
 }

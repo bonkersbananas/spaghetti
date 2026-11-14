@@ -49,11 +49,13 @@ export function fileKey(fileId: string, part: FilePart): string {
   return `files/${fileId}/${part}`;
 }
 
-export type FilePart = "file" | "thumb" | "sliced" | "previous" | "previous-thumb";
+export type FilePart = "file" | "thumb" | "original-thumb" | "sliced" | "previous" | "previous-thumb";
 
 /** Every R2 object a file row may have: what the purge removes with it. */
 export const fileKeys = (fileId: string) =>
-  (["file", "thumb", "sliced", "previous", "previous-thumb"] as const).map((part) => fileKey(fileId, part));
+  (["file", "thumb", "original-thumb", "sliced", "previous", "previous-thumb"] as const).map((part) =>
+    fileKey(fileId, part),
+  );
 
 export { PURGE_AFTER_MS };
 
