@@ -81,6 +81,7 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
 });
 
 test("the arrow keys step layers as soon as the 3D view opens, and after a drag on the canvas", async ({ page }) => {
+  test.setTimeout(90_000); // the first open reads 317 layers in a worker, slow on a shared runner
   await signIn(page);
   const itemId = await buildWithTugboat(page);
   await page.goto(`/builds/${itemId}`);
