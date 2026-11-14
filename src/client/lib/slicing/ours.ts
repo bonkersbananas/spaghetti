@@ -18,7 +18,7 @@ interface Exports {
   dealloc(ptr: number, len: number): void;
   setup(ptr: number, len: number): number;
   add(name: number, nameLen: number, data: number, dataLen: number): number;
-  /** As `add`, with the filament the object prints in (from 1); in releases from slicer-rs PR #265 on. */
+  /** As `add`, with the filament the object prints in (from 1); in releases from slicer-rs-v4 on. */
   add_in?(name: number, nameLen: number, data: number, dataLen: number, filament: number): number;
   slice(flags: number): number;
   output_ptr(): number;
