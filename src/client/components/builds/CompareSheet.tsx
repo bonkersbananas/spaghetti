@@ -95,6 +95,7 @@ function AttemptPhotos({
           alt={`Attempt ${attempt.number}`}
           color={shown.color || undefined}
           fit="contain"
+          glow
           eager
           frame="deep"
           className="size-full"
