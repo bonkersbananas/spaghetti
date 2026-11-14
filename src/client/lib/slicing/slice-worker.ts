@@ -509,7 +509,10 @@ function engineObjects(objects: Placed[]): Placed[] {
     if (!triangles.length) return object;
     const ends: number[] = [];
     let length = 0;
-    for (const code of codes) ends.push((length += code.length));
+    for (const code of codes) {
+      length += code.length;
+      ends.push(length);
+    }
     return {
       ...object,
       paint: { triangles: Uint32Array.from(triangles), codes: codes.join(""), ends: Uint32Array.from(ends) },
