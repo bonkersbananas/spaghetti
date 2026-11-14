@@ -183,11 +183,14 @@ async function run(request: SliceRequest) {
       // Scaled about the origin (shared/mesh.ts, as Twists scales): the plate's arrangement places it after.
       return { ...object, positions: scale === 100 ? turned : scaleMesh({ positions: turned }, scale / 100).positions };
     });
+    // Ours prints an object made of parts in different filaments part by part, so its picture shows the parts in their
+    // colours (the engine prints it whole: drawn again if it steps in).
+    const byParts = slicing.slicer === "spaghetti" && objects.some((object) => partsOf(object));
     try {
       place(objects, plate, volume, read.project && scale === 100 && !down, scale);
     } catch (error) {
       // A model that doesn't fit still gets its picture, as it is.
-      png = await picture(objects, oursSetup, oursSetup !== setup);
+      png = await picture(objects, oursSetup, byParts);
       throw error;
     }
     // Fins are the model's own walls: built on the part as it lies on the plate, appended to it.
@@ -201,8 +204,8 @@ async function run(request: SliceRequest) {
     }
     progress("reading", 1);
 
-    // The picture in what ours would print: an object's parts each in its filament's colour.
-    png = await picture(objects, oursSetup, oursSetup !== setup);
+    // The picture as it will print: with ours, an object's parts each in its filament's colour.
+    png = await picture(objects, oursSetup, byParts);
     if (png) post({ type: "picture", png });
 
     for (const each of new Set([setup, oursSetup])) {
@@ -218,7 +221,7 @@ async function run(request: SliceRequest) {
     if (ours?.ok && oursSetup !== setup) {
       settings = oursSetup.settings;
       slicing = oursSetup.slicing;
-    } else if (ours && !ours.ok && oursSetup !== setup) {
+    } else if (ours && !ours.ok && byParts) {
       // The engine prints each object in its own filament: so does the picture.
       png = await picture(objects, setup, false);
       if (png) post({ type: "picture", png });
