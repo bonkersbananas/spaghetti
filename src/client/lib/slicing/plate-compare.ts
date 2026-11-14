@@ -97,6 +97,8 @@ export function comparePlates(
   comparisons.set(job.fileId, state("running", job.plates.length - todo.length));
   emit();
   return inTurn(async () => {
+    // Stopped while it waited for its turn: nothing is fetched, and the turn goes to the next.
+    if (!current()) return;
     const { sliceModel } = await import("./slice-model");
     const pantry = await pantryAndDefaults(queryClient);
     let source: Blob | null = null;
@@ -105,6 +107,7 @@ export function comparePlates(
     } catch {
       source = null;
     }
+    if (!current()) return;
     for (const [at, plate] of todo.entries()) {
       if (!current()) return;
       if (!source) {
