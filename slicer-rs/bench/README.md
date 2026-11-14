@@ -27,6 +27,7 @@ cargo build --release
 cargo rustc --release --lib --crate-type cdylib --target wasm32-unknown-unknown --no-default-features
 python3 -I bench/place.py 3DBenchy.stl $BENCH_MODELS/benchy.stl           # and the others: see run.py
 python3 -I bench/place.py 3DBenchy.stl $BENCH_MODELS/plate/benchy.stl --copies 12 --columns 3
+python3 -I bench/colour.py $BENCH_MODELS/colour                           # the plate in two filaments
 python3 -I bench/run.py --runs 3                                          # all runners, all models
 python3 -I bench/run.py --runs 3 --only rust-native --models benchy       # one of each
 ```
@@ -43,7 +44,16 @@ target/release/spaghetti-slicer --setup abs.json model.stl -o model.gcode.3mf
 node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm model.gcode.3mf --setup abs.json model.stl   # in WebAssembly
 ```
 
-A setup it can't slice yet (slim or hybrid trees, more than one filament, brim ears…) is refused by name; what it prints otherwise than asked (other infill patterns as straight lines…) it notes, on stderr natively and in the summary's `fallbacks` in WebAssembly. `tests/setups/` keeps one setup made this way, which the tests and CI slice.
+A setup it can't slice yet (slim or hybrid trees, brim ears…) is refused by name; what it prints otherwise than asked (other infill patterns as straight lines…) it notes, on stderr natively and in the summary's `fallbacks` in WebAssembly. `tests/setups/` keeps one setup made this way, which the tests and CI slice.
+
+## Several filaments
+
+A plate in several filaments needs a setup with that many (`"filaments": [{…}, {…}]`, as the app's `sliceSetup` makes for a project in colour) and each model's filament: a Bambu Studio or Orca project names each object's, `--filaments 1,2` gives each file one (1-based, in order), here and in `wasm-node.mjs` (the module's `add_in`). The filaments go on the X2D's nozzles as Orca groups them, or as `--filament-map 1,1` says (1 the left nozzle, 2 the right, as Orca's own `--filament-map`). Without a setup, the command line gives each filament the presets' and a stand-in colour. `bench/colour.py` writes the benchmark's plate, a block with an S cut through it and the S, as two STLs; `run.py` slices it on two nozzles (`colour`) and on one (`colour-one-nozzle`), and native Orca with the same two filaments (`--load-filament-ids`, `--filament-map-mode Manual`) and the tower where the app puts it:
+
+```sh
+target/release/spaghetti-slicer --keep-placement --filaments 1,2 $BENCH_MODELS/colour/block.stl $BENCH_MODELS/colour/letter.stl -o colour.gcode.3mf
+python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models colour,colour-one-nozzle
+```
 
 ## Comparing files
 

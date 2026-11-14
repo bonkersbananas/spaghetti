@@ -49,6 +49,27 @@ pub struct Stats {
     /// Each layer's seconds.
     pub layer_times: Vec<f64>,
     pub max_z: f64,
+    /// With several filaments, each one's use (every filament of the plate's, used or not).
+    pub filaments: Vec<FilamentUse>,
+    /// With several filaments, how many times the print changes filament, and the prime tower's width, depth and brim
+    /// width (mm).
+    pub tool_changes: usize,
+    pub tower: Option<[f64; 3]>,
+}
+
+/// What one filament of several prints and flushes.
+#[derive(Clone, Debug, Default)]
+pub struct FilamentUse {
+    /// In all: mm, mm³, g and cost, the flush included.
+    pub length: f64,
+    pub volume: f64,
+    pub weight: f64,
+    pub cost: f64,
+    /// mm³ printed on the prime tower, and flushed by the printer when changing to it.
+    pub tower: f64,
+    pub flush: f64,
+    /// g per mm³.
+    pub density: f64,
 }
 
 pub struct Gcode {
@@ -105,6 +126,10 @@ enum Note {
     LabelEnd(u32),
     /// The printer's own G-code: the layer change, the timelapse photo.
     Text(String),
+    /// A visit to the prime tower's G-code (`toolchange.rs`): written as it is, with what it costs.
+    Tower(Box<crate::toolchange::Text>),
+    /// The filament printing from here on (several filaments).
+    Tool(usize),
 }
 
 /// What every layer's G-code shares.
@@ -116,6 +141,8 @@ pub struct Job<'a> {
     pub photos: &'a [Option<[i64; 2]>],
     /// Where the start G-code leaves the nozzle.
     pub start: [f64; 3],
+    /// The plate's filaments, their tool changes and prime tower, when it prints in several (`toolchange.rs`).
+    pub colours: Option<&'a crate::toolchange::Colours>,
 }
 
 impl Job<'_> {
@@ -148,6 +175,8 @@ pub struct LayerGcode {
     features: [Feature; Role::ALL.len()],
     /// The part and auxiliary fans for the layer, in percent (`layer_fans`).
     fans: [f64; 2],
+    /// With several filaments: mm of each, and mm³ of each on the prime tower.
+    by_filament: Vec<[f64; 2]>,
 }
 
 /// The part and auxiliary fans for layer `i`, in percent, as Orca's cooling sets them at a layer's start
@@ -198,7 +227,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
         .iter()
         .map(|&(plan, regions, from_z)| {
             let (moves, notes) = build_layer(plan, regions, job, from_z);
-            let first = plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)]);
+            let first = layer_start(plan);
             let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]);
             (moves, notes, start, first)
         })
@@ -225,7 +254,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                 .as_bytes(),
             );
             let progress_at = text.len();
-            let out = finish_layer(&moves, &notes, start, job, text, plan.header_height);
+            let tool = job.colours.map_or(0, |c| c.start(plan.index));
+            let out = finish_layer(&moves, &notes, start, job, text, plan.header_height, (fans, tool));
             LayerGcode {
                 text: out.text,
                 progress_at,
@@ -241,6 +271,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                 filament_mm: out.filament_mm,
                 features: out.features,
                 fans,
+                by_filament: out.by_filament,
             }
         })
         .collect()
@@ -266,6 +297,8 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
     let mut stats = Stats { layers: n, max_z: layers.last().map(|l| l.z).unwrap_or(0.0), ..Default::default() };
     let mut at = [job.start[0], job.start[1]];
     let mut times = Vec::with_capacity(n);
+    // With several filaments, each one's mm and mm³ on the prime tower.
+    let mut by_filament: Vec<[f64; 2]> = Vec::new();
     for (i, l) in layers.iter().enumerate() {
         // The travel onto the layer, from where the one before ended.
         let mut time = l.time;
@@ -285,15 +318,52 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
         stats.travel_distance += l.travel_distance;
         stats.retractions += l.retractions;
         stats.filament_mm += l.filament_mm;
+        if by_filament.len() < l.by_filament.len() {
+            by_filament.resize(l.by_filament.len(), [0.0; 2]);
+        }
+        for (total, b) in by_filament.iter_mut().zip(&l.by_filament) {
+            total[0] += b[0];
+            total[1] += b[1];
+        }
         for (total, f) in stats.features.iter_mut().zip(&l.features) {
             total.time += f.time;
             total.volume += f.volume;
         }
     }
     stats.layer_times = times;
-    stats.volume = stats.filament_mm * s.filament_area();
-    stats.weight = stats.volume * s.filament_density / 1000.0;
-    stats.cost = stats.weight / 1000.0 * s.filament_cost;
+    if let Some(c) = job.colours {
+        // Each filament's own: what it prints, and what the printer flushes when changing to it (Orca counts the flush
+        // to the new filament).
+        by_filament.resize(c.settings.len(), [0.0; 2]);
+        stats.filaments = by_filament
+            .iter()
+            .zip(&c.settings)
+            .zip(&c.flushed)
+            .map(|((b, fs), &flush)| {
+                let volume = b[0] * fs.filament_area() + flush;
+                let weight = volume * fs.filament_density / 1000.0;
+                FilamentUse {
+                    length: volume / fs.filament_area(),
+                    volume,
+                    weight,
+                    cost: weight / 1000.0 * fs.filament_cost,
+                    tower: b[1],
+                    flush,
+                    density: fs.filament_density / 1000.0,
+                }
+            })
+            .collect();
+        stats.filament_mm = stats.filaments.iter().map(|f| f.length).sum();
+        stats.volume = stats.filaments.iter().map(|f| f.volume).sum();
+        stats.weight = stats.filaments.iter().map(|f| f.weight).sum();
+        stats.cost = stats.filaments.iter().map(|f| f.cost).sum();
+        stats.tool_changes = c.changes;
+        stats.tower = Some([c.tower[0], c.tower[1], c.tower[2]]);
+    } else {
+        stats.volume = stats.filament_mm * s.filament_area();
+        stats.weight = stats.volume * s.filament_density / 1000.0;
+        stats.cost = stats.weight / 1000.0 * s.filament_cost;
+    }
     let start = job.frame.start();
     let prepare = time_custom(&start, s);
     stats.prepare_time = prepare;
@@ -336,23 +406,20 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
     }
     text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
     text.extend_from_slice(job.frame.end(last_index, last_z).as_bytes());
-    text.extend_from_slice(
-        format!(
-            "M73 P100 R0\n\
-             ; EXECUTABLE_BLOCK_END\n\
-             \n\
-             ; filament used [mm] = {mm:.2}\n\
-             ; filament used [cm3] = {cm3:.2}\n\
-             ; filament used [g] = {g:.2}\n\
-             ; filament cost = {cost:.2}\n\
-             \n",
-            mm = stats.filament_mm,
-            cm3 = stats.volume / 1000.0,
-            g = stats.weight,
-            cost = stats.cost,
-        )
-        .as_bytes(),
-    );
+    text.extend_from_slice(b"M73 P100 R0\n; EXECUTABLE_BLOCK_END\n\n");
+    // Each filament's use, every filament of the plate's listed (as Orca's processor writes them).
+    let uses: Vec<[f64; 4]> = match job.colours {
+        Some(_) => stats.filaments.iter().map(|f| [f.length, f.volume / 1000.0, f.weight, f.cost]).collect(),
+        None => vec![[stats.filament_mm, stats.volume / 1000.0, stats.weight, stats.cost]],
+    };
+    for (k, what) in ["; filament used [mm] =", "; filament used [cm3] =", "; filament used [g] =", "; filament cost ="]
+        .iter()
+        .enumerate()
+    {
+        let values: Vec<String> = uses.iter().map(|u| format!(" {:.2}", u[k])).collect();
+        text.extend_from_slice(format!("{what}{}\n", values.join(",")).as_bytes());
+    }
+    text.push(b'\n');
     Gcode { text, stats }
 }
 
@@ -371,8 +438,16 @@ struct Builder<'a> {
     /// The acceleration the printer has, as Orca's writer tracks it: moves that set none keep it.
     accel: f64,
     first_layer: bool,
+    /// The layer's height (for an overhang wall's flow when the filament changes).
+    layer_height: f64,
     /// The last extrusion, until a wipe goes back over it, and the speed it ended at.
     wipe: Option<(&'a Path, f64)>,
+    /// The speed the last extrusion ended at (Orca wipes at it on the prime tower too).
+    speed: f64,
+    /// mm the filament is pulled back by now, when `retracted`; and mm it was already pulled back by when it came
+    /// back from a tool change (its next retraction pulls back only the rest).
+    retracted_mm: f64,
+    prior: f64,
     /// An overhang wall's width, mm³ per mm, speed and acceleration on this layer.
     overhang: (f64, f64, f64, f64),
 }
@@ -431,11 +506,18 @@ impl<'a> Builder<'a> {
     /// line) for the wipe distance, retracting during the wipe as much as the retraction speed allows in the time it
     /// takes and the rest just before it.
     fn retract(&mut self) {
+        self.retract_by(self.s.retract_length);
+    }
+
+    /// `retract` by `length` mm (less what was already pulled back).
+    fn retract_by(&mut self, length: f64) {
         if self.retracted {
             return;
         }
         let s = self.s;
-        let mut left = s.retract_length;
+        let mut left = (length - self.prior).max(0.0);
+        self.retracted_mm = length.max(self.prior);
+        self.prior = 0.0;
         if let Some((path, speed)) = self.wipe.take()
             && s.wipe_distance > 0.0
             && path.points.len() >= 2
@@ -531,7 +613,7 @@ impl<'a> Builder<'a> {
             self.lifted = false;
         }
         if self.retracted {
-            self.line(self.x, self.y, self.z, self.s.retract_length, self.s.deretract_speed, Kind::Retract);
+            self.line(self.x, self.y, self.z, self.retracted_mm, self.s.deretract_speed, Kind::Retract);
             self.retracted = false;
         }
     }
@@ -595,6 +677,100 @@ impl<'a> Builder<'a> {
             self.push(m);
         }
         self.wipe = Some((path, written / 60.0));
+        self.speed = written / 60.0;
+    }
+
+    /// `retract_by` wiping along `route` (mm on the plate) instead of the last path.
+    fn retract_along(&mut self, length: f64, route: &[[f64; 2]]) {
+        if self.retracted {
+            return;
+        }
+        let s = self.s;
+        let mut left = (length - self.prior).max(0.0);
+        self.retracted_mm = length.max(self.prior);
+        self.prior = 0.0;
+        self.wipe = None;
+        let points: Vec<Pt> = route.iter().map(|p| geom::pt(geom::sc(p[0]), geom::sc(p[1]))).collect();
+        if s.wipe_distance > 0.0 && points.len() >= 2 {
+            let from = (self.x, self.y);
+            let length = route_length(from, points[1..].iter(), s.wipe_distance);
+            let speed = self.speed.max(10.0);
+            let during = e_units((s.retract_speed * length / speed).min(left));
+            if length > 1e-9 && during > 0 {
+                let before = e_units(left) - during;
+                if before > 0 {
+                    self.line(self.x, self.y, self.z, -from_units(before), s.retract_speed, Kind::Retract);
+                }
+                self.wipe_along(points[1..].iter(), length, during, speed);
+                left = 0.0;
+            }
+        }
+        if left > 1e-9 {
+            self.line(self.x, self.y, self.z, -left, s.retract_speed, Kind::Retract);
+        }
+        self.retracted = true;
+    }
+
+    /// Carries out a visit to the prime tower (`toolchange.rs`). `colours` gives each filament's settings.
+    fn visit(
+        &mut self,
+        steps: &'a [crate::toolchange::Step],
+        colours: &'a crate::toolchange::Colours,
+        end_labels: &mut dyn FnMut(&mut Self),
+    ) {
+        use crate::toolchange::Step;
+        for step in steps {
+            match step {
+                Step::Text(t) => {
+                    self.note(Note::Tower(t.clone()));
+                    if let Some(e) = t.end {
+                        (self.x, self.y, self.z) = (e[0], e[1], e[2]);
+                        self.lifted = e[2] > self.layer_z + 1e-6;
+                    }
+                    if let Some(a) = t.accel {
+                        self.accel = a;
+                    }
+                }
+                Step::Retract { length, wipe, lift } => {
+                    let length = length.unwrap_or(self.s.retract_length);
+                    match wipe {
+                        Some(route) => self.retract_along(length, route),
+                        None => self.retract_by(length),
+                    }
+                    if *lift {
+                        self.lift(None);
+                    }
+                }
+                Step::Travel { x, y, lift, lower } => {
+                    let d = (x - self.x).hypot(y - self.y);
+                    if *lift && !self.lifted {
+                        self.lift(Some((*x, *y)));
+                    }
+                    let a = if self.first_layer { self.s.first_layer_travel_accel } else { self.s.travel_accel };
+                    self.set_accel(a);
+                    if d > 1e-9 || self.moves.is_empty() {
+                        self.travel(*x, *y, self.lifted && *lift);
+                    }
+                    if *lower && self.z > self.layer_z + 1e-6 {
+                        self.lift_to(self.layer_z);
+                        self.lifted = false;
+                    }
+                }
+                Step::Ready => self.ready(),
+                Step::EndLabels => end_labels(self),
+                Step::Use { filament, prior } => {
+                    if let Some(s) = colours.settings.get(*filament) {
+                        self.s = s;
+                        self.overhang = crate::plan::overhang_flow(self.first_layer, self.layer_height, s);
+                    }
+                    self.retracted = false;
+                    self.retracted_mm = 0.0;
+                    self.prior = *prior;
+                    self.wipe = None;
+                    self.note(Note::Tool(*filament));
+                }
+            }
+        }
     }
 }
 
@@ -725,16 +901,17 @@ impl<'a> Internal<'a> {
 /// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
 /// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
 /// a lift and the timelapse photo.
-fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64) -> (Vec<Move>, Vec<(usize, Note)>) {
-    let s = job.settings;
+fn build_layer<'a>(
+    plan: &'a LayerPlan,
+    regions: &'a LayerRegions,
+    job: &'a Job<'a>,
+    from_z: f64,
+) -> (Vec<Move>, Vec<(usize, Note)>) {
     let i = plan.index;
+    let s = job.colours.map_or(job.settings, |c| &c.settings[c.start(i)]);
     let first_layer = i == 0;
     let points: usize = plan.paths.iter().map(|p| p.points.len()).sum();
-    let (x0, y0) = plan
-        .paths
-        .first()
-        .map(|p| (geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)))
-        .unwrap_or((job.start[0], job.start[1]));
+    let (x0, y0) = layer_start(plan).map(|[x, y]| (x, y)).unwrap_or((job.start[0], job.start[1]));
     let mut b = Builder {
         s,
         moves: Vec::with_capacity(points + plan.paths.len() * 8 + 8),
@@ -747,7 +924,11 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         lifted: true,
         accel: f64::NAN,
         first_layer,
+        layer_height: plan.height,
         wipe: None,
+        speed: 0.0,
+        retracted_mm: s.retract_length,
+        prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
     };
     if first_layer {
@@ -780,7 +961,38 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
     // The object a path prints inside the labels of: none for a brim, which Orca prints before it starts the object.
     let owner = |p: &Path| (p.role != Role::Brim).then_some(p.object);
     let mut last: Option<&Path> = None;
-    for path in &plan.paths {
+    // With several filaments: the visits to the prime tower between the filaments' paths, and the timelapse photo,
+    // which Orca takes before the tower when the camera's extruder is about to stop printing.
+    let mut next_visit = 0;
+    let mut photo_taken = false;
+    let mut open_label: Option<u32> = None;
+    let photo_note = |b: &Builder| -> Note { Note::Text(layer_photo(plan, job, b.z)) };
+    for (k, path) in plan.paths.iter().enumerate() {
+        while let Some(colours) = job.colours
+            && let Some(visit) = plan.visits.get(next_visit).filter(|v| v.at == k)
+        {
+            next_visit += 1;
+            if let Some(o) = last.and_then(owner) {
+                b.note(Note::Stopped(o));
+            }
+            if !photo_taken && visit.from != visit.to && colours.photo_head(visit.from) {
+                b.retract();
+                b.lift(None);
+                if let Some(o) = open_label.take() {
+                    b.note(Note::LabelEnd(o));
+                }
+                let photo = photo_note(&b);
+                b.note(photo);
+                photo_taken = true;
+            }
+            let mut end = |b: &mut Builder<'a>| {
+                if let Some(o) = open_label.take() {
+                    b.note(Note::LabelEnd(o));
+                }
+            };
+            b.visit(&visit.steps, colours, &mut end);
+            last = None;
+        }
         let to = path.points[0];
         let (x, y) = (geom::unsc(to.x), geom::unsc(to.y));
         match last {
@@ -791,6 +1003,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
                 b.set_accel(b.travel_accel(path, f64::INFINITY));
                 if let Some(o) = owner(path).filter(|_| labels) {
                     b.note(Note::LabelStart(o));
+                    open_label = Some(o);
                 }
                 b.travel(x, y, false);
                 if first_layer {
@@ -809,13 +1022,15 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
                         b.note(Note::Printing(o));
                     }
                 }
-                let relabel = |b: &mut Builder| {
+                let mut relabel = |b: &mut Builder| {
                     if other && labels {
                         if let Some(o) = was {
                             b.note(Note::LabelEnd(o));
                         }
+                        open_label = None;
                         if let Some(o) = now {
                             b.note(Note::LabelStart(o));
+                            open_label = Some(o);
                         }
                     }
                 };
@@ -842,6 +1057,20 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         b.extrude(path);
         last = Some(path);
     }
+    if let Some(colours) = job.colours {
+        for visit in &plan.visits[next_visit.min(plan.visits.len())..] {
+            if let Some(o) = last.and_then(owner) {
+                b.note(Note::Stopped(o));
+            }
+            let mut end = |b: &mut Builder<'a>| {
+                if let Some(o) = open_label.take() {
+                    b.note(Note::LabelEnd(o));
+                }
+            };
+            b.visit(&visit.steps, colours, &mut end);
+            last = None;
+        }
+    }
     if let Some(prev) = last {
         if let Some(o) = owner(prev) {
             b.note(Note::Stopped(o));
@@ -851,8 +1080,29 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
         if let Some(o) = owner(prev).filter(|_| labels) {
             b.note(Note::LabelEnd(o));
         }
+    } else if let Some(o) = open_label.take() {
+        b.note(Note::LabelEnd(o));
     }
-    // The timelapse photo, which the printer skips with the layer's objects when all of them are skipped.
+    if !photo_taken {
+        b.note(Note::Text(layer_photo(plan, job, plan.z)));
+    }
+    (b.moves, b.notes)
+}
+
+/// Where a layer's first travel goes: its first visit to the prime tower when that comes first, else its first path.
+fn layer_start(plan: &LayerPlan) -> Option<[f64; 2]> {
+    if let Some(v) = plan.visits.first().filter(|v| v.at == 0)
+        && let Some(p) = v.first_point()
+    {
+        return Some(p);
+    }
+    plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)])
+}
+
+/// The timelapse photo after the layer, which the printer skips with the layer's objects when all of them are skipped.
+fn layer_photo(plan: &LayerPlan, job: &Job, _z: f64) -> String {
+    let i = plan.index;
+    let labels = job.labels();
     let mut photo = job.frame.timelapse(i, plan.z, plan.z, job.photos.get(i).copied().flatten());
     let mut printed: Vec<u32> =
         plan.paths.iter().map(|p| job.objects.get(p.object as usize).map_or(0, |o| o.label)).collect();
@@ -868,8 +1118,7 @@ fn build_layer(plan: &LayerPlan, regions: &LayerRegions, job: &Job, from_z: f64)
             mask = base64_u64(mask),
         );
     }
-    b.note(Note::Text(photo));
-    (b.moves, b.notes)
+    photo
 }
 
 /// An object's bit in the printer's label mask: its place among the plate's labels, smallest first.
@@ -1161,6 +1410,11 @@ impl Planner<'_> {
 /// Bambu's limit on curves and its jerk on X, Y and Z together). A spiral lift is timed as the straight pieces the
 /// processor splits it into.
 fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
+    timing_with(moves, start, s, &[])
+}
+
+/// `timing`, the planner starting again from rest at `resets` (move index, where the nozzle is then).
+fn timing_with(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, [f64; 3])]) -> Vec<f64> {
     let mut p = Planner {
         s,
         blocks: Vec::with_capacity(moves.len()),
@@ -1171,7 +1425,12 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
         prev_safe: 0.0,
         prev_dir: [0.0; 3],
     };
+    let mut r = 0;
     for (i, m) in moves.iter().enumerate() {
+        while r < resets.len() && resets[r].0 <= i {
+            (p.at, p.prev_cruise, p.prev_axis, p.prev_safe, p.prev_dir) = (resets[r].1, 0.0, [0.0; 4], 0.0, [0.0; 3]);
+            r += 1;
+        }
         if let Kind::Spiral { i: ci, j: cj } = m.kind {
             let r = ci.hypot(cj);
             let (cx, cy, z0) = (p.at[0] + ci, p.at[1] + cj, p.at[2]);
@@ -1250,6 +1509,7 @@ struct LayerOut {
     retractions: usize,
     filament_mm: f64,
     features: [Feature; Role::ALL.len()],
+    by_filament: Vec<[f64; 2]>,
 }
 
 fn role_index(role: Role) -> usize {
@@ -1305,9 +1565,19 @@ fn finish_layer(
     job: &Job,
     text: Vec<u8>,
     header_height: f32,
+    (fans, mut tool): ([f64; 2], usize),
 ) -> LayerOut {
     let s = job.settings;
-    let times = timing(moves, start, s);
+    // Where the prime tower's G-code leaves the nozzle, the planner starts again.
+    let resets: Vec<(usize, [f64; 3])> = notes
+        .iter()
+        .filter_map(|(k, n)| match n {
+            Note::Tower(t) => t.end.map(|e| (*k, e)),
+            _ => None,
+        })
+        .collect();
+    let times = timing_with(moves, start, s, &resets);
+    let filaments = job.colours.map_or(0, |c| c.settings.len());
     let mut out = LayerOut {
         text,
         first_accel: None,
@@ -1318,6 +1588,7 @@ fn finish_layer(
         retractions: 0,
         filament_mm: 0.0,
         features: Default::default(),
+        by_filament: vec![[0.0; 2]; filaments],
     };
     let area = s.filament_area();
     let mut w =
@@ -1333,7 +1604,37 @@ fn finish_layer(
             wiping = false;
         }
         while next_note < notes.len() && notes[next_note].0 == k {
-            write_note(t, &notes[next_note].1, job, &mut w);
+            match &notes[next_note].1 {
+                Note::Tower(tower) => {
+                    let text = tower.text.replace(
+                        ";_FORCE_RESUME_FAN_SPEED\n",
+                        &format!("M106 P2 S{}\n{}", (255.0 * fans[1] / 100.0) as i64, fan_line(fans[0])),
+                    );
+                    t.extend_from_slice(text.as_bytes());
+                    out.time += tower.secs;
+                    out.travel_time += tower.secs - tower.extruding;
+                    out.travel_distance += tower.travel;
+                    out.filament_mm += tower.mm;
+                    let f = &mut out.features[role_index(Role::PrimeTower)];
+                    f.time += tower.extruding;
+                    f.volume += tower.volume;
+                    if let Some(b) = out.by_filament.get_mut(tower.filament) {
+                        b[0] += tower.mm;
+                        b[1] += tower.volume;
+                    }
+                    // What the tower's G-code set, the writer doesn't know: it writes the next feature, width,
+                    // height and speed again, as Orca does after the tower.
+                    (w.feature, w.width, w.height, w.feed) = (None, f64::NAN, f32::NAN, -1);
+                    if let Some(a) = tower.accel {
+                        w.accel = a;
+                    }
+                    if let Some(e) = tower.end {
+                        at = e;
+                    }
+                }
+                Note::Tool(f) => tool = *f,
+                note => write_note(t, note, job, &mut w),
+            }
             next_note += 1;
         }
         let Some(m) = m else { break };
@@ -1345,6 +1646,9 @@ fn finish_layer(
                 f.time += secs;
                 f.volume += m.e * area;
                 out.filament_mm += m.e;
+                if let Some(b) = out.by_filament.get_mut(tool) {
+                    b[0] += m.e;
+                }
             }
             Kind::Travel | Kind::TravelZ => {
                 out.travel_time += secs;
@@ -1467,7 +1771,38 @@ fn write_note(t: &mut Vec<u8>, note: &Note, job: &Job, w: &mut Writer) {
             t.extend_from_slice(format!("; stop printing object, unique label id: {label}\nM625\n").as_bytes());
         }
         Note::Text(text) => t.extend_from_slice(text.as_bytes()),
+        Note::Tower(tower) => t.extend_from_slice(tower.text.as_bytes()),
+        Note::Tool(_) => {}
     }
+}
+
+/// `M106 S…` for the part fan at `percent`, as a line.
+fn fan_line(percent: f64) -> String {
+    let mut t = Vec::new();
+    set_fan(&mut t, percent);
+    String::from_utf8(t).unwrap_or_default()
+}
+
+/// A string in a list of strings as Orca writes it (`escape_strings_cstyle`): quoted, with `\\` and `\"` escaped, when it
+/// holds a space, a tab, a `;`, a quote, a backslash or a line break.
+fn quoted(v: &str) -> String {
+    if !v.contains([' ', ';', '\t', '\\', '"', '\r', '\n']) {
+        return v.to_string();
+    }
+    let mut out = String::from('"');
+    for c in v.chars() {
+        match c {
+            '\\' | '"' => {
+                out.push('\\');
+                out.push(c);
+            }
+            '\r' => out.push_str("\\r"),
+            '\n' => out.push_str("\\n"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn header(t: &mut Vec<u8>, stats: &Stats, job: &Job) {
@@ -1496,16 +1831,39 @@ fn header(t: &mut Vec<u8>, stats: &Stats, job: &Job) {
         let labels: Vec<String> = labels.iter().map(u32::to_string).collect();
         line(t, &format!("; model label id: {}", labels.join(",")));
     }
-    line(t, &format!("; filament_density: {}", trim(s.filament_density)));
-    line(t, &format!("; filament_diameter: {}", trim(s.filament_diameter)));
+    // Each filament's, and the filaments the plate uses.
+    let (densities, diameters, used) = match job.colours {
+        Some(c) => {
+            let all = |v: fn(&Settings) -> f64| c.settings.iter().map(|fs| trim(v(fs))).collect::<Vec<_>>().join(",");
+            let mut used: Vec<usize> = c.orders.iter().flatten().copied().collect();
+            used.sort_unstable();
+            used.dedup();
+            let used: Vec<String> = used.iter().map(|f| (f + 1).to_string()).collect();
+            (all(|fs| fs.filament_density), all(|fs| fs.filament_diameter), used.join(","))
+        }
+        None => (trim(s.filament_density), trim(s.filament_diameter), "1".to_string()),
+    };
+    line(t, &format!("; filament_density: {densities}"));
+    line(t, &format!("; filament_diameter: {diameters}"));
     line(t, &format!("; max_z_height: {:.2}", stats.max_z));
-    line(t, "; filament: 1");
+    line(t, &format!("; filament: {used}"));
     line(t, "; HEADER_BLOCK_END");
     line(t, "");
     line(t, "; CONFIG_BLOCK_START");
-    for (key, value) in s.project_settings() {
+    let settings = match job.colours {
+        Some(c) => c.project_settings(s),
+        None => s.project_settings(),
+    };
+    for (key, value) in settings {
         let text = match value {
             crate::config::Value::One(v) => v,
+            // Several filaments' names, as Orca lists strings: ';' between them, quoted where they have spaces.
+            crate::config::Value::List(v)
+                if job.colours.is_some()
+                    && matches!(key, "filament_settings_id" | "filament_type" | "filament_colour") =>
+            {
+                v.iter().map(|v| quoted(v)).collect::<Vec<_>>().join(";")
+            }
             crate::config::Value::List(v) => v.join(","),
         };
         line(t, &format!("; {key} = {text}"));
@@ -1622,6 +1980,125 @@ fn time_custom(text: &str, s: &Settings) -> f64 {
     seconds + timing(&moves, start, s).iter().sum::<f64>()
 }
 
+/// What a piece of G-code text costs (`time_text`).
+pub struct TextTime {
+    pub secs: f64,
+    /// Seconds extruding.
+    pub extruding: f64,
+    /// Where it leaves the nozzle, if it moves it.
+    pub end: Option<[f64; 3]>,
+    /// The acceleration it leaves set, if it sets one.
+    pub accel: Option<f64>,
+    /// mm of filament extruded (moves that print), and mm travelled.
+    pub mm: f64,
+    pub travel: f64,
+}
+
+/// Times G-code text (the prime tower's, a tool change's) from `from`, as Orca's estimator does: its moves through the
+/// planner at the accelerations it sets (a full-circle `G2`/`G3` lift as the circle), its pauses (`G4`, `M400` with
+/// `S` or `P`, `SYNC T`). Tool changes themselves (`T…`) are timed by `toolchange.rs`.
+pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
+    let mut moves: Vec<Move> = Vec::new();
+    let mut at = from;
+    let mut start = at;
+    let mut feed = s.travel_speed;
+    let mut accel = f64::NAN;
+    let mut out = TextTime { secs: 0.0, extruding: 0.0, end: None, accel: None, mm: 0.0, travel: 0.0 };
+    let flush = |moves: &mut Vec<Move>, start: [f64; 3], out: &mut TextTime| {
+        let times = timing(moves, start, s);
+        for (m, t) in moves.iter().zip(&times) {
+            out.secs += t;
+            if matches!(m.kind, Kind::Extrude(_)) {
+                out.extruding += t;
+            }
+        }
+        moves.clear();
+    };
+    for line in text.lines() {
+        // Orca's estimator runs the moves the printer makes by itself too, which the G-code gives as comments
+        // (`;VG1 E4 F523`: the push after a filament change, the flush).
+        let line = line.strip_prefix(";V").filter(|l| l.starts_with("G1 ")).unwrap_or(line);
+        let code = line.split(';').next().unwrap_or("").trim();
+        let words: Vec<&str> = code.split_whitespace().collect();
+        let Some(&cmd) = words.first() else { continue };
+        let value = |letter: u8| -> Option<f64> {
+            words[1..].iter().find(|w| w.as_bytes().first() == Some(&letter)).and_then(|w| w[1..].parse().ok())
+        };
+        // A pause, and whether the planner waits for the moves before it (`G4 S0` and `SYNC T0` do, a bare `M400`
+        // doesn't on Orca's Marlin).
+        let (mut pause, mut sync) = (0.0, false);
+        match cmd {
+            "M204" => {
+                accel = value(b'S').unwrap_or(accel);
+                out.accel = Some(accel);
+            }
+            "G0" | "G1" => {
+                let mut to = at;
+                for (a, letter) in b"XYZ".iter().copied().enumerate() {
+                    if let Some(v) = value(letter) {
+                        to[a] = v;
+                    }
+                }
+                let e = value(b'E').unwrap_or(0.0);
+                feed = value(b'F').map_or(feed, |f| f / 60.0);
+                let xy = to[0] != at[0] || to[1] != at[1];
+                let kind = if xy {
+                    if e > 0.0 { Kind::Extrude(Role::PrimeTower) } else { Kind::Travel }
+                } else if to[2] != at[2] {
+                    Kind::Lift
+                } else {
+                    Kind::Retract
+                };
+                if xy && e > 0.0 {
+                    out.mm += e;
+                } else if xy {
+                    out.travel += (to[0] - at[0]).hypot(to[1] - at[1]);
+                }
+                if to != at || e != 0.0 {
+                    moves.push(Move { x: to[0], y: to[1], z: to[2], e, f: feed, accel, kind, width: 0.0, height: 0.0 });
+                }
+                if to != at {
+                    out.end = Some(to);
+                }
+                at = to;
+            }
+            "G2" | "G3" if value(b'P') == Some(1.0) => {
+                // A lift turning once round a point beside the nozzle.
+                let (i, j) = (value(b'I').unwrap_or(0.0), value(b'J').unwrap_or(0.0));
+                feed = value(b'F').map_or(feed, |f| f / 60.0);
+                let to = [at[0], at[1], value(b'Z').unwrap_or(at[2])];
+                moves.push(Move {
+                    x: to[0],
+                    y: to[1],
+                    z: to[2],
+                    e: 0.0,
+                    f: feed,
+                    accel,
+                    kind: Kind::Spiral { i, j },
+                    width: 0.0,
+                    height: 0.0,
+                });
+                if to != at {
+                    out.end = Some(to);
+                }
+                at = to;
+            }
+            "G4" | "M400" if value(b'S').is_some() || value(b'P').is_some() => {
+                (pause, sync) = (value(b'S').unwrap_or(0.0) + value(b'P').unwrap_or(0.0) / 1000.0, true);
+            }
+            "SYNC" if value(b'T').is_some() => (pause, sync) = (value(b'T').unwrap_or(0.0), true),
+            _ => {}
+        }
+        if sync {
+            flush(&mut moves, start, &mut out);
+            out.secs += pause;
+            start = at;
+        }
+    }
+    flush(&mut moves, start, &mut out);
+    out
+}
+
 /// "1h 2m 3s", "32m 36s", "5s": durations as Orca writes them (whole seconds, cut off rather than rounded).
 pub fn duration(seconds: f64) -> String {
     let total = seconds.max(0.0);
@@ -1711,8 +2188,40 @@ impl Stats {
             ));
         }
         let layers: Vec<String> = self.layer_times.iter().map(|t| format!("{t:.3}")).collect();
+        // With several filaments, each one's use (as Orca's statistics give them), the tool changes and the tower.
+        let mut colours = String::new();
+        if !self.filaments.is_empty() {
+            let uses: Vec<String> = self
+                .filaments
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    format!(
+                        "\n   {{\"id\": {}, \"length\": {:.2}, \"volume\": {:.3}, \"weight\": {:.4}, \"cost\": {:.2}, \"prime_tower\": {{\"volume\": {:.3}, \"weight\": {:.4}}}, \"flush\": {{\"volume\": {:.3}, \"weight\": {:.4}}}}}",
+                        i + 1,
+                        f.length,
+                        f.volume,
+                        f.weight,
+                        f.cost,
+                        f.tower,
+                        f.tower * f.density,
+                        f.flush,
+                        f.flush * f.density
+                    )
+                })
+                .collect();
+            let tower = self.tower.unwrap_or_default();
+            colours = format!(
+                "  \"filaments\": [{}\n  ],\n  \"tool_changes\": {},\n  \"prime_tower\": {{\"width\": {:.3}, \"depth\": {:.3}, \"brim_width\": {:.3}}},\n",
+                uses.join(","),
+                self.tool_changes,
+                tower[0],
+                tower[1],
+                tower[2]
+            );
+        }
         format!(
-            "{{\n \"generator\": \"{NAME} {VERSION}\",\n \"summary\": {{\n  \"time\": {:.3},\n  \"prepare_time\": {:.3},\n  \"model_time\": {:.3},\n  \"travel_time\": {:.3},\n  \"travel_distance\": {:.2},\n  \"retractions\": {},\n  \"layer_count\": {},\n  \"length\": {:.2},\n  \"volume\": {:.3},\n  \"weight\": {:.4},\n  \"filament_cost\": {:.2},\n  \"features\": {{{}\n  }}\n }},\n \"layer_times\": [{}]\n}}\n",
+            "{{\n \"generator\": \"{NAME} {VERSION}\",\n \"summary\": {{\n  \"time\": {:.3},\n  \"prepare_time\": {:.3},\n  \"model_time\": {:.3},\n  \"travel_time\": {:.3},\n  \"travel_distance\": {:.2},\n  \"retractions\": {},\n  \"layer_count\": {},\n  \"length\": {:.2},\n  \"volume\": {:.3},\n  \"weight\": {:.4},\n  \"filament_cost\": {:.2},\n{}  \"features\": {{{}\n  }}\n }},\n \"layer_times\": [{}]\n}}\n",
             self.total_time,
             self.prepare_time,
             self.model_time,
@@ -1724,6 +2233,7 @@ impl Stats {
             self.volume,
             self.weight,
             self.cost,
+            colours,
             features,
             layers.join(", ")
         )
@@ -1857,7 +2367,11 @@ mod tests {
             lifted: false,
             accel: f64::NAN,
             first_layer: false,
+            layer_height: 0.2,
             wipe: None,
+            speed: 0.0,
+            retracted_mm: 0.0,
+            prior: 0.0,
             overhang,
         };
         let p = |x: f64| geom::pt(geom::sc(x), 0);

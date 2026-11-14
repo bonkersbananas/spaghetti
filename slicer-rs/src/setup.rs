@@ -31,8 +31,8 @@ impl Default for Setup {
     }
 }
 
-/// Reads a setup. A setup this can't read is `Error::Setup`; one it can't slice yet (supports, more than one
-/// filament…) is `Error::Unsupported`, which says what.
+/// Reads a setup. A setup this can't read is `Error::Setup`; one it can't slice yet (tree supports, a raft…) is
+/// `Error::Unsupported`, which says what.
 pub fn read(text: &str) -> Result<Setup, Error> {
     let Some(Json::Object(mut root)) = json::parse(text) else { return Err(Error::Setup) };
     let mut object = |key: &str| match root.remove(key) {
@@ -54,15 +54,39 @@ pub fn read(text: &str) -> Result<Setup, Error> {
         None => Vec::new(),
         Some(_) => return Err(Error::Setup),
     };
-    // One filament for the plate's objects, as sliceSetup counts them; a plate that prints with more needs the
-    // AMS, a prime tower and flushing, which this doesn't do yet.
-    if filaments.len() > 1 {
-        return Err(Error::Unsupported("more than one filament"));
-    }
-    let colour = match root.get("colours") {
-        Some(Json::Array(list)) => list.first().and_then(Json::as_str).map(str::to_string),
-        _ => None,
+    let colours: Vec<String> = match root.get("colours") {
+        Some(Json::Array(list)) => list.iter().filter_map(Json::as_str).map(str::to_string).collect(),
+        _ => Vec::new(),
     };
+    let colour = colours.first().cloned();
+    // Several filaments (as many as sliceSetup counts for the plate's objects): each with the machine and process.
+    let palette = (filaments.len() > 1).then(|| {
+        let manual = |map: &BTreeMap<String, Json>| -> Option<Vec<usize>> {
+            let mode = map.get("filament_map_mode").and_then(|v| match v {
+                Json::Array(a) => a.first().and_then(Json::as_str),
+                other => other.as_str(),
+            });
+            if mode != Some("Manual") {
+                return None;
+            }
+            let list = match map.get("filament_map")? {
+                Json::Array(a) => a.iter().filter_map(Json::as_str).filter_map(|v| v.parse::<usize>().ok()).collect(),
+                other => other.as_str()?.split(',').filter_map(|v| v.trim().parse::<usize>().ok()).collect::<Vec<_>>(),
+            };
+            Some(list.into_iter().map(|e| e.max(1) - 1).collect())
+        };
+        let manual_map = manual(&process).or_else(|| manual(&machine));
+        let profiles = filaments
+            .iter()
+            .map(|f| Arc::new(Profile::over_x2d(machine.clone(), process.clone(), f.clone())))
+            .collect();
+        let colours = (0..filaments.len())
+            .map(|i| colours.get(i).cloned().unwrap_or_else(|| crate::filaments::stand_in(i).to_string()))
+            .collect();
+        // The tower goes where the setup puts it (the app places it), else where the app would.
+        let place_tower = !(process.contains_key("wipe_tower_x") && process.contains_key("wipe_tower_y"));
+        Arc::new(crate::filaments::Palette { profiles, colours, manual_map, place_tower })
+    });
     let scale = match slicing.get("scale") {
         Some(Json::Number(n)) if *n > 0.0 => *n,
         Some(Json::Number(_)) | Some(_) => return Err(Error::Setup),
@@ -70,7 +94,8 @@ pub fn read(text: &str) -> Result<Setup, Error> {
     };
     let filament = filaments.into_iter().next().unwrap_or_default();
     let profile = Arc::new(Profile::over_x2d(machine, process, filament));
-    let settings = Settings::from_profile(profile, colour.as_deref());
+    let mut settings = Settings::from_profile(profile, colour.as_deref());
+    settings.palette = palette;
     if let Some(what) = settings.unsupported() {
         return Err(Error::Unsupported(what));
     }
@@ -164,7 +189,10 @@ mod tests {
         assert_eq!(refused(r#"{"process": {"spiral_mode": "1"}}"#), Some(Error::Unsupported("spiral vase mode")));
         // A raft prints with supports off too.
         assert_eq!(refused(r#"{"process": {"raft_layers": "3"}}"#), Some(Error::Unsupported("a raft")));
-        assert_eq!(refused(r#"{"filaments": [{}, {}]}"#), Some(Error::Unsupported("more than one filament")));
+        // Several filaments slice (filaments.rs, toolchange.rs).
+        assert!(
+            read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))
+        );
         assert_eq!(refused("not json"), Some(Error::Setup));
         assert_eq!(refused(r#"{"process": []}"#), Some(Error::Setup));
         assert_eq!(refused(r#"{"slicing": {"scale": 0}}"#), Some(Error::Setup));

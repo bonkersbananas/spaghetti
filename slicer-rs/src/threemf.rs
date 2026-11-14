@@ -12,6 +12,11 @@ pub struct Model {
     pub meshes: Vec<Mesh>,
     /// A Bambu Studio or Orca project: its objects sit where its plate has them.
     pub project: bool,
+    /// Each mesh's filament (0-based), as a project gives it (its object's `extruder`, else its first part's, as the
+    /// app counts them); 0 otherwise.
+    pub filaments: Vec<usize>,
+    /// Whether an object's parts print in different filaments, which this slicer can't do yet.
+    pub mixed_parts: bool,
 }
 
 type Matrix = [f64; 12];
@@ -159,6 +164,10 @@ fn unit_scale(text: &str) -> f64 {
 struct Info {
     name: Option<String>,
     skip_parts: Vec<String>,
+    /// The object's filament, 1-based.
+    extruder: Option<usize>,
+    /// Whether its parts name different filaments.
+    mixed: bool,
 }
 
 pub fn read(bytes: &[u8]) -> Result<Model, Error> {
@@ -202,7 +211,23 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                 .filter(|t| attr(t, "subtype").is_some_and(|s| s != "normal_part"))
                 .filter_map(|t| attr(t, "id").map(str::to_string))
                 .collect();
-            info.insert(id, Info { name, skip_parts });
+            let extruder_of = |text: &str| {
+                tags(text, "metadata")
+                    .find(|t| attr(t, "key") == Some("extruder"))
+                    .and_then(|t| attr(t, "value"))
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+            };
+            let own = extruder_of(before_parts);
+            // Each model part's filament: its own, else the object's.
+            let parts: Vec<Option<usize>> = block
+                .split("<part")
+                .skip(1)
+                .filter(|part| attr(part, "subtype").is_none_or(|s| s == "normal_part"))
+                .map(|part| extruder_of(part).or(own))
+                .collect();
+            let extruder = own.or_else(|| parts.iter().flatten().next().copied());
+            let mixed = parts.iter().any(|p| p.unwrap_or(1) != parts[0].unwrap_or(1));
+            info.insert(id, Info { name, skip_parts, extruder, mixed });
         }
         if let Some(start) = text.find("<plate>") {
             let end = text[start..].find("</plate>").map(|e| start + e).unwrap_or(text.len());
@@ -221,6 +246,8 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         .map(|t| (attr(t, "objectid").unwrap_or("").to_string(), matrix(attr(t, "transform"))))
         .collect();
     let mut meshes = Vec::new();
+    let mut filaments = Vec::new();
+    let mut mixed_parts = false;
     for (id, transform) in items {
         if plate_objects.as_ref().is_some_and(|ids| !ids.contains(&id)) {
             continue;
@@ -276,11 +303,13 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
             .or(def_name)
             .unwrap_or_else(|| format!("Object {}", meshes.len() + 1));
         meshes.push(Mesh { name, vertices, triangles }.welded());
+        filaments.push(item_info.and_then(|i| i.extruder).map_or(0, |e| e.max(1) - 1));
+        mixed_parts |= item_info.is_some_and(|i| i.mixed);
     }
     if meshes.is_empty() {
         return Err(Error::NoModel);
     }
-    Ok(Model { meshes, project })
+    Ok(Model { meshes, project, filaments, mixed_parts })
 }
 
 fn det(m: &Matrix) -> f64 {

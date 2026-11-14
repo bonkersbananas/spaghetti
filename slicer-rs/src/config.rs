@@ -12,6 +12,8 @@ use std::sync::Arc;
 pub struct Settings {
     /// The presets these come from; the printer's start and end G-code are filled from them too.
     pub profile: Arc<Profile>,
+    /// The plate's filaments when there are several (`filaments.rs`); None for one.
+    pub palette: Option<Arc<crate::filaments::Palette>>,
 
     // The machine.
     pub printer: String,
@@ -437,6 +439,7 @@ impl Settings {
             .or_else(|| p.list("filament_colour").first().filter(|c| !c.is_empty()).map(|c| c.to_string()))
             .unwrap_or_else(|| DEFAULT_COLOUR.to_string());
         Settings {
+            palette: None,
             printer: Profile::name(&p.machine, "printer_settings_id"),
             bed,
             max_height: p.float("printable_height"),
