@@ -1,5 +1,5 @@
-import { OPEN_LINK_MINUTES, type OpenPart } from "../shared/open-link.ts";
 import { toBase64Url } from "../shared/base64url.ts";
+import { OPEN_LINK_MINUTES, type OpenPart } from "../shared/open-link.ts";
 import { secretKeySource } from "./webhooks/secrets.ts";
 
 /**
