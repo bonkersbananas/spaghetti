@@ -3,16 +3,21 @@
 //!
 //! - **Nozzles.** The X2D has two extruders, each with one nozzle: the left, direct-drive one (extruder 0, the
 //!   presets' "Direct Drive Standard" variant) and the right, Bowden one (extruder 1, "Bowden Standard"). Orca's
-//!   default (`filament_map_mode` "Auto For Flush") groups the filaments so that changes flush least: with two
-//!   filaments each gets its own nozzle, filament 1 the right one and filament 2 the left (what Orca's enumeration
-//!   of the groupings finds first), so nothing flushes and every change is a change of nozzle. A setup may instead
-//!   say which nozzle each filament uses (`filament_map_mode` "Manual" with `filament_map`), as Orca's does.
+//!   default (`filament_map_mode` "Auto For Flush", its `FilamentGroup`) weighs every way to share the filaments
+//!   out: first by keeping each on a nozzle that reaches all its objects (the right one prints from x = 20.5 mm and
+//!   up to 256 mm), then by each nozzle's AMS holding its filaments (one 4-slot unit, as Orca's command line
+//!   assumes), then by the flush its layers need, counted as time, plus the time loading and unloading takes; the
+//!   larger group then goes on the left nozzle. With two filaments each gets its own nozzle, filament 1 the right
+//!   one and filament 2 the left, so nothing flushes and every change is a change of nozzle. A setup may instead say
+//!   which nozzle each filament uses (`filament_map_mode` "Manual" with `filament_map`), as Orca's does.
 //! - **Settings per nozzle.** Every per-variant list in the presets (speeds, accelerations, retraction, the
 //!   filament's volumetric speed and temperatures…) holds one value per extruder variant; a filament prints with the
 //!   values of its nozzle's variant (Orca's `update_values_to_printer_extruders`).
 //! - **Flushing.** A change of filament within one nozzle flushes the old one out through the printer's own chute
 //!   (the change G-code's `M620.10 … L<length>`): Orca's volume for the pair of colours (`FlushVolCalc`, with the
-//!   measured table of the nozzle's `nozzle_flush_dataset`) times the nozzle's `flush_multiplier`, at least 100 mm³.
+//!   measured table of the nozzle's `nozzle_flush_dataset`, which for the right nozzle comes to the single-nozzle
+//!   one) times the nozzle's `flush_multiplier`, at least 100 mm³. Its first nozzle volume counts to the filament it
+//!   pushes out, the rest to the new one, as Orca's G-code processor counts them.
 
 use crate::config::Settings;
 use crate::json::Json;
@@ -57,6 +62,12 @@ fn extruder_variant(p: &Profile, extruder: usize) -> String {
     let kind = p.list("extruder_type").get(extruder).copied().unwrap_or("Direct Drive").to_string();
     let volume = p.list("default_nozzle_volume_type").get(extruder).copied().unwrap_or("Standard").to_string();
     format!("{kind} {volume}")
+}
+
+/// mm³ an extruder's nozzle holds (`nozzle_volume` of its variant).
+pub fn nozzle_volume(p: &Profile, extruder: usize) -> f64 {
+    let (index, _) = variant_index(&p.machine, "printer_extruder_variant", &extruder_variant(p, extruder));
+    p.list("nozzle_volume").get(index).and_then(|v| v.parse().ok()).unwrap_or(0.0)
 }
 
 /// How many extruders the printer has.
@@ -303,10 +314,97 @@ pub fn settings_for(palette: &Palette, extruder_of: &[usize]) -> Vec<Settings> {
         .collect()
 }
 
+/// The used filaments each extruder can't print, as Orca hands them to its grouping (`collect_unprintable_limits`):
+/// by the filament's `filament_printable` bits (the first extruder whose bit is clear), and where an object in it
+/// (`objects`: its filament, how far its slices reach, min x, min y, max x, max y, and its top) reaches outside
+/// the extruder's `extruder_printable_area` or above its `extruder_printable_height` (Orca's geometric
+/// unprintables; the X2D's areas are rectangles, so how far the slices reach tells). Of each kind, a filament
+/// neither extruder can print is left out, and a filament the kinds put on different extruders keeps the first.
+pub fn unprintable(palette: &Palette, used: &[usize], objects: &[(usize, [f64; 4], f64)]) -> Vec<Vec<usize>> {
+    let p = &palette.profiles[0];
+    let k = extruders(p);
+    let mut physical = vec![Vec::new(); 2];
+    let mut geometric = vec![Vec::new(); 2];
+    if k < 2 {
+        return physical;
+    }
+    for &f in used {
+        let bits = palette.profiles.get(f).and_then(|q| q.list("filament_printable").first()?.parse::<i64>().ok());
+        if let Some(e) = (0..k.min(32)).find(|&e| bits.unwrap_or(3) >> e & 1 == 0) {
+            physical.resize(physical.len().max(e + 1), Vec::new());
+            physical[e].push(f);
+        }
+    }
+    let areas: Vec<Option<[f64; 4]>> = p
+        .list("extruder_printable_area")
+        .iter()
+        .map(|area| {
+            let pts: Vec<[f64; 2]> = area
+                .split(',')
+                .filter_map(|c| {
+                    let (x, y) = c.split_once('x')?;
+                    Some([x.trim().parse().ok()?, y.trim().parse().ok()?])
+                })
+                .collect();
+            (!pts.is_empty()).then(|| {
+                pts.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, q| {
+                    [b[0].min(q[0]), b[1].min(q[1]), b[2].max(q[0]), b[3].max(q[1])]
+                })
+            })
+        })
+        .collect();
+    let heights: Vec<f64> = p.list("extruder_printable_height").iter().filter_map(|h| h.parse().ok()).collect();
+    for &(f, b, top) in objects {
+        for e in 0..k {
+            let outside = areas
+                .get(e)
+                .copied()
+                .flatten()
+                .is_some_and(|a| b[0] < a[0] || b[1] < a[1] || b[2] > a[2] || b[3] > a[3]);
+            let above = heights.get(e).is_some_and(|&h| top > h);
+            if outside || above {
+                geometric.resize(geometric.len().max(e + 1), Vec::new());
+                geometric[e].push(f);
+            }
+        }
+    }
+    let mut limits = vec![Vec::new(); 2];
+    let mut placed: Vec<usize> = Vec::new();
+    for mut kind in [physical, geometric] {
+        kind.truncate(2);
+        kind.resize(2, Vec::new());
+        for set in &mut kind {
+            set.sort_unstable();
+            set.dedup();
+        }
+        let both: Vec<usize> = kind[0].iter().copied().filter(|f| kind[1].contains(f)).collect();
+        for (e, set) in kind.iter().enumerate() {
+            for &f in set.iter().filter(|f| !both.contains(f)) {
+                if !placed.contains(&f) {
+                    placed.push(f);
+                    limits[e].push(f);
+                }
+            }
+        }
+    }
+    for set in &mut limits {
+        set.sort_unstable();
+    }
+    limits
+}
+
 /// Which extruder each filament prints with (0-based), as Orca groups them: the setup's own map when it gives one,
-/// else Orca's "Auto For Flush" grouping of the filaments the plate uses (`used`, ascending). Filaments the plate
-/// doesn't use go on the master extruder (`master_extruder_id`, the left one).
-pub fn group(palette: &Palette, used: &[usize], flush: &Flush) -> Vec<usize> {
+/// else Orca's "Auto For Flush" grouping of the filaments the plate uses (`used`, ascending), whose `layers` (each
+/// layer's filaments, ascending) it weighs, keeping each filament off the extruder that can't print it
+/// (`unprintable`, by extruder) where it can. Filaments the plate doesn't use go on the master extruder
+/// (`master_extruder_id`, the left one).
+pub fn group(
+    palette: &Palette,
+    layers: &[Vec<usize>],
+    used: &[usize],
+    flush: &Flush,
+    unprintable: &[Vec<usize>],
+) -> Vec<usize> {
     let n = palette.profiles.len();
     let p = &palette.profiles[0];
     let k = extruders(p);
@@ -318,14 +416,257 @@ pub fn group(palette: &Palette, used: &[usize], flush: &Flush) -> Vec<usize> {
     if k < 2 || used.len() < 2 {
         return map;
     }
-    // Orca enumerates every grouping (filament i's nozzle is digit i of the count in base k) and keeps the first
-    // with the least flushing; with as many nozzles as filaments that is the first that puts each on its own, and
-    // the first such count gives the first filament the last nozzle.
-    let total = (k as u64).pow(used.len() as u32);
-    let mut best: Option<(f64, u64)> = None;
+    // Each used filament's extruder it can't go on, if any.
+    let banned: Vec<Option<usize>> = used.iter().map(|f| unprintable.iter().position(|set| set.contains(f))).collect();
+    let labels = flush_group(p, layers, used, flush, k, master, &banned)
+        .unwrap_or_else(|| pair_group(used, flush, k, master, &banned));
+    for (&f, &l) in used.iter().zip(&labels) {
+        map[f] = l;
+    }
+    map
+}
+
+/// Orca's flush counted in seconds (FilamentGroup's `FLUSH_VOLUME_TO_SCORE`: mm³ to grams at 1.26 g/cm³, 180 s a
+/// gram, twice).
+const FLUSH_SECONDS: f64 = 1.26 * 180.0 * 2.0 / 1000.0;
+/// What Orca adds to the score of a grouping that leaves the master extruder fewer than half of the filaments.
+const MASTER_SHORT: f64 = 10.0;
+/// Orca weighs every grouping while there are fewer than this many (else it clusters them).
+const GROUPINGS: u64 = 10_000;
+/// The filaments an extruder's AMS holds as Orca's command line has it: one 4-slot unit.
+const AMS_SLOTS: usize = 4;
+
+/// Orca's grouping for least flushing (FilamentGroup's `calc_group_by_enum`, then `apply_master_extruder_preference`):
+/// of every assignment of the used filaments to the `k` nozzles (filament `i`'s nozzle is digit `i` of a count in
+/// base `k`), the first of the best: those that put the most filaments on a nozzle that can print them (`banned`),
+/// then those whose nozzles' AMS hold their filaments (4 each), then the lowest `score`, raised by 10 where the
+/// master extruder gets fewer than half of the filaments. On two nozzles the larger group then goes on the master
+/// extruder, unless a filament can't print where that would put it. None where Orca would cluster instead (14
+/// filaments or more on two nozzles).
+fn flush_group(
+    p: &Profile,
+    layers: &[Vec<usize>],
+    used: &[usize],
+    flush: &Flush,
+    k: usize,
+    master: usize,
+    banned: &[Option<usize>],
+) -> Option<Vec<usize>> {
+    let n = used.len();
+    let total = (k as u64).checked_pow(n as u32).filter(|&t| t < GROUPINGS)?;
+    if used.iter().any(|&f| f >= 64) {
+        return None;
+    }
+    // Orca's command line groups for one 4-slot AMS on each extruder (`extruder_ams_count` "1#0|4#1").
+    let holds = vec![AMS_SLOTS; k];
+    let times = (p.float("machine_load_filament_time"), p.float("machine_unload_filament_time"));
+    let mut best: Option<((usize, bool), f64, Vec<usize>)> = None;
+    let mut labels = vec![0; n];
+    let mut count = vec![0; k];
     for mask in 0..total {
         let mut num = mask;
-        let mut labels = vec![0; used.len()];
+        count.fill(0);
+        for l in &mut labels {
+            *l = (num % k as u64) as usize;
+            num /= k as u64;
+            count[*l] += 1;
+        }
+        let placeable = labels.iter().zip(banned).filter(|(l, b)| **b != Some(**l)).count();
+        let prefer = (placeable, count.iter().zip(&holds).all(|(c, h)| c <= h));
+        // One less preferred than the best so far can't win, whatever its score.
+        if best.as_ref().is_some_and(|(f, _, _)| prefer < *f) {
+            continue;
+        }
+        let mut s = score(layers, used, &labels, flush, k, times);
+        if master < k && count[master] < n.div_ceil(2) {
+            s += MASTER_SHORT;
+        }
+        if best.as_ref().is_none_or(|(f, b, _)| prefer > *f || (prefer == *f && s < *b)) {
+            best = Some((prefer, s, labels.clone()));
+        }
+    }
+    let (_, _, mut labels) = best?;
+    if k == 2 && master < 2 {
+        let other = 1 - master;
+        let on = |g: usize| labels.iter().filter(|&&l| l == g).count();
+        let (m, o) = (on(master), on(other));
+        // Orca swaps the groups unless a filament can't print on the other extruder, or each group fits its own
+        // extruder's AMS and not the other's.
+        let blocked = labels.iter().zip(banned).any(|(&l, &b)| b == Some(if l == master { other } else { master }));
+        let stuck = holds[other] >= o && holds[master] >= m && (holds[other] < m || holds[master] < o);
+        if o > m && !blocked && !stuck {
+            for l in &mut labels {
+                *l = if *l == master { other } else { master };
+            }
+        }
+    }
+    Some(labels)
+}
+
+/// Orca's score of a grouping, in seconds (FilamentGroup's `full_evaluate`, as it runs for the X2D): the flush its
+/// layers need, each nozzle printing its filaments in the order that flushes least from the one it holds (no look
+/// ahead), plus a change's time on the order the layers print in, unloading what a nozzle holds and loading the next
+/// (`simulate_filament_change_time` with no AMS preloading). Orca adds each layer's flush to a whole number.
+fn score(layers: &[Vec<usize>], used: &[usize], labels: &[usize], flush: &Flush, k: usize, times: (f64, f64)) -> f64 {
+    let mut nozzle_of = [usize::MAX; 64];
+    for (&f, &l) in used.iter().zip(labels) {
+        nozzle_of[f] = l;
+    }
+    let mut flushed = 0i32;
+    // The orders found, by a nozzle's filaments on a layer (as a set) and the one it held before: Orca's cache, which
+    // hands out the first order found for a set whatever order the layer lists it in. Each layer's order on each
+    // nozzle is an index into it.
+    let mut found: Vec<(u64, Option<usize>, Vec<usize>, f32)> = Vec::new();
+    let mut orders: Vec<Vec<usize>> = vec![Vec::new(); k];
+    let mut nozzles = Vec::new();
+    let mut mine = Vec::new();
+    for (e, orders) in orders.iter_mut().enumerate() {
+        if !labels.contains(&e) {
+            continue;
+        }
+        nozzles.push(e);
+        let mut cost = 0i32;
+        let mut held = None;
+        for layer in layers {
+            let set = layer.iter().filter(|&&f| nozzle_of[f] == e).fold(0u64, |m, &f| m | 1 << f);
+            let i = match found.iter().position(|x| x.0 == set && x.1 == held) {
+                Some(i) => i,
+                None => {
+                    mine.clear();
+                    mine.extend(layer.iter().copied().filter(|&f| nozzle_of[f] == e));
+                    let (order, c) = least_flush_order(flush, e, &mine, held);
+                    found.push((set, held, order, c));
+                    found.len() - 1
+                }
+            };
+            cost = (cost as f32 + found[i].3) as i32;
+            if let Some(&f) = found[i].2.last() {
+                held = Some(f);
+            }
+            orders.push(i);
+        }
+        flushed += cost;
+    }
+    // A change's halves as Orca's time model has them, in single precision.
+    let half = |t: f64| (t / 2.0) as f32;
+    let load = (times.0 as f32 - half(times.0)) + half(times.0);
+    let unload = half(times.1) + (times.1 as f32 - half(times.1));
+    let mut seconds = 0.0f64;
+    let mut held: Vec<Option<usize>> = vec![None; k];
+    // Each layer's nozzles from the one that ended the layer below (Orca counts round from it as from an index).
+    let mut last = 0;
+    for layer in 0..layers.len() {
+        let mut ended = last;
+        for i in 0..nozzles.len() {
+            let e = nozzles[(last + i) % nozzles.len()];
+            let order = &found[orders[e][layer]].2;
+            for &f in order {
+                if held[e] != Some(f) {
+                    if held[e].is_some() {
+                        seconds += f64::from(unload);
+                    }
+                    seconds += f64::from(load);
+                    held[e] = Some(f);
+                }
+            }
+            if !order.is_empty() {
+                ended = e;
+            }
+        }
+        last = ended;
+    }
+    f64::from(flushed) * FLUSH_SECONDS + seconds
+}
+
+/// One nozzle's filaments on a layer in the order that flushes least from `start` (the filament it holds), and that
+/// flush: Orca's `get_extruders_order` without looking a layer ahead, the shortest path through them all.
+pub fn least_flush_order(flush: &Flush, e: usize, current: &[usize], start: Option<usize>) -> (Vec<usize>, f32) {
+    let w = |a: usize, b: usize| flush.volume(e, a, b) as f32;
+    match current {
+        [] => return (Vec::new(), 0.0),
+        [f] => return (vec![*f], start.map_or(0.0, |s| w(s, *f))),
+        _ => {}
+    }
+    let mut all: Vec<usize> = current.to_vec();
+    let added = match start {
+        Some(s) => match all.iter().position(|&f| f == s) {
+            Some(i) => {
+                all.swap(0, i);
+                false
+            }
+            None => {
+                all.insert(0, s);
+                true
+            }
+        },
+        None => false,
+    };
+    let start_id = start.unwrap_or(all[0]);
+    let n = all.len();
+    let states = 1usize << n;
+    // The least flush of a path through a state's filaments ending at each, and the filament before it there.
+    let mut cache = vec![f32::MAX; states * n];
+    let mut prev = vec![usize::MAX; states * n];
+    cache[n] = 0.0;
+    for state in 0..states {
+        if state & 1 == 0 {
+            continue;
+        }
+        for target in 0..n {
+            if state >> target & 1 == 0 {
+                continue;
+            }
+            for mid in 0..n {
+                if state >> mid & 1 == 0 {
+                    continue;
+                }
+                let from = state - (1 << target);
+                if cache[from * n + mid] == f32::MAX {
+                    continue;
+                }
+                let t = cache[from * n + mid] + w(all[mid], all[target]);
+                if cache[state * n + target] > t {
+                    cache[state * n + target] = t;
+                    prev[state * n + target] = mid;
+                }
+            }
+        }
+    }
+    let full = states - 1;
+    let mut cost = f32::MAX;
+    let mut found = 0.0;
+    let mut dst = 0;
+    for d in 0..n {
+        if all[d] != start_id && cost > cache[full * n + d] {
+            cost = cache[full * n + d];
+            found = cost;
+            dst = d;
+        }
+    }
+    let mut path = Vec::new();
+    let (mut state, mut point) = (full, dst);
+    while point != usize::MAX {
+        path.push(all[point]);
+        let mid = prev[state * n + point];
+        state -= 1 << point;
+        point = mid;
+    }
+    if added {
+        path.pop();
+    }
+    path.reverse();
+    (path, found)
+}
+
+/// Where Orca would cluster the filaments rather than weigh every grouping (k-medoids, not ported): of every
+/// assignment, the first that flushes least between each pair of filaments on a nozzle, each filament kept off the
+/// extruder that can't print it and the master extruder preferred to take at least half of them.
+fn pair_group(used: &[usize], flush: &Flush, k: usize, master: usize, banned: &[Option<usize>]) -> Vec<usize> {
+    let total = (k as u64).pow(used.len() as u32);
+    let mut best: Option<(f64, u64)> = None;
+    let mut labels = vec![0; used.len()];
+    for mask in 0..total {
+        let mut num = mask;
         for l in &mut labels {
             *l = (num % k as u64) as usize;
             num /= k as u64;
@@ -338,39 +679,54 @@ pub fn group(palette: &Palette, used: &[usize], flush: &Flush) -> Vec<usize> {
                 }
             }
         }
-        // Orca prefers the master extruder to take at least half of the filaments.
-        let on_master = labels.iter().filter(|&&l| l == master).count();
-        if on_master < used.len().div_ceil(2) {
+        if labels.iter().filter(|&&l| l == master).count() < used.len().div_ceil(2) {
             cost += 1e-3;
         }
+        cost += 1e9 * labels.iter().zip(banned).filter(|(l, b)| **b == Some(**l)).count() as f64;
         if best.is_none_or(|(c, _)| cost < c) {
             best = Some((cost, mask));
         }
     }
-    if let Some((_, mask)) = best {
-        let mut num = mask;
-        for &f in used {
-            map[f] = (num % k as u64) as usize;
+    let mut num = best.map_or(0, |b| b.1);
+    used.iter()
+        .map(|_| {
+            let l = (num % k as u64) as usize;
             num /= k as u64;
-        }
-    }
-    map
+            l
+        })
+        .collect()
 }
 
 /// How much a change of filament flushes, mm³, per extruder: Orca's volume for the colours times the extruder's
 /// flush multiplier.
 #[derive(Clone, Debug, Default)]
 pub struct Flush {
-    /// [extruder][from][to].
+    /// [extruder][from][to], before the multiplier.
     pub volumes: Vec<Vec<Vec<f64>>>,
+    /// Each extruder's flush multiplier.
+    pub multipliers: Vec<f64>,
 }
 
 /// Orca's least flush it writes for a change that flushes at all (`g_min_purge_volume`).
 pub const MIN_PURGE_VOLUME: f64 = 100.0;
 
 impl Flush {
-    pub fn volume(&self, extruder: usize, from: usize, to: usize) -> f64 {
+    fn raw(&self, extruder: usize, from: usize, to: usize) -> f64 {
         self.volumes.get(extruder).and_then(|m| m.get(from)).and_then(|r| r.get(to)).copied().unwrap_or(0.0)
+    }
+
+    fn multiplier(&self, extruder: usize) -> f64 {
+        self.multipliers.get(extruder).copied().unwrap_or(1.0)
+    }
+
+    /// What Orca's tool ordering weighs a change by: the volume times the multiplier, kept in single precision.
+    pub fn volume(&self, extruder: usize, from: usize, to: usize) -> f64 {
+        f64::from((self.raw(extruder, from, to) * self.multiplier(extruder)) as f32)
+    }
+
+    /// What Orca's tower plans to flush for a change: the same product, taken in single precision.
+    pub fn purge(&self, extruder: usize, from: usize, to: usize) -> f32 {
+        self.raw(extruder, from, to) as f32 * self.multiplier(extruder) as f32
     }
 
     /// The volumes for `palette`'s colours, as Orca's command line works them out when the project gives none.
@@ -387,22 +743,24 @@ impl Flush {
             m.resize(k, 1.0);
             m
         };
+        // Orca's command line names each extruder's variant by its type and the config's `nozzle_volume_type`,
+        // which the presets leave at its default of one value: it reads the second extruder's past the end, finds
+        // no variant for it and takes the dataset from before the start of the list, which comes to 0, the
+        // single-nozzle table (seen in native Orca 2.5's matrices).
+        let volume_types = p.list("nozzle_volume_type");
+        let volume_types = if volume_types.is_empty() { vec!["Standard"] } else { volume_types };
         let datasets: Vec<i32> = (0..k)
             .map(|e| {
-                let name = extruder_variant(p, e);
-                let (index, _) = variant_index(&p.machine, "printer_extruder_variant", &name);
+                let Some(volume) = volume_types.get(e) else { return 0 };
+                let kind = p.list("extruder_type").get(e).copied().unwrap_or("Direct Drive");
+                let volume = if *volume == "Hybrid" { "Standard" } else { volume };
+                let (index, _) = variant_index(&p.machine, "printer_extruder_variant", &format!("{kind} {volume}"));
                 p.list("nozzle_flush_dataset").get(index).and_then(|v| v.parse().ok()).unwrap_or(0)
             })
             .collect();
         // The least flush is the nozzle's volume (Orca's `get_min_flush_volumes`, without a long retraction when
         // cutting, which the X2D's presets leave off).
-        let min_flush: Vec<i32> = (0..k)
-            .map(|e| {
-                let name = extruder_variant(p, e);
-                let (index, _) = variant_index(&p.machine, "printer_extruder_variant", &name);
-                p.list("nozzle_volume").get(index).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as i32
-            })
-            .collect();
+        let min_flush: Vec<i32> = (0..k).map(|e| nozzle_volume(p, e) as i32).collect();
         let rgb: Vec<[u8; 4]> = palette.colours.iter().map(|c| parse_colour(c)).collect();
         let volumes = (0..k)
             .map(|e| {
@@ -414,14 +772,14 @@ impl Flush {
                                     return 0.0;
                                 }
                                 let (a, b) = (rgb[from], rgb[to]);
-                                calc_flush_vol(a, b, min_flush[e], datasets[e]) as f64 * multipliers[e]
+                                f64::from(calc_flush_vol(a, b, min_flush[e], datasets[e]))
                             })
                             .collect()
                     })
                     .collect()
             })
             .collect();
-        Flush { volumes }
+        Flush { volumes, multipliers }
     }
 }
 
@@ -515,6 +873,7 @@ fn rgb_to_hsv(c: [f32; 3]) -> (f32, f32, f32) {
     (h, s, v)
 }
 
+const FLUSH_STANDARD: &str = include_str!("../profiles/x2d/flush_data_standard.txt");
 const FLUSH_DUAL_STANDARD: &str = include_str!("../profiles/x2d/flush_data_dual_standard.txt");
 const FLUSH_DUAL_HIGHFLOW: &str = include_str!("../profiles/x2d/flush_data_dual_highflow.txt");
 
@@ -531,10 +890,11 @@ fn hex3(s: &str) -> Option<[u8; 3]> {
 
 fn table(dataset: i32) -> Option<&'static Table> {
     use std::sync::OnceLock;
-    static TABLES: [OnceLock<Option<Table>>; 2] = [OnceLock::new(), OnceLock::new()];
+    static TABLES: [OnceLock<Option<Table>>; 3] = [OnceLock::new(), OnceLock::new(), OnceLock::new()];
     let (slot, text) = match dataset {
-        1 => (&TABLES[0], FLUSH_DUAL_STANDARD),
-        2 => (&TABLES[1], FLUSH_DUAL_HIGHFLOW),
+        0 => (&TABLES[0], FLUSH_STANDARD),
+        1 => (&TABLES[1], FLUSH_DUAL_STANDARD),
+        2 => (&TABLES[2], FLUSH_DUAL_HIGHFLOW),
         _ => return None,
     };
     slot.get_or_init(|| {
@@ -653,7 +1013,35 @@ mod tests {
     fn two_filaments_each_get_a_nozzle_the_first_the_right_one() {
         let pal = palette(&["#F2754E", "#4F7FC7"]);
         let flush = Flush::of(&pal);
-        assert_eq!(group(&pal, &[0, 1], &flush), vec![1, 0]);
+        let layers = vec![vec![0, 1]; 10];
+        assert_eq!(group(&pal, &layers, &[0, 1], &flush, &[vec![], vec![]]), vec![1, 0]);
+        // Unless the right nozzle can't print the first: then they swap.
+        assert_eq!(group(&pal, &layers, &[0, 1], &flush, &[vec![], vec![0]]), vec![0, 1]);
+    }
+
+    #[test]
+    fn the_right_nozzle_flushes_by_the_single_nozzle_table() {
+        // Native Orca 2.5 on the X2D, green to grey and back: the left nozzle by the dual nozzle table (330 and 210
+        // mm³, before its 0.3), the right one by the single nozzle table, where Orca's command line ends up for it
+        // (206 and 56 mm³ measured, plus the nozzle's 92).
+        let pal = palette(&["#00AE42", "#8E9089"]);
+        let flush = Flush::of(&pal);
+        assert_eq!((flush.raw(0, 0, 1), flush.raw(0, 1, 0)), (330.0, 210.0));
+        assert_eq!((flush.raw(1, 0, 1), flush.raw(1, 1, 0)), (298.0, 148.0));
+    }
+
+    #[test]
+    fn a_filament_whose_object_the_right_nozzle_cant_reach_stays_left() {
+        let pal = palette(&["#F2754E", "#4F7FC7", "#FFFFFF"]);
+        // The right nozzle prints from x = 20.5 mm and up to 256 mm high.
+        let objects = [
+            (0, [20.0, 20.0, 35.0, 35.0], 10.0),
+            (1, [50.0, 20.0, 65.0, 35.0], 10.0),
+            (2, [80.0, 20.0, 95.0, 35.0], 258.0),
+        ];
+        assert_eq!(unprintable(&pal, &[0, 1, 2], &objects), vec![vec![], vec![0, 2]]);
+        // Touching the edge is no reach past it.
+        assert_eq!(unprintable(&pal, &[0], &[(0, [20.5, 20.0, 35.0, 35.0], 10.0)]), vec![vec![], vec![]]);
     }
 
     #[test]
@@ -676,6 +1064,7 @@ mod tests {
         let flush = Flush::of(&pal);
         assert!((flush.volume(1, 0, 1) - 289.0).abs() < 1e-9, "{:?}", flush.volumes);
         assert!((flush.volume(1, 1, 0) - 423.0).abs() < 1e-9);
-        assert!((flush.volume(0, 1, 0) - 126.9).abs() < 1e-6);
+        assert_eq!(flush.volume(0, 1, 0), f64::from(126.9f32));
+        assert_eq!(flush.purge(0, 1, 0), 423.0f32 * 0.3f32);
     }
 }

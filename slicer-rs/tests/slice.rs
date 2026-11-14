@@ -1197,6 +1197,81 @@ fn several_filaments_need_each_models_filament() {
     assert_eq!(out.stats.tool_changes, out.stats.layers);
 }
 
+/// 15 mm blocks, each `heights[k]` mm tall in filament `k` (in `colours`), four to a row from (`x0`, 20) 30 mm apart,
+/// sliced where they stand with the prime tower at (150, 90).
+fn blocks_in_filaments(x0: f32, colours: &[&str], heights: &[f32]) -> spaghetti_slicer::Output {
+    let filaments = vec!["{}"; colours.len()].join(", ");
+    let colours = colours.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
+    let setup = format!(
+        r#"{{"filaments": [{filaments}], "colours": [{colours}],
+            "process": {{"wipe_tower_x": ["150"], "wipe_tower_y": ["90"]}}}}"#
+    );
+    let settings = setup::read(&setup).unwrap().settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    for (k, &h) in heights.iter().enumerate() {
+        let (x, y) = (x0 + 30.0 * (k % 4) as f32, 20.0 + 30.0 * (k / 4) as f32);
+        let block = boxes_stl(&[([x, y, 0.0], [x + 15.0, y + 15.0, h])]);
+        plate.add_with_filament(&Input { name: &format!("block-{k}.stl"), bytes: &block }, Some(k)).unwrap();
+    }
+    plate.slice(&settings, &Options { arrange: false, ..Options::default() }).unwrap()
+}
+
+/// A plate of blocks native Orca 2.5 sliced alike (`blocks_in_filaments`), and what it made of it: its filament map,
+/// tool changes and the grams of each filament.
+struct OrcaPlate {
+    x0: f32,
+    colours: &'static [&'static str],
+    heights: &'static [f32],
+    map: &'static str,
+    changes: usize,
+    grams: &'static [f64],
+}
+
+#[test]
+fn several_filaments_go_on_the_nozzles_as_orcas_grouping_puts_them() {
+    let plates = [
+        // Eight filaments: the first column stands at x = 20 mm, where the right nozzle can't reach (it prints from
+        // 20.5 mm), so its two stay on the left; each nozzle takes four, one 4-slot AMS's worth; and of what is left
+        // Orca's flush and loading time pick this.
+        OrcaPlate {
+            x0: 20.0,
+            colours: &["#F7D4E0", "#8E9089", "#5B3A29", "#FFE600", "#00AE42", "#000000", "#C12E1F", "#F2754E"],
+            heights: &[10.0, 6.0, 4.0, 10.0, 8.0, 6.0, 4.0, 4.0],
+            map: "1 1 2 2 1 2 2 1",
+            changes: 210,
+            grams: &[8.45, 6.01, 7.99, 12.01, 4.69, 5.55, 6.56, 3.98],
+        },
+        // Clear of that strip, the flush and loading time alone decide.
+        OrcaPlate {
+            x0: 80.0,
+            colours: &["#FFFFFF", "#000000", "#4F7FC7", "#C12E1F"],
+            heights: &[4.0, 10.0, 4.0, 6.0],
+            map: "1 1 1 2",
+            changes: 70,
+            grams: &[4.48, 5.34, 3.60, 1.85],
+        },
+        OrcaPlate {
+            x0: 80.0,
+            colours: &["#F7D4E0", "#F2754E", "#FFE600"],
+            heights: &[10.0, 6.0, 4.0],
+            map: "2 1 1",
+            changes: 50,
+            grams: &[2.57, 3.46, 2.65],
+        },
+    ];
+    for p in plates {
+        let out = blocks_in_filaments(p.x0, p.colours, p.heights);
+        let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+        let map = format!(r#"<metadata key="filament_maps" value="{}"/>"#, p.map);
+        assert!(info.contains(&map), "{:?}: {info}", p.colours);
+        assert_eq!(out.stats.tool_changes, p.changes, "{:?}", p.colours);
+        // A filament's grams take in the flushes counted to it, as Orca counts them; the rest is our sparse infill.
+        for (f, (got, want)) in out.stats.filaments.iter().zip(p.grams).enumerate() {
+            assert!((got.weight - want).abs() < 0.015, "{:?}: filament {f} {} g, Orca {want} g", p.colours, got.weight);
+        }
+    }
+}
+
 /// Orca's pre-cooling and pre-heating lines taken out of a G-code file (`M400` and `M104 … ;Multi extruder pre
 /// cooling`, and `M632`, `M400`, `M104 … ;Multi extruder pre heating`, `M633`).
 fn without_preheat(gcode: &str) -> String {
