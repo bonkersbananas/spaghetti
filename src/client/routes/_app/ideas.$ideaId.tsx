@@ -4,6 +4,7 @@ import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { OpenOnlyFile } from "@/components/builds/OpenInStudio";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { DraftNote } from "@/components/ideas/DraftNote";
@@ -442,6 +443,7 @@ function Idea({ item }: { item: ItemView }) {
                   {existingTwist ? "Twist" : "Make a twist"}
                 </Button>
               )}
+              {!item.pending && <OpenOnlyFile files={files} />}
             </div>
 
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">

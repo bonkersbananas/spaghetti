@@ -11,6 +11,7 @@ import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
 import { sendWeekPush } from "./push/week.ts";
+import { openRoutes } from "./routes/open.ts";
 import { purgeScoutPictures, scoutTick } from "./scout/run.ts";
 import { refreshPrices } from "./shopping/lookup.ts";
 import { spa } from "./spa.ts";
@@ -45,6 +46,7 @@ export default {
     if (pathname.startsWith("/.well-known/oauth-") || pathname.startsWith("/oauth/")) {
       return oauthEndpoints.fetch(request, env, ctx);
     }
+    if (pathname.startsWith("/open/")) return openRoutes.fetch(request, env, ctx);
     if (pathname === "/api/share" && request.method === "POST") return shareFallback(request);
     if (!pathname.startsWith("/api/") && (request.method === "GET" || request.method === "HEAD")) {
       return spa(request, env);

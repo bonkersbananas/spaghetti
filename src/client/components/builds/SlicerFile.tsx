@@ -17,6 +17,7 @@ import { formatBytes, plateThumb, type SlicerFileDraft } from "@/lib/slicer-file
 import type { SliceTarget } from "@/lib/slicing/jobs";
 import { useObjectUrl } from "@/lib/use-object-url";
 import { canView3d, type PrintingAttempt, ThreeDButton, type View3d } from "../viewer/ThreeDButton";
+import { OpenInStudio } from "./OpenInStudio";
 import { formatMinutes } from "./settings";
 
 /** A plate's picture on a quiet well (slicers render them on transparent ground). */
@@ -61,6 +62,8 @@ interface FileCardProps {
   /** Lines under the meta in place of the note: a model's slicing, with its actions (ModelFile.tsx). */
   status?: ReactNode;
   download?: string;
+  /** The kept file, where it can be opened in Bambu Studio (a button under the text, on computers only). */
+  openFile?: Parameters<typeof OpenInStudio>[0]["file"];
   /** The download's file name, when it isn't the card's name (a model's sliced file). */
   downloadName?: string;
   /** Where the file can be shown in 3D: the whole plate picture opens the view, a "3D" pill on its corner. */
@@ -88,6 +91,7 @@ export function FileCard({
   note,
   status,
   download,
+  openFile,
   downloadName,
   view3d,
   onRemove,
@@ -158,6 +162,7 @@ export function FileCard({
   );
   const actions = (
     <>
+      {openFile && !compact && <OpenInStudio icon file={openFile} />}
       {download && (
         <a
           href={download}
@@ -326,6 +331,7 @@ function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, 
       note={going ? undefined : note}
       status={going ? <UploadLine upload={going} /> : undefined}
       download={file.stored && !file.pending ? fileUrl(file.id) : undefined}
+      openFile={file}
       view3d={canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined}
       onRemove={onRemove}
       compact={compact}
