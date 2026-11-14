@@ -221,15 +221,51 @@ describe("big files", () => {
     return lines.join("\n");
   }
 
-  it("decimates a large file so it stays small", () => {
+  it("decimates a large file so it stays small, every layer of it", () => {
     const text = big(30);
+    const layers = text.split("; CHANGE_LAYER").length - 1;
     const t = Date.now();
     const paths = parseGcode(text, { maxSegments: 50_000 });
     expect(paths.stats.decimated).toBe(true);
     expect(paths.stats.segments).toBeLessThanOrEqual(50_000);
     expect(paths.stats.moves).toBeGreaterThan(paths.stats.segments);
-    expect(paths.layers.length).toBeGreaterThan(5);
+    expect(paths.stats.truncated).toBe(false);
+    expect(paths.layers).toHaveLength(layers);
     expect(Date.now() - t).toBeLessThan(20_000);
+  });
+
+  /** `layers` layers of a round wall 100 mm across in `points` segments (600: about 0.5 mm), as curvy models' are. */
+  function walls(layers: number, points = 600): string {
+    const lines: string[] = [];
+    for (let layer = 0; layer < layers; layer++) {
+      lines.push("; CHANGE_LAYER", `; Z_HEIGHT: ${((layer + 1) * 0.2).toFixed(1)}`, "; LAYER_HEIGHT: 0.2");
+      lines.push("; FEATURE: Outer wall", "G0 X178 Y128");
+      for (let i = 0; i <= points; i++) {
+        const a = (i / points) * 2 * Math.PI;
+        lines.push(`G1 X${(128 + 50 * Math.cos(a)).toFixed(3)} Y${(128 + 50 * Math.sin(a)).toFixed(3)} E.02`);
+      }
+    }
+    return lines.join("\n");
+  }
+
+  it("keeps every layer of walls too long to merge at first, coarser rather than cut short", () => {
+    // Three times the budget in segments the size's first guess can't merge: they once filled it a third of the way
+    // up, and the layers above were dropped.
+    const paths = parseGcode(walls(300), { maxSegments: 60_000 });
+    expect(paths.layers).toHaveLength(300);
+    expect(paths.layers.at(-1)?.z).toBeCloseTo(60);
+    expect(paths.stats.truncated).toBe(false);
+    expect(paths.stats.segments).toBeLessThanOrEqual(60_000);
+    expect(paths.stats.decimated).toBe(true);
+    // The budget spread over the print, not spent on its first layers.
+    const counts = paths.layers.map((layer) => layer.count);
+    expect(Math.min(...counts.slice(200))).toBeGreaterThan(50);
+  });
+
+  it("leaves a file within its budget as it was", () => {
+    const paths = parseGcode(walls(300, 100), { maxSegments: 60_000 });
+    expect(paths.stats.decimated).toBe(false);
+    expect(paths.stats.segments).toBe(300 * 100);
   });
 });
 

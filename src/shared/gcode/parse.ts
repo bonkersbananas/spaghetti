@@ -50,6 +50,22 @@ const MAX_TOOL = 64;
 const DEFAULT_MAX_SEGMENTS = 2_000_000;
 /** What a decimated file's moves cost in bytes of G-code, roughly, to guess how many there are before reading them. */
 const BYTES_PER_MOVE = 30;
+/**
+ * The share of the budget the reader steers for, layer by layer: the rest is room for a dense stretch it only sees
+ * after the fact. Kept segments can't be taken back (the viewer draws each layer as it comes), so the reader keeps
+ * to the budget as it goes: what it has kept, against the share of the file it has read.
+ */
+const STEER_SHARE = 0.85;
+/** The coarsest it goes: segments merged up to this long (mm), and one infill line in this many. */
+const MAX_MIN_SEGMENT = 8;
+const MAX_INFILL_STRIDE = 32;
+/** Decimation's lightest setting (mm): only collinear runs and specks merge. */
+const BASE_MIN_SEGMENT = 0.04;
+/**
+ * Segments kept back for each layer still to come, at most: should a layer be too dense for the coarsest decimation,
+ * it is drawn in part rather than leave the layers above it out.
+ */
+const LAYER_FLOOR = 64;
 const ARC_STEP = 0.35; // radians per arc piece
 
 class Floats {
@@ -111,6 +127,8 @@ export class GcodeReader {
   private readonly opts: ParseOptions;
   private rest = "";
   private bytes = 0;
+  /** How far into the text the line being read ends. */
+  private at = 0;
 
   // The machine.
   private x = 0;
@@ -141,11 +159,19 @@ export class GcodeReader {
   private pFeature = 0;
   private pTool = 0;
 
-  // Decimation, decided from the file's size.
-  private readonly minSegment: number;
-  private readonly infillStride: number;
+  // Decimation: first guessed from the file's size, then steered at every layer so the whole print fits the budget.
+  private minSegment: number;
+  private infillStride: number;
   private infillSeen = 0;
   private readonly maxSegments: number;
+  private everDecimated = false;
+  private steeredAt = { bytes: 0, kept: 0 };
+  private baseMinSegment = BASE_MIN_SEGMENT;
+  private baseInfillStride = 1;
+  /** The layer being read keeps segments up to this many in all, leaving room for the layers above it. */
+  private layerCap = Number.POSITIVE_INFINITY;
+  /** The file's own count of its layers (its header's "total layer number"). */
+  private headerLayers: number | null = null;
 
   private moves = 0;
   private kept = 0;
@@ -162,17 +188,23 @@ export class GcodeReader {
     this.maxSegments = opts.maxSegments ?? DEFAULT_MAX_SEGMENTS;
     const expected = (opts.sourceBytes ?? 0) / BYTES_PER_MOVE;
     const ratio = expected / this.maxSegments;
-    this.minSegment = ratio > 1 ? Math.min(2, 0.15 * ratio) : 0.04;
+    this.minSegment = ratio > 1 ? Math.min(2, 0.15 * ratio) : BASE_MIN_SEGMENT;
     this.infillStride = ratio > 2 ? Math.min(8, Math.ceil(ratio / 2)) : 1;
+    this.everDecimated = this.minSegment > BASE_MIN_SEGMENT || this.infillStride > 1;
+    this.baseMinSegment = this.minSegment;
+    this.baseInfillStride = this.infillStride;
   }
 
   write(text: string): void {
+    // Where `data` starts in the whole text: the decimation is steered by how far into it each line is.
+    const from = this.bytes - this.rest.length;
     this.bytes += text.length;
     const data = this.rest ? this.rest + text : text;
     let start = 0;
     for (;;) {
       const nl = data.indexOf("\n", start);
       if (nl < 0) break;
+      this.at = from + nl + 1;
       this.line(data, start, nl);
       start = nl + 1;
     }
@@ -196,7 +228,7 @@ export class GcodeReader {
       color: null,
       segments: this.toolSegments[i] ?? 0,
     }));
-    const decimated = this.minSegment > 0.04 || this.infillStride > 1;
+    const decimated = this.everDecimated;
     const total = this.totalSeconds ?? this.firstTotal;
     return {
       plate,
@@ -320,6 +352,11 @@ export class GcodeReader {
       this.setHeight(Number(s.slice(at + 7, to)));
       return;
     }
+    if (c === 116 && s.startsWith("total layer number:", at)) {
+      const n = Number(s.slice(at + 19, to));
+      if (Number.isInteger(n) && n > 0) this.headerLayers = n;
+      return;
+    }
     if (c === 108 && s.startsWith("layer num/total_layer_count:", at)) {
       const m = /(\d+)\s*\/\s*(\d+)/.exec(s.slice(at + 28, to));
       if (m) this.announced = Number(m[2]);
@@ -356,6 +393,8 @@ export class GcodeReader {
   private startLayer(): void {
     this.sawLayerComment = true;
     this.finishLayer();
+    this.steer();
+    this.capLayer();
     this.cur = {
       z: 0,
       height: 0,
@@ -364,6 +403,53 @@ export class GcodeReader {
       feature: new Bytes(),
       filament: new Bytes(),
     };
+  }
+
+  /**
+   * Keeps the whole print within the budget, every layer of it: at each layer, the segments the last stretch kept for
+   * each byte it read, against what the budget left allows for each byte still to come. Ahead of it, segments are
+   * merged up to a longer length (and, coarse enough, infill thinned); well behind it, eased back towards the size's
+   * first guess. Without the file's size there is nothing to steer by, and the first guess stands.
+   */
+  private steer(): void {
+    const total = this.opts.sourceBytes;
+    if (!total) return;
+    const read = this.at - this.steeredAt.bytes;
+    // Too little read since the last look to judge it by (the start G-code, a thin layer).
+    if (read < total / 400) return;
+    const kept = this.kept - this.steeredAt.kept;
+    this.steeredAt = { bytes: this.at, kept: this.kept };
+    const left = Math.max(total - this.at, total / 400);
+    const room = Math.max(this.maxSegments * STEER_SHARE - this.kept, 0);
+    const allowed = room / left;
+    const rate = kept / read;
+    if (rate > allowed) {
+      const factor = Math.min(4, allowed > 0 ? rate / allowed : 4);
+      this.minSegment = Math.min(MAX_MIN_SEGMENT, Math.max(this.minSegment, 0.1) * factor * 1.1);
+      if (this.minSegment >= 0.5 || allowed === 0) {
+        this.infillStride = Math.min(MAX_INFILL_STRIDE, Math.ceil(Math.max(this.infillStride, 1) * factor));
+      }
+      this.everDecimated = true;
+    } else if (rate < allowed / 3 && this.minSegment > this.baseMinSegment) {
+      this.minSegment = Math.max(this.baseMinSegment, this.minSegment / 1.5);
+      this.infillStride = Math.max(this.baseInfillStride, Math.floor(this.infillStride / 1.5));
+    }
+  }
+
+  /**
+   * What the layer starting may keep: the budget less a floor for each layer still to come, counted from the file's
+   * header, else guessed from the share of the file left at the layers' size so far.
+   */
+  private capLayer(): void {
+    const total = this.opts.sourceBytes;
+    const done = this.layerCount;
+    let left: number;
+    if (this.headerLayers !== null) left = Math.max(this.headerLayers - done - 1, 0);
+    else if (total && done > 0 && this.at > 0) left = Math.ceil(((total - this.at) / this.at) * done);
+    else return;
+    const floor = Math.min(LAYER_FLOOR, Math.floor(this.maxSegments / (2 * (done + left + 1))));
+    // Its own floor at least, should the count of layers to come have grown since the last.
+    this.layerCap = Math.max(this.maxSegments - 1 - left * floor, Math.min(this.kept + floor, this.maxSegments - 1));
   }
 
   private setZ(z: number): void {
@@ -504,6 +590,12 @@ export class GcodeReader {
     this.moves++;
     if (this.kept >= this.maxSegments - 1) {
       this.truncated = true;
+      return;
+    }
+    if (this.kept >= this.layerCap) {
+      // This layer has had its share: the rest of it gives way to the layers above.
+      this.everDecimated = true;
+      this.flush();
       return;
     }
     if ((this.feature === 4 || this.feature === 5) && this.infillStride > 1) {
