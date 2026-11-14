@@ -8,6 +8,44 @@ use crate::profile::{self, Profile};
 use std::f64::consts::PI;
 use std::sync::Arc;
 
+/// An extrusion's shape (Orca's `Flow`): its width and height, mm³ per mm, and how far apart its lines lie.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Flow {
+    pub width: f64,
+    pub height: f64,
+    pub mm3_per_mm: f64,
+    pub spacing: f64,
+}
+
+impl Flow {
+    /// A flat line `w` wide and `h` high, a rectangle with round ends.
+    pub fn flat(w: f64, h: f64) -> Flow {
+        Flow { width: w, height: h, mm3_per_mm: Settings::mm3_per_mm(w, h), spacing: Settings::spacing(w, h) }
+    }
+
+    /// Orca's `Flow::with_flow_ratio` of a flat line: more plastic keeps the line's spacing and grows it in height,
+    /// less narrows it, down to a round thread.
+    pub fn with_flow_ratio(self, ratio: f64) -> Flow {
+        let area = self.mm3_per_mm;
+        let wanted = area * ratio;
+        if wanted > area + 1e-4 {
+            let height = wanted / self.spacing;
+            Flow { width: self.spacing + height * (1.0 - PI / 4.0), height, mm3_per_mm: wanted, spacing: self.spacing }
+        } else if wanted < area - 1e-4 {
+            let width = self.width - (area - wanted) / self.height;
+            if width > self.height {
+                Flow::flat(width, self.height)
+            } else {
+                // Orca's "diameter" here is the radius of a circle of that area, its spacing the line's.
+                let d = (wanted / PI).sqrt();
+                Flow { width: d, height: d, mm3_per_mm: Settings::mm3_per_mm(d, d), spacing: self.spacing }
+            }
+        } else {
+            self
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Settings {
     /// The presets these come from; the printer's start and end G-code are filled from them too.
@@ -98,6 +136,10 @@ pub struct Settings {
     /// (`thick_bridges`, `thick_internal_bridges`), rather than flat at the layer's height.
     pub thick_bridges: bool,
     pub thick_internal_bridges: bool,
+    /// How much more plastic bridges and overhang walls carry than their lines' cross-section (`bridge_flow`: 1.5 on
+    /// the 0.2 mm nozzle), and internal bridges on top of it as the G-code is written (`internal_bridge_flow`).
+    pub bridge_flow_ratio: f64,
+    pub internal_bridge_flow: f64,
     /// Whether narrow bands of solid infill print as loops instead of lines
     /// (`detect_narrow_internal_solid_infill`).
     pub narrow_solid_loops: bool,
@@ -400,6 +442,8 @@ impl Settings {
         let nozzle_diameter = at("nozzle_diameter");
         // A line width may be a share of the nozzle; 0 is the process's default width.
         let default_width = p.float_of("line_width", nozzle_diameter);
+        // A flow ratio, 1 where a preset leaves it out (or gives one Orca would refuse).
+        let ratio = |key: &str| if p.text(key).is_empty() || p.float(key) <= 0.0 { 1.0 } else { p.float(key) };
         let width = |key: &str| match p.float_of(key, nozzle_diameter) {
             w if w > 0.0 => w,
             _ => default_width,
@@ -487,13 +531,15 @@ impl Settings {
             skirt_distance: p.float("skirt_distance"),
             brim_width: p.float("brim_width"),
             brim_object_gap: p.float("brim_object_gap"),
-            brim_flow_ratio: if p.text("brim_flow_ratio").is_empty() { 1.0 } else { p.float("brim_flow_ratio") },
+            brim_flow_ratio: ratio("brim_flow_ratio"),
             seam_gap: p.float_of("seam_gap", nozzle_diameter),
             only_one_wall_top: p.bool("only_one_wall_top"),
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
             thick_bridges: p.bool("thick_bridges"),
             thick_internal_bridges: p.bool("thick_internal_bridges"),
+            bridge_flow_ratio: ratio("bridge_flow"),
+            internal_bridge_flow: ratio("internal_bridge_flow"),
             narrow_solid_loops: p.bool("detect_narrow_internal_solid_infill"),
             detect_overhang_wall: p.bool("detect_overhang_wall"),
 
@@ -710,19 +756,32 @@ impl Settings {
         width - height * (1.0 - PI / 4.0)
     }
 
-    /// Width, mm³ per mm and line spacing of a bridge on a layer `h` high, over air or (`internal`) over sparse
-    /// infill, as Orca's `bridging_flow`: a thick bridge is a round thread a bridge line wide (else the nozzle's
-    /// width), its lines that and 0.05 mm apart; any other is a flat line at the layer's height, a bridge line wide
-    /// (else solid infill's width).
-    pub fn bridge_flow(&self, internal: bool, h: f64) -> (f64, f64, f64) {
+    /// A bridge on a layer `h` high, over air or (`internal`) over sparse infill, as Orca's `bridging_flow`: a thick
+    /// bridge is a round thread a bridge line wide (else the nozzle's width), its lines that and 0.05 mm apart; any
+    /// other is a flat line at the layer's height, a bridge line wide (else solid infill's width). Either carries
+    /// `bridge_flow` times the plastic.
+    pub fn bridge_flow(&self, internal: bool, h: f64) -> Flow {
         let thick = if internal { self.thick_internal_bridges } else { self.thick_bridges };
+        self.bridging_flow(self.solid_infill_width, thick, h)
+    }
+
+    /// An overhang wall on a layer `h` high: Orca's bridging flow for walls, a bridge line wide (else an inner
+    /// wall's), round threads where bridges are thick.
+    pub fn overhang_wall_flow(&self, h: f64) -> Flow {
+        self.bridging_flow(self.inner_wall_width, self.thick_bridges, h)
+    }
+
+    /// Orca's `LayerRegion::bridging_flow`, from a flat line `base` wide where no bridge line width is given.
+    fn bridging_flow(&self, base: f64, thick: bool, h: f64) -> Flow {
         let given = (self.bridge_width > 0.0).then_some(self.bridge_width);
+        let ratio = self.bridge_flow_ratio;
         if thick {
             let d = given.unwrap_or(self.nozzle_diameter);
-            (d, PI * (d / 2.0).powi(2), d + 0.05)
+            // Orca grows the thread's diameter by the ratio's square root, in single precision.
+            let d = if ratio != 1.0 { (d as f32 * ratio.sqrt() as f32) as f64 } else { d };
+            Flow { width: d, height: d, mm3_per_mm: PI * (d / 2.0).powi(2), spacing: d + 0.05 }
         } else {
-            let w = given.unwrap_or(self.solid_infill_width);
-            (w, Settings::mm3_per_mm(w, h), Settings::spacing(w, h))
+            Flow::flat(given.unwrap_or(base), h).with_flow_ratio(ratio)
         }
     }
 

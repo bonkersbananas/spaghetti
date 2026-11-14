@@ -60,10 +60,11 @@ pub fn bridge_over_infill(
     let candidates = candidates.0;
     // The thick bridge Orca measures with (whatever the bridges print as): a round thread, its height 0.9 of which
     // decides how deep the sparse infill under it must be.
-    let (thread, _, thread_spacing) = {
+    let (thread, thread_spacing) = {
         let mut thick = s.clone();
         thick.thick_internal_bridges = true;
-        thick.bridge_flow(true, s.layer_height)
+        let f = thick.bridge_flow(true, s.layer_height);
+        (f.width, f.spacing)
     };
     let reach_down = thread * 0.9;
     // Layers with candidates, in runs of neighbours close enough that a bridge on one takes from the next one's
