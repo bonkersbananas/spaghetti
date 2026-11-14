@@ -491,8 +491,15 @@ impl SupportSettings {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
             Some("supports without a gap or interface")
-        } else if !self.independent_layer_height
-            || self.enforce_layers > 0
+        } else if on && !self.independent_layer_height && !self.organic() && self.classic().is_none() {
+            // Normal supports' layers in step with the object's (Orca's `synchronize_layers`), as several filaments
+            // have them.
+            Some(if s.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+                "normal supports in several filaments"
+            } else {
+                "these support settings"
+            })
+        } else if self.enforce_layers > 0
             || self.expansion != 0.0
             || self.angle != 0.0
             || self.ironing
@@ -891,6 +898,21 @@ impl Settings {
         }
         out
     }
+    /// The support's gaps under the object and over it, mm (Orca's `gap_support_object` and `gap_object_support`): as
+    /// set, or in whole layers where the support's layers follow the object's (no independent support layer height,
+    /// as with several filaments).
+    pub fn support_gaps(&self) -> (f64, f64) {
+        let sp = &self.support;
+        let gap = |set: f64| {
+            if sp.independent_layer_height || set == 0.0 {
+                set
+            } else {
+                (set / self.layer_height + 1e-4).round() * self.layer_height
+            }
+        };
+        (gap(sp.top_z_distance), gap(sp.bottom_z_distance))
+    }
+
     /// Whether an object's layer prints on the plate, as the print's first layer: its first one, unless a raft is
     /// under it (`raft.rs`), whose own first layer is then the print's.
     pub fn on_plate(&self, layer: usize) -> bool {

@@ -138,8 +138,9 @@ impl Config {
         // above the model before a branch may rest on it.
         let bp_radius = 7_500_000 / 2;
         let bp_radius_increase_per_layer = ((0.7f64).tan() * layer_height as f64).min(0.5 * support_line_width as f64);
-        let support_top_distance = scaled(sp.top_z_distance);
-        let support_bottom_distance = scaled(sp.bottom_z_distance);
+        let (top_gap, bottom_gap) = s.support_gaps();
+        let support_top_distance = scaled(top_gap);
+        let support_bottom_distance = scaled(bottom_gap);
         let layers = |d: i64| (d as f64 / layer_height as f64).round() as usize;
         Config {
             layer_height,

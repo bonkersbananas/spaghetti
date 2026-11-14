@@ -100,6 +100,11 @@ pub fn read_over(text: &str, base: &Profile) -> Result<Setup, Error> {
     let filament = filaments.into_iter().next().unwrap_or_default();
     let profile = Arc::new(Profile::over(base, machine, process, filament));
     let mut settings = Settings::from_profile(profile, colour.as_deref());
+    // Several filaments print a prime tower, and with one Orca turns the support's own layer heights off
+    // (`normalize_fdm_2`): its layers follow the object's.
+    if palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+        settings.support.independent_layer_height = false;
+    }
     settings.palette = palette;
     if let Some(what) = settings.unsupported() {
         return Err(Error::Unsupported(what));
@@ -216,6 +221,17 @@ mod tests {
             refused(r#"{"process": {"raft_layers": "2"}, "filaments": [{}, {}]}"#),
             Some(Error::Unsupported("a raft with several filaments"))
         );
+        // Several filaments print a prime tower, with which Orca's supports follow the object's layers: trees slice,
+        // normal supports don't yet.
+        let several =
+            |more: &str| format!(r#"{{"process": {{"enable_support": "1"{more}}}, "filaments": [{{}}, {{}}]}}"#);
+        assert!(read(&several("")).is_ok_and(|s| !s.settings.support.independent_layer_height));
+        assert!(read(&several(r#", "support_style": "tree_hybrid""#)).is_ok());
+        assert_eq!(
+            refused(&several(r#", "support_type": "normal(auto)""#)),
+            Some(Error::Unsupported("normal supports in several filaments"))
+        );
+        assert!(read(&normal("")).is_ok_and(|s| s.settings.support.independent_layer_height));
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))
