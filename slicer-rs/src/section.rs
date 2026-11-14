@@ -45,9 +45,11 @@ struct Soup<'a> {
     vertex_base: Vec<u32>,
 }
 
-/// Cuts the meshes at every layer's plane; returns each layer's region (outlines with holes), simplified to
-/// `resolution` mm, and for each of its shapes the mesh (object) it is a slice of.
-pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> (Vec<Shapes>, Vec<Vec<u32>>) {
+/// Cuts the meshes at every layer's plane; returns each layer's region (outlines with holes) and for each of its
+/// shapes the mesh (object) it is a slice of. Each object's outline is made on its own, as Orca slices each object
+/// on its own, and as Orca makes a layer's (`make_expolygons`, then `ExPolygon::simplify`): its loops joined, gaps
+/// and notches narrower than twice `closing` mm closed, then simplified to `tolerance` mm.
+pub fn slice(meshes: &[Mesh], layers: &Layers, tolerance: f64, closing: f64) -> (Vec<Shapes>, Vec<Vec<u32>>) {
     let planes = layers.slice_z();
     let n_layers = planes.len();
     let mut vertex_base = Vec::with_capacity(meshes.len());
@@ -85,10 +87,9 @@ pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> (Vec<Shapes>,
     }
     drop(ranges);
 
-    let tolerance = (resolution * SCALE / 2.0).max(1.0) as i32;
     par::map_range(n_layers, |l| {
         let triangles = &items[starts[l]..starts[l + 1]];
-        cut_layer(&soup, triangles, planes[l], tolerance)
+        cut_layer(&soup, triangles, planes[l], tolerance, closing)
     })
     .into_iter()
     .unzip()
@@ -119,7 +120,7 @@ struct Segment {
 
 type EdgeMap = HashMap<u64, u32, BuildHasherDefault<FastHasher>>;
 
-fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) -> (Shapes, Vec<u32>) {
+fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: f64, closing: f64) -> (Shapes, Vec<u32>) {
     let mut segments: Vec<Segment> = Vec::with_capacity(triangles.len());
     for &(mi, ti) in triangles {
         let mesh = &soup.meshes[mi as usize];
@@ -217,47 +218,32 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) 
     if !open.is_empty() {
         close_open_chains(open, &mut closed, (2.0 * SCALE) as i64);
     }
-    let (loops, meshes): (Vec<Contour>, Vec<u32>) = closed
-        .iter()
-        .map(|(c, mesh)| (geom::simplify_contour(c, tolerance), *mesh))
-        .filter(|(c, _)| c.len() >= 3)
-        .unzip();
-    let shapes = geom::union_contours(&loops);
-    let owners = owners(&shapes, &loops, &meshes);
-    (shapes, owners)
-}
-
-/// The mesh each of a layer's shapes is a slice of: the one whose outline passes through the shape's lowest-left
-/// corner. A union's lowest-left corner is always a corner of one of the outlines it merged, so this holds even
-/// where objects touch or stand in each other's openings (where their bounding boxes say nothing).
-fn owners(shapes: &Shapes, loops: &[Contour], meshes: &[u32]) -> Vec<u32> {
-    let first = meshes.first().copied().unwrap_or(0);
-    if meshes.iter().all(|&m| m == first) {
-        return vec![first; shapes.len()];
+    let mut by_mesh: std::collections::BTreeMap<u32, Vec<Contour>> = std::collections::BTreeMap::new();
+    for (contour, mesh) in closed {
+        if contour.len() >= 3 {
+            by_mesh.entry(mesh).or_default().push(contour);
+        }
     }
-    // Outer outlines (counter-clockwise) by their lowest-left corner.
-    let mut corners: Vec<((i32, i32), u32)> =
-        loops.iter().zip(meshes).filter(|(c, _)| geom::area2(c) > 0).map(|(c, &m)| (lowest_left(c), m)).collect();
-    corners.sort_unstable();
-    shapes
-        .iter()
-        .map(|shape| {
-            let Some(outer) = shape.first().filter(|c| !c.is_empty()) else { return first };
-            let p = lowest_left(outer);
-            match corners.binary_search_by(|(q, _)| q.cmp(&p)) {
-                Ok(k) => corners[k].1,
-                // Not expected: the nearest outline's corner.
-                Err(_) => corners
-                    .iter()
-                    .min_by_key(|(q, _)| d2(geom::pt(q.0, q.1), geom::pt(p.0, p.1)))
-                    .map_or(first, |&(_, m)| m),
+    let mut shapes = Vec::new();
+    let mut owners = Vec::new();
+    for (mesh, loops) in by_mesh {
+        let mut made = geom::union_contours(&loops);
+        if tolerance > 0.0 {
+            // Simplified before the closing too, which then offsets a seventh of the points: Orca closes the loops as
+            // they come, which comes to the same within the tolerance and took seven times longer here.
+            made = geom::simplify_polygons(&made, tolerance);
+        }
+        if closing > 0.0 && !made.is_empty() {
+            let join = geom::Join::Miter(3.0);
+            made = geom::offset_c2(&geom::offset_c2(&made, closing, join), -closing, join);
+            if tolerance > 0.0 {
+                made = geom::simplify_polygons(&made, tolerance);
             }
-        })
-        .collect()
-}
-
-fn lowest_left(contour: &[Pt]) -> (i32, i32) {
-    contour.iter().map(|p| (p.x, p.y)).min().unwrap_or((0, 0))
+        }
+        owners.extend(std::iter::repeat_n(mesh, made.len()));
+        shapes.extend(made);
+    }
+    (shapes, owners)
 }
 
 #[inline]
