@@ -143,6 +143,8 @@ pub struct Job<'a> {
     pub start: [f64; 3],
     /// The plate's filaments, their tool changes and prime tower, when it prints in several (`toolchange.rs`).
     pub colours: Option<&'a crate::toolchange::Colours>,
+    /// Each layer's overhangs, over which a travel lifts in a spiral rather than a slope with Auto Lift (`lift.rs`).
+    pub lift_overhangs: &'a crate::lift::Overhangs,
 }
 
 impl Job<'_> {
@@ -494,6 +496,23 @@ impl<'a> Builder<'a> {
     fn travel(&mut self, x: f64, y: f64, with_z: bool) {
         let kind = if with_z { Kind::TravelZ } else { Kind::Travel };
         self.line(x, y, self.z, 0.0, self.s.travel_speed, kind);
+    }
+
+    /// Travels to (`x`, `y`) with the nozzle lifting by the z-hop on the way, as Orca's slope lift does: up the travel
+    /// slope as it sets off, then the rest of the way at that height; a travel too short for the slope rises
+    /// straight to the height at its end.
+    fn slope_to(&mut self, x: f64, y: f64) {
+        let s = self.s;
+        let z = self.z + s.z_hop;
+        let d = (x - self.x).hypot(y - self.y);
+        let slope = s.travel_slope.to_radians();
+        if s.z_hop > 0.0 && d > 0.0 && s.z_hop.atan2(d) < slope {
+            let run = s.z_hop / slope.tan();
+            let (tx, ty) = (self.x + (x - self.x) / d * run, self.y + (y - self.y) / d * run);
+            self.line(tx, ty, z, 0.0, s.travel_speed, Kind::TravelZ);
+        }
+        self.line(x, y, z, 0.0, s.travel_speed, Kind::TravelZ);
+        self.lifted = s.z_hop > 0.0;
     }
 
     fn lift_to(&mut self, z: f64) {
@@ -1043,8 +1062,15 @@ fn build_layer<'a>(
                         b.retract();
                     }
                     relabel(&mut b);
+                    // With Auto Lift a travel lifts along a slope, or in a spiral where it sets off over an
+                    // overhang, decided from where the last path ended, before the wipe (Orca's `needs_retraction`).
+                    let reach = b.s.z_hop / b.s.travel_slope.to_radians().tan();
                     if stay {
                         b.travel(x, y, false);
+                    } else if b.s.z_hop_type == "Auto Lift"
+                        && !job.lift_overhangs.sets_off_over(plan.z, here, to, reach)
+                    {
+                        b.slope_to(x, y);
                     } else {
                         b.lift(Some((x, y)));
                         b.travel(x, y, true);

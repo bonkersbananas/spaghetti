@@ -17,6 +17,14 @@ pub struct Flow {
     pub spacing: f64,
 }
 
+/// How the nozzle lifts on a retraction (`z_hop_types`): the filament's own, unless it says "nil", else the printer's.
+fn z_hop_type(p: &Profile) -> String {
+    match p.list("filament_z_hop_types").first() {
+        Some(t) if *t != "nil" && !t.is_empty() => t.to_string(),
+        _ => p.text("z_hop_types").to_string(),
+    }
+}
+
 impl Flow {
     /// A flat line `w` wide and `h` high, a rectangle with round ends.
     pub fn flat(w: f64, h: f64) -> Flow {
@@ -436,6 +444,11 @@ pub const DEFAULT_PLATE: &str = "Textured PEI Plate";
 pub const DEFAULT_COLOUR: &str = "#F2754E";
 
 impl Settings {
+    /// Whether a filament lifts the nozzle as Orca's Auto Lift does (the X2D's generic filaments: `lift.rs`).
+    pub fn auto_lifts(p: &Profile) -> bool {
+        z_hop_type(p) == "Auto Lift"
+    }
+
     /// The settings in `profile`, by Orca's keys. `colour` is the filament's colour as the setup gives it ("#RRGGBB"),
     /// else the preset's, else Orca's stand-in.
     pub fn from_profile(profile: Arc<Profile>, colour: Option<&str>) -> Settings {
@@ -475,10 +488,7 @@ impl Settings {
         let outer_wall_accel = at("outer_wall_acceleration");
         let bridge_speed = at("bridge_speed");
         let travel_accel = at("travel_acceleration");
-        let z_hop_type = match p.list("filament_z_hop_types").first() {
-            Some(t) if *t != "nil" && !t.is_empty() => t.to_string(),
-            _ => text("z_hop_types"),
-        };
+        let z_hop_type = z_hop_type(p);
         let colour = colour
             .filter(|c| !c.is_empty())
             .map(str::to_string)
@@ -742,7 +752,7 @@ impl Settings {
         if !matches!(self.fuzzy_skin.as_str(), "disabled_fuzzy" | "none" | "") {
             out.push("no fuzzy skin".into());
         }
-        if self.z_hop > 0.0 && self.z_hop_type != "Spiral Lift" {
+        if self.z_hop > 0.0 && !matches!(self.z_hop_type.as_str(), "Spiral Lift" | "Auto Lift") {
             out.push(format!("{} printed as spiral lifts", self.z_hop_type));
         }
         out
