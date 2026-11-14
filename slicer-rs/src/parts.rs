@@ -48,6 +48,17 @@ impl Regions {
         out
     }
 
+    /// The region of object `g` in filament `f`, made (after the others) where the object has none: a painted
+    /// filament's.
+    pub fn region_of(&mut self, g: usize, f: usize) -> u32 {
+        let known = self.group.iter().zip(&self.filament).position(|(&rg, &rf)| rg as usize == g && rf == f);
+        known.unwrap_or_else(|| {
+            self.group.push(g as u32);
+            self.filament.push(f);
+            self.group.len() - 1
+        }) as u32
+    }
+
     /// Whether some object prints as more than one mesh: its parts in different filaments.
     pub fn split(&self) -> bool {
         self.members.iter().any(|m| m.len() > 1)
