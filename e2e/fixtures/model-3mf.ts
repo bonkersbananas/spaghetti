@@ -82,6 +82,14 @@ export function patternProject(pattern: string): Uint8Array {
   return boxProject({ sparse_infill_pattern: pattern });
 }
 
+/**
+ * The same block in a project printed in spiral vase mode (`spiral_mode`): its bottom, then one wall rising as it goes
+ * round. Our own slicer refused spiral vases until release 12.
+ */
+export function vaseProject(): Uint8Array {
+  return boxProject({ spiral_mode: "1" });
+}
+
 /** A 24 × 24 × 10 mm block in a project for the X2D, its settings Orca's defaults but `settings`. */
 function boxProject(settings: Record<string, string>): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
