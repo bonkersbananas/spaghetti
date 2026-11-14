@@ -6,6 +6,8 @@
 //! 0.1 µm units: its `SCALED_EPSILON` (100 nm) is one of them.
 
 use crate::geom::{self, Pt, Shape, Shapes};
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 
 /// A point in our units, wide enough for the products the tests take.
 pub(crate) type P = [i64; 2];
@@ -1657,14 +1659,18 @@ fn merge_box(a: Option<[i64; 4]>, b: Option<[i64; 4]>) -> Option<[i64; 4]> {
     }
 }
 
-/// `multi_material_segmentation_by_painting` for one object, its painted sides: each layer's shapes painted in each
-/// filament (`[layer][filament]`, filament 0 the first), from its layers' shapes (all its regions) cut at `slice_z`
-/// and its painted triangles (`facets`), for `filaments` filaments.
+/// `multi_material_segmentation_by_painting` for one object: each layer's shapes painted in each filament
+/// (`[layer][filament]`, filament 0 the first), from its layers' shapes (all its regions) cut at `slice_z`, each
+/// layer `heights` thick, for `filaments` filaments. Its sides as its painted triangles (`facets`) colour them, then
+/// its tops and bottoms as all its triangles (`surfaces`, each in its state) colour them, `shells` deep.
 pub fn painted_regions(
     slice_z: &[f64],
+    heights: &[f64],
     layers: &[Shapes],
     facets: &[(i32, Corners)],
+    surfaces: &[(i32, Corners)],
     filaments: usize,
+    shells: &Shells,
 ) -> Vec<Vec<Shapes>> {
     let n = layers.len();
     let states = filaments + 1;
@@ -1716,9 +1722,20 @@ pub fn painted_regions(
                 }
             }
         }
+        // Orca's `cut_segmented_layers`: kept to a band along the outline, on every other layer (the first, the
+        // third…) a band as deep as the interlocking depth where there is one.
+        let cut =
+            if l % 2 == 0 && shells.interlocking_depth != 0.0 { shells.interlocking_depth } else { shells.max_width };
+        if cut > 0.0 && out.iter().any(|f| !f.is_empty()) {
+            let inside = geom::offset_c2(&outlines[l], -cut, geom::Join::Miter(3.0));
+            for region in &mut out {
+                *region = geom::difference(region, &inside);
+            }
+        }
         out
     });
-    per_layer
+    let tops = tops_and_bottoms(slice_z, heights, &outlines, surfaces, states, shells);
+    crate::par::map_range(n, |l| merge_layer(&per_layer[l], &tops[l]))
 }
 
 /// `apply_mm_segmentation` for one object on one layer: each of its regions (its filament and shapes) gives what is
@@ -1778,6 +1795,397 @@ pub fn apply(regions: &[(usize, Shapes)], painted: &[Shapes]) -> Vec<(usize, Sha
     }
     by.into_iter()
         .map(|(f, shapes, merge)| (f, if merge { geom::closing(&shapes, 10.0 / geom::SCALE) } else { shapes }))
+        .collect()
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Painted tops and bottoms (Orca's `segmentation_top_and_bottom_layers`), and how they join the sides
+// (`merge_segmented_layers`).
+
+/// How far painted colours reach into an object.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Shells {
+    /// Layers a top colours, itself and those under it (`Settings::top_color_layers`); 0 for none.
+    pub top: usize,
+    /// Layers a bottom colours, itself and those over it.
+    pub bottom: usize,
+    /// The outer wall's line width, mm.
+    pub width: f64,
+    /// Whether gap fill prints (its speed is above 0): a painted patch may then be as thin as half a line.
+    pub gap_fill: bool,
+    /// mm: how far in from the outline a colour painted on the sides reaches (Orca's
+    /// `mmu_segmented_region_max_width`), and on every other layer how far, to interlock (its
+    /// `mmu_segmented_region_interlocking_depth`); 0 for as far as the segmentation takes it.
+    pub max_width: f64,
+    pub interlocking_depth: f64,
+}
+
+impl Shells {
+    /// Orca's `LayerColorStat` on a layer `height` mm thick, in nanometres and single precision as Orca works them
+    /// out: the outer wall's width, its spacing, and the radius thinner patches are opened away by.
+    fn stat(&self, height: f64) -> (f32, f32, f32) {
+        let w = self.width as f32;
+        let spacing = w - height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32;
+        let small = if self.gap_fill { 0.5 * w } else { w + 0.7 * spacing };
+        let nm = |mm: f32| mm / 1e-6;
+        (nm(w), nm(spacing), nm(small * 0.5))
+    }
+}
+
+/// Nanometres to mm.
+fn mm(nm: f32) -> f64 {
+    f64::from(nm) * 1e-6
+}
+
+/// Orca's `opening_ex`: shrunk by `d` mm and grown back, mitred (Clipper2's offsets, as Orca's).
+fn opening_c2(shapes: &Shapes, d: f64) -> Shapes {
+    if shapes.is_empty() {
+        return Vec::new();
+    }
+    let join = geom::Join::Miter(3.0);
+    geom::offset_c2(&geom::offset_c2(shapes, -d, join), d, join)
+}
+
+/// Every triangle of an object's meshes with its state, as Orca's `get_facets_strict` gives each state's: a painted
+/// triangle's leaves (those left unpainted in state 0), every other triangle whole in state 0; each with its corners
+/// in its mesh's order, so that it faces out of the object.
+pub fn surfaces(meshes: &[(&crate::mesh::Mesh, Option<&crate::paint::Paint>)]) -> Vec<(i32, Corners)> {
+    let mut out = Vec::new();
+    for (mesh, paint) in meshes {
+        let mut painted = vec![false; mesh.triangles.len()];
+        for (t, code, turned) in paint.iter().flat_map(|p| p.iter()) {
+            let Some(tri) = mesh.triangles.get(t as usize) else { continue };
+            let c = tri.map(|v| mesh.vertices[v as usize]);
+            // The code goes by the file's corners; a turned triangle's leaves face out again in the mesh's order.
+            let corners = if turned { [c[0], c[2], c[1]] } else { c };
+            let Some(leaves) = crate::paint::leaves(code, corners) else { continue };
+            painted[t as usize] = true;
+            out.extend(
+                leaves.into_iter().map(|(l, state)| (state as i32, if turned { [l[0], l[2], l[1]] } else { l })),
+            );
+        }
+        for (t, tri) in mesh.triangles.iter().enumerate() {
+            if !painted[t] {
+                out.push((0, tri.map(|v| mesh.vertices[v as usize])));
+            }
+        }
+    }
+    out
+}
+
+/// Twice a triangle's area seen from above: above 0 where it faces up, below where it faces down.
+fn facing(c: &Corners) -> f64 {
+    let [a, b, d] = c.map(|v| [f64::from(v[0]), f64::from(v[1])]);
+    (b[0] - a[0]) * (d[1] - b[1]) - (b[1] - a[1]) * (d[0] - b[0])
+}
+
+/// Where an edge crosses the height `z`, seen from above: worked out from its end lower in (z, x, y), whichever way
+/// the edge runs, so that the two triangles sharing an edge cross it at the same point.
+fn crossing(a: [f64; 3], b: [f64; 3], z: f64) -> [f64; 2] {
+    let (p, q) = if (a[2], a[0], a[1]) < (b[2], b[0], b[1]) { (a, b) } else { (b, a) };
+    let s = (z - p[2]) / (q[2] - p[2]);
+    [p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s]
+}
+
+/// The part of a triangle from the height `lo` up to `hi` (either may be infinite), seen from above, round it the way
+/// the triangle runs.
+fn piece(c: &[[f64; 3]; 3], lo: f64, hi: f64) -> Vec<Pt> {
+    fn push(out: &mut Vec<Pt>, q: [f64; 2]) {
+        let p = geom::pt((q[0] * geom::SCALE).round() as i32, (q[1] * geom::SCALE).round() as i32);
+        if out.last() != Some(&p) {
+            out.push(p);
+        }
+    }
+    let mut out: Vec<Pt> = Vec::with_capacity(6);
+    for i in 0..3 {
+        let (a, b) = (c[i], c[(i + 1) % 3]);
+        if a[2] >= lo && a[2] <= hi {
+            push(&mut out, [a[0], a[1]]);
+        }
+        // The planes the edge crosses, in the order it meets them.
+        for z in if a[2] < b[2] { [lo, hi] } else { [hi, lo] } {
+            if z.is_finite() && (a[2] - z) * (b[2] - z) < 0.0 {
+                push(&mut out, crossing(a, b, z));
+            }
+        }
+    }
+    while out.len() > 1 && out.first() == out.last() {
+        out.pop();
+    }
+    out
+}
+
+/// The loops round what `pieces` (each counter-clockwise) cover between them: an edge two pieces share, run once
+/// each way, cancels, and the edges left chain into loops, counter-clockwise round what is covered and clockwise
+/// round holes, as Orca chains a slab's lines along the open edges of the mesh.
+fn loops_of(pieces: &[Vec<Pt>]) -> Vec<geom::Contour> {
+    type Edge = (i32, i32, i32, i32);
+    let mut count: HashMap<Edge, i32, BuildHasherDefault<crate::mesh::FastHasher>> = HashMap::default();
+    for piece in pieces {
+        for (i, &a) in piece.iter().enumerate() {
+            let b = piece[(i + 1) % piece.len()];
+            if a == b {
+                continue;
+            }
+            if let Some(c) = count.get_mut(&(b.x, b.y, a.x, a.y)).filter(|c| **c > 0) {
+                *c -= 1;
+            } else {
+                *count.entry((a.x, a.y, b.x, b.y)).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut edges: Vec<Edge> = Vec::new();
+    for (e, c) in count {
+        edges.extend(std::iter::repeat_n(e, c.max(0) as usize));
+    }
+    // By where they start, so that a point's edges out are side by side.
+    edges.sort_unstable();
+    let mut used = vec![false; edges.len()];
+    let mut loops = Vec::new();
+    for first in 0..edges.len() {
+        if used[first] {
+            continue;
+        }
+        let start = (edges[first].0, edges[first].1);
+        let mut contour = Vec::new();
+        let mut e = first;
+        loop {
+            used[e] = true;
+            contour.push(geom::pt(edges[e].0, edges[e].1));
+            let to = (edges[e].2, edges[e].3);
+            if to == start {
+                break;
+            }
+            let mut k = edges.partition_point(|x| (x.0, x.1) < to);
+            while k < edges.len() && (edges[k].0, edges[k].1) == to && used[k] {
+                k += 1;
+            }
+            if k == edges.len() || (edges[k].0, edges[k].1) != to {
+                break;
+            }
+            e = k;
+        }
+        if contour.len() >= 3 {
+            loops.push(contour);
+        }
+    }
+    loops
+}
+
+/// What the `facets` of each state (0 to `states` − 1) cover on each layer's slab, seen from above: Orca's
+/// `slice_mesh_slabs` for each state's `get_facets_strict`. Tops (`top`) from the triangles facing up, between the
+/// layer's plane and the next layer's (all above the last layer's); bottoms from those facing down, between the plane
+/// under the layer's and its own (all below the first layer's). A face lying on a plane is the top of the layer cut
+/// there and the bottom of the layer over it, as a slice takes it. Loops under 0.01 mm² go, as Orca drops them
+/// (`remove_small`): `[layer][state]`, the loops counter-clockwise round what is covered.
+fn slabs(facets: &[(i32, Corners)], states: usize, slice_z: &[f64], top: bool) -> Vec<Vec<Vec<geom::Contour>>> {
+    let n = slice_z.len();
+    let mut buckets: Vec<Vec<u32>> = vec![Vec::new(); n];
+    for (i, (state, c)) in facets.iter().enumerate() {
+        if *state < 0 || *state as usize >= states {
+            continue;
+        }
+        let d = facing(c);
+        if (top && d <= 0.0) || (!top && d >= 0.0) {
+            continue;
+        }
+        let z = c.map(|v| f64::from(v[2]));
+        let (lo, hi) = (z[0].min(z[1]).min(z[2]), z[0].max(z[1]).max(z[2]));
+        // Planes at or under `lo`; planes under `hi`.
+        let at_or_under = slice_z.partition_point(|&p| p <= lo);
+        let under_hi = slice_z.partition_point(|&p| p < hi);
+        let (from, to) = match (top, lo == hi) {
+            // A level face: the slab whose plane is at or under it (a top), or the next one (a bottom).
+            (true, true) if at_or_under == 0 => continue,
+            (true, true) => (at_or_under - 1, at_or_under),
+            (false, true) => (at_or_under, at_or_under + 1),
+            // Slab k of the tops runs from plane k to plane k + 1; of the bottoms from plane k − 1 to plane k.
+            (true, false) => (at_or_under.saturating_sub(1), under_hi),
+            (false, false) => (at_or_under, under_hi + 1),
+        };
+        for b in &mut buckets[from.min(n)..to.min(n)] {
+            b.push(i as u32);
+        }
+    }
+    crate::par::map_range(n, |l| {
+        let (lo, hi) = if top {
+            (slice_z[l], slice_z.get(l + 1).copied().unwrap_or(f64::INFINITY))
+        } else {
+            (if l > 0 { slice_z[l - 1] } else { f64::NEG_INFINITY }, slice_z[l])
+        };
+        let mut pieces: Vec<Vec<Vec<Pt>>> = vec![Vec::new(); states];
+        for &i in &buckets[l] {
+            let (state, c) = &facets[i as usize];
+            let mut p = piece(&c.map(|v| v.map(f64::from)), lo, hi);
+            if p.len() < 3 {
+                continue;
+            }
+            // Each counter-clockwise from above: a bottom's triangle runs the other way.
+            if !top {
+                p.reverse();
+            }
+            pieces[*state as usize].push(p);
+        }
+        let min_area2 = 2.0 * scaled(0.1) * scaled(0.1);
+        pieces
+            .iter()
+            .map(|p| {
+                let mut loops = loops_of(p);
+                loops.retain(|c| (geom::area2(c) as f64).abs() >= min_area2);
+                loops
+            })
+            .collect()
+    })
+}
+
+/// `project_to_shells`: a top's (bottom's) `patch` on layer `l` carried into the `layers` under (over) it, nearest
+/// first, on each one outer wall's width and spacing (`step`, nm) further in from what every layer from `l` to it
+/// covers, opened by `small` (mm); it stops at the first layer it leaves nothing on.
+fn carry(
+    patch: &Shapes,
+    l: usize,
+    layers: &[usize],
+    outlines: &[Shapes],
+    step: f32,
+    small: f64,
+) -> Vec<(usize, Shapes)> {
+    let mut out = Vec::new();
+    let mut trimmed = outlines[l].clone();
+    let mut offset = 0f32;
+    for &k in layers {
+        offset -= step;
+        if trimmed.is_empty() {
+            break;
+        }
+        trimmed = geom::intersection(&trimmed, &outlines[k]);
+        let inner = geom::offset_c2(&trimmed, mm(offset), geom::Join::Miter(3.0));
+        let shell = opening_c2(&geom::intersection(patch, &inner), small);
+        if shell.is_empty() {
+            break;
+        }
+        out.push((k, shell));
+    }
+    out
+}
+
+/// `segmentation_top_and_bottom_layers` for one object: each layer's regions coloured by a painted top or bottom,
+/// by state (`[layer][state]`, state 0 the object's own filament). Each patch of its tops and bottoms seen from above
+/// on a layer's slab (`slabs`), less what the layer over a top (under a bottom) covers and opened by a quarter of a
+/// wall's width, colours that layer; and, one wall's width and spacing further in on each, the layers under a top
+/// (over a bottom) as deep as `shells` says, until nothing is left. A layer's own patches keep what other colours
+/// carry into it; then each colour gives way to those before it, and the object's own (0) to all of them.
+/// `outlines`: each layer's shapes as the segmentation takes them (`outline`).
+fn tops_and_bottoms(
+    slice_z: &[f64],
+    heights: &[f64],
+    outlines: &[Shapes],
+    surfaces: &[(i32, Corners)],
+    states: usize,
+    shells: &Shells,
+) -> Vec<Vec<Shapes>> {
+    let n = slice_z.len();
+    if shells.top == 0 && shells.bottom == 0 {
+        return vec![vec![Vec::new(); states]; n];
+    }
+    let none = || vec![vec![Vec::new(); states]; n];
+    let tops = if shells.top > 0 { slabs(surfaces, states, slice_z, true) } else { none() };
+    let bottoms = if shells.bottom > 0 { slabs(surfaces, states, slice_z, false) } else { none() };
+    // Each layer's own patches by state, and those it carries: (layer, state, shapes), under its tops and over its
+    // bottoms.
+    type Carried = Vec<(usize, usize, Shapes)>;
+    let per_layer: Vec<(Vec<Shapes>, Carried, Carried)> = crate::par::map_range(n, |l| {
+        let (width, spacing, small) = shells.stat(heights[l]);
+        let small = mm(small);
+        let mut own: Vec<Shapes> = vec![Vec::new(); states];
+        let (mut down, mut up) = (Vec::new(), Vec::new());
+        for s in 0..states {
+            // Bottoms first, as Orca appends them.
+            for top in [false, true] {
+                let loops = if top { &tops[l][s] } else { &bottoms[l][s] };
+                if loops.is_empty() {
+                    continue;
+                }
+                let mut patch = geom::union_contours(loops);
+                // A top the layer over it covers is no top (a bottom likewise).
+                let next = if top { outlines.get(l + 1) } else { l.checked_sub(1).map(|k| &outlines[k]) };
+                if let Some(cover) = next {
+                    patch = geom::difference(&patch, cover);
+                }
+                let patch = opening_c2(&patch, small);
+                if patch.is_empty() {
+                    continue;
+                }
+                let layers: Vec<usize> = if top {
+                    (l.saturating_sub(shells.top) + 1..l).rev().collect()
+                } else {
+                    (l + 1..(l + shells.bottom).min(n)).collect()
+                };
+                for (k, shell) in carry(&patch, l, &layers, outlines, spacing + width, small) {
+                    if top { &mut down } else { &mut up }.push((k, s, shell));
+                }
+                own[s].extend(patch);
+            }
+        }
+        (own, down, up)
+    });
+    // What each layer has carried into it, by state, in the order of the layers it comes from.
+    let mut carried_down: Vec<Vec<Shapes>> = vec![vec![Vec::new(); states]; n];
+    let mut carried_up: Vec<Vec<Shapes>> = vec![vec![Vec::new(); states]; n];
+    for (_, down, up) in &per_layer {
+        for (k, s, shapes) in down {
+            carried_down[*k][*s].extend(shapes.iter().cloned());
+        }
+        for (k, s, shapes) in up {
+            carried_up[*k][*s].extend(shapes.iter().cloned());
+        }
+    }
+    crate::par::map_range(n, |l| {
+        let mut by: Vec<Shapes> = per_layer[l].0.iter().map(|own| geom::union(own, &Vec::new())).collect();
+        let painted = geom::union_all(&by.iter().collect::<Vec<_>>());
+        for (s, region) in by.iter_mut().enumerate() {
+            let down = geom::difference(&geom::union(&carried_down[l][s], &Vec::new()), &painted);
+            let up = geom::difference(&geom::union(&carried_up[l][s], &Vec::new()), &painted);
+            if !down.is_empty() || !up.is_empty() {
+                *region = geom::union_all(&[&*region, &down, &up]);
+            }
+        }
+        // Trimmed by each other: each colour gives way to those before it, the object's own to all.
+        let mut taken: Shapes = Vec::new();
+        for region in by.iter_mut().skip(1) {
+            if !taken.is_empty() {
+                *region = geom::difference(region, &taken);
+            }
+            taken.extend(region.iter().cloned());
+        }
+        if !taken.is_empty() {
+            by[0] = geom::difference(&by[0], &taken);
+        }
+        by
+    })
+}
+
+/// `merge_segmented_layers` on one layer: its regions painted on the sides (`sides[f]`, filament `f`) less every
+/// top and bottom region (`tops[state]`, state 0 the object's own filament), then each painted filament's top and
+/// bottom regions added, where it has side regions too merged with them, closed by 0.1 µm (Orca's dimple removal).
+fn merge_layer(sides: &[Shapes], tops: &[Shapes]) -> Vec<Shapes> {
+    if tops.iter().all(Vec::is_empty) {
+        return sides.to_vec();
+    }
+    let all: Shapes = tops.iter().flatten().cloned().collect();
+    let eps = SCALED_EPSILON as f64 / geom::SCALE;
+    let join = geom::Join::Miter(3.0);
+    sides
+        .iter()
+        .enumerate()
+        .map(|(f, side)| {
+            let side = geom::difference(side, &all);
+            let Some(top) = tops.get(f + 1).filter(|t| !t.is_empty()) else { return side };
+            if side.is_empty() {
+                return top.clone();
+            }
+            let merged = geom::union(&side, top);
+            geom::offset_c2(&geom::offset_c2(&merged, eps, join), -eps, join)
+        })
         .collect()
 }
 
