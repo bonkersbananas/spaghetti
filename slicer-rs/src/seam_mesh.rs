@@ -9,6 +9,7 @@
 //! `generate_canonical`, `uniform_int_distribution` and `std::shuffle`, made here as libstdc++ makes them.
 
 use crate::mesh::Mesh;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Orca's `raycasting_visibility_samples_count`.
 const SAMPLES: usize = 30_000;
@@ -643,15 +644,16 @@ impl Bvh {
     /// its default epsilon finds it: the shortest distance in single precision, ties to the first in Orca's tree.
     fn first_hit(&self, origin: [f64; 3], dir: [f64; 3]) -> Option<u32> {
         let inv = dir.map(|d| 1.0 / d);
+        let neg = inv.map(|i| i < 0.0);
         // Where the ray enters a box, if it does by `limit`.
         let enter = |node: &Node, limit: f64| -> Option<f64> {
             let (mut t0, mut t1) = (0.0f64, limit);
             for k in 0..3 {
-                let a = (node.min[k] - origin[k]) * inv[k];
-                let b = (node.max[k] - origin[k]) * inv[k];
-                let (lo, hi) = if a < b { (a, b) } else { (b, a) };
-                t0 = if lo > t0 { lo } else { t0 };
-                t1 = if hi < t1 { hi } else { t1 };
+                let (near, far) = if neg[k] { (node.max[k], node.min[k]) } else { (node.min[k], node.max[k]) };
+                let a = (near - origin[k]) * inv[k];
+                let b = (far - origin[k]) * inv[k];
+                t0 = if a > t0 { a } else { t0 };
+                t1 = if b < t1 { b } else { t1 };
             }
             (t0 <= t1).then_some(t0)
         };
@@ -764,26 +766,30 @@ fn directions() -> Vec<V3> {
 pub struct Visibility {
     positions: Vec<V3>,
     normals: Vec<V3>,
-    visibility: Vec<f32>,
+    /// Each sample's visibility (its bits) once measured, `UNMEASURED` until a point near it asks.
+    visibility: Vec<AtomicU32>,
     /// mm: how far round a point its samples count (`mesh_samples_radius`).
     radius: f32,
     /// The samples in cells `radius` wide.
     grid: Grid,
     /// mm: where the middle of the object is, which the samples are round.
     offset: [f64; 2],
+    /// The decimated mesh, for the rays.
+    bvh: Bvh,
+    face_normals: Vec<V3>,
+    directions: Vec<V3>,
+    back: bool,
 }
+
+/// What a sample's visibility holds until it is measured: a NaN that no measurement gives.
+const UNMEASURED: u32 = u32::MAX;
 
 impl Visibility {
     /// The visibility of `mesh`'s surface (its vertices in mm, where the object is sliced). With `back`, as Orca's
-    /// "aligned back" seams have it: a face that looks to the front counts as less visible the more it does.
+    /// "aligned back" seams have it: a face that looks to the front counts as less visible the more it does. Each
+    /// sample is measured when `at` first asks about a point near it, so samples far from every outer wall (on wide
+    /// tops and bottoms) never are.
     pub fn of(mesh: &Mesh, back: bool) -> Visibility {
-        Visibility::near(mesh, back, None)
-    }
-
-    /// `of`, measuring only the samples that `at` looks at for `points` (mm, where the object is sliced), when
-    /// given: the rest it leaves fully visible, so `at` must be asked about those points alone. Most of a model's
-    /// surface is far from where its outer walls could start.
-    pub fn near(mesh: &Mesh, back: bool, points: Option<&[V3]>) -> Visibility {
         let (mut vertices, indices) = collapse_short_edges(&mesh.vertices, &mesh.triangles, TRIANGLES);
         // Orca samples the object where it slices it, round the middle of its bounding box (`trafo_centered`, its
         // `m_center_offset` whole nanometres, cut towards zero), which rounds the points' floats as here.
@@ -800,64 +806,54 @@ impl Visibility {
         let radius = (f64::from(search_area) / std::f64::consts::PI).sqrt() as f32;
         let grid = Grid::new(&samples.positions, radius);
         let count = samples.positions.len();
-        let mut out = Visibility {
+        Visibility {
             positions: samples.positions,
             normals: samples.normals,
-            visibility: vec![1.0; count],
+            visibility: (0..count).map(|_| AtomicU32::new(UNMEASURED)).collect(),
             radius,
             grid,
             offset,
-        };
-        let wanted: Vec<u32> = match points {
-            None => (0..count as u32).collect(),
-            Some(points) => {
-                let mut near = vec![false; count];
-                for &p in points {
-                    out.around(p, |k, _| near[k as usize] = true);
-                }
-                (0..count as u32).filter(|&k| near[k as usize]).collect()
-            }
-        };
-        let bvh = Bvh::build(&vertices, &indices);
-        let dirs = directions();
-        let face_normals: Vec<V3> = indices.iter().map(|&t| face_normal(&vertices, t)).collect();
-        let step = 1.0f32 / (RAYS * RAYS) as f32;
-        let chunk = 256;
-        let (positions, normals) = (&out.positions, &out.normals);
-        let measured: Vec<f32> = crate::par::map_range(wanted.len().div_ceil(chunk), |c| {
-            wanted[c * chunk..((c + 1) * chunk).min(wanted.len())]
-                .iter()
-                .map(|&s| {
-                    let mut v = 1.0f32;
-                    let (center, normal) = (positions[s as usize], normals[s as usize]);
-                    if back {
-                        v += ((dot(normal, [0.0, -1.0, 0.0]) + 1.2) * 0.5).clamp(0.0, 1.0);
-                    }
-                    // Orca's Frame::set_from_z.
-                    let z = normalized(normal);
-                    let tmp_x = if z[0].abs() > 0.99 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
-                    let y = normalized(cross(z, tmp_x));
-                    let x = cross(y, z);
-                    let origin = add(center, scale(normal, 0.01)).map(f64::from);
-                    for d in &dirs {
-                        let world = add(add(scale(x, d[0]), scale(y, d[1])), scale(z, d[2]));
-                        if let Some(t) = bvh.first_hit(origin, world.map(f64::from))
-                            && dot(face_normals[t as usize], world) <= 0.0
-                        {
-                            v -= step;
-                        }
-                    }
-                    v
-                })
-                .collect::<Vec<f32>>()
-        })
-        .into_iter()
-        .flatten()
-        .collect();
-        for (&k, v) in wanted.iter().zip(measured) {
-            out.visibility[k as usize] = v;
+            bvh: Bvh::build(&vertices, &indices),
+            face_normals: indices.iter().map(|&t| face_normal(&vertices, t)).collect(),
+            directions: directions(),
+            back,
         }
-        out
+    }
+
+    /// Sample `k`'s visibility, measured the first time it is asked for.
+    fn sample_visibility(&self, k: usize) -> f32 {
+        let bits = self.visibility[k].load(Ordering::Relaxed);
+        if bits != UNMEASURED {
+            return f32::from_bits(bits);
+        }
+        let v = self.measure(k);
+        self.visibility[k].store(v.to_bits(), Ordering::Relaxed);
+        v
+    }
+
+    /// Orca's `raycast_visibility` of sample `k`: a 25th off for each ray that meets the model's outside first.
+    fn measure(&self, k: usize) -> f32 {
+        let mut v = 1.0f32;
+        let (center, normal) = (self.positions[k], self.normals[k]);
+        if self.back {
+            v += ((dot(normal, [0.0, -1.0, 0.0]) + 1.2) * 0.5).clamp(0.0, 1.0);
+        }
+        // Orca's Frame::set_from_z.
+        let z = normalized(normal);
+        let origin = add(center, scale(normal, 0.01)).map(f64::from);
+        let tmp_x = if z[0].abs() > 0.99 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+        let y = normalized(cross(z, tmp_x));
+        let x = cross(y, z);
+        let step = 1.0f32 / (RAYS * RAYS) as f32;
+        for d in &self.directions {
+            let world = add(add(scale(x, d[0]), scale(y, d[1])), scale(z, d[2]));
+            if let Some(t) = self.bvh.first_hit(origin, world.map(f64::from))
+                && dot(self.face_normals[t as usize], world) <= 0.0
+            {
+                v -= step;
+            }
+        }
+        v
     }
 
     /// Each sample within the radius of `p` (mm, where the object is sliced), with `p` moved round the object's
@@ -890,7 +886,7 @@ impl Visibility {
             any = true;
             let mut w = r - dot(d, self.normals[k as usize]).abs();
             w += r - norm(d);
-            total += w * self.visibility[k as usize];
+            total += w * self.sample_visibility(k as usize);
             weights += w;
         });
         if any { total / weights } else { 1.0 }
@@ -1035,13 +1031,14 @@ mod torus {
         let v = Visibility::of(&torus(), false);
         assert_eq!(v.radius.to_bits(), 0x3f4d_73dd, "{}", v.radius);
         assert_eq!(v.positions.len(), SAMPLES);
-        let visible: f64 = v.visibility.iter().map(|&x| f64::from(x)).sum();
+        let all: Vec<f32> = (0..v.positions.len()).map(|k| v.sample_visibility(k)).collect();
+        let visible: f64 = all.iter().map(|&x| f64::from(x)).sum();
         assert_eq!(visible, 27070.0384484604);
         let at: f64 = v.positions.iter().map(|p| f64::from(p[0]) + f64::from(p[1]) + f64::from(p[2])).sum();
         assert_eq!(at, 521.0006640803767);
         assert_eq!(v.positions[0], [-12.501299, 1.4116337, 3.038413]);
-        assert_eq!(v.visibility[1], 0.87999994);
-        assert_eq!(v.visibility.iter().filter(|&&x| x < 0.5).count(), 111);
+        assert_eq!(all[1], 0.87999994);
+        assert_eq!(all.iter().filter(|&&x| x < 0.5).count(), 111);
         // Round the outside of the ring the surface sees all of space, round the inside the ring hides some.
         let (outside, inside) = (v.at([14.0, 0.0, 0.0]), v.at([6.0, 0.0, 0.0]));
         assert!(outside > 0.99 && inside < 0.8, "{outside} {inside}");

@@ -469,10 +469,9 @@ fn object_seams(
         }
         seams
     });
-    // How visible each candidate is, from the samples round the candidates alone.
+    // How visible each candidate is, from the samples round it.
     if mode != Mode::Rear {
-        let points: Vec<[f32; 3]> = layers.iter().flat_map(|l| l.points.iter().map(|p| p.position)).collect();
-        let v = Visibility::near(mesh, mode == Mode::AlignedBack, Some(&points));
+        let v = Visibility::of(mesh, mode == Mode::AlignedBack);
         let seen: Vec<Vec<f32>> =
             crate::par::map_range(layers.len(), |l| layers[l].points.iter().map(|p| v.at(p.position)).collect());
         for (layer, seen) in layers.iter_mut().zip(seen) {
