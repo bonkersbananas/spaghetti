@@ -260,6 +260,11 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         let item_info = info.get(&id);
         let mut vertices: Vec<[f32; 3]> = Vec::new();
         let mut triangles: Vec<[u32; 3]> = Vec::new();
+        // Each part's corners, how far its transform lifts it and its heights as the file has them: Orca's heights
+        // (`settle_heights`) where every part is only moved.
+        let mut parts: Vec<(std::ops::Range<usize>, f64)> = Vec::new();
+        let mut heights: Vec<f32> = Vec::new();
+        let mut settle = true;
         // Depth-first through components (at most 8 deep), loading other model files as they are named.
         let mut stack: Vec<(String, String, Matrix, usize)> = vec![(root_name.clone(), id.clone(), transform, 0)];
         while let Some((file, object_id, m, depth)) = stack.pop() {
@@ -275,6 +280,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                 continue;
             }
             let base = vertices.len() as u32;
+            settle &= m[..9] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
             for v in &object.vertices {
                 let (x, y, z) = (v[0] * scale, v[1] * scale, v[2] * scale);
                 vertices.push([
@@ -282,7 +288,9 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                     (x * m[1] + y * m[4] + z * m[7] + m[10] * scale) as f32,
                     (x * m[2] + y * m[5] + z * m[8] + m[11] * scale) as f32,
                 ]);
+                heights.push(z as f32);
             }
+            parts.push((base as usize..vertices.len(), m[11] * scale));
             let flip = det(&m) < 0.0;
             for t in &object.triangles {
                 let t = [t[0] + base, t[1] + base, t[2] + base];
@@ -297,6 +305,13 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         }
         if triangles.is_empty() || vertices.iter().any(|v| !v.iter().all(|c| c.is_finite())) {
             continue;
+        }
+        if settle {
+            for (v, &z) in vertices.iter_mut().zip(&heights) {
+                v[2] = z;
+            }
+            // Orca puts other programs' models on the bed; a project's sit where it has them.
+            crate::mesh::settle_heights(&mut vertices, &parts, !project);
         }
         let name = item_info
             .and_then(|i| i.name.clone())
@@ -346,7 +361,8 @@ mod tests {
         assert!(!m.project);
         assert_eq!(m.meshes.len(), 2);
         assert_eq!(m.meshes[0].name, "Tetra");
-        assert_eq!(m.meshes[0].vertices[1], [110.0, 20.0, 30.0]);
+        // Put down on the bed, as Orca puts another program's model.
+        assert_eq!(m.meshes[0].vertices[1], [110.0, 20.0, 0.0]);
         assert_eq!(m.meshes[1].vertices[0], [50.0, 0.0, 0.0]);
         assert_eq!(m.meshes[1].triangles.len(), 4);
     }

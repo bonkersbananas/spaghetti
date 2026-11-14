@@ -243,7 +243,10 @@ impl Plate {
             self.filaments.extend(model.filaments.iter().map(|&f| filament.unwrap_or(f)));
             self.meshes.extend(model.meshes);
         } else {
-            self.meshes.push(mesh::read_stl(name, input.bytes)?);
+            let mut m = mesh::read_stl(name, input.bytes)?;
+            let n = m.vertices.len();
+            mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], true);
+            self.meshes.push(m);
             self.unassigned |= filament.is_none();
             self.filaments.push(filament.unwrap_or(0));
         }
