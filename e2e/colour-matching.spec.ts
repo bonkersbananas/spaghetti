@@ -57,6 +57,10 @@ test("a model with colours of its own prints each in a filament matched to it, a
   await files.getByRole("button", { name: "Slice with…" }).click();
   const settings = page.getByRole("dialog", { name: "How to slice it" });
   await expect(settings.getByText("Colours", { exact: true })).toBeVisible();
+  // Folded to one line: how many colours on how many spools.
+  const summary = settings.getByRole("button", { name: /^Colours/ });
+  await expect(summary).toContainText("6 colours on 6 spools");
+  await summary.click();
   const first = settings.getByRole("button", { name: /Ketchup Red/ });
   await expect(first).toContainText("Not in the Pantry yet");
   await first.click();

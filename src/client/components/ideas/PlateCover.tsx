@@ -37,10 +37,11 @@ export function PlateCover({
         <SlicerPreviewBadge />
       </span>
       {original && (
-        <div className="mt-3 px-5 md:px-0">
+        <div className="absolute inset-x-0 bottom-3 flex justify-center">
           <SegmentedControl
             label="Colours shown"
             labelHidden
+            overlay
             options={[
               { value: "matched", label: "In our filaments" },
               { value: "original", label: "Model's colours" },

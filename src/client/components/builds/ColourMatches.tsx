@@ -64,6 +64,8 @@ export function ColourMatches({
   wide?: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  // The rows are folded to one line until asked for: the panel and the sheet keep their room.
+  const [all, setAll] = useState(false);
   const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
   const choose = (colour: SliceColour, id: string) => {
     const others = choices.filter((choice) => choice.from !== colour.hex);
@@ -75,12 +77,32 @@ export function ColourMatches({
     const spool = offered.find((candidate) => candidate.id === id);
     if (spool) onChange([...others, { from: colour.hex, filament: filamentOfSpool(spool) }]);
   };
+  const filaments = new Set(colours.map(keyOf));
+  const shared = [...filaments].filter((key) => colours.filter((colour) => keyOf(colour) === key).length > 1).length;
+  const standIns = colours.filter((colour) => !colour.inPantry).length;
+  const summary = (
+    <span className="flex flex-col gap-1.5">
+      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        {colours.map((colour) => (
+          <span key={colour.hex} className="flex items-center gap-1">
+            <Swatch color={colour.hex} />
+            <ArrowRightIcon size={10} aria-hidden className="text-ink-ghost" />
+            <SpoolDisc color={colour.filament.colorHex} size="xs" empty={!colour.inPantry} />
+          </span>
+        ))}
+      </span>
+      <span>
+        {colours.length} colours on {filaments.size} {filaments.size === 1 ? "spool" : "spools"}
+        {shared ? ` · ${shared} shared` : ""}
+        {standIns ? ` · ${standIns} not in the Pantry yet` : ""}
+      </span>
+    </span>
+  );
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Colours</span>
-        <p className="text-small text-ink-soft text-pretty">Each colour in the model, and the spool that prints it.</p>
-      </div>
+    <Disclosure appearance="plain" open={all} onOpenChange={setAll} title="Colours" summary={summary}>
+      <p className="text-small text-ink-soft mb-2 text-pretty">
+        Each colour in the model, and the spool that prints it.
+      </p>
       <ul className={wide ? "grid grid-cols-2 gap-x-6 gap-y-0" : "flex flex-col"}>
         {colours.map((colour) => {
           const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
@@ -149,7 +171,7 @@ export function ColourMatches({
           );
         })}
       </ul>
-    </div>
+    </Disclosure>
   );
 }
 

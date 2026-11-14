@@ -23,6 +23,11 @@ interface SegmentedControlProps<T extends string> {
   /** null: nothing picked yet. */
   value: T | null;
   onChange: (value: T) => void;
+  /**
+   * Lies on a picture (the cover's before/after): a compact warm pill that sizes to its words, in place of the
+   * recessed channel.
+   */
+  overlay?: boolean;
   className?: string;
 }
 
@@ -38,23 +43,34 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  overlay = false,
   className,
 }: SegmentedControlProps<T>) {
   const name = useId();
   return (
     <fieldset className={cn("flex min-w-0 flex-col gap-2", className)}>
       <legend className={labelHidden ? "sr-only" : "text-small text-ink-faint mb-2 font-medium"}>{label}</legend>
-      <div className="bg-well shadow-well flex gap-1 rounded-md p-1">
+      <div
+        className={cn(
+          "flex gap-1 p-1",
+          overlay ? "bg-lifted/90 shadow-raised rounded-pill w-fit backdrop-blur-sm" : "bg-well shadow-well rounded-md",
+        )}
+      >
         {options.map(({ value: optionValue, label: optionLabel, icon: IconComponent, mark, markWords }) => {
           const selected = optionValue === value;
           return (
             <label
               key={optionValue}
               className={cn(
-                "pressable has-focus-visible:shadow-ring relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-sm font-semibold whitespace-nowrap",
+                "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer items-center justify-center gap-1.5 font-semibold whitespace-nowrap",
+                overlay ? "rounded-pill px-3.5" : "flex-1 rounded-sm",
                 // 44 px on phones (a touch-target overlay would sit over the radio and take its clicks); compact on desktop.
                 "text-small h-11 md:h-8",
-                selected ? "bg-lifted text-ink shadow-soft" : "text-ink-faint hover:text-ink",
+                selected
+                  ? overlay
+                    ? "bg-semolina-soft text-semolina-ink"
+                    : "bg-lifted text-ink shadow-soft"
+                  : "text-ink-faint hover:text-ink",
               )}
             >
               <input
