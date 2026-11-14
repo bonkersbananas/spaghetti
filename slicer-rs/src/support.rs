@@ -42,6 +42,15 @@ const NO_OVERLAP_XY_GAP: f64 = 0.2;
 /// the profile's default). We write the chords, not the arcs: round a tree's circles they print 0.4 % less plastic.
 const RESOLUTION: f64 = 0.0375;
 
+/// What a brim keeps the first layer's support out of: the object's footprint, its outlines grown by `gap` where a
+/// brim goes round them (`outer`), its holes shrunk by it where one goes inside them (`inner`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BrimTrim {
+    outer: bool,
+    inner: bool,
+    gap: f64,
+}
+
 /// What the generator needs from the settings, worked out as Orca's `SupportParameters` and `SlicingParameters` do.
 #[derive(Clone, Debug)]
 pub struct Params {
@@ -75,8 +84,10 @@ pub struct Params {
     first_expansion: f64,
     /// A bottom contact layer's height (the layer height as Orca's float flow keeps it).
     bottom_contact_height: f64,
-    /// How the brim keeps the first layer's support off: none, the object's footprint, or that grown by the gap.
-    brim: Option<f64>,
+    /// How the brim keeps the first layer's support off: not at all (no brim), or by the object's footprint, its
+    /// outlines grown by the brim's gap where a brim goes round them and its holes shrunk by it where one goes inside
+    /// them (Orca's `trim_support_layers_by_object`).
+    brim: Option<BrimTrim>,
     grid_resolution: f64,
     base_spacing: f64,
     /// Orca's organic trees (`smsTreeOrganic`), whose layers come from `tree.rs`: their bottom contacts aren't printed,
@@ -130,8 +141,12 @@ impl Params {
             first_expansion: sp.first_layer_expansion,
             bottom_contact_height: s.layer_height as f32 as f64,
             brim: match s.brim_type.as_str() {
-                "auto_brim" | "" => Some(0.0),
-                "outer_only" if s.brim_width > 0.0 => Some(s.brim_object_gap),
+                "auto_brim" | "" => Some(BrimTrim { outer: false, inner: false, gap: 0.0 }),
+                kind if s.brim_width > 0.0 && kind != "no_brim" => Some(BrimTrim {
+                    outer: matches!(kind, "outer_only" | "outer_and_inner"),
+                    inner: matches!(kind, "inner_only" | "outer_and_inner"),
+                    gap: s.brim_object_gap,
+                }),
                 _ => None,
             },
             grid_resolution: support_spacing,
@@ -1231,17 +1246,20 @@ fn flange(o: &Object, arena: &mut [Gen], tops: &[usize], interfaces: &[usize], i
             arena[b].polygons = geom::difference(&arena[b].polygons, &geom::union_all(&[&interface_polygons]));
         }
     }
-    if let Some(gap) = p.brim {
-        // A brim round the outside: the footprint's outlines grown by the brim's gap, its holes left out.
-        let brim = if gap > 0.0 {
-            let outlines: Shapes = footprint.iter().map(|s| vec![s[0].clone()]).collect();
-            let holes: Shapes = footprint
-                .iter()
-                .flat_map(|s| s[1..].iter().map(|h| vec![h.iter().rev().copied().collect::<Vec<Pt>>()]))
-                .collect();
-            geom::difference(&geom::offset_round(&outlines, gap, 0.1), &holes)
-        } else {
-            footprint
+    if let Some(BrimTrim { outer, inner, gap }) = p.brim {
+        let outlines: Shapes = footprint.iter().map(|s| vec![s[0].clone()]).collect();
+        let holes: Shapes = footprint
+            .iter()
+            .flat_map(|s| s[1..].iter().map(|h| vec![h.iter().rev().copied().collect::<Vec<Pt>>()]))
+            .collect();
+        let brim = match (outer, inner) {
+            // Brims both sides: the footprint grown by the gap, mitred (Orca's offset of the expolygons).
+            (true, true) => geom::offset_c2(&footprint, gap, geom::Join::Miter(3.0)),
+            // A brim round the outside: the outlines grown by the gap, round, the holes left out.
+            (true, false) => geom::difference(&geom::offset_round(&outlines, gap, 0.1), &holes),
+            // A brim inside the holes only: the outlines as they are, the holes shrunk by the gap, round.
+            (false, true) => geom::difference(&outlines, &geom::offset_round(&holes, -gap, 0.1)),
+            (false, false) => footprint,
         };
         for g in [base, contacts, first_interface].into_iter().flatten() {
             if !arena[g].polygons.is_empty() {

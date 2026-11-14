@@ -192,10 +192,9 @@ mod tests {
             read(r#"{"process": {"enable_support": "1", "support_type": "normal(manual)"}}"#).err(),
             Some(Error::Unsupported("supports painted on"))
         );
-        assert_eq!(refused(r#"{"process": {"brim_type": "brim_ears"}}"#), Some(Error::Unsupported("brim ears")));
         assert_eq!(
-            refused(r#"{"process": {"brim_type": "outer_and_inner"}}"#),
-            Some(Error::Unsupported("a brim inside holes"))
+            refused(r#"{"process": {"brim_type": "painted"}}"#),
+            Some(Error::Unsupported("brim ears painted on"))
         );
         // Spiral vase mode slices (spiral.rs), with one wall, no top shells and no sparse infill as Orca prints it.
         let spiral = read(r#"{"process": {"spiral_mode": "1", "wall_loops": "3", "sparse_infill_density": "20%"}}"#);
@@ -212,8 +211,8 @@ mod tests {
         assert_eq!(refused("not json"), Some(Error::Setup));
         assert_eq!(refused(r#"{"process": []}"#), Some(Error::Setup));
         assert_eq!(refused(r#"{"slicing": {"scale": 0}}"#), Some(Error::Setup));
-        // An auto brim, a brim people turn on and no brim slice.
-        for brim in ["auto_brim", "outer_only", "no_brim"] {
+        // An auto brim, a brim people turn on round the outside, inside holes or both, brim ears and no brim slice.
+        for brim in ["auto_brim", "outer_only", "inner_only", "outer_and_inner", "brim_ears", "no_brim"] {
             assert!(read(&format!(r#"{{"process": {{"brim_type": "{brim}"}}}}"#)).is_ok(), "{brim}");
         }
     }
