@@ -1434,7 +1434,10 @@ pub fn classic_layers(
 ) -> Vec<Layer> {
     use crate::tree::classic::draw::AreaType;
     let flow_spacing = |w: f64, h: f64| (w as f32 - h as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
-    let interface_angle = std::f32::consts::FRAC_PI_2 as f64;
+    // Orca's `_infill_direction` angles (the filler's and a quarter turn, in float): the interfaces' filler is at the
+    // support angle and a quarter turn, the base's at the support angle.
+    let interface_angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
+    let base_angle = std::f32::consts::FRAC_PI_2 as f64;
     par::map_range(drawn.len(), |layer_id| {
         let d = &drawn[layer_id];
         let h = d.height;
@@ -1453,14 +1456,14 @@ pub fn classic_layers(
             let one_area = vec![g.area.clone()];
             match g.kind {
                 AreaType::Base if first => {
-                    items.extend(flange_paths(&one_area, 0.0, origin, p));
+                    items.extend(flange_paths(&one_area, base_angle, origin, p));
                 }
                 AreaType::Base if g.need_infill => {
                     // A hybrid tree's column: walls (one at least where it is too thin for lines alone) and the
                     // support pattern inside.
                     let thin = geom::offset_square(&one_area, -(support_spacing * 1.5)).is_empty();
                     let walls = wall_count.max(usize::from(thin));
-                    items.push(Item::Fixed(walled_infill(&one_area, walls, sp, support_density, origin, h, p)));
+                    items.push(Item::Fixed(walled_infill(&one_area, walls, sp, support_density, base_angle, origin, h, p)));
                 }
                 AreaType::Base => {
                     let mut lp = p.clone();
@@ -1518,11 +1521,13 @@ pub fn classic_layers(
 
 /// Orca's `make_perimeter_and_infill` with the walls first: `walls` loops from half a line in, and the support
 /// pattern inside the last; with no walls, a loop only round what the lines leave out.
+#[allow(clippy::too_many_arguments)]
 fn walled_infill(
     area: &Shapes,
     walls: usize,
     sp: f64,
     density: f64,
+    angle: f64,
     origin: (f64, f64),
     h: f64,
     p: &Params,
@@ -1538,7 +1543,7 @@ fn walled_infill(
     let mut lines: Vec<Path> = Vec::new();
     let mut boxes: Vec<[i32; 4]> = Vec::new();
     for e in &to_infill {
-        let fill = base_support::fill(e, 0.0, origin, sp, density);
+        let fill = base_support::fill(e, angle, origin, sp, density);
         if let Some(b) = geom::bbox(&fill.iter().map(|l| vec![l.clone()]).collect::<Shapes>()) {
             boxes.push(b);
         }
