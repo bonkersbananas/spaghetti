@@ -826,11 +826,19 @@ export default function ModelFileCard({
     ...(figuresPlate ? { figuresPlate } : {}),
   };
   // Its settings: a sheet on phones, a panel beside the page on desktop (but not over the attempt's sheet).
-  // A project with several plates says which this is of how many, first (the settings' own "Plate 3" gives way).
   const plate = file.slice?.status === "sliced" ? file.slice.plate : undefined;
+  // A change of plate is no saving: the new plate's own figures and which it is, not a before and after.
+  const plateNote =
+    change && file.previous && file.slice?.status === "sliced" && plate
+      ? (slicingOfSlice(file.previous.slice).modelPlate ?? 1) !== (slicingOfSlice(file.slice).modelPlate ?? 1)
+        ? `Now plate ${plate.index} of ${plate.count} · ${Math.round(plate.height)} mm tall`
+        : undefined
+      : undefined;
+  // A project with several plates says which this is of how many, first (the settings' own "Plate 3" gives way).
   const summary = plate
     ? [
-        `Plate ${plate.index} of ${plate.count}`,
+        // The note of a change of plate says it already, for now.
+        ...(plateNote ? [] : [`Plate ${plate.index} of ${plate.count}`]),
         ...slicingSummary(settings).filter((piece) => !/^Plate \d/.test(piece)),
       ]
     : slicingSummary(settings);
@@ -852,13 +860,6 @@ export default function ModelFileCard({
           const words = changeWords(slicingOfSlice(file.previous.slice), slicingOfSlice(file.slice));
           return words === "the new settings" ? undefined : words;
         })()
-      : undefined;
-  // A change of plate is no saving: the new plate's own figures and which it is, not a before and after.
-  const plateNote =
-    change && file.previous && file.slice?.status === "sliced" && plate
-      ? (slicingOfSlice(file.previous.slice).modelPlate ?? 1) !== (slicingOfSlice(file.slice).modelPlate ?? 1)
-        ? `Now plate ${plate.index} of ${plate.count} · ${Math.round(plate.height)} mm tall`
-        : undefined
       : undefined;
   const card = (
     <ModelCard

@@ -21,7 +21,8 @@ import { ModelCard, type ModelState, SliceResult } from "@/components/builds/Mod
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
-import { type PlateOption, PlatePicker, plateWords } from "@/components/ui/PlatePicker";
+import { MetaList } from "@/components/ui/MetaList";
+import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { LayersGlyph, NozzleGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import type { AttemptFileView } from "@/lib/items";
 import type { LyingState } from "@/lib/slicing/orientations";
@@ -30,6 +31,7 @@ import { Label, Panel, Section } from "./shared";
 const ORANGE = "#f2754e"; // design-lint-ignore: a filament color is data
 const BLACK = "#1d1d1f"; // design-lint-ignore: a filament color is data
 const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
+const GREY = "#b4b0a8"; // design-lint-ignore: a filament color is data
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
 
 type Vec = [number, number, number];
@@ -350,8 +352,8 @@ export function SlicingSection() {
   const [settings, setSettings] = useState(SETTINGS);
   const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
   const lying = useBracketLying(ORANGE);
-  const plates = usePlateOptions(ORANGE);
-  const many = usePlateOptions(ORANGE, 7);
+  const plates = usePlateOptions(GREY);
+  const many = usePlateOptions(GREY, 7);
   const [plate, setPlate] = useState(2);
   const [manyPlate, setManyPlate] = useState(1);
   return (
@@ -380,9 +382,16 @@ export function SlicingSection() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-display text-title text-ink font-semibold">How to slice it</p>
-                  <p className="text-small text-ink-faint mt-0.5">stackable-bins.3mf · {plateWords(many, manyPlate)}</p>
+                  <MetaList className="text-small text-ink-faint mt-0.5">
+                    {"stackable-bins.3mf"}
+                    {plateParts(many, manyPlate).map((part) => (
+                      <span key={part} className="whitespace-nowrap">
+                        {part}
+                      </span>
+                    ))}
+                  </MetaList>
                 </div>
-                <PlatePicker inSheet plates={many} value={manyPlate} onChange={setManyPlate} />
+                <PlatePicker inSheet plates={many} value={manyPlate} onChange={setManyPlate} className="md:max-w-44" />
               </div>
             </Panel>
           </div>

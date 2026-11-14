@@ -38,15 +38,15 @@ export const plateLabel = (plate: Pick<PlateOption, "index" | "name">) => plate.
 /** "96 mm tall", "58 mm tall": whole millimetres, as "Lay it down" says a height. */
 export const plateHeight = (mm: number) => `${Math.round(mm)} mm tall`;
 
-/** What a plate is, in a line: "Plate 2 of 3 · 96 mm tall". */
-export function plateWords(plates: readonly PlateOption[], value: number): string {
+/** What a plate is, in pieces for a `MetaList`: "Plate 2 of 3", "96 mm tall". */
+export function plateParts(plates: readonly PlateOption[], value: number): string[] {
   const at = Math.max(
     0,
     plates.findIndex((plate) => plate.index === value),
   );
   const chosen = plates[at];
-  if (!chosen) return "";
-  return `${plateLabel(chosen)} of ${plates.length} · ${plateHeight(chosen.height)}`;
+  if (!chosen) return [];
+  return [`${plateLabel(chosen)} of ${plates.length}`, plateHeight(chosen.height)];
 }
 
 const tiles = (plates: readonly PlateOption[]): ChoiceTile<string>[] =>
@@ -119,7 +119,7 @@ export function PlatePicker({ plates, value, onChange, disabled, inSheet, classN
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">
-            {plateWords(plates, value).split(" · ")[0]}
+            {plateParts(plates, value)[0]}
           </span>
           <span className="text-body truncate font-semibold">{plateLabel(chosen)}</span>
           <span className="text-caption text-ink-soft tabular-nums">

@@ -50,7 +50,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
 import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { type PlateOption, PlatePicker, plateWords } from "@/components/ui/PlatePicker";
+import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -1018,7 +1018,19 @@ export default function SliceSettingsSheet({
       onOpenChange={onOpenChange}
       title="How to slice it"
       description={
-        projectPlates ? `${file.name} · ${plateWords(projectPlates, choices.settings.modelPlate ?? 1)}` : file.name
+        projectPlates ? (
+          // Each piece wraps whole: "Plate 1 of 3" and "120 mm tall" never split, and no dot starts a line.
+          <MetaList>
+            {file.name}
+            {plateParts(projectPlates, choices.settings.modelPlate ?? 1).map((part) => (
+              <span key={part} className="whitespace-nowrap">
+                {part}
+              </span>
+            ))}
+          </MetaList>
+        ) : (
+          file.name
+        )
       }
       // A project's plates, small, beside the title: no sheet over this sheet, and no line of its own to push the
       // first choices down.
