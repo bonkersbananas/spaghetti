@@ -71,6 +71,19 @@ export function twoColourProject(): Uint8Array {
  * can't build a raft yet.
  */
 export function raftProject(): Uint8Array {
+  return boxProject({ raft_layers: "2" });
+}
+
+/**
+ * The same block in a project whose sparse infill is `pattern`: one of the patterns only a project asks for, which
+ * our own slicer printed as straight lines until release 11 (triangles, tri-hexagon, quarter cubic).
+ */
+export function patternProject(pattern: string): Uint8Array {
+  return boxProject({ sparse_infill_pattern: pattern });
+}
+
+/** A 24 × 24 × 10 mm block in a project for the X2D, its settings Orca's defaults but `settings`. */
+function boxProject(settings: Record<string, string>): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <resources>
@@ -78,7 +91,7 @@ export function raftProject(): Uint8Array {
 </resources>
 <build><item objectid="1"/></build>
 </model>`;
-  const project = { printer_model: "Bambu Lab X2D", nozzle_diameter: ["0.4", "0.4"], raft_layers: "2" };
+  const project = { printer_model: "Bambu Lab X2D", nozzle_diameter: ["0.4", "0.4"], ...settings };
   return zipSync({
     "3D/3dmodel.model": strToU8(model),
     "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
