@@ -1862,3 +1862,47 @@ fn normal_supports_stand_on_a_raft_as_orcas_do() {
     }
     assert!(!speeds.is_empty() && speeds.iter().all(|&f| f < 2100.0), "{speeds:?}");
 }
+
+#[test]
+fn organic_trees_stand_on_a_raft_as_orcas_do() {
+    // The T of `organic_trees_hold_up_a_slab_on_two_trunks` on a raft of three layers.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let s = setup::read(r#"{"process": {"enable_support": "1", "raft_layers": "3"}}"#).unwrap().settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &s, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers = check_moves(&gcode, &s);
+    // Native OrcaSlicer 2.5.0 (Nov 14): 129 layers, the raft's at 0.2, 0.5 and 0.8 mm, one of branches alone in the
+    // gap over its contact layer, then the T's from 1.1 mm; 824.1 mm³ of support and 102.2 mm³ of interface. Ours
+    // are the same raft and trees, 2 % lighter where branches merge, as without a raft.
+    assert_eq!(layers.len(), 129);
+    let zs: Vec<f64> =
+        gcode.lines().filter_map(|l| l.strip_prefix("; Z_HEIGHT: ")).map(|z| z.parse().unwrap()).collect();
+    assert_eq!(&zs[..6], &[0.2, 0.5, 0.8, 0.9, 1.1, 1.3]);
+    let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    let near = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    assert!(near(feature(Role::Support), 824.1, 0.05), "{} mm³ of support", feature(Role::Support));
+    assert!(near(feature(Role::SupportInterface), 102.2, 0.005), "{} mm³", feature(Role::SupportInterface));
+    // The trees stand on the plate under the raft's first layer and cut through the layers above it, which print
+    // round them: branches and the raft's interface on its second and third layers, branches alone in the gap.
+    let mut features: Vec<Vec<&str>> = Vec::new();
+    let mut feature = "";
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        } else if line.starts_with("; CHANGE_LAYER") {
+            features.push(Vec::new());
+        } else if (line.starts_with("G1 X") || line.starts_with("G2 ") || line.starts_with("G3 "))
+            && word(line, 'E').is_some_and(|e| e > 0.0)
+            && let Some(layer) = features.last_mut().filter(|l| !l.contains(&feature))
+        {
+            layer.push(feature);
+        }
+    }
+    assert_eq!(
+        features[..4],
+        [vec!["Support"], vec!["Support", "Support interface"], vec!["Support", "Support interface"], vec!["Support"]]
+    );
+    assert!(features[4].contains(&"Outer wall"));
+}

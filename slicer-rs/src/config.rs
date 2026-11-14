@@ -482,9 +482,8 @@ impl SupportSettings {
             Some("supports painted on")
         } else if on && kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "") {
             Some("this style of support")
-        } else if on && self.raft_layers > 0 && kind == "tree(auto)" {
-            Some("a raft under tree supports")
-        } else if !on && self.raft_layers > 0 && self.raft_maker() == RaftMaker::ClassicTrees {
+        } else if self.raft_layers > 0 && self.raft_maker() == RaftMaker::ClassicTrees {
+            // Orca's classic trees build rafts of their own (`TreeSupport`), with supports on or off.
             Some("a raft in this style of tree support")
         } else if on && self.on_build_plate_only {
             Some("supports on the plate only")

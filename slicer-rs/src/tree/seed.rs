@@ -72,6 +72,14 @@ impl<'a> Seeder<'a> {
         self.out
     }
 
+    /// A raft's contact layer on support layer `layer`: a contact roof over all of `area` (Orca's
+    /// `add_roof_unguarded`, from `generate_raft_contact`).
+    pub fn add_raft_contact(&mut self, layer: usize, area: Shapes) {
+        if let Some(contacts) = self.out.contacts.get_mut(layer) {
+            contacts.extend(area);
+        }
+    }
+
     fn r0(&self) -> i64 {
         self.c.radius(0, 0.0)
     }
