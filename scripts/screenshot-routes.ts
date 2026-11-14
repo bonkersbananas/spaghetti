@@ -1412,7 +1412,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Up next with 1 queued idea: a strip on phones, the featured grid on desktop.
+    // Up next with 1 queued idea: a strip of small cards.
     name: "ideas-up-next-1",
     path: "/ideas",
     prepare: async (page) => {
@@ -1429,7 +1429,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 3 queued ideas: a strip on phones, the featured grid on desktop.
+    // Up next with 3 queued ideas: a strip of small cards.
     name: "ideas-up-next-3",
     path: "/ideas",
     prepare: async (page) => {
@@ -1446,11 +1446,28 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 6 queued ideas: a strip on phones, the featured grid on desktop.
+    // Up next with 6 queued ideas: a strip of small cards.
     name: "ideas-up-next-6",
     path: "/ideas",
     prepare: async (page) => {
       const count = 6;
+      await setQueue(page, count);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: new RegExp(`^Up next\\s*${count}$`) }).waitFor();
+      await page.waitForTimeout(500);
+      // Cards that arrived after the first draw fade in on the shots' fixed clock: finish them.
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // Up next with 8 queued ideas: a strip of small cards on both.
+    name: "ideas-up-next-8",
+    path: "/ideas",
+    prepare: async (page) => {
+      const count = 8;
       await setQueue(page, count);
       await page.reload();
       await page.getByRole("heading", { level: 2, name: new RegExp(`^Up next\\s*${count}$`) }).waitFor();

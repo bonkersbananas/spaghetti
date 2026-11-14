@@ -68,16 +68,6 @@ export interface UpNextMenu {
   wish?: Pick<ItemView, "id" | "pending">;
 }
 
-/** Dragging a queued card to another place (desktop). */
-export interface CardDrag {
-  dragging: boolean;
-  over: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: () => void;
-  onDrop: () => void;
-}
-
 interface IdeaCardProps {
   item: ItemView;
   person?: Person;
@@ -86,16 +76,13 @@ interface IdeaCardProps {
   /** Just captured: it lands with a little bounce. */
   landing?: boolean;
   menu?: UpNextMenu;
-  drag?: CardDrag;
   /** 3 when the grid sits under a section heading (Up next). */
   headingLevel?: 2 | 3;
-  /** Up next on desktop: a wider, squarer card, so the queue reads as the featured row. */
-  featured?: boolean;
   /** Lets the list measure the card when it leaves (see Reflow). */
   ref?: Ref<HTMLLIElement>;
 }
 
-export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel = 2, featured, ref }: IdeaCardProps) {
+export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, ref }: IdeaCardProps) {
   const cover = item.photos[0];
   const plate = cover ? undefined : plateCover(item);
   const upload = useUploadState(item);
@@ -107,40 +94,10 @@ export function IdeaCard({ item, person, via, landing, menu, drag, headingLevel 
     showing && showing !== cover?.id && item.photos.some((photo) => photo.id === showing) ? showing : undefined;
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
-      <div
-        draggable={!!drag}
-        onDragStart={
-          drag
-            ? (event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", item.id);
-                drag.onDragStart();
-              }
-            : undefined
-        }
-        onDragEnd={drag?.onDragEnd}
-        onDragOver={
-          drag
-            ? (event) => {
-                event.preventDefault();
-                drag.onDragOver();
-              }
-            : undefined
-        }
-        onDrop={
-          drag
-            ? (event) => {
-                event.preventDefault();
-                drag.onDrop();
-              }
-            : undefined
-        }
-        className={cn("h-full rounded-lg", drag?.dragging && "opacity-40", drag?.over && "ring-tomato ring-2")}
-      >
+      <div className="h-full rounded-lg">
         <Card
           link={{ to: "/ideas/$ideaId", params: { ideaId: item.id }, search: opensOn ? { photo: opensOn } : {} }}
-          aspect={featured ? "square" : "portrait"}
+          aspect="portrait"
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
           photo={
