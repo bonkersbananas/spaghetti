@@ -79,6 +79,8 @@ pub struct Settings {
     pub elephant_foot: f64,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
+    /// mm: gaps and notches in a layer's outline narrower than twice this are closed (`slice_closing_radius`).
+    pub slice_closing_radius: f64,
     /// mm between the first layer and a skirt (there is none, but Orca levels the bed that far around the first
     /// layer all the same).
     pub skirt_distance: f64,
@@ -487,6 +489,7 @@ impl Settings {
             infill_anchor_max,
             elephant_foot: p.float("elefant_foot_compensation"),
             resolution: p.float("resolution"),
+            slice_closing_radius: p.float("slice_closing_radius"),
             skirt_distance: p.float("skirt_distance"),
             brim_width: p.float("brim_width"),
             brim_object_gap: p.float("brim_object_gap"),
