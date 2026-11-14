@@ -21,7 +21,7 @@ async function share(title: string, canShare: boolean) {
     await navigator.clipboard.writeText(url);
     toast.success("Link copied", "Only the two of you can open it.");
   } catch {
-    toast.error("Couldn't copy the link", "It is in the address bar.");
+    toast.error("Couldn't copy the link", "Try again in a moment.");
   }
 }
 
