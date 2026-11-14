@@ -79,3 +79,4 @@ Status: Accepted | Open | Superseded by NNNN
 | [0057](0057-a-model-tries-another-nozzle-size-on-its-own.md) | A model can try another nozzle size on its own, and a file still prints through the main nozzle | Accepted |
 | [0058](0058-open-in-bambu-studio-by-a-signed-link.md) | "Open in Bambu Studio" hands Bambu Studio a short-lived (10 minutes), HMAC-signed link to one .3mf, made by a signed-in person; the sliced file opens when there is one | Accepted |
 | [0059](0059-the-original-model-opens-in-bambu-studio-too.md) | A model's original opens in Bambu Studio too (a sliced model's action offers the sliced file or the original); an .stl is wrapped in a 3MF on the way, streamed in the Worker, up to 32 MB | Accepted |
+| [0060](0060-spools-know-their-colours-lines-and-presets.md) | A spool knows its colours (two or three, with no single colour to match), its product line and the Bambu or generic preset it slices with | Accepted |
