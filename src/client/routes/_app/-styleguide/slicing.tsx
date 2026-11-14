@@ -9,6 +9,7 @@ import {
   type SlicingSettings,
   STRENGTHS,
   SUPPORT_PLACEMENTS,
+  withNozzle,
 } from "@shared/slicing/settings.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import type { SpoolLike } from "@shared/spools";
@@ -443,8 +444,8 @@ export function SlicingSection() {
         <div className="flex min-w-0 flex-col gap-4">
           <Label>
             How to slice it (live): a panel beside the page on desktop, two columns that need no scrolling at 1440×900;
-            a tall sheet on phones, one column in the same order. A 0.2 mm nozzle is fitted on the right: a line says it
-            slices for the main one
+            a tall sheet on phones, one column in the same order. A 0.2 mm nozzle is fitted as the other nozzle: the
+            model slices for the main one, and tries another size under More
           </Label>
           {/* As the panel draws it: lifted, floating. */}
           <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
@@ -467,17 +468,26 @@ export function SlicingSection() {
           </div>
 
           <Label>
-            More, open: how supports are built, the brim, walls and infill by number, plate, nozzle, size, and which
-            slicer; under it, which slicer slices it and its source
+            More, open: the nozzle size first (the sizes fitted marked; here a 0.6 mm the model tried, which the main
+            nozzle doesn't have, said under the filament and on its Print it), then how supports are built, the brim,
+            walls and infill by number, plate, size, and which slicer; under it, which slicer slices it and its source
           </Label>
           <div className="sg-lifted-surface bg-lifted shadow-float w-full max-w-[44rem] rounded-xl p-6">
             <SliceSettingsPanel
               file={{ id: "styleguide-model", name: "lasagne-sheet.stl", url: "#", size: 1 }}
               lying={{ status: "none" }}
-              settings={{ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }}
+              settings={{
+                ...withNozzle({ ...settings, layerHeight: 0.16, walls: 3, infill: 22, pattern: "gyroid" }, 0.6),
+                nozzlePicked: true,
+              }}
               onChange={setSettings}
               spools={[]}
               plates={["Textured PEI Plate"]}
+              nozzles={{
+                main: { diameter: 0.4, hardened: true },
+                auxiliary: { diameter: 0.2, hardened: false },
+              }}
+              onReset={noop}
               slice={TOO_BIG}
               scalable
               moreOpen

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SLICING } from "../../../src/shared/slicing/defaults.ts";
 import { workshopDefaults } from "../../../src/shared/slicing/pantry.ts";
 import { recipeSlicing, recipeSlicingOf, recipesFor } from "../../../src/shared/slicing/recipe.ts";
-import { type SlicingSettings, slicingDefaultsOf } from "../../../src/shared/slicing/settings.ts";
+import { type SlicingSettings, slicingDefaultsOf, withNozzle } from "../../../src/shared/slicing/settings.ts";
 import { DEFAULT_PRINTER, type SpoolLike } from "../../../src/shared/spools.ts";
 
 const spool = (id: string, change: Partial<SpoolLike> = {}): SpoolLike => ({
@@ -30,6 +30,16 @@ describe("slicing with a recipe", () => {
       filaments: [orange],
       scale: 80,
     });
+  });
+
+  it("picks the nozzle for the model when the recipe is for another size, and keeps the model's own pick otherwise", () => {
+    const at = (nozzle: number): SlicingSettings => withNozzle(DEFAULT_SLICING, nozzle);
+    const recipe = (slicing: SlicingSettings) => ({ material: "PLA", finish: null, settings: {}, slicing });
+    // Another size than the model's: that size is picked for it.
+    expect(recipeSlicing(recipe(at(0.6)), at(0.4)).nozzlePicked).toBe(true);
+    // The same size: the model's pick stays as it was, picked or not.
+    expect(recipeSlicing(recipe(at(0.6)), at(0.6)).nozzlePicked).toBeUndefined();
+    expect(recipeSlicing(recipe(at(0.6)), { ...at(0.6), nozzlePicked: true }).nozzlePicked).toBe(true);
   });
 
   it("reads an older recipe's attempt settings in the settings' words, over the model's for what it doesn't say", () => {

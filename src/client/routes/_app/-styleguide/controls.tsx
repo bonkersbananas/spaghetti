@@ -34,6 +34,19 @@ export function ControlSection() {
             onChange={setNozzle}
             className="w-full"
           />
+          <Label>With marks: the nozzles fitted (solid: main, ring: the other)</Label>
+          <SegmentedControl
+            label="Nozzle size"
+            options={[
+              { value: "0.2", label: "0.2 mm", mark: "ring", markWords: "other nozzle" },
+              { value: "0.4", label: "0.4 mm", mark: "solid", markWords: "main nozzle" },
+              { value: "0.6", label: "0.6 mm" },
+              { value: "0.8", label: "0.8 mm" },
+            ]}
+            value="0.4"
+            onChange={() => undefined}
+            className="w-full"
+          />
           <Label>Number, decimal and duration fields</Label>
           <div className="grid grid-cols-3 gap-2.5">
             <NumberField size="sm" label="Bed" suffix="°C" min={0} max={150} value={bed} onChange={setBed} />

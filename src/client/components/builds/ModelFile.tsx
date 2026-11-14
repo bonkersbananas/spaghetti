@@ -4,7 +4,7 @@ import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
-import { type SlicingSettings, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
+import { type SlicingSettings, sameSlicing, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
 import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
@@ -36,6 +36,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { toast } from "@/components/ui/Toast";
 import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -180,6 +181,9 @@ export function changeFigures(change: SliceChange): Change[] {
   ];
 }
 
+/** A duration or weight that never breaks across lines: "1 h 48 min", "2.7 g". */
+const tight = (figure: string) => figure.replace(/ /g, "\u00A0");
+
 /**
  * What a change did, in words: "Fine: 26 min longer, 0.4 g lighter". `what` is the change itself ("Fine", "supports
  * where needed", from `changeWords`), left out when several things changed. A figure that stayed the same isn't said.
@@ -189,11 +193,11 @@ export function changeSentence(change: SliceChange, what?: string): string {
   const said: string[] = [];
   if (before.minutes !== undefined && after.minutes !== undefined) {
     const minutes = Math.round(after.minutes - before.minutes);
-    if (minutes !== 0) said.push(`${formatMinutes(Math.abs(minutes))} ${minutes > 0 ? "longer" : "shorter"}`);
+    if (minutes !== 0) said.push(`${tight(formatMinutes(Math.abs(minutes)))} ${minutes > 0 ? "longer" : "shorter"}`);
   }
   if (before.grams !== undefined && after.grams !== undefined) {
     const delta = Math.round((after.grams - before.grams) * 10) / 10;
-    if (delta !== 0) said.push(`${grams(Math.abs(delta))} ${delta > 0 ? "heavier" : "lighter"}`);
+    if (delta !== 0) said.push(`${tight(grams(Math.abs(delta)))} ${delta > 0 ? "heavier" : "lighter"}`);
   }
   const effect = said.length ? said.join(", ") : "the same time and filament";
   return what
@@ -318,6 +322,8 @@ export interface ModelActions {
    * size says so, with the way to slice for this one.
    */
   mainNozzle?: number;
+  /** The nozzle size was the model's own pick: the way back is Undo, or More's Nozzle, not a button of its own. */
+  nozzlePicked?: boolean;
 }
 
 /** The lines under a model's name: its slicing, and what can be done about it. */
@@ -331,6 +337,7 @@ export function ModelStatus({
   onStop,
   settings,
   mainNozzle,
+  nozzlePicked,
 }: ModelActions & {
   state: ModelState;
   /** Says it about a phone ("ran out of memory on this phone"). */
@@ -352,6 +359,7 @@ export function ModelStatus({
     onUndo,
     onStop,
     mainNozzle,
+    nozzlePicked,
   });
   // The lines change with the state; the actions keep their places. What helps (the filled buttons) sits above the
   // settings row, which every state renders, with a quiet Undo beside it, so the row keeps its place while the card
@@ -381,6 +389,7 @@ function statusOf(
     onUndo,
     onStop,
     mainNozzle,
+    nozzlePicked,
   }: Omit<ModelActions, "settings"> & {
     phone: boolean;
     line?: ReactNode;
@@ -475,8 +484,8 @@ function statusOf(
               </span>
             ) : change && onUndo && line ? (
               // What the change did, with its way back at the end of that line: quiet, and apart from the settings row.
-              <span className="flex w-full min-w-0 items-center justify-between gap-2">
-                {line}
+              <span className="flex w-full min-w-0 flex-wrap items-center justify-between gap-x-2">
+                <span className="min-w-0 basis-full md:flex-1 md:basis-0">{line}</span>
                 {button("Undo", onUndo, UndoIcon, "quiet")}
               </span>
             ) : (
@@ -494,12 +503,21 @@ function statusOf(
         primary: (
           <>
             {elsewhere &&
+              !nozzlePicked &&
+              !state.change &&
               onSlice &&
               mainNozzle !== undefined &&
-              button(`Slice for the ${mainNozzle} mm`, () => {
-                const { nozzle, layerHeight } = withNozzle(sliced, mainNozzle);
-                onSlice({ nozzle, layerHeight });
-              })}
+              // Quiet: the filled button is Print it's or the page's one; the way back is also More's Nozzle.
+              button(
+                `Slice for the ${mainNozzle} mm`,
+                () => {
+                  const { nozzle, layerHeight } = withNozzle(sliced, mainNozzle);
+                  // The main nozzle's size is no pick of the model's own: it follows the main nozzle again.
+                  onSlice({ nozzle, layerHeight, nozzlePicked: false });
+                },
+                undefined,
+                "quiet",
+              )}
             {floating && onSlice && button("Supports where needed", () => onSlice({ supports: "where-needed" }))}
             {ahead && !again && onSlice && button("Slice it", () => onSlice({}))}
           </>
@@ -595,7 +613,7 @@ export function ModelCard({
   // wraps on a phone doesn't leave a word or two alone.
   const line =
     slice && !compact ? (
-      <MetaList className="text-small text-ink-faint text-balance">
+      <MetaList className="text-small text-ink-faint text-pretty">
         {change && !change.failed
           ? [changeSentence(change, changed)]
           : details
@@ -721,18 +739,31 @@ export default function ModelFileCard({
   /** Slices it as it is set up now, over the slice there (kept for an undo) if it has one. */
   const sliceNow = () => {
     if (!target) return;
+    // Settings that follow the main nozzle moved on from what is saved: keep them with this slice, so the card isn't
+    // left "ahead" of it.
+    if (file.slicing && !sameSlicing(file.slicing, settings)) {
+      changeSlicing(queryClient, { target, file, next: settings });
+      return;
+    }
     const again = file.slice?.status === "sliced";
     void startSlice(queryClient, {
       fileId: file.id,
       name: file.name,
       source: () => fetchOriginal(file.id),
-      chosen: file.slicing ?? (file.slice ? slicingOfSlice(file.slice) : {}),
+      chosen: file.slicing || file.slice ? settings : {},
       target,
       again,
       ...(again ? { before: figuresOf(file.prefill) } : {}),
     });
   };
   const change_ = (next: SlicingSettings) => target && changeSlicing(queryClient, { target, file, next });
+  // Back to the usual settings (what a new model gets): kept as an undo toast, since the settings were work.
+  const resettable = !!file.slicing && (!sameSlicing(file.slicing, defaults) || !!file.slicing.nozzlePicked);
+  const reset = () => {
+    const before = settings;
+    change_(defaults);
+    toast.undo("Back to the usual settings", { onUndo: () => change_(before) });
+  };
   const actions: Omit<ModelActions, "settings"> = target
     ? {
         onSlice: (asked) => (Object.keys(asked).length ? change_(slicingFor(asked, settings)) : sliceNow()),
@@ -757,6 +788,7 @@ export default function ModelFileCard({
     spools,
     plates: setup.plates,
     nozzles: setup.nozzles,
+    ...(resettable ? { onReset: reset } : {}),
     slice: file.slice,
     scalable: isStlName(file.name),
     recipes: offered,
@@ -803,6 +835,7 @@ export default function ModelFileCard({
       raised={raised}
       className={className}
       mainNozzle={setup.nozzles.main.diameter}
+      nozzlePicked={!!settings.nozzlePicked}
       {...actions}
     />
   );
