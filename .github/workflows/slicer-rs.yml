@@ -76,6 +76,17 @@ jobs:
           ./target/release/spaghetti-slicer --setup /tmp/two.json --filaments 1,2 tests/models/bridge.stl tests/models/bridge.stl -o /tmp/two-stl.gcode.3mf
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/two-stl-wasm.gcode.3mf --setup /tmp/two.json --filaments 1,2 tests/models/bridge.stl tests/models/bridge.stl
           cmp /tmp/two-stl.gcode.3mf /tmp/two-stl-wasm.gcode.3mf
+      - name: The same, an object made of parts in two filaments
+        run: |
+          echo '{"filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}' > /tmp/two.json
+          ./target/release/spaghetti-slicer --setup /tmp/two.json tests/models/parts.3mf -o /tmp/parts.gcode.3mf --gcode /tmp/parts.gcode
+          grep -q '^; model label id: 1$' /tmp/parts.gcode
+          grep -q '; FEATURE: Prime tower' /tmp/parts.gcode
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/parts-wasm.gcode.3mf --setup /tmp/two.json tests/models/parts.3mf
+          cmp /tmp/parts.gcode.3mf /tmp/parts-wasm.gcode.3mf
+          ./target/release/spaghetti-slicer --setup /tmp/two.json --parts --filaments 1,2 tests/models/bridge.stl tests/models/parts.3mf -o /tmp/parts-stl.gcode.3mf
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/parts-stl-wasm.gcode.3mf --setup /tmp/two.json --parts --filaments 1,2 tests/models/bridge.stl tests/models/parts.3mf
+          cmp /tmp/parts-stl.gcode.3mf /tmp/parts-stl-wasm.gcode.3mf
       - name: The same, with normal supports under the bridge
         run: |
           echo '{"process": {"enable_support": "1", "support_type": "normal(auto)"}}' > /tmp/supports.json
