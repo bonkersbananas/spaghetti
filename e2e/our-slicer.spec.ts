@@ -256,7 +256,8 @@ test("an object made of parts in two filaments gets its supports from ours, each
     let tool = "T0";
     let feature = "";
     for (const line of gcode.split("\n")) {
-      if (/^T\d\b/.test(line)) tool = line.split(/\s/)[0];
+      const change = /^T\d\b/.exec(line);
+      if (change) tool = change[0];
       if (line.startsWith("; FEATURE: ")) feature = line.slice("; FEATURE: ".length);
       if (feature === "Support" && /^G[123] .* E\.?\d/.test(line)) supportTools.add(tool);
     }
