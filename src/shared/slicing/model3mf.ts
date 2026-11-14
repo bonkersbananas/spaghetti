@@ -1,5 +1,6 @@
 import { strFromU8, unzipSync } from "fflate";
 import type { Config } from "./gcode3mf.ts";
+import { type ModelPaint, paintCodeStates } from "./paint.ts";
 
 /**
  * Reads the geometry of a `.3mf` that has no G-code: a Bambu Studio or Orca project, or a plain 3MF from anywhere
@@ -19,6 +20,11 @@ export interface ModelObject {
    * them, as the triangles of `positions` it is (its own and its sub-parts', one after another).
    */
   parts?: ModelPart[];
+  /**
+   * A project's painted colours on it (each painted triangle's `paint_color`, as Orca reads it), when it has any:
+   * codes that aren't ones, or paint nothing, are left out, as Orca leaves them.
+   */
+  paint?: ModelPaint;
 }
 
 /** A part of an object: its triangles `from` (the first) `to` (past the last), and its filament, when it says. */
@@ -86,6 +92,8 @@ interface Mesh {
   vertices: Float64Array;
   /** Corner indices, three a triangle (NaN where a file wrote something else). */
   triangles: Float64Array;
+  /** Painted triangles' codes (`paint_color`), by their index in the mesh. */
+  paint?: Map<number, string>;
 }
 
 interface ObjectDef {
@@ -150,9 +158,22 @@ function readMesh(body: string): Mesh {
       at = end;
     }
   };
+  const paint = new Map<number, string>();
   each("vertex", (tag) => vertices.push(number(tag, "x"), number(tag, "y"), number(tag, "z")));
-  each("triangle", (tag) => triangles.push(number(tag, "v1"), number(tag, "v2"), number(tag, "v3")));
-  return { vertices: Float64Array.from(vertices), triangles: Float64Array.from(triangles) };
+  each("triangle", (tag) => {
+    // Bambu Studio and Orca write a painted triangle's colours in its `paint_color`.
+    const at = tag.indexOf(' paint_color="');
+    if (at >= 0) {
+      const code = tag.slice(at + 14, tag.indexOf('"', at + 14));
+      if (code) paint.set(triangles.length / 3, code);
+    }
+    triangles.push(number(tag, "v1"), number(tag, "v2"), number(tag, "v3"));
+  });
+  return {
+    vertices: Float64Array.from(vertices),
+    triangles: Float64Array.from(triangles),
+    ...(paint.size ? { paint } : {}),
+  };
 }
 
 export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
@@ -247,11 +268,12 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     const triangles: number[] = [];
     // Which part each run of triangles is of: the object's own component it comes through (null: the object's own).
     const runs: { part: string | null; from: number; to: number }[] = [];
+    const painted: Painted = { triangles: [], codes: [] };
     const visit = (object: ObjectDef, transform: Matrix, depth: number, part: string | null) => {
       if (depth > 8) return;
       if (object.mesh) {
         const from = triangles.length / 9;
-        appendMesh(object.mesh, transform, scale.value, triangles);
+        appendMesh(object.mesh, transform, scale.value, triangles, painted);
         if (triangles.length / 9 > from) runs.push({ part, from, to: triangles.length / 9 });
       }
       for (const component of object.components) {
@@ -265,11 +287,13 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     visit(def, matrix(item.transform), 0, null);
     if (!triangles.length) continue;
     const parts = partsOf(runs, info);
+    const paint = paintOf(painted);
     out.push({
       name: info?.name || def.name || `Object ${out.length + 1}`,
       positions: Float32Array.from(triangles),
       ...(info?.extruder ? { extruder: info.extruder } : {}),
       ...(parts ? { parts } : {}),
+      ...(paint ? { paint } : {}),
     });
   }
   if (!out.length) return "no-objects";
@@ -314,7 +338,30 @@ function partsOf(
   return parts.map(({ from, to, extruder }) => ({ from, to, ...(extruder ? { extruder } : {}) }));
 }
 
-function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[]) {
+/** An object's painted triangles as they are read: each one's index in the object, and its code. */
+interface Painted {
+  triangles: number[];
+  codes: string[];
+}
+
+/** The paint of an object, its codes checked (none: undefined). */
+function paintOf(painted: Painted): ModelPaint | undefined {
+  const triangles: number[] = [];
+  const ends: number[] = [];
+  let codes = "";
+  for (const [index, code] of painted.codes.entries()) {
+    const states = paintCodeStates(code);
+    // A code Orca can't read, or one that paints nothing (state 0 only): the triangle is the object's own.
+    if (states === null || states <= 1) continue;
+    triangles.push(painted.triangles[index] as number);
+    codes += code;
+    ends.push(codes.length);
+  }
+  if (!triangles.length) return undefined;
+  return { triangles: Uint32Array.from(triangles), codes, ends: Uint32Array.from(ends) };
+}
+
+function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[], painted?: Painted) {
   const v = mesh.vertices;
   const t = mesh.triangles;
   const count = v.length / 3;
@@ -324,6 +371,11 @@ function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[]) {
     const c = t[i + 2] as number;
     // A corner that isn't one of the mesh's vertices leaves the triangle out.
     if (![a, b, c].every((index) => Number.isInteger(index) && index >= 0 && index < count)) continue;
+    const code = mesh.paint?.get(i / 3);
+    if (code !== undefined && painted) {
+      painted.triangles.push(out.length / 9);
+      painted.codes.push(code);
+    }
     for (const index of [a, b, c]) {
       const x = (v[index * 3] as number) * scale;
       const y = (v[index * 3 + 1] as number) * scale;
