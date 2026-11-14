@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { raftProject } from "../e2e/fixtures/model-3mf.ts";
+import { partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -423,6 +423,11 @@ const RACK = {
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
 /** A project for the X2D that asks for a raft under its tree supports, which our own slicer can't build yet. */
 const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject({ enable_support: "1" }) };
+const TWO_TONE = { name: "two-tone-coaster.3mf", bytes: partsProject() };
+const TWO_TONE_IDEA = {
+  title: "Two-tone coaster",
+  note: "One coaster, half white and half tomato red: the project's two parts, each in its own filament.",
+};
 const RAFT_IDEA = {
   title: "Ravioli stamp",
   note: "Square, on a raft as the project says, to see if it lifts cleaner.",
@@ -2231,6 +2236,22 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await setSlicingDefaults(page, { slicer: "spaghetti" });
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti's own slicer/);
+      await sliceSaved(page);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await setSlicingDefaults(page, null);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Ours picked, for a project whose one object is made of two parts in different filaments: it prints each half
+    // in its own, and the plate picture shows them so.
+    name: "idea-model-ours-parts",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setSlicingDefaults(page, { slicer: "spaghetti" });
+      await ideaWithModel(page, TWO_TONE_IDEA, TWO_TONE, /Sliced by Spaghetti's own slicer/);
       await sliceSaved(page);
     },
     beforeShot: modelInView,
