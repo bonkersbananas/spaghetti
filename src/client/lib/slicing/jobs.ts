@@ -130,13 +130,20 @@ export async function slicingDefaults(queryClient: QueryClient): Promise<Slicing
 }
 
 /** The workshop's defaults and the Pantry's spools they came from (the spools match a model's own colours). */
-async function pantryAndDefaults(queryClient: QueryClient) {
+export async function pantryAndDefaults(queryClient: QueryClient) {
   // Offline or failing, what was seen last (or nothing: the stand-in, the stock plate).
   const [spools, printer] = await Promise.all([
     queryClient.ensureQueryData(spoolsQuery).catch(() => queryClient.getQueryData(spoolsQuery.queryKey) ?? []),
     queryClient.ensureQueryData(printerQuery).catch(() => queryClient.getQueryData(printerQuery.queryKey)),
   ]);
   return { spools, defaults: workshopDefaults({ spools, setup: printer?.setup ?? DEFAULT_PRINTER }) };
+}
+
+/** Runs `task` in its turn among the slices on this device (a phone has the memory for one at a time). */
+export function inTurn<T>(task: () => Promise<T>): Promise<T> {
+  const turn = queue.then(task, task);
+  queue = turn.catch(() => null);
+  return turn;
 }
 
 /** A saved model's original, for slicing it again. */

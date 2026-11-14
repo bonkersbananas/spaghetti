@@ -59,6 +59,7 @@ import {
   useSliceChange,
   useSliceJob,
 } from "@/lib/slicing/jobs";
+import { comparePlates, comparisonKey, dropStaleComparison, usePlateComparison } from "@/lib/slicing/plate-compare";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useWarmSoon } from "@/lib/warm-soon";
 import { canView3d, type View3d } from "../viewer/ThreeDButton";
@@ -809,8 +810,29 @@ export default function ModelFileCard({
     : file.slice?.status === "sliced"
       ? slicingOfSlice(file.slice).modelPlate
       : undefined;
+  // "Slice every plate": the figures of each plate with these settings, for the plate tiles (nothing is saved).
+  const comparison = usePlateComparison(file.id, settings);
+  // Settings that change under a comparison going stop it, so the model's own slice isn't kept waiting for it.
+  const comparisonSettings = comparisonKey(settings);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when what the figures hold for changes.
+  useEffect(() => dropStaleComparison(file.id, settings), [file.id, comparisonSettings]);
+  const sliceNowFigures =
+    file.slice?.status === "sliced" && comparisonKey(slicingOfSlice(file.slice)) === comparisonKey(settings)
+      ? { [figuresPlate ?? 1]: figuresOf(prefill) }
+      : undefined;
   const panel = target && {
     file: { id: file.id, name: file.name, url: fileUrl(file.id), size: file.size },
+    compare: {
+      state: comparison,
+      run: (plates: number[]) =>
+        void comparePlates(queryClient, {
+          fileId: file.id,
+          name: file.name,
+          settings,
+          plates,
+          ...(sliceNowFigures ? { known: sliceNowFigures } : {}),
+        }),
+    },
     settings,
     onChange: (next: SlicingSettings) => change_(next),
     spools,

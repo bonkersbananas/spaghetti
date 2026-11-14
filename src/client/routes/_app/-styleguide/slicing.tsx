@@ -131,11 +131,12 @@ function usePlateOptions(colour: string, count = 3): PlateOption[] {
       return canvas.toDataURL();
     };
     const sliced = ["3 h 5 min · 94 g", "2 h 40 min · 78 g", "1 h 35 min · 47 g"];
+    const notes = ["3 h 5", "2 h 40", "1 h 35"];
     setPlates(
       heights.map((height, n) => ({
         index: n + 1,
         height,
-        ...(sliced[n] && n < 3 ? { detail: sliced[n] } : {}),
+        ...(sliced[n] && n < 3 ? { detail: sliced[n], note: notes[n] } : {}),
         src: draw(meshes[n] as Float32Array),
       })),
     );

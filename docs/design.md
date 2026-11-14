@@ -134,7 +134,7 @@ The scale has one set of names and two sets of sizes: phones read slightly large
 | `text-caption`  | 12    | 12      | Tab labels, overlines (uppercase + `tracking-wider`) |
 | `text-micro`    | 11    | 11      | Two initials in the 24 px avatar (xs); nothing else  |
 
-Use `tabular` for numbers that line up (temperatures, durations, weights).
+Use `tabular` for numbers that line up (temperatures, durations, weights). Durations are written in full by `formatDuration` ("2 h 10 min"); the compact `formatDurationShort` ("2 h 10") is only for a caption with about 40 px, such as the times under the plates in a sheet's header, and whatever shows it says the full time (and grams) in its accessible label.
 
 ## Space, layout and radii
 
