@@ -12,6 +12,8 @@ export interface ChoiceTile<T extends string> {
   glyph?: ReactNode;
   /** A picture of it, big (a plate picture: the model lying on its side), instead of a glyph: the tile grows to show it. */
   picture?: ReactNode;
+  /** In a "strip": a few words under the picture, as small as can be read ("1 h 44"). */
+  note?: string;
   disabled?: boolean;
 }
 
@@ -101,7 +103,11 @@ export function ChoiceTiles<T extends string>({
                 "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-lg text-center",
                 // A picture's tile starts at the top, so tiles with a line more or less keep their pictures level.
                 option.picture ? "justify-start" : "justify-center",
-                strip ? "size-13 shrink-0 snap-start p-1" : dense ? "px-0.5 py-2" : "px-2 py-2.5",
+                strip
+                  ? cn("w-13 shrink-0 snap-start p-1", !option.note && "h-13")
+                  : dense
+                    ? "px-0.5 py-2"
+                    : "px-2 py-2.5",
                 layout === "scroll" && "w-28 shrink-0 snap-start md:w-auto",
                 selected
                   ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
@@ -122,6 +128,11 @@ export function ChoiceTiles<T extends string>({
               {option.picture && (
                 <span className="flex aspect-square w-full items-center justify-center" aria-hidden>
                   {option.picture}
+                </span>
+              )}
+              {strip && option.note && (
+                <span className="text-micro tabular text-ink-faint w-full text-center leading-none" aria-hidden>
+                  {option.note}
                 </span>
               )}
               {strip && (

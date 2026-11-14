@@ -175,6 +175,18 @@ describe("models kept with an idea", () => {
     expect(file).toEqual(sliced);
   });
 
+  it("says which plate of its project a slice is, on the file and again after an undo", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const first = await putSliced(id, slicedForm({ plate: { index: 1, count: 3, height: 120 } }));
+    expect((await first.json<ItemFileResponse>()).file).toMatchObject({ plate: 1, plateCount: 3 });
+    const second = await putSliced(id, slicedForm({ plate: { index: 3, count: 3, height: 57.6 } }, { keep: true }));
+    expect((await second.json<ItemFileResponse>()).file).toMatchObject({ plate: 3, plateCount: 3 });
+    const back = await request(`/api/files/${id}/sliced/restore`, { method: "POST", cookie });
+    expect((await back.json<ItemFileResponse>()).file).toMatchObject({ plate: 1, plateCount: 3 });
+  });
+
   it("keeps why a slice failed, and drops the sliced file it had", async () => {
     const item = await idea();
     const id = uuid();

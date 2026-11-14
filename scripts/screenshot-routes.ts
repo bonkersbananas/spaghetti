@@ -1971,6 +1971,20 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // "Slice every plate": each plate sliced with these settings only to compare, its time under its picture.
+    name: "slice-settings-plates-compared",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: BINS_IDEA, file: BINS });
+      await settings.getByRole("button", { name: /^Slice all 3/ }).click();
+      await settings.getByText(/^Slicing \d of 3/).waitFor();
+      await settings.getByRole("button", { name: /^Slice all 3/ }).waitFor({ state: "detached", timeout: 120_000 });
+      await settings.getByText(/^Slicing \d of 3/).waitFor({ state: "detached", timeout: 120_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
     // A set of seven plates: more than fit beside the title, so the row scrolls sideways.
     name: "slice-settings-plates-many",
     path: "/ideas",

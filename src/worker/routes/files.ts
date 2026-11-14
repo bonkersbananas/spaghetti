@@ -906,6 +906,8 @@ export const fileRoutes = new Hono<AppEnv>()
       previousSlice: previous ?? null,
       // What the sliced file says replaces what the model said (nothing); a failure leaves it.
       ...(done ? { prefill: fields.prefill ?? {}, objects: fields.objects ?? [], slicer: fields.slicer || null } : {}),
+      // A project's plate that was sliced: the file is that plate of its project, and its attempts say so.
+      ...(done && fields.slice.plate ? { plate: fields.slice.plate.index, plateCount: fields.slice.plate.count } : {}),
     };
     const db = c.var.db;
     const target = tableOf(table);
@@ -968,6 +970,9 @@ export const fileRoutes = new Hono<AppEnv>()
           // What it was sliced with is what the next slice uses again.
           ...(previous.slice.settings.slicing ? { slicing: previous.slice.settings.slicing } : {}),
           previousSlice: null,
+          ...(previous.slice.status === "sliced" && previous.slice.plate
+            ? { plate: previous.slice.plate.index, plateCount: previous.slice.plate.count }
+            : {}),
         })
         .where(eq(target.id, id)),
       ...touched(c, found, id),

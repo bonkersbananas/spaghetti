@@ -17,6 +17,8 @@ export interface PlateOption {
   src: string | null;
   /** Once sliced: "1 h 20 min · 34 g", said under the height. */
   detail?: string;
+  /** The same in a few characters, under a picture in a sheet's header: "1 h 20". */
+  note?: string;
 }
 
 interface PlatePickerProps {
@@ -55,6 +57,7 @@ const tiles = (plates: readonly PlateOption[]): ChoiceTile<string>[] =>
     label: plateLabel(plate),
     // The height, then the sliced figures on a line of their own (their words kept together).
     detail: [plateHeight(plate.height), plate.detail?.replace(/ /g, "\u00a0")].filter(Boolean).join("\n"),
+    ...(plate.note ? { note: plate.note } : {}),
     picture: <PlatePicture src={plate.src} />,
   }));
 
@@ -88,7 +91,8 @@ export function PlatePicker({ plates, value, onChange, disabled, inSheet, classN
         value={picked}
         onChange={choose}
         disabled={disabled}
-        className={className ?? "max-w-40 md:max-w-72"}
+        // Three fit beside the title on a phone with none cut off; more scroll sideways, the next one peeking.
+        className={className ?? "max-w-[11.5rem] md:max-w-72"}
       />
     );
   }
