@@ -660,6 +660,26 @@ async function settleSection(page: Page, section: Locator) {
   await page.waitForTimeout(400);
 }
 
+/** The seed's Up next queue, in order: the desk tidy-up, then the oven knob. */
+const SEED_QUEUE = [SEED_IDS.deskTidy, "5eed0000-0000-4000-8000-000000000003"];
+
+/** Up next holds exactly these ideas, in this order (the first two are the seed's own). */
+async function setQueue(page: Page, count: number) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const { items } = await (await page.request.get("/api/items?stage=idea")).json();
+  for (const item of items) {
+    if (item.upNext !== null) await page.request.patch(`/api/items/${item.id}`, { headers, data: { upNext: false } });
+  }
+  // The seed's own two first, then the ideas that are still ideas (some seed ideas are builds), photos before notes.
+  const more = items
+    .filter((item: { id: string }) => !SEED_QUEUE.includes(item.id))
+    .sort((x: { photos: unknown[] }, y: { photos: unknown[] }) => Number(!x.photos.length) - Number(!y.photos.length))
+    .map((item: { id: string }) => item.id);
+  for (const id of [...SEED_QUEUE, ...more].slice(0, count)) {
+    await page.request.patch(`/api/items/${id}`, { headers, data: { upNext: true } });
+  }
+}
+
 /** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
 const modelItems: string[] = [];
 
@@ -1344,6 +1364,104 @@ export const shots: Shot[] = [
   },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
   { name: "ideas", path: "/ideas" },
+  {
+    // A photo tile with a long title: two lines, then cut.
+    name: "ideas-up-next-long",
+    path: "/ideas",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await setQueue(page, 4);
+      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+        headers,
+        data: { title: "Desk tidy-up with clips, a drawer bin and a phone stand in blue PETG" },
+      });
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*4$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { title: "Desk tidy-up" },
+      });
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // The menu opened from a tile in the strip (a sheet on phones; the popover on desktop's full cards).
+    name: "ideas-up-next-menu",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setQueue(page, 4);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*4$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+      await page.getByRole("button", { name: "Options for Desk tidy-up" }).click();
+      await page.getByRole("button", { name: "Take off Up next" }).waitFor();
+      await page.waitForTimeout(900);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // Up next with 1 queued idea: a strip on phones, the featured grid on desktop.
+    name: "ideas-up-next-1",
+    path: "/ideas",
+    prepare: async (page) => {
+      const count = 1;
+      await setQueue(page, count);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: new RegExp(`^Up next\\s*${count}$`) }).waitFor();
+      await page.waitForTimeout(500);
+      // Cards that arrived after the first draw fade in on the shots' fixed clock: finish them.
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // Up next with 3 queued ideas: a strip on phones, the featured grid on desktop.
+    name: "ideas-up-next-3",
+    path: "/ideas",
+    prepare: async (page) => {
+      const count = 3;
+      await setQueue(page, count);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: new RegExp(`^Up next\\s*${count}$`) }).waitFor();
+      await page.waitForTimeout(500);
+      // Cards that arrived after the first draw fade in on the shots' fixed clock: finish them.
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // Up next with 6 queued ideas: a strip on phones, the featured grid on desktop.
+    name: "ideas-up-next-6",
+    path: "/ideas",
+    prepare: async (page) => {
+      const count = 6;
+      await setQueue(page, count);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: new RegExp(`^Up next\\s*${count}$`) }).waitFor();
+      await page.waitForTimeout(500);
+      // Cards that arrived after the first draw fade in on the shots' fixed clock: finish them.
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
   {
     // A card with several photos swiped to its second (and hovered, where a mouse shows the arrows).
     name: "ideas-swiped",
