@@ -139,6 +139,18 @@ pub struct LayerRegions {
 }
 
 impl LayerRegions {
+    /// Whether island `k` prints anything: a wall, gap fill or infill. A painted region can leave an island too thin
+    /// for any of them (a sliver where two colours' outlines meet), which Orca's tool ordering skips, as it counts a
+    /// region's filament only where the region has extrusions.
+    pub fn prints(&self, k: usize) -> bool {
+        let island = &self.islands[k];
+        island.walls.iter().any(|w| !w.is_empty())
+            || !island.gaps.is_empty()
+            || self.fills.get(k).is_some_and(|f| {
+                [&f.top, &f.bottom, &f.bridge, &f.internal_bridge, &f.solid, &f.sparse].iter().any(|s| !s.is_empty())
+            })
+    }
+
     /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
     /// (Orca's `lslices`).
     pub fn slice_of(&self, group: u32) -> Shapes {
