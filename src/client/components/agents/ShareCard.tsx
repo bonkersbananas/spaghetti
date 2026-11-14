@@ -64,7 +64,8 @@ export function ShareCard() {
         <Button
           variant="secondary"
           size={isDesktop ? "md" : "lg"}
-          className="self-start"
+          className={isDesktop ? "self-start" : undefined}
+          fullWidth={!isDesktop}
           disabled={readOnly}
           onClick={() => canEdit() && setSetup(true)}
         >
