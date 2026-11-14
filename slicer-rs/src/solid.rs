@@ -394,6 +394,15 @@ impl Beading {
         (1.0 + self.split) * self.s
     }
 
+    /// How far Arachne's transition from `lower` beads to one more reaches to the side with more beads (`upper`) or
+    /// fewer, from where the band is as wide as the change takes (`getTransitionAnchorPos`), mm.
+    fn half_transition(&self, lower: usize, upper: bool) -> f64 {
+        // From no bead to one, the transition is a hundredth of a millimetre (`getTransitioningLength`).
+        let length = if lower == 0 { 0.01 } else { TRANSITION_LENGTH };
+        let past = if lower % 2 == 1 { self.split } else { self.add };
+        length * if upper { past } else { 1.0 - past }
+    }
+
     /// The width from which a band holds `n` beads or more, mm.
     fn threshold(&self, n: usize) -> f64 {
         match n {
@@ -434,40 +443,48 @@ fn cut_by_count(line: &medial::ThickLine, beading: &Beading) -> Vec<(ThickPath, 
     runs
 }
 
-/// mm: half of Arachne's transition between two bead counts (`wall_transition_length`, 0.4 mm here).
-const HALF_TRANSITION: f64 = 0.2;
+/// mm: how long Arachne's transition between two bead counts is (`wall_transition_length`, as
+/// `FillConcentricInternal` sets it).
+const TRANSITION_LENGTH: f64 = 0.4;
 
-/// Arachne's filter on where a band's bead count changes (`filterTransitionMids`), for the odd middle bead: where it
-/// starts and soon stops again (or stops and soon starts again) and the band stays within the allowed deviation of
-/// the width where it would, the stretch keeps the count round it, its beads that much wider or narrower (the
-/// deviation counted in the bead it changes: all of it in one middle bead, half in each of two); and a stretch at a
-/// free end of the middle shorter than half a transition takes the count beside it (`filterEndOfCentralTransition`).
-/// Where a pair of beads starts or stops the loops, which come from offsets, decide, so those steps stay.
-fn settle(runs: &mut Vec<(ThickPath, usize)>, beading: &Beading, free: [bool; 2]) {
+/// Arachne's filter on where a band's bead count changes (`filterTransitionMids`): where a bead (or a pair of them)
+/// starts and soon stops again and the band stays within the allowed deviation of the width where it would, the
+/// stretch keeps the count round it, its beads that much wider (the deviation counted in the bead it changes: all of
+/// it in one middle bead, half in each of two); Arachne tries that first, and then the other way round, where a bead
+/// stops and soon starts again. A stretch at a free end of the middle shorter than its half of the transition takes
+/// the count beside it (`filterEndOfCentralTransition`), unless it would take a pair of beads the loops can't reach.
+/// The runs of a ring (`closed`) go round: its last run lies before its first.
+fn settle(runs: &mut Vec<(ThickPath, usize)>, beading: &Beading, free: [bool; 2], closed: bool) {
     loop {
+        let n = runs.len();
         let mut changed = false;
-        for k in 1..runs.len().saturating_sub(1) {
-            let (before, here, after) = (runs[k - 1].1, runs[k].1, runs[k + 1].1);
-            if before != after || before.abs_diff(here) != 1 || before.max(here).is_multiple_of(2) {
-                continue;
+        for bumps in [true, false] {
+            let (from, to) = if closed && n >= 2 { (0, n) } else { (1, n.saturating_sub(1)) };
+            for k in from..to {
+                let (before, here, after) = (runs[(k + n - 1) % n].1, runs[k].1, runs[(k + 1) % n].1);
+                if before != after || before.abs_diff(here) != 1 || (here > before) != bumps {
+                    continue;
+                }
+                let t = beading.threshold(before.max(here));
+                let off = runs[k].0.widths.iter().fold(0.0f64, |m, &w| m.max((w - t).abs()));
+                if (if before % 2 == 1 { off } else { off / 2.0 }) <= beading.deviation {
+                    runs[k].1 = before;
+                    changed = true;
+                }
             }
-            let t = beading.threshold(before.max(here));
-            let off = runs[k].0.widths.iter().fold(0.0f64, |m, &w| m.max((w - t).abs()));
-            if (if before % 2 == 1 { off } else { off / 2.0 }) <= beading.deviation {
-                runs[k].1 = before;
-                changed = true;
+            if changed {
+                break;
             }
         }
-        let n = runs.len();
         for (end, next, is_free) in [(0, 1, free[0]), (n.wrapping_sub(1), n.wrapping_sub(2), free[1])] {
-            if !is_free || n < 2 {
+            if !is_free || closed || n < 2 {
                 continue;
             }
             let (a, b) = (runs[end].1, runs[next].1);
-            if a.abs_diff(b) != 1 || a.min(b) == 0 || a.max(b).is_multiple_of(2) {
+            if a.abs_diff(b) != 1 || a.min(b) == 0 || (b.is_multiple_of(2) && b > a) {
                 continue;
             }
-            if geom::length_mm(&runs[end].0.points, false) < HALF_TRANSITION {
+            if geom::length_mm(&runs[end].0.points, false) < beading.half_transition(a.min(b), a > b) {
                 runs[end].1 = runs[next].1;
                 changed = true;
             }
@@ -479,15 +496,32 @@ fn settle(runs: &mut Vec<(ThickPath, usize)>, beading: &Beading, free: [bool; 2]
         let mut merged: Vec<(ThickPath, usize)> = Vec::with_capacity(runs.len());
         for (run, count) in runs.drain(..) {
             match merged.last_mut() {
-                Some(last) if last.1 == count => {
-                    last.0.points.extend(run.points.into_iter().skip(1));
-                    last.0.widths.extend(run.widths.into_iter().skip(1));
-                }
+                Some(last) if last.1 == count => join(&mut last.0, run),
                 _ => merged.push((run, count)),
             }
         }
+        if closed && merged.len() > 1 && merged[0].1 == merged[merged.len() - 1].1 {
+            let (first, _) = merged.remove(0);
+            join(&mut merged.last_mut().unwrap().0, first);
+        }
         *runs = merged;
     }
+}
+
+/// `b` added to the end of `a`, which ends where it starts.
+fn join(a: &mut ThickPath, b: ThickPath) {
+    a.points.extend(b.points.into_iter().skip(1));
+    a.widths.extend(b.widths.into_iter().skip(1));
+}
+
+/// A ring's runs, cut where its points happen to start and end, start instead where one run ends and the next
+/// begins: the run across its first point is one.
+fn ring_runs(mut runs: Vec<(ThickPath, usize)>) -> Vec<(ThickPath, usize)> {
+    if runs.len() > 1 && runs[0].1 == runs[runs.len() - 1].1 {
+        let (first, _) = runs.remove(0);
+        join(&mut runs.last_mut().unwrap().0, first);
+    }
+    runs
 }
 
 /// mm: the shortest segment Arachne's simplification keeps in a line (`meshfix_maximum_resolution`).
@@ -496,8 +530,8 @@ const ARACHNE_RESOLUTION: f64 = 0.5;
 /// The middle of a narrow region and its width there: where the odd beads run, and how wide the band is beside a
 /// loop.
 struct Axis {
-    /// The middle lines, each cut where its bead count changes, with the count of each run.
-    runs: Vec<Vec<(ThickPath, usize)>>,
+    /// The middle lines, each cut where its bead count changes, with the count of each run, and whether it is a ring.
+    runs: Vec<(Vec<(ThickPath, usize)>, bool)>,
     /// Each segment of the runs (units) with the band's width at its ends (mm) and its run's bead count.
     segments: Vec<(Pt, Pt, f64, f64, usize)>,
     cell: f64,
@@ -526,16 +560,21 @@ impl Axis {
             }
         }
         let free = |p: Pt| ends.get(&(p.x, p.y)).copied() == Some(1);
-        let runs: Vec<Vec<(ThickPath, usize)>> = lines
+        let runs: Vec<(Vec<(ThickPath, usize)>, bool)> = lines
             .iter()
             .map(|line| {
+                let (first, last) = (line.points[0], *line.points.last().unwrap());
+                let closed = line.points.len() > 2 && first == last;
                 let mut runs = cut_by_count(line, beading);
-                settle(&mut runs, beading, [free(line.points[0]), free(*line.points.last().unwrap())]);
-                runs
+                if closed {
+                    runs = ring_runs(runs);
+                }
+                settle(&mut runs, beading, [free(first), free(last)], closed);
+                (runs, closed)
             })
             .collect();
         let mut segments = Vec::new();
-        for (run, count) in runs.iter().flatten() {
+        for (run, count) in runs.iter().flat_map(|(runs, _)| runs) {
             for k in 1..run.points.len() {
                 segments.push((run.points[k - 1], run.points[k], run.widths[k - 1], run.widths[k], *count));
             }
@@ -589,8 +628,9 @@ impl Axis {
     fn odd_beads(&self, beading: &Beading) -> Vec<ThickPath> {
         let trim = beading.two() / 2.0 * geom::SCALE;
         let mut out = Vec::new();
-        for runs in &self.runs {
-            for k in 0..runs.len() {
+        for (runs, closed) in &self.runs {
+            let len = runs.len();
+            for k in 0..len {
                 let n = runs[k].1;
                 if n.is_multiple_of(2) {
                     continue;
@@ -602,10 +642,33 @@ impl Axis {
                     .map(|&t| if m == 0 { t.max(beading.min_bead) } else { t - 2.0 * m as f64 * beading.s })
                     .collect();
                 let mut path = ThickPath { points: points.clone(), widths };
-                if k + 1 < runs.len() && runs[k + 1].1 > n {
+                let next = if k + 1 < len {
+                    Some(k + 1)
+                } else if *closed && len > 1 {
+                    Some(0)
+                } else {
+                    None
+                };
+                let before = if k > 0 {
+                    Some(k - 1)
+                } else if *closed && len > 1 {
+                    Some(len - 1)
+                } else {
+                    None
+                };
+                // A step from one bead fewer to one more that lies wholly within the two transitions: Arachne's middle
+                // bead is odd only outside a transition, and within one it is part of the loop round the pair.
+                let counts = (before.map(|j| runs[j].1), next.map(|j| runs[j].1));
+                if (counts == (Some(n - 1), Some(n + 1)) || counts == (Some(n + 1), Some(n - 1)))
+                    && geom::length_mm(points, false)
+                        < beading.half_transition(n, false) + beading.half_transition(n - 1, true)
+                {
+                    continue;
+                }
+                if next.is_some_and(|j| runs[j].1 > n) {
                     clip_end(&mut path, trim);
                 }
-                if k > 0 && runs[k - 1].1 > n {
+                if before.is_some_and(|j| runs[j].1 > n) {
                     path.points.reverse();
                     path.widths.reverse();
                     clip_end(&mut path, trim);
@@ -614,11 +677,26 @@ impl Axis {
                 }
                 let narrowest = path.widths.iter().cloned().fold(f64::INFINITY, f64::min);
                 if path.points.len() >= 2 && geom::length_mm(&path.points, false) >= narrowest / 2.0 {
-                    out.push(path);
+                    out.push((path, n));
                 }
             }
         }
-        out
+        stitch(out, beading.s)
+    }
+
+    /// Where Arachne's filter filled a gap in the `level`th pair of beads (the band narrower there than the pair
+    /// takes), a thread along the middle of the run that now holds the pair, to join the loops either side of it.
+    fn gaps(&self, level: usize, beading: &Beading) -> Shapes {
+        let need = 2 * level + 2;
+        let t = beading.threshold(need);
+        let threads: Vec<Shape> = self
+            .runs
+            .iter()
+            .flat_map(|(runs, _)| runs)
+            .filter(|(run, count)| *count >= need && run.widths.iter().any(|&w| w < t - 1e-6))
+            .flat_map(|(run, _)| geom::offset_open(&run.points, THREAD))
+            .collect();
+        if threads.len() > 1 { geom::union_all(&[&threads]) } else { threads }
     }
 
     /// The width of the band (mm) at the point of its middle nearest `p`, how far that is (mm) and how many beads
@@ -670,6 +748,67 @@ impl Axis {
     }
 }
 
+/// mm: half the width of the thread that joins the loops across a gap Arachne's filter filled.
+const THREAD: f64 = 0.005;
+
+/// Arachne's stitching (`stitchToolPaths`): middle lines of the same bead (`count`) whose ends lie within a bead's
+/// width `s` of each other are one line, joined end to end from the first line on, each time with the nearest end
+/// within reach; one that comes back to where it began is a loop.
+fn stitch(lines: Vec<(ThickPath, usize)>, s: f64) -> Vec<ThickPath> {
+    let reach = s * geom::SCALE - 1.0;
+    let mut lines: Vec<Option<(ThickPath, usize)>> = lines.into_iter().map(Some).collect();
+    let mut out = Vec::new();
+    for i in 0..lines.len() {
+        let Some((mut chain, count)) = lines[i].take() else { continue };
+        if chain.points.len() > 2 && chain.points[0] == *chain.points.last().unwrap() {
+            out.push(chain);
+            continue;
+        }
+        for side in 0..2 {
+            if side == 1 {
+                chain.points.reverse();
+                chain.widths.reverse();
+            }
+            loop {
+                let end = *chain.points.last().unwrap();
+                let mut best: Option<(f64, usize, bool)> = None;
+                for (j, line) in lines.iter().enumerate() {
+                    let Some((line, c)) = line else { continue };
+                    if *c != count {
+                        continue;
+                    }
+                    for (back, p) in [(false, line.points[0]), (true, *line.points.last().unwrap())] {
+                        let d = geom::dist(end, p);
+                        if d <= reach && best.is_none_or(|b| d < b.0) {
+                            best = Some((d, j, back));
+                        }
+                    }
+                }
+                let Some((d, j, back)) = best else { break };
+                let (mut next, _) = lines[j].take().unwrap();
+                if back {
+                    next.points.reverse();
+                    next.widths.reverse();
+                }
+                let skip = usize::from(d < 1.0);
+                chain.points.extend(next.points.into_iter().skip(skip));
+                chain.widths.extend(next.widths.into_iter().skip(skip));
+            }
+        }
+        // Back where it began: a loop.
+        let (first, last) = (chain.points[0], *chain.points.last().unwrap());
+        if first != last
+            && geom::dist(first, last) <= reach
+            && geom::length_mm(&chain.points, false) * geom::SCALE > 3.0 * reach
+        {
+            chain.points.push(first);
+            chain.widths.push(chain.widths[0]);
+        }
+        out.push(chain);
+    }
+    out
+}
+
 /// The narrow region filled with beads `w` mm apart (the solid line's spacing, at layers `h` mm high; `nozzle` sets
 /// Arachne's narrowest bead and feature), in print order from `at`: loops half a bead in from the edge where two
 /// beads fit and lines along the middle of what is too thin for that, each as wide as Arachne makes it there. Each
@@ -689,10 +828,17 @@ pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec
         if rest.is_empty() || rest.iter().all(|shape| max_inradius(shape) < two / 2.0 * geom::SCALE) {
             break;
         }
-        // Where two beads fit: what is left of the region shrunk by two beads' half width.
-        let core = geom::offset(&rest, -two / 2.0);
+        // Where two beads fit: what is left of the region shrunk by two beads' half width, but where Arachne's filter
+        // left out the pair.
+        let mut core = geom::offset(&rest, -two / 2.0);
+        core.retain(|shape| holds_pair(shape, level, &beading, &axis));
         if core.is_empty() {
             break;
+        }
+        // Where the filter filled a gap in the pair, the loop runs on through it.
+        let threads = axis.gaps(level, &beading);
+        if !threads.is_empty() {
+            core = geom::union(&core, &threads);
         }
         // The loop runs half a bead in from the edge, where the region is two beads wide.
         for shape in &geom::offset(&core, (two - w) / 2.0) {
@@ -736,6 +882,20 @@ pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec
     ordered
 }
 
+/// Whether a piece of the region, two beads' half width in from its edge (where the `level`th pair of beads goes),
+/// holds that pair: not where the middle beside every point of it holds fewer beads, as there Arachne's filter left the
+/// pair out.
+fn holds_pair(shape: &Shape, level: usize, beading: &Beading, axis: &Axis) -> bool {
+    let mut fewer = false;
+    for &p in shape.iter().flatten() {
+        match axis.width_near(p, beading.s) {
+            Some((_, _, count)) if count < 2 * level + 2 => fewer = true,
+            _ => return true,
+        }
+    }
+    !fewer
+}
+
 /// A loop of the `level`th pair of beads in from the region's edge, closed: a bead's width where more beads lie
 /// inside it, else (the innermost pair) half of what is left of the band, laid in the middle of its half as Arachne
 /// lays it. Along a side over which the band's width changes, points are added where the width bends, so that it
@@ -750,8 +910,14 @@ fn bead(contour: &[Pt], level: usize, beading: &Beading, axis: &Axis) -> ThickPa
             && (d - (t / 2.0 - depth)).abs() <= s
             && count < 2 * level + 3
         {
+            let left = t - 2.0 * level as f64 * s;
+            if count == 2 * level + 2 && left < beading.two() {
+                // A gap in the pair that Arachne's filter filled: each bead half of what is left, its middle a quarter
+                // of that from the band's (the loop runs along a thread there, not half a bead in from the edge).
+                return (left / 2.0, d - left / 4.0);
+            }
             // What is left of the band, no narrower than two beads take and no wider than takes two more.
-            let left = (t - 2.0 * level as f64 * s).clamp(beading.two(), (3.0 + beading.split) * s);
+            let left = left.clamp(beading.two(), (3.0 + beading.split) * s);
             return (left / 2.0, (left / 2.0 - s) / 2.0);
         }
         (s, 0.0)
@@ -970,6 +1136,100 @@ mod tests {
         let length = geom::length_mm(&lines[0].points, false);
         assert!((length - 18.76).abs() < 0.1, "{length}");
         let area = 20.0 * 1.2;
+        assert!((laid(&paths) / area - 1.0).abs() < 0.03, "{} of {area}", laid(&paths));
+    }
+
+    /// A run of the middle from `a` to `b` (mm along x), the band `w` mm wide all along it, holding `count` beads.
+    fn run(a: f64, b: f64, w: f64, count: usize) -> (ThickPath, usize) {
+        (ThickPath { points: vec![geom::pt(sc(a), 0), geom::pt(sc(b), 0)], widths: vec![w, w] }, count)
+    }
+
+    fn counts(runs: &[(ThickPath, usize)]) -> Vec<usize> {
+        runs.iter().map(|r| r.1).collect()
+    }
+
+    #[test]
+    fn the_filter_keeps_a_count_through_a_short_change_within_the_deviation() {
+        // 0.38 mm beads from a 0.4 mm nozzle: two beads from 0.61 mm, a bead's width allowed to stray 0.1 mm.
+        let b = Beading::new(0.38, 0.4, 0.2);
+        let two = b.two();
+        // A pair that starts and stops again within the deviation goes: one bead, wider there.
+        let mut runs = vec![run(0.0, 5.0, two - 0.1, 1), run(5.0, 6.0, two + 0.08, 2), run(6.0, 9.0, two - 0.1, 1)];
+        settle(&mut runs, &b, [true, true], false);
+        assert_eq!(counts(&runs), [1]);
+        assert_eq!(runs[0].0.points.len(), 4, "the runs are one");
+        // Beyond the deviation, it stays.
+        let mut runs = vec![run(0.0, 5.0, two - 0.1, 1), run(5.0, 6.0, two + 0.12, 2), run(6.0, 9.0, two - 0.1, 1)];
+        settle(&mut runs, &b, [true, true], false);
+        assert_eq!(counts(&runs), [1, 2, 1]);
+        // A pair that stops and starts again: the deviation is shared by two beads, so twice as much may go.
+        let mut runs = vec![run(0.0, 5.0, two + 0.1, 2), run(5.0, 6.0, two - 0.18, 1), run(6.0, 9.0, two + 0.1, 2)];
+        settle(&mut runs, &b, [true, true], false);
+        assert_eq!(counts(&runs), [2]);
+    }
+
+    #[test]
+    fn the_filter_goes_round_a_ring_through_where_its_points_start() {
+        // A ring's points start in the middle of a stretch a little too wide for one bead: that stretch is one run,
+        // and between the ends of the one-bead run round the rest of the ring the filter takes the pair out.
+        let b = Beading::new(0.38, 0.4, 0.2);
+        let two = b.two();
+        let at = |x: f64, y: f64| geom::pt(sc(x), sc(y));
+        let path = |points: Vec<Pt>, w: f64| ThickPath { widths: vec![w; points.len()], points };
+        let runs = vec![
+            (path(vec![at(0.0, 0.0), at(1.0, 0.0)], two + 0.05), 2),
+            (path(vec![at(1.0, 0.0), at(10.0, 0.0), at(10.0, 10.0), at(0.0, 10.0)], two - 0.1), 1),
+            (path(vec![at(0.0, 10.0), at(0.0, 0.0)], two + 0.05), 2),
+        ];
+        let mut runs = ring_runs(runs);
+        assert_eq!(counts(&runs), [1, 2]);
+        assert_eq!(runs[1].0.points, [at(0.0, 10.0), at(0.0, 0.0), at(1.0, 0.0)]);
+        settle(&mut runs, &b, [false, false], true);
+        assert_eq!(counts(&runs), [1]);
+        assert_eq!(runs[0].0.points.first(), runs[0].0.points.last(), "still a ring");
+    }
+
+    #[test]
+    fn a_band_a_little_too_wide_for_one_bead_in_places_is_still_one_line() {
+        // 0.58 mm wide, 0.03 mm under where two 0.38 mm beads fit, but 0.65 mm over a mm or two in two places: within
+        // the deviation, so one line all along rather than a loop round each bulge.
+        let mut top = Vec::new();
+        for (x, y) in [(20.0, 0.58), (13.0, 0.58), (12.0, 0.65), (10.0, 0.65), (9.0, 0.58), (7.0, 0.58), (6.0, 0.65)]
+            .into_iter()
+            .chain([(5.0, 0.65), (4.0, 0.58), (0.0, 0.58)])
+        {
+            top.push(geom::pt(sc(x), sc(y)));
+        }
+        let mut band = vec![geom::pt(0, 0), geom::pt(sc(20.0), 0)];
+        band.extend(top);
+        let paths = narrow_loops(&vec![vec![band.clone()]], 0.38, 0.4, 0.2, geom::pt(0, 0));
+        assert_eq!(paths.len(), 1, "{paths:?}");
+        assert!(!is_loop(&paths[0]));
+        assert!(paths[0].widths.iter().all(|&w| (0.57..0.66).contains(&w)), "{:?}", paths[0].widths);
+        let area = geom::area_mm2(&vec![vec![band]]);
+        assert!((laid(&paths) / area - 1.0).abs() < 0.03, "{} of {area}", laid(&paths));
+    }
+
+    #[test]
+    fn a_band_two_beads_wide_narrowing_for_a_moment_is_still_one_loop() {
+        // 0.75 mm wide but 0.58 mm over a mm in the middle, less than two 0.38 mm beads take: within the deviation,
+        // so the loop runs on through the narrowing, its beads narrower there, rather than stop either side of it.
+        let band = vec![
+            geom::pt(0, 0),
+            geom::pt(sc(20.0), 0),
+            geom::pt(sc(20.0), sc(0.75)),
+            geom::pt(sc(11.0), sc(0.75)),
+            geom::pt(sc(10.5), sc(0.58)),
+            geom::pt(sc(9.5), sc(0.58)),
+            geom::pt(sc(9.0), sc(0.75)),
+            geom::pt(0, sc(0.75)),
+        ];
+        let paths = narrow_loops(&vec![vec![band.clone()]], 0.38, 0.4, 0.2, geom::pt(0, 0));
+        assert_eq!(paths.len(), 1, "{paths:?}");
+        assert!(is_loop(&paths[0]));
+        let narrowest = paths[0].widths.iter().cloned().fold(f64::INFINITY, f64::min);
+        assert!((narrowest - 0.29).abs() < 0.01, "{narrowest}");
+        let area = geom::area_mm2(&vec![vec![band]]);
         assert!((laid(&paths) / area - 1.0).abs() < 0.03, "{} of {area}", laid(&paths));
     }
 
