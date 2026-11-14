@@ -94,6 +94,15 @@ fn a_cube_becomes_a_file_the_app_reads() {
     ] {
         assert!(names.iter().any(|n| n == name), "no {name}");
     }
+    // Bambu Studio opens a zip as a sliced plate only when its generator is "BambuStudio-<version>" (its reader
+    // `_handle_end_metadata`; otherwise it loads no config or G-code and says "The file does not contain any
+    // geometry data"), with a non-empty project config and the plate's G-code named in model_settings.config.
+    let model = String::from_utf8(entry(&out.file, "3D/3dmodel.model")).unwrap();
+    assert!(model.contains(r#"<metadata name="Application">BambuStudio-02.00.00.00</metadata>"#), "{model}");
+    let project = String::from_utf8(entry(&out.file, "Metadata/project_settings.config")).unwrap();
+    assert!(project.trim_start().starts_with('{') && project.len() > 100);
+    let model_settings = String::from_utf8(entry(&out.file, "Metadata/model_settings.config")).unwrap();
+    assert!(model_settings.contains(r#"<metadata key="gcode_file" value="Metadata/plate_1.gcode"/>"#));
     let inside = entry(&out.file, "Metadata/plate_1.gcode");
     assert_eq!(inside, out.gcode);
     let md5: String = Md5::digest(&inside).iter().map(|b| format!("{b:02x}")).collect();
