@@ -175,6 +175,9 @@ pub fn regions(
     if n > 0 {
         tops.push(slices[n - 1].clone());
     }
+    if s.spiral_mode {
+        crate::spiral::surfaces(&mut tops, &mut bottoms, slices, s);
+    }
     // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
     // came from, and belongs to its object.
     let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
@@ -195,6 +198,7 @@ pub fn regions(
             lower: i.checked_sub(1).map(|j| &slices[j]),
             top: &tops[i],
             last: &last,
+            largest: crate::spiral::largest_wall(i, layers.top[i], s),
         };
         let mut islands = walls(&slice, i, layers.height[i], &around, s);
         for ((island, object), shape) in islands.iter_mut().zip(objects).zip(slice) {
@@ -738,6 +742,8 @@ pub struct Around<'a> {
     /// What the layer above doesn't cover (the tops `regions` finds): where a top may be split off.
     pub top: &'a Shapes,
     pub last: &'a [bool],
+    /// A spiral vase's layer above its bottom: its outer wall keeps its largest loop alone, as Orca's does there.
+    pub largest: bool,
 }
 
 /// `walls` for shapes that all get `loops` walls, and are (`last`) or aren't on their objects' last layer.
@@ -763,6 +769,9 @@ fn wall_group(
     let safety = 1.0 / geom::SCALE;
 
     let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), PATH_RESOLUTION);
+    if around.largest && region.len() > 1 {
+        crate::section::keep_largest(&mut region);
+    }
     let mut depths: Vec<Shapes> = Vec::new();
     let mut gaps: Shapes = Vec::new();
     let mut last_spacing = sp_outer;
@@ -779,8 +788,12 @@ fn wall_group(
             region = split.rest;
             top = Some(split.fill);
         }
-        // Each inner wall, and one more past the last to find the gaps the last one leaves.
+        // Each inner wall, and one more past the last to find the gaps the last one leaves (not with no sparse
+        // infill, as Orca's classic walls skip that pass then).
         for k in 1..=loops {
+            if k == loops && s.sparse_density <= 0.0 {
+                break;
+            }
             // Orca's precise outer wall: the first inner wall a whole line width from the outer one (no overlap,
             // so the outer wall keeps to the model's outline).
             let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };

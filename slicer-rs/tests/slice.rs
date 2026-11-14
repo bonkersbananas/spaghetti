@@ -1492,3 +1492,54 @@ fn preheat_puts_back_orcas_lines() {
     }
     println!("{same} of {} lines exactly as Orca's", theirs.len());
 }
+
+#[test]
+fn a_vase_climbs_in_one_spiral_above_its_bottom_and_is_alone_on_its_plate() {
+    // Spiral vase mode, as a project asks for it: Orca's settings for it, one wall and nothing inside.
+    let settings = setup::read(r#"{"process": {"spiral_mode": "1"}}"#).unwrap().settings;
+    assert_eq!(settings.unsupported(), None);
+    assert_eq!((settings.wall_loops, settings.top_shell_layers, settings.sparse_density), (1, 0, 0.0));
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let block = boxes_stl(&[([116., 116., 0.], [140., 140., 10.])]);
+    let out = slice(&[Input { name: "vase.stl", bytes: &block }], &settings, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    // Each layer's height, its extrusions' heights and whether it retracts.
+    let mut layers: Vec<(f64, Vec<f64>, bool)> = Vec::new();
+    let mut z = 0.0;
+    for line in gcode.lines() {
+        if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            layers.push((h.parse().unwrap(), Vec::new(), false));
+        }
+        if !line.starts_with("G1 ") {
+            continue;
+        }
+        z = word(line, 'Z').unwrap_or(z);
+        if let Some(layer) = layers.last_mut() {
+            match word(line, 'E') {
+                Some(e) if e > 0.0 && word(line, 'X').or(word(line, 'Y')).is_some() => layer.1.push(z),
+                Some(e) if e < 0.0 => layer.2 = true,
+                _ => {}
+            }
+        }
+    }
+    // 50 layers, and the last one's turn again, flat, as Orca ends a vase (and counts it).
+    assert_eq!(layers.len(), 51);
+    let bottom = settings.bottom_shell_layers;
+    for (i, (top, zs, retracts)) in layers.iter().enumerate() {
+        assert!(!zs.is_empty(), "layer {i}");
+        if i < bottom || i == 50 {
+            // The bottom layers print flat, as any print's, and so does the last turn's copy.
+            assert!(zs.iter().all(|z| (z - top).abs() < 1e-9), "layer {i} at {top}: {zs:?}");
+        } else {
+            // Above them each turn rises from the layer below to its own height as it goes round, never retracting.
+            assert!(!retracts, "layer {i} retracts");
+            assert!(zs.windows(2).all(|w| w[1] > w[0]), "layer {i} rises: {zs:?}");
+            assert!(zs[0] > top - 0.2 && (zs[zs.len() - 1] - top).abs() < 1e-9, "layer {i} at {top}: {zs:?}");
+        }
+    }
+    // Orca prints one object in spiral vase mode, and stops the slice when there are more: so do we.
+    let beside = boxes_stl(&[([150., 116., 0.], [160., 126., 10.])]);
+    let two = [Input { name: "vase.stl", bytes: &block }, Input { name: "cup.stl", bytes: &beside }];
+    assert_eq!(slice(&two, &settings, &options).err(), Some(Error::Unsupported("several objects in spiral vase mode")));
+}

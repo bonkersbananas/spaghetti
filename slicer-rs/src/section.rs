@@ -48,8 +48,16 @@ struct Soup<'a> {
 /// Cuts the meshes at every layer's plane; returns each layer's region (outlines with holes) and for each of its
 /// shapes the mesh (object) it is a slice of. Each object's outline is made on its own, as Orca slices each object
 /// on its own, and as Orca makes a layer's (`make_expolygons`, then `ExPolygon::simplify`): its loops joined, gaps
-/// and notches narrower than twice `closing` mm closed, then simplified to `tolerance` mm.
-pub fn slice(meshes: &[Mesh], layers: &Layers, tolerance: f64, closing: f64) -> (Vec<Shapes>, Vec<Vec<u32>>) {
+/// and notches narrower than twice `closing` mm closed, then simplified to `tolerance` mm. From layer `largest_from`
+/// on (a spiral vase's layers above its bottom), each object's outline is its largest loop alone, holes and all
+/// filled (Orca's `PositiveLargestContour`).
+pub fn slice(
+    meshes: &[Mesh],
+    layers: &Layers,
+    tolerance: f64,
+    closing: f64,
+    largest_from: usize,
+) -> (Vec<Shapes>, Vec<Vec<u32>>) {
     let planes = layers.slice_z();
     let n_layers = planes.len();
     let mut vertex_base = Vec::with_capacity(meshes.len());
@@ -89,7 +97,7 @@ pub fn slice(meshes: &[Mesh], layers: &Layers, tolerance: f64, closing: f64) -> 
 
     par::map_range(n_layers, |l| {
         let triangles = &items[starts[l]..starts[l + 1]];
-        cut_layer(&soup, triangles, planes[l], tolerance, closing)
+        cut_layer(&soup, triangles, planes[l], tolerance, closing, l >= largest_from)
     })
     .into_iter()
     .unzip()
@@ -120,7 +128,14 @@ struct Segment {
 
 type EdgeMap = HashMap<u64, u32, BuildHasherDefault<FastHasher>>;
 
-fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: f64, closing: f64) -> (Shapes, Vec<u32>) {
+fn cut_layer(
+    soup: &Soup,
+    triangles: &[(u32, u32)],
+    plane: f64,
+    tolerance: f64,
+    closing: f64,
+    largest: bool,
+) -> (Shapes, Vec<u32>) {
     let mut segments: Vec<Segment> = Vec::with_capacity(triangles.len());
     for &(mi, ti) in triangles {
         let mesh = &soup.meshes[mi as usize];
@@ -226,7 +241,15 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: f64, 
     }
     let mut shapes = Vec::new();
     let mut owners = Vec::new();
-    for (mesh, loops) in by_mesh {
+    for (mesh, mut loops) in by_mesh {
+        if largest {
+            // Every loop counter-clockwise, so that what a loop encloses is filled whichever way it ran.
+            for contour in &mut loops {
+                if geom::area2(contour) < 0 {
+                    contour.reverse();
+                }
+            }
+        }
         let mut made = geom::union_contours(&loops);
         if tolerance > 0.0 {
             // Simplified before the closing too, which then offsets a seventh of the points: Orca closes the loops as
@@ -240,10 +263,23 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: f64, 
                 made = geom::simplify_polygons(&made, tolerance);
             }
         }
+        if largest && made.len() > 1 {
+            keep_largest(&mut made);
+        }
         owners.extend(std::iter::repeat_n(mesh, made.len()));
         shapes.extend(made);
     }
     (shapes, owners)
+}
+
+/// Keeps the shape whose outer loop encloses the most (Orca's `keep_largest_contour_only`), with its holes.
+pub fn keep_largest(shapes: &mut Shapes) {
+    let area = |shape: &geom::Shape| shape.first().map_or(0, |c| geom::area2(c));
+    if let Some(k) = (0..shapes.len()).reduce(|best, k| if area(&shapes[k]) > area(&shapes[best]) { k } else { best }) {
+        let kept = shapes.swap_remove(k);
+        shapes.clear();
+        shapes.push(kept);
+    }
 }
 
 #[inline]
