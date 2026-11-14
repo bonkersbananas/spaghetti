@@ -6,6 +6,7 @@
 
 use crate::config::Settings;
 use crate::fill;
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shapes};
 use crate::par;
 use crate::region::{Fills, Island};
@@ -377,7 +378,7 @@ fn bridging_angle(area: &Shapes, lines: &[(Pt, Pt)]) -> f64 {
         for w in contour.windows(2) {
             let (start, next) = ((w[0].x as f64, w[0].y as f64), (w[1].x as f64, w[1].y as f64));
             let v = (next.0 - start.0, next.1 - start.1);
-            let len = v.0.hypot(v.1);
+            let len = v.0.hyp(v.1);
             travelled += len;
             if travelled <= step {
                 continue;

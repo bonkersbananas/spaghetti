@@ -15,6 +15,7 @@
 //! from its edge, and so on inwards. The odd middle beads run along the region's medial axis, which also gives each
 //! loop the band's width beside it.
 
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shape, Shapes};
 use crate::medial;
 
@@ -959,7 +960,7 @@ fn along(
     along(path, a, (m, at_m), look, s, deep + 1);
     // On the side, in along its normal (to its left, into the solid).
     let (dx, dy) = ((b.0.x - a.0.x) as f64, (b.0.y - a.0.y) as f64);
-    let len = dx.hypot(dy);
+    let len = dx.hyp(dy);
     let reach = at_m.1 * geom::SCALE;
     path.points
         .push(geom::pt((m.x as f64 - dy / len * reach).round() as i32, (m.y as f64 + dx / len * reach).round() as i32));
@@ -974,12 +975,12 @@ fn moved(contour: &[Pt], i: usize, d: f64) -> Pt {
     let (a, p, b) = (contour[(i + n - 1) % n], contour[i], contour[(i + 1) % n]);
     let unit = |u: Pt, v: Pt| {
         let (dx, dy) = ((v.x - u.x) as f64, (v.y - u.y) as f64);
-        let len = dx.hypot(dy);
+        let len = dx.hyp(dy);
         if len > 0.0 { (-dy / len, dx / len) } else { (0.0, 0.0) }
     };
     let (n0, n1) = (unit(a, p), unit(p, b));
     let (mx, my) = (n0.0 + n1.0, n0.1 + n1.1);
-    let len = mx.hypot(my);
+    let len = mx.hyp(my);
     if len < 1e-6 {
         return p;
     }

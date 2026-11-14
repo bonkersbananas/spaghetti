@@ -4,6 +4,7 @@
 //! same code builds for WebAssembly). Shapes are an outer contour (counter-clockwise) followed by its holes
 //! (clockwise).
 
+use crate::fmath::Hyp;
 use i_overlay::core::extract::BooleanExtractionBuffer;
 use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay::{IntOverlayOptions, Overlay};
@@ -188,7 +189,7 @@ pub fn offset_square(shapes: &Shapes, delta: f64) -> Shapes {
             .map(|j| {
                 let (a, b) = (src[j], src[(j + 1) % n]);
                 let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
-                let f = 1.0 / dx.hypot(dy);
+                let f = 1.0 / dx.hyp(dy);
                 (dy * f, -dx * f)
             })
             .collect();
@@ -1202,7 +1203,7 @@ mod tests {
                                         } else {
                                             (((p.x - u.x) as f64 * dx + (p.y - u.y) as f64 * dy) / l2).clamp(0.0, 1.0)
                                         };
-                                        ((p.x - u.x) as f64 - t * dx).hypot((p.y - u.y) as f64 - t * dy)
+                                        ((p.x - u.x) as f64 - t * dx).hyp((p.y - u.y) as f64 - t * dy)
                                     })
                                     .fold(f64::MAX, f64::min)
                             })

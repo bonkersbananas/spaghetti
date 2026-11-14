@@ -14,6 +14,47 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
     render_each(meshes, size, &vec![colour; meshes.len()])
 }
 
+/// The rows of the picture one band draws, and how near the model is at each of their samples.
+struct Band<'a> {
+    /// The first row.
+    r0: usize,
+    width: usize,
+    depth: &'a mut [f32],
+    colours: &'a mut [u32],
+}
+
+/// Draws a triangle (its corners on the screen, x and y in samples, and depth) on the samples of a band within
+/// `x` and `y` (inclusive) where it is the nearest yet, in `colour`. Out of line: inlined into `render_each`, the
+/// loop ran at half speed in WebAssembly in V8, which made the picture 5 % of a Benchy's slice there.
+#[inline(never)]
+fn draw_triangle(p: [[f64; 3]; 3], area: f64, x: (usize, usize), y: (usize, usize), colour: u32, band: Band) {
+    let [p0, p1, p2] = p;
+    let (x0, x1) = x;
+    // The barycentric weights are linear across a row: step them instead of solving each pixel.
+    let inv = 1.0 / area;
+    let (d0, d1) = ((p1[1] - p2[1]) * inv, (p2[1] - p0[1]) * inv);
+    let (z0, z1, z2) = (p0[2] - p2[2], p1[2] - p2[2], p2[2]);
+    let sx0 = x0 as f64 + 0.5;
+    for py in y.0..=y.1 {
+        let sy = py as f64 + 0.5;
+        let mut w0 = ((p1[0] - sx0) * (p2[1] - sy) - (p1[1] - sy) * (p2[0] - sx0)) * inv;
+        let mut w1 = ((p2[0] - sx0) * (p0[1] - sy) - (p2[1] - sy) * (p0[0] - sx0)) * inv;
+        let row = (py - band.r0) * band.width;
+        for px in x0..=x1 {
+            if w0 >= 0.0 && w1 >= 0.0 && w0 + w1 <= 1.0 {
+                let z = (z2 + w0 * z0 + w1 * z1) as f32;
+                let at = row + px;
+                if z < band.depth[at] {
+                    band.depth[at] = z;
+                    band.colours[at] = colour;
+                }
+            }
+            w0 += d0;
+            w1 += d1;
+        }
+    }
+}
+
 /// `render`, each mesh in its own colour (a plate in several filaments).
 pub fn render_each(meshes: &[Mesh], size: usize, colours: &[&str]) -> Vec<u8> {
     let big = size * SUPERSAMPLE;
@@ -169,29 +210,15 @@ pub fn render_each(meshes: &[Mesh], size: usize, colours: &[&str]) -> Vec<u8> {
             if x1 < 0 {
                 continue;
             }
-            // The barycentric weights are linear across a row: step them instead of solving each pixel.
-            let inv = 1.0 / area;
-            let (d0, d1) = ((p1[1] - p2[1]) * inv, (p2[1] - p0[1]) * inv);
-            let (z0, z1, z2) = (p0[2] - p2[2], p1[2] - p2[2], p2[2]);
-            let sx0 = x0 as f64 + 0.5;
-            for py in y0..=y1 {
-                let sy = py as f64 + 0.5;
-                let mut w0 = ((p1[0] - sx0) * (p2[1] - sy) - (p1[1] - sy) * (p2[0] - sx0)) * inv;
-                let mut w1 = ((p2[0] - sx0) * (p0[1] - sy) - (p2[1] - sy) * (p0[0] - sx0)) * inv;
-                let row = (py - r0) * big;
-                for px in x0..=x1 as usize {
-                    if w0 >= 0.0 && w1 >= 0.0 && w0 + w1 <= 1.0 {
-                        let z = (z2 + w0 * z0 + w1 * z1) as f32;
-                        let at = row + px;
-                        if z < depth[at] {
-                            depth[at] = z;
-                            colours[at] = colour;
-                        }
-                    }
-                    w0 += d0;
-                    w1 += d1;
-                }
-            }
+            let x1 = x1 as usize;
+            draw_triangle(
+                [p0, p1, p2],
+                area,
+                (x0, x1),
+                (y0, y1),
+                colour,
+                Band { r0, width: big, depth: &mut depth, colours: &mut colours },
+            );
         }
         (depth, colours)
     });

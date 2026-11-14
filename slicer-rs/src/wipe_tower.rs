@@ -20,6 +20,7 @@
 //! Orca fits them (`arc_fit.rs`, to 0.1 mm) and written as `G2`/`G3`; with it off, as lines simplified to 0.1 mm.
 
 use crate::arc_fit;
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour};
 use std::collections::HashMap;
 use std::f32::consts::PI as PI_F32;
@@ -984,7 +985,7 @@ fn snap_crossings(mut union: Vec<arc_fit::P>, loops: &[Vec<arc_fit::P>]) -> Vec<
         let (px, py) = ((q[0] - a[0]) as f64, (q[1] - a[1]) as f64);
         let len2 = dx * dx + dy * dy;
         let t = ((px * dx + py * dy) / len2).clamp(0.0, 1.0);
-        len2 > 0.0 && (px - t * dx).hypot(py - t * dy) < 2.0
+        len2 > 0.0 && (px - t * dx).hyp(py - t * dy) < 2.0
     };
     for q in union.iter_mut() {
         if loops.iter().any(|l| l.contains(q)) {
@@ -1076,7 +1077,7 @@ fn box_corners_as_clipper(
                         let (ex, ey) = ((b[0] - a[0]) as f64, (b[1] - a[1]) as f64);
                         let (px, py) = ((c[0] - a[0]) as f64, (c[1] - a[1]) as f64);
                         let t = ((px * ex + py * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
-                        (px - t * ex).hypot(py - t * ey)
+                        (px - t * ex).hyp(py - t * ey)
                     };
                     d(i).total_cmp(&d(j))
                 });

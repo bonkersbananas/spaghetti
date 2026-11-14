@@ -9,6 +9,7 @@
 use crate::Object;
 use crate::bambu::Frame;
 use crate::config::{Settings, trim};
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shapes};
 use crate::plan::{LayerPlan, Path};
 use crate::region::{LayerRegions, Role};
@@ -334,7 +335,7 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
         // The travel onto the layer, from where the one before ended.
         let mut time = l.time;
         if let Some(first) = l.first {
-            let d = (first[0] - at[0]).hypot(first[1] - at[1]);
+            let d = (first[0] - at[0]).hyp(first[1] - at[1]);
             let t = travel_time(d, i == 0, s);
             time += t;
             stats.travel_time += t;
@@ -533,7 +534,7 @@ impl<'a> Builder<'a> {
     fn slope_to(&mut self, x: f64, y: f64) {
         let s = self.s;
         let z = self.z + s.z_hop;
-        let d = (x - self.x).hypot(y - self.y);
+        let d = (x - self.x).hyp(y - self.y);
         let slope = s.travel_slope.to_radians();
         if s.z_hop > 0.0 && d > 0.0 && s.z_hop.atan2(d) < slope {
             let run = s.z_hop / slope.tan();
@@ -612,7 +613,7 @@ impl<'a> Builder<'a> {
         let mut written = 0;
         for q in route {
             let (qx, qy) = (geom::unsc(q.x), geom::unsc(q.y));
-            let seg = (qx - self.x).hypot(qy - self.y);
+            let seg = (qx - self.x).hyp(qy - self.y);
             if seg < 1e-9 {
                 continue;
             }
@@ -641,8 +642,8 @@ impl<'a> Builder<'a> {
         let z = self.layer_z + s.z_hop;
         let r = s.z_hop / (2.0 * PI * (s.travel_slope.to_radians()).atan());
         let (i, j) = match toward {
-            Some((x, y)) if (x - self.x).hypot(y - self.y) > 0.0 => {
-                let d = (x - self.x).hypot(y - self.y);
+            Some((x, y)) if (x - self.x).hyp(y - self.y) > 0.0 => {
+                let d = (x - self.x).hyp(y - self.y);
                 (-(y - self.y) / d * r, (x - self.x) / d * r)
             }
             _ => (r, 0.0),
@@ -718,7 +719,7 @@ impl<'a> Builder<'a> {
                 }
                 None => written = own * 60.0,
             }
-            let length = (x - self.x).hypot(y - self.y);
+            let length = (x - self.x).hyp(y - self.y);
             self.accel = accel;
             let m = Move {
                 x,
@@ -800,7 +801,7 @@ impl<'a> Builder<'a> {
                     }
                 }
                 Step::Travel { x, y, lift, lower } => {
-                    let d = (x - self.x).hypot(y - self.y);
+                    let d = (x - self.x).hyp(y - self.y);
                     if *lift && !self.lifted {
                         self.lift(Some((*x, *y)));
                     }
@@ -874,7 +875,7 @@ fn route_length<'p>(from: (f64, f64), route: impl Iterator<Item = &'p Pt>, most:
     let mut total = 0.0;
     for q in route {
         let (qx, qy) = (geom::unsc(q.x), geom::unsc(q.y));
-        total += (qx - x).hypot(qy - y);
+        total += (qx - x).hyp(qy - y);
         if total >= most {
             return most;
         }
@@ -1077,7 +1078,7 @@ fn build_layer<'a>(
                 if let Some(o) = owner(path) {
                     b.note(Note::Printing(o));
                 }
-                let d = (x - b.x).hypot(y - b.y);
+                let d = (x - b.x).hyp(y - b.y);
                 b.set_accel(b.travel_accel(path, d));
                 if d >= s.retract_min_travel {
                     b.retract();
@@ -1134,7 +1135,7 @@ fn build_layer<'a>(
                         }
                     }
                 };
-                let d = (x - b.x).hypot(y - b.y);
+                let d = (x - b.x).hyp(y - b.y);
                 if d > 1e-6 && course.is_some() {
                     // Spiral vase mode: a retraction lifts straight up at once; the layer's first travel to its
                     // height comes down as it goes, any other at the lifted height.
@@ -1309,7 +1310,7 @@ fn base64_u64(value: u64) -> String {
 
 fn simple_time(m: &Move, from: [f64; 3]) -> f64 {
     let d = match m.kind {
-        Kind::Spiral { i, j } => (2.0 * PI * i.hypot(j)).hypot(m.z - from[2]),
+        Kind::Spiral { i, j } => (2.0 * PI * i.hyp(j)).hyp(m.z - from[2]),
         _ => ((m.x - from[0]).powi(2) + (m.y - from[1]).powi(2) + (m.z - from[2]).powi(2)).sqrt(),
     };
     let d = if d > 1e-9 { d } else { m.e.abs() };
@@ -1420,7 +1421,7 @@ pub(crate) fn arc_steps(r: f64, angle: f64) -> usize {
 pub(crate) fn arc_pieces(from: [f64; 3], to: [f64; 3], i: f64, j: f64, clockwise: bool) -> Vec<[f64; 3]> {
     let c = [from[0] + i, from[1] + j];
     let (rs, re) = ([from[0] - c[0], from[1] - c[1]], [to[0] - c[0], to[1] - c[1]]);
-    let r = rs[0].hypot(rs[1]);
+    let r = rs[0].hyp(rs[1]);
     let angle = if (to[0] - from[0]).abs() < 1e-4 && (to[1] - from[1]).abs() < 1e-4 {
         2.0 * PI
     } else {
@@ -1431,7 +1432,7 @@ pub(crate) fn arc_pieces(from: [f64; 3], to: [f64; 3], i: f64, j: f64, clockwise
         if clockwise { a - 2.0 * PI } else { a }
     };
     let dz = to[2] - from[2];
-    if (angle * r).hypot(dz) < 0.001 {
+    if (angle * r).hyp(dz) < 0.001 {
         return Vec::new();
     }
     let n = arc_steps(r, angle.abs());
@@ -1484,14 +1485,14 @@ impl Planner<'_> {
         // the path turns by less than about 29° from the last move, no faster than the print acceleration allows round
         // the circle the turn implies.
         if (self.prev_dir[0] != 0.0 || self.prev_dir[1] != 0.0) && (dir[0] != 0.0 || dir[1] != 0.0) {
-            let (l1, l2) = (self.prev_dir[0].hypot(self.prev_dir[1]), dir[0].hypot(dir[1]));
+            let (l1, l2) = (self.prev_dir[0].hyp(self.prev_dir[1]), dir[0].hyp(dir[1]));
             let v1 = (self.prev_dir[0] / l1, self.prev_dir[1] / l1);
             let v2 = (dir[0] / l2, dir[1] / l2);
-            let norm_diff = (v2.0 - v1.0).hypot(v2.1 - v1.1);
+            let norm_diff = (v2.0 - v1.0).hyp(v2.1 - v1.1);
             if norm_diff < 0.5 && norm_diff > 0.00001 {
                 let angle = (v1.0 * v2.1 - v1.1 * v2.0).atan2(v1.0 * v2.0 + v1.1 * v2.1);
                 let sin_half = ((1.0 - angle.cos()) * 0.5).sqrt();
-                let r = delta[0].hypot(delta[1]) * 0.5 / sin_half;
+                let r = delta[0].hyp(delta[1]) * 0.5 / sin_half;
                 cruise = cruise.min((set.min(s.max_accel_extruding) * r).sqrt());
             }
         }
@@ -1647,7 +1648,7 @@ fn plan(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, [f64; 3
             r += 1;
         }
         if let Kind::Spiral { i: ci, j: cj } = m.kind {
-            let r = ci.hypot(cj);
+            let r = ci.hyp(cj);
             let (cx, cy, z0) = (p.at[0] + ci, p.at[1] + cj, p.at[2]);
             let a0 = (-cj).atan2(-ci);
             let n = arc_steps(r, 2.0 * PI);
@@ -1888,7 +1889,7 @@ fn finish_layer(
             }
             Kind::Travel | Kind::TravelZ => {
                 out.travel_time += secs;
-                out.travel_distance += (m.x - at[0]).hypot(m.y - at[1]);
+                out.travel_distance += (m.x - at[0]).hyp(m.y - at[1]);
             }
             Kind::Retract | Kind::Wipe | Kind::Lift | Kind::Spiral { .. } => out.travel_time += secs,
         }
@@ -2315,7 +2316,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                 if xy && e > 0.0 {
                     out.mm += e;
                 } else if xy {
-                    out.travel += (to[0] - at[0]).hypot(to[1] - at[1]);
+                    out.travel += (to[0] - at[0]).hyp(to[1] - at[1]);
                 }
                 if to != at || e != 0.0 {
                     moves.push(Move {
@@ -2376,7 +2377,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                     let mut from = at;
                     for p in pieces {
                         if e <= 0.0 {
-                            out.travel += (p[0] - from[0]).hypot(p[1] - from[1]);
+                            out.travel += (p[0] - from[0]).hyp(p[1] - from[1]);
                         }
                         moves.push(Move {
                             x: p[0],
@@ -2850,7 +2851,7 @@ mod tests {
             } else if !moved {
                 moves.push(mv(nx, ny, nz, 0.0, Kind::Spiral { i, j }));
             } else {
-                let (cx, cy, r) = (x + i, y + j, i.hypot(j));
+                let (cx, cy, r) = (x + i, y + j, i.hyp(j));
                 let a0 = (y - cy).atan2(x - cx);
                 let mut d = (ny - cy).atan2(nx - cx) - a0;
                 if g == "G3" && d <= 0.0 {

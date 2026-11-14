@@ -5,6 +5,7 @@
 //! they go round corners rather than through walls. Bridges whose growth meets become one bridge, which spans the
 //! way its first part spans best. Sparse infill left in small pieces turns solid.
 
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shape, Shapes};
 use std::f64::consts::PI;
 
@@ -213,7 +214,7 @@ fn inner_point(shape: &Shape) -> Option<Pt> {
     for i in 0..n {
         let (a, b) = (outer[i], outer[(i + 1) % n]);
         let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
-        let len = dx.hypot(dy);
+        let len = dx.hyp(dy);
         if len < 4.0 {
             continue;
         }
@@ -334,7 +335,7 @@ fn bridge_angle(bridge: &Shape, anchors: &Shapes) -> f64 {
                 continue;
             }
             let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
-            let len = dx.hypot(dy);
+            let len = dx.hyp(dy);
             let (mx, my) = ((a.x as f64 + b.x as f64) / 2.0, (a.y as f64 + b.y as f64) / 2.0);
             let off = |side: f64| {
                 let e = 10.0 * side / len;
@@ -355,7 +356,7 @@ fn bridge_angle(bridge: &Shape, anchors: &Shapes) -> f64 {
         let mut normals: Vec<(i64, (f64, f64))> = Vec::new();
         for &(a, b) in &free {
             let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
-            let len = dx.hypot(dy);
+            let len = dx.hyp(dy);
             let normal = (dy / len, -dx / len);
             let key = (normal.1.atan2(normal.0) * 1000.0).ceil() as i64;
             if !normals.iter().any(|(k, _)| *k == key) {
@@ -419,7 +420,7 @@ fn narrow_axis(shape: &Shape) -> Option<(f64, f64)> {
     let (ea, eb) = (0.5 * (vx + vy + root), 0.5 * (vx + vy - root));
     let small = if ea > eb { eb } else { ea };
     let v = ((small - vy) / cov, 1.0);
-    let len = v.0.hypot(v.1);
+    let len = v.0.hyp(v.1);
     Some((v.0 / len, v.1 / len))
 }
 

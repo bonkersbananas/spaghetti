@@ -3,6 +3,7 @@
 //! line on the next scanline, joined by a short extrusion where the joint stays inside the region (a zig-zag),
 //! else the run ends there and the next one starts with a travel.
 
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, Shapes};
 
 /// A region edge in the frame where the lines are horizontal: from `y0` up to `y1`, at `x0` when at `y0`.
@@ -205,7 +206,7 @@ fn joint_inside(edges: &[Edge], band: &[u32], p: (f64, f64), q: (f64, f64)) -> b
             let along = ((mid.0 - ax) * ex + (mid.1 - ay) * ey) / (e_len * e_len);
             if (0.0..=1.0).contains(&along) {
                 let (cx, cy) = (ax + ex * along, ay + ey * along);
-                if (cx - mid.0).hypot(cy - mid.1) <= TOL {
+                if (cx - mid.0).hyp(cy - mid.1) <= TOL {
                     on_edge = true;
                 }
             }

@@ -9,6 +9,7 @@
 use super::grow::Element;
 use super::volumes::Volumes;
 use super::{Config, smooth, util};
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, SCALE, Shapes};
 use crate::par;
 use std::collections::HashMap;
@@ -311,8 +312,8 @@ fn smooth_branches(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], frame: 
         let limit = |k: usize, mut candidate: (f64, f64), current: (f64, f64)| -> (f64, f64) {
             let constrain = |candidate: (f64, f64), anchor: (f64, f64), allowed: f64| {
                 let delta = (candidate.0 - anchor.0, candidate.1 - anchor.1);
-                let dist = delta.0.hypot(delta.1);
-                let allowed = allowed.max((current.0 - anchor.0).hypot(current.1 - anchor.1));
+                let dist = delta.0.hyp(delta.1);
+                let allowed = allowed.max((current.0 - anchor.0).hyp(current.1 - anchor.1));
                 if dist > allowed && dist > 1e-4 {
                     (anchor.0 + delta.0 * (allowed / dist), anchor.1 + delta.1 * (allowed / dist))
                 } else {
@@ -364,7 +365,7 @@ fn smooth_branches(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], frame: 
                 moved = depth > 1e-4;
                 let nudge = (depth + 0.1).clamp(0.0, 0.5);
                 let (dx, dy) = ((pos[0] - hit[0]) as f64, (pos[1] - hit[1]) as f64);
-                let len = dx.hypot(dy);
+                let len = dx.hyp(dy);
                 let dir = if len > 0.0 { (dx / len, dy / len) } else { (0.0, 0.0) };
                 // As Orca writes it, the nudge goes its distance squared.
                 let current = (pos[0] as f64, pos[1] as f64);
@@ -393,7 +394,7 @@ fn smooth_branches(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], frame: 
             let (ax, ay) = (ax / weight, ay / weight);
             let old = (pos[0] as f64, pos[1] as f64);
             let shift = (0.5 * old.0 + 0.5 * ax - old.0, 0.5 * old.1 + 0.5 * ay - old.1);
-            let dmax = shift.0.hypot(shift.1);
+            let dmax = shift.0.hyp(shift.1);
             let d = dmax.clamp(0.0, 0.2);
             if d > 0.0 {
                 let candidate = (old.0 + shift.0 * (d / dmax), old.1 + shift.1 * (d / dmax));

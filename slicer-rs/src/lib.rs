@@ -10,6 +10,7 @@ pub mod brim;
 pub mod config;
 pub mod filaments;
 pub mod fill;
+pub mod fmath;
 pub mod gcode;
 pub mod geom;
 pub mod grid;
@@ -46,6 +47,12 @@ pub mod toolchange;
 pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+
+/// In WebAssembly, Talc's allocator rather than Rust's own (dlmalloc): about as fast on a Benchy, a little faster
+/// with trees, and a smaller module.
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 pub mod wipe_tower;
 pub mod zip;
 

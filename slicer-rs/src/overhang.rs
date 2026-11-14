@@ -13,6 +13,7 @@
 
 use crate::config::Settings;
 use crate::fill::{self, EdgeGrid};
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, Shapes};
 use crate::plan::{Part, Path};
 use crate::region::Role;
@@ -83,7 +84,7 @@ impl Below {
             if sa > r || sb > r {
                 return true;
             }
-            let length = (b.0 - a.0).hypot(b.1 - a.1);
+            let length = (b.0 - a.0).hyp(b.1 - a.1);
             if (sa + sb + length) / 2.0 <= r {
                 continue;
             }
@@ -274,8 +275,7 @@ impl Below {
             if (prev.d as f64 > bo as f64 + EPSILON) != (next.d as f64 > bo as f64 + EPSILON) {
                 self.outline.crossings((prev.x, prev.y), (next.x, next.y), &mut crossings);
                 for &(_, cx, cy) in &crossings {
-                    if (cx - prev.x).hypot(cy - prev.y) > min_spacing && (next.x - cx).hypot(next.y - cy) > min_spacing
-                    {
+                    if (cx - prev.x).hyp(cy - prev.y) > min_spacing && (next.x - cx).hyp(next.y - cy) > min_spacing {
                         points.push(Ext { x: cx, y: cy, d: bo });
                     }
                 }
@@ -293,7 +293,7 @@ impl Below {
             for idx in 0..points.len() - 1 {
                 let (curr, next) = (points[idx], points[idx + 1]);
                 let step = (next.x - curr.x, next.y - curr.y);
-                let line_len = step.0.hypot(step.1);
+                let line_len = step.0.hyp(step.1);
                 interior.clear();
                 if line_len >= max_probe_spacing {
                     pending.push((0.0, 1.0, MAX_DEPTH));
@@ -349,7 +349,7 @@ impl Below {
         for idx in 0..points.len() - 1 {
             let (curr, next) = (points[idx], points[idx + 1]);
             if near(curr.d) || near(next.d) {
-                let line_len = (next.x - curr.x).hypot(next.y - curr.y);
+                let line_len = (next.x - curr.x).hyp(next.y - curr.y);
                 let split = line_len >= 2.0 && (table.slower(curr.d, 0.0) || table.slower(next.d, 0.0));
                 if split {
                     let a0 = (((curr.d + 3.0 * bo) as f64) / line_len).clamp(0.0, 1.0);
@@ -364,8 +364,8 @@ impl Below {
                         }
                         let (px, py) = (curr.x + t * (next.x - curr.x), curr.y + t * (next.y - curr.y));
                         cut[k] = Ext { x: px, y: py, d: distance(px, py) };
-                        keep[k] = (px - curr.x).hypot(py - curr.y) > min_spacing
-                            && (next.x - px).hypot(next.y - py) > min_spacing;
+                        keep[k] = (px - curr.x).hyp(py - curr.y) > min_spacing
+                            && (next.x - px).hyp(next.y - py) > min_spacing;
                     }
                     // Only cuts that print otherwise than what is either side of them.
                     if keep[0] {
@@ -376,7 +376,7 @@ impl Below {
                         keep[1] = !table.same(cut[1].d, if keep[0] { cut[0].d } else { curr.d })
                             || !table.same(cut[1].d, next.d);
                     }
-                    if keep[0] && keep[1] && (cut[1].x - cut[0].x).hypot(cut[1].y - cut[0].y) <= min_spacing {
+                    if keep[0] && keep[1] && (cut[1].x - cut[0].x).hyp(cut[1].y - cut[0].y) <= min_spacing {
                         keep[1] = false;
                     }
                     for k in 0..2 {
@@ -547,7 +547,7 @@ fn split(line: &[Pt], grid: &EdgeGrid) -> Vec<(Vec<Pt>, bool)> {
         let start = at(s0, t0);
         let mut rest: Vec<(f64, f64)> = (s0 + 1..=s1).map(|v| pts[v]).collect();
         rest.push(at(s1, t1));
-        let Some(&next) = rest.iter().find(|q| (q.0 - start.0).hypot(q.1 - start.1) > 1e-6) else { continue };
+        let Some(&next) = rest.iter().find(|q| (q.0 - start.0).hyp(q.1 - start.1) > 1e-6) else { continue };
         let beyond = !grid.inside(((start.0 + next.0) / 2.0, (start.1 + next.1) / 2.0));
         match out.last_mut() {
             Some((points, was)) if *was == beyond => {
@@ -745,7 +745,7 @@ impl Outline {
                 if t <= 0.0 { ((ax, ay), self.prev[e as usize], e) } else { ((bx, by), e, self.next[e as usize]) };
             let normal = |k: u32| {
                 let [ax, ay, bx, by] = self.edges[k as usize];
-                let l = (bx - ax).hypot(by - ay);
+                let l = (bx - ax).hyp(by - ay);
                 if l > 0.0 { ((by - ay) / l, -(bx - ax) / l) } else { (0.0, 0.0) }
             };
             let (n1, n2) = (normal(e_in), normal(e_out));
@@ -813,7 +813,7 @@ impl Outline {
             let t2 = (v1.0 * v12.1 - v1.1 * v12.0) / denom;
             if (0.0..=1.0).contains(&t1) && (0.0..=1.0).contains(&t2) {
                 let (px, py) = (a.0 + t1 * v1.0, a.1 + t1 * v1.1);
-                out.push(((px - a.0).hypot(py - a.1), px, py));
+                out.push(((px - a.0).hyp(py - a.1), px, py));
             }
         }
         out.sort_by(|p, q| p.0.total_cmp(&q.0));
