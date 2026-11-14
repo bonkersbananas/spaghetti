@@ -2,20 +2,31 @@
  * Where a slice's defaults come from in this workshop: a filament from the Pantry (the stand-in only when it has no
  * spool to offer), a plate the Printer page says is owned, and the nozzle fitted (decision 0047). Pure.
  */
-import type { PrinterSetup, SpoolLike } from "../spools.ts";
+import { productOf } from "../products.ts";
+import { type PrinterSetup, type SpoolLike, spoolColors } from "../spools.ts";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 import { ENGINE_NOZZLES } from "./orca.ts";
 import { normalizeSlicing, type SlicingFilament, type SlicingSettings, withNozzle } from "./settings.ts";
 
 /** A spool as a slice's filament: its plain words (so the slice reads the same without it) and its id. */
 export function filamentOfSpool(spool: SpoolLike): SlicingFilament {
+  const colors = spoolColors(spool);
+  // The spool's own range, else the maker's for its product: the slice stays inside it.
+  const product = productOf(spool);
+  const range = [spool.nozzleTempMin ?? product?.nozzle[0], spool.nozzleTempMax ?? product?.nozzle[1]] as const;
   return {
     material: spool.material,
-    ...(spool.colorHex ? { colorHex: spool.colorHex.toLowerCase() } : {}),
+    // A multi-colour spool slices in its first colour: it is all the plate picture and the sliced file show.
+    ...(colors[0] ? { colorHex: colors[0] } : {}),
+    ...(colors.length > 1 ? { colors } : {}),
     ...(spool.colorName ? { colorName: spool.colorName } : {}),
     ...(spool.brand ? { brand: spool.brand } : {}),
+    ...(spool.line ? { line: spool.line } : {}),
     ...(spool.finish ? { finish: spool.finish } : {}),
     spoolId: spool.id,
+    ...(range[0] !== undefined && range[1] !== undefined && range[0] <= range[1]
+      ? { nozzleTempMin: range[0], nozzleTempMax: range[1] }
+      : {}),
   };
 }
 

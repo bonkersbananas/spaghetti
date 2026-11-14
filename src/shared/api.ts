@@ -613,8 +613,12 @@ export interface Spool {
   material: string;
   brand: string | null;
   colorName: string | null;
-  /** #rrggbb */
+  /** #rrggbb. Null for a dual- or tri-colour spool: its colours are in `colors`, so nothing matches it as one colour. */
   colorHex: string | null;
+  /** Two or three #rrggbb, in order, for a co-extruded spool whose colour shifts with the angle; else null. */
+  colors: string[] | null;
+  /** The product line the maker puts before the material: "PolyTerra", "Panchroma". */
+  line: string | null;
   finish: string | null;
   /**
    * The level. With gram data (`gramsLeft` not null) it is derived from the grams over `netGrams`, whatever was
@@ -679,6 +683,9 @@ export interface CreateSpoolRequest {
   brand?: string | null;
   colorName?: string | null;
   colorHex?: string | null;
+  /** Two or three colours: sets `colorHex` to null. A single `colorHex` clears them. */
+  colors?: string[] | null;
+  line?: string | null;
   finish?: string | null;
   remaining?: Remaining;
   /** Grams when new (Bambu spools: 1000). */

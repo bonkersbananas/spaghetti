@@ -33,6 +33,9 @@ describe("a slice's defaults from the workshop", () => {
       brand: "Bambu Lab",
       finish: "basic",
       spoolId: "s1",
+      // Bambu's own range for its PLA Basic, so a slice stays inside it.
+      nozzleTempMin: 190,
+      nozzleTempMax: 230,
     });
     expect(filamentOfSpool(spool("s2", { colorHex: null }))).toEqual({ material: "PLA", spoolId: "s2" });
   });

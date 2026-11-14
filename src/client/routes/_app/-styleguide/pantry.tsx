@@ -1,5 +1,6 @@
 import type { Spool } from "@shared/api";
 import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
+import { type SpoolLike, spoolLabel } from "@shared/spools";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
@@ -17,6 +18,7 @@ import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { NumberField, TextField } from "@/components/ui/Field";
 import { FromLabel } from "@/components/ui/FromLabel";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
+import { SpoolColourField, type SpoolColourValue } from "@/components/ui/SpoolColourField";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
 
@@ -27,12 +29,26 @@ const SILK = "#c9a46b"; // design-lint-ignore: a filament color is data
 
 const TEAL = "#2c8a87"; // design-lint-ignore: a filament color is data
 
+const PURPLE_BLACK = ["#1a1a1a", "#7b2fbe"]; // design-lint-ignore: a filament color is data
+const PINK_GOLD = ["#f29bc0", "#d4af37"]; // design-lint-ignore: a filament color is data
+const TRI = ["#1a1a1a", "#d4af37", "#7b2fbe"]; // design-lint-ignore: a filament color is data
+const WHITE_GOLD = ["#f4f1ea", "#d4af37"]; // design-lint-ignore: a filament color is data
+
+const LABELS: SpoolLike[] = [
+  { id: "a", brand: "Anycubic", material: "PLA", finish: "silk", colorName: "Black/Purple", colors: PURPLE_BLACK },
+  { id: "b", brand: "SUNLU", material: "PLA+", finish: "silk", colorName: "Black/Gold/Purple", colors: TRI },
+  { id: "c", brand: "Polymaker", line: "PolyTerra", material: "PLA", colorName: "Forest Green", colorHex: "#2f6b3a" }, // design-lint-ignore: a filament color is data
+  { id: "d", brand: "Bambu Lab", material: "PLA", finish: "silk+", colorName: "Candy Red", colorHex: "#c8102e" }, // design-lint-ignore: a filament color is data
+];
+
 const sampleSpool: Spool = {
   id: "sample-spool",
   material: "PLA",
   brand: "Eryone",
   colorName: "Silk gold",
   colorHex: SILK,
+  colors: null,
+  line: null,
   finish: "silk",
   remaining: "half",
   netGrams: 1000,
@@ -54,6 +70,7 @@ const sampleSpool: Spool = {
 export function PantrySection() {
   const [nozzle, setNozzle] = useState<number | undefined>(310);
   const [weight, setWeight] = useState<number | null>(1000);
+  const [colourValue, setColourValue] = useState<SpoolColourValue>({ colorHex: null, colors: PINK_GOLD });
   return (
     <Section
       id="pantry"
@@ -81,6 +98,33 @@ export function PantrySection() {
               </div>
             ))}
           </div>
+          <Label>
+            Dual colour and tri-colour: a co-extruded silk is drawn as even slices of the wound filament, a hard split
+            on a slant (never a rainbow); stored as its colours, with no single colour to match
+          </Label>
+          <div className="flex flex-wrap items-end gap-4">
+            <SpoolDisc colors={PURPLE_BLACK} size="sm" />
+            <SpoolDisc colors={PURPLE_BLACK} size="md" />
+            <SpoolDisc colors={PINK_GOLD} size="lg" />
+            <SpoolDisc colors={TRI} size="xl" />
+            <SpoolDisc colors={TRI} size="md" />
+          </div>
+          <Label>Their rim, on both surfaces (a black stripe needs it in dark mode, a white one in light)</Label>
+          <div className="bg-paper flex flex-wrap items-center gap-4 rounded-lg p-3">
+            <SpoolDisc colors={PURPLE_BLACK} size="lg" />
+            <SpoolDisc colors={WHITE_GOLD} size="lg" />
+          </div>
+          <Label>Picking a colour: one, or two or three in order, the common colours one tap each</Label>
+          <SpoolColourField value={colourValue} onChange={setColourValue} />
+          <Label>Named as the label reads, with how many colours</Label>
+          <ul className="text-small flex flex-col gap-1">
+            {LABELS.map((spool) => (
+              <li key={spoolLabel(spool)} className="flex items-center gap-2.5">
+                <SpoolDisc color={spool.colorHex} colors={spool.colors} size="sm" />
+                {spoolLabel(spool)}
+              </li>
+            ))}
+          </ul>
           <Label>Fill: three fifths of a square parent</Label>
           <div className="flex flex-wrap gap-3">
             {[SILK, WHITE, BLACK].map((color) => (

@@ -93,6 +93,7 @@ function Workshop() {
                 <SpoolDisc
                   key={spool.id}
                   color={spool.colorHex}
+                  colors={spool.colors}
                   size={isDesktop ? "lg" : "md"}
                   className="-ml-4 first:ml-0"
                 />
@@ -118,6 +119,7 @@ function Workshop() {
                       <SpoolDisc
                         size={isDesktop ? "md" : "sm"}
                         color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
+                        colors={spools?.find((spool) => spool.id === spoolId)?.colors}
                         empty={!spoolId}
                       />
                       <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">

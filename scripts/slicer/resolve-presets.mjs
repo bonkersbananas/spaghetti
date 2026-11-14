@@ -67,10 +67,27 @@ const MATERIALS_0_2 = [
   "Generic PVA",
   "Generic HIPS",
 ];
+/**
+ * Bambu's own PLA lines the X2D has presets for at the pinned Orca commit, as orca.ts `bambuLine` picks them for Bambu's
+ * spools (Orca has no X2D preset for another maker's filament: those slice with the generic ones above): Matte and
+ * Silk+ on 0.2 and 0.4 mm with one shared by the 0.6 and 0.8 mm; Silk on 0.4 mm with the shared one (its 0.2 mm is
+ * above). Bambu's PLA Pure has no X2D preset there yet (later Orca has it): its spools slice with Basic, which is what
+ * orca.ts falls back to, and the name here is for when the pin moves.
+ */
+const BAMBU_LINES = [
+  ...["Bambu PLA Matte", "Bambu PLA Silk+"].flatMap((name) => [
+    `${name} @BBL X2D 0.2 nozzle`,
+    `${name} @BBL X2D 0.4 nozzle`,
+    `${name} @BBL X2D`,
+  ]),
+  "Bambu PLA Silk @BBL X2D 0.4 nozzle",
+  "Bambu PLA Silk @BBL X2D",
+];
 const FILAMENTS = [
   ...MATERIALS.map((name) => `${name} @BBL X2D 0.4 nozzle`),
   ...MATERIALS.map((name) => `${name} @BBL X2D`),
   ...MATERIALS_0_2.map((name) => `${name} @BBL X2D 0.2 nozzle`),
+  ...BAMBU_LINES,
 ];
 
 const [dist, profiles, out] = process.argv.slice(2);

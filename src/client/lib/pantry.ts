@@ -29,7 +29,15 @@ export interface SpoolDraft {
   brand?: string | null;
   colorName?: string | null;
   colorHex?: string | null;
+  /** Two or three colours of a co-extruded spool; `colorHex` is then null. */
+  colors?: readonly string[] | null;
+  line?: string | null;
   finish?: string | null;
+  /** The maker's ranges in °C, from a known product. */
+  nozzleTempMin?: number | null;
+  nozzleTempMax?: number | null;
+  bedTempMin?: number | null;
+  bedTempMax?: number | null;
   note?: string;
   /** Grams when new; leave out for a spool whose level stays hand-set. */
   netGrams?: number | null;
@@ -54,8 +62,14 @@ export function addSpool(
     material: draft.material.trim() || "PLA",
     brand: draft.brand?.trim() || null,
     colorName: draft.colorName?.trim() || null,
-    colorHex: draft.colorHex ?? null,
+    colorHex: draft.colors ? null : (draft.colorHex ?? null),
+    colors: draft.colors ? [...draft.colors] : null,
+    line: draft.line?.trim() || null,
     finish: draft.finish ?? null,
+    nozzleTempMin: draft.nozzleTempMin ?? null,
+    nozzleTempMax: draft.nozzleTempMax ?? null,
+    bedTempMin: draft.bedTempMin ?? null,
+    bedTempMax: draft.bedTempMax ?? null,
     remaining: "full",
     netGrams: draft.netGrams ?? null,
     tareGrams: null,
@@ -74,17 +88,7 @@ export function addSpool(
     updatedAt: now,
     // Every other field is checked against the type; these start out missing (as null would) and the server's copy
     // fills them in a moment later (kept out of the pantry's first load: lib/label-read.ts has the full defaults).
-  } satisfies Omit<
-    Spool,
-    | "diameterMm"
-    | "nozzleTempMin"
-    | "nozzleTempMax"
-    | "bedTempMin"
-    | "bedTempMax"
-    | "dryTempC"
-    | "dryHours"
-    | "productCode"
-  > as Partial<Spool> as Spool;
+  } satisfies Omit<Spool, "diameterMm" | "dryTempC" | "dryHours" | "productCode"> as Partial<Spool> as Spool;
   patchSpools(queryClient, (spools) => [spool, ...spools]);
   if (!queryClient.getQueryData(spoolsQuery.queryKey)) queryClient.setQueryData(spoolsQuery.queryKey, [spool]);
   const saved = (async () => {
@@ -97,7 +101,13 @@ export function addSpool(
           brand: spool.brand,
           colorName: spool.colorName,
           colorHex: spool.colorHex,
+          colors: spool.colors,
+          line: spool.line,
           finish: spool.finish,
+          nozzleTempMin: spool.nozzleTempMin,
+          nozzleTempMax: spool.nozzleTempMax,
+          bedTempMin: spool.bedTempMin,
+          bedTempMax: spool.bedTempMax,
           netGrams: spool.netGrams,
           note: spool.note,
           createdAt: now,

@@ -42,15 +42,17 @@ import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { standInSentence } from "@shared/slicing/words.ts";
 import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
+import { formatDuration, formatDurationShort } from "@shared/time";
 import { Fragment, type ReactNode, useMemo, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
-import { DownloadIcon, ExternalIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
+import { DownloadIcon, ExternalIcon, LayersIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
+import { PulseDot } from "@/components/ui/PulseDot";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -60,6 +62,7 @@ import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
+import type { PlateComparison, PlateFigure } from "@/lib/slicing/plate-compare";
 import { usePlates } from "@/lib/slicing/plates";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { ColourMatches, spoolTile } from "./ColourMatches";
@@ -554,7 +557,7 @@ function FilamentChoice({
           value: "own",
           label: filament.colorName || filament.material,
           detail: filament.colorHex ? (filament.colorName ? filament.material : "From the file") : "Stand-in",
-          glyph: <SpoolDisc color={filament.colorHex} size="sm" />,
+          glyph: <SpoolDisc color={filament.colorHex} colors={filament.colors} size="md" />,
         }
       : null;
   const caption = !filament ? null : picked ? (
@@ -937,7 +940,20 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
   figures?: string;
   /** The plate those figures are of: the one the slice there was made for (the first when absent). */
   figuresPlate?: number;
+  /** "Slice every plate": the comparison made, if one was, and how to make it (the plates' numbers are the sheet's). */
+  compare?: { state: PlateComparison | undefined; run: (plates: number[]) => void };
 }
+
+/** A plate's figures in words: "1 h 44 min · 75.5 g", or that it can't be sliced. */
+const plateFigureWords = (figure: PlateFigure) =>
+  figure.failed
+    ? "can't be sliced"
+    : [
+        figure.minutes !== undefined ? formatDuration(figure.minutes) : "",
+        figure.grams !== undefined ? `${Math.round(figure.grams * 10) / 10} g` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
 /** The plates of a model's 3MF, with their pictures, for the picker (none for a file with one plate, or that isn't a 3MF). */
 function useProjectPlates(
@@ -945,6 +961,7 @@ function useProjectPlates(
   settings: SlicingSettings,
   figures?: string,
   figuresPlate?: number,
+  comparison?: PlateComparison,
   enabled = true,
 ): PlateOption[] | undefined {
   const found = usePlates(
@@ -955,15 +972,29 @@ function useProjectPlates(
   return useMemo(() => {
     if (found.status !== "ready") return undefined;
     const sliced = figuresPlate ?? found.plates[0]?.index;
-    return found.plates.map((plate) => ({
-      index: plate.index,
-      name: plate.name,
-      height: plate.height,
-      // The project's own picture until ours is drawn (or where it can't be).
-      src: plate.src ?? plate.placeholder,
-      ...(figures && plate.index === sliced ? { detail: figures } : {}),
-    }));
-  }, [found, figuresPlate, figures]);
+    return found.plates.map((plate) => {
+      const figure = comparison?.figures[plate.index];
+      return {
+        index: plate.index,
+        name: plate.name,
+        height: plate.height,
+        // The project's own picture until ours is drawn (or where it can't be).
+        src: plate.src ?? plate.placeholder,
+        ...(figure
+          ? {
+              detail: plateFigureWords(figure),
+              note: figure.failed
+                ? "–"
+                : figure.minutes !== undefined
+                  ? formatDurationShort(figure.minutes)
+                  : undefined,
+            }
+          : figures && plate.index === sliced
+            ? { detail: figures }
+            : {}),
+      };
+    });
+  }, [found, figuresPlate, figures, comparison]);
 }
 
 /**
@@ -1000,6 +1031,7 @@ export default function SliceSettingsSheet({
   sliced,
   figures,
   figuresPlate,
+  compare,
   ...choices
 }: SliceSettingsProps & {
   open: boolean;
@@ -1014,7 +1046,7 @@ export default function SliceSettingsSheet({
     open && !choices.lying,
     choices.settings.modelPlate,
   );
-  const projectPlates = useProjectPlates(file, choices.settings, figures, figuresPlate, open);
+  const projectPlates = useProjectPlates(file, choices.settings, figures, figuresPlate, compare?.state, open);
   const about = (
     <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />
   );
@@ -1042,13 +1074,34 @@ export default function SliceSettingsSheet({
       // first choices down.
       headerActions={
         projectPlates && projectPlates.length > 1 ? (
-          <PlatePicker
-            inSheet
-            plates={projectPlates}
-            value={choices.settings.modelPlate ?? projectPlates[0]?.index ?? 1}
-            // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
-            onChange={(modelPlate) => choices.onChange(slicingFor({ modelPlate, orientation: null }, choices.settings))}
-          />
+          <div className="flex min-w-0 flex-col items-end">
+            <PlatePicker
+              inSheet
+              plates={projectPlates}
+              value={choices.settings.modelPlate ?? projectPlates[0]?.index ?? 1}
+              // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
+              onChange={(modelPlate) =>
+                choices.onChange(slicingFor({ modelPlate, orientation: null }, choices.settings))
+              }
+            />
+            {compare && !compare.state ? (
+              // Every plate sliced with these settings, only to compare how long each takes.
+              <Button
+                variant="quiet"
+                size="sm"
+                icon={LayersIcon}
+                onClick={() => compare.run(projectPlates.map((plate) => plate.index))}
+                className="-mr-1"
+              >
+                Slice all {projectPlates.length}
+              </Button>
+            ) : compare?.state?.status === "running" ? (
+              <span role="status" className="text-small text-ink-soft inline-flex h-8 items-center gap-2 px-3">
+                <PulseDot />
+                Slicing {Math.min(compare.state.done + 1, compare.state.of)} of {compare.state.of}…
+              </span>
+            ) : null}
+          </div>
         ) : undefined
       }
       tall

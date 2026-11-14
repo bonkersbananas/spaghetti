@@ -28,7 +28,7 @@ export function SpoolRow({ spool, draggable = true }: { spool: Spool; draggable?
         className="focus-ring-inset hover:bg-ink/4 duration-fast flex h-16 items-center gap-4 px-4 transition-colors"
       >
         {/* An empty spool steps back: its disc dims (text stays at full contrast; "Empty" says it in words). */}
-        <SpoolDisc color={spool.colorHex} size="md" className={cn(empty && "opacity-60")} />
+        <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" className={cn(empty && "opacity-60")} />
         <span className="min-w-0 flex-1">
           <span className={cn("text-body block truncate font-semibold", empty ? "text-ink-soft" : "text-ink")}>
             {name.title}

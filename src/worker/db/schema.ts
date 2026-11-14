@@ -560,8 +560,12 @@ export const spools = sqliteTable(
     material: text("material").notNull(),
     brand: text("brand"),
     colorName: text("color_name"),
-    /** Lowercase #rrggbb. */
+    /** Lowercase #rrggbb. Null for a multi-colour spool: its colours are in `colors`. */
     colorHex: text("color_hex"),
+    /** A dual- or tri-colour spool's colours, as JSON: ["#1a1a1a", "#7b2fbe"] (two or three, lowercase #rrggbb). */
+    colors: text("colors"),
+    /** The product line said before the material: "PolyTerra", "Panchroma". */
+    line: text("line"),
     /** "matte", "silk"… (shared/spools.ts), or people's own word. */
     finish: text("finish"),
     /** The level set by hand (or reported by the AMS). Once the spool has gram data, the level follows the grams instead. */

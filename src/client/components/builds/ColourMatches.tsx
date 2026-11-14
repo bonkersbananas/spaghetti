@@ -28,7 +28,7 @@ export function spoolTile(spool: SpoolLike): ChoiceTile<string> {
     value: spool.id,
     label: spool.colorName || spool.material,
     detail: spoolDetail(spool),
-    glyph: <SpoolDisc color={spool.colorHex} size="sm" />,
+    glyph: <SpoolDisc color={spool.colorHex} colors={spool.colors} size="sm" />,
   };
 }
 
@@ -88,7 +88,12 @@ export function ColourMatches({
           <span key={colour.hex} className="flex items-center gap-1">
             <Swatch color={colour.hex} />
             <ArrowRightIcon size={10} aria-hidden className="text-ink-ghost" />
-            <SpoolDisc color={colour.filament.colorHex} size="xs" empty={!colour.inPantry} />
+            <SpoolDisc
+              color={colour.filament.colorHex}
+              colors={colour.filament.colors}
+              size="xs"
+              empty={!colour.inPantry}
+            />
           </span>
         ))}
       </span>
@@ -148,7 +153,12 @@ export function ColourMatches({
                       </span>
                       <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
                       <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
-                        <SpoolDisc color={colour.filament.colorHex} size="sm" empty={!colour.inPantry} />
+                        <SpoolDisc
+                          color={colour.filament.colorHex}
+                          colors={colour.filament.colors}
+                          size="sm"
+                          empty={!colour.inPantry}
+                        />
                         <span className="flex min-w-0 flex-col">
                           <span className="text-small text-ink font-semibold text-balance">
                             {colour.filament.colorName || colour.filament.material}

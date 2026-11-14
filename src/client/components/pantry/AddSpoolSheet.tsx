@@ -1,6 +1,16 @@
 import type { Spool } from "@shared/api";
 import { DEFAULT_NET_GRAMS } from "@shared/ledger";
-import { BRANDS, FINISHES, finishLabel, nearestColorName, QUICK_COLORS, SPOOL_MATERIALS } from "@shared/spools";
+import { PRODUCTS, productName, productOf, spoolFieldsOf } from "@shared/products";
+import {
+  BRANDS,
+  colorsName,
+  FINISHES,
+  finishLabel,
+  linesFor,
+  nearestColorName,
+  SPOOL_MATERIALS,
+  spoolColors,
+} from "@shared/spools";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
@@ -10,7 +20,7 @@ import { TextField } from "@/components/ui/Field";
 import { CameraIcon, CheckIcon, ImageIcon, PlusIcon, SparkleIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
-import { SwatchPicker } from "@/components/ui/Swatch";
+import { SpoolColourField, withColourCount } from "@/components/ui/SpoolColourField";
 import { cn } from "@/lib/cn";
 import { useLabelReadsEnabled } from "@/lib/label-read";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
@@ -37,6 +47,8 @@ const blank = (initial?: SpoolDraft): SpoolDraft => ({
   brand: null,
   colorName: null,
   colorHex: null,
+  colors: null,
+  line: null,
   finish: null,
   netGrams: DEFAULT_NET_GRAMS,
   ...initial,
@@ -91,8 +103,27 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
     setTouched((current) => new Set([...current, ...Object.keys(next)]));
     setDraft((current) => ({ ...current, ...next }));
   };
-  const setColor = (hex: string, name?: string) =>
-    change({ colorHex: hex, ...(namedByHand ? {} : { colorName: name ?? nearestColorName(hex) ?? null }) });
+  // A colour name typed by hand stays; a guessed one follows the colours ("Black/Purple" for two).
+  const setColours = (next: { colorHex: string | null; colors: string[] | null }) => {
+    const colors = spoolColors(next);
+    const guess = colors.length > 1 ? colorsName(colors) : colors[0] ? nearestColorName(colors[0]) : undefined;
+    change({ ...next, ...(namedByHand ? {} : { colorName: guess ?? null }) });
+  };
+  // A known product fills in what its label says; the colours stay as picked, spread over as many as it has.
+  const pickProduct = (id: string) => {
+    const product = PRODUCTS.find((entry) => entry.id === id);
+    if (!product) return;
+    if (productOf(draft)?.id === id) {
+      change({ brand: null, line: null, finish: null, nozzleTempMin: null, nozzleTempMax: null });
+      return;
+    }
+    setOtherMaterial(!(SPOOL_MATERIALS as readonly string[]).includes(product.material));
+    change(spoolFieldsOf(product));
+    const count = product.colours ?? 1;
+    if (count !== Math.max(1, spoolColors(draft).length) && (count > 1 || draft.colors)) {
+      setColours(withColourCount({ colorHex: draft.colorHex ?? null, colors: draft.colors ?? null }, count));
+    }
+  };
 
   function save(label?: File) {
     if (!user || (!label && !draft.material.trim())) return;
@@ -182,6 +213,21 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
         </div>
 
         <fieldset className="flex flex-col gap-2.5">
+          <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">Start from a product</legend>
+          <div className="flex flex-wrap gap-2">
+            {PRODUCTS.map((product) => (
+              <ToggleChip
+                key={product.id}
+                selected={productOf(draft)?.id === product.id}
+                onClick={() => pickProduct(product.id)}
+              >
+                {productName(product)}
+              </ToggleChip>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2.5">
           <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">Material</legend>
           <div className="flex flex-wrap gap-2">
             {SPOOL_MATERIALS.map((material) => (
@@ -221,34 +267,10 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
 
         <fieldset className="flex flex-col gap-3">
           <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">Color</legend>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Common colors">
-            {QUICK_COLORS.map((color) => {
-              const selected = draft.colorHex === color.hex;
-              return (
-                // biome-ignore lint/a11y/useSemanticElements: a swatch, not a form radio.
-                <button
-                  key={color.hex}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  aria-label={color.name}
-                  title={color.name}
-                  onClick={() => setColor(color.hex, color.name)}
-                  className={cn(
-                    "pressable focus-ring shadow-well ring-ink/15 size-10 rounded-full ring-1 ring-inset md:size-8",
-                    selected && "ring-ink ring-offset-paper ring-2 ring-offset-2",
-                  )}
-                  style={{ backgroundColor: color.hex }} // design-lint-ignore: a filament's color is data
-                />
-              );
-            })}
-            <SwatchPicker
-              value={draft.colorHex && !QUICK_COLORS.some((c) => c.hex === draft.colorHex) ? draft.colorHex : undefined}
-              onChange={(hex) => setColor(hex)}
-              label="Another color"
-              className="size-10 rounded-full md:size-8"
-            />
-          </div>
+          <SpoolColourField
+            value={{ colorHex: draft.colorHex ?? null, colors: draft.colors ?? null }}
+            onChange={setColours}
+          />
           <TextField
             size="sm"
             aria-label="Color name"
@@ -266,7 +288,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
           <TextField
             size="sm"
             label="Brand"
-            placeholder="Bambu, Polymaker…"
+            placeholder="Bambu Lab, Polymaker…"
             list={`${id}-brands`}
             maxLength={60}
             value={draft.brand ?? ""}
@@ -275,6 +297,23 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
           <datalist id={`${id}-brands`}>
             {BRANDS.map((brand) => (
               <option key={brand} value={brand} />
+            ))}
+          </datalist>
+        </div>
+
+        <div>
+          <TextField
+            size="sm"
+            label="Product line"
+            placeholder="PolyTerra, Panchroma… if it has one"
+            list={`${id}-lines`}
+            maxLength={40}
+            value={draft.line ?? ""}
+            onChange={(event) => change({ line: event.target.value || null })}
+          />
+          <datalist id={`${id}-lines`}>
+            {linesFor(draft.brand).map((line) => (
+              <option key={line} value={line} />
             ))}
           </datalist>
         </div>
