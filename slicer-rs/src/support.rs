@@ -570,7 +570,7 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
     };
 
     // 6. Layers and toolpaths: the raft's layers under its contact layer, then the rest.
-    let mut layers = raft_paths(&arena, &rafts, o.origin, p);
+    let mut layers = raft_paths(&arena, &rafts, &[], o.origin, p);
     layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p));
     mark_raft(&mut layers, p);
     layers
@@ -600,7 +600,7 @@ pub fn raft_alone(o: &Object, p: &Params) -> Vec<Layer> {
     let mut arena = vec![g];
     let tops = [0];
     let rafts = if r.layers() > 1 { raft_base(&mut arena, &tops, &[], &[], &r, p) } else { Vec::new() };
-    let mut layers = raft_paths(&arena, &rafts, o.origin, p);
+    let mut layers = raft_paths(&arena, &rafts, &[], o.origin, p);
     layers.extend(toolpaths(o, &mut arena, &tops, &[], &[], &[], p));
     mark_raft(&mut layers, p);
     layers
@@ -644,8 +644,23 @@ pub fn generate_tree(o: &Object, p: &Params, t: TreeLayers) -> Vec<Layer> {
         return Vec::new();
     }
     let interfaces = tree_interface_layers(&mut arena, &tops, &bottoms, &inter, &placed, p);
+    if let Some(r) = p.raft.filter(|r| r.layers() > 1) {
+        // On a raft (Orca's `generate_raft_base`, then `generate_support_toolpaths`): the raft's layers under its
+        // contact, the trees cutting through them, then the rest from the contact layer up, as without a raft.
+        let rafts = raft_base(&mut arena, &tops, &interfaces, &inter, &r, p);
+        let mut layers = raft_paths(&arena, &rafts, &inter, o.origin, p);
+        let above = |list: &[usize]| -> Vec<usize> {
+            list.iter().copied().filter(|&g| arena[g].print_z > r.interface_top_z + EPSILON).collect()
+        };
+        let (tops, bottoms, inter, interfaces) = (above(&tops), above(&bottoms), above(&inter), above(&interfaces));
+        layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p));
+        mark_raft(&mut layers, p);
+        return layers;
+    }
     flange(o, &mut arena, &tops, &interfaces, &inter, p);
-    toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p)
+    let mut layers = toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p);
+    mark_raft(&mut layers, p);
+    layers
 }
 
 /// Orca's `generate_interface_layers` for organic trees: a base layer prints as interface where the contacts on its
@@ -1467,12 +1482,17 @@ fn raft_base(
         }
     }
     let interface_polygons = geom::union_all(&[&interface_polygons]);
-    let (mut base, mut columns) = (Vec::new(), Vec::new());
+    let (mut base, mut columns, mut first_layer) = (Vec::new(), Vec::new(), Vec::new());
     if let Some(c) = columns_base {
-        // Columns standing on the raft's interface.
-        base = arena[c].polygons.clone();
-        columns =
-            if interface_polygons.is_empty() { base.clone() } else { geom::difference(&base, &interface_polygons) };
+        if arena[c].bottom_print_z() > r.interface_top_z - EPSILON {
+            // Columns standing on the raft's interface.
+            base = arena[c].polygons.clone();
+            columns =
+                if interface_polygons.is_empty() { base.clone() } else { geom::difference(&base, &interface_polygons) };
+        } else {
+            // Organic trees, which stand on the plate through the raft: their foot is the raft's first layer too.
+            first_layer = arena[c].polygons.clone();
+        }
     }
     if !interface_polygons.is_empty() {
         base = geom::union(&base, &interface_polygons);
@@ -1485,8 +1505,12 @@ fn raft_base(
     // The first layer.
     let kind = if r.base_layers > 0 { Kind::RaftBase } else { Kind::RaftInterface };
     let mut g = Gen::new(kind, 0.0, r.first_height, r.first_height);
-    g.polygons =
-        if first_inflate > 0.0 { geom::offset_c2(&base, first_inflate, geom::Join::Miter(3.0)) } else { base.clone() };
+    let first_layer = if first_layer.is_empty() { base.clone() } else { geom::union(&first_layer, &base) };
+    g.polygons = if first_inflate > 0.0 {
+        geom::offset_c2(&first_layer, first_inflate, geom::Join::Miter(3.0))
+    } else {
+        first_layer
+    };
     push(arena, g);
     let mut z = r.first_height;
     // The rest of the base.
@@ -1561,7 +1585,7 @@ fn raft_contact_id(r: &Raft) -> usize {
 /// loop round the raft's interface pattern at its own density (`raft_first_layer_density`), the base layers in the
 /// support's pattern and density, and the interface layers in the raft's interface pattern, an eighth of a turn
 /// either way by layer, with the columns that start on the raft printed through them as base.
-fn raft_paths(arena: &[Gen], rafts: &[usize], origin: (f64, f64), p: &Params) -> Vec<Layer> {
+fn raft_paths(arena: &[Gen], rafts: &[usize], trees: &[usize], origin: (f64, f64), p: &Params) -> Vec<Layer> {
     let Some(r) = p.raft else { return Vec::new() };
     let angles = RaftAngles::of(&r);
     // The raft's interface is the support pattern but at a density over 95 %, where it is straight lines.
@@ -1575,20 +1599,35 @@ fn raft_paths(arena: &[Gen], rafts: &[usize], origin: (f64, f64), p: &Params) ->
             width,
             height: h,
         };
+        // Organic trees cut through the raft above its first layer (Orca takes the k-th layer of their branches
+        // where it is at this height): the raft prints round them, and they print as branches.
+        let tree = trees
+            .get(k)
+            .map(|&t| &arena[t])
+            .filter(|t| k > 0 && (t.print_z - g.print_z).abs() < EPSILON && !t.polygons.is_empty());
+        let but_trees = |area: &Shapes| -> Shapes {
+            match tree {
+                Some(t) => geom::difference(area, &t.polygons),
+                None => area.clone(),
+            }
+        };
         let mut items: Vec<Item> = Vec::new();
         if k > 0 {
-            let area = if k < r.base_layers { &g.polygons } else { &g.contact };
+            let area = but_trees(if k < r.base_layers { &g.polygons } else { &g.contact });
             let fill = |shape: &Shape| base_support::fill(shape, direction(angles.base), origin, p.spacing, p.density);
             if p.raft_sheath {
                 // A loop round each part, as wide as a support line of the layer's height.
                 let line = Line { width: p.width, height: h, spacing: flow_spacing(p.width, h) };
-                items.extend(sheath_paths(area, line, Role::Support, false, fill));
+                items.extend(sheath_paths(&area, line, Role::Support, false, fill));
             } else {
-                for shape in &geom::closing(area, SCALED_EPSILON) {
+                for shape in &geom::closing(&area, SCALED_EPSILON) {
                     for line in fill(shape) {
                         items.push(Item::Path(path(Role::Support, line, p.width)));
                     }
                 }
+            }
+            if let Some(t) = tree {
+                items.extend(tree_paths(&t.polygons, h, p));
             }
         }
         let role = if k < r.base_layers { Role::Support } else { Role::SupportInterface };
@@ -1605,7 +1644,7 @@ fn raft_paths(arena: &[Gen], rafts: &[usize], origin: (f64, f64), p: &Params) ->
         } else if k >= r.base_layers {
             // Interface ids count the raft's interface layers from 0.
             let angle = direction(angles.interface(k - r.base_layers));
-            for shape in &geom::closing(&g.polygons, SCALED_EPSILON) {
+            for shape in &geom::closing(&but_trees(&g.polygons), SCALED_EPSILON) {
                 let lines = if rectilinear {
                     monotonic::rectilinear(shape, angle, origin, p.spacing, p.raft_interface_density)
                 } else {
@@ -1616,7 +1655,10 @@ fn raft_paths(arena: &[Gen], rafts: &[usize], origin: (f64, f64), p: &Params) ->
                 }
             }
         }
-        let islands = geom::union(&g.polygons, &g.contact);
+        let islands = match tree {
+            Some(t) => geom::union_all(&[&g.polygons, &g.contact, &t.polygons]),
+            None => geom::union(&g.polygons, &g.contact),
+        };
         Layer { print_z: g.print_z, height: h, items, islands, first: k == 0, raft: false }
     })
 }

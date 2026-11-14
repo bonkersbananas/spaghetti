@@ -904,8 +904,9 @@ fn object_supports(
             } else if s.support.classic().is_some() {
                 tree::classic::supports(&object, s, &params)
             } else if s.support.organic() {
+                // With nothing to hold up, a raft alone (Orca's `generate_raft_contact`), if there is one.
                 tree::supports(&object.slices, object.height, s, object.origin, s.bed)
-                    .map_or_else(Vec::new, |t| support::generate_tree(&object, &params, t))
+                    .map_or_else(|| support::raft_alone(&object, &params), |t| support::generate_tree(&object, &params, t))
             } else {
                 support::generate(&object, &params)
             }
