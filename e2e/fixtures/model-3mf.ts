@@ -41,6 +41,44 @@ function boxMesh([x, y, z]: Vec, [w, d, h]: Vec, paint: Record<number, string> =
   return `<mesh><vertices>${vertices}</vertices><triangles>${triangles}</triangles></mesh>`;
 }
 
+/** The colours of `hotdogModel`: eight named ones, two of them (the reds, the creams) near each other. */
+export const HOTDOG_COLOURS: { name: string; hex: string }[] = [
+  { name: "Ketchup Red", hex: "#D2281E" },
+  { name: "Tomato Red", hex: "#CC3A2B" },
+  { name: "Mustard", hex: "#E3B505" },
+  { name: "Bun", hex: "#D9A25E" },
+  { name: "Sausage", hex: "#8F3B2A" },
+  { name: "Lettuce", hex: "#5FAE3B" },
+  { name: "Cream", hex: "#F3E9D2" },
+  { name: "Ivory", hex: "#F1E8D8" },
+];
+
+/**
+ * A plain 3MF as a model site or a CAD tool gives it, with no Bambu metadata: thirteen small boxes in a row, each an
+ * object with its own colour from the core's `basematerials` (eight named colours, `displaycolor` with an alpha
+ * byte), no colours on single triangles.
+ */
+export function hotdogModel(): Uint8Array {
+  const bases = HOTDOG_COLOURS.map((c) => `<base name="${c.name}" displaycolor="${c.hex}FF"/>`).join("");
+  // Which colour each object takes: more than one object in some colours.
+  const order = [0, 2, 3, 3, 4, 5, 1, 6, 7, 6, 0, 2, 4];
+  const objects = order
+    .map(
+      (colour, index) =>
+        `<object id="${index + 2}" type="model" name="Part ${index + 1}" pid="1" pindex="${colour}">${boxMesh([index * 12, 0, 0], [10, 10, 6])}</object>`,
+    )
+    .join("");
+  const items = order.map(
+    (_, index) => `<item objectid="${index + 2}" transform="1 0 0 0 1 0 0 0 1 ${60 + index * 12} 100 0"/>`,
+  );
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources><basematerials id="1">${bases}</basematerials>${objects}</resources>
+<build>${items.join("")}</build>
+</model>`;
+  return zipSync({ "3D/3dmodel.model": strToU8(model) });
+}
+
 /**
  * A Bambu Studio or OrcaSlicer project of two coasters side by side on its plate, the first printing in filament 1
  * (white PLA), the second in filament 2 (red PLA): a plate in two colours, as such a project says it (each object's

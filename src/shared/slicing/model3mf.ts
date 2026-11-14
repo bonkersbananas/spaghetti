@@ -9,6 +9,19 @@ import { type ModelPaint, paintCodeStates } from "./paint.ts";
  * its first plate are read, and its settings come along. Never throws: a file it can't read gives a reason.
  */
 
+/** A colour a model brings: lowercase "#rrggbb" (alpha dropped) and the name the file gives it, when it does. */
+export interface ModelColour {
+  hex: string;
+  name?: string;
+}
+
+/** The triangles `from` (the first) `to` (past the last) of an object's `positions` that print in one colour. */
+export interface ModelColourRun {
+  from: number;
+  to: number;
+  colour: ModelColour;
+}
+
 export interface ModelObject {
   name: string;
   /** Nine floats a triangle, in mm, where the file puts it. */
@@ -25,6 +38,13 @@ export interface ModelObject {
    * codes that aren't ones, or paint nothing, are left out, as Orca leaves them.
    */
   paint?: ModelPaint;
+  /**
+   * The colours the model gives it, as runs of its triangles in order (one run covering all of them when it is one
+   * colour; triangles in none have no colour of their own). From the 3MF core's `basematerials` an object (or the
+   * component it comes through) points at, or, in a Bambu or Orca project, from the colour of the filament it prints
+   * in. A colour on single triangles (`colorgroup`) and painted colours aren't read here.
+   */
+  colours?: ModelColourRun[];
 }
 
 /** A part of an object: its triangles `from` (the first) `to` (past the last), and its filament, when it says. */
@@ -88,6 +108,39 @@ function attributes(tag: string): Record<string, string> {
   return out;
 }
 
+/** "#D2281EFF", "#d2281e" or "D2281E" as "#d2281e" (alpha dropped); undefined for anything else. */
+export function colourHex(text: string | undefined): string | undefined {
+  const match = /^#?([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec((text ?? "").trim());
+  return match ? `#${(match[1] as string).toLowerCase()}` : undefined;
+}
+
+/** The `basematerials` groups of one model file: id, then each base's colour in order (undefined: unreadable). */
+function readMaterials(text: string): Map<string, (ModelColour | undefined)[]> {
+  const groups = new Map<string, (ModelColour | undefined)[]>();
+  for (const match of text.matchAll(/<(?:\w+:)?basematerials\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?basematerials>/g)) {
+    const id = attributes(match[1] as string).id;
+    if (id === undefined) continue;
+    const bases: (ModelColour | undefined)[] = [];
+    for (const base of (match[2] as string).matchAll(/<(?:\w+:)?base\b[^>]*>/g)) {
+      const attrs = attributes(base[0]);
+      const hex = colourHex(attrs.displaycolor);
+      const name = attrs.name?.trim();
+      bases.push(hex ? { hex, ...(name ? { name: decodeXml(name) } : {}) } : undefined);
+    }
+    groups.set(id, bases);
+  }
+  return groups;
+}
+
+function decodeXml(text: string): string {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
 interface Mesh {
   vertices: Float64Array;
   /** Corner indices, three a triangle (NaN where a file wrote something else). */
@@ -99,6 +152,8 @@ interface Mesh {
 interface ObjectDef {
   id: string;
   name?: string;
+  /** The colour its `pid` and `pindex` point at, in this file's `basematerials`. */
+  colour?: ModelColour;
   type: string;
   mesh?: Mesh;
   components: { file: string; id: string; transform: Matrix }[];
@@ -107,6 +162,7 @@ interface ObjectDef {
 /** The objects of one model file, by id. */
 function readModelFile(text: string, file: string, scale: { value: number }): Map<string, ObjectDef> {
   const objects = new Map<string, ObjectDef>();
+  const materials = readMaterials(text);
   const unit = /<model\b[^>]*\bunit\s*=\s*"([^"]+)"/.exec(text)?.[1];
   if (unit && UNITS[unit] !== undefined && file === "3D/3dmodel.model") scale.value = UNITS[unit] as number;
   let at = 0;
@@ -124,6 +180,8 @@ function readModelFile(text: string, file: string, scale: { value: number }): Ma
     at = end + 1;
     const def: ObjectDef = { id: attrs.id ?? "", type: attrs.type ?? "model", components: [] };
     if (attrs.name) def.name = attrs.name;
+    const own = attrs.pid === undefined ? undefined : materials.get(attrs.pid)?.[Number(attrs.pindex ?? 0)];
+    if (own) def.colour = own;
     if (body.includes("<mesh")) def.mesh = readMesh(body);
     for (const match of body.matchAll(/<component\b[^>]*>/g)) {
       const c = attributes(match[0]);
@@ -257,47 +315,7 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     }
   }
 
-  const out: ModelObject[] = [];
-  for (const item of items) {
-    const id = item.objectid ?? "";
-    if (item.printable === "0") continue;
-    if (plateObjects && plateObjects.size > 0 && !plateObjects.has(id)) continue;
-    const def = rootObjects.get(id);
-    if (!def || (def.type !== "model" && def.type !== "")) continue;
-    const info = objectInfo.get(id);
-    const triangles: number[] = [];
-    // Which part each run of triangles is of: the object's own component it comes through (null: the object's own).
-    const runs: { part: string | null; from: number; to: number }[] = [];
-    const painted: Painted = { triangles: [], codes: [] };
-    const visit = (object: ObjectDef, transform: Matrix, depth: number, part: string | null) => {
-      if (depth > 8) return;
-      if (object.mesh) {
-        const from = triangles.length / 9;
-        appendMesh(object.mesh, transform, scale.value, triangles, painted);
-        if (triangles.length / 9 > from) runs.push({ part, from, to: triangles.length / 9 });
-      }
-      for (const component of object.components) {
-        if (info?.skipParts.has(component.id)) continue;
-        const child = modelFile(component.file).get(component.id);
-        if (child && (child.type === "model" || child.type === "")) {
-          visit(child, multiply(component.transform, transform), depth + 1, part ?? component.id);
-        }
-      }
-    };
-    visit(def, matrix(item.transform), 0, null);
-    if (!triangles.length) continue;
-    const parts = partsOf(runs, info);
-    const paint = paintOf(painted);
-    out.push({
-      name: info?.name || def.name || `Object ${out.length + 1}`,
-      positions: Float32Array.from(triangles),
-      ...(info?.extruder ? { extruder: info.extruder } : {}),
-      ...(parts ? { parts } : {}),
-      ...(paint ? { paint } : {}),
-    });
-  }
-  if (!out.length) return "no-objects";
-
+  // The colours of the filaments a project lists, filament 1 first.
   let settings: Config | undefined;
   const projectSettings = files["Metadata/project_settings.config"];
   if (projectSettings) {
@@ -310,7 +328,85 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
       // Settings we can't read: the defaults slice it.
     }
   }
+  const filamentColours = [settings?.filament_colour ?? []].flat().map((hex) => colourHex(hex));
+
+  const out: ModelObject[] = [];
+  for (const item of items) {
+    const id = item.objectid ?? "";
+    if (item.printable === "0") continue;
+    if (plateObjects && plateObjects.size > 0 && !plateObjects.has(id)) continue;
+    const def = rootObjects.get(id);
+    if (!def || (def.type !== "model" && def.type !== "")) continue;
+    const info = objectInfo.get(id);
+    const triangles: number[] = [];
+    // Which part each run of triangles is of: the object's own component it comes through (null: the object's own).
+    const runs: { part: string | null; from: number; to: number; colour?: ModelColour }[] = [];
+    const painted: Painted = { triangles: [], codes: [] };
+    const visit = (
+      object: ObjectDef,
+      transform: Matrix,
+      depth: number,
+      part: string | null,
+      inherited: ModelColour | undefined,
+    ) => {
+      if (depth > 8) return;
+      // An object's own colour covers what is under it, unless that has one of its own.
+      const colour = object.colour ?? inherited;
+      if (object.mesh) {
+        const from = triangles.length / 9;
+        appendMesh(object.mesh, transform, scale.value, triangles, painted);
+        if (triangles.length / 9 > from)
+          runs.push({ part, from, to: triangles.length / 9, ...(colour ? { colour } : {}) });
+      }
+      for (const component of object.components) {
+        if (info?.skipParts.has(component.id)) continue;
+        const child = modelFile(component.file).get(component.id);
+        if (child && (child.type === "model" || child.type === "")) {
+          visit(child, multiply(component.transform, transform), depth + 1, part ?? component.id, colour);
+        }
+      }
+    };
+    visit(def, matrix(item.transform), 0, null, undefined);
+    if (!triangles.length) continue;
+    const parts = partsOf(runs, info);
+    const paint = paintOf(painted);
+    const colours = coloursOf(runs, info, filamentColours, project);
+    out.push({
+      name: info?.name || def.name || `Object ${out.length + 1}`,
+      positions: Float32Array.from(triangles),
+      ...(info?.extruder ? { extruder: info.extruder } : {}),
+      ...(parts ? { parts } : {}),
+      ...(paint ? { paint } : {}),
+      ...(colours ? { colours } : {}),
+    });
+  }
+  if (!out.length) return "no-objects";
   return { objects: out, project, ...(settings ? { settings } : {}), sliced };
+}
+
+/**
+ * The colours an object's triangles print in, as runs (neighbours of one colour joined). A Bambu or Orca project
+ * prints each part in its filament, so there the filament's colour is the part's; any other file says its own, in the
+ * materials its objects point at. Triangles that have none are left out of the runs.
+ */
+function coloursOf(
+  runs: { part: string | null; from: number; to: number; colour?: ModelColour }[],
+  info: { extruder?: number; partExtruders: Map<string, number> } | undefined,
+  filamentColours: (string | undefined)[],
+  project: boolean,
+): ModelColourRun[] | undefined {
+  const out: ModelColourRun[] = [];
+  for (const run of runs) {
+    const extruder = (run.part === null ? undefined : info?.partExtruders.get(run.part)) ?? info?.extruder ?? 1;
+    const hex = project ? filamentColours[extruder - 1] : undefined;
+    const colour = hex ? { hex } : run.colour;
+    if (!colour) continue;
+    const last = out[out.length - 1];
+    if (last && last.to === run.from && last.colour.hex === colour.hex && last.colour.name === colour.name) {
+      last.to = run.to;
+    } else out.push({ from: run.from, to: run.to, colour });
+  }
+  return out.length ? out : undefined;
 }
 
 /**
