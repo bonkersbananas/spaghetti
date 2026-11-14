@@ -48,8 +48,8 @@ pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
-/// In WebAssembly, Talc's allocator rather than Rust's own (dlmalloc), which takes a fifth of the time to allocate
-/// and free.
+/// In WebAssembly, Talc's allocator rather than Rust's own (dlmalloc): about as fast on a Benchy, a little faster
+/// with trees, and a smaller module.
 #[cfg(target_arch = "wasm32")]
 #[global_allocator]
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
