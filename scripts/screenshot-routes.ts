@@ -1864,7 +1864,9 @@ export const shots: Shot[] = [
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       const colours = settings.getByText("Colours", { exact: true });
       await colours.waitFor();
-      await settings.getByRole("button", { name: /Ketchup Red/ }).click();
+      const row = settings.getByRole("button", { name: /Ketchup Red/ });
+      await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
+      await row.click({ force: true });
       await colours.evaluate((heading) => heading.scrollIntoView({ block: "start", behavior: "instant" }));
     },
     beforeShot: settleSliceSettings,

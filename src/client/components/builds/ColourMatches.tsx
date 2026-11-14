@@ -60,12 +60,12 @@ export function ColourMatches({
           const isOpen = open === colour.hex;
           const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
           return (
-            <li key={colour.hex} className="bg-paper-deep rounded-2xl">
+            <li key={colour.hex} className="bg-paper-deep rounded-lg">
               <button
                 type="button"
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : colour.hex)}
-                className="touch-target grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left"
+                className="touch-target grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2.5 rounded-lg px-3 py-2.5 text-left"
               >
                 <span className="flex min-w-0 items-center gap-2.5">
                   <Swatch color={colour.hex} size="md" />
