@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { unzipSync } from "fflate";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentScope, NewTokenResponse } from "../../src/shared/agents.ts";
 import type { AttemptResponse, ItemFileResponse, ItemResponse, RecipeResponse } from "../../src/shared/api.ts";
@@ -633,7 +634,7 @@ describe("open in Bambu Studio: signed links (decision 0058)", () => {
     expect(new Uint8Array(await download.arrayBuffer())).toEqual(SLICED);
   });
 
-  it("opens a plain .3mf's own bytes, and offers nothing for an .stl that isn't sliced", async () => {
+  it("opens a plain .3mf's own bytes", async () => {
     const item = await idea();
     const threemf = uuid();
     await putModel(item.id, threemf, modelForm({ name: "Bracket v2.3mf", bytes: SLICED }));
@@ -641,11 +642,46 @@ describe("open in Bambu Studio: signed links (decision 0058)", () => {
     expect(made.url).toMatch(/\/Bracket-v2\.3mf$/);
     const download = await fetchLink(made.url);
     expect(new Uint8Array(await download.arrayBuffer())).toEqual(SLICED);
+  });
 
-    const stl = uuid();
-    await putModel(item.id, stl);
-    expect((await link(stl, { part: "file" })).status).toBe(404);
-    expect((await link(stl)).status).toBe(404);
+  it("wraps an original .stl in a .3mf on the way, whole and with the same triangles, sliced or not", async () => {
+    const triangles = Array.from({ length: 3000 }, (_, i) => [i, 0, 0, i + 0.5, 0.25, 0, i, 1, 2.125]);
+    const stl = new Uint8Array(84 + 50 * triangles.length);
+    const view = new DataView(stl.buffer);
+    view.setUint32(80, triangles.length, true);
+    for (const [i, t] of triangles.entries())
+      for (const [k, v] of t.entries()) view.setFloat32(84 + 50 * i + 12 + 4 * k, v, true);
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id, modelForm({ name: "Mount v2.stl", bytes: stl }));
+    // Not sliced yet: the original is the only thing to open.
+    const made = await (await link(id, { part: "file" })).json<OpenLinkResponse>();
+    expect(made.url).toMatch(/\/Mount-v2\.3mf$/);
+    expect(made.name).toBe("Mount v2.stl");
+    const download = await fetchLink(made.url);
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-disposition")).toContain('filename="Mount-v2.3mf"');
+    const files = unzipSync(new Uint8Array(await download.arrayBuffer()));
+    const xml = new TextDecoder().decode(files["3D/3dmodel.model"]);
+    expect([...xml.matchAll(/<triangle /g)]).toHaveLength(3000);
+    const vertices = [...xml.matchAll(/<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"/g)].map((m) =>
+      [m[1], m[2], m[3]].map(Number),
+    );
+    expect(vertices.flat()).toEqual(triangles.flat().map(Math.fround));
+    // Sliced: the sliced file is still what the plain request makes, the original is asked for by part.
+    await putSliced(id, slicedForm());
+    expect((await (await link(id)).json<OpenLinkResponse>()).name).toBe("Mount v2.gcode.3mf");
+    expect((await link(id, { part: "file" })).status).toBe(200);
+  });
+
+  it("won't wrap an .stl over the size it can convert here", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    await env.DB.prepare("UPDATE item_files SET size = ? WHERE id = ?")
+      .bind(40 * 1024 * 1024, id)
+      .run();
+    expect((await link(id, { part: "file" })).status).toBe(404);
   });
 
   it("stops working once it has expired, and when the file is gone", async () => {

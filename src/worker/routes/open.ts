@@ -1,13 +1,14 @@
 import { Hono } from "hono";
-import { type OpenPart, openName, opensInBambuStudio } from "../../shared/open-link.ts";
-import { slicedName } from "../../shared/slicing/files.ts";
+import { type OpenPart, openName, opensOriginal } from "../../shared/open-link.ts";
+import { isStlName, slicedName } from "../../shared/slicing/files.ts";
+import { stlTo3mf } from "../../shared/threemf/stl-wrap.ts";
 import { getDb } from "../db/index.ts";
 import type { AppEnv } from "../env.ts";
 import { verifyOpenLink } from "../open-link.ts";
 import { fileKey } from "../photos.ts";
 import { disposition, liveFile } from "./files.ts";
 
-/** What a live file's part is called and whether there is one to open: its own .3mf, or a model's sliced file. */
+/** What a live file's part is called and whether there is one to open: its own .3mf (or .stl, wrapped), or a model's sliced file. */
 export async function openable(
   c: Parameters<typeof liveFile>[0],
   id: string,
@@ -18,7 +19,7 @@ export async function openable(
   if (part === "sliced") {
     return row.kind === "model" && row.slice?.status === "sliced" ? { name: slicedName(row.name), stored: true } : null;
   }
-  return row.stored && opensInBambuStudio(row.name) ? { name: row.name, stored: true } : null;
+  return row.stored && opensOriginal(row.name, row.size) ? { name: row.name, stored: true } : null;
 }
 
 /**
@@ -42,8 +43,10 @@ export const openRoutes = new Hono<AppEnv>()
     c.header("Cache-Control", "no-store");
     c.header("Content-Type", "application/octet-stream");
     c.header("Content-Disposition", disposition(openName(found.name)));
-    c.header("Content-Length", String(object.size));
+    const wrapped = link.part === "file" && isStlName(found.name);
+    // An .stl goes out as a 3MF made as it is read: its length isn't known beforehand.
+    if (!wrapped) c.header("Content-Length", String(object.size));
     c.header("X-Content-Type-Options", "nosniff");
     c.header("Referrer-Policy", "no-referrer");
-    return c.body(object.body);
+    return c.body(wrapped ? stlTo3mf(object.body, object.size) : object.body);
   });

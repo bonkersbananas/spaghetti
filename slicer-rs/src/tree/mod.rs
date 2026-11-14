@@ -24,7 +24,7 @@ pub mod util;
 pub mod volumes;
 
 use crate::config::Settings;
-use crate::geom::Shapes;
+use crate::geom::{self, Pt, Shapes};
 
 /// mm from Orca's nanometres.
 #[inline]
@@ -97,6 +97,11 @@ pub struct Config {
     pub z_distance_bottom_layers: usize,
     pub z_distance_top_layers: usize,
     pub layer_start_bp_radius: i64,
+    /// mm: the tops of the support's layers under the object's first one where it stands on a raft (Orca's
+    /// `raft_layers`): the raft's own, its contact layer the last of them but those in the gap above it; and the top
+    /// of the object's first layer. The support's layer `raft_layers.len() + i` is the object's layer `i`.
+    pub raft_layers: Vec<f64>,
+    pub object_first_z: f64,
 }
 
 impl Config {
@@ -142,6 +147,37 @@ impl Config {
         let support_top_distance = scaled(top_gap);
         let support_bottom_distance = scaled(bottom_gap);
         let layers = |d: i64| (d as f64 / layer_height as f64).round() as usize;
+        // Under a raft, its layers (Orca's `TreeSupportSettings`): the first layer, the base's and the interface's,
+        // the contact layer, then the gap up to the object in steps of the support's thickest layer at most.
+        let (raft_layers, object_first_z) = match crate::raft::Raft::of(s) {
+            Some(r) => {
+                let mut z = r.first_height;
+                let mut zs = vec![z];
+                for _ in 1..r.base_layers {
+                    z += r.base_height;
+                    zs.push(z);
+                }
+                for _ in 1..r.interface_layers {
+                    z += r.interface_height;
+                    zs.push(z);
+                }
+                if r.layers() > 1 {
+                    z = r.contact_top_z;
+                    zs.push(z);
+                }
+                let gap = r.object_z - z;
+                if gap > 1e-4 {
+                    let steps = ((gap - 1e-4) / sp.max_layer_height).ceil() as usize;
+                    let step = gap / steps as f64;
+                    for _ in 0..steps {
+                        z += step;
+                        zs.push(z);
+                    }
+                }
+                (zs, r.object_z + s.layer_height)
+            }
+            None => (Vec::new(), s.first_layer_height),
+        };
         Config {
             layer_height,
             first_layer_height_mm: s.first_layer_height,
@@ -195,6 +231,8 @@ impl Config {
             z_distance_bottom_layers: layers(support_bottom_distance),
             z_distance_top_layers: layers(support_top_distance),
             layer_start_bp_radius: ((bp_radius - branch_radius) as f64 / bp_radius_increase_per_layer) as i64,
+            raft_layers,
+            object_first_z,
         }
     }
 
@@ -221,9 +259,12 @@ impl Config {
         if widened > 0.0 { (self.branch_radius as f64 + widened * self.bp_radius_increase_per_layer) as i64 } else { 0 }
     }
 
-    /// mm: the top of the support's layer `layer` (`layer_z`: the object's layers, by formula).
+    /// mm: the top of the support's layer `layer` (`layer_z`: a raft's, then the object's layers, by formula).
     pub fn layer_z(&self, layer: usize) -> f64 {
-        self.first_layer_height_mm + layer as f64 * self.layer_height_mm
+        match self.raft_layers.get(layer) {
+            Some(&z) => z,
+            None => self.object_first_z + (layer - self.raft_layers.len()) as f64 * self.layer_height_mm,
+        }
     }
 }
 
@@ -247,9 +288,19 @@ fn grown(
 ) -> Option<(Config, volumes::Volumes, Branches)> {
     let c = Config::new(s);
     let found = overhangs::detect(slices, heights, &c, s);
-    let areas = overhangs::areas(&found);
+    let mut areas = overhangs::areas(&found);
+    // On a raft the support's layers start with the raft's, which hold nothing of the model.
+    let raft = c.raft_layers.len();
+    let raft_slices: Vec<Shapes>;
+    let slices = if raft > 0 {
+        areas.splice(0..0, std::iter::repeat_n(Vec::new(), raft));
+        raft_slices = std::iter::repeat_n(Vec::new(), raft).chain(slices.iter().cloned()).collect();
+        &raft_slices[..]
+    } else {
+        slices
+    };
     // Support layers up to the highest overhang above the first layer, less the top gap (Orca's `precalculate`).
-    let top = (1..areas.len()).rev().find(|&l| !areas[l].is_empty())?;
+    let top = (raft.max(1)..areas.len()).rev().find(|&l| !areas[l].is_empty())?;
     let n = top.saturating_sub(c.z_distance_top_layers);
     if n == 0 {
         return None;
@@ -259,13 +310,59 @@ fn grown(
     let flow_spacing =
         (s.support.line_width as f32 - s.layer_height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
     let roof_density = (flow_spacing / (s.support.interface_spacing + flow_spacing)).min(1.0);
-    let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n);
+    let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n.max(raft));
+    // The raft's contact layer, a roof under the object's first layer grown by `raft_expansion`, on the last of the
+    // raft's layers no higher than it (Orca's `generate_raft_contact`).
+    let raft_contact = crate::raft::Raft::of(s).filter(|_| raft > 0).map(|r| {
+        let mut layer = raft - 1;
+        while layer > 0 && c.raft_layers[layer] > r.contact_top_z + 1e-4 {
+            layer -= 1;
+        }
+        let footprint = slices[raft].clone();
+        let expansion = s.support.raft_expansion;
+        let area =
+            if expansion > 0.0 { geom::offset_c2(&footprint, expansion, geom::Join::Miter(3.0)) } else { footprint };
+        seeder.add_raft_contact(layer, area);
+        (layer, r)
+    });
     seeder.seed(&areas);
-    let seeds = seeder.finish();
+    let mut seeds = seeder.finish();
+    // Orca's `finalize_raft_contact`: no roofs or tips under the contact layer, and none of the tips on it that sit
+    // inside the raft within twice its expansion of the edge.
+    if let Some((layer, r)) = raft_contact {
+        let first_tree_layer = r.layers() - 1;
+        for l in 0..first_tree_layer.min(seeds.layers.len()) {
+            seeds.contacts[l].clear();
+            seeds.layers[l].clear();
+        }
+        let expansion = s.support.raft_expansion;
+        if expansion > 0.0 && first_tree_layer < seeds.layers.len() {
+            let area = geom::union_nonzero(&seeds.contacts[layer].iter().flatten().cloned().collect::<Vec<_>>());
+            let reach = geom::sc(2.0 * expansion) as f64;
+            seeds.layers[first_tree_layer].retain(|e| {
+                e.state.result_on_layer.is_none_or(|p| !(geom::contains(&area, p) && near_edge(&area, p, reach)))
+            });
+        }
+    }
     let mut layers = seeds.layers;
     grow::grow(&c, &v, &mut layers);
     grow::place(&c, &v, &mut layers);
     Some((c, v, Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces }))
+}
+
+/// Whether `p` lies within `reach` units of an edge of `area`.
+fn near_edge(area: &Shapes, p: Pt, reach: f64) -> bool {
+    let (px, py) = (p.x as f64, p.y as f64);
+    area.iter().flatten().any(|contour| {
+        (0..contour.len()).any(|i| {
+            let (a, b) = (contour[i], contour[(i + 1) % contour.len()]);
+            let (ax, ay, bx, by) = (a.x as f64, a.y as f64, b.x as f64, b.y as f64);
+            let (dx, dy) = (bx - ax, by - ay);
+            let len2 = dx * dx + dy * dy;
+            let t = if len2 > 0.0 { (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+            (px - ax - t * dx).hypot(py - ay - t * dy) <= reach
+        })
+    })
 }
 
 /// The trees for an object (see `grown`), grown and placed but not drawn.

@@ -421,8 +421,9 @@ const RACK = {
   ]),
 };
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
-/** A project for the X2D that asks for a raft under its tree supports, which our own slicer can't build yet. */
-const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject({ enable_support: "1" }) };
+/** A project for the X2D that asks for a raft under hybrid trees, Orca's classic ones, which our own slicer can't
+ * build yet. */
+const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject({ enable_support: "1", support_style: "tree_hybrid" }) };
 const TWO_TONE = { name: "two-tone-coaster.3mf", bytes: partsProject() };
 const TWO_TONE_IDEA = {
   title: "Two-tone coaster",
@@ -1771,7 +1772,8 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
-    // A tap on it: the browser can't tell whether Bambu Studio opened, so the card says where the download is.
+    // A tap on it, then the sliced file: the browser can't tell whether Bambu Studio opened, so the card says where the
+    // download is.
     name: "idea-model-open-tried",
     path: "/ideas",
     width: 1440,
@@ -1779,9 +1781,24 @@ export const shots: Shot[] = [
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
       await sliceSaved(page);
       await page.getByTestId("open-in-studio").first().click();
+      await page.getByTestId("open-in-studio-sliced").click();
       await page.getByText("Nothing opened?").first().waitFor();
     },
     beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // A sliced model has two things to open: its sliced file, ready to print, and the original model, to slice or tweak.
+    name: "idea-model-open-menu",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      await modelInView(page);
+      await page.getByTestId("open-in-studio").first().click();
+      await page.getByTestId("open-in-studio-sliced").waitFor();
+    },
     cleanup: removeModelItems,
   },
   {
@@ -2299,7 +2316,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked, for a project that asks for a raft under its tree supports, which it can't build yet: OrcaSlicer's
+    // Ours picked, for a project that asks for a raft under hybrid trees, which it can't build yet: OrcaSlicer's
     // engine sliced it, and the card says why in one line.
     name: "idea-model-stepped-in",
     path: "/ideas",
