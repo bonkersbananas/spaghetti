@@ -1362,4 +1362,28 @@ mod tests {
         let line = [mm(0.0, 0.0), mm(5.0, 0.0), mm(2.0, 0.0)];
         assert_eq!(simplify_line(&line, 0.04), line.to_vec());
     }
+
+    #[test]
+    fn the_polygon_engines_patched_passes_split_segments_as_full_passes_would() {
+        // vendor/i_overlay finds where segments cross in passes, and after the first tests only the pairs with a piece
+        // the last pass split, while those are under a quarter of the segments. A few segments tangled on a small grid
+        // cross where rounding to the grid moves their pieces, so the splitting takes several passes; a row of short
+        // ones that cross nothing keeps the pieces few enough for those passes. Each pass is checked against a pass
+        // over every pair and the segments' order against a full sort (`spaghetti_checks::passes`).
+        let mut state = 1u64;
+        let mut next = move |n: u64| {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((state >> 33) % n) as i32
+        };
+        let (mut fresh, mut marks) = (0, 0);
+        for _ in 0..200 {
+            let mut segments: Vec<([i32; 2], [i32; 2])> =
+                (0..16).map(|_| ([next(21) - 10, next(21) - 10], [next(21) - 10, next(21) - 10])).collect();
+            segments.extend((0..600).map(|k| ([100 + 3 * k, 100], [101 + 3 * k, 100])));
+            let passes = i_overlay::spaghetti_checks::passes(&segments);
+            fresh += passes.fresh;
+            marks += passes.fresh_marks;
+        }
+        assert!(fresh > 0 && marks > 0, "{fresh} passes on fresh pieces only, with {marks} marks");
+    }
 }
