@@ -260,13 +260,21 @@ pub fn regions(
     // Each layer's infill area as Orca's shells see it (its `fill_expolygons`): reaching into the walls by the
     // overlap, so that a band where a wall above or below stands further in is narrower by that much. Layers whose
     // slices are alike (a prism's, past the first layer) share a run, and have the same infill area.
+    // An object of several regions (its parts or its paint in different filaments) counts its whole slice inside one
+    // set of walls too, as if it printed in one filament (Orca's shells over all regions): the walls where its regions
+    // meet, which move from layer to layer, then call for no solid infill.
+    let several = several_regions(group);
     let holes: Vec<Shapes> = par::map_range(n, |i| {
-        islands[i]
+        let mut area: Shapes = islands[i]
             .iter()
             .flat_map(|island| {
                 if island.overlap > 0.0 { geom::offset(&island.inner, island.overlap) } else { island.inner.clone() }
             })
-            .collect()
+            .collect();
+        if mixed {
+            area.extend(infill_as_one(&slices[i], &owners[i], &group_of, &several, layers.height[i], s.on_plate(i), s));
+        }
+        area
     });
     let mut run = vec![0usize; n];
     for i in 1..n {
@@ -438,6 +446,51 @@ pub fn regions(
             .zip(owners[0].iter().copied())
             .map(|(shape, o)| (shape, o, group_of(o)))
             .collect();
+    }
+    out
+}
+
+/// Which groups (`regions`' `group`) have more than one region: Orca's objects of several printing regions.
+fn several_regions(group: &[u32]) -> Vec<bool> {
+    let mut count = vec![0u32; group.iter().map(|&g| g as usize + 1).max().unwrap_or(0)];
+    for &g in group {
+        count[g as usize] += 1;
+    }
+    count.into_iter().map(|c| c > 1).collect()
+}
+
+/// The infill area of each object of several regions on a layer, as though it printed in one filament (Orca's
+/// `discover_vertical_shells` over all regions): its regions' shapes merged (grown by 0.3 of the narrower wall
+/// spacing first) and shrunk by one set of walls, the outer one and `wall_loops` - 1 inner ones.
+fn infill_as_one(
+    slice: &Shapes,
+    owners: &[u32],
+    group_of: &dyn Fn(u32) -> u32,
+    several: &[bool],
+    height: f64,
+    first: bool,
+    s: &Settings,
+) -> Shapes {
+    if s.wall_loops == 0 {
+        return Vec::new();
+    }
+    let (outer, inner) =
+        if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    let (outer_spacing, inner_spacing) = (Settings::spacing(outer, height), Settings::spacing(inner, height));
+    let walls = 0.5 * (outer + outer_spacing) + (s.wall_loops - 1) as f64 * inner_spacing;
+    let merge = 0.3 * outer_spacing.min(inner_spacing);
+    let mut out = Vec::new();
+    let mut done: Vec<u32> = Vec::new();
+    for &o in owners {
+        let g = group_of(o);
+        if !several.get(g as usize).copied().unwrap_or(false) || done.contains(&g) {
+            continue;
+        }
+        done.push(g);
+        let whole: Shapes =
+            slice.iter().zip(owners).filter(|&(_, &r)| group_of(r) == g).map(|(shape, _)| shape.clone()).collect();
+        let grown = geom::offset(&geom::union_all(&[&whole]), merge);
+        out.extend(geom::offset(&grown, -(walls + merge)));
     }
     out
 }
