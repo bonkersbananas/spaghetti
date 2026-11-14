@@ -276,3 +276,12 @@ describe("brands as makers spell them", () => {
     );
   });
 });
+
+describe("a spool picked by colour match", () => {
+  it("is the same filament as one picked from the Pantry, with its line and range", () => {
+    const teal = twelve[4]!.spool;
+    const matched = matchColour({ hex: "#3fa6a0", name: undefined }, [teal]);
+    expect(matched.filament).toEqual(filamentOfSpool(teal));
+    expect(matched.filament).toMatchObject({ line: "Panchroma", nozzleTempMin: 190, nozzleTempMax: 230 });
+  });
+});

@@ -20288,10 +20288,26 @@
                   "minLength": 1,
                   "maxLength": 40
                 },
+                "colors": {
+                  "description": "The two or three colours of a multi-colour spool, in order (colorHex is the first).",
+                  "minItems": 2,
+                  "maxItems": 3,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  }
+                },
                 "brand": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 60
+                },
+                "line": {
+                  "description": "The product line before the material: \"PolyTerra\".",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
                 },
                 "finish": {
                   "description": "The Pantry's finish: \"basic\", \"matte\", \"silk\"…",
@@ -20303,6 +20319,18 @@
                   "description": "The Pantry's spool it was picked from.",
                   "type": "string",
                   "pattern": "^[\\w-]{1,64}$"
+                },
+                "nozzleTempMin": {
+                  "description": "The maker's printing range in °C, low end.",
+                  "type": "number",
+                  "minimum": 100,
+                  "maximum": 500
+                },
+                "nozzleTempMax": {
+                  "description": "The maker's printing range in °C, high end.",
+                  "type": "number",
+                  "minimum": 100,
+                  "maximum": 500
                 }
               },
               "required": [
@@ -20379,10 +20407,26 @@
                       "minLength": 1,
                       "maxLength": 40
                     },
+                    "colors": {
+                      "description": "The two or three colours of a multi-colour spool, in order (colorHex is the first).",
+                      "minItems": 2,
+                      "maxItems": 3,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$"
+                      }
+                    },
                     "brand": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 60
+                    },
+                    "line": {
+                      "description": "The product line before the material: \"PolyTerra\".",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
                     },
                     "finish": {
                       "description": "The Pantry's finish: \"basic\", \"matte\", \"silk\"…",
@@ -20394,6 +20438,18 @@
                       "description": "The Pantry's spool it was picked from.",
                       "type": "string",
                       "pattern": "^[\\w-]{1,64}$"
+                    },
+                    "nozzleTempMin": {
+                      "description": "The maker's printing range in °C, low end.",
+                      "type": "number",
+                      "minimum": 100,
+                      "maximum": 500
+                    },
+                    "nozzleTempMax": {
+                      "description": "The maker's printing range in °C, high end.",
+                      "type": "number",
+                      "minimum": 100,
+                      "maximum": 500
                     }
                   },
                   "required": [
