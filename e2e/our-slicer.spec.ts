@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { raftProject, twoColourProject } from "./fixtures/model-3mf";
+import { patternProject, raftProject, twoColourProject } from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -279,6 +279,30 @@ test("a part that floats is sliced by ours, which warns of it as OrcaSlicer's en
     expect(held.fallback).toBeUndefined();
     expect(held.cautions).toBeUndefined();
     await expect(files.getByText("Parts of it float in the air.")).toBeHidden();
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a project's triangles, tri-hexagon or quarter cubic infill is sliced by ours as Orca draws it", async ({
+  page,
+}) => {
+  test.setTimeout(4 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    for (const pattern of ["triangles", "tri-hexagon", "quartercubic"]) {
+      const { id } = await ideaWithModel(page, `Block in ${pattern}`, `${pattern}.3mf`, patternProject(pattern));
+      await expect
+        .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+        .toBe("spaghetti");
+      const slice = (await fileOf(page, id)).slice;
+      expect(slice.settings.slicing.pattern, pattern).toBe(pattern);
+      expect(slice.fallback, pattern).toBeUndefined();
+      // Until release 11 ours printed these as straight lines, and said so: "triangles sparse infill printed as
+      // straight lines".
+      expect(slice.notes ?? [], pattern).toEqual([]);
+    }
   } finally {
     await setDefaults(page, null);
   }
