@@ -27,7 +27,9 @@ impl Mesh {
     }
 
     /// `count` triangles, corner `k` of triangle `t` at `corner(t, k)`, with corners at the same spot joined into
-    /// one vertex (exact float bits; -0 is 0) and triangles that collapse dropped.
+    /// one vertex (exact float bits; -0 is 0) and triangles that collapse dropped. Each dropped triangle's place
+    /// goes to the last of those still kept, as Orca's admesh drops them (`stl_check_facets_exact`): the order of
+    /// the triangles is the order Orca's seam placer shuffles them in.
     fn weld(name: &str, count: usize, corner: impl Fn(usize, usize) -> [f32; 3]) -> Mesh {
         let mut index: HashMap<[u32; 3], u32, BuildHasherDefault<FastHasher>> =
             HashMap::with_capacity_and_hasher(count / 2 + 16, Default::default());
@@ -43,9 +45,16 @@ impl Mesh {
                     (vertices.len() - 1) as u32
                 });
             }
-            // A triangle with two equal corners has no area and no edges worth following.
-            if ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2] {
-                triangles.push(ids);
+            triangles.push(ids);
+        }
+        // A triangle with two equal corners has no area and no edges worth following.
+        let collapsed = |t: &[u32; 3]| t[0] == t[1] || t[1] == t[2] || t[0] == t[2];
+        let mut i = 0;
+        while i < triangles.len() {
+            if collapsed(&triangles[i]) {
+                triangles.swap_remove(i);
+            } else {
+                i += 1;
             }
         }
         Mesh { name: name.into(), vertices, triangles }

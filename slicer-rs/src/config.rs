@@ -148,6 +148,10 @@ pub struct Settings {
     /// mm a loop stops short of where it started (`seam_gap`, a share of the nozzle), so it doesn't print over its
     /// start.
     pub seam_gap: f64,
+    /// Where wall loops start (`seam_position`: aligned, aligned_back, back, nearest or random).
+    pub seam_position: String,
+    /// Whether inner walls start a little further along than the outer wall (`staggered_inner_seams`).
+    pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
     /// How wide a top must be before it gets one wall (`min_width_top_surface`, a share of the inner wall's width).
     pub min_width_top_surface: Share,
@@ -612,6 +616,8 @@ impl Settings {
             brim_ears_outer_only: p.bool("brim_ears_outer_only"),
             brim_flow_ratio: ratio("brim_flow_ratio"),
             seam_gap: p.float_of("seam_gap", nozzle_diameter),
+            seam_position: p.text("seam_position").to_string(),
+            staggered_inner_seams: p.bool("staggered_inner_seams"),
             only_one_wall_top: p.bool("only_one_wall_top"),
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
@@ -839,6 +845,9 @@ impl Settings {
         }
         if !matches!(self.fuzzy_skin.as_str(), "disabled_fuzzy" | "none" | "") {
             out.push("no fuzzy skin".into());
+        }
+        if matches!(self.seam_position.as_str(), "nearest" | "random") && !self.spiral_mode {
+            out.push(format!("{} seams placed as aligned ones", self.seam_position));
         }
         // In spiral vase mode every lift goes straight up, as Orca's do there.
         if self.z_hop > 0.0 && !self.spiral_mode && !matches!(self.z_hop_type.as_str(), "Spiral Lift" | "Auto Lift") {

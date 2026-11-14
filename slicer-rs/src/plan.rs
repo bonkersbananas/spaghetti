@@ -158,7 +158,8 @@ pub fn plan_layer_of(
         let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
         let under = below.get(island.object as usize).and_then(Option::as_ref);
         let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
-        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, trees, (at, rising), s)
+        let seams = r.seams.get(island.object as usize);
+        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, trees, seams, (at, rising), s)
     };
     let mut per_island: Vec<Vec<Path>> = (0..r.islands.len()).map(|k| island_at(k, None, false)).collect();
     // In spiral vase mode, a layer that is one island's wall loop and nothing else rises as it goes round, as Orca's
@@ -503,6 +504,7 @@ fn island_paths(
     (z, h): (f64, f64),
     centre: (f64, f64),
     trees: &[Vec<Pt>],
+    seams: Option<&crate::seam::LayerSeams>,
     (mut at, rises): (Option<Pt>, bool),
     s: &Settings,
 ) -> Vec<Path> {
@@ -519,7 +521,12 @@ fn island_paths(
     let overhang = overhang_flow(first, h, s);
     for (contour, depth, outline) in wall_order(walls, centre_pt) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
-        let mut wall = path(role, seam_loop(contour, outline), true, island, first, h, s);
+        // From where the seam placer starts it (`seam.rs`), else from the back; in spiral vase mode, which places no
+        // seams, from the point nearest the nozzle, as Orca's loops start there.
+        let points = seams
+            .and_then(|seams| seams.wall_loop(contour, outline, depth == 0, s))
+            .unwrap_or_else(|| seam_loop(contour, outline));
+        let mut wall = path(role, points, true, island, first, h, s);
         if let Some(p) = at {
             split_loop(&mut wall.points, p);
         }
