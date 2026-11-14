@@ -4823,6 +4823,12 @@ export const shots: Shot[] = [
       for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers });
       await page.reload();
       await page.getByText("Nothing twisted yet").waitFor();
+      // The clock is fixed, so the empty state's entrance would sit at opacity 0: finish it.
+      await page.evaluate(() =>
+        document.getAnimations().forEach((animation) => {
+          animation.finish();
+        }),
+      );
       await page.waitForTimeout(600);
     },
   },

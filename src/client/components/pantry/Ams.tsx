@@ -84,8 +84,8 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
         !readOnly && "hover:bg-ink/6",
         over && "shadow-ring bg-semolina-soft/60",
         shape === "bay"
-          ? // Tall on phones and laptops; from lg a row like the external holder, so the tile fills edge to edge.
-            "flex-col items-center gap-2 px-1.5 pt-3 pb-2.5 md:px-2 md:pt-4 lg:flex-row lg:gap-3 lg:px-3 lg:py-3 lg:text-left"
+          ? // Tall on phones and laptops; in a wide enough unit (container, not screen) a row like the external holder, so the tile fills edge to edge.
+            "flex-col items-center gap-2 px-1.5 pt-3 pb-2.5 md:px-2 md:pt-4 @3xl:flex-row @3xl:gap-3 @3xl:px-3 @3xl:py-3 @3xl:text-left"
           : "w-full items-center gap-3 px-3 py-2.5 text-left",
       )}
     >
@@ -98,7 +98,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
       <span
         className={cn(
           "flex min-w-0 flex-col",
-          shape === "bay" ? "w-full flex-1 items-center text-center lg:items-start lg:text-left" : "flex-1",
+          shape === "bay" ? "w-full flex-1 items-center text-center @3xl:items-start @3xl:text-left" : "flex-1",
         )}
       >
         <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
@@ -110,7 +110,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
             // A bay is narrow on a phone: the name steps down a size and may take two lines, breaking between
             // words, rather than lose its end ("Sunflow…").
             shape === "bay"
-              ? cn("text-caption md:text-small break-words", unknown && !spool ? "" : "line-clamp-2 lg:line-clamp-1")
+              ? cn("text-caption md:text-small break-words", unknown && !spool ? "" : "line-clamp-2 @3xl:line-clamp-1")
               : "text-small truncate",
             spool ? "text-ink" : "text-ink-faint",
           )}
@@ -128,13 +128,13 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
               className={cn(
                 "text-caption text-ink-faint block w-full min-w-0 truncate",
                 // From lg, a dried spool says so beside its material (below).
-                shape === "bay" && !!spool.driedAt && "lg:hidden",
+                shape === "bay" && !!spool.driedAt && "@3xl:hidden",
               )}
             >
               {spool.colorName ? spool.material : (spool.brand ?? "")}
             </span>
             {shape === "bay" && spool.driedAt && (
-              <MetaList className="text-caption text-ink-faint hidden w-full lg:block">
+              <MetaList className="text-caption text-ink-faint hidden w-full @3xl:block">
                 <span>{spool.colorName ? spool.material : (spool.brand ?? "")}</span>
                 <span className="inline-flex items-center gap-1 whitespace-nowrap">
                   <DriedIcon size={12} aria-hidden />
@@ -144,7 +144,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
               </MetaList>
             )}
             {shape === "bay" && (
-              <DryIt spool={spool} compact className="text-caption justify-center lg:justify-start" />
+              <DryIt spool={spool} compact className="text-caption justify-center @3xl:justify-start" />
             )}
             {shape === "bay" && (
               <RemainingMeter
@@ -153,7 +153,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
                 // A spool that is still loaded but empty says so in words at every width, and grams always show.
                 showLabel={spool.remaining === "empty" || spool.gramsLeft !== null ? true : "lg"}
                 // Pinned to the bottom of the tile, so the four meters sit on one line when a name wraps.
-                className="mt-auto self-center pt-1 lg:mt-0.5 lg:self-start lg:pt-0"
+                className="mt-auto self-center pt-1 @3xl:mt-0.5 @3xl:self-start @3xl:pt-0"
               />
             )}
           </>
@@ -217,7 +217,11 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
       {units.map((letter) => {
         const loaded = unitSlots(letter).filter((slot) => spoolIn(slot)).length;
         return (
-          <section key={letter} aria-label={`AMS ${letter}`} className="bg-cream shadow-soft rounded-xl p-3 md:p-4">
+          <section
+            key={letter}
+            aria-label={`AMS ${letter}`}
+            className="@container bg-cream shadow-soft rounded-xl p-3 md:p-4"
+          >
             <div className="mb-3 flex items-baseline justify-between gap-3 px-1">
               <h3 className="text-small text-ink font-sans font-semibold">AMS {letter}</h3>
               <span className="text-caption text-ink-faint">AMS 2 Pro · {loaded} of 4 loaded</span>
