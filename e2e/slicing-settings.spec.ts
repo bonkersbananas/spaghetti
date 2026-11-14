@@ -226,7 +226,7 @@ test("lay it down: glasses with no flat side get one they stand on at their rims
   await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
 });
 
-test("the Printer page's defaults are how a model nobody set up is sliced, until they go back to Spaghetti's own", async ({
+test("the Printer page's defaults are how a model nobody set up is sliced, until they go back to the usual settings", async ({
   page,
 }) => {
   test.setTimeout(2 * SLICED);
@@ -253,7 +253,7 @@ test("the Printer page's defaults are how a model nobody set up is sliced, until
     await page.goto("/printer");
     await expect(fold).toContainText("Fine");
     await fold.click();
-    await section.getByRole("button", { name: "Back to Spaghetti's own" }).click();
+    await section.getByRole("button", { name: "Back to the usual settings" }).click();
     await expect(quality.getByRole("radio", { name: /^Standard/ })).toBeChecked();
     await expect.poll(defaults).toBeUndefined();
     // Going back throws away what was set: the toast's Undo brings it back.

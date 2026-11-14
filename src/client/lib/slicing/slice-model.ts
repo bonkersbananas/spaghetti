@@ -2,6 +2,7 @@ import engine from "virtual:slicer-engine";
 import type { AttemptSettings } from "@shared/attempts";
 import { presetRecord } from "@shared/slicing/orca.ts";
 import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
+import { pacedFraction } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions, SliceProblem } from "@shared/slicing/types.ts";
 import type { SliceMessage, SlicePhase, SliceRequest } from "./slice-worker";
 
@@ -67,9 +68,10 @@ const failed = (problem: SliceProblem, ask: SliceAsk) =>
   notSliced(problem, ask, { engine: engine.version, orca: engine.orca.version });
 
 /**
- * Slices an .stl or a plain .3mf into a .gcode.3mf with OrcaSlicer's engine, off the main thread (slice-worker.ts),
- * with the settings chosen over the defaults (decision 0047). Never rejects but for `signal`: a model it can't slice
- * resolves with the reason. Loaded only when something is sliced; Twists can slice through it too.
+ * Slices an .stl or a plain .3mf into a .gcode.3mf off the main thread (slice-worker.ts), with the settings chosen
+ * over the defaults (decision 0047), by the slicer they ask for: Spaghetti's own or OrcaSlicer's engine (decision
+ * 0055). Never rejects but for `signal`: a model it can't slice resolves with the reason. Loaded only when something
+ * is sliced; Twists can slice through it too.
  */
 export function sliceModel(
   file: Blob,
@@ -82,8 +84,12 @@ export function sliceModel(
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./slice-worker.ts", import.meta.url), { type: "module", name: "slicing" });
     let settled = false;
+    // A step that can't say how far it is (our slicer's one call) moves the ring by about how long it takes.
+    let pacing: ReturnType<typeof setInterval> | undefined;
+    const stopPacing = () => clearInterval(pacing);
     const end = () => {
       settled = true;
+      stopPacing();
       worker.terminate();
       signal?.removeEventListener("abort", abort);
     };
@@ -98,9 +104,18 @@ export function sliceModel(
     worker.onmessage = (event: MessageEvent<SliceMessage>) => {
       if (settled) return;
       const message = event.data;
+      stopPacing();
       if (message.type === "progress") {
         const [from, to] = PHASES[message.phase];
-        handlers.onProgress?.(from + (to - from) * message.fraction, message.phase);
+        const { phase, fraction, expectMs } = message;
+        handlers.onProgress?.(from + (to - from) * fraction, phase);
+        if (expectMs) {
+          const started = performance.now();
+          pacing = setInterval(() => {
+            const paced = pacedFraction(performance.now() - started, expectMs);
+            handlers.onProgress?.(from + (to - from) * Math.max(fraction, paced), phase);
+          }, 150);
+        }
       } else if (message.type === "picture") {
         handlers.onPicture?.(message.png);
       } else if (message.type === "done") {
@@ -125,12 +140,16 @@ export function sliceModel(
       resolve(failed(/memory/i.test(event.message ?? "") ? "memory" : "engine", ask));
     };
     const base = new URL(engine.base as string, location.href).href;
+    const rust = engine.rust.base
+      ? { base: new URL(engine.rust.base, location.href).href, wasm: engine.rust.wasm, version: engine.rust.version }
+      : null;
     worker.postMessage({
       file,
       name,
       chosen: ask.chosen,
       defaults: ask.defaults,
       engine: { base, host: engine.host, version: engine.version },
+      rust,
     } satisfies SliceRequest);
   });
 }

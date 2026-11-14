@@ -15,6 +15,20 @@ use crate::monotonic;
 /// angle: a quarter turn more than the filler's), on a grid through `origin` (units), `spacing` mm wide at
 /// `density`. Each line prints from its first point.
 pub fn fill(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, density: f64) -> Vec<Vec<Pt>> {
+    fill_on_grid(shape, angle, origin, None, spacing, density)
+}
+
+/// `fill` with its lines on a grid through `grid` (units, before turning) rather than through `origin`, which it is
+/// still turned about: Orca's filler with no bounding box set, which lays its lines through the middle of each
+/// part's outline (the trees' tips).
+pub fn fill_on_grid(
+    shape: &Shape,
+    angle: f64,
+    origin: (f64, f64),
+    grid: Option<Pt>,
+    spacing: f64,
+    density: f64,
+) -> Vec<Vec<Pt>> {
     let sp = spacing * geom::SCALE;
     if shape.is_empty() || sp < 1.0 || density <= 0.0 {
         return Vec::new();
@@ -32,7 +46,8 @@ pub fn fill(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, density
     // Orca's spacing in whole nanometres (its float spacing over its float density).
     let ls_nm = (spacing * 1e6 / (density as f32 as f64)) as i64;
     let (x_min, x_max) = (bb[0] as i64, bb[2] as i64);
-    let positions = monotonic::grid_lines(x_min, x_max, origin.0, ls_nm);
+    let grid_x = grid.map_or(origin.0, |g| turn(g, origin, s, c).x as f64);
+    let positions = monotonic::grid_lines(x_min, x_max, grid_x, ls_nm);
     let contours: Vec<Vec<(i64, i64)>> =
         boundary.iter().map(|c| c.iter().map(|q| (q.x as i64, q.y as i64)).collect()).collect();
     let Some(lines) = monotonic::vertical_runs(&contours, &positions, x_min, x_max) else { return Vec::new() };

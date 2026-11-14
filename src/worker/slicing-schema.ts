@@ -9,6 +9,7 @@ import {
   INFILL_PATTERNS,
   LIMITS,
   normalizeSlicing,
+  SLICER_IDS,
   SLICING_PLATES,
   type SlicingDefaults,
   type SlicingSettings,
@@ -76,6 +77,12 @@ export const slicingSettingsShape = z
       .describe(
         "The face the model rests on, as the direction in the model's own axes [x, y, z] that points down; null lays it as the file does.",
       ),
+    slicer: z
+      .enum(SLICER_IDS)
+      .optional()
+      .describe(
+        "Which slicer slices it (decision 0055): spaghetti, Spaghetti's own (OrcaSlicer's engine steps in for what it can't slice yet); orca, OrcaSlicer's engine. Absent: the default, OrcaSlicer's engine for now.",
+      ),
   })
   .strict()
   .meta({ id: "SlicingSettings" });
@@ -88,8 +95,8 @@ export const slicingSettings = slicingSettingsShape
   .transform((value): SlicingSettings => normalizeSlicing(value));
 
 /**
- * A workspace's defaults (the Printer page, decision 0051): how a model nobody set up prints, and for which nozzle
- * (a layer height is that nozzle's). The filament and plate aren't among them: they come from the Pantry and the
+ * A workspace's defaults (the Printer page, decision 0051): how a model nobody set up prints, with the nozzle its
+ * layer height was set for. The filament and plate aren't among them: they come from the Pantry and the
  * setup.
  */
 export const slicingDefaults = slicingSettingsShape
@@ -102,6 +109,7 @@ export const slicingDefaults = slicingSettingsShape
     supportStyle: true,
     brim: true,
     nozzle: true,
+    slicer: true,
   })
   .partial({ nozzle: true })
   .strict()
@@ -112,7 +120,8 @@ export const slicingDefaults = slicingSettingsShape
   })
   .transform((value): SlicingDefaults => {
     const { nozzle, ...defaults } = slicingDefaultsOf(normalizeSlicing({ ...DEFAULT_SLICING, ...value }));
-    // Defaults that name no nozzle keep naming none: new models then slice for the main nozzle, whatever it is.
+    // Defaults that name no nozzle keep naming none: their layer height is the 0.4 mm's (new models slice for the
+    // main nozzle whatever it is, the quality keeping its name there).
     return value.nozzle === undefined ? defaults : { ...defaults, nozzle };
   })
   .meta({ id: "SlicingDefaults" });

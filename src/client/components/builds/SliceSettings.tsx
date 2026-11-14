@@ -1,6 +1,6 @@
 import engine from "virtual:slicer-engine";
 import { plateName } from "@shared/attempts";
-import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
+import { DEFAULT_SLICER, DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { slicedName } from "@shared/slicing/files.ts";
 import { STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { defaultNozzle, filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
@@ -19,7 +19,9 @@ import {
   type QualityId,
   qualitiesFor,
   qualityOf,
+  SLICERS,
   SLICING_NOZZLES,
+  type SlicerId,
   type SlicingDefaults,
   type SlicingFilament,
   type SlicingSettings,
@@ -29,12 +31,14 @@ import {
   SUPPORT_STYLES,
   type SupportStyle,
   sameSlicing,
+  slicerWords,
   slicingDefaultsOf,
   slicingFor,
   strengthOf,
   supportStyleWords,
   withNozzle,
 } from "@shared/slicing/settings.ts";
+import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { nozzleSentence, standInSentence } from "@shared/slicing/words.ts";
 import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
@@ -75,7 +79,7 @@ export interface SlicingChoicesProps {
   /** The plates the Printer page says are owned. */
   plates: readonly string[];
   /**
-   * The nozzles fitted. Every slice is for the main one (decision 0055): when the two differ, or the settings are for
+   * The nozzles fitted. Every slice is for the main one (decision 0056): when the two differ, or the settings are for
    * another size, a line says so where the filament is.
    */
   nozzles?: PrinterSetup["nozzles"];
@@ -267,7 +271,8 @@ export function SlicingChoices({
     />
   );
   if (twoColumns) {
-    // A desktop panel: the phone's order down the first column, then the second; the licence, the files and More close the first.
+    // A desktop panel: the phone's order down the first column, then the second; More, the licence and the files close
+    // the first.
     return (
       <div className="flex flex-col gap-7">
         <div className="grid grid-cols-2 items-start gap-x-6">
@@ -275,9 +280,10 @@ export function SlicingChoices({
             {recipeGroup}
             {qualityGroup}
             {strengthGroup}
-            {/* The licence, the files and More fill the room under the strength, so nothing scrolls. */}
-            {after}
+            {/* More, the licence and the files fill the room under the strength, so nothing scrolls; as on a phone, the
+                line saying which slicer sliced it, and in how long, follows More's last choice, the slicer. */}
             {more}
+            {after}
           </div>
           <div className="flex min-w-0 flex-col gap-7">
             {supportsGroup}
@@ -448,7 +454,7 @@ function LayItDown({
 
 /**
  * Which nozzle a slice is for, in one calm line with the X2D's two nozzles drawn (the main one solid): always the main
- * one, since the engine prints every slice with it (decision 0055). With a smaller or bigger nozzle in the auxiliary,
+ * one, since the engine prints every slice with it (decision 0056). With a smaller or bigger nozzle in the auxiliary,
  * it says how to slice for that one; settings for a size the main nozzle doesn't have (More) say so plainly.
  */
 function NozzleNote({
@@ -592,7 +598,10 @@ function SettingRow({ label, children, wide }: { label: string; children: ReactN
   );
 }
 
-/** The rest, behind one tap: how supports are built, the brim, walls and infill by number, plate, nozzle, size. */
+/**
+ * The rest, behind one tap: how supports are built, the brim, walls and infill by number, plate, nozzle, size, and
+ * which slicer slices it (decision 0055).
+ */
 function MoreSettings({
   settings,
   set,
@@ -645,7 +654,9 @@ function MoreSettings({
     model ? plateName(settings.plate) : "",
     nozzleSize ? `${settings.nozzle} mm nozzle` : "",
     model && settings.scale !== 100 ? `${settings.scale}%` : "",
+    settings.slicer !== DEFAULT_SLICER ? slicerWords(settings.slicer) : "",
   ].filter(Boolean);
+  const slicer = SLICERS.find((choice) => choice.id === settings.slicer);
   return (
     <Disclosure
       open={open}
@@ -756,6 +767,17 @@ function MoreSettings({
             </p>
           </SettingRow>
         )}
+        {/* What slices it, beside the nozzle it slices for. */}
+        <SettingRow label="Slicer" wide>
+          <SegmentedControl<SlicerId>
+            label="Slicer"
+            labelHidden
+            options={SLICERS.map((choice) => ({ value: choice.id, label: choice.label }))}
+            value={settings.slicer}
+            onChange={(value) => set({ slicer: value })}
+          />
+          {slicer && <Effect name={slicer.label} effect={slicer.effect} />}
+        </SettingRow>
         {scalable && (
           <SettingRow label="Size">
             <span className="flex items-center gap-2">
@@ -792,24 +814,47 @@ function Effect({ name, effect }: { name: string; effect: string }) {
   );
 }
 
-/** The engine, its licence and source (as the AGPL asks), and the files to download. */
+/**
+ * Who sliced it, in how long, its licence and source (as the AGPL asks), and the files to download. The slicer is
+ * the one that made the slice there (decision 0055: OrcaSlicer's engine where it stepped in for ours, and why), or
+ * before there is one, the one asked for.
+ */
 export function SliceAbout({
   file,
   slice,
   sliced,
+  slicer,
 }: {
   file: { id: string; name: string; url: string };
   slice: FileSlice | null;
   /** The sliced file's address, once there is one. */
   sliced?: string;
+  /** The slicer asked for, said while nothing is sliced. */
+  slicer: SlicerId;
 }) {
+  const made = slice?.status === "sliced" ? slice : null;
+  const by = made ? slicerOf(made) : slicer;
+  const name = by === "spaghetti" ? slicerWords(by) : `OrcaSlicer${slice ? ` ${slice.settings.orca}` : ""}`;
+  const source = by === "spaghetti" ? engine.rust.source : engine.source;
+  const took = made?.ms ? ` in ${durationWords(made.ms)}` : "";
+  const notes = made && by === "spaghetti" ? (made.notes ?? []) : [];
   return (
     <div className="flex flex-col gap-3">
       <p className="text-caption text-ink-faint">
-        Sliced in this browser by OrcaSlicer{slice ? ` ${slice.settings.orca}` : ""}, free software under the AGPL.{" "}
-        {engine.source && (
+        {made?.fallback ? (
+          <>
+            Sliced in this browser{took} by {name}: {fallbackWords(made.fallback)}. OrcaSlicer is free software under
+            the AGPL.{" "}
+          </>
+        ) : (
+          <>
+            Sliced in this browser{took} by {name}, free software under the AGPL.{" "}
+            {notes.map((note) => `${note.charAt(0).toUpperCase()}${note.slice(1)}. `).join("")}
+          </>
+        )}
+        {source && (
           <a
-            href={engine.source}
+            href={source}
             target="_blank"
             rel="noreferrer"
             className="focus-ring text-ink-soft hover:text-ink rounded-sm underline underline-offset-2"
@@ -849,7 +894,7 @@ export function SliceSettingsPanel({ file, sliced, ...choices }: SliceSettingsPr
       {...choices}
       lying={choices.lying ?? found}
       twoColumns
-      after={<SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />}
+      after={<SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />}
     />
   );
 }
@@ -874,7 +919,9 @@ export default function SliceSettingsSheet({
 }) {
   const isDesktop = useIsDesktop();
   const found = useLying(file, choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0], open && !choices.lying);
-  const about = <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} />;
+  const about = (
+    <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />
+  );
   return (
     <Sheet
       open={open}
@@ -903,9 +950,9 @@ export function WorkspaceSlicing({
   onChange,
   nozzles,
 }: {
-  /** The workspace's own, or none: Spaghetti's. */
+  /** The workspace's own, or none: Spaghetti's defaults. */
   value: SlicingDefaults | undefined;
-  /** Null goes back to Spaghetti's own. */
+  /** Null goes back to Spaghetti's defaults. */
   onChange: (next: SlicingDefaults | null) => void;
   /** The nozzles fitted: new models are sliced for one of them, the main one unless these defaults pick another. */
   nozzles: PrinterSetup["nozzles"];
@@ -917,7 +964,7 @@ export function WorkspaceSlicing({
   const reset = () => {
     const before = value;
     onChange(null);
-    if (before) toast.undo("Back to Spaghetti's own slicing", { onUndo: () => onChange(before) });
+    if (before) toast.undo("Back to the usual settings", { onUndo: () => onChange(before) });
   };
   return (
     <div className="flex flex-col gap-7">
@@ -933,7 +980,7 @@ export function WorkspaceSlicing({
       {own && (
         <div className="-mt-3">
           <Button variant="quiet" size="sm" icon={UndoIcon} onClick={reset} className="-ml-3">
-            Back to Spaghetti's own
+            Back to the usual settings
           </Button>
         </div>
       )}

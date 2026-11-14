@@ -3,7 +3,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
-// Slicing for another nozzle (decision 0055). The engine prints every slice with the main nozzle, so a slice is for
+// Slicing for another nozzle (decision 0056). The engine prints every slice with the main nozzle, so a slice is for
 // the size fitted there: with a 0.2 mm as the main nozzle, models slice with Bambu's 0.2 mm presets (Standard is
 // 0.10 mm layers and 0.22 mm lines); with a 0.2 mm only in the auxiliary, a line says how to slice for it.
 const SLICED = 60_000;

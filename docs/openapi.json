@@ -18437,7 +18437,20 @@
                         "type": "string",
                         "maxLength": 40
                       },
-                      "slicing": {}
+                      "slicing": {},
+                      "slicer": {
+                        "description": "The slicer that made it (decision 0055): spaghetti, Spaghetti's own; orca, OrcaSlicer's engine (also when absent).",
+                        "type": "string",
+                        "enum": [
+                          "spaghetti",
+                          "orca"
+                        ]
+                      },
+                      "rust": {
+                        "description": "Spaghetti's own slicer's release, when it made it.",
+                        "type": "string",
+                        "maxLength": 40
+                      }
                     },
                     "required": [
                       "machine",
@@ -18545,6 +18558,46 @@
                       "computer"
                     ]
                   },
+                  "fallback": {
+                    "description": "OrcaSlicer's engine made it where Spaghetti's own slicer was asked for: what ours can't slice yet (unsupported, `what` in its words), parts that may float (which ours can't check yet), ours not starting, or failing on this model.",
+                    "type": "object",
+                    "properties": {
+                      "why": {
+                        "type": "string",
+                        "enum": [
+                          "unsupported",
+                          "floating",
+                          "unloaded",
+                          "failed"
+                        ]
+                      },
+                      "what": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "why"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "notes": {
+                    "description": "What Spaghetti's own slicer printed otherwise than asked, in its words.",
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    }
+                  },
+                  "ms": {
+                    "description": "How long the slicer took on the device that sliced it, in ms.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 86400000
+                  },
                   "at": {
                     "type": "integer",
                     "minimum": 0,
@@ -18650,7 +18703,20 @@
                             "type": "string",
                             "maxLength": 40
                           },
-                          "slicing": {}
+                          "slicing": {},
+                          "slicer": {
+                            "description": "The slicer that made it (decision 0055): spaghetti, Spaghetti's own; orca, OrcaSlicer's engine (also when absent).",
+                            "type": "string",
+                            "enum": [
+                              "spaghetti",
+                              "orca"
+                            ]
+                          },
+                          "rust": {
+                            "description": "Spaghetti's own slicer's release, when it made it.",
+                            "type": "string",
+                            "maxLength": 40
+                          }
                         },
                         "required": [
                           "machine",
@@ -18757,6 +18823,46 @@
                           "phone",
                           "computer"
                         ]
+                      },
+                      "fallback": {
+                        "description": "OrcaSlicer's engine made it where Spaghetti's own slicer was asked for: what ours can't slice yet (unsupported, `what` in its words), parts that may float (which ours can't check yet), ours not starting, or failing on this model.",
+                        "type": "object",
+                        "properties": {
+                          "why": {
+                            "type": "string",
+                            "enum": [
+                              "unsupported",
+                              "floating",
+                              "unloaded",
+                              "failed"
+                            ]
+                          },
+                          "what": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80
+                          }
+                        },
+                        "required": [
+                          "why"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "notes": {
+                        "description": "What Spaghetti's own slicer printed otherwise than asked, in its words.",
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        }
+                      },
+                      "ms": {
+                        "description": "How long the slicer took on the device that sliced it, in ms.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 86400000
                       },
                       "at": {
                         "type": "integer",
@@ -19764,6 +19870,14 @@
               }
             ],
             "description": "mm"
+          },
+          "slicer": {
+            "description": "Which slicer slices it (decision 0055): spaghetti, Spaghetti's own (OrcaSlicer's engine steps in for what it can't slice yet); orca, OrcaSlicer's engine. Absent: the default, OrcaSlicer's engine for now.",
+            "type": "string",
+            "enum": [
+              "spaghetti",
+              "orca"
+            ]
           }
         },
         "required": [
@@ -19962,6 +20076,14 @@
               }
             ],
             "description": "The face the model rests on, as the direction in the model's own axes [x, y, z] that points down; null lays it as the file does."
+          },
+          "slicer": {
+            "description": "Which slicer slices it (decision 0055): spaghetti, Spaghetti's own (OrcaSlicer's engine steps in for what it can't slice yet); orca, OrcaSlicer's engine. Absent: the default, OrcaSlicer's engine for now.",
+            "type": "string",
+            "enum": [
+              "spaghetti",
+              "orca"
+            ]
           }
         },
         "required": [

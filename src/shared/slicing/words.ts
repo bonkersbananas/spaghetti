@@ -2,7 +2,7 @@
  * What the app (and Claude, through MCP) says about a model's slicing: one quiet line for how it was sliced, and one
  * short human sentence for why it couldn't be.
  */
-
+import { DEFAULT_SLICER } from "./defaults.ts";
 import { filamentStandIn } from "./orca.ts";
 import {
   filamentWords,
@@ -10,6 +10,7 @@ import {
   patternWords,
   qualityOf,
   type SlicingSettings,
+  slicerWords,
   slicingLine,
   supportWords,
 } from "./settings.ts";
@@ -66,9 +67,10 @@ export function sliceSummary(settings: SliceSettings): string[] {
 /**
  * Every setting of a slice in words, for Claude (MCP's get_build) and anyone reading a build's story: "Fine (0.12 mm
  * layers), 2 walls and 15% crosshatch infill, tree supports where needed, a brim where needed, PLA Basic orange
- * (Bambu Lab), Textured PEI Plate, 0.4 mm nozzle", and the size when it was scaled.
+ * (Bambu Lab), Textured PEI Plate, 0.4 mm nozzle", and the size when it was scaled, and the slicer when it isn't
+ * the usual one ("by Spaghetti's own slicer"), unless `slicer` is false (a slice's line says who made it).
  */
-export function slicingDetail(settings: SlicingSettings): string {
+export function slicingDetail(settings: SlicingSettings, { slicer = true }: { slicer?: boolean } = {}): string {
   const quality = qualityOf(settings.layerHeight, settings.nozzle);
   const layers = `${settings.layerHeight.toFixed(2)} mm layers`;
   const standIn = settings.filaments.map((filament) => filamentStandIn(filament, settings.nozzle)).find(Boolean);
@@ -84,6 +86,7 @@ export function slicingDetail(settings: SlicingSettings): string {
     `${settings.nozzle} mm nozzle${standIn ? ` (${standIn.material} sliced as ${standIn.as}, which has a preset for it)` : ""}`,
     orientationWords(settings) ? `laid ${orientationWords(settings)}` : "",
     settings.scale !== 100 ? `scaled to ${settings.scale}%` : "",
+    slicer && settings.slicer !== DEFAULT_SLICER ? `by ${slicerWords(settings.slicer)}` : "",
   ]
     .filter(Boolean)
     .join(", ");
@@ -103,7 +106,7 @@ export function standInSentence(settings: Pick<SlicingSettings, "filaments" | "n
 
 /**
  * "Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.": a slice made for a size that isn't the main nozzle's,
- * which the engine prints every slice with (decision 0055); null when it is the main nozzle's.
+ * which the engine prints every slice with (decision 0056); null when it is the main nozzle's.
  */
 export function nozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNozzle: number): string | null {
   return settings.nozzle === mainNozzle

@@ -217,6 +217,10 @@ pub struct SupportSettings {
     /// Degrees from vertical beyond which an overhang needs support (`support_threshold_angle`).
     pub threshold_angle: f64,
     pub remove_small_overhang: bool,
+    /// Supports only under what would fall (`support_critical_regions_only`, the app's "where needed"): trees hold
+    /// up only overhangs that reach far from what holds them and islands that start in the air; normal supports
+    /// ignore it, as Orca's do.
+    pub critical_regions_only: bool,
     /// mm between support and the object above it, below it, beside it, and beside it on the first layer.
     pub top_z_distance: f64,
     pub bottom_z_distance: f64,
@@ -252,6 +256,18 @@ pub struct SupportSettings {
     pub ironing: bool,
     pub interface_loops: bool,
     pub wall_count: i64,
+    /// Orca's organic trees (`tree_support_*`): the branches' diameter and their angle from vertical, fast and slow
+    /// (degrees), how far apart their tips start, the tips' diameter, how much faster the diameter grows than the
+    /// branch leans (degrees), and the share of a tip's area that is roof (percent).
+    pub tree_branch_diameter: f64,
+    pub tree_branch_angle: f64,
+    pub tree_angle_slow: f64,
+    pub tree_branch_distance: f64,
+    pub tree_tip_diameter: f64,
+    pub tree_branch_diameter_angle: f64,
+    pub tree_top_rate: f64,
+    /// `min_feature_size` as the trees read it: its number, a share of the nozzle, taken as millimetres.
+    pub min_feature_size: f64,
     pub filament: i64,
     pub interface_filament: i64,
 }
@@ -291,15 +307,21 @@ fn overhang_fan_overlap(threshold: &str) -> f64 {
 }
 
 impl SupportSettings {
-    /// What of supports this can't slice yet, in a few words: only Orca's normal supports, made where they are
-    /// needed, in their grid style, with the settings Orca's presets give them.
+    /// Whether these are Orca's organic trees: tree supports made where they are needed, in the default style (which
+    /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one.
+    pub fn organic(&self) -> bool {
+        self.kind == "tree(auto)" && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
+    }
+
+    /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid style and its
+    /// organic trees, made where they are needed, with the settings Orca's presets give them.
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
-        if kind.starts_with("tree") {
-            Some("tree supports")
-        } else if kind != "normal(auto)" {
+        if kind == "tree(auto)" && !self.organic() {
+            Some("this style of tree support")
+        } else if kind != "normal(auto)" && kind != "tree(auto)" {
             Some("supports painted on")
-        } else if !matches!(self.style.as_str(), "default" | "grid" | "") {
+        } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "") {
             Some("this style of support")
         } else if self.raft_layers > 0 {
             Some("a raft")
@@ -307,8 +329,12 @@ impl SupportSettings {
             Some("supports on the plate only")
         } else if self.threshold_angle <= 0.0 {
             Some("supports by overlap")
-        } else if !matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
-            || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
+        } else if !(if self.organic() {
+            // Other patterns fill trees' branches rather than drawing them as loops.
+            matches!(self.base_pattern.as_str(), "default" | "none" | "")
+        } else {
+            matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
+        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
         {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
@@ -319,7 +345,7 @@ impl SupportSettings {
             || self.angle != 0.0
             || self.ironing
             || self.interface_loops
-            || self.wall_count > 0
+            || (self.wall_count > 0 && !self.organic())
             || self.bridge_no_support
             || s.thick_bridges
         {
@@ -496,6 +522,7 @@ impl Settings {
                 style: text("support_style"),
                 threshold_angle: p.float("support_threshold_angle"),
                 remove_small_overhang: p.bool("support_remove_small_overhang"),
+                critical_regions_only: p.bool("support_critical_regions_only"),
                 top_z_distance: p.float("support_top_z_distance"),
                 bottom_z_distance: match p.float("support_bottom_z_distance") {
                     // 0 is the top distance.
@@ -530,6 +557,14 @@ impl Settings {
                 ironing: p.bool("support_ironing"),
                 interface_loops: p.bool("support_interface_loop_pattern"),
                 wall_count: p.int("tree_support_wall_count"),
+                tree_branch_diameter: p.float("tree_support_branch_diameter_organic"),
+                tree_branch_angle: p.float("tree_support_branch_angle_organic"),
+                tree_angle_slow: p.float("tree_support_angle_slow"),
+                tree_branch_distance: p.float("tree_support_branch_distance_organic"),
+                tree_tip_diameter: p.float("tree_support_tip_diameter"),
+                tree_branch_diameter_angle: p.float("tree_support_branch_diameter_angle"),
+                tree_top_rate: p.float("tree_support_top_rate"),
+                min_feature_size: p.float("min_feature_size"),
                 filament: p.int("support_filament"),
                 interface_filament: p.int("support_interface_filament"),
             },

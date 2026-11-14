@@ -54,7 +54,7 @@ export const engineSlices = (nozzle: number) => ENGINE_NOZZLES.includes(nozzle);
 
 /**
  * The nozzle a model nobody set up is sliced for: always the main one, at the size fitted there, since the engine
- * prints every slice with it (decision 0055). The defaults' own `nozzle` only says which nozzle their layer height
+ * prints every slice with it (decision 0056). The defaults' own `nozzle` only says which nozzle their layer height
  * was set for.
  */
 export const defaultNozzle = (setup: Pick<PrinterSetup, "nozzles">): number => setup.nozzles.main.diameter;

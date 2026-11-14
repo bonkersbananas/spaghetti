@@ -1,4 +1,4 @@
-# 0055. Each nozzle slices with Bambu's own presets, its qualities keep their names, and every slice is for the main nozzle
+# 0056. Each nozzle slices with Bambu's own presets, its qualities keep their names, and every slice is for the main nozzle
 
 Status: Accepted
 

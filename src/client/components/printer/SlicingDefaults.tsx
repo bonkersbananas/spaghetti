@@ -1,10 +1,11 @@
-import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
+import { DEFAULT_SLICER, DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { defaultNozzle } from "@shared/slicing/pantry.ts";
 import {
   type SlicingDefaults as Defaults,
   nozzleWords,
   patternWords,
   qualityWords,
+  slicerWords,
   slicingFor,
   strengthOf,
   strengthWords,
@@ -31,7 +32,8 @@ const WorkspaceSlicing = lazy(() => loadTiles().then((m) => ({ default: m.Worksp
 
 /**
  * "Standard quality · Everyday strength · no supports": the defaults in the model card's words, while folded, on the
- * nozzle they slice for (named when it isn't the 0.4 mm).
+ * main nozzle they slice for (named when it isn't the 0.4 mm), with the slicer when it isn't the usual one
+ * ("Spaghetti's own slicer", decision 0055).
  */
 function defaultsWords(value: Defaults | null, nozzles: PrinterSetup["nozzles"]): string[] {
   const settings = withNozzle(slicingFor(value ?? {}, DEFAULT_SLICING), defaultNozzle({ nozzles }));
@@ -43,6 +45,7 @@ function defaultsWords(value: Defaults | null, nozzles: PrinterSetup["nozzles"])
       ? strengthWords(strength)
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
     supportWords(settings) || "no supports",
+    ...(settings.slicer !== DEFAULT_SLICER ? [slicerWords(settings.slicer)] : []),
   ].filter(Boolean);
 }
 

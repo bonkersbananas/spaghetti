@@ -34,7 +34,7 @@ const orange = {
 };
 
 describe("the slicing settings", () => {
-  it("start as OrcaSlicer's 0.20 mm Standard for the X2D: two walls, 15 % crosshatch, no supports, PLA", () => {
+  it("start as OrcaSlicer's 0.20 mm Standard for the X2D: two walls, 15 % crosshatch, no supports, PLA, by OrcaSlicer", () => {
     expect(DEFAULT_SLICING).toEqual({
       layerHeight: 0.2,
       walls: 2,
@@ -48,6 +48,8 @@ describe("the slicing settings", () => {
       nozzle: 0.4,
       scale: 100,
       orientation: null,
+      // OrcaSlicer's engine until a print from Spaghetti's own has worked on the X2D (decision 0055).
+      slicer: "orca",
     });
     expect(slicingProblems(DEFAULT_SLICING)).toEqual([]);
     expect(qualityOf(DEFAULT_SLICING.layerHeight)?.id).toBe("standard");

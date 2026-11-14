@@ -31,6 +31,7 @@ pub mod support;
 pub mod surfaces;
 pub mod template;
 pub mod threemf;
+pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 pub mod zip;
@@ -430,7 +431,12 @@ fn object_supports(
                 tops,
                 origin: centres[o],
             };
-            support::generate(&object, &params)
+            if s.support.organic() {
+                tree::supports(&object.slices, object.height, s, object.origin, s.bed)
+                    .map_or_else(Vec::new, |t| support::generate_tree(&object, &params, t))
+            } else {
+                support::generate(&object, &params)
+            }
         })
         .collect()
 }
@@ -583,6 +589,18 @@ pub mod par {
     #[cfg(not(feature = "parallel"))]
     pub fn map_range<T, F: Fn(usize) -> T>(n: usize, f: F) -> Vec<T> {
         (0..n).map(f).collect()
+    }
+
+    /// Each item's result, in order (on every core where there are threads).
+    #[cfg(feature = "parallel")]
+    pub fn map_vec<T: Send, R: Send, F: Fn(T) -> R + Sync + Send>(items: Vec<T>, f: F) -> Vec<R> {
+        use rayon::prelude::*;
+        items.into_par_iter().map(f).collect()
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn map_vec<T, R, F: Fn(T) -> R>(items: Vec<T>, f: F) -> Vec<R> {
+        items.into_iter().map(f).collect()
     }
 
     #[cfg(feature = "parallel")]

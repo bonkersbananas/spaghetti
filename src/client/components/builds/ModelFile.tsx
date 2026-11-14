@@ -5,6 +5,7 @@ import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
 import { type SlicingSettings, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
+import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
   finishesOnComputer,
@@ -200,24 +201,44 @@ export function changeSentence(change: SliceChange, what?: string): string {
     : `${effect.charAt(0).toUpperCase()}${effect.slice(1)}`;
 }
 
-/** "Sliced by Spaghetti · Fine · PLA Basic orange", or only "Sliced by Spaghetti" where the attempt's line says the rest. */
-const slicedPieces = (slice: FileSlice, short?: boolean) =>
-  short ? ["Sliced by Spaghetti"] : ["Sliced by Spaghetti", ...sliceSummary(slice.settings)];
+/**
+ * "Sliced by Spaghetti · Fine · PLA Basic orange" (or "Sliced by Spaghetti's own slicer · …", decision 0055), where no
+ * settings row says the rest.
+ */
+const slicedPieces = (slice: FileSlice) => [slicedBy(slice, { short: true }), ...sliceSummary(slice.settings)];
+
+/** Words that may wrap, a slicer's name in them kept whole: "our own / slicer" never splits. */
+function NamesWhole({ words }: { words: string }) {
+  return (
+    <span>
+      {nameParts(words).map((part) =>
+        part.name ? (
+          <span key={part.text} className="whitespace-nowrap">
+            {part.text}
+          </span>
+        ) : (
+          part.text
+        ),
+      )}
+    </span>
+  );
+}
 
 /**
- * A story card's "Sliced by Spaghetti", under the file's name, that opens the settings: a quiet button, its glyph in
- * line with the name, taking a text line's height (and 44 px to tap on touch screens).
+ * A story card's "Sliced by Spaghetti" (or by which slicer, when it isn't the usual one), under the file's name, that
+ * opens the settings: a quiet button, its glyph in line with the name, taking a text line's height (and 44 px to tap on
+ * touch screens).
  */
-const SlicedOpener = (props: ComponentPropsWithRef<"button">) => (
+const SlicedOpener = ({ words, ...props }: ComponentPropsWithRef<"button"> & { words: string }) => (
   <Button
     variant="quiet"
     size="sm"
     icon={SettingsIcon}
-    aria-label="Sliced by Spaghetti: how to slice it"
+    aria-label={`${words}: how to slice it`}
     className="-my-1.5 -ml-3 self-start"
     {...props}
   >
-    Sliced by Spaghetti
+    {words}
   </Button>
 );
 
@@ -293,7 +314,7 @@ export interface ModelActions {
   /** The settings row, as it opens the settings here; absent where they don't open. */
   settings?: ReactNode;
   /**
-   * The size of the main nozzle fitted, which the engine prints every slice with (decision 0055): a slice for another
+   * The size of the main nozzle fitted, which the engine prints every slice with (decision 0056): a slice for another
    * size says so, with the way to slice for this one.
    */
   mainNozzle?: number;
@@ -512,10 +533,10 @@ export interface SettingsOpener {
 }
 
 /** The trigger of a model's settings as it opens here: the settings row, or on a story card "Sliced by Spaghetti". */
-function opener(details: SettingsOpener | undefined, inline: boolean): ReactNode {
+function opener(details: SettingsOpener | undefined, inline: string | false): ReactNode {
   if (!details) return null;
   const trigger = inline ? (
-    <SlicedOpener onClick={details.open} />
+    <SlicedOpener words={inline} onClick={details.open} />
   ) : (
     <SettingsRow summary={details.summary} shortcut={details.shortcut} onClick={details.open} />
   );
@@ -569,14 +590,16 @@ export function ModelCard({
   const figures = change ? changeFigures(change) : [];
   const again = state.kind === "sliced" && !!state.again;
   const busy = state.kind === "sliced" && (again || !!state.ahead);
-  // Under the print: what the last change did, else who sliced it (with the rest of how, where no settings row says it).
+  // Under the print: what the last change did, else who sliced it (and why OrcaSlicer's engine did, where it stepped
+  // in for ours: decision 0055), with the rest of how where no settings row says it. Balanced, so a sentence that
+  // wraps on a phone doesn't leave a word or two alone.
   const line =
     slice && !compact ? (
-      <MetaList className="text-small text-ink-faint">
+      <MetaList className="text-small text-ink-faint text-balance">
         {change && !change.failed
           ? [changeSentence(change, changed)]
           : details
-            ? ["Sliced by Spaghetti"]
+            ? [<NamesWhole key="by" words={slicedBy(slice)} />]
             : slicedPieces(slice)}
       </MetaList>
     ) : null;
@@ -590,8 +613,8 @@ export function ModelCard({
       leadStale={again}
       // A story card says only who sliced it (its attempt's line says the rest): a button that opens the settings, on
       // its own line under the name, or the words where they don't open.
-      meta={slice && compact && !details ? ["Sliced by Spaghetti"] : []}
-      opener={slice && compact ? opener(details, true) : null}
+      meta={slice && compact && !details ? [slicedBy(slice, { short: true })] : []}
+      opener={slice && compact ? opener(details, slicedBy(slice, { short: true })) : null}
       status={
         quiet ? undefined : (
           <>

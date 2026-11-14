@@ -201,6 +201,8 @@ export function sliceSetup(
     nozzle,
     scale: chosen.scale ?? defaults.scale,
     orientation: chosen.orientation !== undefined ? chosen.orientation : defaults.orientation,
+    // Which slicer is no setting of Orca's: what was chosen, else the defaults' (decision 0055).
+    slicer: chosen.slicer ?? defaults.slicer,
   };
   applySlicing({ machine, process }, target);
   // The presets' names go into the sliced file's settings, where Orca, Bambu Studio and Spaghetti's reader look.

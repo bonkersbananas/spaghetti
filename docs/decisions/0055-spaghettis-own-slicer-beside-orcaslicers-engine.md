@@ -1,0 +1,21 @@
+# 0055. Spaghetti's own slicer slices beside OrcaSlicer's engine, which steps in for what it can't do yet
+
+Status: Accepted
+
+**Decision:** A model's slicing settings (decision 0047) gain `slicer`: `spaghetti`, Spaghetti's own slicer (`slicer-rs/`, in Rust), or `orca`, OrcaSlicer's engine (decision 0046). It is picked under More, last ("Slicer": "Spaghetti's own · quicker to slice; OrcaSlicer steps in for what it can't do yet" or "OrcaSlicer · slower to slice, and slices everything"), on a model and in the Printer page's defaults (decision 0051); a recipe slices with the model's slicer. The default stays OrcaSlicer's engine until a print from ours has come out right on the X2D: `DEFAULT_SLICER` in `src/shared/slicing/defaults.ts` is the one line to change, and it reaches every new model and every workspace that never picked one (the Printer page keeps `slicer` only when it isn't the default). A model already sliced keeps the slicer it was sliced with, as it keeps its other settings.
+
+Ours is released as the engine is: a `slicer-rs-vN` tag builds its WebAssembly module in its own workflow and publishes it with its source (AGPL-3.0, as it follows OrcaSlicer's algorithms), `scripts/slicer-rs/release.json` pins the zip by sha256, and the app serves it at `/slicer/rust-<version>/`, fetched by the slice worker only when a model slices with ours. The app's build, its container and CI need no Rust.
+
+OrcaSlicer's engine slices a model whose settings pick ours when ours can't: it answers that it can't slice a setting yet (its code 8, "can't slice with tree supports yet"), the model has no supports and may have a part that starts in the air (ours doesn't warn of floating parts yet, so a mesh check asks first), or the module doesn't load or fails. The card says so in one line: "Sliced by OrcaSlicer: our own slicer can't do tree supports yet". What ours prints otherwise than asked (its notes: "Auto Lift printed as spiral lifts") doesn't make it step aside; the notes are said under the settings.
+
+A slice records which slicer made it (`settings.slicer`, with `settings.rust`, the release), why OrcaSlicer's engine stepped in (`fallback`: `unsupported` with what, `floating`, `unloaded`, `failed`), the notes, and how long the slicer took (`ms`). The card's line names the slicer only when it isn't the usual one ("Sliced by Spaghetti's own slicer"; "Sliced by Spaghetti" stays the usual); the line under the settings says which made it and in how long ("Sliced in this browser in 2.6 s by Spaghetti's own slicer, free software under the AGPL"), and links its source.
+
+**Why:** Carl Oscar asked to slice in the app with Spaghetti's own slicer, as a choice beside OrcaSlicer with a fallback for what it can't do yet. Ours slices a Benchy in about 2.5 s in Chromium where OrcaSlicer's engine takes about 8.7 s, from a module a fifth of the size, to the same estimate (38 min) and about the same weight (11.4 g against 11.3 g); but it is new, and no print from it has been judged on the X2D yet, so it is a choice before it is the default. Falling back rather than refusing keeps the promise that every model gets sliced, and saying why in one line tells what ours can't do yet without a dialog.
+
+**Consequences:**
+
+- What ours can do grows release by release; a setting it learns needs no change in the app beyond a moved pin, since it answers for itself what it can't slice.
+- A model whose settings pick ours and whose slice came from OrcaSlicer's engine keeps asking ours: the next slice tries ours again (after a newer release, say).
+- The floating check (`shared/slicing/floating.ts`) looks at the mesh, not at slices: a lowest point or flat underside above the first layer, standing alone for a layer, with nothing of the model under it. Orca's other warning, an arm reaching out more than 12 mm, isn't looked for, so such a model slices with ours without the caution. Once ours reports what Orca's `need_support_on` does, the check can go.
+- Older slices have no `slicer` and read as OrcaSlicer's engine's.
+- The time a slice took is the slicer's own (for the engine, its slice and packing), not the job's: reading the model, the plate picture and the upload are the same for both.
