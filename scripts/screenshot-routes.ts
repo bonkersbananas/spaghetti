@@ -313,6 +313,18 @@ async function openViewer(page: Page) {
   await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
 }
 
+/** Drags up over the 3D view's canvas: the camera orbits under the plate. */
+async function orbitBelow(page: Page) {
+  const box = await page.getByRole("dialog", { name: "3D view" }).locator("canvas").boundingBox();
+  if (!box) return;
+  const x = box.x + box.width / 2;
+  await page.mouse.move(x, box.y + box.height * 0.8);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + box.height * 0.05, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+}
+
 async function closeDialog(page: Page) {
   await page.keyboard.press("Escape");
   await page.getByRole("dialog").waitFor({ state: "detached" });
@@ -2164,6 +2176,24 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The same sliced model seen from below the plate: the plate fades to a grid and the first layer shows.
+    name: "idea-model-viewer-below",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await files.getByRole("button", { name: `See ${FUSILLI.name} in 3D` }).click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+      await orbitBelow(page);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
     // A model too long for the plate: one sentence, and the one thing that helps.
     name: "idea-model-too-big",
     path: "/ideas",
@@ -2438,6 +2468,17 @@ export const shots: Shot[] = [
     prepare: openViewer,
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
+  {
+    // The tugboat's 3D view from below the plate: the see-through grid, and the hull's first layer through it.
+    name: "viewer-below",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: openViewer,
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+      await orbitBelow(page);
     },
     cleanup: closeDialog,
   },

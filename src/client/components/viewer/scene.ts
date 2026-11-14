@@ -1,13 +1,17 @@
 import type { Layer } from "@shared/gcode";
 import { FEATURES } from "@shared/gcode";
 import {
+  BufferGeometry,
   CanvasTexture,
   Color,
   ColorManagement,
   DoubleSide,
   ExtrudeGeometry,
+  Float32BufferAttribute,
   Group,
   LinearSRGBColorSpace,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
   NoToneMapping,
@@ -24,6 +28,7 @@ import {
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { boxGeometry, chunkGeometry } from "./chunks";
+import { gridOpacity, MAX_POLAR, plateSolidity } from "./plate-view";
 
 /**
  * The 3D viewer's scene: a build plate that looks like the printer's, and the toolpaths as small extrusions, one
@@ -216,6 +221,9 @@ export class PrintScene {
   private readonly box = boxGeometry();
   private readonly chunks: Mesh[] = [];
   private plate: Group | null = null;
+  private plateGrid: LineSegments | null = null;
+  private plateMaterials: MeshBasicMaterial[] = [];
+  private solidity = 1;
   private shadow: Mesh | null = null;
   private frame = 0;
   private animating = false;
@@ -267,7 +275,7 @@ export class PrintScene {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.09;
     this.controls.screenSpacePanning = true;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
+    this.controls.maxPolarAngle = MAX_POLAR;
     this.controls.minDistance = 20;
     // One finger turns the print, two pinch to zoom and drag to pan.
     this.controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
@@ -313,6 +321,21 @@ export class PrintScene {
       curveSegments: 10,
     });
     const slab = new Mesh(geometry, [top, side]);
+    // From below the slab fades out and a quiet grid of its own edge colour takes over, so the underside shows.
+    this.plateMaterials = [top, side];
+    this.solidity = -1;
+    for (const m of this.plateMaterials) m.transparent = true;
+    const lines: number[] = [];
+    for (let i = 0; i <= PLATE; i += 32) lines.push(i, 0, 0, i, PLATE, 0, 0, i, 0, PLATE, i, 0);
+    const gridGeometry = new BufferGeometry();
+    gridGeometry.setAttribute("position", new Float32BufferAttribute(lines, 3));
+    const grid = new LineSegments(
+      gridGeometry,
+      new LineBasicMaterial({ color: colors.plateEdge, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    grid.position.z = -0.05;
+    this.plateGrid = grid;
+    plate.add(grid);
     slab.position.z = -PLATE_THICKNESS - 0.8;
     plate.add(slab);
     this.plate = plate;
@@ -492,9 +515,25 @@ export class PrintScene {
     this.animating = false;
     if (this.disposed) return;
     const moved = this.controls.update();
+    this.fadePlate();
     this.renderer.render(this.scene, this.camera);
     if (moved) this.dirty();
   };
+
+  /** Solid plate from above, a see-through grid from below. */
+  private fadePlate() {
+    const distance = this.camera.position.distanceTo(this.controls.target);
+    const solidity = plateSolidity(this.camera.position.y, distance);
+    if (solidity === this.solidity) return;
+    this.solidity = solidity;
+    for (const m of this.plateMaterials) {
+      m.opacity = solidity;
+      m.depthWrite = solidity > 0.99;
+      m.visible = solidity > 0.01;
+    }
+    if (this.plateGrid) (this.plateGrid.material as LineBasicMaterial).opacity = gridOpacity(solidity);
+    if (this.shadow) this.shadow.visible = solidity > 0.5;
+  }
 
   /** A still of the current view, as a data URL (for a hero without a photo). */
   snapshot(): string {
