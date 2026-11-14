@@ -165,3 +165,44 @@ export function paintWithin(paint: ModelPaint, filaments: number): { paint: Mode
   if (!triangles.length) return null;
   return { paint: { triangles: Uint32Array.from(triangles), codes, ends: Uint32Array.from(ends) }, highest };
 }
+
+/**
+ * The paint of an object's triangles `from` to `to` (past the last), each by its place among them: a part's, which
+ * our own slicer takes part by part. Null when none of them is painted.
+ */
+export function paintBetween(paint: ModelPaint, from: number, to: number): ModelPaint | null {
+  const triangles: number[] = [];
+  const ends: number[] = [];
+  let codes = "";
+  let start = 0;
+  for (const [index, triangle] of paint.triangles.entries()) {
+    const end = paint.ends[index] as number;
+    if (triangle >= from && triangle < to) {
+      triangles.push(triangle - from);
+      codes += paint.codes.slice(start, end);
+      ends.push(codes.length);
+    }
+    start = end;
+  }
+  if (!triangles.length) return null;
+  return { triangles: Uint32Array.from(triangles), codes, ends: Uint32Array.from(ends) };
+}
+
+/**
+ * Paint as our own slicer's module takes it (`paint`, slicer-rs's `Paint::from_bytes`): the number of painted
+ * triangles n, the n triangles, the n ends of their codes (each a little-endian u32), then the codes, in ASCII.
+ */
+export function paintBytes(paint: ModelPaint): Uint8Array {
+  const n = paint.triangles.length;
+  const at = 4 + n * 8;
+  const bytes = new Uint8Array(at + paint.codes.length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, n, true);
+  for (let k = 0; k < n; k++) {
+    view.setUint32(4 + k * 4, paint.triangles[k] as number, true);
+    view.setUint32(4 + (n + k) * 4, paint.ends[k] as number, true);
+  }
+  // The codes are hex digits, one byte each.
+  for (let k = 0; k < paint.codes.length; k++) bytes[at + k] = paint.codes.charCodeAt(k);
+  return bytes;
+}

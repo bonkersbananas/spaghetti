@@ -455,7 +455,7 @@ const HOTDOG_IDEA = {
   title: "Hotdog hero",
   note: "A model that brings its own colours: each is matched to a spool from the Pantry.",
 };
-/** A project with painted colours, which our own slicer can't do yet: OrcaSlicer's engine prints them. */
+/** A project with painted colours, which our own slicer prints since release 23 (OrcaSlicer's engine before). */
 const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
 const FARFALLE_IDEA = {
   title: "Farfalle coaster",
@@ -2448,7 +2448,8 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked for a project with painted colours: OrcaSlicer's engine prints the paint, and the card says why.
+    // Ours picked for a project with painted colours, which it prints (before release 23, OrcaSlicer's engine did,
+    // and the card said why).
     name: "idea-model-painted",
     path: "/ideas",
     prepare: async (page) => {
