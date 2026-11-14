@@ -38,7 +38,8 @@ const SHARP_TAIL_MAX_HEIGHT: f64 = 16.0;
 /// mm: how far support keeps off a sharp tail, and off object layers it doesn't overlap in height.
 const SHARP_TAIL_XY_GAP: f64 = 0.2;
 const NO_OVERLAP_XY_GAP: f64 = 0.2;
-/// mm: support paths are simplified to this (Orca's `SCALED_SUPPORT_RESOLUTION`, with arc fitting off).
+/// mm: support paths are simplified to this, the tolerance Orca fits them to when it fits arcs (`SCALED_SUPPORT_RESOLUTION`,
+/// the profile's default). We write the chords, not the arcs: round a tree's circles they print 0.4 % less plastic.
 const RESOLUTION: f64 = 0.0375;
 
 /// What the generator needs from the settings, worked out as Orca's `SupportParameters` and `SlicingParameters` do.
@@ -1463,7 +1464,16 @@ pub fn classic_layers(
                     // support pattern inside.
                     let thin = geom::offset_square(&one_area, -(support_spacing * 1.5)).is_empty();
                     let walls = wall_count.max(usize::from(thin));
-                    items.push(Item::Fixed(walled_infill(&one_area, walls, sp, support_density, base_angle, origin, h, p)));
+                    items.push(Item::Fixed(walled_infill(
+                        &one_area,
+                        walls,
+                        sp,
+                        support_density,
+                        base_angle,
+                        origin,
+                        h,
+                        p,
+                    )));
                 }
                 AreaType::Base => {
                     let mut lp = p.clone();

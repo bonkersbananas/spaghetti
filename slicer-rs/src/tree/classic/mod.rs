@@ -164,6 +164,15 @@ impl Frame {
         (p.x as i64 * 100 - self.origin.0, p.y as i64 * 100 - self.origin.1)
     }
 
+    /// A point in plate nanometres (a nanometre shape's) in Orca's frame, and back.
+    pub fn from_plate_nm(&self, q: Pt) -> P {
+        (q.x as i64 - self.origin.0, q.y as i64 - self.origin.1)
+    }
+
+    pub fn plate_nm(&self, p: P) -> Pt {
+        crate::geom::pt((p.0 + self.origin.0) as i32, (p.1 + self.origin.1) as i32)
+    }
+
     pub fn units(&self, p: P) -> Pt {
         let r = |v: i64| (v as f64 / 100.0).round() as i32;
         crate::geom::pt(r(p.0 + self.origin.0), r(p.1 + self.origin.1))
@@ -183,10 +192,19 @@ pub fn supports(
     if o.slices.len() < 2 {
         return Vec::new();
     }
-    let found = crate::tree::overhangs::detect(&o.slices, o.height, &crate::tree::Config::new(s), s);
+    let config = crate::tree::Config::new(s);
+    let found = crate::tree::overhangs::detect(&o.slices, o.height, &config, s);
     if found.iter().all(|layer| layer.is_empty()) {
         return Vec::new();
     }
+    // The detected overhangs to the nanometre, which the tips are spaced along.
+    let nm_overhangs: Vec<crate::geom::Shapes> = crate::par::map_range(found.len(), |l| {
+        if l > 0 && found[l].iter().any(|(_, k)| *k == crate::tree::overhangs::Kind::Detected) {
+            crate::tree::overhangs::detected_nm(&o.slices, o.height, &config, s, l)
+        } else {
+            Vec::new()
+        }
+    });
     let (min_layer_height, max_layer_height) = params.layer_bounds();
     // Orca keeps the top gap as a float, at least the thinnest layer.
     let mut top_z_distance = sp.top_z_distance as f32;
@@ -205,6 +223,7 @@ pub fn supports(
     let object_size = ((o.size.0 / mst::SCALING_FACTOR) as i64, (o.size.1 / mst::SCALING_FACTOR) as i64);
     let contacts = contact::contact_points(
         &found,
+        &nm_overhangs,
         &data.outlines_below,
         o.print_z,
         o.height,

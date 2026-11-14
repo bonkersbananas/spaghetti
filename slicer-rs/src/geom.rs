@@ -520,6 +520,74 @@ pub fn shape_area_mm2(shape: &Shape) -> f64 {
     shape.iter().map(|c| area2(c)).sum::<i128>() as f64 / 2.0 / (SCALE * SCALE)
 }
 
+/// Starts each loop of a boolean's result where Clipper2, Orca's polygon engine, starts it: right after the point
+/// where its sweep (from the highest y down) closes the loop. That is the loop's lowest point; where the loop's
+/// bottom is a level edge, the end of it the sweep runs to along the input edge it lies on (`inputs`, the boolean's
+/// operands), which an input outline runs along forwards where it comes down to the edge or goes on down, and
+/// backwards where it climbs both to and from it. Holes start after their lowest point, the rightmost of the lowest.
+/// Orca spaces points along outlines from their start (the classic trees' contact points), so they land where Orca's
+/// do. A guide, not Clipper2: loops whose bottom edge lies on edges of both operands may start elsewhere.
+pub fn clipper2_start(result: &mut Shapes, inputs: &[&Shapes]) {
+    for shape in result.iter_mut() {
+        for l in shape.iter_mut() {
+            let n = l.len();
+            if n < 3 {
+                continue;
+            }
+            let start = clipper2_start_of(l, area2(l) > 0, inputs);
+            l.rotate_left(start % n);
+        }
+    }
+}
+
+fn clipper2_start_of(l: &[Pt], outer: bool, inputs: &[&Shapes]) -> usize {
+    let n = l.len();
+    let ymin = l.iter().map(|p| p.y).min().unwrap_or(0);
+    let lowest_right = (0..n).filter(|&i| l[i].y == ymin).max_by_key(|&i| l[i].x).unwrap_or(0);
+    let lowest_left = (0..n).filter(|&i| l[i].y == ymin).min_by_key(|&i| l[i].x).unwrap_or(0);
+    if !outer || lowest_left == lowest_right {
+        return lowest_right + 1;
+    }
+    let (cx, dx) = (l[lowest_left].x, l[lowest_right].x);
+    // The input edge the bottom edge lies on, and which way the sweep runs along it.
+    for c in inputs.iter().flat_map(|s| s.iter().flatten()) {
+        let m = c.len();
+        for i in 0..m {
+            let (a, b) = (c[i], c[(i + 1) % m]);
+            if a.y != ymin || b.y != ymin || a.x.max(b.x).min(dx) <= a.x.min(b.x).max(cx) {
+                continue;
+            }
+            // The outline's way in to the edge and out of it, past any other level edges.
+            let mut k = i;
+            let mut steps = 0;
+            while c[(k + m - 1) % m].y == ymin && steps < m {
+                k = (k + m - 1) % m;
+                steps += 1;
+            }
+            let before = ymin as i64 - c[(k + m - 1) % m].y as i64;
+            let mut k = (i + 1) % m;
+            let mut steps = 0;
+            while c[(k + 1) % m].y == ymin && steps < m {
+                k = (k + 1) % m;
+                steps += 1;
+            }
+            let after = c[(k + 1) % m].y as i64 - ymin as i64;
+            let forwards = if b.x > a.x { 1 } else { -1 };
+            let way = match (before < 0, after > 0) {
+                (true, _) => forwards,
+                (false, true) => -forwards,
+                (false, false) => 0,
+            };
+            return match way {
+                // Swept leftwards: closed at its left end, so the loop starts at its right end.
+                -1 => lowest_right,
+                _ => lowest_right + 1,
+            };
+        }
+    }
+    lowest_right + 1
+}
+
 /// Drops points of a closed contour that lie within `tolerance` (units) of the line through their neighbours
 /// (Ramer–Douglas–Peucker on the closed loop), keeping its shape to that tolerance.
 pub fn simplify_contour(contour: &[Pt], tolerance: i32) -> Contour {
@@ -984,6 +1052,34 @@ mod tests {
             simplify_line(&square, 0.012),
             vec![mm(0.0, 0.0), mm(2.0, 0.0), mm(2.0, 2.0), mm(0.0, 2.0), mm(0.0, 0.0)]
         );
+    }
+
+    #[test]
+    fn a_differences_loops_start_where_clipper2_starts_them() {
+        // Two overhangs Orca finds (a slice less the layer below grown), with the start Clipper2 gives each, as its
+        // own code does for these shapes. A slab out from the side of a pillar: its bottom edge lies on the slab's,
+        // which the sweep runs along to the right, so the loop starts after its lowest right corner.
+        let slab: Shapes = vec![vec![vec![mm(100.0, 140.0), mm(100.0, 120.0), mm(135.0, 120.0), mm(135.0, 140.0)]]];
+        let pillar: Shapes = vec![vec![vec![mm(99.7, 140.3), mm(99.7, 119.7), mm(110.3, 119.7), mm(110.3, 140.3)]]];
+        let mut out = difference(&slab, &pillar);
+        clipper2_start(&mut out, &[&slab, &pillar]);
+        assert_eq!(out, vec![vec![vec![mm(135.0, 140.0), mm(110.3, 140.0), mm(110.3, 120.0), mm(135.0, 120.0)]]]);
+        // An arm out from a fin: its bottom edge is a step of the outline that climbs to it and on, which the sweep
+        // runs along to the left, so the loop starts at its lowest right corner.
+        let arm: Shapes = vec![vec![vec![
+            mm(100.0, 130.0),
+            mm(100.0, 110.0),
+            mm(104.0, 110.0),
+            mm(104.0, 115.0),
+            mm(114.0, 115.0),
+            mm(114.0, 125.0),
+            mm(104.0, 125.0),
+            mm(104.0, 130.0),
+        ]]];
+        let fin: Shapes = vec![vec![vec![mm(99.7, 130.3), mm(99.7, 109.7), mm(104.3, 109.7), mm(104.3, 130.3)]]];
+        let mut out = difference(&arm, &fin);
+        clipper2_start(&mut out, &[&arm, &fin]);
+        assert_eq!(out, vec![vec![vec![mm(114.0, 115.0), mm(114.0, 125.0), mm(104.3, 125.0), mm(104.3, 115.0)]]]);
     }
 
     #[test]

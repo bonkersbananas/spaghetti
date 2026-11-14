@@ -396,8 +396,9 @@ impl SupportSettings {
         self.kind == "normal(auto)" && self.style == "snug"
     }
 
-    /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid and snug styles and
-    /// its organic trees, made where they are needed, with the settings Orca's presets give them.
+    /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid and snug styles, its
+    /// organic trees and its classic ones (slim, strong and hybrid), made where they are needed, with the settings
+    /// Orca's presets give them.
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
         // Each by its name in the app's settings, as the app says "our own slicer can't do … yet".

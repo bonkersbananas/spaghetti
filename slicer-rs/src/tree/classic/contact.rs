@@ -3,7 +3,7 @@
 //! that lies a branch's radius inside it. Hybrid trees hold up a big overhang's part far from the object below with
 //! one node that is the overhang itself.
 
-use super::data::{offset_ex, scale};
+use super::data::scale;
 use super::mst::{P, SCALING_FACTOR};
 use super::{Frame, NewNode, NodeType, Nodes, Style};
 use crate::geom::{self, Shape, Shapes};
@@ -67,6 +67,25 @@ impl EdgeCache {
 }
 
 /// Orca's `BoundingBox` of points: min and max.
+/// A shape in our units (0.1 µm) in nanometres, and back (rounded).
+fn shape_nm(shape: &Shape) -> Shape {
+    shape.iter().map(|c| c.iter().map(|q| geom::pt(q.x * 100, q.y * 100)).collect()).collect()
+}
+
+fn shape_units(shape: &Shape) -> Shape {
+    let r = |v: i32| (v as f64 / 100.0).round() as i32;
+    shape.iter().map(|c| c.iter().map(|q| geom::pt(r(q.x), r(q.y))).collect()).collect()
+}
+
+/// `offset_ex` (mitred, a limit of 3) of shapes in nanometres, by `nm`.
+fn offset_nm(shapes: &Shapes, nm: f64) -> Shapes {
+    if shapes.is_empty() {
+        Vec::new()
+    } else {
+        geom::offset_c2(shapes, (nm as f32) as f64 / 1e6 * 100.0, geom::Join::Miter(3.0))
+    }
+}
+
 fn bbox(points: &[P]) -> (P, P) {
     let mut min = (i64::MAX, i64::MAX);
     let mut max = (i64::MIN, i64::MIN);
@@ -107,6 +126,18 @@ impl<'a> Areas<'a> {
             })
             .collect();
         Areas { shapes, boxes }
+    }
+
+    /// Whether shapes in plate nanometres hold a point (Orca's frame).
+    pub fn contain_nm(&self, frame: &Frame, p: P) -> bool {
+        let u = frame.plate_nm(p);
+        self.shapes.iter().zip(&self.boxes).any(|(s, b)| {
+            u.x >= b[0]
+                && u.x <= b[2]
+                && u.y >= b[1]
+                && u.y <= b[3]
+                && crate::tree::util::contains(std::slice::from_ref(s), u)
+        })
     }
 
     pub fn contain(&self, frame: &Frame, p: P) -> bool {
@@ -164,10 +195,12 @@ pub struct Contacts {
     pub nodes_angle: f32,
 }
 
-/// `print_z` and `height` are the object layers' (mm); `object_size` the object's size in nm.
+/// `print_z` and `height` are the object layers' (mm); `object_size` the object's size in nm; `nm_overhangs` each
+/// layer's detected overhangs to the nanometre (`overhangs::detected_nm`), which the tips are spaced along.
 #[allow(clippy::too_many_arguments)]
 pub fn contact_points(
     overhangs: &Overhangs,
+    nm_overhangs: &[Shapes],
     outlines_below: &[Shapes],
     print_z: &[f64],
     height: &[f64],
@@ -225,19 +258,46 @@ pub fn contact_points(
         for (part, kind) in &overhangs[layer_nr] {
             let is_sharp_tail = *kind == Kind::SharpTail;
             let part_area = geom::shape_area_mm2(part) * 1e12;
-            let mut regular: Shapes = vec![part.clone()];
+            // The part to the nanometre: the layer's detected overhang with its bounds (to half a micrometre),
+            // worked out again in nanometres as Orca has it, else the part as it is, started as Clipper2 would.
+            let bounds_of = |s: &Shape| geom::bbox(&vec![s.clone()]);
+            let part_nm = match (kind, bounds_of(part)) {
+                (Kind::Detected, Some(b)) => nm_overhangs[layer_nr]
+                    .iter()
+                    .filter_map(|o| {
+                        let c = bounds_of(o)?;
+                        let off = (0..4).map(|k| (c[k] as f64 / 100.0 - b[k] as f64).abs()).fold(0.0, f64::max);
+                        (off <= 5.0).then_some((off, o))
+                    })
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                    .map(|(_, o)| o.clone()),
+                _ => None,
+            }
+            .unwrap_or_else(|| {
+                let mut one = vec![shape_nm(part)];
+                if *kind == Kind::Detected {
+                    geom::clipper2_start(&mut one, &[]);
+                }
+                one.remove(0)
+            });
+            let mut regular: Vec<Shape> = vec![part_nm.clone()];
             if p.style == Style::Hybrid && part_area > thresh_big_overhang && !is_sharp_tail {
-                let held = geom::intersection(&vec![part.clone()], &outlines_below[layer_nr - 1]);
-                let near = offset_ex(&held, radius_scaled as f64);
-                let normal = geom::difference(&vec![part.clone()], &near);
-                if geom::area_mm2(&normal) * 1e12 > thresh_big_overhang {
+                let held = geom::intersection(
+                    &vec![part_nm.clone()],
+                    &crate::tree::overhangs::to_nm(&outlines_below[layer_nr - 1]),
+                );
+                let mut near = offset_nm(&held, radius_scaled as f64);
+                geom::clipper2_start(&mut near, &[]);
+                let mut normal = geom::difference(&vec![part_nm.clone()], &near);
+                geom::clipper2_start(&mut normal, &[&vec![part_nm.clone()], &near]);
+                if geom::area_mm2(&normal) * 1e8 > thresh_big_overhang {
                     regular = near;
                     for overhang in normal {
-                        let pts: Vec<P> = overhang[0].iter().map(|&q| frame.nm(q)).collect();
+                        let pts: Vec<P> = overhang[0].iter().map(|&q| frame.from_plate_nm(q)).collect();
                         let b = bbox(&pts);
                         let radius = bbox_radius(b) * SCALING_FACTOR;
                         let candidate = ((b.0.0 + b.1.0) / 2, (b.0.1 + b.1.1) / 2);
-                        let overhang = Arc::new(overhang);
+                        let overhang = Arc::new(shape_units(&overhang));
                         if let Some(i) =
                             insert_point(&mut curr, candidate, &overhang, radius, true, true, is_sharp_tail)
                         {
@@ -246,12 +306,12 @@ pub fn contact_points(
                     }
                 }
             }
-            for overhang in regular {
-                let add_interface = geom::shape_area_mm2(&overhang) * 1e12 > minimum_roof_area && !is_sharp_tail;
-                let contour: Vec<P> = overhang[0].iter().map(|&q| frame.nm(q)).collect();
+            for overhang_nm in regular {
+                let add_interface = geom::shape_area_mm2(&overhang_nm) * 1e8 > minimum_roof_area && !is_sharp_tail;
+                let contour: Vec<P> = overhang_nm[0].iter().map(|&q| frame.from_plate_nm(q)).collect();
                 let bounds = bbox(&contour);
                 let radius = (bbox_radius(bounds) * SCALING_FACTOR).clamp(super::MIN_BRANCH_RADIUS, p.base_radius);
-                let overhang = Arc::new(overhang);
+                let overhang = Arc::new(shape_units(&overhang_nm));
                 // The corners sharper than 135°.
                 let m = contour.len();
                 for i in 0..m {
@@ -273,9 +333,9 @@ pub fn contact_points(
                     }
                 }
                 // Along the outline and the holes', a branch distance apart.
-                for (c, loop_) in overhang.iter().enumerate() {
+                for (c, loop_) in overhang_nm.iter().enumerate() {
                     let mut pts: Vec<P> =
-                        if c == 0 { contour.clone() } else { loop_.iter().map(|&q| frame.nm(q)).collect() };
+                        if c == 0 { contour.clone() } else { loop_.iter().map(|&q| frame.from_plate_nm(q)).collect() };
                     if pts.len() > 1 {
                         pts.push(pts[0]);
                     }
@@ -292,10 +352,10 @@ pub fn contact_points(
                     continue;
                 }
                 // Inside it, on the grid.
-                let inner = offset_ex(&vec![(*overhang).clone()], -(radius_scaled as f64));
+                let inner = offset_nm(&vec![overhang_nm.clone()], -(radius_scaled as f64));
                 let inner = Areas::new(&inner);
                 for &candidate in &grid {
-                    if bbox_contains(bounds, candidate) && inner.contain(frame, candidate) {
+                    if bbox_contains(bounds, candidate) && inner.contain_nm(frame, candidate) {
                         insert_point(&mut curr, candidate, &overhang, radius, false, add_interface, is_sharp_tail);
                     }
                 }

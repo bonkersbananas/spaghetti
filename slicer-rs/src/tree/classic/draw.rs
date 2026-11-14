@@ -105,9 +105,14 @@ fn bbox_overlap(a: &Shapes, b: &Shapes) -> bool {
     }
 }
 
-/// Orca's `overlaps`.
+/// Orca's `overlaps`: whether two sets share some area (tried only with what of `b` is near `a`).
 fn overlaps(a: &Shapes, b: &Shapes) -> bool {
-    bbox_overlap(a, b) && !geom::intersection(a, b).is_empty()
+    let Some(ba) = geom::bbox(a) else { return false };
+    if !bbox_overlap(a, b) {
+        return false;
+    }
+    let near = geom::near(b, ba);
+    !near.is_empty() && !geom::intersection(a, &near).is_empty()
 }
 
 /// Each support layer with nodes drawn (layers without any are left out, as Orca drops them), and Orca's count of
@@ -143,6 +148,18 @@ pub fn draw_circles(
     let max_move_sq = scale(p.line_width / 2.0).powi(2);
     let top_base_interface_layers = 0usize;
 
+    // Each object layer's surfaces a branch can come down on (its tops, and the first layer itself) and their box,
+    // looked through for every piece of every support layer's base.
+    let surfaces: Vec<Shapes> = (0..object.tops.len())
+        .map(|idx| {
+            let mut s = object.tops[idx].clone();
+            if idx == 0 {
+                s.extend(object.slices[0].iter().cloned());
+            }
+            s
+        })
+        .collect();
+    let surface_boxes: Vec<Option<[i32; 4]>> = surfaces.iter().map(geom::bbox).collect();
     let drawn: Vec<Option<Drawn>> = crate::par::map_range(layer_heights.len(), |layer_nr| {
         let curr = &contacts[layer_nr];
         if curr.is_empty() {
@@ -327,16 +344,16 @@ pub fn draw_circles(
             for comp in &base_areas {
                 let mut comp_poly: Shapes = vec![comp.clone()];
                 let mut bands: Vec<(f64, Shapes)> = Vec::new();
+                let b = geom::bbox_of(comp);
                 for idx in (0..=obj_layer_nr.min(object.tops.len().saturating_sub(1))).rev() {
-                    let mut surfaces = object.tops[idx].clone();
-                    if idx == 0 {
-                        surfaces.extend(object.slices[0].iter().cloned());
-                    }
-                    if surfaces.is_empty() || !bbox_overlap(&comp_poly, &surfaces) {
+                    let Some(sb) = surface_boxes[idx] else { continue };
+                    if sb[0] > b[2] || b[0] > sb[2] || sb[1] > b[3] || b[1] > sb[3] {
                         continue;
                     }
-                    if !geom::intersection(&comp_poly, &surfaces).is_empty() {
-                        bands.push((object.print_z[idx], surfaces));
+                    // What of the surfaces lies in the piece's box decides whether they meet.
+                    let local = geom::clip_box(&geom::near(&surfaces[idx], b), b);
+                    if !local.is_empty() && !geom::intersection(&comp_poly, &local).is_empty() {
+                        bands.push((object.print_z[idx], surfaces[idx].clone()));
                     }
                 }
                 if bands.is_empty() {

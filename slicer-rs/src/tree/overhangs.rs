@@ -300,13 +300,42 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
         }
         let lower = grow(&extrudable[l - 1], 12_500.0);
         for (t, h) in &tails[l] {
-            let areas = geom::difference(&one(t), &lower);
+            let mut areas = geom::difference(&one(t), &lower);
+            geom::clipper2_start(&mut areas, &[&one(t), &lower]);
             if !areas.is_empty() && ((h * 10.0) as i32) % 5 == 0 {
                 out[l].extend(areas.into_iter().map(|a| (a, Kind::SharpTail)));
             }
         }
     }
     out
+}
+
+/// Layer `l`'s overhangs (above the first layer) to the nanometre, as Orca works them out in its unit where ours is
+/// 0.1 µm: the layer's extrudable slices less the layer below's grown by the overhang angle's reach (which rounds to
+/// our grid where Orca's doesn't), each loop started where Clipper2 starts it. Coordinates are plate nanometres. The
+/// classic trees space their tips along these outlines and order them by position, so nanometres decide how their
+/// branches join; with these, models whose slices are exact on our grid grow Orca's trees exactly.
+pub fn detected_nm(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config::Settings, l: usize) -> Shapes {
+    let ews = extrusion_width(s);
+    let extrudable = |k: usize| {
+        let opened = grow(&grow(&slices[k], (-ews / 2.0) as f32 as f64), ews as f32 as f64);
+        geom::intersection(&slices[k], &opened)
+    };
+    let upper = to_nm(&extrudable(l));
+    let llo = heights[l - 1] as f32 as f64 / c.threshold_degrees.to_radians().tan();
+    // `offset_c2` takes millimetres in our units; in nanometres, a hundred times as many.
+    let lower = geom::offset_c2(&to_nm(&extrudable(l - 1)), mm((llo * 1e6) as f32 as f64) * 100.0, Join::Square);
+    let mut out = geom::difference(&upper, &lower);
+    geom::clipper2_start(&mut out, &[&upper, &lower]);
+    out
+}
+
+/// Shapes in our units (0.1 µm) as nanometres.
+pub fn to_nm(shapes: &Shapes) -> Shapes {
+    shapes
+        .iter()
+        .map(|s| s.iter().map(|c| c.iter().map(|p| geom::pt(p.x * 100, p.y * 100)).collect()).collect())
+        .collect()
 }
 
 /// The areas the trees grow from on each layer: each overhang's outline, a sharp tail's grown by 0.2 mm, not
