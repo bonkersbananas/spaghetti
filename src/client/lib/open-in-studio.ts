@@ -1,5 +1,4 @@
-import { fileUrl } from "@shared/api";
-import { bambuStudioUrl, type OpenLinkResponse, type OpenPart, openTarget } from "@shared/open-link";
+import { bambuStudioUrl, type OpenChoice, type OpenLinkResponse, openChoices } from "@shared/open-link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { useIsDesktop } from "./use-media-query";
@@ -24,27 +23,27 @@ export const TRIED_MS = 12_000;
 export type StudioState =
   | { phase: "ready" }
   | { phase: "asking" }
-  | { phase: "tried"; download: string; name: string }
-  | { phase: "failed" };
+  | { phase: "tried"; choice: OpenChoice }
+  | { phase: "failed"; choice: OpenChoice };
 
 /**
  * Opening one kept file in Bambu Studio: asks the Worker for a signed link, and sends the browser to the address that
  * makes Bambu Studio fetch it. A browser can't tell whether an app opened, so afterwards it says where the plain
  * download is, for a few seconds.
  */
-export function useOpenInStudio(file: Parameters<typeof openTarget>[0] & { id: string }) {
-  const target = openTarget(file);
+export function useOpenInStudio(file: Parameters<typeof openChoices>[0] & { id: string }) {
+  const choices = openChoices(file);
   const [state, setState] = useState<StudioState>({ phase: "ready" });
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const open = async () => {
-    if (!target || state.phase === "asking") return;
+  const open = async (choice: OpenChoice | undefined = choices[0]) => {
+    if (!choice || state.phase === "asking") return;
     setState({ phase: "asking" });
     try {
       const made = await api<OpenLinkResponse>(`/files/${file.id}/open-link`, {
         method: "POST",
-        json: { part: target.part },
+        json: { part: choice.part },
       });
       // A click on a real link: how a browser hands a custom address to the app that has it.
       const link = document.createElement("a");
@@ -53,14 +52,14 @@ export function useOpenInStudio(file: Parameters<typeof openTarget>[0] & { id: s
       document.body.append(link);
       link.click();
       link.remove();
-      setState({ phase: "tried", download: fileUrl(file.id, target.part as OpenPart), name: made.name });
+      setState({ phase: "tried", choice });
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setState({ phase: "ready" }), TRIED_MS);
     } catch {
-      setState({ phase: "failed" });
+      setState({ phase: "failed", choice });
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setState({ phase: "ready" }), TRIED_MS);
     }
   };
-  return { target, state, open };
+  return { choices, state, open };
 }

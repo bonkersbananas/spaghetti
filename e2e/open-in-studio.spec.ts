@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { unzipSync } from "fflate";
 import { TUGBOAT_FILE_NAME, tugboatFile } from "./fixtures/gcode-tugboat";
+import { boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
 test.afterEach(async ({ page }) => {
@@ -69,5 +71,45 @@ test("Open in Bambu Studio builds the bambustudio:// address of a signed link th
   const [fileId, part, , signature] = token.split(".") as [string, string, string, string];
   const expired = `${fileId}.${part}.${Date.now() - 1000}.${signature}`;
   expect((await stranger.request.get(`${new URL(signed).origin}/open/${expired}/x.3mf`)).status()).toBe(404);
+  await stranger.close();
+});
+
+test("an .stl that isn't sliced opens in Bambu Studio as a 3MF with the same triangles, with no cookie", async ({
+  page,
+  browser,
+}) => {
+  await signIn(page);
+  const stl = Buffer.from(boxStl(20));
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: { Origin: origin(page) }, data: { id, title: "Box", note: "x" } });
+  await page.goto(`/ideas/${id}`);
+  await page.getByTestId("idea-file-input").setInputFiles({ name: "box.stl", mimeType: "model/stl", buffer: stl });
+  await expect(page.getByRole("region", { name: /^Files/ }).getByText("box.stl")).toBeVisible();
+  await page.evaluate(() => {
+    document.addEventListener(
+      "click",
+      (event) => {
+        const link = (event.target as Element).closest?.("a[href^='bambustudio']");
+        if (!link) return;
+        event.preventDefault();
+        (window as unknown as { opened: string[] }).opened.push(link.getAttribute("href") ?? "");
+      },
+      true,
+    );
+    (window as unknown as { opened: string[] }).opened = [];
+  });
+  await page.getByTestId("open-in-studio").first().click();
+  await expect(page.getByText("Nothing opened?").first()).toBeVisible();
+  const [href] = await page.evaluate(() => (window as unknown as { opened: string[] }).opened);
+  const signed = decodeURIComponent((href as string).split("file=")[1] as string);
+  expect(new URL(signed).pathname).toMatch(/^\/open\/[^/]+\/box\.3mf$/);
+
+  const stranger = await browser.newContext();
+  const download = await stranger.request.get(signed);
+  expect(download.status()).toBe(200);
+  const files = unzipSync(new Uint8Array(await download.body()));
+  const xml = new TextDecoder().decode(files["3D/3dmodel.model"]);
+  expect(xml.match(/<triangle /g)).toHaveLength(12);
+  expect(xml.match(/<vertex /g)).toHaveLength(36);
   await stranger.close();
 });
