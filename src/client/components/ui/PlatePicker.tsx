@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { isTyping } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { NextIcon } from "./icons";
 import { Kbd } from "./Kbd";
@@ -109,24 +109,15 @@ export function PlatePicker({ plates, value, onChange, disabled, className }: Pl
     plates.findIndex((plate) => plate.index === value),
   );
   const chosen = plates[position];
-  // Always the freshest, so the key listener needn't be set up again each time.
-  const step = useRef((_by: number) => {});
-  step.current = (by: number) => {
+  const row = useRef<HTMLFieldSetElement>(null);
+  const step = (by: number) => {
     const next = plates[(position + by + plates.length) % plates.length];
     if (next && !disabled) onChange(next.index);
   };
-  useEffect(() => {
-    if (!isDesktop) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
-      if (event.key === "[") step.current(-1);
-      else if (event.key === "]") step.current(1);
-      else return;
-      event.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isDesktop]);
+  // `[` and `]` on desktop, in the panel of the slicing settings too (it is a dialog, with no scrim).
+  useHotkeys(isDesktop && plates.length > 1 ? { platePrevious: () => step(-1), plateNext: () => step(1) } : {}, {
+    inDialog: () => row.current,
+  });
 
   if (plates.length < 2 || !chosen) return null;
 
@@ -167,12 +158,12 @@ export function PlatePicker({ plates, value, onChange, disabled, className }: Pl
   }
 
   return (
-    <fieldset disabled={disabled} className={cn("flex min-w-0 flex-col", className)}>
+    <fieldset ref={row} disabled={disabled} className={cn("flex min-w-0 flex-col", className)}>
       <legend className="text-caption text-ink-faint mb-2.5 flex items-center gap-2 font-sans font-semibold tracking-wider uppercase">
         Plates
         <span className="flex items-center gap-1 tracking-normal normal-case">
-          <Kbd keys={["["]} />
-          <Kbd keys={["]"]} />
+          <Kbd keys={shortcutCaps("platePrevious")} />
+          <Kbd keys={shortcutCaps("plateNext")} />
         </span>
       </legend>
       <PlateGrid plates={plates} value={value} name={name} onPick={onChange} />

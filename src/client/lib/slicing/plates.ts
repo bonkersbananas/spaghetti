@@ -27,9 +27,23 @@ export type PlatesState = { status: "loading" } | { status: "ready"; plates: Pla
 const found = new Map<string, Promise<PlatesMessage | null>>();
 const listeners = new Map<string, Set<(plates: PlateView[]) => void>>();
 const latest = new Map<string, PlateView[]>();
+/** The most files whose pictures are kept (the older go back to the browser: their object URLs are let go). */
+const KEPT = 6;
 
 function url(blob: Blob | null): string | null {
   return blob ? URL.createObjectURL(blob) : null;
+}
+
+/** Lets go of the oldest files' pictures once more than `KEPT` are held. */
+function trim() {
+  while (latest.size > KEPT) {
+    const oldest = latest.keys().next().value as string;
+    for (const plate of latest.get(oldest) ?? []) {
+      for (const src of [plate.src, plate.placeholder]) if (src) URL.revokeObjectURL(src);
+    }
+    latest.delete(oldest);
+    found.delete(oldest);
+  }
 }
 
 function platesOf(fileId: string, colour: string, size: number): Promise<PlatesMessage | null> {
@@ -47,15 +61,19 @@ function platesOf(fileId: string, colour: string, size: number): Promise<PlatesM
       worker.onmessage = (event: MessageEvent<PlatesMessage>) => {
         const message = event.data;
         if (message.type !== "plates") return end(message);
-        const views = message.plates.map<PlateView>((plate) => ({
+        // The project's pictures come once, in the first message: the second keeps their URLs and adds ours.
+        const before = latest.get(key);
+        const views = message.plates.map<PlateView>((plate, at) => ({
           index: plate.index,
           name: plate.name,
           objects: plate.objects,
           height: plate.height,
           src: url(plate.png),
-          placeholder: url(plate.placeholder),
+          placeholder: before?.[at]?.placeholder ?? url(plate.placeholder),
         }));
+        latest.delete(key);
         latest.set(key, views);
+        trim();
         for (const listener of listeners.get(key) ?? []) listener(views);
         if (message.final) end(message);
       };
@@ -74,19 +92,16 @@ function platesOf(fileId: string, colour: string, size: number): Promise<PlatesM
 export function usePlates(file: { id: string; size: number }, colour: string, enabled = true, size = 256): PlatesState {
   const skip = !enabled || tooBigForPhone(file.size);
   const key = `${file.id}:${size}:${colour}`;
-  const [state, setState] = useState<PlatesState>(() => {
-    const kept = latest.get(key);
-    return skip ? { status: "none" } : kept ? { status: "ready", plates: kept } : { status: "loading" };
-  });
+  const [seen, setSeen] = useState<{ key: string; state: PlatesState } | null>(null);
   useEffect(() => {
-    if (skip) return setState({ status: "none" });
+    if (skip) return;
     let current = true;
-    const listener = (plates: PlateView[]) => current && setState({ status: "ready", plates });
+    const listener = (plates: PlateView[]) => current && setSeen({ key, state: { status: "ready", plates } });
     const set = listeners.get(key) ?? new Set();
     set.add(listener);
     listeners.set(key, set);
     void platesOf(file.id, colour, size).then((message) => {
-      if (current && (!message || message.type === "none")) setState({ status: "none" });
+      if (current && (!message || message.type === "none")) setSeen({ key, state: { status: "none" } });
     });
     const kept = latest.get(key);
     if (kept) listener(kept);
@@ -95,5 +110,9 @@ export function usePlates(file: { id: string; size: number }, colour: string, en
       set.delete(listener);
     };
   }, [skip, key, file.id, colour, size]);
-  return state;
+  // Only what was found for this very file and size: another's, from before the inputs changed, never shows.
+  if (skip) return { status: "none" };
+  const kept = latest.get(key);
+  if (seen?.key === key) return seen.state;
+  return kept ? { status: "ready", plates: kept } : { status: "loading" };
 }
