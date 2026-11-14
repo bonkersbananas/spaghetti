@@ -9,7 +9,7 @@ A self-contained crate, about 37,000 lines of Rust on seven small crates (polygo
 The same code builds two ways:
 
 - **Native**: a 3.3 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
-- **WebAssembly**: a 3.0 MB module (942 kB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
+- **WebAssembly**: a 3.0 MB module (945 kB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
 
 What it does, in order:
 
@@ -250,20 +250,20 @@ What the app's "Slice with…" can ask for (`src/shared/slicing/settings.ts`), t
 
 1. **Tree supports**, the app's support style unless people pick another: they slice, in the app since release 3, within 6 % of Orca's support (section 3). Left: their speed in the browser (section 2).
 2. **Nozzles other than 0.4 mm**: they slice with the presets the app's setup brings for each (Bambu's, decision 0056), within 1 % of Orca's plastic and 4 % of its estimate on a Benchy (section 3), the 0.2 mm's bridges with the extra plastic its presets ask for (in the app since release 5). Left: their internal solid infill, gap fill and retractions (section 5).
-3. **Filaments other than PLA**: they slice as Orca slices them, the generic filaments lifting the nozzle with Orca's Auto Lift (section 3; with the next release in the app).
+3. **Filaments other than PLA**: they slice as Orca slices them, the generic filaments lifting the nozzle with Orca's Auto Lift (section 3; in the app since release 6).
 4. **Several filaments**: they slice now, each object in its filament, on the X2D's two nozzles or one, with Orca's tool changes, tower and flushing, and the waiting nozzle cooled and heated again as Orca's is (section 3). The app hands the module each object's filament (`add_in`, as its engine gets `extruder` per object; from release 4), so a plate in several slices with ours there. Left: painted colours and objects made of parts in different filaments (refused, large).
 5. **The other supports**: slim, strong and hybrid trees (Orca's older tree code) and snug normal supports, refused (medium each).
 6. **The patterns only a project asks for**, 13 of them from adaptive cubic to TPMS-D: straight lines, with a note (small to medium each).
 7. **The rest of what a project's settings can ask for**: Arachne walls, ironing and fuzzy skin (notes); spiral vase, one object after another, brim ears and inner brims, and rafts (refused; a raft with supports off sliced without it until Nov 13).
 
-Parts that float in the air no longer stop it: the app gave a model without supports to Orca's engine when its mesh check found a part that may start in the air, for Orca's warning; ours now warns of the same objects in the same words (section 3), so from the next release the app keeps such a model.
+Parts that float in the air no longer stop it: the app gave a model without supports to Orca's engine when its mesh check found a part that may start in the air, for Orca's warning; ours now warns of the same objects in the same words (section 3), so since release 6 the app keeps such a model.
 
 Before any of it, a watched print (section 5's first row). For the module in the app: hand it the app's placed meshes with their placement kept (`slice` with flag 1) and a setup whose `slicing.scale` is 100, since otherwise it scales the models by that and arranges the plate again.
 
 ## 6. Where it could run
 
 - **On a bridge-like host, as an offline slicing proxy.** A 3.0 MB program, slicing a Benchy in under half a second and a full plate in about 5 s, in 250 MB. It needs nothing installed, and nothing from Bambu or the internet.
-- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 0.94 MB gzip, a Benchy is ready in about two seconds instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
+- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 0.95 MB gzip, a Benchy is ready in about two seconds instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
 - **In the Worker itself**, for single models: a Benchy needs 30 MB of WebAssembly memory and 2.3 s of CPU. That fits in a Worker's 128 MB, if the account's CPU limit allows a few seconds a request. Orca's engine can't run there (its heap starts at 256 MB). A plate of many models would not fit.
 
 ## 7. Recommendation
