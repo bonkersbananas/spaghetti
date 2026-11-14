@@ -196,7 +196,7 @@ test("the spool page and the printer setup follow the other person's edits, and 
     // Alex's screen takes Sam's edits on its own (the window regaining focus asks the feed at once, as it does
     // for a person coming back to the tab), and what Alex typed stays.
     await focus(page);
-    await expect(page.getByRole("radio", { name: "Low" })).toBeChecked();
+    await expect(page.getByRole("radio", { name: "Low", exact: true })).toBeChecked();
     await expect(brand).toHaveValue("Bambu Eco");
 
     // The printer's setup works the same way, a part at a time.
