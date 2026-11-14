@@ -589,10 +589,13 @@ async function openSliceSettings(page: Page, model = { idea: FUSILLI_IDEA, file:
 }
 
 /** A colour's row in the settings, scrolled to the middle and opened. */
-async function openColour(settings: Locator, name: RegExp) {
-  const row = settings.getByRole("button", { name });
+async function openColour(page: Page, settings: Locator, name: RegExp) {
+  const row = settings.getByRole("button", { name }).first();
   await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
   await row.click({ force: true });
+  // Its spools are below it: the row up to the top of the view, so they show.
+  await page.waitForTimeout(400);
+  await row.evaluate((button) => button.scrollIntoView({ block: "start", behavior: "instant" }));
 }
 
 /** The settings' sheet or popover has finished opening (the shots' fixed clock starts its fade late: finish it). */
@@ -1870,6 +1873,12 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       await settings.getByText("Colours", { exact: true }).waitFor();
+      // On a phone the sheet scrolls to Supports, so Colours is seen where it sits, under the other choices.
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await settings
+          .getByRole("group", { name: "Supports" })
+          .evaluate((group) => group.scrollIntoView({ block: "start", behavior: "instant" }));
+      }
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
@@ -1881,7 +1890,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       await settings.getByText("Colours", { exact: true }).waitFor();
-      await openColour(settings, /Ketchup Red/);
+      await openColour(page, settings, /Ketchup Red/);
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
@@ -1893,7 +1902,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       await settings.getByText("Colours", { exact: true }).waitFor();
-      await openColour(settings, /Grape/);
+      await openColour(page, settings, /Grape/);
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
@@ -1905,7 +1914,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       await settings.getByText("Colours", { exact: true }).waitFor();
-      const row = settings.getByRole("button", { name: /Mustard/ });
+      const row = settings.getByRole("button", { name: /Mustard/ }).first();
       await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
       // A key first, so the focus ring shows as it does for the keyboard.
       await page.keyboard.press("Shift");

@@ -91,7 +91,7 @@ export function ColourMatches({
                 open={open === colour.hex}
                 onOpenChange={(next) => setOpen(next ? colour.hex : null)}
                 title={
-                  <span className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
                     <span className="flex min-w-0 items-center gap-2.5">
                       <Swatch color={colour.hex} size="md" />
                       <span className="flex min-w-0 flex-col">
@@ -104,8 +104,8 @@ export function ColourMatches({
                         </MetaList>
                       </span>
                     </span>
-                    <ArrowRightIcon size={14} aria-hidden className="text-ink-faint" />
-                    <span className="flex min-w-0 items-center gap-2.5">
+                    <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
+                    <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
                       <SpoolDisc color={colour.filament.colorHex} size="sm" empty={!colour.inPantry} />
                       <span className="flex min-w-0 flex-col">
                         <span className="text-small text-ink font-semibold text-balance">
@@ -119,7 +119,7 @@ export function ColourMatches({
                               : filamentWords({ ...colour.filament, colorHex: undefined })}
                         </span>
                         {sharing.length > 0 && (
-                          <span className="text-caption text-semolina-ink font-normal">
+                          <span className="text-caption text-ink-soft font-normal">
                             Same spool as {nameOf(sharing[0] as SliceColour)}
                             {sharing.length > 1 ? ` and ${sharing.length - 1} more` : ""}
                           </span>
