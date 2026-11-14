@@ -75,6 +75,7 @@ src/
     webhooks/             secrets.ts (AES-GCM at rest, HMAC signing), deliver.ts (fan-out from the change feed, sending, retries; run by the 5-minute cron)
     db/schema.ts          Drizzle schema: users, sessions, items, photos, attempts, tags, spools, ams_slots, printer, attempt_files
     push/                 web push: webpush.ts (VAPID + aes128gcm on WebCrypto), nudges.ts (the cron's "how did it go?" rules)
+    open-link.ts, routes/open.ts  signed links for "Open in Bambu Studio": HMAC token (key from WEBHOOK_SECRET_KEY), POST /api/files/:id/open-link, and the cookie-less GET /open/<token>/<name> (decision 0058; client side lib/open-in-studio.ts, components/builds/OpenInStudio.tsx)
     photos.ts             R2 keys (photos and slicer files) and the daily purge (scheduled handler in index.ts)
   shared/                 code both sides use (API types, the change feed (changes.ts), attempts and tags, spools and printer checks, journal grouping, search terms, keyboard shortcut registry, password hashing, person colors, EXIF, links, model-mark (which ideas have a model: ui/ModelMark.tsx shows it), times)
     threemf/              the .3mf reader, and prefill.ts: a file's plate as attempt settings

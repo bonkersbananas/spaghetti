@@ -5,6 +5,7 @@ import { Card, PhotoDots } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
+import { MiniCard } from "@/components/ui/MiniCard";
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, people, Section } from "./shared";
@@ -97,6 +98,26 @@ export function CardSection() {
             aspect="portrait"
           />
         </div>
+      </div>
+      <div className="mt-10">
+        <Label>
+          Mini cards, for a row that scrolls sideways with snap (Up next on phones): the cover only, so a drag never
+          fights a photo swipe, with the title under it and room for a menu button in the corner
+        </Label>
+        <ul className="no-scrollbar flex snap-x snap-proximity gap-2.5 overflow-x-auto pb-1">
+          <MiniCard
+            link={{ to: "/styleguide" }}
+            photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+            title="Articulated dragon"
+          />
+          <MiniCard
+            link={{ to: "/styleguide" }}
+            photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+            title="Spiral vase in silk PLA, maybe 0.6 nozzle"
+          />
+          <MiniCard link={{ to: "/styleguide" }} note="Hook for the bike helmet" />
+          <MiniCard link={{ to: "/styleguide" }} photo={{ src: planterPhoto, alt: "A green planter" }} />
+        </ul>
       </div>
       <div className="mt-10">
         <Label>

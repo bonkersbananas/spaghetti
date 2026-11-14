@@ -574,6 +574,7 @@ export function ModelCard({
   thumbSrc,
   prefill,
   download,
+  openFile,
   view3d,
   onRemove,
   details,
@@ -593,6 +594,8 @@ export function ModelCard({
   prefill?: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams">;
   /** The sliced file's address, once it is saved. */
   download?: string;
+  /** The kept file: its "Open in Bambu Studio" (a sliced model opens its sliced file). */
+  openFile?: AttemptFileView;
   /** Once sliced and saved: the plate picture opens the 3D view. */
   view3d?: View3d;
   onRemove?: () => void;
@@ -648,6 +651,7 @@ export function ModelCard({
         )
       }
       download={download}
+      openFile={openFile}
       downloadName={slicedName(name)}
       view3d={view3d}
       onRemove={onRemove}
@@ -824,6 +828,7 @@ export default function ModelFileCard({
       prefill={prefill}
       // On a phone an idea's card keeps its width for "About 36 min · 10.6 g": the sliced file is in its settings.
       download={saved && (isDesktop || !raised) ? fileUrl(file.id, "sliced") : undefined}
+      openFile={file}
       view3d={
         saved && canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined
       }

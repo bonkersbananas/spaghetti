@@ -10,7 +10,7 @@
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "none",
-    "run_worker_first": ["/", "/api/*", "/mcp", "/oauth/*", "/.well-known/*"]
+    "run_worker_first": ["/", "/api/*", "/open/*", "/mcp", "/oauth/*", "/.well-known/*"]
   },
   "d1_databases": [
     {

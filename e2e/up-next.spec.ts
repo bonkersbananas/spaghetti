@@ -141,3 +141,61 @@ test("Today shows the first three of the queue, in order, and nothing when it is
   await section.getByRole("link", { name: /Bravo/ }).click();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Bravo");
 });
+
+test("on phones Up next is one compact strip, in queue order, above the inbox", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The strip is the phone's layout.");
+  const queued: string[] = [];
+  for (const title of ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]) {
+    const id = await makeIdea(page, title);
+    queued.push(id);
+    await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
+  }
+  await makeIdea(page, "Plain inbox idea");
+  await page.goto("/ideas");
+  await expect.poll(() => names(page)).toEqual(["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]);
+  await expect(page.getByRole("heading", { level: 2, name: /^Up next/ })).toBeVisible();
+
+  // One row that scrolls sideways, and the inbox starts on the first screen.
+  const strip = upNext(page);
+  const box = await strip.boundingBox();
+  const head = await page.getByRole("heading", { level: 2, name: /^Up next/ }).boundingBox();
+  const viewport = page.viewportSize();
+  // The heading and the strip together take well under a third of the screen.
+  expect(box && head && viewport && box.y + box.height - head.y < viewport.height / 3).toBe(true);
+  const cards = await strip.getByRole("listitem").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
+  expect(new Set(cards.map(Math.round)).size).toBe(1);
+  expect(await strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await expect(page.getByRole("heading", { name: "Plain inbox idea" })).toBeInViewport();
+
+  // A tap opens the idea.
+  await strip.getByRole("link", { name: /Bravo/ }).click();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Bravo");
+  await page.goBack();
+
+  // The menu takes it off Up next.
+  await page.getByRole("button", { name: "Options for Alpha" }).click();
+  await page.getByRole("button", { name: "Take off Up next" }).click();
+  await expect.poll(() => names(page)).toEqual(["Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]);
+  await expect.poll(() => serverQueue(page)).toEqual(["Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]);
+});
+
+test("on desktop Up next stays the featured grid of full cards", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones have the strip.");
+  for (const title of ["One", "Two"]) {
+    const id = await makeIdea(page, title);
+    await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { upNext: true } });
+  }
+  await page.goto("/ideas");
+  await expect.poll(() => names(page)).toEqual(["One", "Two"]);
+  const list = upNext(page);
+  expect(await list.evaluate((el) => getComputedStyle(el).display)).toBe("grid");
+  expect(
+    await list
+      .getByRole("listitem")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().width),
+  ).toBeGreaterThan(200);
+});

@@ -4,7 +4,7 @@ Spaghetti is private to two people. Nothing of the workspace (ideas, builds, pho
 
 ## What anyone can reach
 
-The Worker answers five kinds of address (`src/worker/index.ts`). Everything else is a static file of the build.
+The Worker answers six kinds of address (`src/worker/index.ts`). Everything else is a static file of the build.
 
 | Address | Public? | Why |
 | --- | --- | --- |
@@ -12,6 +12,7 @@ The Worker answers five kinds of address (`src/worker/index.ts`). Everything els
 | App routes (`/today`, `/builds/…`) | yes | The same empty shell (`spa.ts`). It asks `/api/session` first and shows sign-in on a 401. |
 | Static files (`/assets/*`, icons, `/sw.js`, `/bridge/install.sh`) | yes | The build: code, styles, fonts, pictures. No data, names, emails or keys (checked by searching the build). |
 | `/api/*` | **no**, except the list below | Needs a session cookie or an agent token (`requireAuth` in `app.ts`). |
+| `/open/<signed link>/<name>` | yes, with a valid signature | Bambu Studio's own download of one file for ten minutes ([0058](decisions/0058-open-in-bambu-studio-by-a-signed-link.md)): HMAC-signed, one file, read-only; every failure is a 404. |
 | `/mcp` | **no** | A `POST` needs an agent token; `GET` and `DELETE` are a 405. |
 | `/oauth/*`, `/.well-known/oauth-*` | yes | The OAuth protocol for MCP clients (below). |
 | `POST /api/share` | yes | The share target's fallback when no service worker took it: it only redirects to `/share` with the words. |

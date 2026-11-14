@@ -14,6 +14,7 @@ import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
+import { OpenOnlyFile, onlyOpenable } from "@/components/builds/OpenInStudio";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
@@ -603,16 +604,19 @@ function Build({ item }: { item: ItemView }) {
               />
               <NoteLinks note={note} />
               {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
-              {(model || existingTwistId) && (
+              {(model || existingTwistId || onlyOpenable(item.files)) && (
                 <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
-                  <Button
-                    variant="quiet"
-                    icon={TwistIcon}
-                    disabled={readOnly || !user || !twists}
-                    onClick={saveAsTwist}
-                  >
-                    {existingTwistId ? "Twist" : "Save as twist"}
-                  </Button>
+                  {(model || existingTwistId) && (
+                    <Button
+                      variant="quiet"
+                      icon={TwistIcon}
+                      disabled={readOnly || !user || !twists}
+                      onClick={saveAsTwist}
+                    >
+                      {existingTwistId ? "Twist" : "Save as twist"}
+                    </Button>
+                  )}
+                  <OpenOnlyFile files={item.files} />
                 </div>
               )}
             </div>

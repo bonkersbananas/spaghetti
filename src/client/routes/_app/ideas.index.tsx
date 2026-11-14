@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
+import { UpNextStrip } from "@/components/ideas/UpNextStrip";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/_app/ideas/")({
   component: Ideas,
 });
 
-/** Up next is the featured row: fewer, wider cards than the inbox below it. */
+/** Up next on desktop is the featured row: fewer, wider cards than the inbox below it. Phones get UpNextStrip. */
 const upNextGrid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-5 lg:grid-cols-3";
 /** The inbox's grid: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
@@ -142,15 +143,30 @@ function Ideas() {
             </p>
           )}
           {queue.length > 0 && (
-            <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-12 md:mb-16">
-              <ul data-picks className={`${upNextGrid} relative`} aria-label="Up next">
-                <Reflow key={filter ?? "all"}>{queue.map((item, index) => card(item, index))}</Reflow>
-              </ul>
+            <Section
+              id="up-next-heading"
+              title="Up next"
+              size={isDesktop ? "headline" : "title"}
+              count={queue.length}
+              className="mb-8 md:mb-16"
+            >
+              {isDesktop ? (
+                <ul data-picks className={`${upNextGrid} relative`} aria-label="Up next">
+                  <Reflow key={filter ?? "all"}>{queue.map((item, index) => card(item, index))}</Reflow>
+                </ul>
+              ) : (
+                <UpNextStrip
+                  key={filter ?? "all"}
+                  queue={queue}
+                  menuFor={menuFor}
+                  landed={(item) => item.id === landed || arrived.has(item.id)}
+                />
+              )}
             </Section>
           )}
           {rest.length > 0 &&
             (queue.length > 0 ? (
-              <Section id="inbox-heading" title="The rest">
+              <Section id="inbox-heading" title="The rest" size={isDesktop ? "headline" : "title"}>
                 <ul data-picks className={`${grid} relative`} aria-label="Ideas">
                   <Reflow key={filter ?? "all"}>{rest.map((item) => card(item, -1))}</Reflow>
                 </ul>

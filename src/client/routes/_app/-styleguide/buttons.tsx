@@ -1,3 +1,4 @@
+import { OpenInStudio } from "@/components/builds/OpenInStudio";
 import { Button, ButtonLink, IconButton } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
@@ -52,7 +53,18 @@ export function ButtonSection() {
             Keyboard hints: <Kbd keys={["G", "I"]} /> <Kbd keys={["/"]} />
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Computers only: "Open in Bambu Studio" on a card (icon) and beside a page's quiet actions (button). */}
+          <OpenInStudio icon file={SAMPLE_FILE} />
+          <OpenInStudio size="md" file={SAMPLE_FILE} />
+          <span className="text-small text-ink-faint">
+            Open in Bambu Studio: an icon among a card's actions, a quiet button on the page. Absent on phones and
+            tablets.
+          </span>
+        </div>
       </Panel>
     </Section>
   );
 }
+
+const SAMPLE_FILE = { id: "00000000-0000-4000-8000-000000000000", name: "fusilli-knob.gcode.3mf", stored: true };

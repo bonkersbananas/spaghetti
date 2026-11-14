@@ -723,6 +723,15 @@ export const operations: Record<string, Operation> = {
     response: "binary",
     errors: { 404: notFound("file") },
   },
+  "POST /files/:id/open-link": {
+    summary:
+      "A signed link to one .3mf (the file's own, or with `part: sliced` a model's sliced file) that Bambu Studio can fetch without a session, for 10 minutes: `{ url, name, expiresAt }`. People only.",
+    response: z.object({ url: z.string(), name: z.string(), expiresAt: z.number() }),
+    errors: {
+      404: "not_found: there is no .3mf of that file to open.",
+      503: "open_unavailable: the Worker has no key.",
+    },
+  },
   "PUT /files/:id/sliced": {
     summary:
       "Keeps how a model was sliced (or why it couldn't be), with the sliced .gcode.3mf and its plate picture. The app slices in the browser; slicing again replaces it.",
