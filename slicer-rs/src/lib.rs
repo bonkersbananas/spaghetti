@@ -351,6 +351,21 @@ impl Plate {
                     *f = f.min(geom::area2(outer) as f64 / 2.0 / (geom::SCALE * geom::SCALE));
                 }
             }
+            // How far each object's slices reach on the plate and how high, which decide the nozzles that can
+            // print it.
+            let mut reach = vec![[f64::MAX, f64::MAX, f64::MIN, f64::MIN]; objects.len()];
+            let mut tops = vec![0.0f64; objects.len()];
+            for (r, &top) in regions.iter().zip(&layers.top) {
+                for island in &r.islands {
+                    let o = island.object as usize;
+                    tops[o] = tops[o].max(top);
+                    for p in island.outline.iter().flatten() {
+                        let (x, y) = (f64::from(p.x) / geom::SCALE, f64::from(p.y) / geom::SCALE);
+                        let b = &mut reach[o];
+                        *b = [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)];
+                    }
+                }
+            }
             toolchange::Colours::prepare(
                 settings,
                 palette,
@@ -361,6 +376,8 @@ impl Plate {
                     layer_h: &hs,
                     first_island: &first_island,
                     object_boxes: &objects.iter().map(|o| [o.min[0], o.min[1], o.max[0], o.max[1]]).collect::<Vec<_>>(),
+                    object_reach: &reach,
+                    object_tops: &tops,
                 },
             )
         });

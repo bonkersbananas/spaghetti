@@ -138,6 +138,10 @@ pub struct Plate<'a> {
     pub first_island: &'a [f64],
     /// Each object's extent on the plate (min x, min y, max x, max y), where the tower must keep clear of.
     pub object_boxes: &'a [[f64; 4]],
+    /// How far each object's slices reach on the plate (min x, min y, max x, max y) and the top of its last layer,
+    /// which decide the nozzles that can print it.
+    pub object_reach: &'a [[f64; 4]],
+    pub object_tops: &'a [f64],
 }
 
 /// Where the app puts the prime tower when nothing says (`towerSpot` in slice-worker.ts): the first corner of the
@@ -185,9 +189,10 @@ impl Colours {
         used.sort_unstable();
         used.dedup();
         let flush = Flush::of(palette);
-        let extruder_of = filaments::group(palette, &used, &flush);
-        let per_filament = filaments::settings_for(palette, &extruder_of);
-        let k = filaments::extruders(&palette.profiles[0]);
+        let objects: Vec<(usize, [f64; 4], f64)> = (0..object_filament.len())
+            .map(|o| (object_filament[o], plate.object_reach[o], plate.object_tops[o]))
+            .collect();
+        let unprintable = filaments::unprintable(palette, &used, &objects);
 
         // The first layer: the filament whose smallest island is largest first.
         let mut first_order: Vec<usize> = Vec::new();
@@ -208,6 +213,26 @@ impl Colours {
                 first_order.insert(at, f);
             }
         }
+        // Each layer's filaments as Orca's tool ordering lists them when it groups and orders them
+        // (`handle_dontcare_extruder`): the first layer in its order, every later one ascending but for the filament
+        // the layer below ended with, which comes first.
+        let mut listed = layer_filaments.clone();
+        if let Some(l0) = listed.first_mut() {
+            *l0 = first_order.clone();
+        }
+        let mut ended = listed.first().and_then(|l| l.last().copied());
+        for layer in listed.iter_mut().skip(1) {
+            if layer.is_empty() {
+                continue;
+            }
+            if let Some(i) = layer.iter().position(|&f| Some(f) == ended).filter(|&i| i > 0) {
+                layer[..=i].rotate_right(1);
+            }
+            ended = layer.last().copied();
+        }
+        let extruder_of = filaments::group(palette, &listed, &used, &flush, &unprintable);
+        let per_filament = filaments::settings_for(palette, &extruder_of);
+        let k = filaments::extruders(&palette.profiles[0]);
         let orders = order_layers(&layer_filaments, &first_order, &extruder_of, &flush, k);
         let first = orders.iter().find_map(|o| o.first().copied()).unwrap_or(0);
 
@@ -268,14 +293,14 @@ impl Colours {
                     continue;
                 }
                 let e = extruder_of[f];
-                let mut purge = 0.0;
-                if let Some(prev) = in_nozzle[e]
-                    && prev != f
-                {
-                    purge = flush.volume(e, prev, f);
+                // In single precision, as Orca plans the tower's changes.
+                let mut purge = 0.0f32;
+                let pushed_out = in_nozzle[e].filter(|&prev| prev != f);
+                if let Some(prev) = pushed_out {
+                    purge = flush.purge(e, prev, f);
                 }
                 in_nozzle[e] = Some(f);
-                let grab = list_f(p0, "grab_length", e) * 2.4;
+                let grab = (list_f(p0, "grab_length", e) * 2.4) as f32;
                 let purge = (purge - grab).max(0.0);
                 let pv = |key: &str| list_f(&palette.profiles[f], key, 0) as f32;
                 tower.plan_toolchange(
@@ -285,10 +310,16 @@ impl Colours {
                     f,
                     pv("filament_prime_volume"),
                     pv("filament_prime_volume_nc"),
-                    purge as f32,
+                    purge,
                 );
-                let written = if purge < 1e-4 { 0.0 } else { purge.max(MIN_PURGE_VOLUME) };
-                flushed[f] += written;
+                let written = f64::from(if purge < 1e-4 { 0.0 } else { purge.max(MIN_PURGE_VOLUME as f32) });
+                // Orca's G-code processor counts a flush's first nozzle volume to the filament it pushes out of the
+                // nozzle and the rest to the new one.
+                let out = pushed_out.map_or(0.0, |_| written.min(filaments::nozzle_volume(p0, e)));
+                if let Some(prev) = pushed_out {
+                    flushed[prev] += out;
+                }
+                flushed[f] += written - out;
                 flushes.push((g, current, f, written));
                 changes += 1;
                 current = f;
@@ -616,8 +647,9 @@ impl Colours {
         let first_layer = g == 0;
         let temp =
             |s: &Settings| if first_layer { s.first_layer_nozzle_temperature } else { s.nozzle_temperature } as i64;
-        let area = std::f64::consts::PI / 4.0 * sn.filament_diameter * sn.filament_diameter;
-        let purge_length = purge / area;
+        // The filament's section and the flush's length in single precision, as Orca's G-code writer has them.
+        let area = f64::from((std::f64::consts::PI / 4.0 * (sn.filament_diameter * sn.filament_diameter)) as f32);
+        let purge_length = f64::from(purge as f32 / area as f32);
         let feed = |s: &Settings| match (60.0 * list_f(&s.profile, "filament_max_volumetric_speed", 0) / area) as i64 {
             0 => 100,
             f => f,
@@ -1201,72 +1233,7 @@ fn extruder_order(flush: &Flush, e: usize, current: &[usize], next: &[usize], st
         return best;
     }
     // Fewest flushes over every order (a path through all of them from the start).
-    let mut all: Vec<usize> = current.to_vec();
-    let added = match start {
-        Some(s) => match all.iter().position(|&f| f == s) {
-            Some(i) => {
-                all.swap(0, i);
-                false
-            }
-            None => {
-                all.insert(0, s);
-                true
-            }
-        },
-        None => false,
-    };
-    let start_id = start.unwrap_or(all[0]);
-    let n = all.len();
-    let states = 1usize << n;
-    let mut cache = vec![vec![f32::MAX; n]; states];
-    let mut prev = vec![vec![usize::MAX; n]; states];
-    cache[1][0] = 0.0;
-    for state in 0..states {
-        if state & 1 == 0 {
-            continue;
-        }
-        for target in 0..n {
-            if state >> target & 1 == 0 {
-                continue;
-            }
-            for mid in 0..n {
-                if state >> mid & 1 == 0 {
-                    continue;
-                }
-                let from = state - (1 << target);
-                if cache[from][mid] == f32::MAX {
-                    continue;
-                }
-                let t = cache[from][mid] + w(all[mid], all[target]);
-                if cache[state][target] > t {
-                    cache[state][target] = t;
-                    prev[state][target] = mid;
-                }
-            }
-        }
-    }
-    let full = states - 1;
-    let mut cost = f32::MAX;
-    let mut dst = 0;
-    for d in 0..n {
-        if all[d] != start_id && cost > cache[full][d] {
-            cost = cache[full][d];
-            dst = d;
-        }
-    }
-    let mut path = Vec::new();
-    let (mut state, mut point) = (full, dst);
-    while point != usize::MAX {
-        path.push(all[point]);
-        let mid = prev[state][point];
-        state -= 1 << point;
-        point = mid;
-    }
-    if added {
-        path.pop();
-    }
-    path.reverse();
-    path
+    filaments::least_flush_order(flush, e, current, start).0
 }
 
 fn next_permutation(v: &mut [usize]) -> bool {
