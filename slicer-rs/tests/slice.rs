@@ -105,7 +105,7 @@ fn a_cube_becomes_a_file_the_app_reads() {
     assert!(model_settings.contains(r#"<metadata key="gcode_file" value="Metadata/plate_1.gcode"/>"#));
     let inside = entry(&out.file, "Metadata/plate_1.gcode");
     assert_eq!(inside, out.gcode);
-    let md5: String = Md5::digest(&inside).iter().map(|b| format!("{b:02x}")).collect();
+    let md5: String = Md5::digest(&inside).iter().map(|b| format!("{b:02X}")).collect();
     assert_eq!(String::from_utf8(entry(&out.file, "Metadata/plate_1.gcode.md5")).unwrap(), md5);
     let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
     assert!(info.contains(&format!(r#"<metadata key="prediction" value="{}"/>"#, s.total_time.round())));
@@ -1018,9 +1018,9 @@ fn a_setup_made_from_the_apps_settings_slices_as_they_ask() {
     assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
     let lifts = lifts(&gcode);
     assert!(lifts.iter().flat_map(|(_, l)| l).any(|(k, _)| *k == "slope"));
-    // The plate's description: ABS in its colour, and no Bambu tray id for a generic filament.
+    // The plate's description: ABS in its colour, with the id Bambu Studio gives Generic ABS.
     let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
-    assert!(info.contains(r##"<filament id="1" tray_info_idx="" type="ABS" color="#2B6CB0""##), "{info}");
+    assert!(info.contains(r##"<filament id="1" tray_info_idx="GFB99" type="ABS" color="#2B6CB0""##), "{info}");
 }
 
 /// Settings with Orca's normal supports, as the app asks for them (its "normal" support style).
