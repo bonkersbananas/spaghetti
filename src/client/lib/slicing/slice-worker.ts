@@ -489,15 +489,38 @@ function withChoices(slicing: SlicingSettings, chosen: SliceOptions): SlicingSet
 }
 
 /**
- * What the engine is given: an object whose parts print in the filaments its colours were matched to goes in part by
- * part, each its own object where it lies (the engine prints one filament an object).
+ * What the engine is given: an object whose parts print in the filaments its colours were matched to goes in whole
+ * (one object, so a part in the air still sits on what holds it), its parts painted in their filaments as a project's
+ * painted colours are, which Orca's own segmentation prints. Triangles in the object's own filament stay unpainted.
  */
 function engineObjects(objects: Placed[]): Placed[] {
-  return objects.flatMap((object) => {
-    const parts = object.byColour ? partsOf(object) : null;
-    if (!parts) return [object];
-    return parts.map(({ positions, filament }) => ({ name: object.name, positions, extruder: filament }));
+  return objects.map((object) => {
+    if (!object.byColour || !object.parts) return object;
+    const triangles: number[] = [];
+    const codes: string[] = [];
+    for (const part of object.parts) {
+      if (part.extruder === object.extruder) continue;
+      const code = paintCode(part.extruder);
+      for (let t = part.from; t < part.to; t++) {
+        triangles.push(t);
+        codes.push(code);
+      }
+    }
+    if (!triangles.length) return object;
+    const ends: number[] = [];
+    let length = 0;
+    for (const code of codes) ends.push((length += code.length));
+    return {
+      ...object,
+      paint: { triangles: Uint32Array.from(triangles), codes: codes.join(""), ends: Uint32Array.from(ends) },
+    };
   });
+}
+
+/** Orca's code for a whole triangle painted in a filament (paint.ts: states 1 and 2 are one digit, 3 and up two). */
+function paintCode(filament: number): string {
+  if (filament <= 2) return String(filament * 4);
+  return `${(filament - 3).toString(16).toUpperCase()}C`;
 }
 
 /** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
