@@ -137,6 +137,12 @@ pub struct Settings {
     /// (`brim_object_gap`).
     pub brim_width: f64,
     pub brim_object_gap: f64,
+    /// Brim ears (`brim_type` "brim_ears"): round the corners of the first layer's outline, simplified to within
+    /// `brim_ears_detection_length` mm, that turn by more than 180° less `brim_ears_max_angle`; in holes too unless
+    /// `brim_ears_outer_only`.
+    pub brim_ears_max_angle: f64,
+    pub brim_ears_detection_length: f64,
+    pub brim_ears_outer_only: bool,
     /// The brim's flow, a share of its line's (`brim_flow_ratio`).
     pub brim_flow_ratio: f64,
     /// mm a loop stops short of where it started (`seam_gap`, a share of the nozzle), so it doesn't print over its
@@ -601,6 +607,9 @@ impl Settings {
             skirt_distance: p.float("skirt_distance"),
             brim_width: p.float("brim_width"),
             brim_object_gap: p.float("brim_object_gap"),
+            brim_ears_max_angle: p.float("brim_ears_max_angle"),
+            brim_ears_detection_length: p.float("brim_ears_detection_length"),
+            brim_ears_outer_only: p.bool("brim_ears_outer_only"),
             brim_flow_ratio: ratio("brim_flow_ratio"),
             seam_gap: p.float_of("seam_gap", nozzle_diameter),
             only_one_wall_top: p.bool("only_one_wall_top"),
@@ -779,10 +788,12 @@ impl Settings {
             Some("a raft")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
-        } else if !matches!(self.brim_type.as_str(), "auto_brim" | "outer_only" | "no_brim" | "") {
+        } else if !matches!(
+            self.brim_type.as_str(),
+            "auto_brim" | "outer_only" | "inner_only" | "outer_and_inner" | "brim_ears" | "no_brim" | ""
+        ) {
             Some(match self.brim_type.as_str() {
-                "brim_ears" => "brim ears",
-                "inner_only" | "outer_and_inner" => "a brim inside holes",
+                "painted" => "brim ears painted on",
                 _ => "this kind of brim",
             })
         } else {

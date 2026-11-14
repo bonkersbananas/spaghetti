@@ -5,16 +5,45 @@
 //! object's height over how stiff its footprint is (the footprint's second moment of area), with how fast the
 //! printer moves and with how far the material curls, up to 18 mm, and anything under 5 mm is dropped. A tall
 //! object's island too thin to hold on its own (less area than 1.1 mm times its outline) gets a 5 mm brim anyway, as
-//! wide at most as the island. A brim people turn on is the process's width round every island. Either is a band
-//! from `brim_object_gap` off the island's outline, cut where another object (or the edge of a hole in one) is, where
-//! an earlier object's brim already lies and where the supports' lowest layers print, and dropped where it would not
-//! touch its object. Loops fill it a line apart from the outside in, an even number of them.
+//! wide at most as the island. A brim people turn on is the process's width round every island, inside its holes
+//! too or only there when asked; brim ears are discs at the outline's sharp corners (and at the holes' corners that
+//! point into them), the width less the gap and a line in radius. Any of them is a band from `brim_object_gap` off
+//! the island's outline, cut where another object (or the edge of a hole in one) is, where an earlier object's brim
+//! already lies and where the supports' lowest layers print, and dropped where it would not touch its object. Loops
+//! fill it a line apart from the outside in, an even number of them.
 
 use crate::config::Settings;
-use crate::geom::{self, Contour, Pt, Shape, Shapes};
+use crate::geom::{self, Contour, Join, Pt, Shape, Shapes};
 
 /// mm: Orca's `RESOLUTION`, to which the brim's band is simplified and its corners rounded.
 const RESOLUTION: f64 = 0.0125;
+
+/// The sides of a brim ear's disc (Orca's `POLY_SIDE_COUNT`).
+const EAR_SIDES: usize = 24;
+
+/// Which brims the settings ask for (Orca's `brim_type`): round the outside of each island, inside its holes, and
+/// whether as ears at the corners, or as wide as the auto brim makes it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Kind {
+    auto: bool,
+    outer: bool,
+    inner: bool,
+    ears: bool,
+}
+
+impl Kind {
+    fn of(s: &Settings) -> Kind {
+        let ears = s.brim_type == "brim_ears";
+        match s.brim_type.as_str() {
+            "auto_brim" => Kind { auto: true, outer: true, ..Kind::default() },
+            "outer_only" => Kind { outer: true, ..Kind::default() },
+            "inner_only" => Kind { inner: true, ..Kind::default() },
+            "outer_and_inner" => Kind { outer: true, inner: true, ..Kind::default() },
+            _ if ears => Kind { outer: true, inner: !s.brim_ears_outer_only, ears, auto: false },
+            _ => Kind::default(),
+        }
+    }
+}
 
 /// Orca's materials (`MaterialType.cpp`): how well each holds to the plate and its thermal length (mm), the
 /// footprint over which it starts to curl.
@@ -124,8 +153,9 @@ impl Brims {
 pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, s: &Settings) -> Brims {
     let objects = heights.len();
     let mut out = Brims { loops: vec![Vec::new(); objects], area: Vec::new() };
-    let auto = s.brim_type == "auto_brim";
-    if !auto && s.brim_type != "outer_only" {
+    let kind = Kind::of(s);
+    let auto = kind.auto;
+    if !kind.outer && !kind.inner {
         return out;
     }
     let spacing = Settings::spacing(s.first_layer_width, s.first_layer_height);
@@ -149,7 +179,8 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, 
     .fold(0.0, f64::max);
     let fastest = if fastest > 0.0 { fastest } else { 250.0 };
 
-    // Each object's band: from the gap off each island's outline to the brim's width beyond.
+    // Each object's band: from the gap off each island's outline to the brim's width beyond (or to its ears), and
+    // from the gap inside each of its holes to the object's brim width further in (or to the ears there).
     let islands_of = |o: usize| -> Shapes {
         first.iter().zip(owners).filter(|&(_, &k)| k as usize == o).map(|(shape, _)| shape.clone()).collect()
     };
@@ -173,10 +204,25 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, 
                 w = w.min(geom::unsc(b[2] - b[0]).max(geom::unsc(b[3] - b[1])));
             }
             let w = even(w);
-            if w > 0.0 {
-                let inner = geom::offset_round(&vec![vec![island[0].clone()]], gap, RESOLUTION);
-                let outer = geom::offset_round(&inner, w, RESOLUTION);
-                band.extend(geom::difference(&outer, &inner));
+            if kind.outer && w > 0.0 {
+                let outline = vec![vec![island[0].clone()]];
+                if kind.ears {
+                    // Which corners get ears depends on where the outline grown by the gap starts (its simplification
+                    // keeps that point), so it is grown as Orca grows it, by Clipper2.
+                    let inner = geom::offset_c2(&outline, gap, Join::Round(RESOLUTION));
+                    band.extend(geom::difference(&ears(&inner, w - gap - spacing, true, s), &inner));
+                } else {
+                    let inner = geom::offset_round(&outline, gap, RESOLUTION);
+                    band.extend(geom::difference(&geom::offset_round(&inner, w, RESOLUTION), &inner));
+                }
+            }
+            // In the holes, as wide as the object's brim (Orca's `brim_width` there, not the island's), mitred.
+            if kind.inner && width > 0.0 && island.len() > 1 {
+                let holes: Shapes = island[1..].iter().map(|h| vec![h.iter().rev().copied().collect()]).collect();
+                let deep = geom::offset_c2(&holes, -(width + gap), Join::Miter(3.0));
+                let edge = geom::offset_c2(&holes, -gap, Join::Miter(3.0));
+                let outer = if kind.ears { ears(&edge, width - gap - spacing, false, s) } else { edge };
+                band.extend(geom::intersection(&geom::difference(&outer, &deep), &holes));
             }
         }
     }
@@ -184,9 +230,10 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, 
         return out;
     }
     // Near each band: every object's islands grown by the gap, where no brim may go nor one need reach to stay, a
-    // line's width in from the edge of each of their holes, and what the supports' lowest layers print, where no brim
-    // may go either. What lies further off can't change a boolean with the band (`geom::local`), so only the islands
-    // near it are grown.
+    // line's width in from the edge of each of their holes where they get no brim inside them, a line's width round
+    // their outline where they get none outside it, and what the supports' lowest layers print, where no brim may go
+    // either. What lies further off can't change a boolean with the band (`geom::local`), so only the islands near
+    // it are grown.
     let reach = 2.0 * spacing;
     let (bx, by) = (geom::sc(s.bed[0]), geom::sc(s.bed[1]));
     let bed: Shapes = vec![vec![vec![geom::pt(0, 0), geom::pt(bx, 0), geom::pt(bx, by), geom::pt(0, by)]]];
@@ -196,13 +243,22 @@ pub fn brims(first: &Shapes, owners: &[u32], heights: &[f64], support: &Shapes, 
         let near = geom::local(first, geom::inflate(b, reach + gap + spacing));
         *grown = geom::union_all(&[&geom::offset_round(&near, gap, RESOLUTION)]);
         let mut keep_out = grown.clone();
-        for hole in near.iter().flat_map(|island| &island[1..]) {
-            let mut ring = hole.clone();
-            if geom::area2(&ring) < 0 {
-                ring.reverse();
+        if !kind.inner {
+            for hole in near.iter().flat_map(|island| &island[1..]) {
+                let mut ring = hole.clone();
+                if geom::area2(&ring) < 0 {
+                    ring.reverse();
+                }
+                let area: Shapes = vec![vec![ring]];
+                keep_out.extend(geom::difference(&area, &geom::offset(&area, -spacing)));
             }
-            let area: Shapes = vec![vec![ring]];
-            keep_out.extend(geom::difference(&area, &geom::offset(&area, -spacing)));
+        }
+        if !kind.outer {
+            for island in &near {
+                let outline: Shapes = vec![vec![island[0].clone()]];
+                let holes: Shapes = island[1..].iter().map(|h| vec![h.iter().rev().copied().collect()]).collect();
+                keep_out.extend(geom::difference(&geom::offset_c2(&outline, spacing, Join::Miter(3.0)), &holes));
+            }
         }
         keep_out.extend(geom::local(support, b));
         // Nothing where another island or a hole's edge is, nor off the plate.
@@ -260,6 +316,70 @@ fn auto_width(islands: &Shapes, height: f64, adhesion: f64, fastest: f64, therma
         return 0.0;
     }
     width.min(18.0)
+}
+
+/// Brim ears round `areas`' outlines (Orca's `make_brim_ears_auto`): a disc `radius` mm across at each corner of an
+/// outline, simplified to within `brim_ears_detection_length`, that turns more sharply than `brim_ears_max_angle`
+/// allows, outwards (`convex`) or, for a hole's outline, inwards.
+fn ears(areas: &Shapes, radius: f64, convex: bool, s: &Settings) -> Shapes {
+    if radius <= 0.0 {
+        return Vec::new();
+    }
+    let threshold = (180.0 - s.brim_ears_max_angle).to_radians();
+    let mut centres = Vec::new();
+    for area in areas {
+        let mut outline = area[0].clone();
+        if s.brim_ears_detection_length > 0.0 {
+            let mut closed = outline.clone();
+            closed.push(outline[0]);
+            let mut kept = geom::simplify_line(&closed, s.brim_ears_detection_length);
+            // Not below four corners, which surely hold it anyway.
+            if kept.len() > 4 {
+                kept.pop();
+                outline = kept;
+            }
+        }
+        centres.extend(corners(&outline, threshold, convex));
+    }
+    let r = radius * geom::SCALE;
+    let disc: Contour = (0..EAR_SIDES)
+        .map(|i| {
+            let a = 2.0 * std::f64::consts::PI * i as f64 / EAR_SIDES as f64;
+            geom::pt((r * a.cos()).round() as i32, (r * a.sin()).round() as i32)
+        })
+        .collect();
+    centres.into_iter().map(|c| vec![disc.iter().map(|q| geom::pt(q.x + c.x, q.y + c.y)).collect()]).collect()
+}
+
+/// The corners of a ring where it turns left (`convex`, on a counter-clockwise outline) or right by more than
+/// `threshold` radians, as Orca's `convex_points` and `concave_points` find them (from its last point round).
+fn corners(ring: &[Pt], threshold: f64, convex: bool) -> Vec<Pt> {
+    let n = ring.len();
+    if n < 3 {
+        return Vec::new();
+    }
+    let cos_threshold = threshold.next_up().cos();
+    let unit = |x: f64, y: f64| {
+        let l = x.hypot(y);
+        if l > 0.0 { (x / l, y / l) } else { (x, y) }
+    };
+    let mut out = Vec::new();
+    let mut p1 = ring[n - 1];
+    let mut v1 = ((p1.x - ring[n - 2].x) as f64, (p1.y - ring[n - 2].y) as f64);
+    for &p2 in ring {
+        let v2 = ((p2.x - p1.x) as f64, (p2.y - p1.y) as f64);
+        let cross = v1.0 * v2.1 - v1.1 * v2.0;
+        let turns = if convex { cross > 0.0 } else { cross < 0.0 };
+        if turns {
+            let (a, b) = (unit(v1.0, v1.1), unit(v2.0, v2.1));
+            if threshold <= 1e-4 || a.0 * b.0 + a.1 * b.1 < cos_threshold {
+                out.push(p1);
+            }
+        }
+        v1 = v2;
+        p1 = p2;
+    }
+    out
 }
 
 /// Whether an island has less area than 1.1 mm times its outline: too thin to hold on its own.
@@ -416,8 +536,9 @@ fn walk(siblings: &[usize], found: &[Contour], children: &[Vec<usize>], order: &
     }
 }
 
-/// An order to visit points in: for up to four, the shortest path through them, as Orca chains so few exactly
-/// (`chain_segments_exact`, ties going as its search finds them); for more, each next the nearest.
+/// An order to visit points in, as Orca's `chain_points`: for up to four, the shortest path through them, as Orca
+/// chains so few exactly (`chain_segments_exact`, ties going as its search finds them); for more, its multi-fragment
+/// algorithm (`order::chain`).
 fn chain(points: &[Pt]) -> Vec<usize> {
     let n = points.len();
     if n <= 1 {
@@ -425,14 +546,8 @@ fn chain(points: &[Pt]) -> Vec<usize> {
     }
     let d = |a: usize, b: usize| geom::dist(points[a], points[b]);
     if n > 4 {
-        let mut left: Vec<usize> = (1..n).collect();
-        let mut out = vec![0];
-        while !left.is_empty() {
-            let at = out[out.len() - 1];
-            let k = (0..left.len()).min_by(|&x, &y| d(at, left[x]).total_cmp(&d(at, left[y]))).unwrap_or(0);
-            out.push(left.remove(k));
-        }
-        return out;
+        let ends: Vec<(Pt, Pt)> = points.iter().map(|&p| (p, p)).collect();
+        return crate::order::chain(&ends, &vec![true; n], None, false).into_iter().map(|(i, _)| i).collect();
     }
     // States (visited, last, flipped), as Orca's search keeps them: a point flipped is the same point.
     let states = (1usize << n) * n * 2;
@@ -557,6 +672,103 @@ mod tests {
         for q in out[0].iter().flatten() {
             let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
             assert!(!(100.0..=140.0).contains(&x) || !(100.0..=140.0).contains(&y), "the frame's brim at ({x}, {y})");
+        }
+    }
+
+    /// A 40 mm square with a 20 mm square hole, its lowest corner at (100, 100).
+    fn frame() -> Shape {
+        let mut frame = rect(100.0, 100.0, 40.0, 40.0);
+        let mut hole = rect(110.0, 110.0, 20.0, 20.0).remove(0);
+        hole.reverse();
+        frame.push(hole);
+        frame
+    }
+
+    /// Each loop's bounding box, mm.
+    fn boxes(loops: &[Contour]) -> Vec<[f64; 4]> {
+        loops
+            .iter()
+            .map(|c| geom::bbox_of(&vec![c.clone()]))
+            .map(|b| [geom::unsc(b[0]), geom::unsc(b[1]), geom::unsc(b[2]), geom::unsc(b[3])])
+            .collect()
+    }
+
+    #[test]
+    fn ears_hold_the_sharp_corners_and_a_round_part_gets_none() {
+        let s = settings("brim_ears");
+        let spacing = Settings::spacing(s.first_layer_width, s.first_layer_height);
+        let width = (s.brim_width / spacing / 2.0).floor() * spacing * 2.0;
+        let radius = width - s.brim_object_gap - spacing;
+        // A 30 mm square: a disc at each corner, its radius the brim's width less the gap and a line, its loops a line
+        // apart from the outside in, nothing along the middle of the sides.
+        let out = brims(&vec![rect(100.0, 100.0, 30.0, 30.0)], &[0], &[10.0], &Vec::new(), &s).loops;
+        assert!(!out[0].is_empty());
+        for q in out[0].iter().flatten() {
+            let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
+            let corner = [100.0, 130.0].iter().any(|cx| (x - cx).abs() <= radius + 0.11)
+                && [100.0, 130.0].iter().any(|cy| (y - cy).abs() <= radius + 0.11);
+            assert!(corner, "brim at ({x}, {y}) off the corners");
+        }
+        let b = boxes(&out[0]);
+        let outermost = b.iter().filter(|b| (b[2] - b[0] - 2.0 * (radius - spacing / 2.0)).abs() < 0.05).count();
+        assert_eq!(outermost, 4, "one disc's outermost loop at each corner: {b:?}");
+        // The discs stop at the outline grown by the gap.
+        for q in out[0].iter().flatten() {
+            let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
+            assert!(
+                !(x > 100.0 - s.brim_object_gap
+                    && x < 130.0 + s.brim_object_gap
+                    && y > 100.0 - s.brim_object_gap
+                    && y < 130.0 + s.brim_object_gap)
+            );
+        }
+        // A disc 30 mm across has no corner sharp enough.
+        let round: Contour = geom::make_circle(15.0, 0.01)
+            .iter()
+            .map(|q| geom::pt(q.x + geom::sc(115.0), q.y + geom::sc(115.0)))
+            .collect();
+        let out = brims(&vec![vec![round]], &[0], &[10.0], &Vec::new(), &s);
+        assert!(out.loops[0].is_empty() && out.area.is_empty());
+    }
+
+    #[test]
+    fn an_inner_brim_lines_a_hole_and_an_outer_and_inner_one_both_sides() {
+        let spacing = Settings::spacing(Settings::default().first_layer_width, Settings::default().first_layer_height);
+        let lines = |s: &Settings| (s.brim_width / spacing / 2.0).floor() as usize * 2;
+        // Inside only: as many loops along the hole's sides as a brim round the outside has, and one more in each of
+        // its corners, where the band, mitred, is wider (14, as Orca's), all inside the hole, the first the gap and
+        // half a line in from its edge.
+        let s = settings("inner_only");
+        let inner = brims(&vec![frame()], &[0], &[10.0], &Vec::new(), &s).loops;
+        assert_eq!(inner[0].len(), lines(&s) + 4);
+        for b in boxes(&inner[0]) {
+            assert!(b[0] >= 110.0 && b[2] <= 130.0 && b[1] >= 110.0 && b[3] <= 130.0, "{b:?} outside the hole");
+        }
+        let first = boxes(&inner[0])[0];
+        assert!((first[0] - (110.0 + s.brim_object_gap + spacing / 2.0)).abs() < 0.01, "{first:?}");
+        // Both sides: the outer brim's loops, then the hole's.
+        let s = settings("outer_and_inner");
+        let both = brims(&vec![frame()], &[0], &[10.0], &Vec::new(), &s).loops;
+        assert_eq!(both[0].len(), lines(&s) + lines(&s) + 4);
+        let b = boxes(&both[0]);
+        assert!(b[..lines(&s)].iter().all(|b| b[0] < 100.0), "the outside first: {b:?}");
+        assert!(b[lines(&s)..].iter().all(|b| b[0] > 110.0), "then the hole: {b:?}");
+        // Brim ears in a square hole: its corners point out of the hole, so none there.
+        let ears = brims(&vec![frame()], &[0], &[10.0], &Vec::new(), &settings("brim_ears")).loops;
+        assert!(boxes(&ears[0]).iter().all(|b| b[0] < 100.0 || b[2] > 140.0 || b[1] < 100.0 || b[3] > 140.0));
+    }
+
+    #[test]
+    fn a_brim_only_inside_holes_keeps_other_brims_a_line_off_its_outline() {
+        let s = settings("inner_only");
+        let spacing = Settings::spacing(s.first_layer_width, s.first_layer_height);
+        // A frame and a block 1 mm beside it: the block's brim, a ring round the outside of a hole-less part, is
+        // none (inside only), and nothing else lies within a line of the frame's outline.
+        let out = brims(&vec![frame(), rect(141.0, 100.0, 10.0, 10.0)], &[0, 1], &[10.0, 10.0], &Vec::new(), &s);
+        assert!(out.loops[1].is_empty());
+        for q in out.loops[0].iter().flatten() {
+            let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
+            assert!((110.0 + spacing / 2.0..=130.0 - spacing / 2.0).contains(&x), "({x}, {y})");
         }
     }
 
