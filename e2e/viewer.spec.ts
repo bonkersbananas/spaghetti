@@ -72,6 +72,24 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   await page.keyboard.press("End");
   await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
 
+  // Space plays and pauses the build-up from anywhere (not from a focused button); the readout moves only while it plays.
+  const readout = dialog.locator("p.tabular").first();
+  await slider.focus();
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=busy]")).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
+  const paused = await readout.textContent();
+  await page.waitForTimeout(400);
+  expect(await readout.textContent()).toBe(paused);
+  // A step key while playing pauses.
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=busy]")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
+
   // Colouring by feature says what the colours are.
   await dialog.getByRole("radio", { name: "Feature" }).check({ force: true });
   await expect(dialog.getByText("Outer wall")).toBeVisible();

@@ -202,6 +202,19 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     return () => cancelAnimationFrame(animation.current);
   }, [replays, state, count, setLayer]);
 
+  const replay = () => {
+    if (prefersReducedMotion()) return;
+    setBuilding(true);
+    setReplays((n) => n + 1);
+  };
+
+  // Pause where it is: the slider stays on the layer it reached.
+  const pause = () => {
+    cancelAnimationFrame(animation.current);
+    setBuilding(false);
+    follow.current = layer >= count - 1;
+  };
+
   const scrub = (index: number) => {
     cancelAnimationFrame(animation.current);
     setBuilding(false);
@@ -222,6 +235,16 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     if (tag === "INPUT" && type !== "range") return;
     const step = event.shiftKey ? 10 : 1;
     const key = event.key;
+    if (key === " ") {
+      // Space activates a focused button, link or radio, as it does everywhere.
+      if (target?.closest("button, a, summary, [role=button], [role=radio], [role=tab], [role=menuitem]")) return;
+      event.preventDefault();
+      if (!event.repeat && count > 1) {
+        if (building) pause();
+        else replay();
+      }
+      return;
+    }
     let next: number | null = null;
     if (key === "ArrowRight" || key === "ArrowUp") next = layer + step;
     else if (key === "ArrowLeft" || key === "ArrowDown") next = layer - step;
@@ -297,11 +320,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             label="Build it up again"
             size="sm"
             className="bg-cream/90 shadow-soft absolute right-3 bottom-3"
-            onClick={() => {
-              if (prefersReducedMotion()) return;
-              setBuilding(true);
-              setReplays((n) => n + 1);
-            }}
+            onClick={replay}
           />
         )}
         {state === "ready" && summary?.stats.decimated && (
@@ -351,6 +370,8 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             step layers
             <Kbd keys={["Shift"]} className="ml-2" />
             ten at a time
+            <Kbd keys={["Space"]} className="ml-2" />
+            play or pause
           </p>
         </div>
       </div>
