@@ -218,7 +218,7 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     expect(ourFile.gcode).toMatch(/^; model label id: 1$/m);
     expect(ourFile.gcode).toContain("; FEATURE: Prime tower");
 
-    // OrcaSlicer's engine, picked under More, gets the coaster whole, in the object's filament, as before.
+    // OrcaSlicer's engine, picked under More, gets the coaster whole, its two halves painted in their filaments.
     await files.getByRole("button", { name: "Slice with…" }).click();
     const settings = page.getByRole("dialog", { name: "How to slice it" });
     await settings.getByRole("button", { name: /^More/ }).click();
@@ -227,10 +227,10 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     await page.keyboard.press("Escape");
     const engine = await fileOf(page, id);
     expect(engine.slice.status).toBe("sliced");
-    expect(engine.slice.settings.filaments).toHaveLength(1);
+    expect(engine.slice.settings.filaments).toHaveLength(2);
     const engineFile = await slicedFile(engine.id);
-    expect(engineFile.info.match(/<filament id="/g)).toHaveLength(1);
-    expect(engineFile.gcode).not.toContain("; FEATURE: Prime tower");
+    expect(engineFile.info.match(/<filament id="/g)).toHaveLength(2);
+    expect(engineFile.info.match(/<object identify_id="/g)).toHaveLength(1);
   } finally {
     await setDefaults(page, null);
   }

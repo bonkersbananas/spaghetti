@@ -72,6 +72,9 @@ export type SliceMessage =
     }
   | { type: "failed"; slice: FileSlice; png: Blob | null };
 
+/** A project's filament that says no colour: a neutral grey, for its swatch and the picture. */
+const NO_COLOUR = "#8c8c8c"; // design-lint-ignore: a filament's colour is data
+
 /** A filament's colour when nothing says one (the stand-in's first: Orca's own). */
 const FALLBACK_COLOUR = STAND_IN_COLOURS[0];
 /** Plate pictures are drawn at the size Bambu Studio and Orca use. */
@@ -517,7 +520,7 @@ function matchProject(
   }
   const plan = planProject(listed, used, spools, chosen.colours);
   const rows: SliceColour[] = plan.rows.map((row) => ({
-    hex: row.hex ?? "#8c8c8c",
+    hex: row.hex ?? NO_COLOUR,
     name: `Filament ${row.slot}`,
     slot: row.slot,
     material: row.material,
@@ -527,7 +530,11 @@ function matchProject(
     ...(row.chosen ? { chosen: true } : {}),
   }));
   // The project's own colours, for the picture of the plate as it has them.
-  const originalColours = listed.map((filament) => filament.hex ?? "#8c8c8c");
+  const originalColours = listed.map((filament) => filament.hex ?? NO_COLOUR);
+  // OrcaSlicer's engine takes an object made of parts in several filaments whole, its parts painted in theirs.
+  for (const object of objects) {
+    if (new Set(object.parts?.map((part) => part.extruder)).size > 1) object.byColour = true;
+  }
   return { filaments: plan.filaments, rows, originalColours };
 }
 
