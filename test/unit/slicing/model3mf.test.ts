@@ -1,4 +1,4 @@
-import { strToU8, zipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { boundsOf } from "../../../src/shared/slicing/arrange.ts";
 import { readModel3mf } from "../../../src/shared/slicing/model3mf.ts";
@@ -274,6 +274,13 @@ describe("readModel3mf plates", () => {
           .map((v) => Math.round(v)),
       ).toEqual([128, 128]);
     }
+  });
+
+  it("reads a plate when the project's printable area has no readable corner", () => {
+    const files = unzipSync(project(3));
+    const bytes = zipSync({ ...files, "Metadata/project_settings.config": strToU8('{"printable_area":[]}') });
+    const got = read(bytes, 2);
+    expect(boundsOf(got.objects[0]?.positions ?? new Float32Array()).min.map(Math.round)).toEqual([128, 128, 0]);
   });
 
   it("gives a file without plates none", () => {

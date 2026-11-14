@@ -373,7 +373,9 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
 
   // Bambu lays its plates out in a grid, columns left to right and rows going down (y falling), each 1.2 bed
   // sizes from the next: a plate's objects sit at its grid spot, and go back to the first plate's when sliced.
-  const bed = plateArea(settings?.printable_area, undefined);
+  let bed = plateArea(settings?.printable_area, undefined);
+  // A printable area without a readable corner gives no bed size: the X2D's (and Bambu's default) 256 mm does.
+  if (!(bed.maxX > bed.minX && bed.maxY > bed.minY)) bed = plateArea(undefined, undefined);
   const columns = gridColumns(plateList.length);
   const chosen = plateList.find((plate) => plate.index === options.plate) ?? plateList[0];
   const out: ModelObject[] = [];
