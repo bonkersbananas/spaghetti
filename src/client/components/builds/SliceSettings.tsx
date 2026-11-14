@@ -40,7 +40,7 @@ import {
 } from "@shared/slicing/settings.ts";
 import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
-import { nozzleSentence, standInSentence } from "@shared/slicing/words.ts";
+import { standInSentence } from "@shared/slicing/words.ts";
 import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
 import { Fragment, type ReactNode, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
