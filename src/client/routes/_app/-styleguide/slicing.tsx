@@ -391,7 +391,7 @@ export function SlicingSection() {
                     ))}
                   </MetaList>
                 </div>
-                <PlatePicker inSheet plates={many} value={manyPlate} onChange={setManyPlate} className="md:max-w-44" />
+                <PlatePicker inSheet plates={many} value={manyPlate} onChange={setManyPlate} className="max-w-[45%]" />
               </div>
             </Panel>
           </div>

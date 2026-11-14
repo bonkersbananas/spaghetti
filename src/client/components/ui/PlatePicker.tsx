@@ -88,7 +88,7 @@ export function PlatePicker({ plates, value, onChange, disabled, inSheet, classN
         value={picked}
         onChange={choose}
         disabled={disabled}
-        className={cn("max-w-40 md:max-w-72", className)}
+        className={className ?? "max-w-40 md:max-w-72"}
       />
     );
   }
