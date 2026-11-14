@@ -135,6 +135,47 @@ describe("readModel3mf", () => {
     expect(plain?.parts).toBeUndefined();
   });
 
+  it("reads a project's painted colours, as triangles of its object with their codes", () => {
+    // The prism with paint on some triangles: `codes` by triangle, in the mesh's order.
+    const painted = (codes: (string | null)[]) =>
+      MESH.replace(/<triangle ([^/]*)\/>/g, (tag, inner: string) => {
+        const code = codes.shift();
+        return code ? `<triangle ${inner} paint_color="${code}"/>` : tag;
+      });
+    const read = readModel3mf(
+      zip({
+        "3D/3dmodel.model": model(
+          `<resources>
+             <object id="1" type="model">${painted([null, "8", null, "081"])}</object>
+             <object id="7" type="model">${painted(["4", "4", "4", "4"])}</object>
+             <object id="2" type="model">${painted(["0", null, "G8", "4"])}</object>
+             <object id="10" type="model"><components><component objectid="1"/><component objectid="7"/><component objectid="2"/></components></object>
+             <object id="11" type="model">${MESH}</object>
+           </resources>
+           <build><item objectid="10"/><item objectid="11" transform="1 0 0 0 1 0 0 0 1 60 0 0"/></build>`,
+        ),
+        "Metadata/model_settings.config": `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="10">
+    <metadata key="name" value="Painted"/>
+    <part id="1" subtype="normal_part"/>
+    <part id="7" subtype="modifier_part"/>
+    <part id="2" subtype="normal_part"/>
+  </object>
+</config>`,
+      }),
+    );
+    if (typeof read === "string") throw new Error(read);
+    const [object, plain] = read.objects;
+    // The first part's second and fourth triangles, and the second part's last (the object's eighth); the modifier's
+    // paint left out with it, a code that paints nothing (state 0) or isn't one ("G8") left out as Orca leaves it.
+    expect(object?.positions.length).toBe(8 * 9);
+    expect([...(object?.paint?.triangles ?? [])]).toEqual([1, 3, 7]);
+    expect(object?.paint?.codes).toBe("80814");
+    expect([...(object?.paint?.ends ?? [])]).toEqual([1, 4, 5]);
+    expect(plain?.paint).toBeUndefined();
+  });
+
   it("knows a sliced file, and says what it can't read", () => {
     const sliced = readModel3mf(
       zip({

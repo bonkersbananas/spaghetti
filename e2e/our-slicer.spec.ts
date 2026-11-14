@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import {
   brimProject,
+  paintedProject,
   partsProject,
   patternProject,
   raftProject,
@@ -224,6 +225,34 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     const engineFile = await slicedFile(engine.id);
     expect(engineFile.info.match(/<filament id="/g)).toHaveLength(1);
     expect(engineFile.gcode).not.toContain("; FEATURE: Prime tower");
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a painted project is sliced by OrcaSlicer's engine in its colours, ours stepping aside", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    // A Bambu Studio project: a white coaster with a red bow tie painted on its top.
+    const { id, files } = await ideaWithModel(page, "Farfalle coaster", "farfalle.3mf", paintedProject());
+    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do painted colours yet")).toBeVisible({
+      timeout: SLICED,
+    });
+    const file = await fileOf(page, id);
+    expect(file.slice.settings.slicer).toBe("orca");
+    expect(file.slice.fallback).toEqual({ why: "unsupported", what: "painted colours" });
+    expect(file.slice.settings.filaments).toHaveLength(2);
+    // The paint prints: both filaments used, over a prime tower.
+    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+    expect(sliced.ok()).toBe(true);
+    const zip = unzipSync(new Uint8Array(await sliced.body()));
+    const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
+    const used = [...info.matchAll(/<filament id="(\d+)"[^>]*\bused_g="([\d.]+)"/g)].map((match) => Number(match[2]));
+    expect(used).toHaveLength(2);
+    for (const grams of used) expect(grams).toBeGreaterThan(0);
+    expect(strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array())).toContain("; FEATURE: Prime tower");
   } finally {
     await setDefaults(page, null);
   }
