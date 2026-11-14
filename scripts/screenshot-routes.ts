@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
+import { paintedProject, partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -427,6 +427,12 @@ const TWO_TONE = { name: "two-tone-coaster.3mf", bytes: partsProject() };
 const TWO_TONE_IDEA = {
   title: "Two-tone coaster",
   note: "One coaster, half white and half tomato red: the project's two parts, each in its own filament.",
+};
+/** A project with painted colours, which our own slicer can't do yet: OrcaSlicer's engine prints them. */
+const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
+const FARFALLE_IDEA = {
+  title: "Farfalle coaster",
+  note: "A white coaster with a tomato-red bow tie painted on its top in Bambu Studio.",
 };
 const RAFT_IDEA = {
   title: "Ravioli stamp",
@@ -2252,6 +2258,22 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await setSlicingDefaults(page, { slicer: "spaghetti" });
       await ideaWithModel(page, TWO_TONE_IDEA, TWO_TONE, /Sliced by Spaghetti's own slicer/);
+      await sliceSaved(page);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await setSlicingDefaults(page, null);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Ours picked for a project with painted colours: OrcaSlicer's engine prints the paint, and the card says why.
+    name: "idea-model-painted",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setSlicingDefaults(page, { slicer: "spaghetti" });
+      // "Sliced by": whichever slicer made it, so the route runs before paint was read too (a before/after).
+      await ideaWithModel(page, FARFALLE_IDEA, FARFALLE, /Sliced by/);
       await sliceSaved(page);
     },
     beforeShot: modelInView,

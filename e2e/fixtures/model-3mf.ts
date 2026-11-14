@@ -2,8 +2,11 @@ import { strToU8, zipSync } from "fflate";
 
 type Vec = [number, number, number];
 
-/** A box as a 3MF mesh, its lowest corner at `at`, its faces turned outward. */
-function boxMesh([x, y, z]: Vec, [w, d, h]: Vec): string {
+/**
+ * A box as a 3MF mesh, its lowest corner at `at`, its faces turned outward; `paint` gives some of its triangles
+ * painted colours (`paint_color`, Orca's codes), by their index: 2 and 3 are the top.
+ */
+function boxMesh([x, y, z]: Vec, [w, d, h]: Vec, paint: Record<number, string> = {}): string {
   const corners: Vec[] = [
     [x, y, z],
     [x + w, y, z],
@@ -29,7 +32,12 @@ function boxMesh([x, y, z]: Vec, [w, d, h]: Vec): string {
     [1, 6, 5],
   ];
   const vertices = corners.map(([vx, vy, vz]) => `<vertex x="${vx}" y="${vy}" z="${vz}"/>`).join("");
-  const triangles = faces.map(([a, b, c]) => `<triangle v1="${a}" v2="${b}" v3="${c}"/>`).join("");
+  const triangles = faces
+    .map(([a, b, c], index) => {
+      const code = paint[index];
+      return `<triangle v1="${a}" v2="${b}" v3="${c}"${code ? ` paint_color="${code}"` : ""}/>`;
+    })
+    .join("");
   return `<mesh><vertices>${vertices}</vertices><triangles>${triangles}</triangles></mesh>`;
 }
 
@@ -132,6 +140,36 @@ export function tPartsProject(): Uint8Array {
   <plate>
     <metadata key="plater_id" value="1"/>
     <model_instance><metadata key="object_id" value="4"/></model_instance>
+  </plate>
+</config>`;
+  const project = { filament_type: ["PLA", "PLA"], filament_colour: ["#F2EEE4", "#C2412D"] };
+  return zipSync({
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(settings),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+  });
+}
+
+/**
+ * A Bambu Studio or OrcaSlicer project of one coaster with a bow tie painted on its top: each of the top's two
+ * triangles halved along the other diagonal (Orca's code 5 and 9, a split of one side), the front and back quarters
+ * painted in filament 2 (red PLA, 8), the left and right ones left in the coaster's own (0, white PLA). OrcaSlicer's
+ * engine prints the paint, as Orca does; our own slicer steps aside for it.
+ */
+export function paintedProject(): Uint8Array {
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>
+<object id="1" type="model">${boxMesh([116, 116, 0], [24, 24, 3], { 2: "085", 3: "089" })}</object>
+</resources>
+<build><item objectid="1"/></build>
+</model>`;
+  const settings = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="1"><metadata key="name" value="Farfalle coaster"/><metadata key="extruder" value="1"/></object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <model_instance><metadata key="object_id" value="1"/></model_instance>
   </plate>
 </config>`;
   const project = { filament_type: ["PLA", "PLA"], filament_colour: ["#F2EEE4", "#C2412D"] };
