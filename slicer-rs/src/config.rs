@@ -125,7 +125,10 @@ pub struct Settings {
     /// Lateral lattice infill's two angles, degrees (Orca's `lateral_lattice_angle_1` and `_2`): how far from upright
     /// each of its two sets of walls leans.
     pub lateral_lattice_angles: [f64; 2],
+    /// mm the first layer is pulled in against elephant's foot, where it is wide enough (`elephant.rs`).
     pub elephant_foot: f64,
+    /// How many layers Orca pulls in, by less on each (`elefant_foot_compensation_layers`): this pulls in the first.
+    pub elephant_foot_layers: usize,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
     /// mm: gaps and notches in a layer's outline narrower than twice this are closed (`slice_closing_radius`).
@@ -660,6 +663,7 @@ impl Settings {
                 .map(|(key, default)| if p.text(key).is_empty() { default } else { p.float(key) }),
             infill_anchor_max,
             elephant_foot: p.float("elefant_foot_compensation"),
+            elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
             slice_closing_radius: p.float("slice_closing_radius"),
             skirt_distance: p.float("skirt_distance"),
@@ -912,6 +916,9 @@ impl Settings {
         }
         if self.wall_generator == "arachne" {
             out.push("arachne walls printed as classic walls".into());
+        }
+        if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
+            out.push("elephant's foot compensated on the first layer only".into());
         }
         if !matches!(self.ironing_type.as_str(), "no ironing" | "") {
             out.push("no ironing".into());

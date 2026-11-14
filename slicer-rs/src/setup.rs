@@ -153,6 +153,16 @@ mod tests {
     }
 
     #[test]
+    fn elephants_foot_on_more_than_one_layer_is_noted() {
+        // Pulled in on the first layer only, as the X2D's presets ask; Orca would pull in more layers by less each.
+        let note = "elephant's foot compensated on the first layer only";
+        let s = read(r#"{"process": {"elefant_foot_compensation_layers": "3"}}"#).unwrap().settings;
+        assert!(s.fallbacks().iter().any(|f| f == note), "{:?}", s.fallbacks());
+        let s = read("{}").unwrap().settings;
+        assert!(!s.fallbacks().iter().any(|f| f == note), "{:?}", s.fallbacks());
+    }
+
+    #[test]
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
         // The X2D's supports are organic trees, which slice, as the classic slim, strong and hybrid ones do, and
