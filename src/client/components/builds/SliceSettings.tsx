@@ -161,7 +161,8 @@ export function SlicingChoices({
       dense
       plates={projectPlates}
       value={settings.modelPlate ?? projectPlates[0]?.index ?? 1}
-      onChange={(modelPlate) => set({ modelPlate })}
+      // Another plate is another model on the bed: the face chosen for the last one to lie on goes.
+      onChange={(modelPlate) => set({ modelPlate, orientation: null })}
     />
   );
   const recipeGroup = model && recipes.length > 0 && (
@@ -943,6 +944,8 @@ export interface SliceSettingsProps extends SlicingChoicesProps {
   sliced?: string;
   /** What the slice there says of its plate, "1 h 20 · 34 g": shown on the plate it is of. */
   figures?: string;
+  /** The plate those figures are of: the one the slice there was made for (the first when absent). */
+  figuresPlate?: number;
 }
 
 /** The plates of a model's 3MF, with their pictures, for the picker (none for a file with one plate, or that isn't a 3MF). */
@@ -950,6 +953,7 @@ function useProjectPlates(
   file: { id: string; name: string; size: number },
   settings: SlicingSettings,
   figures?: string,
+  figuresPlate?: number,
   enabled = true,
 ): PlateOption[] | undefined {
   const found = usePlates(
@@ -959,30 +963,30 @@ function useProjectPlates(
   );
   return useMemo(() => {
     if (found.status !== "ready") return undefined;
-    const chosen = settings.modelPlate ?? found.plates[0]?.index;
+    const sliced = figuresPlate ?? found.plates[0]?.index;
     return found.plates.map((plate) => ({
       index: plate.index,
       name: plate.name,
       height: plate.height,
       src: plate.src,
       placeholder: plate.placeholder,
-      ...(figures && plate.index === chosen ? { detail: figures } : {}),
+      ...(figures && plate.index === sliced ? { detail: figures } : {}),
     }));
-  }, [found, settings.modelPlate, figures]);
+  }, [found, figuresPlate, figures]);
 }
 
 /**
  * The settings of a model as a desktop panel's body: two columns, so everything shows at once at 1440×900 with no
  * scrolling (the phone's sheet scrolls one column, in the same order).
  */
-export function SliceSettingsPanel({ file, sliced, figures, ...choices }: SliceSettingsProps) {
+export function SliceSettingsPanel({ file, sliced, figures, figuresPlate, ...choices }: SliceSettingsProps) {
   const found = useLying(
     file,
     choices.settings.filaments[0]?.colorHex ?? STAND_IN_COLOURS[0],
     !choices.lying,
     choices.settings.modelPlate,
   );
-  const projectPlates = useProjectPlates(file, choices.settings, figures);
+  const projectPlates = useProjectPlates(file, choices.settings, figures, figuresPlate);
   return (
     <SlicingChoices
       {...choices}
@@ -1006,6 +1010,7 @@ export default function SliceSettingsSheet({
   result,
   sliced,
   figures,
+  figuresPlate,
   ...choices
 }: SliceSettingsProps & {
   open: boolean;
@@ -1020,7 +1025,7 @@ export default function SliceSettingsSheet({
     open && !choices.lying,
     choices.settings.modelPlate,
   );
-  const projectPlates = useProjectPlates(file, choices.settings, figures, open);
+  const projectPlates = useProjectPlates(file, choices.settings, figures, figuresPlate, open);
   const about = (
     <SliceAbout file={file} slice={choices.slice ?? null} sliced={sliced} slicer={choices.settings.slicer} />
   );

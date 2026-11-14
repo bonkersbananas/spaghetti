@@ -807,6 +807,10 @@ export default function ModelFileCard({
     recipes: offered,
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
     ...(plateFigures(prefill) ? { figures: plateFigures(prefill) } : {}),
+    // The figures are of the plate the slice there was made for, not the one just picked.
+    ...(file.slice?.status === "sliced" && slicingOfSlice(file.slice).modelPlate
+      ? { figuresPlate: slicingOfSlice(file.slice).modelPlate }
+      : {}),
   };
   // Its settings: a sheet on phones, a panel beside the page on desktop (but not over the attempt's sheet).
   const summary = slicingSummary(settings);
