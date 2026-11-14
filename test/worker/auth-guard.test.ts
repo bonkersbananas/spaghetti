@@ -3,6 +3,7 @@ import type { NewTokenResponse } from "../../src/shared/agents.ts";
 import { app } from "../../src/worker/app.ts";
 import { mcpRoutes } from "../../src/worker/mcp/index.ts";
 import { oauthEndpoints } from "../../src/worker/oauth/index.ts";
+import { openRoutes } from "../../src/worker/routes/open.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
 
 /**
@@ -21,6 +22,8 @@ const PUBLIC: Record<string, string> = {
   "POST /api/join/options": "joining by invite, only with the invite's token",
   "POST /api/join": "joining by invite, only with the invite's token",
   "POST /api/bridge/pair": "the printer bridge trading a pairing code for its token (rate limited)",
+  "GET /open/:token/:name?":
+    "Bambu Studio's own download of one file: a signed, expiring link made on a signed-in device",
   "GET /mcp": "405: the MCP server is POST only",
   "DELETE /mcp": "405: the MCP server is POST only",
   "GET /.well-known/oauth-protected-resource/:rest{.*}?": "OAuth metadata (RFC 9728)",
@@ -36,7 +39,7 @@ interface Route {
   handler: { length: number };
 }
 
-const routers: Route[] = [...app.routes, ...mcpRoutes.routes, ...oauthEndpoints.routes];
+const routers: Route[] = [...app.routes, ...mcpRoutes.routes, ...oauthEndpoints.routes, ...openRoutes.routes];
 /** Middleware is registered as ALL with a (c, next) handler; anything else answers requests. */
 const endpoints = routers.filter((route) => !(route.method === "ALL" && route.handler.length === 2));
 const key = (route: Route) => `${route.method} ${route.path}`;

@@ -12,6 +12,7 @@ export {
   ArrowDown as MoveDownIcon,
   ArrowElbowDownRight as MoveIntoIcon,
   ArrowRight as ArrowRightIcon,
+  ArrowSquareOut as OpenInAppIcon,
   ArrowsClockwise as SameAgainIcon,
   ArrowsOutCardinal as MoveIcon,
   ArrowUp as MoveUpIcon,
