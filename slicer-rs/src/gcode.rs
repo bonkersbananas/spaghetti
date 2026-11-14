@@ -157,7 +157,13 @@ pub struct Job<'a> {
 impl Job<'_> {
     /// Whether the objects get labels: Orca's label mask has room for 63.
     fn labels(&self) -> bool {
-        self.objects.len() < 64
+        self.plate_objects() < 64
+    }
+
+    /// How many objects the plate has: an object whose parts print in different filaments is one, with one label,
+    /// though it prints as an object for each filament (`parts.rs`).
+    fn plate_objects(&self) -> usize {
+        self.objects.iter().map(|o| o.group as usize + 1).max().unwrap_or(0)
     }
 }
 
@@ -1258,7 +1264,7 @@ fn layer_photo(plan: &LayerPlan, job: &Job, _z: f64) -> String {
         plan.paths.iter().map(|p| job.objects.get(p.object as usize).map_or(0, |o| o.label)).collect();
     printed.sort_unstable();
     printed.dedup();
-    if labels && job.objects.len() > 1 && !printed.is_empty() {
+    if labels && job.plate_objects() > 1 && !printed.is_empty() {
         let ids: Vec<String> = printed.iter().map(u32::to_string).collect();
         let mask = printed.iter().fold(0u64, |m, &label| m | label_bit(job, label));
         photo = format!(
@@ -1273,8 +1279,10 @@ fn layer_photo(plan: &LayerPlan, job: &Job, _z: f64) -> String {
 
 /// An object's bit in the printer's label mask: its place among the plate's labels, smallest first.
 fn label_bit(job: &Job, label: u32) -> u64 {
-    let rank = job.objects.iter().filter(|o| o.label < label).count();
-    1u64 << rank.min(63)
+    let mut smaller: Vec<u32> = job.objects.iter().map(|o| o.label).filter(|&l| l < label).collect();
+    smaller.sort_unstable();
+    smaller.dedup();
+    1u64 << smaller.len().min(63)
 }
 
 /// Eight bytes, least significant first, in base64 (Orca's `encodeBase64` of a label mask).
@@ -1995,7 +2003,8 @@ fn write_note(t: &mut Vec<u8>, note: &Note, job: &Job, w: &mut Writer) {
         Note::Printing(k) | Note::Stopped(k) => {
             let verb = if matches!(note, Note::Printing(_)) { "printing" } else { "stop printing" };
             let name = object(*k).map_or("", |o| o.name.as_str());
-            t.extend_from_slice(format!("; {verb} object {name} id:{k} copy 0\n").as_bytes());
+            let id = object(*k).map_or(*k, |o| o.group);
+            t.extend_from_slice(format!("; {verb} object {name} id:{id} copy 0\n").as_bytes());
         }
         Note::LabelStart(k) => {
             let label = object(*k).map_or(0, |o| o.label);
@@ -2069,6 +2078,7 @@ fn header(t: &mut Vec<u8>, stats: &Stats, job: &Job) {
     if job.labels() {
         let mut labels: Vec<u32> = job.objects.iter().map(|o| o.label).collect();
         labels.sort_unstable();
+        labels.dedup();
         let labels: Vec<String> = labels.iter().map(u32::to_string).collect();
         line(t, &format!("; model label id: {}", labels.join(",")));
     }
@@ -2111,7 +2121,8 @@ fn header(t: &mut Vec<u8>, stats: &Stats, job: &Job) {
     }
     line(t, "; CONFIG_BLOCK_END");
     line(t, "");
-    // Orca writes the widths once for each print region, which here is once for each object.
+    // Orca writes the widths once for each print region, which here is once for each object (an object whose parts
+    // print in different filaments, once for each of them).
     for _ in 0..job.objects.len().max(1) {
         for (what, width) in [
             ("external perimeters", s.outer_wall_width),

@@ -1,6 +1,7 @@
 """Writes the test models: python3 -I make.py (from this folder). bridge.stl: two 10 mm pillars 20 mm apart under
 a 3 mm beam, as three touching boxes, for walls, infill, top and bottom surfaces and a bridge. two-colours.3mf: a
-frame and the square that fills it, in two filaments."""
+frame and the square that fills it, in two filaments. parts.3mf: one object of three parts in two filaments that cut
+into each other."""
 
 import struct
 
@@ -70,3 +71,35 @@ with zipfile.ZipFile("two-colours.3mf", "w", zipfile.ZIP_DEFLATED) as z:
         # A fixed date, so the file is the same each time.
         z.writestr(zipfile.ZipInfo(name, date_time=(2026, 11, 14, 0, 0, 0)), text, zipfile.ZIP_DEFLATED)
 print("two-colours.3mf")
+
+# parts.3mf: one object, a Bambu Studio project, of three parts: a 20 mm slab 4 mm thick (filament 1), a post over its
+# right edge 10 mm tall (filament 2), which cuts into the slab, and a nub sunk into the slab's top (filament 1), which
+# merges with it.
+PARTS = [("slab", 1, [((0, 0, 0), (20, 20, 4))]), ("post", 2, [((15, 7, 0), (23, 13, 10))]), ("nub", 1, [((4, 4, 2), (8, 8, 6))])]
+resources = "".join(f'<object id="{k + 1}" type="model">{mesh_xml(boxes)}</object>' for k, (_, _, boxes) in enumerate(PARTS))
+whole = len(PARTS) + 1
+components = "".join(f'<component objectid="{k + 1}"/>' for k in range(len(PARTS)))
+model = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+    f'<resources>{resources}<object id="{whole}" type="model"><components>{components}</components></object></resources>'
+    f'<build><item objectid="{whole}"/></build></model>\n'
+)
+parts = "".join(
+    f'    <part id="{k + 1}" subtype="normal_part">\n      <metadata key="name" value="{name}"/>\n'
+    f'      <metadata key="extruder" value="{extruder}"/>\n    </part>\n'
+    for k, (name, extruder, _) in enumerate(PARTS)
+)
+settings = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n'
+    f'  <object id="{whole}">\n    <metadata key="name" value="slab and post"/>\n'
+    f'    <metadata key="extruder" value="1"/>\n{parts}  </object>\n</config>\n'
+)
+with zipfile.ZipFile("parts.3mf", "w", zipfile.ZIP_DEFLATED) as z:
+    for name, text in [
+        ("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n'),
+        ("3D/3dmodel.model", model),
+        ("Metadata/model_settings.config", settings),
+    ]:
+        z.writestr(zipfile.ZipInfo(name, date_time=(2026, 11, 14, 0, 0, 0)), text, zipfile.ZIP_DEFLATED)
+print("parts.3mf")

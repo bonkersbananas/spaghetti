@@ -23,7 +23,7 @@ export function CardMenu({
   menu: UpNextMenu;
   name: string;
   item: ItemView;
-  /** On a mini card: a small round button over the photo's top-right corner, not under the card. */
+  /** On a mini card: a small round button over the photo's top-right corner, not under the card; with a mouse it shows on hover or focus, on touch screens always. */
   compact?: boolean;
 }) {
   const isDesktop = useIsDesktop();
@@ -107,7 +107,7 @@ export function CardMenu({
       }
       className={
         compact
-          ? "pressable focus-ring touch-target bg-veil text-on-veil absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-md"
+          ? "pressable focus-ring touch-target bg-veil text-on-veil absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-md [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:transition-opacity [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/mini:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-hover/mini:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:data-[state=open]:opacity-100"
           : "pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
       }
     >

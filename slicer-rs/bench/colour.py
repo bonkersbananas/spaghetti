@@ -6,10 +6,12 @@ tool changes, flushing and prime tower can be compared with ours.
 
 Writes <out>/block.stl and <out>/letter.stl, centred on the plate. Each is built from square cells on one grid, so
 the two meshes are closed and share their walls exactly: tops and bottoms are a cell's two triangles, walls run
-between a filled cell and an empty one."""
+between a filled cell and an empty one. With --project, also <out>/block-and-s.3mf: a project with the two as parts
+of one object, the block in filament 1 and the S in filament 2 (each part's `extruder` in model_settings.config)."""
 
 import struct
 import sys
+import zipfile
 
 BED = 256.0
 # The S, row by row from the back (largest y) to the front.
@@ -51,6 +53,63 @@ def write(path, name, tris, dx, dy):
             f.write(b"\0\0")
 
 
+def mesh_xml(tris, dx, dy):
+    """A 3MF <mesh> of `tris`, moved by (dx, dy), its corners shared between triangles."""
+    index, vertices, triangles = {}, [], []
+    for t in tris:
+        ids = []
+        for x, y, z in t:
+            key = (x + dx, y + dy, z)
+            if key not in index:
+                index[key] = len(vertices)
+                vertices.append(key)
+            ids.append(index[key])
+        triangles.append(ids)
+    v = "".join(f'<vertex x="{x:g}" y="{y:g}" z="{z:g}"/>' for x, y, z in vertices)
+    t = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in triangles)
+    return f"<mesh><vertices>{v}</vertices><triangles>{t}</triangles></mesh>"
+
+
+def project(path, parts, dx, dy):
+    """A Bambu Studio or Orca project of one object whose parts are `parts`, part k printing in filament k + 1."""
+    resources = "".join(f'<object id="{k + 1}" type="model">{mesh_xml(tris, dx, dy)}</object>' for k, tris in enumerate(parts))
+    whole = len(parts) + 1
+    components = "".join(f'<component objectid="{k + 1}"/>' for k in range(len(parts)))
+    model = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+        f'<resources>{resources}<object id="{whole}" type="model"><components>{components}</components></object></resources>'
+        f'<build><item objectid="{whole}"/></build></model>'
+    )
+    names = ["Block", "S"]
+    part_settings = "".join(
+        f'<part id="{k + 1}" subtype="normal_part"><metadata key="name" value="{names[k] if k < len(names) else k + 1}"/>'
+        f'<metadata key="extruder" value="{k + 1}"/></part>'
+        for k in range(len(parts))
+    )
+    settings = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<config>'
+        f'<object id="{whole}"><metadata key="name" value="Block with an S"/><metadata key="extruder" value="1"/>{part_settings}</object>'
+        f'<plate><metadata key="plater_id" value="1"/><model_instance><metadata key="object_id" value="{whole}"/></model_instance></plate>'
+        "</config>"
+    )
+    types = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>'
+    )
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+        "</Relationships>"
+    )
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", types)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("3D/3dmodel.model", model)
+        z.writestr("Metadata/model_settings.config", settings)
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -70,6 +129,8 @@ def main():
     dx, dy = (BED - side) / 2, (BED - side) / 2
     write(f"{out}/block.stl", "a block with an S cut through it", mesh(block, cell, height), dx, dy)
     write(f"{out}/letter.stl", "the S", mesh(letter, cell, height), dx, dy)
+    if "--project" in args:
+        project(f"{out}/block-and-s.3mf", [mesh(block, cell, height), mesh(letter, cell, height)], dx, dy)
     print(f"block {side:g} x {side:g} x {height:g} mm, the S {cols * cell:g} x {rows * cell:g} mm")
 
 

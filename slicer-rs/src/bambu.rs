@@ -435,6 +435,7 @@ mod tests {
         crate::Object {
             name: "model.stl".into(),
             label: 1,
+            group: 0,
             min,
             max,
             first_layer: [min[0], min[1], max[0], max[1]],

@@ -1307,8 +1307,9 @@ fn two_filaments_on_one_nozzle_flush_between_them() {
     assert!(!gcode.contains(";Multi extruder pre"));
 }
 
-#[test]
-fn parts_of_one_object_in_different_filaments_are_refused() {
+/// A project of one object, "two parts": two tetrahedra 10 mm on a side, the second 20 mm right of the first (or
+/// `overlap` mm less, into it), the first part in filament 1 and the second in filament 2.
+fn two_part_object(overlap: f32) -> Vec<u8> {
     let mut w = zip::Writer::default();
     let cube = |at: f32| {
         format!(
@@ -1319,18 +1320,126 @@ fn parts_of_one_object_in_different_filaments_are_refused() {
     let model = format!(
         r#"<model unit="millimeter"><resources><object id="1" type="model">{}</object><object id="2" type="model">{}</object><object id="3" type="model"><components><component objectid="1"/><component objectid="2"/></components></object></resources><build><item objectid="3" transform="1 0 0 0 1 0 0 0 1 100 100 0"/></build></model>"#,
         cube(0.0),
-        cube(20.0)
+        cube(20.0 - overlap)
     );
     let settings = r#"<config><object id="3"><metadata key="name" value="two parts"/><part id="1" subtype="normal_part"><metadata key="extruder" value="1"/></part><part id="2" subtype="normal_part"><metadata key="extruder" value="2"/></part></object></config>"#;
     w.add("3D/3dmodel.model", model.as_bytes(), 6);
     w.add("Metadata/model_settings.config", settings.as_bytes(), 6);
-    let file = w.finish();
+    w.finish()
+}
+
+#[test]
+fn parts_of_one_object_print_in_their_filaments() {
+    let file = two_part_object(0.0);
     let input = || Input { name: "parts.3mf", bytes: &file };
     let two = setup::read(TWO_FILAMENTS).unwrap().settings;
-    let refused = slice(&[input()], &two, &Options::default()).err();
-    assert_eq!(refused, Some(Error::Unsupported("parts of one object in different filaments")));
+    let out = slice(&[input()], &two, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    // Each part in its filament, over the prime tower, as Orca prints an object of two regions.
+    assert!(out.stats.filaments.iter().all(|f| f.volume > 0.0), "{:?}", out.stats.filaments);
+    assert!(out.stats.tool_changes > 0);
+    let walls: Vec<Option<usize>> =
+        tools_and_labels(&gcode).windows(2).filter(|w| w[0].2 == "; FEATURE: Outer wall").map(|w| w[1].0).collect();
+    assert!(walls.contains(&Some(0)) && walls.contains(&Some(1)), "{walls:?}");
+    // One object, with one label and one name, whichever filament prints it.
+    assert!(gcode.contains("\n; model label id: 1\n"));
+    assert!(tools_and_labels(&gcode).iter().all(|(_, label, _)| label.is_none_or(|l| l == 1)));
+    assert!(gcode.contains("; printing object two parts id:0 copy 0"));
+    assert!(!gcode.contains(" id:1 copy 0"));
+    let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+    assert_eq!(info.matches("<object identify_id=").count(), 1, "{info}");
+    // Supports for it are left to Orca's engine for now.
+    let mut supported = two.clone();
+    supported.enable_support = true;
+    let refused = slice(&[input()], &supported, &Options::default()).err();
+    assert_eq!(refused, Some(Error::Unsupported("supports for an object whose parts print in different filaments")));
     // With one filament, all of it prints in that one, as Orca prints it.
-    assert!(slice(&[input()], &Settings::default(), &Options::default()).is_ok());
+    let one = slice(&[input()], &Settings::default(), &Options::default()).unwrap();
+    assert_eq!(one.stats.tool_changes, 0);
+}
+
+#[test]
+fn a_later_part_cuts_into_the_one_before() {
+    // The second part reaches 7 mm into the first, a third of the first's volume: the first gives way there, as Orca
+    // has the later part win, and the second prints all of itself.
+    let two = setup::read(TWO_FILAMENTS).unwrap().settings;
+    let apart = slice(&[Input { name: "parts.3mf", bytes: &two_part_object(0.0) }], &two, &Options::default());
+    let into = slice(&[Input { name: "parts.3mf", bytes: &two_part_object(17.0) }], &two, &Options::default());
+    let (apart, into) = (apart.unwrap().stats, into.unwrap().stats);
+    let printed = |s: &spaghetti_slicer::Stats, k: usize| {
+        let f = &s.filaments[k];
+        f.volume - f.flush - f.tower
+    };
+    assert!(printed(&into, 0) < printed(&apart, 0) * 0.9, "{} vs {}", printed(&into, 0), printed(&apart, 0));
+    assert!((printed(&into, 1) - printed(&apart, 1)).abs() < printed(&apart, 1) * 0.02);
+}
+
+#[test]
+fn parts_added_one_by_one_make_one_object() {
+    // A slab in filament 1 and a cube sunk 3 mm into its top in filament 2, added as the parts of one object, then a
+    // block of its own: the cube stays where it is (not dropped onto the bed on its own), and the plate has two
+    // objects, the first in both filaments.
+    let slab = boxes_stl(&[([0.0, 0.0, 0.0], [20.0, 20.0, 5.0])]);
+    let cube = boxes_stl(&[([5.0, 5.0, 2.0], [15.0, 15.0, 12.0])]);
+    let block = boxes_stl(&[([40.0, 0.0, 0.0], [50.0, 10.0, 4.0])]);
+    let two = setup::read(TWO_FILAMENTS).unwrap().settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_part(&Input { name: "slab.stl", bytes: &slab }, 0, true).unwrap();
+    plate.add_part(&Input { name: "cube.stl", bytes: &cube }, 1, false).unwrap();
+    plate.add_part(&Input { name: "block.stl", bytes: &block }, 1, true).unwrap();
+    let out = plate.slice(&two, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    assert!(gcode.contains("\n; max_z_height: 12.00\n"));
+    assert!(gcode.contains("\n; model label id: 1,2\n"));
+    let labelled: Vec<(Option<usize>, Option<u32>)> = tools_and_labels(&gcode)
+        .windows(2)
+        .filter(|w| w[0].2 == "; FEATURE: Outer wall")
+        .map(|w| (w[1].0, w[1].1))
+        .collect();
+    for want in [(Some(0), Some(1)), (Some(1), Some(1)), (Some(1), Some(2))] {
+        assert!(labelled.contains(&want), "no outer wall in T{:?} of object {:?}", want.0, want.1);
+    }
+    assert!(!labelled.contains(&(Some(0), Some(2))));
+}
+
+#[test]
+fn seams_hide_where_an_objects_parts_meet() {
+    // A slab in filament 1 and a cube in filament 2 reaching 5 mm into its back, as parts of one object, with seams at
+    // the back: each part's outer walls start in the join, where the other part covers them (Orca's points embedded
+    // in the object's slice come first), not at the back where back seams would go.
+    let slab = boxes_stl(&[([100.0, 100.0, 0.0], [120.0, 120.0, 4.0])]);
+    let cube = boxes_stl(&[([105.0, 115.0, 0.0], [115.0, 125.0, 4.0])]);
+    let setup = r##"{"filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"], "process": {"seam_position": "back"}}"##;
+    let settings = setup::read(setup).unwrap().settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_part(&Input { name: "slab.stl", bytes: &slab }, 0, true).unwrap();
+    plate.add_part(&Input { name: "cube.stl", bytes: &cube }, 1, false).unwrap();
+    let out = plate.slice(&settings, &Options { arrange: false, ..Options::default() }).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    // Where each outer wall starts, with its tool.
+    let (mut at, mut feature, mut begun) = ((0.0f64, 0.0f64), "", false);
+    let mut starts: Vec<(Option<usize>, f64)> = Vec::new();
+    for (tool, _, line) in tools_and_labels(&gcode) {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            (feature, begun) = (f, false);
+            continue;
+        }
+        if !line.starts_with("G1 ") {
+            continue;
+        }
+        let word = |c: char| line.split_whitespace().find_map(|w| w.strip_prefix(c)?.parse::<f64>().ok());
+        let to = (word('X').unwrap_or(at.0), word('Y').unwrap_or(at.1));
+        if feature == "Outer wall" && !begun && word('E').is_some_and(|e| e > 0.0) && to != at {
+            starts.push((tool, at.1));
+            begun = true;
+        }
+        at = to;
+    }
+    assert!(starts.iter().any(|s| s.0 == Some(0)) && starts.iter().any(|s| s.0 == Some(1)), "{starts:?}");
+    // The join runs at y = 115 to 120: the slab's walls start in its notch there, the cube's on its front side.
+    for (tool, y) in starts {
+        assert!(y < 116.0, "an outer wall in T{tool:?} starts at y = {y}");
+    }
 }
 
 #[test]

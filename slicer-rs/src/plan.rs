@@ -132,20 +132,21 @@ pub fn plan_layer_of(
     s: &Settings,
 ) -> LayerPlan {
     let takes = |o: u32| only.is_none_or(|only| only.get(o as usize).copied().unwrap_or(false));
-    // Each object's layer below, where it differs from this one (where it doesn't, nothing hangs).
+    // Each object's layer below (all of its regions: by group), where it differs from this one (where it doesn't,
+    // nothing hangs).
     let mut below: Vec<Option<Below>> = Vec::new();
     if let Some(lower) = lower
         && i > 0
         && (s.detect_overhang_wall || s.overhang_speed)
     {
-        let objects = r.islands.iter().map(|island| island.object as usize + 1).max().unwrap_or(0);
-        below = (0..objects as u32)
-            .map(|o| {
-                let here: Shapes = r.islands.iter().filter(|i| i.object == o).map(|i| i.outline.clone()).collect();
+        let groups = r.islands.iter().map(|island| island.group as usize + 1).max().unwrap_or(0);
+        below = (0..groups as u32)
+            .map(|g| {
+                let here: Shapes = r.islands.iter().filter(|i| i.group == g).map(|i| i.outline.clone()).collect();
                 if here.is_empty() {
                     return None;
                 }
-                let under = lower.slice_of(o);
+                let under = lower.slice_of(g);
                 (under != here).then(|| Below::new(&under, s))
             })
             .collect();
@@ -156,9 +157,9 @@ pub fn plan_layer_of(
             return Vec::new();
         }
         let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
-        let under = below.get(island.object as usize).and_then(Option::as_ref);
-        let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
-        let seams = r.seams.get(island.object as usize);
+        let under = below.get(island.group as usize).and_then(Option::as_ref);
+        let trees = r.lightning.get(island.group as usize).map_or(&[][..], Vec::as_slice);
+        let seams = r.seams.get(island.group as usize);
         island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, trees, seams, (at, rising), s)
     };
     let mut per_island: Vec<Vec<Path>> = (0..r.islands.len()).map(|k| island_at(k, None, false)).collect();

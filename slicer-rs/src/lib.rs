@@ -23,6 +23,7 @@ pub mod monotonic;
 pub mod order;
 pub mod overhang;
 pub mod pack;
+pub mod parts;
 pub mod plan;
 pub mod png;
 pub mod preheat;
@@ -63,6 +64,9 @@ pub struct Object {
     /// The id the printer knows it by: in the header's label list, the M624/M625 labels around its moves and the
     /// plate's object list (1, 2, 3…; Orca uses its own internal ids).
     pub label: u32,
+    /// Which of the plate's objects it is (0, 1, 2…): an object whose parts print in different filaments prints as
+    /// one of these for each filament (`parts.rs`), and they share their object's group, name, label and box.
+    pub group: u32,
     /// mm on the plate: the lowest corner of its bounding box, then the highest.
     pub min: [f64; 3],
     pub max: [f64; 3],
@@ -73,11 +77,20 @@ pub struct Object {
 }
 
 impl Object {
-    fn from_mesh(index: usize, m: &Mesh) -> Object {
-        let b = m.bounds();
+    /// The `group`th object on the plate, from the meshes of its parts.
+    fn of_group(group: usize, parts: &[&Mesh]) -> Object {
+        let mut b = mesh::Bounds { min: [f64::INFINITY; 3], max: [f64::NEG_INFINITY; 3] };
+        for m in parts {
+            let p = m.bounds();
+            for k in 0..3 {
+                b.min[k] = b.min[k].min(p.min[k]);
+                b.max[k] = b.max[k].max(p.max[k]);
+            }
+        }
         Object {
-            name: m.name.clone(),
-            label: index as u32 + 1,
+            name: parts.first().map(|m| m.name.clone()).unwrap_or_default(),
+            label: group as u32 + 1,
+            group: group as u32,
             min: b.min,
             max: b.max,
             first_layer: [b.min[0], b.min[1], b.max[0], b.max[1]],
@@ -205,12 +218,21 @@ pub fn slice(inputs: &[Input], settings: &Settings, options: &Options) -> Result
     plate.slice(settings, options)
 }
 
-/// Keeps the meshes (and their filaments) where `keep` says.
-fn retain_by(meshes: &mut Vec<Mesh>, filaments: &mut Vec<usize>, keep: &[bool]) {
+/// Keeps the meshes (and their filaments and objects) where `keep` says, the objects then numbered from 0 again.
+fn retain_by(meshes: &mut Vec<Mesh>, filaments: &mut Vec<usize>, groups: &mut Vec<usize>, keep: &[bool]) {
     let mut k = keep.iter();
     meshes.retain(|_| k.next().copied().unwrap_or(true));
     let mut k = keep.iter();
     filaments.retain(|_| k.next().copied().unwrap_or(true));
+    let mut k = keep.iter();
+    groups.retain(|_| k.next().copied().unwrap_or(true));
+    let mut seen: Vec<usize> = Vec::new();
+    for g in groups.iter_mut() {
+        *g = seen.iter().position(|&s| s == *g).unwrap_or_else(|| {
+            seen.push(*g);
+            seen.len() - 1
+        });
+    }
 }
 
 /// Models read from their files, not yet laid out or sliced. Adding the files one at a time lets each file's bytes
@@ -220,9 +242,10 @@ pub struct Plate {
     meshes: Vec<Mesh>,
     /// Each mesh's filament (0-based).
     filaments: Vec<usize>,
+    /// Which object each mesh is of: a project's object whose parts print in different filaments comes as a mesh
+    /// for each part.
+    groups: Vec<usize>,
     project: bool,
-    /// Whether an object's parts print in different filaments (a project's).
-    mixed_parts: bool,
     /// Whether a model came with no word of its filament (an STL, or a 3MF that isn't a project, added without one).
     unassigned: bool,
     title: Option<String>,
@@ -242,15 +265,17 @@ impl Plate {
         if input.bytes.starts_with(b"PK\x03\x04") {
             let model = threemf::read(input.bytes)?;
             self.project |= model.project;
-            self.mixed_parts |= model.mixed_parts;
             self.unassigned |= filament.is_none() && !model.project;
             self.filaments.extend(model.filaments.iter().map(|&f| filament.unwrap_or(f)));
+            let next = self.groups.iter().map(|&g| g + 1).max().unwrap_or(0);
+            self.groups.extend(model.groups.iter().map(|&g| next + g));
             self.meshes.extend(model.meshes);
         } else {
             let mut m = mesh::read_stl(name, input.bytes)?;
             let n = m.vertices.len();
             mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], true);
             self.meshes.push(m);
+            self.groups.push(self.groups.iter().map(|&g| g + 1).max().unwrap_or(0));
             self.unassigned |= filament.is_none();
             self.filaments.push(filament.unwrap_or(0));
         }
@@ -259,30 +284,59 @@ impl Plate {
         Ok(())
     }
 
+    /// One part of an object made of parts (an STL; a 3MF's objects all become parts), printing in filament
+    /// `filament` (0-based): with `first`, of a new object, else of the object of the part added just before. An
+    /// object's parts stay where they are against each other (the object goes onto the bed as a whole), and print as
+    /// Orca prints an object's parts: each in its filament, the later one where two overlap.
+    pub fn add_part(&mut self, input: &Input, filament: usize, first: bool) -> Result<(), Error> {
+        let t0 = now();
+        let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
+        let meshes = if input.bytes.starts_with(b"PK\x03\x04") {
+            threemf::read(input.bytes)?.meshes
+        } else {
+            let mut m = mesh::read_stl(name, input.bytes)?;
+            let n = m.vertices.len();
+            // Its heights as Orca holds a part's, not dropped onto the bed on its own.
+            mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], false);
+            vec![m]
+        };
+        let group = match self.groups.last() {
+            Some(&g) if !first => g,
+            _ => self.groups.iter().map(|&g| g + 1).max().unwrap_or(0),
+        };
+        for m in meshes {
+            self.meshes.push(m);
+            self.groups.push(group);
+            self.filaments.push(filament);
+        }
+        self.title.get_or_insert_with(|| name.to_string());
+        self.read_ms += now() - t0;
+        Ok(())
+    }
+
     /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
-        let Plate { mut meshes, mut filaments, project, mixed_parts, unassigned, title, read_ms } = self;
+        let Plate { mut meshes, mut filaments, mut groups, project, unassigned, title, read_ms } = self;
         filaments.resize(meshes.len(), 0);
+        if groups.len() != meshes.len() {
+            groups = (0..meshes.len()).collect();
+        }
         let t0 = now();
         if let Some(what) = settings.unsupported() {
             return Err(Error::Unsupported(what));
         }
-        // With several filaments, each object prints in the one its file or its caller gives it: parts of it in others
-        // it can't print yet, and models that say nothing would all print in the first (with one filament, everything
-        // prints in it, as Orca prints it).
-        if settings.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
-            if mixed_parts {
-                return Err(Error::Unsupported("parts of one object in different filaments"));
-            }
-            if unassigned {
-                return Err(Error::Unsupported("several filaments for models that don't say which they print in"));
-            }
+        // With several filaments, each object prints in the one its file or its caller gives it (a project's object
+        // its parts each in theirs): models that say nothing would all print in the first (with one filament,
+        // everything prints in it, as Orca prints it).
+        let several = settings.palette.as_ref().is_some_and(|p| p.profiles.len() > 1);
+        if several && unassigned {
+            return Err(Error::Unsupported("several filaments for models that don't say which they print in"));
         }
         if meshes.iter().all(|m| m.triangles.is_empty()) {
             return Err(Error::NoModel);
         }
         let keep: Vec<bool> = meshes.iter().map(|m| !m.triangles.is_empty()).collect();
-        retain_by(&mut meshes, &mut filaments, &keep);
+        retain_by(&mut meshes, &mut filaments, &mut groups, &keep);
         let scaled = options.scale > 0.0 && (options.scale - 100.0).abs() > 1e-9;
         for m in &mut meshes {
             m.orient();
@@ -291,25 +345,41 @@ impl Plate {
             }
         }
         if (options.arrange && !project) || scaled {
-            mesh::arrange(&mut meshes, settings.bed, settings.max_height)?;
+            mesh::arrange(&mut meshes, &groups, settings.bed, settings.max_height)?;
         } else {
-            mesh::drop_to_bed(&mut meshes);
+            mesh::drop_to_bed(&mut meshes, &groups);
             // Kept where they are, as Orca keeps them: one partly off the plate stops the slice, and those wholly off
-            // it (on a project's other plates) are left out.
+            // it (on a project's other plates) are left out. An object's parts are where the object is.
             let places: Vec<mesh::OnPlate> = meshes.iter().map(|m| mesh::on_plate(m, settings.bed)).collect();
+            let place_of = |g: usize| {
+                let mine: Vec<mesh::OnPlate> =
+                    places.iter().zip(&groups).filter(|&(_, &k)| k == g).map(|(p, _)| *p).collect();
+                if mine.iter().all(|p| *p == mine[0]) { mine[0] } else { mesh::OnPlate::Partly }
+            };
+            let places: Vec<mesh::OnPlate> = groups.iter().map(|&g| place_of(g)).collect();
             if places.contains(&mesh::OnPlate::Partly) {
                 return Err(Error::OffPlate);
             }
             let keep: Vec<bool> = places.iter().map(|p| *p == mesh::OnPlate::Inside).collect();
-            retain_by(&mut meshes, &mut filaments, &keep);
+            retain_by(&mut meshes, &mut filaments, &mut groups, &keep);
             if meshes.is_empty() {
                 return Err(Error::OffPlate);
             }
         }
         // In spiral vase mode Orca prints one object, and stops the slice when the plate has more: so the app's
-        // fallback, Orca's engine, says why.
-        if settings.spiral_mode && meshes.len() > 1 {
+        // fallback, Orca's engine, says why. An object made of parts there is left to Orca's engine too.
+        let objects_on_plate = groups.iter().map(|&g| g + 1).max().unwrap_or(0);
+        if settings.spiral_mode && objects_on_plate > 1 {
             return Err(Error::Unsupported("several objects in spiral vase mode"));
+        }
+        if settings.spiral_mode && meshes.len() > 1 {
+            return Err(Error::Unsupported("an object made of parts in spiral vase mode"));
+        }
+        // Each object prints as a region for each filament its parts print in (with one filament, one region).
+        let region_filaments: Vec<usize> = if several { filaments.clone() } else { vec![0; meshes.len()] };
+        let parts = parts::Regions::new(&groups, &region_filaments);
+        if settings.enable_support && parts.mixed() {
+            return Err(Error::Unsupported("supports for an object whose parts print in different filaments"));
         }
         let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
         if height > settings.max_height {
@@ -326,13 +396,25 @@ impl Plate {
         // comes a little closer to its supports on a Benchy and makes every later step a third slower.
         // A spiral vase's layers above its bottom keep their outline's largest loop alone.
         let largest_from = if settings.spiral_mode { spiral::first_layer(&layers, settings) } else { usize::MAX };
-        let (slices, owners) =
+        let (mut slices, mut owners) =
             section::slice(&meshes, &layers, settings.resolution / 2.0, settings.slice_closing_radius, largest_from);
+        // An object's parts in different filaments: each part clipped by the parts after it, those of one filament
+        // merged into a region (`parts.rs`); from here on each region is an object of its own, of its group.
+        parts.assign(&mut slices, &mut owners, &meshes);
         let t2 = now();
-        let mut objects: Vec<Object> = meshes.iter().enumerate().map(|(i, m)| Object::from_mesh(i, m)).collect();
+        // The plate's objects, and one for each region (an object's own, unless its parts print in several filaments).
+        let mut group_objects: Vec<Object> = parts
+            .members
+            .iter()
+            .enumerate()
+            .map(|(g, members)| Object::of_group(g, &members.iter().map(|&m| &meshes[m]).collect::<Vec<_>>()))
+            .collect();
+        // Each shape's object by group, for what Orca works out for whole objects.
+        let group_owners = |owners: &[u32]| if parts.mixed() { parts.groups_of(owners) } else { owners.to_vec() };
         if let Some(first) = slices.first() {
-            first_layers(&mut objects, first, &owners[0]);
+            first_layers(&mut group_objects, first, &group_owners(&owners[0]));
         }
+        let objects: Vec<Object> = parts.group.iter().map(|&g| group_objects[g as usize].clone()).collect();
         // The first layer as sliced, for the brims once the supports are known.
         let first = slices.first().cloned().unwrap_or_default();
         let first_owners = owners.first().cloned().unwrap_or_default();
@@ -342,11 +424,23 @@ impl Plate {
             .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
             .collect();
         let sizes: Vec<(f64, f64)> = objects.iter().map(|o| (o.max[0] - o.min[0], o.max[1] - o.min[1])).collect();
-        let mut regions = region::regions(&slices, &owners, &layers, &centres, settings);
+        let mut regions = region::regions(&slices, &owners, &parts.group, &layers, &centres, settings);
         // Where each wall loop starts, from the objects' outer walls and their surfaces (`seam.rs`). In spiral vase mode
         // Orca starts every loop where the nozzle is instead (`GCode::extrude_loop`), so there are none to place.
         if !settings.spiral_mode {
-            seam::place(&mut regions, &meshes, &layers.slice_z(), &layers.height, settings);
+            // Each object's mesh: all of its parts' (Orca sees an object's seams on its whole model).
+            let whole: Vec<Option<Mesh>> = parts
+                .members
+                .iter()
+                .map(|members| (members.len() > 1).then(|| Mesh::merged(members.iter().map(|&m| &meshes[m]))))
+                .collect();
+            let by_group: Vec<&Mesh> = parts
+                .members
+                .iter()
+                .zip(&whole)
+                .map(|(members, w)| w.as_ref().unwrap_or(&meshes[members[0]]))
+                .collect();
+            seam::place(&mut regions, &by_group, &layers.slice_z(), &layers.height, settings);
         }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {
@@ -354,6 +448,7 @@ impl Plate {
             _ => settings.z_hop_type == "Auto Lift",
         };
         let lift_overhangs = if auto_lift && settings.z_hop > 0.0 {
+            let owners: Vec<Vec<u32>> = owners.iter().map(|o| group_owners(o)).collect();
             lift::Overhangs::find(&slices, &owners, &layers.top, settings.line_width)
         } else {
             lift::Overhangs::default()
@@ -367,14 +462,23 @@ impl Plate {
             Vec::new()
         };
         // Without supports, whether an object needs them, as Orca checks it and warns.
-        let warnings =
-            if settings.enable_support { Vec::new() } else { support_warnings(&regions, &layers, &objects, settings) };
-        // Each object's brim, round its first layer as sliced and out of what the supports' lowest layers print.
-        let heights: Vec<f64> = objects.iter().map(|o| o.max[2] - o.min[2]).collect();
+        let warnings = if settings.enable_support {
+            Vec::new()
+        } else {
+            support_warnings(&regions, &layers, &group_objects, settings)
+        };
+        // Each object's brim, round its first layer as sliced (all of its regions as one) and out of what the
+        // supports' lowest layers print.
+        let heights: Vec<f64> = group_objects.iter().map(|o| o.max[2] - o.min[2]).collect();
         let support_cover: Vec<geom::Shapes> =
             supports.iter().filter_map(|layers| layers.first()).map(support::cover).collect();
         let support_cover = geom::union_all(&support_cover.iter().collect::<Vec<_>>());
-        let brims = brim::brims(&first, &first_owners, &heights, &support_cover, settings);
+        let brims = if parts.mixed() {
+            let (shapes, owners) = parts::group_slices(&first, &parts.groups_of(&first_owners));
+            brim::brims(&shapes, &owners, &heights, &support_cover, settings)
+        } else {
+            brim::brims(&first, &first_owners, &heights, &support_cover, settings)
+        };
         let facts = first_layer_facts(&first, &layers, &brims, settings);
         let facts = with_support(facts, &supports, settings);
         let schedule = schedule(&layers, &supports, objects.len());
@@ -426,7 +530,7 @@ impl Plate {
                 settings,
                 palette,
                 &toolchange::Plate {
-                    object_filament: &filaments,
+                    object_filament: &parts.filament,
                     layer_objects: &layer_objects,
                     layer_z: &zs,
                     layer_h: &hs,
@@ -448,12 +552,35 @@ impl Plate {
             }),
             None => facts,
         };
+        // Each object's brim prints with the first of its regions that the first layer comes to, as Orca prints an
+        // object's brim on its first visit to it.
+        let brim_loops: Vec<Vec<geom::Contour>> = if parts.mixed() {
+            let order = colours.as_ref().and_then(|c| c.orders.first());
+            let rank =
+                |r: usize| order.and_then(|o| o.iter().position(|&f| f == parts.filament[r])).unwrap_or(usize::MAX);
+            let mut owner: Vec<Option<usize>> = vec![None; group_objects.len()];
+            for &r in &first_owners {
+                let (r, g) = (r as usize, parts.group[r as usize] as usize);
+                if owner[g].is_none_or(|o| (rank(r), r) < (rank(o), o)) {
+                    owner[g] = Some(r);
+                }
+            }
+            let mut loops = brims.loops;
+            (0..parts.group.len())
+                .map(|r| {
+                    let g = parts.group[r] as usize;
+                    if owner[g] == Some(r) { std::mem::take(&mut loops[g]) } else { Vec::new() }
+                })
+                .collect()
+        } else {
+            brims.loops
+        };
         let mut frame = bambu::Frame::new(settings.profile.clone(), &facts);
         if let (Some(c), Some(palette)) = (&colours, &settings.palette) {
             c.frame_vars(&mut frame, palette);
         }
         let zs: Vec<f64> = schedule.iter().map(|slot| slot.z).collect();
-        let photos = timelapse_spots(&objects, &zs, settings);
+        let photos = timelapse_spots(&group_objects, &zs, settings);
         let job = gcode::Job {
             settings,
             frame: &frame,
@@ -503,7 +630,7 @@ impl Plate {
                                         l,
                                         (slot.z, h),
                                         &centres,
-                                        &brims.loops,
+                                        &brim_loops,
                                         &here,
                                         spiral.as_ref().map(|st| st.at),
                                         s,
@@ -519,7 +646,7 @@ impl Plate {
                             l,
                             (slot.z, h),
                             &centres,
-                            &brims.loops,
+                            &brim_loops,
                             &here,
                             spiral.as_ref().map(|st| st.at),
                             settings,
@@ -580,7 +707,7 @@ impl Plate {
         let t7 = now();
         let title = title.as_deref().unwrap_or("Model");
         let file =
-            pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title, colours.as_ref());
+            pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &group_objects, settings, title, colours.as_ref());
         let t8 = now();
         Ok(Output {
             file,
@@ -651,12 +778,12 @@ fn timelapse_spots(objects: &[Object], zs: &[f64], s: &Settings) -> Vec<Option<[
     spots
 }
 
-/// Each object's highest layer, if it has any.
+/// Each object's highest layer, if it has any (by group: all of an object's regions).
 fn last_layers(regions: &[region::LayerRegions], objects: usize) -> Vec<Option<usize>> {
     let mut last = vec![None; objects];
     for (l, r) in regions.iter().enumerate() {
         for island in &r.islands {
-            if let Some(last) = last.get_mut(island.object as usize) {
+            if let Some(last) = last.get_mut(island.group as usize) {
                 *last = Some(l);
             }
         }
@@ -665,7 +792,8 @@ fn last_layers(regions: &[region::LayerRegions], objects: usize) -> Vec<Option<u
 }
 
 /// Orca's warning for each object sliced without supports that needs them (`PrintObject::is_support_necessary`, which
-/// runs its trees' overhang detection on the object whatever the support settings).
+/// runs its trees' overhang detection on the object whatever the support settings). `objects` are the plate's, one
+/// for each group.
 fn support_warnings(
     regions: &[region::LayerRegions],
     layers: &section::Layers,

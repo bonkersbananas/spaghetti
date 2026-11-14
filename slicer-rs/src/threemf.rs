@@ -15,8 +15,9 @@ pub struct Model {
     /// Each mesh's filament (0-based), as a project gives it (its object's `extruder`, else its first part's, as the
     /// app counts them); 0 otherwise.
     pub filaments: Vec<usize>,
-    /// Whether an object's parts print in different filaments, which this slicer can't do yet.
-    pub mixed_parts: bool,
+    /// Which of the plate's objects each mesh is of: an object whose parts print in different filaments comes as one
+    /// mesh for each part, in the object's order of them, each in its part's filament.
+    pub groups: Vec<usize>,
 }
 
 type Matrix = [f64; 12];
@@ -166,6 +167,8 @@ struct Info {
     skip_parts: Vec<String>,
     /// The object's filament, 1-based.
     extruder: Option<usize>,
+    /// Each model part's filament (1-based, its own else the object's), by the part's id.
+    part_extruders: HashMap<String, Option<usize>>,
     /// Whether its parts name different filaments.
     mixed: bool,
 }
@@ -219,15 +222,16 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
             };
             let own = extruder_of(before_parts);
             // Each model part's filament: its own, else the object's.
-            let parts: Vec<Option<usize>> = block
+            let parts: Vec<(Option<String>, Option<usize>)> = block
                 .split("<part")
                 .skip(1)
                 .filter(|part| attr(part, "subtype").is_none_or(|s| s == "normal_part"))
-                .map(|part| extruder_of(part).or(own))
+                .map(|part| (attr(part, "id").map(str::to_string), extruder_of(part).or(own)))
                 .collect();
-            let extruder = own.or_else(|| parts.iter().flatten().next().copied());
-            let mixed = parts.iter().any(|p| p.unwrap_or(1) != parts[0].unwrap_or(1));
-            info.insert(id, Info { name, skip_parts, extruder, mixed });
+            let extruder = own.or_else(|| parts.iter().find_map(|p| p.1));
+            let mixed = parts.iter().any(|p| p.1.unwrap_or(1) != parts[0].1.unwrap_or(1));
+            let part_extruders = parts.into_iter().filter_map(|(id, e)| Some((id?, e))).collect();
+            info.insert(id, Info { name, skip_parts, extruder, part_extruders, mixed });
         }
         if let Some(start) = text.find("<plate>") {
             let end = text[start..].find("</plate>").map(|e| start + e).unwrap_or(text.len());
@@ -247,7 +251,8 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         .collect();
     let mut meshes = Vec::new();
     let mut filaments = Vec::new();
-    let mut mixed_parts = false;
+    let mut groups = Vec::new();
+    let mut objects = 0;
     for (id, transform) in items {
         if plate_objects.as_ref().is_some_and(|ids| !ids.contains(&id)) {
             continue;
@@ -265,9 +270,13 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         let mut parts: Vec<(std::ops::Range<usize>, f64)> = Vec::new();
         let mut heights: Vec<f32> = Vec::new();
         let mut settle = true;
+        // Which of the object's parts (its own components, by id) each triangle is of.
+        let mut part_ids: Vec<String> = Vec::new();
+        let mut triangle_part: Vec<usize> = Vec::new();
         // Depth-first through components (at most 8 deep), loading other model files as they are named.
-        let mut stack: Vec<(String, String, Matrix, usize)> = vec![(root_name.clone(), id.clone(), transform, 0)];
-        while let Some((file, object_id, m, depth)) = stack.pop() {
+        let mut stack: Vec<(String, String, Matrix, usize, Option<String>)> =
+            vec![(root_name.clone(), id.clone(), transform, 0, None)];
+        while let Some((file, object_id, m, depth, part)) = stack.pop() {
             if depth > 8 {
                 continue;
             }
@@ -292,15 +301,25 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
             }
             parts.push((base as usize..vertices.len(), m[11] * scale));
             let flip = det(&m) < 0.0;
+            let part_index = match &part {
+                Some(p) => part_ids.iter().position(|q| q == p).unwrap_or_else(|| {
+                    part_ids.push(p.clone());
+                    part_ids.len() - 1
+                }),
+                None => usize::MAX,
+            };
             for t in &object.triangles {
                 let t = [t[0] + base, t[1] + base, t[2] + base];
                 triangles.push(if flip { [t[0], t[2], t[1]] } else { t });
+                triangle_part.push(part_index);
             }
             for (path, child, ct) in object.components.iter().rev() {
                 if item_info.is_some_and(|i| i.skip_parts.contains(child)) {
                     continue;
                 }
-                stack.push((path.clone(), child.clone(), multiply(ct, &m), depth + 1));
+                // The object's own components are its parts; deeper ones belong to theirs.
+                let part = part.clone().or_else(|| Some(child.clone()));
+                stack.push((path.clone(), child.clone(), multiply(ct, &m), depth + 1, part));
             }
         }
         if triangles.is_empty() || vertices.iter().any(|v| !v.iter().all(|c| c.is_finite())) {
@@ -313,18 +332,53 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
             // Orca puts other programs' models on the bed; a project's sit where it has them.
             crate::mesh::settle_heights(&mut vertices, &parts, !project);
         }
-        let name = item_info
-            .and_then(|i| i.name.clone())
-            .or(def_name)
-            .unwrap_or_else(|| format!("Object {}", meshes.len() + 1));
-        meshes.push(Mesh { name, vertices, triangles }.welded());
-        filaments.push(item_info.and_then(|i| i.extruder).map_or(0, |e| e.max(1) - 1));
-        mixed_parts |= item_info.is_some_and(|i| i.mixed);
+        let name =
+            item_info.and_then(|i| i.name.clone()).or(def_name).unwrap_or_else(|| format!("Object {}", objects + 1));
+        let filament = |e: Option<usize>| e.map_or(0, |e| e.max(1) - 1);
+        match item_info.filter(|i| i.mixed && !part_ids.is_empty()) {
+            // Parts in different filaments: each part a mesh of its own, in its filament (the object's own triangles,
+            // if it has any beside its parts, in the object's).
+            Some(info) => {
+                let own = triangle_part.contains(&usize::MAX).then_some((usize::MAX, None));
+                let each = part_ids.iter().enumerate().map(|(k, part)| (k, Some(part)));
+                for (k, part) in own.into_iter().chain(each) {
+                    let mut index: HashMap<u32, u32> = HashMap::new();
+                    let mut part_vertices = Vec::new();
+                    let part_triangles: Vec<[u32; 3]> = triangles
+                        .iter()
+                        .zip(&triangle_part)
+                        .filter(|&(_, &p)| p == k)
+                        .map(|(t, _)| {
+                            t.map(|v| {
+                                *index.entry(v).or_insert_with(|| {
+                                    part_vertices.push(vertices[v as usize]);
+                                    (part_vertices.len() - 1) as u32
+                                })
+                            })
+                        })
+                        .collect();
+                    if part_triangles.is_empty() {
+                        continue;
+                    }
+                    let e = part.and_then(|p| info.part_extruders.get(p).copied().flatten()).or(info.extruder);
+                    meshes
+                        .push(Mesh { name: name.clone(), vertices: part_vertices, triangles: part_triangles }.welded());
+                    filaments.push(filament(e));
+                    groups.push(objects);
+                }
+            }
+            None => {
+                meshes.push(Mesh { name, vertices, triangles }.welded());
+                filaments.push(filament(item_info.and_then(|i| i.extruder)));
+                groups.push(objects);
+            }
+        }
+        objects += 1;
     }
     if meshes.is_empty() {
         return Err(Error::NoModel);
     }
-    Ok(Model { meshes, project, filaments, mixed_parts })
+    Ok(Model { meshes, project, filaments, groups })
 }
 
 fn det(m: &Matrix) -> f64 {
