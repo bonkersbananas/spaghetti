@@ -21,6 +21,9 @@ parallel = ["dep:rayon"]
 
 [dependencies]
 boostvoronoi = "0.12.1"
+# Clipper2, Orca 2.5's polygon engine, ported: the offsets that follow Orca's resolve their paths with it, so their
+# loops come out as Orca's do (geom::union_clipper2).
+clipper2-rs = "0.3.0"
 crc32fast = "1.5.5"
 i_overlay = "9.1.0"
 # Maths functions in plain Rust (musl's), which WebAssembly's standard library uses too: natively it calls the

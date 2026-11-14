@@ -1,6 +1,8 @@
 //! 2D geometry in scaled integers: a point is 0.1 µm (`SCALE` units a millimetre), so a 256 mm plate fits easily in
-//! i32 and boolean operations and offsets are exact. The polygon engine is `i_overlay` (pure Rust, so the same code
-//! builds for WebAssembly). Shapes are an outer contour (counter-clockwise) followed by its holes (clockwise).
+//! i32 and boolean operations and offsets are exact. The polygon engine is `i_overlay`; the offsets that follow Orca
+//! 2.5's, whose engine is Clipper2, resolve their paths with clipper2-rs, a port of Clipper2 (both pure Rust, so the
+//! same code builds for WebAssembly). Shapes are an outer contour (counter-clockwise) followed by its holes
+//! (clockwise).
 
 use i_overlay::core::extract::BooleanExtractionBuffer;
 use i_overlay::core::fill_rule::FillRule;
@@ -240,28 +242,20 @@ pub enum Join {
 /// offset to the last one kept go first (`append_offset_path`); each edge moves along its normal; a corner the
 /// offset goes into gets the crossing of its edges where both are long enough (Orca's `OffsetConcaveCrossing`), else
 /// three points whose loop the union takes out; a corner it goes round is mitred, squared or rounded by `join`; and
-/// what the paths wind round positively is kept.
+/// what the paths wind round positively is kept, as Clipper2 resolves it (`union_clipper2`).
 pub fn offset_c2(shapes: &Shapes, delta: f64, join: Join) -> Shapes {
-    offset_c2_resolved(shapes, delta, join, false)
-}
-
-/// `offset_c2` for one shape shrunk past many small round features (a tree's branches, tens of times as wide as the
-/// offset's step round them), several times faster: where its path folds back over itself at more than
-/// `FOLDS_IN_PIECES` corners, the folds are resolved a stretch at a time. What it keeps is the same, but for points up
-/// to a micrometre off where stretches cross, specks under 10 µm² left out.
-pub fn offset_c2_folded(shapes: &Shapes, delta: f64, join: Join) -> Shapes {
-    offset_c2_resolved(shapes, delta, join, true)
-}
-
-/// `offset_c2`, its folded paths resolved a stretch at a time where they fold often (`in_pieces`), or all at once.
-fn offset_c2_resolved(shapes: &Shapes, delta: f64, join: Join, in_pieces: bool) -> Shapes {
-    let d = delta * SCALE;
     if shapes.is_empty() {
         return Vec::new();
     }
-    if d.abs() < 0.5 {
+    if (delta * SCALE).abs() < 0.5 {
         return shapes.clone();
     }
+    union_clipper2(&offset_c2_paths(shapes, delta, join))
+}
+
+/// `offset_c2`'s paths, before the union resolves where they cross themselves.
+fn offset_c2_paths(shapes: &Shapes, delta: f64, join: Join) -> Vec<Contour> {
+    let d = delta * SCALE;
     let abs_d = d.abs();
     let shortest2 = (abs_d * 0.005) * (abs_d * 0.005);
     // Mitred while the corner turns less than the limit allows (`temp_lim_`), and the round joins' fixed step.
@@ -283,10 +277,6 @@ fn offset_c2_resolved(shapes: &Shapes, delta: f64, join: Join, in_pieces: bool) 
     };
     let at = |x: f64, y: f64| pt(x.round() as i32, y.round() as i32);
     let mut paths: Vec<Contour> = Vec::new();
-    // Each contour's points as offset, and where its path folds back through a corner (the three points' middle):
-    // at the path's index, the corner's.
-    let mut kept: Vec<Contour> = Vec::new();
-    let mut folds: Vec<Vec<(usize, usize)>> = Vec::new();
     for contour in shapes.iter().flatten() {
         let close = |a: &Pt, b: &Pt| {
             let (dx, dy) = ((a.x - b.x) as f64, (a.y - b.y) as f64);
@@ -317,7 +307,6 @@ fn offset_c2_resolved(shapes: &Shapes, delta: f64, join: Join, in_pieces: bool) 
             })
             .collect();
         let mut out: Vec<Pt> = Vec::with_capacity(2 * n);
-        let mut fold: Vec<(usize, usize)> = Vec::new();
         let mut k = n - 1;
         for j in 0..n {
             let (pj, pk) = (p[j], p[k]);
@@ -339,7 +328,6 @@ fn offset_c2_resolved(shapes: &Shapes, delta: f64, join: Join, in_pieces: bool) 
                     out.push(at(x + (nk.0 + nj.0) * q, y + (nk.1 + nj.1) * q));
                 } else if concave {
                     out.push(at(x + nk.0 * d, y + nk.1 * d));
-                    fold.push((out.len(), j));
                     out.push(pj);
                     out.push(at(x + nj.0 * d, y + nj.1 * d));
                 } else if (cos_a > 0.999 && !matches!(join, Join::Round(_)))
@@ -387,122 +375,104 @@ fn offset_c2_resolved(shapes: &Shapes, delta: f64, join: Join, in_pieces: bool) 
             k = j;
         }
         paths.push(out);
-        kept.push(p);
-        folds.push(fold);
     }
-    // A shape shrunk past many corners folds its path back over itself at each, tens of times over where it shrinks
-    // past small round features (a tree's branches), and resolving all those crossings in one union is slow. Each
-    // stretch of path between two of its folds, closed by the outline back to where it started, winds −1 round what
-    // its edges and corners take out and nowhere else positively, and the whole path is those stretches and the
-    // outline: so what it keeps is the shape less what the stretches take out, each resolved on its own.
-    let fold_count: usize = folds.iter().map(Vec::len).sum();
-    if in_pieces && d < 0.0 && shapes.len() == 1 && fold_count >= FOLDS_IN_PIECES {
-        return shrunk_in_pieces(&kept, &paths, &folds);
-    }
-    union_contours(&paths)
+    paths
 }
 
-/// Folds past which `offset_c2` resolves a shrunk shape's path a stretch at a time, and how many folds a stretch spans.
-const FOLDS_IN_PIECES: usize = 16;
-const FOLDS_A_PIECE: usize = 4;
+/// What paths wind round positively, as Orca's offsets resolve their paths: Clipper2's union, collinear points dropped
+/// (the last step of its `ClipperOffset`), by clipper2-rs, a port that gives Clipper2's points in Clipper2's order. Its
+/// loops start and run as Clipper2's do, which decides where a tree's branches meet (`TreeSupport3D.cpp` walks
+/// areas' points in their order), and a path that crosses itself thousands of times, as a shape shrunk past many
+/// small round features does, it resolves twenty times faster than `union_contours`.
+pub fn union_clipper2(paths: &[Contour]) -> Shapes {
+    let subjects: clipper2_rs::Paths64 =
+        paths.iter().map(|c| c.iter().map(|p| clipper2_rs::Point64::new(p.x as i64, p.y as i64)).collect()).collect();
+    let mut clipper = clipper2_rs::Clipper64::new();
+    clipper.set_preserve_collinear(false);
+    clipper.add_subject(&subjects);
+    match clipper.execute_tree(clipper2_rs::ClipType::Union, clipper2_rs::FillRule::Positive) {
+        Ok((tree, _)) => shapes_of_tree(&tree),
+        // Clipper2 gives up on crossings it can't order, which `union_contours` resolves.
+        Err(_) => union_contours(paths),
+    }
+}
 
-/// What one shape's shrunk paths keep (see `offset_c2`): its outline (`kept`, each contour as offset) less what each
-/// stretch of the paths between folds (`folds`: index in the path, corner) takes out.
-fn shrunk_in_pieces(kept: &[Contour], paths: &[Contour], folds: &[Vec<(usize, usize)>]) -> Shapes {
-    let mut pieces: Vec<Contour> = Vec::new();
-    for ((p, out), fold) in kept.iter().zip(paths).zip(folds) {
-        let n = p.len();
-        if fold.len() < 2 {
-            // Too few folds to cut at: the path with its outline turned back, which winds the same.
-            let taken = vec![out.clone(), p.iter().rev().copied().collect()].simplify(FillRule::Negative, options());
-            pieces.extend(taken.into_iter().flatten());
-            continue;
-        }
-        let m = fold.len();
-        let starts: Vec<usize> = (0..m).step_by(FOLDS_A_PIECE).collect();
-        for (t, &a) in starts.iter().enumerate() {
-            let b = starts.get(t + 1).copied().unwrap_or(m);
-            let (from, corner_from) = fold[a];
-            let (to, corner_to) = fold[b % m];
-            // The path from one fold's corner to the other's, then the outline back.
-            let mut piece: Contour =
-                if b < m { out[from..=to].to_vec() } else { out[from..].iter().chain(&out[..=to]).copied().collect() };
-            let mut c = (corner_to + n - 1) % n;
-            while c != corner_from {
-                piece.push(p[c]);
-                c = (c + n - 1) % n;
+/// Clipper2's tree as shapes, as Orca reads it (`c2_to_expolygons`): each outline with the holes right under it, then
+/// the islands in those holes. Clipper2 now and then nests a hole beside the outline round it rather than under it:
+/// a clockwise loop where an outline belongs goes to the smallest outline round it (`c2_attach_stray_holes`).
+fn shapes_of_tree(tree: &clipper2_rs::PolyTree64) -> Shapes {
+    fn contour(path: &clipper2_rs::Path64) -> Contour {
+        path.iter().map(|p| pt(p.x as i32, p.y as i32)).collect()
+    }
+    fn append(tree: &clipper2_rs::PolyTree64, id: usize, out: &mut Shapes, stray: &mut Vec<Contour>) {
+        let node = tree.node(id);
+        let outline = contour(&node.polygon);
+        if area2(&outline) < 0 {
+            stray.push(outline);
+            for &island in &node.children {
+                append(tree, island, out, stray);
             }
-            let taken = [piece].simplify(FillRule::Negative, options());
-            pieces.extend(taken.into_iter().flatten());
+            return;
         }
-    }
-    if pieces.is_empty() {
-        return union_contours(kept);
-    }
-    // The outline less every piece's area at once: each piece turned round winds −1 where it takes out.
-    let mut all: Vec<Contour> = kept.to_vec();
-    all.extend(pieces.into_iter().map(|mut c| {
-        c.reverse();
-        c
-    }));
-    let mut out = union_contours(&all);
-    // Where pieces cross, their points rounded to our grid can leave specks of a few square micrometres, or holes as
-    // small, that one union of the whole path doesn't. A speck stays only if the whole path winds round its middle,
-    // a hole only if it doesn't.
-    let speck = |c: &Contour| area2(c).unsigned_abs() < 2 * SPECK_AREA;
-    let kept_by_path = |c: &Contour| winding(paths, centre(c)) > 0;
-    out.retain(|shape| !speck(&shape[0]) || kept_by_path(&shape[0]));
-    for shape in &mut out {
-        let mut k = 1;
-        while k < shape.len() {
-            if speck(&shape[k]) && kept_by_path(&shape[k]) {
-                shape.remove(k);
+        let at = out.len();
+        out.push(vec![outline]);
+        for &child in &node.children {
+            let inner = &tree.node(child);
+            let l = contour(&inner.polygon);
+            if area2(&l) > 0 {
+                append(tree, child, out, stray);
             } else {
-                k += 1;
+                out[at].push(l);
+                for &island in &inner.children {
+                    append(tree, island, out, stray);
+                }
             }
+        }
+    }
+    let mut out = Vec::new();
+    let mut stray = Vec::new();
+    for &root in tree.roots() {
+        append(tree, root, &mut out, &mut stray);
+    }
+    for hole in stray {
+        let hole_area = -area2(&hole);
+        let hb = bbox_of(&vec![hole.clone()]);
+        let mut round: Vec<(i128, usize)> = (0..out.len())
+            .filter(|&i| {
+                let b = bbox_of(&out[i]);
+                b[0] <= hb[0] && b[1] <= hb[1] && b[2] >= hb[2] && b[3] >= hb[3]
+            })
+            .map(|i| (area2(&out[i][0]), i))
+            .filter(|&(a, _)| a > hole_area)
+            .collect();
+        round.sort_by_key(|&(a, _)| a);
+        match round.into_iter().find(|&(_, i)| encloses(&out[i][0], &hole)) {
+            Some((_, i)) => out[i].push(hole),
+            // Nothing round it: kept as Clipper2 gave it.
+            None => out.push(vec![hole]),
         }
     }
     out
 }
 
-/// 0.01 µm²: the area under which `offset_c2_folded` checks a shape or hole against the whole path, 10 µm².
-const SPECK_AREA: u128 = 1000;
-
-/// A contour's centroid, unrounded, or its first point where it has no area.
-fn centre(c: &Contour) -> (f64, f64) {
-    let (mut a, mut x, mut y) = (0.0, 0.0, 0.0);
-    for i in 0..c.len() {
-        let (p, q) = (c[i], c[(i + 1) % c.len()]);
-        let cross = p.x as f64 * q.y as f64 - q.x as f64 * p.y as f64;
-        a += cross;
-        x += (p.x + q.x) as f64 * cross;
-        y += (p.y + q.y) as f64 * cross;
-    }
-    if a == 0.0 { (c[0].x as f64, c[0].y as f64) } else { (x / (3.0 * a), y / (3.0 * a)) }
-}
-
-/// How many times closed paths wind round a point (anticlockwise counts up).
-fn winding(paths: &[Contour], (x, y): (f64, f64)) -> i32 {
-    let mut w = 0;
-    for c in paths {
-        for i in 0..c.len() {
-            let (a, b) = (c[i], c[(i + 1) % c.len()]);
-            let (ay, by) = (a.y as f64, b.y as f64);
-            let side = (b.x - a.x) as f64 * (y - ay) - (x - a.x as f64) * (by - ay);
-            if ay <= y && by > y && side > 0.0 {
-                w += 1;
-            } else if by <= y && ay > y && side < 0.0 {
-                w -= 1;
-            }
+/// Whether `outer` encloses `inner`, two loops of one result, which touch but don't cross: the first point of `inner`
+/// clear of `outer` (rounding leaves touching points up to 1.5 units across) decides, else its centroid.
+fn encloses(outer: &Contour, inner: &Contour) -> bool {
+    let n = outer.len();
+    let near = |p: Pt| (0..n).any(|i| segment_dist2(p, outer[i], outer[(i + 1) % n]) <= 9.0);
+    match inner.iter().find(|&&p| !near(p)) {
+        Some(&p) => contour_contains(outer, p),
+        None => {
+            let c = centroid(inner);
+            contour_contains(inner, c) && contour_contains(outer, c)
         }
     }
-    w
 }
 
 /// What an open path covers grown `delta` mm to both sides, with square joins and flat ends: Clipper2's offset of an
 /// open path (`ClipperOffset::OffsetOpenPath`, `EndType::Butt`, `JoinType::Square`), which Orca 2.5's
-/// `offset(Polyline, delta)` makes, its loops resolved with positive fill. A path that ends where it starts covers
-/// the whole ring.
+/// `offset(Polyline, delta)` makes, its loops resolved as Clipper2 resolves them (`union_clipper2`). A path that ends
+/// where it starts covers the whole ring.
 pub fn offset_open(points: &[Pt], delta: f64) -> Shapes {
     let d = (delta * SCALE).abs();
     if d < 0.5 || points.is_empty() {
@@ -528,7 +498,7 @@ pub fn offset_open(points: &[Pt], delta: f64) -> Shapes {
         }
         let r = d.ceil() as i32;
         let (x, y) = (p[0].x, p[0].y);
-        return union_contours(&[vec![pt(x - r, y - r), pt(x + r, y - r), pt(x + r, y + r), pt(x - r, y + r)]]);
+        return union_clipper2(&[vec![pt(x - r, y - r), pt(x + r, y - r), pt(x + r, y + r), pt(x - r, y + r)]]);
     }
     let unit_normal = |a: Pt, b: Pt| -> (f64, f64) {
         if a == b {
@@ -604,7 +574,7 @@ pub fn offset_open(points: &[Pt], delta: f64) -> Shapes {
     for j in (1..last).rev() {
         offset_point(&mut out, &norms, j, j + 1);
     }
-    union_contours(&[out])
+    union_clipper2(&[out])
 }
 
 /// Shrinks then grows back: drops every part thinner than `2 × d`.
@@ -1182,9 +1152,10 @@ mod tests {
     }
 
     #[test]
-    fn a_shape_shrunk_past_many_folds_keeps_what_one_union_of_its_path_keeps() {
-        // Blobs of small circles, as a tree's branches merge into: shrunk in stretches, they keep what resolving the
-        // whole path at once keeps, the same shapes with their points within a micrometre.
+    fn clipper2_resolves_a_path_folded_thousands_of_times_as_our_polygon_engine_does() {
+        // Blobs of small circles, as a tree's branches merge into, shrunk past their folds: Clipper2 keeps what
+        // i_overlay keeps of the same paths, the same shapes with their points within two micrometres (the tip of a
+        // needle-thin spike, where two edges cross at a hair's angle, rounds a micrometre or so apart).
         let mut seed: u64 = 7;
         let mut next = || {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -1210,9 +1181,10 @@ mod tests {
                     (-0.21, Join::Square),
                     (-0.5, Join::Round(0.0)),
                 ] {
-                    let pieces = offset_c2_resolved(&one, delta, join, true);
-                    let whole = offset_c2_resolved(&one, delta, join, false);
-                    assert_eq!(pieces.len(), whole.len(), "blob {blob}, {delta} {join:?}");
+                    let paths = offset_c2_paths(&one, delta, join);
+                    let (clipper2, ours) = (union_clipper2(&paths), union_contours(&paths));
+                    assert_eq!(clipper2.len(), ours.len(), "blob {blob}, {delta} {join:?}");
+                    assert_eq!(clipper2, offset_c2(&one, delta, join));
                     // Every point of each within a micrometre of the other's outline.
                     let off = |a: &Shapes, b: &Shapes| {
                         a.iter()
@@ -1236,13 +1208,30 @@ mod tests {
                             })
                             .fold(0.0, f64::max)
                     };
-                    let worst = off(&pieces, &whole).max(off(&whole, &pieces));
-                    assert!(worst <= 10.0, "blob {blob}, {delta} {join:?}: {worst} units off");
+                    let worst = off(&clipper2, &ours).max(off(&ours, &clipper2));
+                    assert!(worst <= 20.0, "blob {blob}, {delta} {join:?}: {worst} units off");
                     checked += 1;
                 }
             }
         }
         assert!(checked > 20, "{checked}");
+    }
+
+    #[test]
+    fn clipper2s_tree_comes_back_as_orca_reads_it() {
+        // A ring with an island in its hole, and a square beside it: each outline counter-clockwise with its hole
+        // clockwise under it, the island right after the ring that holds it.
+        let square = |x0: f64, y0: f64, s: f64| vec![mm(x0, y0), mm(x0 + s, y0), mm(x0 + s, y0 + s), mm(x0, y0 + s)];
+        let mut hole = square(2.0, 2.0, 6.0);
+        hole.reverse();
+        let shapes = union_clipper2(&[square(0.0, 0.0, 10.0), hole, square(4.0, 4.0, 2.0), square(20.0, 0.0, 3.0)]);
+        assert_eq!(shapes.len(), 3);
+        let ring = shapes.iter().position(|s| s.len() == 2).unwrap();
+        assert!(area2(&shapes[ring][0]) > 0 && area2(&shapes[ring][1]) < 0);
+        assert_eq!(shape_area_mm2(&shapes[ring]), 100.0 - 36.0);
+        assert_eq!(shape_area_mm2(&shapes[ring + 1]), 4.0);
+        assert!(shapes.iter().all(|s| area2(&s[0]) > 0));
+        assert_eq!(area_mm2(&shapes), 100.0 - 36.0 + 4.0 + 9.0);
     }
 
     #[test]
