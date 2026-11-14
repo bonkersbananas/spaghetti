@@ -16,6 +16,10 @@ Options:
   -o, --output <file>   The .gcode.3mf to write (default: the first model's name with .gcode.3mf)
       --gcode <file>    Also write the plain G-code
       --stats <file>    Write the statistics as JSON (time, filament, per feature, per layer)
+      --filaments <n,…> Print each model in a filament (1, 2, …; one per model, in order): a plate in several
+                        filaments prints as the X2D does with the AMS, changing filament over a prime tower
+      --filament-map <n,…> Which nozzle prints each filament (1 the left, 2 the right), as Orca's manual
+                        grouping; by default Orca's own grouping chooses
       --keep-placement  Keep the objects where the files put them instead of arranging them on the plate
       --no-thumbnail    Leave out the plate picture
       --timings         Print how long each step took
@@ -30,6 +34,10 @@ struct Args {
     keep_placement: bool,
     thumbnail: bool,
     timings: bool,
+    /// Each input's filament (1-based), when given.
+    filaments: Vec<usize>,
+    /// Each filament's nozzle (1-based), when given.
+    filament_map: Option<Vec<usize>>,
 }
 
 fn parse(args: Vec<String>) -> Result<Args, String> {
@@ -42,6 +50,8 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
         keep_placement: false,
         thumbnail: true,
         timings: false,
+        filaments: vec![],
+        filament_map: None,
     };
     let mut it = args.into_iter();
     while let Some(arg) = it.next() {
@@ -52,6 +62,23 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
             "--keep-placement" => out.keep_placement = true,
+            "--filaments" => {
+                let list = it.next().ok_or_else(|| "--filaments needs a list".to_string())?;
+                out.filaments = list
+                    .split(',')
+                    .map(|v| v.trim().parse::<usize>().ok().filter(|&n| (1..=16).contains(&n)))
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| format!("--filaments takes numbers from 1 to 16, not {list}"))?;
+            }
+            "--filament-map" => {
+                let list = it.next().ok_or_else(|| "--filament-map needs a list".to_string())?;
+                let map = list
+                    .split(',')
+                    .map(|v| v.trim().parse::<usize>().ok().filter(|&n| (1..=2).contains(&n)))
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| format!("--filament-map takes nozzles 1 and 2, not {list}"))?;
+                out.filament_map = Some(map);
+            }
             "--no-thumbnail" => out.thumbnail = false,
             "--timings" => out.timings = true,
             "-h" | "--help" => return Err(String::new()),
@@ -93,11 +120,19 @@ fn main() -> ExitCode {
             },
         },
     };
-    let settings = setup.settings;
+    let mut settings = setup.settings;
+    // Models in several filaments with no setup to say what they are: the presets' filament for each.
+    let count = args.filaments.iter().copied().max().unwrap_or(1);
+    if count > 1 && settings.palette.as_ref().is_none_or(|p| p.profiles.len() < count) {
+        settings.palette = Some(std::sync::Arc::new(spaghetti_slicer::filaments::palette_of(&settings, count)));
+    }
+    if let (Some(map), Some(palette)) = (&args.filament_map, &mut settings.palette) {
+        std::sync::Arc::make_mut(palette).manual_map = Some(map.iter().map(|n| n - 1).collect());
+    }
     let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail, scale: setup.scale };
     // One file at a time: each file's bytes go once it is read.
     let mut plate = Plate::default();
-    for path in &args.inputs {
+    for (k, path) in args.inputs.iter().enumerate() {
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -105,7 +140,8 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
-        if let Err(e) = plate.add(&Input { name: path, bytes: &bytes }) {
+        let filament = args.filaments.get(k).map(|f| f - 1);
+        if let Err(e) = plate.add_with_filament(&Input { name: path, bytes: &bytes }, filament) {
             eprintln!("can't slice {path}: {e}");
             return ExitCode::FAILURE;
         }

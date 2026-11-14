@@ -196,12 +196,6 @@ struct LayerInfo {
     tool_changes: Vec<ToolChange>,
 }
 
-impl LayerInfo {
-    fn toolchanges_depth(&self) -> f32 {
-        self.tool_changes.iter().map(|t| t.required_depth).sum()
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LayerType {
     Normal,
@@ -945,7 +939,7 @@ fn ray_intersection(a: V, v1: V, b: V, c: V) -> Option<V> {
     let v12 = a - b;
     let t1 = cross(v2, v12) / denom;
     let t2 = cross(v1, v12) / denom;
-    (t1 >= 0.0 && t2 >= 0.0 && t2 <= 1.0).then(|| a + v1 * t1 as f32)
+    (t1 >= 0.0 && (0.0..=1.0).contains(&t2)).then(|| a + v1 * t1 as f32)
 }
 
 /// `add_extra_point`: three points in the middle of the edge nearest the bottom middle of the loop, `range` apart,
@@ -1230,7 +1224,8 @@ impl WipeTower {
         self.wipe_tower_depth
     }
 
-    pub fn brim_width(&self) -> f32 {
+    /// The brim's width as printed (`get_brim_width`, which Orca keeps apart from the setting).
+    pub fn brim_width_printed(&self) -> f32 {
         self.brim_width_real
     }
 
@@ -1287,10 +1282,6 @@ impl WipeTower {
 
     fn volume_to_length(&self, volume: f32, line_width: f32, layer_height: f32) -> f32 {
         (volume / (layer_height * (line_width - layer_height * (1.0 - PI_F32 / 4.0)))).max(0.0)
-    }
-
-    fn length_to_volume(&self, length: f32, line_width: f32, layer_height: f32) -> f32 {
-        (length * (layer_height * (line_width - layer_height * (1.0 - PI_F32 / 4.0)))).max(0.0)
     }
 
     fn change_length(&self, extruder_change: bool, tool: usize) -> f32 {
@@ -1895,7 +1886,7 @@ impl WipeTower {
                 Some(x) => x.1 += 1,
                 None => {
                     list.push((k, 1));
-                    list.sort_by(|a, b| a.0.cmp(&b.0));
+                    list.sort_by_key(|a| a.0);
                 }
             }
         }
@@ -2085,9 +2076,7 @@ impl WipeTower {
         if let Some(t) = self.plan.iter().find_map(|l| l.tool_changes.first()) {
             self.current_tool = t.old_tool;
         }
-        for u in &mut self.used_filament_length {
-            *u = 0.0;
-        }
+        self.used_filament_length.fill(0.0);
         let wall_filament = self.get_wall_filament_for_all_layer();
         self.outer_wall = Vec::with_capacity(self.plan.len());
         for index in 0..self.plan.len() {
@@ -2150,8 +2139,7 @@ impl WipeTower {
                 }
             }
             let mut insert_finish_layer_idx: Option<usize> = None;
-            for i in 0..layer.tool_changes.len() {
-                let t = layer.tool_changes[i];
+            for (i, &t) in layer.tool_changes.iter().enumerate() {
                 if i == 0 && Some(t.old_tool) == wall_idx {
                     finish_layer = Some(self.finish_layer_new(true, false, false));
                 }
@@ -3113,7 +3101,7 @@ impl WipeTower {
         let (a, b) = (self.wipe_tower_width, self.wipe_tower_depth);
         let line_len = ((a as f64).powi(2) + (b as f64).powi(2)).sqrt();
         let mut extra = (self.rib_length - line_len as f32).max(0.0) / 2.0;
-        extra = (self.wipe_tower_height - self.z_pos).abs() / self.wipe_tower_height * extra;
+        extra *= (self.wipe_tower_height - self.z_pos).abs() / self.wipe_tower_height;
         let extend = |p: V, q: V| -> (V, V) {
             let d = q - p;
             let len = (d.x as f64).hypot(d.y as f64);

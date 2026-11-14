@@ -769,3 +769,154 @@ fn a_brim_leaves_room_for_the_supports_flange() {
         }
     }
 }
+
+/// A 20 mm frame in filament 1 round the 10 mm square that fills it in filament 2, 4 mm tall: a Bambu Studio project
+/// of two objects that each name their filament (tests/models/make.py).
+const TWO_COLOURS: &[u8] = include_bytes!("models/two-colours.3mf");
+const TWO_FILAMENTS: &str = r##"{"filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}"##;
+
+/// The tool each line runs with (`T…` lines change it), and the object label it is inside, for every line.
+fn tools_and_labels(gcode: &str) -> Vec<(Option<usize>, Option<u32>, &str)> {
+    let (mut tool, mut label) = (None, None);
+    gcode
+        .lines()
+        .map(|line| {
+            let code = line.split(';').next().unwrap_or("").trim();
+            if let Some(t) = code.split_whitespace().next().and_then(|w| w.strip_prefix('T'))
+                && let Ok(t) = t.parse::<usize>()
+                && t < 16
+            {
+                tool = Some(t);
+            }
+            if let Some(id) = line.strip_prefix("; start printing object, unique label id: ") {
+                label = id.trim().parse().ok();
+            }
+            if line.starts_with("; stop printing object") {
+                label = None;
+            }
+            (tool, label, line)
+        })
+        .collect()
+}
+
+#[test]
+fn two_filaments_change_once_a_layer_over_a_prime_tower() {
+    let settings = setup::read(TWO_FILAMENTS).unwrap().settings;
+    let input = || Input { name: "two-colours.3mf", bytes: TWO_COLOURS };
+    let out = slice(&[input()], &settings, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    let s = &out.stats;
+    assert_eq!(s.layers, 20);
+    // As Orca groups two filaments on the X2D: each on a nozzle of its own, the first on the right one.
+    let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+    assert!(info.contains(r#"<metadata key="filament_maps" value="2 1"/>"#), "{info}");
+    assert!(info.contains(r##"<filament id="2" tray_info_idx="GFA00" type="PLA" color="#4F7FC7""##), "{info}");
+    assert!(info.contains(r#"<nozzle id="1" extruder_id="2""#), "{info}");
+    assert!(gcode.contains("\n; filament: 1,2\n"));
+    // Every layer changes filament once, in a tool change on the tower, and prints the tower.
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    assert_eq!(layers.len(), s.layers);
+    for (i, layer) in layers.iter().enumerate() {
+        let mut in_change = false;
+        let mut changes = 0;
+        for line in layer.lines() {
+            match line {
+                "; CP TOOLCHANGE START" => in_change = true,
+                "; CP TOOLCHANGE END" => in_change = false,
+                l if l.starts_with("T0 ") || l.starts_with("T1 ") => {
+                    assert!(in_change, "layer {i} changes filament off the tower: {l}");
+                    changes += 1;
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(changes, 1, "layer {i}");
+        assert!(layer.contains("; FEATURE: Prime tower\n"), "layer {i} has no tower");
+    }
+    assert_eq!(s.tool_changes, 20);
+    // Each object prints in its own filament (T0 the frame, T1 the square), and every move between the printer's start
+    // and end G-code stays on the plate, tool changes and all.
+    let mut printed = [0usize; 2];
+    let mut in_body = false;
+    for (tool, label, line) in tools_and_labels(&gcode) {
+        match line {
+            "M981 S1 P20000 ;open spaghetti detector" => in_body = true,
+            "M981 S0 P20000 ; close spaghetti detector" => in_body = false,
+            _ => {}
+        }
+        let code = line.split(';').next().unwrap_or("").trim();
+        if !in_body || !(code.starts_with("G1 ") || code.starts_with("G0 ")) {
+            continue;
+        }
+        let (x, y) = (word(code, 'X'), word(code, 'Y'));
+        for (v, max) in [(x, settings.bed[0]), (y, settings.bed[1])] {
+            assert!(v.is_none_or(|v| (0.0..=max).contains(&v)), "off the plate: {line}");
+        }
+        if let Some(label) = label
+            && word(code, 'E').is_some_and(|e| e > 0.0)
+            && (x.is_some() || y.is_some())
+        {
+            assert_eq!(tool, Some(label as usize - 1), "object {label} printed with T{tool:?}: {line}");
+            printed[label as usize - 1] += 1;
+        }
+    }
+    assert!(printed.iter().all(|&n| n > 100), "{printed:?}");
+    // Each filament's use, the tower's included; nothing flushed (each has its nozzle); the totals add them up.
+    assert_eq!(s.filaments.len(), 2);
+    assert!(s.filaments.iter().all(|f| f.length > 100.0 && f.tower > 100.0 && f.flush == 0.0), "{:?}", s.filaments);
+    let weight: f64 = s.filaments.iter().map(|f| f.weight).sum();
+    assert!((weight - s.weight).abs() < 1e-9);
+    let used: Vec<String> = s.filaments.iter().map(|f| format!(" {:.2}", f.length)).collect();
+    assert!(gcode.contains(&format!("; filament used [mm] ={}\n", used.join(","))), "{}", &gcode[gcode.len() - 300..]);
+    // The plate in one filament prints the same objects without the changes, the tower and their minutes.
+    let one = slice(&[input()], &Settings::default(), &Options::default()).unwrap();
+    assert!(s.total_time > one.stats.total_time + 20.0 * 5.0, "{} s against {} s", s.total_time, one.stats.total_time);
+    assert!(!String::from_utf8(one.gcode).unwrap().contains("; FEATURE: Prime tower"));
+}
+
+#[test]
+fn two_filaments_on_one_nozzle_flush_between_them() {
+    let setup = r##"{"process": {"filament_map_mode": "Manual", "filament_map": ["1", "1"]},
+        "filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}"##;
+    let settings = setup::read(setup).unwrap().settings;
+    let out = slice(&[Input { name: "two-colours.3mf", bytes: TWO_COLOURS }], &settings, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+    assert!(info.contains(r#"<metadata key="filament_maps" value="1 1"/>"#), "{info}");
+    // The printer flushes at each change, as Orca's volumes for orange and blue on the left nozzle say (its least,
+    // 100 mm³, one way; 423 mm³ times the left nozzle's 0.3 the other), and the estimate waits for it.
+    assert!(gcode.contains("M620.10 A1 F523.843 L41.5752 "), "no 100 mm³ flush");
+    assert!(gcode.contains("M620.10 A1 F523.843 L52.7589 "), "no 126.9 mm³ flush");
+    let s = &out.stats;
+    let flushed: f64 = s.filaments.iter().map(|f| f.flush).sum();
+    assert!((flushed - 10.0 * 100.0 - 10.0 * 126.9).abs() < 1.0, "{flushed} mm³ flushed");
+    // Flushing counts in the filament used.
+    let printed: f64 = s.filaments.iter().map(|f| f.volume - f.flush).sum();
+    assert!((s.volume - printed - flushed).abs() < 1e-6);
+}
+
+#[test]
+fn parts_of_one_object_in_different_filaments_are_refused() {
+    let mut w = zip::Writer::default();
+    let cube = |at: f32| {
+        format!(
+            r#"<mesh><vertices><vertex x="{at}" y="0" z="0"/><vertex x="{x}" y="0" z="0"/><vertex x="{at}" y="10" z="0"/><vertex x="{at}" y="0" z="10"/></vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/><triangle v1="1" v2="2" v3="3"/><triangle v1="0" v2="3" v3="2"/></triangles></mesh>"#,
+            x = at + 10.0
+        )
+    };
+    let model = format!(
+        r#"<model unit="millimeter"><resources><object id="1" type="model">{}</object><object id="2" type="model">{}</object><object id="3" type="model"><components><component objectid="1"/><component objectid="2"/></components></object></resources><build><item objectid="3" transform="1 0 0 0 1 0 0 0 1 100 100 0"/></build></model>"#,
+        cube(0.0),
+        cube(20.0)
+    );
+    let settings = r#"<config><object id="3"><metadata key="name" value="two parts"/><part id="1" subtype="normal_part"><metadata key="extruder" value="1"/></part><part id="2" subtype="normal_part"><metadata key="extruder" value="2"/></part></object></config>"#;
+    w.add("3D/3dmodel.model", model.as_bytes(), 6);
+    w.add("Metadata/model_settings.config", settings.as_bytes(), 6);
+    let file = w.finish();
+    let input = || Input { name: "parts.3mf", bytes: &file };
+    let two = setup::read(TWO_FILAMENTS).unwrap().settings;
+    let refused = slice(&[input()], &two, &Options::default()).err();
+    assert_eq!(refused, Some(Error::Unsupported("parts of one object in different filaments")));
+    // With one filament, all of it prints in that one, as Orca prints it.
+    assert!(slice(&[input()], &Settings::default(), &Options::default()).is_ok());
+}

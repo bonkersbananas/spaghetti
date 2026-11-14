@@ -29,6 +29,27 @@ pub struct Palette {
     pub colours: Vec<String>,
     /// Each filament's extruder (0-based) when the setup chooses them (`filament_map_mode` "Manual").
     pub manual_map: Option<Vec<usize>>,
+    /// Whether the tower's place is still to be chosen (the presets' own, not a setup's): then it goes where the app
+    /// puts it, the first corner of the plate no object comes near.
+    pub place_tower: bool,
+}
+
+/// The app's stand-in colours for filaments nobody coloured (`STAND_IN_COLOURS` in orca.ts).
+pub const STAND_INS: [&str; 8] =
+    ["#F2754E", "#4F7FC7", "#6FA37A", "#E8A33D", "#A77FC2", "#8D9AA3", "#C2418A", "#3F8F86"];
+
+pub fn stand_in(i: usize) -> &'static str {
+    STAND_INS[i % STAND_INS.len()]
+}
+
+/// `count` filaments with `s`'s presets (its colour first, then the stand-ins), for a plate given no setup.
+pub fn palette_of(s: &Settings, count: usize) -> Palette {
+    Palette {
+        profiles: (0..count).map(|_| s.profile.clone()).collect(),
+        colours: (0..count).map(|i| if i == 0 { s.filament_colour.clone() } else { stand_in(i).to_string() }).collect(),
+        manual_map: None,
+        place_tower: true,
+    }
 }
 
 /// The X2D's extruders: their variant names in the presets' per-variant lists.
@@ -624,6 +645,7 @@ mod tests {
             profiles: colours.iter().map(|_| p.clone()).collect(),
             colours: colours.iter().map(|c| c.to_string()).collect(),
             manual_map: None,
+            place_tower: false,
         }
     }
 
