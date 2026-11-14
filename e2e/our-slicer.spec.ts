@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
+import { bambuStudioProblems } from "../test/unit/slicing/bambu-rules";
 import {
   brimProject,
   paintedProject,
@@ -11,7 +12,6 @@ import {
   twoColourProject,
   vaseProject,
 } from "./fixtures/model-3mf";
-import { bambuStudioProblems } from "../test/unit/slicing/bambu-rules";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
