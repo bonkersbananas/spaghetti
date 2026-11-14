@@ -85,6 +85,37 @@ const putModel = (itemId: string, fileId: string, body = modelForm()) =>
 const putSliced = (fileId: string, body: FormData, as: string | null = cookie) =>
   request(`/api/files/${fileId}/sliced`, { method: "PUT", body, ...(as ? { cookie: as } : {}) });
 
+describe("a model's picture in its own colours", () => {
+  it("is kept with the slice that made it, served, and gone with the next slice without one", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const form = slicedForm({ originalPicture: true });
+    form.set("originalThumb", new File([PNG], "plate_1_original.png", { type: "image/png" }));
+    expect((await putSliced(id, form)).status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slice?.originalPicture).toBe(true);
+    const picture = await request(`/api/files/${id}/original-thumb`, { cookie });
+    expect(picture.status).toBe(200);
+    expect(picture.headers.get("content-type")).toBe("image/png");
+    // Sliced again without colours: the picture is gone.
+    expect((await putSliced(id, slicedForm())).status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slice?.originalPicture).toBeUndefined();
+    expect((await request(`/api/files/${id}/original-thumb`, { cookie })).status).toBe(404);
+  });
+
+  it("is not claimed by a slice that comes back from an undo", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const first = slicedForm({ originalPicture: true });
+    first.set("originalThumb", new File([PNG], "o.png", { type: "image/png" }));
+    await putSliced(id, first);
+    await putSliced(id, slicedForm({}, { keep: true }));
+    expect((await request(`/api/files/${id}/sliced/restore`, { method: "POST", cookie })).status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slice?.originalPicture).toBeUndefined();
+  });
+});
+
 describe("models kept with an idea", () => {
   it("keeps the original as it is, not sliced yet, and serves it", async () => {
     const item = await idea();

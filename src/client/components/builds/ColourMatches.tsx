@@ -6,10 +6,11 @@ import { type SpoolLike, slotPlace } from "@shared/spools";
 import { useEffect, useRef, useState } from "react";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { ArrowRightIcon, UndoIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, PaletteIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Swatch } from "@/components/ui/Swatch";
+import { cn } from "@/lib/cn";
 import { scrollBehavior } from "@/lib/motion";
 
 /** The Pantry's spools offered under a colour, at most: a pantry is rarely bigger. */
@@ -49,6 +50,7 @@ export function ColourMatches({
   spools,
   onChange,
   wrapped,
+  wide,
 }: {
   /** What the last slice printed each colour in. */
   colours: readonly SliceColour[];
@@ -58,8 +60,13 @@ export function ColourMatches({
   onChange: (choices: ColourChoice[]) => void;
   /** In a panel's column: the spools wrap in rows of four instead of scrolling sideways. */
   wrapped: boolean;
+  /** Across a panel's whole width (under its two columns): the rows sit two to a line. */
+  wide?: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  // The rows are folded to one line until asked for: the panel and the sheet keep their room.
+  const [all, setAll] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
   const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
   const choose = (colour: SliceColour, id: string) => {
     const others = choices.filter((choice) => choice.from !== colour.hex);
@@ -71,82 +78,123 @@ export function ColourMatches({
     const spool = offered.find((candidate) => candidate.id === id);
     if (spool) onChange([...others, { from: colour.hex, filament: filamentOfSpool(spool) }]);
   };
+  const filaments = new Set(colours.map(keyOf));
+  const shared = [...filaments].filter((key) => colours.filter((colour) => keyOf(colour) === key).length > 1).length;
+  const standIns = colours.filter((colour) => !colour.inPantry).length;
+  const summary = (
+    <span className="flex flex-col gap-1.5">
+      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        {colours.map((colour) => (
+          <span key={colour.hex} className="flex items-center gap-1">
+            <Swatch color={colour.hex} />
+            <ArrowRightIcon size={10} aria-hidden className="text-ink-ghost" />
+            <SpoolDisc
+              color={colour.filament.colorHex}
+              colors={colour.filament.colors}
+              size="xs"
+              empty={!colour.inPantry}
+            />
+          </span>
+        ))}
+      </span>
+      <span>
+        {colours.length} colours on {filaments.size} {filaments.size === 1 ? "spool" : "spools"}
+        {shared ? ` · ${shared} shared` : ""}
+        {standIns ? ` · ${standIns} not in the Pantry yet` : ""}
+      </span>
+    </span>
+  );
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Colours</span>
-        <p className="text-small text-ink-soft text-pretty">Each colour in the model, and the spool that prints it.</p>
-      </div>
-      <ul className="flex flex-col">
-        {colours.map((colour) => {
-          const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
-          const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
-          return (
-            <li
-              key={colour.hex}
-              className="not-first:before:bg-hairline relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-0 not-first:before:h-px"
-            >
-              <Disclosure
-                appearance="plain"
-                open={open === colour.hex}
-                onOpenChange={(next) => setOpen(next ? colour.hex : null)}
-                title={
-                  <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <Swatch color={colour.hex} size="md" />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="text-small text-ink font-semibold text-balance">
-                          {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
-                        </span>
-                        <MetaList className="text-caption text-ink-faint font-normal">
-                          {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
-                          {`${colour.share}%`}
-                        </MetaList>
-                      </span>
-                    </span>
-                    <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
-                    <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
-                      <SpoolDisc
-                        color={colour.filament.colorHex}
-                        colors={colour.filament.colors}
-                        size="sm"
-                        empty={!colour.inPantry}
-                      />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="text-small text-ink font-semibold text-balance">
-                          {colour.filament.colorName || colour.filament.material}
-                        </span>
-                        <span className="text-caption text-ink-faint font-normal">
-                          {!colour.inPantry
-                            ? "Not in the Pantry yet"
-                            : spool
-                              ? spoolDetail(spool)
-                              : filamentWords({ ...colour.filament, colorHex: undefined })}
-                        </span>
-                        {sharing.length > 0 && (
-                          <span className="text-caption text-ink-soft font-normal">
-                            Same spool as {nameOf(sharing[0] as SliceColour)}
-                            {sharing.length > 1 ? ` and ${sharing.length - 1} more` : ""}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                  </span>
-                }
+    <div ref={box}>
+      <Disclosure
+        appearance="plain"
+        open={all}
+        onOpenChange={(next) => {
+          setAll(next);
+          // The rows open below the fold of a sheet: bring them into view.
+          if (next) setTimeout(() => box.current?.scrollIntoView({ block: "start", behavior: scrollBehavior() }), 250);
+        }}
+        title="Colours"
+        icon={PaletteIcon}
+        summary={summary}
+      >
+        <p className="text-small text-ink-soft mb-2 text-pretty">
+          Each colour in the model, and the spool that prints it.
+        </p>
+        <ul className={wide ? "grid grid-cols-2 gap-x-6 gap-y-0" : "flex flex-col"}>
+          {colours.map((colour) => {
+            const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
+            const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
+            return (
+              <li
+                key={colour.hex}
+                className={cn(
+                  "before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
+                  wide ? "nth-[-n+2]:before:hidden" : "first:before:hidden",
+                )}
               >
-                <Picker
-                  colour={colour}
-                  spool={spool}
-                  offered={offered}
-                  wrapped={wrapped}
-                  onPick={(id) => choose(colour, id)}
-                  onBack={() => onChange(choices.filter((choice) => choice.from !== colour.hex))}
-                />
-              </Disclosure>
-            </li>
-          );
-        })}
-      </ul>
+                <Disclosure
+                  appearance="plain"
+                  open={open === colour.hex}
+                  onOpenChange={(next) => setOpen(next ? colour.hex : null)}
+                  title={
+                    <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <Swatch color={colour.hex} size="md" />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-small text-ink font-semibold text-balance">
+                            {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+                          </span>
+                          <MetaList className="text-caption text-ink-faint font-normal">
+                            {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
+                            {`${colour.share}%`}
+                          </MetaList>
+                        </span>
+                      </span>
+                      <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
+                      <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
+                        <SpoolDisc
+                          color={colour.filament.colorHex}
+                          colors={colour.filament.colors}
+                          size="sm"
+                          empty={!colour.inPantry}
+                        />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-small text-ink font-semibold text-balance">
+                            {colour.filament.colorName || colour.filament.material}
+                          </span>
+                          <span className="text-caption text-ink-faint font-normal">
+                            {!colour.inPantry
+                              ? "Not in the Pantry yet"
+                              : spool
+                                ? spoolDetail(spool)
+                                : filamentWords({ ...colour.filament, colorHex: undefined })}
+                          </span>
+                          {sharing.length > 0 && (
+                            <span className="text-caption text-ink-soft font-normal">
+                              Same spool as {nameOf(sharing[0] as SliceColour)}
+                              {sharing.length > 1 ? ` and ${sharing.length - 1} more` : ""}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </span>
+                  }
+                >
+                  <Picker
+                    colour={colour}
+                    spool={spool}
+                    offered={offered}
+                    wrapped={wrapped}
+                    onPick={(id) => choose(colour, id)}
+                    onBack={() => onChange(choices.filter((choice) => choice.from !== colour.hex))}
+                  />
+                </Disclosure>
+              </li>
+            );
+          })}
+        </ul>
+      </Disclosure>
     </div>
   );
 }

@@ -18731,6 +18731,10 @@
                       "maxLength": 120
                     }
                   },
+                  "originalPicture": {
+                    "description": "The plate's picture in the model's own colours is kept too (`/api/files/:id/original-thumb`).",
+                    "type": "boolean"
+                  },
                   "colours": {
                     "description": "A model with colours of its own: each, and the filament that printed it.",
                     "maxItems": 16,
@@ -19103,6 +19107,10 @@
                           "minLength": 1,
                           "maxLength": 120
                         }
+                      },
+                      "originalPicture": {
+                        "description": "The plate's picture in the model's own colours is kept too (`/api/files/:id/original-thumb`).",
+                        "type": "boolean"
                       },
                       "colours": {
                         "description": "A model with colours of its own: each, and the filament that printed it.",

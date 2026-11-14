@@ -62,6 +62,8 @@ export type SliceMessage =
       type: "done";
       sliced: Uint8Array;
       png: Blob | null;
+      /** The plate in the model's own colours, when it has colours that were matched. */
+      originalPng?: Blob | null;
       slice: FileSlice;
       prefill: AttemptSettings;
       objects: string[];
@@ -143,11 +145,12 @@ async function run(request: SliceRequest) {
   let by: SlicerId | null = null;
   let fallback: SliceFallback | undefined;
   let colourRows: SliceColour[] | undefined;
+  let originalPng: Blob | null = null;
   let plateOf: FileSlice["plate"];
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
     ...(fallback ? { fallback } : {}),
-    ...(colourRows ? { colours: colourRows } : {}),
+    ...(colourRows ? { colours: colourRows, ...(originalPng ? { originalPicture: true } : {}) } : {}),
     ...(plateOf ? { plate: plateOf } : {}),
     settings: {
       ...settings,
@@ -237,6 +240,7 @@ async function run(request: SliceRequest) {
     // The picture as it will print: with ours, an object's parts each in its filament's colour.
     png = await picture(objects, oursSetup, byParts);
     if (png) post({ type: "picture", png });
+    if (matched) originalPng = await originalPicture(objects, oursSetup);
 
     for (const each of new Set([setup, oursSetup])) {
       const tower = objects.length && each.filaments.length > 1 ? towerSpot(objects, plate, each) : null;
@@ -264,7 +268,7 @@ async function run(request: SliceRequest) {
       by = "spaghetti";
       cautions = cautionsOf(ours.warnings, slicing.supports);
     } else {
-      const result = await sliceWithEngine(engine, setup, objects);
+      const result = await sliceWithEngineFitted(engine, setup, objects, plate);
       by = "orca";
       cautions = cautionsOf(result.warnings, slicing.supports);
       progress("packing", 0);
@@ -297,6 +301,7 @@ async function run(request: SliceRequest) {
         type: "done",
         sliced,
         png,
+        ...(colourRows && originalPng ? { originalPng } : {}),
         slice: slice({
           status: "sliced",
           bytes: sliced.byteLength,
@@ -494,15 +499,41 @@ function withChoices(slicing: SlicingSettings, chosen: SliceOptions): SlicingSet
 }
 
 /**
- * What the engine is given: an object whose parts print in the filaments its colours were matched to goes in part by
- * part, each its own object where it lies (the engine prints one filament an object).
+ * What the engine is given: an object whose parts print in the filaments its colours were matched to goes in whole
+ * (one object, so a part in the air still sits on what holds it), its parts painted in their filaments as a project's
+ * painted colours are, which Orca's own segmentation prints. Triangles in the object's own filament stay unpainted.
  */
 function engineObjects(objects: Placed[]): Placed[] {
-  return objects.flatMap((object) => {
-    const parts = object.byColour ? partsOf(object) : null;
-    if (!parts) return [object];
-    return parts.map(({ positions, filament }) => ({ name: object.name, positions, extruder: filament }));
+  return objects.map((object) => {
+    if (!object.byColour || !object.parts) return object;
+    const triangles: number[] = [];
+    const codes: string[] = [];
+    for (const part of object.parts) {
+      if (part.extruder === object.extruder) continue;
+      const code = paintCode(part.extruder);
+      for (let t = part.from; t < part.to; t++) {
+        triangles.push(t);
+        codes.push(code);
+      }
+    }
+    if (!triangles.length) return object;
+    const ends: number[] = [];
+    let length = 0;
+    for (const code of codes) {
+      length += code.length;
+      ends.push(length);
+    }
+    return {
+      ...object,
+      paint: { triangles: Uint32Array.from(triangles), codes: codes.join(""), ends: Uint32Array.from(ends) },
+    };
   });
+}
+
+/** Orca's code for a whole triangle painted in a filament (paint.ts: states 1 and 2 are one digit, 3 and up two). */
+function paintCode(filament: number): string {
+  if (filament <= 2) return String(filament * 4);
+  return `${(filament - 3).toString(16).toUpperCase()}C`;
 }
 
 /** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
@@ -686,6 +717,44 @@ async function picture(objects: Placed[], setup: SliceSetup, parts: boolean): Pr
 }
 
 /**
+ * The plate picture with the model's own colours, for the before and after of colour matching: each run of an
+ * object's triangles in the colour the file gives it (the rest, fins included, in the first filament's).
+ */
+async function originalPicture(objects: Placed[], setup: SliceSetup): Promise<Blob | null> {
+  if (typeof OffscreenCanvas !== "function") return null;
+  try {
+    const meshes: { positions: Float32Array; colour: string | undefined }[] = [];
+    for (const object of objects) {
+      let at = 0;
+      for (const run of object.colours ?? []) {
+        if (run.from > at)
+          meshes.push({ positions: object.positions.subarray(at * 9, run.from * 9), colour: undefined });
+        meshes.push({ positions: object.positions.subarray(run.from * 9, run.to * 9), colour: run.colour.hex });
+        at = run.to;
+      }
+      if (at * 9 < object.positions.length) {
+        meshes.push({ positions: object.positions.subarray(at * 9), colour: undefined });
+      }
+    }
+    const pixels = renderPlate(
+      meshes.map((mesh) => mesh.positions),
+      {
+        size: PICTURE,
+        colour: setup.colours[0] ?? FALLBACK_COLOUR,
+        colours: meshes.map((mesh) => mesh.colour),
+      },
+    );
+    const canvas = new OffscreenCanvas(PICTURE, PICTURE);
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.putImageData(new ImageData(new Uint8ClampedArray(pixels), PICTURE, PICTURE), 0, 0);
+    return await canvas.convertToBlob({ type: "image/png" });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A painted object as meshes, one a filament: its unpainted triangles in its own, each painted piece in the one it
  * is painted with (a filament past the setup's, or none, its own), split as Orca splits it.
  */
@@ -732,6 +801,38 @@ function paintedMeshes(
 
 /* The engine's host, spoken to with protocol v2 messages ---------------------------------------------------------- */
 
+/**
+ * Slices with the engine; when it says the prime tower is partly off the plate (many filaments, or ones that purge a
+ * lot, such as TPU beside PLA, make it deep), tries again with a wider one, which is shallower, put where it fits.
+ */
+async function sliceWithEngineFitted(
+  engine: SliceRequest["engine"],
+  setup: SliceSetup,
+  objects: Placed[],
+  plate: ReturnType<typeof plateArea>,
+) {
+  try {
+    return await sliceWithEngine(engine, setup, objects);
+  } catch (error) {
+    const outside = error instanceof Error && /prime tower is partially outside/i.test(error.message);
+    if (!outside || setup.tower || setup.filaments.length < 2) throw error;
+    let last: unknown = error;
+    for (const width of [60, 90]) {
+      setup.process.prime_tower_width = [String(width)];
+      const tower = towerSpot(objects, plate, setup);
+      if (!tower) break;
+      setup.process.wipe_tower_x = [String(Math.round(tower.x))];
+      setup.process.wipe_tower_y = [String(Math.round(tower.y))];
+      try {
+        return await sliceWithEngine(engine, setup, objects);
+      } catch (again) {
+        last = again;
+      }
+    }
+    throw last;
+  }
+}
+
 class EngineError extends Error {
   readonly code: number;
   constructor(code: number, message: string) {
@@ -756,6 +857,8 @@ function engineProblem(error: EngineError): Pick<FileSlice, "problem" | "message
 
 async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup, objects: Placed[]) {
   progress("engine", 0);
+  // An engine from an attempt before this one (a retry with a wider prime tower) is let go: one at a time in memory.
+  host?.terminate();
   const worker = new Worker(new URL(engine.host, engine.base), { type: "module", name: "slicer-engine" });
   host = worker;
   const pending = new Map<

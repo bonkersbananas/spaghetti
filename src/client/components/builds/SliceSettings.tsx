@@ -250,24 +250,25 @@ export function SlicingChoices({
   );
   // A model with colours of its own: each colour and what prints it, in place of one filament to pick.
   const colours = slice?.status === "sliced" ? slice.colours : undefined;
-  const filamentGroup =
-    model &&
-    (colours && colours.length > 1 ? (
+  const colourMatches =
+    model && colours && colours.length > 1 ? (
       <ColourMatches
         colours={colours}
         choices={settings.colours ?? []}
         spools={spools}
         onChange={(next) => set({ colours: next })}
         wrapped={!!twoColumns}
+        wide={!!twoColumns}
       />
-    ) : (
-      <FilamentChoice
-        settings={settings}
-        spools={spools}
-        onChange={(filaments) => set({ filaments })}
-        wrapped={!!twoColumns}
-      />
-    ));
+    ) : null;
+  const filamentGroup = model && !colourMatches && (
+    <FilamentChoice
+      settings={settings}
+      spools={spools}
+      onChange={(filaments) => set({ filaments })}
+      wrapped={!!twoColumns}
+    />
+  );
   // The workspace's defaults carry no filament of their own: where the choice would be, it says where it comes from.
   const filamentRule = !model && (
     <div className="flex flex-col gap-2.5">
@@ -326,7 +327,9 @@ export function SlicingChoices({
             {/* More, the licence and the files fill the room under the strength, so nothing scrolls; as on a phone, the
                 line saying which slicer sliced it, and in how long, follows More's last choice, the slicer. */}
             {more}
-            {after}
+            {/* A model with colours of its own: the licence and files move to the second column, so the two are
+                even, and the colours run across the panel under them. */}
+            {!colourMatches && after}
           </div>
           <div className="flex min-w-0 flex-col gap-7">
             {supportsGroup}
@@ -335,8 +338,10 @@ export function SlicingChoices({
             {filamentRule}
             {nozzleGroup}
             {resetGroup}
+            {colourMatches && after}
           </div>
         </div>
+        {colourMatches}
       </div>
     );
   }
@@ -348,6 +353,7 @@ export function SlicingChoices({
       {supportsGroup}
       {layGroup}
       {filamentGroup}
+      {colourMatches}
       {filamentRule}
       {nozzleGroup}
       {resetGroup}

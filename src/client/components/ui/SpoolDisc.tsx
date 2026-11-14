@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import { cn } from "@/lib/cn";
 
 const sizes = {
+  /** In a line of text: a colour beside the spool that prints it. */
+  xs: "size-4",
   sm: "size-6",
   md: "size-11",
   lg: "size-16",

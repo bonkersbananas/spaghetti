@@ -12,6 +12,8 @@ export interface Sliced {
   ok: true;
   sliced: Blob;
   png: Blob | null;
+  /** The plate in the model's own colours, when its colours were matched to filaments. */
+  originalPng?: Blob;
   slice: FileSlice;
   /** The settings a dropped .gcode.3mf would give an attempt. */
   prefill: AttemptSettings;
@@ -127,6 +129,7 @@ export function sliceModel(
           ok: true,
           sliced: new Blob([message.sliced as BlobPart], { type: "model/3mf" }),
           png: message.png,
+          ...(message.originalPng ? { originalPng: message.originalPng } : {}),
           slice: message.slice,
           prefill: message.prefill,
           objects: message.objects,

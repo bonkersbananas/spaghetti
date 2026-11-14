@@ -59,7 +59,13 @@ export function Disclosure({
         )}
         <span className="min-w-0 flex-1">
           <span className="text-body text-ink block font-semibold">{title}</span>
-          {summary && !open && <span className="text-small text-ink-faint mt-0.5 line-clamp-2 block">{summary}</span>}
+          {summary && !open && (
+            <span
+              className={cn("text-small text-ink-faint mt-0.5 block", typeof summary === "string" && "line-clamp-2")}
+            >
+              {summary}
+            </span>
+          )}
         </span>
         <ExpandIcon
           size={18}
