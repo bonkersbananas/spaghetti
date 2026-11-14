@@ -227,21 +227,61 @@ test("with a 0.2 mm as the main nozzle, ours slices with its presets, bridges wi
   }
 });
 
-test("a part that floats is OrcaSlicer's to slice, which warns of it", async ({ page }) => {
-  test.setTimeout(2 * SLICED);
+test("a part that floats is sliced by ours, which warns of it as OrcaSlicer's engine does", async ({ page }) => {
+  test.setTimeout(3 * SLICED);
   await signIn(page);
   try {
     await setDefaults(page, { slicer: "spaghetti" });
-    // Without supports, its arm would print in the air (as slicing-settings.spec.ts's drying rack).
+    // Without supports, its arm would print in the air (as slicing-settings.spec.ts's drying rack): ours slices it
+    // and warns of it (release 6), as Orca's engine did when it stepped in for that.
     const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
     await expect(files.getByText("Parts of it float in the air.")).toBeVisible({ timeout: SLICED });
-    await expect(
-      files.getByText("Sliced by OrcaSlicer: our own slicer can't check for floating parts yet"),
-    ).toBeVisible();
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
     await expect
-      .poll(async () => (await fileOf(page, id))?.slice?.fallback, { timeout: SLICED })
-      .toEqual({ why: "floating" });
+      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+      .toBe("spaghetti");
+    const floating = (await fileOf(page, id)).slice;
+    expect(floating.fallback).toBeUndefined();
+    expect(floating.cautions).toEqual(["floating"]);
+
+    // Its one suggestion: supports where needed, which ours builds (trees), and the caution goes.
+    await files.getByRole("button", { name: "Supports where needed" }).click();
+    await expect
+      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing?.supports, { timeout: SLICED })
+      .toBe("where-needed");
+    const held = (await fileOf(page, id)).slice;
+    expect(held.settings.slicer).toBe("spaghetti");
+    expect(held.fallback).toBeUndefined();
+    expect(held.cautions).toBeUndefined();
+    await expect(files.getByText("Parts of it float in the air.")).toBeHidden();
   } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a generic filament slices with ours, which lifts the nozzle as Orca's Auto Lift does", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const spool = crypto.randomUUID();
+  try {
+    // The Pantry's one spool is PETG, which slices with Orca's Generic PETG: it lifts the nozzle with Auto Lift.
+    await page.request.post("/api/spools", {
+      headers,
+      data: { id: spool, material: "PETG", colorName: "Teal", colorHex: "#2a8a85" },
+    });
+    await setDefaults(page, { slicer: "spaghetti" });
+    const { id } = await ideaWithModel(page, "Cube", "cube.stl", boxStl(20));
+    await expect
+      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+      .toBe("spaghetti");
+    const slice = (await fileOf(page, id)).slice;
+    expect(slice.settings.filaments).toEqual([expect.stringMatching(/^Generic PETG @/)]);
+    expect(slice.fallback).toBeUndefined();
+    // Until release 6 ours lifted in spirals instead, and said so: "Auto Lift printed as spiral lifts".
+    expect(slice.notes ?? []).toEqual([]);
+  } finally {
+    await page.request.delete(`/api/spools/${spool}`, { headers });
     await setDefaults(page, null);
   }
 });

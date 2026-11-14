@@ -2040,12 +2040,28 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked, with tree supports where needed, which it can't build yet: OrcaSlicer's engine sliced it, and the
-    // card says why in one line.
+    // Ours picked for the drying rack, whose arm starts in the air: the card has the usual caution and the one thing
+    // that helps, under who sliced it.
+    name: "idea-model-ours-floating",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setSlicingDefaults(page, { slicer: "spaghetti" });
+      await ideaWithModel(page, RACK_IDEA, RACK, /Parts of it float/);
+      await sliceSaved(page);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await setSlicingDefaults(page, null);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Ours picked, with slim tree supports where needed, which it can't build yet: OrcaSlicer's engine sliced it, and
+    // the card says why in one line.
     name: "idea-model-stepped-in",
     path: "/ideas",
     prepare: async (page) => {
-      await setSlicingDefaults(page, { slicer: "spaghetti", supports: "where-needed" });
+      await setSlicingDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
       await ideaWithModel(page, RACK_IDEA, RACK, /Sliced by OrcaSlicer: our own slicer/);
       await sliceSaved(page);
     },

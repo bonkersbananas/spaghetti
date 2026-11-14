@@ -903,6 +903,48 @@ fn supports_leave_a_model_that_needs_none_as_it_was() {
     assert!(!String::from_utf8(with.gcode).unwrap().contains("; FEATURE: Support"));
 }
 
+/// A model made of boxes (`boxes_stl`): each box's lowest and highest corners.
+type Boxes<'a> = &'a [([f32; 3], [f32; 3])];
+
+#[test]
+fn without_supports_each_object_that_needs_them_is_warned_of_as_orca_warns() {
+    let warnings = |models: &[(&str, Boxes)], s: &Settings| {
+        let stls: Vec<Vec<u8>> = models.iter().map(|(_, boxes)| boxes_stl(boxes)).collect();
+        let inputs: Vec<Input> =
+            models.iter().zip(&stls).map(|((name, _), stl)| Input { name, bytes: stl.as_slice() }).collect();
+        let out = slice(&inputs, s, &Options { thumbnail: false, ..Options::default() }).unwrap();
+        out.warnings.into_iter().map(|w| (w.kind, w.message)).collect::<Vec<_>>()
+    };
+    let says = |name: &str, what: &str| {
+        vec![(
+            "need_support_on",
+            format!("It seems object {name} {what}. Please re-orient the object or enable support generation."),
+        )]
+    };
+    let none: Vec<(&str, String)> = Vec::new();
+    // Native OrcaSlicer 2.5.0 (Nov 14) warns of each as here. The app's drying rack: an arm that starts in the air
+    // 6 mm from its post.
+    let rack: Boxes =
+        &[([0., 0., 0.], [36., 36., 4.]), ([12., 12., 4.], [24., 24., 50.]), ([30., 15., 34.], [56., 21., 38.])];
+    let off = Settings::default();
+    assert_eq!(warnings(&[("rack.stl", rack)], &off), says("rack.stl", "has floating regions"));
+    // A slab 15 mm out each side of its pillar, and a ledge 8 mm out from a wall: more than the 6 mm Orca lets be.
+    let tee: Boxes = &[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])];
+    assert_eq!(warnings(&[("tee.stl", tee)], &off), says("tee.stl", "has a floating cantilever"));
+    let ledge = |out: f32| [([110., 120., 0.], [120., 140., 30.]), ([120., 120., 15.], [120. + out, 140., 19.])];
+    assert_eq!(warnings(&[("ledge.stl", &ledge(8.0))], &off), says("ledge.stl", "has a floating cantilever"));
+    // A ledge 5 mm out and a cube need none; on a plate with them, only the rack is warned of.
+    let cube: Boxes = &[([0., 0., 0.], [20., 20., 20.])];
+    assert_eq!(warnings(&[("ledge.stl", &ledge(5.0)), ("cube.stl", cube)], &off), none);
+    assert_eq!(
+        warnings(&[("cube.stl", cube), ("rack.stl", rack), ("ledge.stl", &ledge(5.0))], &off),
+        says("rack.stl", "has floating regions")
+    );
+    // With supports, there is nothing to warn of.
+    let on = setup::read(r#"{"process": {"enable_support": "1"}}"#).unwrap().settings;
+    assert_eq!(warnings(&[("rack.stl", rack)], &on), none);
+}
+
 #[test]
 fn a_brim_leaves_room_for_the_supports_flange() {
     // A fin 4 × 20 mm and 40 mm tall gets a brim; an arm off it 10 mm up has support down to the plate, whose flange

@@ -59,24 +59,36 @@ struct Cluster {
     cantilever: bool,
 }
 
-/// Each layer's overhangs, from the object's slices (the first layer as sliced) and its layers' heights (mm).
-pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config::Settings) -> Overhangs {
+/// What Orca's first pass over the layers finds on one: its overhangs, its sharp tails (on the first layer its small
+/// islands, above it the islands with nothing under them), the overhangs that reach more than 3 mm from what holds
+/// them and how far the farthest of those reaches (nm), and whether it has over a hundred overhangs (`crowded`).
+struct Found {
+    overhangs: Shapes,
+    tails: Vec<(Shape, f32)>,
+    cantilevers: Shapes,
+    reach_nm: f64,
+    crowded: bool,
+}
+
+/// Orca's first pass (`TreeSupport::detect_overhangs`, in parallel over the layers): each layer's slices with what is
+/// too thin to print taken out (`lslices_extrudable`), and what it finds on each.
+fn scan(
+    slices: &[Shapes],
+    heights: &[f64],
+    c: &Config,
+    s: &crate::config::Settings,
+    min_reach_nm: f64,
+) -> (Vec<Shapes>, Vec<Found>) {
     let n = slices.len();
     let ews = extrusion_width(s);
-    // The slices with what is too thin to print taken out (`lslices_extrudable`).
     let extrudable: Vec<Shapes> = par::map_range(n, |l| {
         let opened = grow(&grow(&slices[l], (-ews / 2.0) as f32 as f64), ews as f32 as f64);
         geom::intersection(&slices[l], &opened)
     });
     let threshold = c.threshold_degrees.to_radians();
-    struct Found {
-        overhangs: Shapes,
-        tails: Vec<(Shape, f32)>,
-        cantilevers: Shapes,
-        crowded: bool,
-    }
     let found: Vec<Found> = par::map_range(n, |l| {
-        let mut f = Found { overhangs: Vec::new(), tails: Vec::new(), cantilevers: Vec::new(), crowded: false };
+        let mut f =
+            Found { overhangs: Vec::new(), tails: Vec::new(), cantilevers: Vec::new(), reach_nm: 0.0, crowded: false };
         if l == 0 {
             // Small islands of the first layer are sharp tails.
             for island in &extrudable[0] {
@@ -94,18 +106,31 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
             f.crowded = true;
             return f;
         }
-        // Islands with nothing under them.
+        // Islands with nothing under them. One with a corner inside the layer below rests on it: up to eight
+        // corners round it are tried first, which saves the offsets for nearly every island.
         for island in &extrudable[l] {
+            let outer = &island[0];
+            let step = outer.len().div_ceil(8).max(1);
+            if outer.iter().step_by(step).any(|&p| geom::contains(&extrudable[l - 1], p)) {
+                continue;
+            }
             let expanded = grow(&one(island), 0.1 * ews);
             if !overlaps(&expanded, &extrudable[l - 1]) && !grow(&one(island), -0.1 * ews).is_empty() {
                 f.tails.push((island.clone(), 0.0));
             }
         }
-        // Overhangs that reach more than 3 mm from what holds them.
+        // Overhangs that reach more than `min_reach_nm` from what holds them (3 mm for the trees).
         let reach = ((((s.line_width - llo).max(0.0) + 0.1) * 1e6) as f32) as f64;
-        let held = grow(&lower_offset, reach);
+        // No point of an overhang lies farther from what holds it than its bounding box's diagonal: only those wider
+        // than `min_reach_nm` are measured, and what holds them is worked out only for them.
+        let mut held: Option<Shapes> = None;
         for poly in &f.overhangs {
-            let boundary = geom::intersection(&one(poly), &held);
+            let (w, h) = size_nm(&one(poly));
+            if w.hypot(h) <= min_reach_nm {
+                continue;
+            }
+            let held = held.get_or_insert_with(|| grow(&lower_offset, reach));
+            let boundary = geom::intersection(&one(poly), held);
             if boundary.is_empty() {
                 continue;
             }
@@ -114,12 +139,42 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
                 .iter()
                 .map(|p| vertices.iter().map(|q| geom::dist(*p, *q)).fold(f64::MAX, f64::min))
                 .fold(0.0, f64::max);
-            if far * 100.0 > 3e6 {
+            if far * 100.0 > min_reach_nm {
                 f.cantilevers.push(poly.clone());
+                f.reach_nm = f.reach_nm.max(far * 100.0);
             }
         }
         f
     });
+    (extrudable, found)
+}
+
+/// Why an object sliced without supports needs them, as Orca's support-necessity check finds it
+/// (`PrintObject::is_support_necessary`): a part that starts in the air ("floating regions"), else an overhang that
+/// reaches more than 6 mm from what holds it ("a floating cantilever").
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Necessity {
+    FloatingRegions,
+    FloatingCantilever,
+}
+
+/// Whether an object (its slices and layers' heights, as `detect` takes them) needs supports, by Orca's check: its
+/// first pass only. A layer with over a hundred overhangs turns the sharp tails off, as in `detect`.
+pub fn necessity(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config::Settings) -> Option<Necessity> {
+    let (_, found) = scan(slices, heights, c, s, 6e6);
+    let crowded = found.iter().any(|f| f.crowded);
+    if !crowded && found.iter().skip(1).any(|f| !f.tails.is_empty()) {
+        return Some(Necessity::FloatingRegions);
+    }
+    let reach = found.iter().map(|f| f.reach_nm).fold(0.0, f64::max);
+    (reach > 6e6).then_some(Necessity::FloatingCantilever)
+}
+
+/// Each layer's overhangs, from the object's slices (the first layer as sliced) and its layers' heights (mm).
+pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config::Settings) -> Overhangs {
+    let n = slices.len();
+    let ews = extrusion_width(s);
+    let (extrudable, found) = scan(slices, heights, c, s, 3e6);
     // A layer with over a hundred overhangs turns off sharp tails and the small overhangs' removal (Orca's guard,
     // which also stops at 30 s: there it depends on which layers were done first; here it holds for all).
     let crowded = found.iter().any(|f| f.crowded);

@@ -66,8 +66,9 @@ export interface SliceSettings {
 
 /**
  * Why OrcaSlicer's engine made a slice that Spaghetti's own slicer was asked for (decision 0055): what ours can't
- * slice yet, in its words ("tree supports"), parts that may float (ours can't tell yet, and OrcaSlicer warns of
- * them), ours not starting (its module didn't load), or ours failing on this model.
+ * slice yet, in its words ("tree supports"), ours not starting (its module didn't load), or ours failing on this
+ * model. "floating" is only on older slices: until ours warned of floating parts (slicer-rs-v6), a model without
+ * supports that may have had one went to the engine, which warns of them.
  */
 export interface SliceFallback {
   why: "unsupported" | "floating" | "unloaded" | "failed";
@@ -75,7 +76,7 @@ export interface SliceFallback {
   what?: string;
 }
 
-/** Orca's cautions worth a line on the card: "floating", parts that start in the air while supports are off. */
+/** The slicer's cautions worth a line on the card: "floating", parts that start in the air while supports are off. */
 export type SliceCaution = "floating";
 
 /** A model file's slicing, kept on its row: absent until it is sliced, or until slicing fails. */

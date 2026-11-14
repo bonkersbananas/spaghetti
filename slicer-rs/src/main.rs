@@ -202,6 +202,9 @@ fn main() -> ExitCode {
     for fallback in &out.fallbacks {
         eprintln!("note: {fallback}");
     }
+    for warning in &out.warnings {
+        eprintln!("warning: {}", warning.message);
+    }
     if args.timings {
         let t = &out.timings;
         eprintln!(
