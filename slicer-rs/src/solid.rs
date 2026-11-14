@@ -356,6 +356,8 @@ struct Beading {
     /// Arachne's `wall_split_middle_threshold` and `wall_add_middle_threshold`, of a bead's width.
     split: f64,
     add: f64,
+    /// How far a bead's width may stray to keep a bead count along a band (`wall_transition_filter_deviation`), mm.
+    deviation: f64,
 }
 
 impl Beading {
@@ -369,6 +371,7 @@ impl Beading {
             min_feature: 0.25 * nozzle,
             split: (2.0 * min_bead / width - 1.0).clamp(0.01, 0.99),
             add: (min_bead / width).clamp(0.01, 0.99),
+            deviation: 0.25 * nozzle,
         }
     }
 
@@ -401,15 +404,102 @@ impl Beading {
     }
 }
 
+/// A middle line cut where its band's bead count changes (at the width where it does), each run with its count.
+fn cut_by_count(line: &medial::ThickLine, beading: &Beading) -> Vec<(ThickPath, usize)> {
+    let mut runs: Vec<(ThickPath, usize)> = Vec::new();
+    let mut count = beading.count(line.widths[0]);
+    let mut run = ThickPath { points: vec![line.points[0]], widths: vec![line.widths[0]] };
+    for k in 1..line.points.len() {
+        let (p, q) = (line.points[k - 1], line.points[k]);
+        let (tp, tq) = (line.widths[k - 1], line.widths[k]);
+        let target = beading.count(tq);
+        while count != target {
+            let next = if target > count { count + 1 } else { count - 1 };
+            let t = beading.threshold(count.max(next));
+            let f = if tq != tp { ((t - tp) / (tq - tp)).clamp(0.0, 1.0) } else { 0.0 };
+            let x = geom::pt(
+                (p.x as f64 + (q.x - p.x) as f64 * f).round() as i32,
+                (p.y as f64 + (q.y - p.y) as f64 * f).round() as i32,
+            );
+            run.points.push(x);
+            run.widths.push(t);
+            let done = std::mem::replace(&mut run, ThickPath { points: vec![x], widths: vec![t] });
+            runs.push((done, count));
+            count = next;
+        }
+        run.points.push(q);
+        run.widths.push(tq);
+    }
+    runs.push((run, count));
+    runs
+}
+
+/// mm: half of Arachne's transition between two bead counts (`wall_transition_length`, 0.4 mm here).
+const HALF_TRANSITION: f64 = 0.2;
+
+/// Arachne's filter on where a band's bead count changes (`filterTransitionMids`), for the odd middle bead: where it
+/// starts and soon stops again (or stops and soon starts again) and the band stays within the allowed deviation of
+/// the width where it would, the stretch keeps the count round it, its beads that much wider or narrower (the
+/// deviation counted in the bead it changes: all of it in one middle bead, half in each of two); and a stretch at a
+/// free end of the middle shorter than half a transition takes the count beside it (`filterEndOfCentralTransition`).
+/// Where a pair of beads starts or stops the loops, which come from offsets, decide, so those steps stay.
+fn settle(runs: &mut Vec<(ThickPath, usize)>, beading: &Beading, free: [bool; 2]) {
+    loop {
+        let mut changed = false;
+        for k in 1..runs.len().saturating_sub(1) {
+            let (before, here, after) = (runs[k - 1].1, runs[k].1, runs[k + 1].1);
+            if before != after || before.abs_diff(here) != 1 || before.max(here).is_multiple_of(2) {
+                continue;
+            }
+            let t = beading.threshold(before.max(here));
+            let off = runs[k].0.widths.iter().fold(0.0f64, |m, &w| m.max((w - t).abs()));
+            if (if before % 2 == 1 { off } else { off / 2.0 }) <= beading.deviation {
+                runs[k].1 = before;
+                changed = true;
+            }
+        }
+        let n = runs.len();
+        for (end, next, is_free) in [(0, 1, free[0]), (n.wrapping_sub(1), n.wrapping_sub(2), free[1])] {
+            if !is_free || n < 2 {
+                continue;
+            }
+            let (a, b) = (runs[end].1, runs[next].1);
+            if a.abs_diff(b) != 1 || a.min(b) == 0 || a.max(b).is_multiple_of(2) {
+                continue;
+            }
+            if geom::length_mm(&runs[end].0.points, false) < HALF_TRANSITION {
+                runs[end].1 = runs[next].1;
+                changed = true;
+            }
+        }
+        if !changed {
+            return;
+        }
+        // Runs that now hold the same count are one.
+        let mut merged: Vec<(ThickPath, usize)> = Vec::with_capacity(runs.len());
+        for (run, count) in runs.drain(..) {
+            match merged.last_mut() {
+                Some(last) if last.1 == count => {
+                    last.0.points.extend(run.points.into_iter().skip(1));
+                    last.0.widths.extend(run.widths.into_iter().skip(1));
+                }
+                _ => merged.push((run, count)),
+            }
+        }
+        *runs = merged;
+    }
+}
+
 /// mm: the shortest segment Arachne's simplification keeps in a line (`meshfix_maximum_resolution`).
 const ARACHNE_RESOLUTION: f64 = 0.5;
 
 /// The middle of a narrow region and its width there: where the odd beads run, and how wide the band is beside a
 /// loop.
 struct Axis {
-    lines: Vec<medial::ThickLine>,
-    /// Each segment of the middle lines (units) with the width at its ends (mm).
-    segments: Vec<(Pt, Pt, f64, f64)>,
+    /// The middle lines, each cut where its bead count changes, with the count of each run.
+    runs: Vec<Vec<(ThickPath, usize)>>,
+    /// Each segment of the runs (units) with the band's width at its ends (mm) and its run's bead count.
+    segments: Vec<(Pt, Pt, f64, f64, usize)>,
     cell: f64,
     origin: (f64, f64),
     size: (i64, i64),
@@ -419,19 +509,35 @@ struct Axis {
 }
 
 impl Axis {
-    fn new(region: &Shapes, min_width: f64, cell: f64) -> Axis {
+    fn new(region: &Shapes, beading: &Beading, cell: f64) -> Axis {
         let mut lines = Vec::new();
         for shape in region {
             // Nowhere as wide as the narrowest feature: no line (and no Voronoi diagram to pay for).
-            if max_inradius(shape) < min_width / 2.0 * geom::SCALE {
+            if max_inradius(shape) < beading.min_feature / 2.0 * geom::SCALE {
                 continue;
             }
-            lines.extend(medial::axis(shape, min_width, 1e3));
+            lines.extend(medial::axis(shape, beading.min_feature, 1e3));
         }
-        let mut segments = Vec::new();
+        // A line's end that no other line shares ends the middle there; the others meet at junctions.
+        let mut ends: std::collections::HashMap<(i32, i32), u32> = std::collections::HashMap::new();
         for line in &lines {
-            for k in 1..line.points.len() {
-                segments.push((line.points[k - 1], line.points[k], line.widths[k - 1], line.widths[k]));
+            for p in [line.points[0], *line.points.last().unwrap()] {
+                *ends.entry((p.x, p.y)).or_default() += 1;
+            }
+        }
+        let free = |p: Pt| ends.get(&(p.x, p.y)).copied() == Some(1);
+        let runs: Vec<Vec<(ThickPath, usize)>> = lines
+            .iter()
+            .map(|line| {
+                let mut runs = cut_by_count(line, beading);
+                settle(&mut runs, beading, [free(line.points[0]), free(*line.points.last().unwrap())]);
+                runs
+            })
+            .collect();
+        let mut segments = Vec::new();
+        for (run, count) in runs.iter().flatten() {
+            for k in 1..run.points.len() {
+                segments.push((run.points[k - 1], run.points[k], run.widths[k - 1], run.widths[k], *count));
             }
         }
         let cell = cell * geom::SCALE;
@@ -450,7 +556,7 @@ impl Axis {
         };
         let ncells = (size.0 * size.1) as usize;
         let mut start = vec![0usize; ncells + 1];
-        for &(a, b, _, _) in &segments {
+        for &(a, b, _, _, _) in &segments {
             let (x0, y0, x1, y1) = cells_of(a, b);
             for y in y0..=y1 {
                 for x in x0..=x1 {
@@ -463,7 +569,7 @@ impl Axis {
         }
         let mut at = start.clone();
         let mut ids = vec![0usize; start[ncells]];
-        for (k, &(a, b, _, _)) in segments.iter().enumerate() {
+        for (k, &(a, b, _, _, _)) in segments.iter().enumerate() {
             let (x0, y0, x1, y1) = cells_of(a, b);
             for y in y0..=y1 {
                 for x in x0..=x1 {
@@ -473,7 +579,7 @@ impl Axis {
                 }
             }
         }
-        Axis { lines, segments, cell, origin, size, start, ids }
+        Axis { runs, segments, cell, origin, size, start, ids }
     }
 
     /// Arachne's odd beads: along the middle, wherever the band holds an odd number of beads, the middle one, as
@@ -483,33 +589,7 @@ impl Axis {
     fn odd_beads(&self, beading: &Beading) -> Vec<ThickPath> {
         let trim = beading.two() / 2.0 * geom::SCALE;
         let mut out = Vec::new();
-        for line in &self.lines {
-            // The line cut where its bead count changes, each run with its count.
-            let mut runs: Vec<(ThickPath, usize)> = Vec::new();
-            let mut count = beading.count(line.widths[0]);
-            let mut run = ThickPath { points: vec![line.points[0]], widths: vec![line.widths[0]] };
-            for k in 1..line.points.len() {
-                let (p, q) = (line.points[k - 1], line.points[k]);
-                let (tp, tq) = (line.widths[k - 1], line.widths[k]);
-                let target = beading.count(tq);
-                while count != target {
-                    let next = if target > count { count + 1 } else { count - 1 };
-                    let t = beading.threshold(count.max(next));
-                    let f = if tq != tp { ((t - tp) / (tq - tp)).clamp(0.0, 1.0) } else { 0.0 };
-                    let x = geom::pt(
-                        (p.x as f64 + (q.x - p.x) as f64 * f).round() as i32,
-                        (p.y as f64 + (q.y - p.y) as f64 * f).round() as i32,
-                    );
-                    run.points.push(x);
-                    run.widths.push(t);
-                    let done = std::mem::replace(&mut run, ThickPath { points: vec![x], widths: vec![t] });
-                    runs.push((done, count));
-                    count = next;
-                }
-                run.points.push(q);
-                run.widths.push(tq);
-            }
-            runs.push((run, count));
+        for runs in &self.runs {
             for k in 0..runs.len() {
                 let n = runs[k].1;
                 if n.is_multiple_of(2) {
@@ -541,16 +621,16 @@ impl Axis {
         out
     }
 
-    /// The width of the band (mm) at the point of its middle nearest `p`, and how far that is (mm), looking no
-    /// further than `reach` mm.
-    fn width_near(&self, p: Pt, reach: f64) -> Option<(f64, f64)> {
+    /// The width of the band (mm) at the point of its middle nearest `p`, how far that is (mm) and how many beads
+    /// the band holds there, looking no further than `reach` mm.
+    fn width_near(&self, p: Pt, reach: f64) -> Option<(f64, f64, usize)> {
         if self.segments.is_empty() {
             return None;
         }
         let (x, y) = (p.x as f64, p.y as f64);
         let (cx, cy) =
             (((x - self.origin.0) / self.cell).floor() as i64, ((y - self.origin.1) / self.cell).floor() as i64);
-        let mut best: Option<(f64, f64)> = None;
+        let mut best: Option<(f64, f64, usize)> = None;
         let mut best_d2 = f64::INFINITY;
         let rings = (reach * geom::SCALE / self.cell).ceil() as i64 + 1;
         for r in 0..=rings {
@@ -564,7 +644,7 @@ impl Axis {
                     }
                     let c = (iy * self.size.0 + ix) as usize;
                     for &k in &self.ids[self.start[c]..self.start[c + 1]] {
-                        let (a, b, wa, wb) = self.segments[k];
+                        let (a, b, wa, wb, count) = self.segments[k];
                         let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
                         let len2 = dx * dx + dy * dy;
                         let t = if len2 > 0.0 {
@@ -576,7 +656,7 @@ impl Axis {
                         let d2 = (x - px) * (x - px) + (y - py) * (y - py);
                         if d2 < best_d2 {
                             best_d2 = d2;
-                            best = Some((wa + (wb - wa) * t, d2.sqrt() / geom::SCALE));
+                            best = Some((wa + (wb - wa) * t, d2.sqrt() / geom::SCALE, count));
                         }
                     }
                 }
@@ -586,7 +666,7 @@ impl Axis {
                 break;
             }
         }
-        best.filter(|&(_, d)| d <= reach)
+        best.filter(|&(_, d, _)| d <= reach)
     }
 }
 
@@ -603,7 +683,7 @@ pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec
     let smallest = (w / 2.0 * geom::SCALE).powi(2) * 2.0;
     rest.retain(|shape| shape.first().is_some_and(|outer| geom::area2(outer).abs() as f64 >= smallest));
     // The odd beads run along the middle; the loops go round it, a bead's width apart, as long as two more fit.
-    let axis = Axis::new(&rest, beading.min_feature, 2.0 * two);
+    let axis = Axis::new(&rest, &beading, 2.0 * two);
     let mut paths = axis.odd_beads(&beading);
     for level in 0..1000 {
         if rest.is_empty() || rest.iter().all(|shape| max_inradius(shape) < two / 2.0 * geom::SCALE) {
@@ -666,11 +746,12 @@ fn bead(contour: &[Pt], level: usize, beading: &Beading, axis: &Axis) -> ThickPa
     let depth = (level as f64 + 0.5) * s;
     // The bead's width at a point of the loop, and how far in from the loop it goes, mm.
     let look = |p: Pt| {
-        if let Some((t, d)) = axis.width_near(p, depth + 2.0 * s)
+        if let Some((t, d, count)) = axis.width_near(p, depth + 2.0 * s)
             && (d - (t / 2.0 - depth)).abs() <= s
-            && beading.count(t) < 2 * level + 3
+            && count < 2 * level + 3
         {
-            let left = (t - 2.0 * level as f64 * s).clamp(beading.two(), (2.0 + beading.add) * s);
+            // What is left of the band, no narrower than two beads take and no wider than takes two more.
+            let left = (t - 2.0 * level as f64 * s).clamp(beading.two(), (3.0 + beading.split) * s);
             return (left / 2.0, (left / 2.0 - s) / 2.0);
         }
         (s, 0.0)
