@@ -38,7 +38,8 @@ const SHARP_TAIL_MAX_HEIGHT: f64 = 16.0;
 /// mm: how far support keeps off a sharp tail, and off object layers it doesn't overlap in height.
 const SHARP_TAIL_XY_GAP: f64 = 0.2;
 const NO_OVERLAP_XY_GAP: f64 = 0.2;
-/// mm: support paths are simplified to this (Orca's `SCALED_SUPPORT_RESOLUTION`, with arc fitting off).
+/// mm: support paths are simplified to this, the tolerance Orca fits them to when it fits arcs (`SCALED_SUPPORT_RESOLUTION`,
+/// the profile's default). We write the chords, not the arcs: round a tree's circles they print 0.4 % less plastic.
 const RESOLUTION: f64 = 0.0375;
 
 /// What the generator needs from the settings, worked out as Orca's `SupportParameters` and `SlicingParameters` do.
@@ -77,6 +78,7 @@ pub struct Params {
     /// How the brim keeps the first layer's support off: none, the object's footprint, or that grown by the gap.
     brim: Option<f64>,
     grid_resolution: f64,
+    base_spacing: f64,
     /// Orca's organic trees (`smsTreeOrganic`), whose layers come from `tree.rs`: their bottom contacts aren't printed,
     /// their interfaces are rounded off, and their branches print as anchored loops.
     organic: bool,
@@ -133,6 +135,7 @@ impl Params {
                 _ => None,
             },
             grid_resolution: support_spacing,
+            base_spacing: sp.base_spacing,
             organic: sp.organic(),
             snug: sp.snug(),
             interface_turn: if sp.snug() && sp.interface_pattern == "rectilinear" {
@@ -146,6 +149,16 @@ impl Params {
                 _ => 1e-13,
             },
         }
+    }
+
+    /// mm between the columns' lines (`support_base_pattern_spacing`).
+    fn base_spacing(&self) -> f64 {
+        self.base_spacing
+    }
+
+    /// mm: the thinnest and thickest support layer.
+    pub fn layer_bounds(&self) -> (f64, f64) {
+        (self.min_height, self.max_height)
     }
 
     fn grid(&self, origin: (i64, i64)) -> grid::Params {
@@ -163,6 +176,8 @@ pub struct Object<'a> {
     pub tops: Vec<Shapes>,
     /// Units on the plate: the middle of its bounding box, the origin of Orca's frame for it.
     pub origin: (f64, f64),
+    /// mm: its bounding box's size, which the classic trees' grid of tips spans.
+    pub size: (f64, f64),
 }
 
 impl Object<'_> {
@@ -1379,35 +1394,10 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
         if !area.is_empty() {
             if g.bottom_z < EPSILON {
-                // The flange: a loop round each part, half a line in, then rectilinear lines along Y, dense.
+                // The flange: rectilinear lines along Y.
                 first = true;
                 let angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
-                let w = p.first_width;
-                let h = p.first_layer_height;
-                let sp = p.first_spacing;
-                let closed = geom::offset(&geom::offset(&area, SCALED_EPSILON), -(SCALED_EPSILON + 0.5 * w));
-                for shape in &closed {
-                    let mut group: Vec<Path> = Vec::new();
-                    for (k, contour) in shape.iter().enumerate() {
-                        let mut pl: Vec<Pt> = contour.clone();
-                        pl.push(pl[0]);
-                        if k > 0 {
-                            pl.reverse();
-                        }
-                        clip_end(&mut pl, 0.15 * sp * geom::SCALE);
-                        if pl.len() >= 2 {
-                            group.push(path(Role::Support, pl, w, h));
-                        }
-                    }
-                    for inner in &geom::offset(&one(shape), -0.4 * sp) {
-                        for line in monotonic::rectilinear(inner, angle, origin, sp, p.first_density) {
-                            group.push(path(Role::Support, line, w, h));
-                        }
-                    }
-                    if !group.is_empty() {
-                        item.paths.push(crate::support::Item::Fixed(group));
-                    }
-                }
+                item.paths.extend(flange_paths(&area, angle, origin, p));
             } else if p.organic {
                 item.paths.extend(tree_paths(&area, g.height, p));
             } else {
@@ -1431,6 +1421,213 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
     }
     let islands = geom::union_all(&[&polys]);
     Layer { print_z: z, height, items, islands, first }
+}
+
+/// The classic trees' layers as drawn (`tree::classic`), printed as Orca's `TreeSupport::generate_toolpaths` prints
+/// them: branches as walls (`tree_paths`), a hybrid tree's columns walled and filled, roofs and floors as the
+/// interface pattern, each roof's first layer a loop and dense lines, and the first layer as the flange. Each
+/// layer's lines are as wide and spaced as a line of its own height.
+pub fn classic_layers(
+    drawn: Vec<crate::tree::classic::draw::Drawn>,
+    origin: (f64, f64),
+    wall_count: usize,
+    p: &Params,
+) -> Vec<Layer> {
+    use crate::tree::classic::draw::AreaType;
+    let flow_spacing = |w: f64, h: f64| (w as f32 - h as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
+    // Orca's `_infill_direction` angles (the filler's and a quarter turn, in float): the interfaces' filler is at the
+    // support angle and a quarter turn, the base's at the support angle.
+    let interface_angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
+    let base_angle = std::f32::consts::FRAC_PI_2 as f64;
+    par::map_range(drawn.len(), |layer_id| {
+        let d = &drawn[layer_id];
+        let h = d.height;
+        let sp = flow_spacing(p.width, h);
+        let support_spacing = p.base_spacing() + sp;
+        let support_density = (sp / support_spacing).min(1.0);
+        let path = |role: Role, points: Vec<Pt>| Path {
+            role,
+            points: geom::simplify_line(&points, RESOLUTION),
+            width: p.width,
+            height: h,
+        };
+        let mut items: Vec<Item> = Vec::new();
+        let first = layer_id == 0;
+        for g in &d.groups {
+            let one_area = vec![g.area.clone()];
+            match g.kind {
+                AreaType::Base if first => {
+                    items.extend(flange_paths(&one_area, base_angle, origin, p));
+                }
+                AreaType::Base if g.need_infill => {
+                    // A hybrid tree's column: walls (one at least where it is too thin for lines alone) and the
+                    // support pattern inside.
+                    let thin = geom::offset_square(&one_area, -(support_spacing * 1.5)).is_empty();
+                    let walls = wall_count.max(usize::from(thin));
+                    items.push(Item::Fixed(walled_infill(
+                        &one_area,
+                        walls,
+                        sp,
+                        support_density,
+                        base_angle,
+                        origin,
+                        h,
+                        p,
+                    )));
+                }
+                AreaType::Base => {
+                    let mut lp = p.clone();
+                    lp.spacing = sp;
+                    if g.need_extra_wall && wall_count == 0 {
+                        lp.double_wall_area = 1e-13;
+                    }
+                    let group: Vec<Path> = tree_paths(&one_area, h, &lp)
+                        .into_iter()
+                        .flat_map(|item| match item {
+                            Item::Path(path) => vec![path],
+                            Item::Fixed(group) => group,
+                        })
+                        .collect();
+                    if !group.is_empty() {
+                        items.push(Item::Fixed(group));
+                    }
+                }
+                AreaType::Roof1stLayer => {
+                    // A loop half a line in, then dense lines inside it.
+                    let mut group: Vec<Path> = Vec::new();
+                    for e in &geom::offset_square(&one_area, -0.5 * sp) {
+                        for (k, contour) in e.iter().enumerate() {
+                            let mut pl = contour.clone();
+                            if k > 0 {
+                                pl.reverse();
+                            }
+                            pl.push(pl[0]);
+                            group.push(path(Role::SupportInterface, pl));
+                        }
+                    }
+                    for e in &geom::offset_square(&one_area, -sp) {
+                        for line in monotonic::rectilinear(e, interface_angle, origin, sp, p.top_interface_density) {
+                            group.push(path(Role::SupportInterface, line));
+                        }
+                    }
+                    if !group.is_empty() {
+                        items.push(Item::Fixed(group));
+                    }
+                }
+                AreaType::Roof | AreaType::Floor => {
+                    let density =
+                        if g.kind == AreaType::Floor { p.bottom_interface_density } else { p.top_interface_density };
+                    let role = if g.interface_as_base { Role::Support } else { Role::SupportInterface };
+                    for line in base_support::fill(&g.area, interface_angle, origin, sp, density) {
+                        items.push(Item::Path(path(role, line)));
+                    }
+                }
+            }
+        }
+        let all: Shapes = d.groups.iter().map(|g| g.area.clone()).collect();
+        Layer { print_z: d.print_z, height: h, items, islands: geom::union_all(&[&all]), first }
+    })
+}
+
+/// Orca's `make_perimeter_and_infill` with the walls first: `walls` loops from half a line in, and the support
+/// pattern inside the last; with no walls, a loop only round what the lines leave out.
+#[allow(clippy::too_many_arguments)]
+fn walled_infill(
+    area: &Shapes,
+    walls: usize,
+    sp: f64,
+    density: f64,
+    angle: f64,
+    origin: (f64, f64),
+    h: f64,
+    p: &Params,
+) -> Vec<Path> {
+    let path = |points: Vec<Pt>| Path {
+        role: Role::Support,
+        points: geom::simplify_line(&points, RESOLUTION),
+        width: p.width,
+        height: h,
+    };
+    let mut outline = geom::offset_square(area, -0.5 * sp);
+    let to_infill = geom::offset_square(area, -(walls as f64) * sp);
+    let mut lines: Vec<Path> = Vec::new();
+    let mut boxes: Vec<[i32; 4]> = Vec::new();
+    for e in &to_infill {
+        let fill = base_support::fill(e, angle, origin, sp, density);
+        if let Some(b) = geom::bbox(&fill.iter().map(|l| vec![l.clone()]).collect::<Shapes>()) {
+            boxes.push(b);
+        }
+        lines.extend(fill.into_iter().map(&path));
+    }
+    if walls == 0 {
+        // The lines' boxes, stretched 10 mm along them, take their place from the loop.
+        for b in boxes {
+            let ten = (10.0 * geom::SCALE) as i32;
+            let r = [b[0] - ten, b[1], b[2] + ten, b[3]];
+            let rect: Shape =
+                vec![vec![geom::pt(r[0], r[1]), geom::pt(r[2], r[1]), geom::pt(r[2], r[3]), geom::pt(r[0], r[3])]];
+            outline = geom::difference(&outline, &geom::offset(&vec![rect], 0.5 * p.width));
+        }
+        outline.retain(|e| !geom::offset(&vec![e.clone()], -p.width).is_empty());
+    }
+    let mut out: Vec<Path> = Vec::new();
+    let mut level = outline;
+    for depth in 0..walls.max(1) {
+        let mut next: Shapes = Vec::new();
+        for e in &level {
+            for (k, contour) in e.iter().enumerate() {
+                let mut pl = contour.clone();
+                if k > 0 {
+                    pl.reverse();
+                }
+                pl.push(pl[0]);
+                out.push(path(pl));
+            }
+            if depth + 1 < walls {
+                next.extend(geom::offset(&geom::offset(&vec![e.clone()], -1.4 * sp), 0.4 * sp));
+            }
+        }
+        level = next;
+    }
+    out.extend(lines);
+    out
+}
+
+/// Orca's `fill_expolygons_with_sheath_generate_paths` on the first layer: a loop round each part, half a line in,
+/// then rectilinear lines at `angle`, dense, each part's printed as it comes.
+fn flange_paths(area: &Shapes, angle: f64, origin: (f64, f64), p: &Params) -> Vec<Item> {
+    let (w, h, sp) = (p.first_width, p.first_layer_height, p.first_spacing);
+    let path = |points: Vec<Pt>| Path {
+        role: Role::Support,
+        points: geom::simplify_line(&points, RESOLUTION),
+        width: w,
+        height: h,
+    };
+    let mut out = Vec::new();
+    let closed = geom::offset(&geom::offset(area, SCALED_EPSILON), -(SCALED_EPSILON + 0.5 * w));
+    for shape in &closed {
+        let mut group: Vec<Path> = Vec::new();
+        for (k, contour) in shape.iter().enumerate() {
+            let mut pl: Vec<Pt> = contour.clone();
+            pl.push(pl[0]);
+            if k > 0 {
+                pl.reverse();
+            }
+            clip_end(&mut pl, 0.15 * sp * geom::SCALE);
+            if pl.len() >= 2 {
+                group.push(path(pl));
+            }
+        }
+        for inner in &geom::offset(&one(shape), -0.4 * sp) {
+            for line in monotonic::rectilinear(inner, angle, origin, sp, p.first_density) {
+                group.push(path(line));
+            }
+        }
+        if !group.is_empty() {
+            out.push(Item::Fixed(group));
+        }
+    }
+    out
 }
 
 /// Orca's `tree_supports_generate_paths`: each of a layer's branch islands as a loop half a line in from its edge,
@@ -1460,7 +1657,7 @@ fn tree_paths(area: &Shapes, height: f64, p: &Params) -> Vec<Item> {
         if p.double_wall_area > 0.0 && geom::shape_area_mm2(e) > p.double_wall_area {
             let mut g = Vec::new();
             let level2 = geom::offset_c2(
-                &geom::offset_c2(&vec![e.clone()], -1.5 * w, geom::Join::Miter(3.0)),
+                &geom::offset_c2_folded(&vec![e.clone()], -1.5 * w, geom::Join::Miter(3.0)),
                 0.5 * w,
                 geom::Join::Miter(3.0),
             );
@@ -1587,7 +1784,7 @@ fn anchor_candidates(region: &Shape, w: f64) -> Vec<Vec<(Pt, i32)>> {
         c
     };
     let join = geom::Join::Miter(1.2);
-    let contours = geom::offset_c2(&vec![vec![ccw(&region[0])]], -w, join);
+    let contours = geom::offset_c2_folded(&vec![vec![ccw(&region[0])]], -w, join);
     if contours.is_empty() {
         return Vec::new();
     }

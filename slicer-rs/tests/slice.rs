@@ -916,6 +916,49 @@ fn organic_trees_hold_up_a_slab_on_two_trunks() {
 }
 
 #[test]
+fn classic_trees_hold_up_a_slab_as_orcas_do() {
+    // The T again, with Orca's classic trees in each of their styles. Native OrcaSlicer 2.5.0 (Nov 14): 181 layers
+    // each; mm³ of branches and of interface. The trees are Orca's to the nanometre (every branch's every point, by
+    // Orca's own log); their loops print 0.4 % less, as chords where Orca fits arcs.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    for (style, support, interface) in
+        [("tree_slim", 604.9, 90.7), ("tree_strong", 747.9, 91.3), ("tree_hybrid", 1272.8, 84.5)]
+    {
+        let json = format!(r#"{{"process": {{"enable_support": "1", "support_style": "{style}"}}}}"#);
+        let s = setup::read(&json).unwrap().settings;
+        let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+        let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &s, &options).unwrap();
+        assert!(out.fallbacks.is_empty(), "{style}: {:?}", out.fallbacks);
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        let layers = check_moves(&gcode, &s);
+        assert_eq!(layers.len(), 181, "{style}");
+        let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()];
+        let near = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+        let (got, got_interface) = (feature(Role::Support).volume, feature(Role::SupportInterface).volume);
+        assert!(near(got, support, 0.01), "{style}: {got} mm³ of branches");
+        assert!(near(got_interface, interface, 0.005), "{style}: {got_interface} mm³ of interface");
+        // Nothing in the pillar.
+        let mut feature = "";
+        for line in gcode.lines() {
+            if let Some(f) = line.strip_prefix("; FEATURE: ") {
+                feature = f;
+            } else if let Some(rest) = line.strip_prefix("G1 X").filter(|_| feature.starts_with("Support")) {
+                let words: Vec<&str> = rest.split(' ').collect();
+                if !words.iter().any(|w| w.starts_with('E') && !w.starts_with("E-")) {
+                    continue;
+                }
+                let x: f64 = words[0].parse().unwrap();
+                let y: f64 = words.iter().find_map(|w| w.strip_prefix('Y')).unwrap().parse().unwrap();
+                assert!(
+                    !(114.8..=125.2).contains(&x) || !(122.8..=133.2).contains(&y),
+                    "{style}: support in the pillar at {x} {y}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn supports_leave_a_model_that_needs_none_as_it_was() {
     let cube = cube_stl(20.0);
     let options = Options { thumbnail: false, ..Options::default() };

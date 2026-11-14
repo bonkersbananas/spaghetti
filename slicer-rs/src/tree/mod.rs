@@ -14,6 +14,7 @@
 //! Lengths are kept in Orca's nanometres where Orca keeps integers, so that its truncations come out the same; the
 //! polygon work is in `geom`'s units (0.1 µm).
 
+pub mod classic;
 pub mod draw;
 pub mod grow;
 pub mod overhangs;

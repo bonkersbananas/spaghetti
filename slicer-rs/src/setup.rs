@@ -155,20 +155,26 @@ mod tests {
     #[test]
     fn what_this_cannot_slice_yet_is_refused_by_name() {
         let refused = |text: &str| read(text).err();
-        // The X2D's supports are organic trees, which slice, as normal ones do in their grid and snug styles; not the
-        // other styles of tree, nor supports on the plate only.
+        // The X2D's supports are organic trees, which slice, as the classic slim, strong and hybrid ones do, and
+        // normal ones in their grid and snug styles; not supports on the plate only.
         assert!(read(r#"{"process": {"enable_support": "1"}}"#).is_ok());
-        // By the names the app's settings give them, as the app says "our own slicer can't do … yet".
-        for (style, what) in [
-            ("tree_slim", "slim tree supports"),
-            ("tree_strong", "strong tree supports"),
-            ("tree_hybrid", "hybrid supports"),
-        ] {
-            assert_eq!(
-                refused(&format!(r#"{{"process": {{"enable_support": "1", "support_style": "{style}"}}}}"#)),
-                Some(Error::Unsupported(what))
-            );
+        let tree = |more: &str| format!(r#"{{"process": {{"enable_support": "1"{more}}}}}"#);
+        for style in ["tree_slim", "tree_strong", "tree_hybrid"] {
+            assert!(read(&tree(&format!(r#", "support_style": "{style}""#))).is_ok(), "{style}");
         }
+        assert_eq!(
+            refused(&tree(r#", "support_style": "tree_unknown""#)),
+            Some(Error::Unsupported("this style of tree support"))
+        );
+        // Classic trees draw their branches as walls and their interfaces in the default pattern only.
+        assert_eq!(
+            refused(&tree(r#", "support_style": "tree_slim", "support_interface_pattern": "rectilinear""#)),
+            Some(Error::Unsupported("this support pattern"))
+        );
+        assert_eq!(
+            refused(&tree(r#", "support_style": "tree_hybrid", "support_base_pattern": "lightning""#)),
+            Some(Error::Unsupported("this support pattern"))
+        );
         assert_eq!(
             refused(r#"{"process": {"enable_support": "1", "support_base_pattern": "rectilinear"}}"#),
             Some(Error::Unsupported("this support pattern"))
