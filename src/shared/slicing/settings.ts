@@ -114,6 +114,11 @@ export interface SlicingSettings {
    * with colours of its own has any; kept with its settings so a re-slice and a reprint keep them.
    */
   colours?: ColourChoice[];
+  /**
+   * Which plate of a 3MF project with several it slices (the project's own number for it, 1 is the first), where
+   * someone chose; without it, the first. Only a project with plates has one; kept so a re-slice and a reprint keep it.
+   */
+  modelPlate?: number;
   /** Which slicer slices it (decision 0055): `DEFAULT_SLICER` (defaults.ts) unless someone picked one. */
   slicer: SlicerId;
 }
@@ -385,7 +390,10 @@ export function slicingProblems(value: unknown): string[] {
       problems.push("colours lists up to 16 choices, each a colour like #f2754e and the filament that prints it.");
     }
   }
-  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked", "colours"]);
+  if (value.modelPlate !== undefined && !plateNumber(value.modelPlate)) {
+    problems.push("modelPlate is a plate's number in the project, from 1 to 99.");
+  }
+  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked", "colours", "modelPlate"]);
   for (const key of Object.keys(value)) if (!known.has(key)) problems.push(`${key} isn't a slicing setting.`);
   return problems;
 }
@@ -424,12 +432,17 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     nozzle: nozzleOk,
     ...(given.nozzlePicked === true ? { nozzlePicked: true } : {}),
     ...(colourChoices(given.colours).length ? { colours: colourChoices(given.colours) } : {}),
+    ...(plateNumber(given.modelPlate) ? { modelPlate: given.modelPlate as number } : {}),
     scale: whole("scale"),
     orientation:
       orientationOf(given.orientation) === undefined ? base.orientation : (orientationOf(given.orientation) ?? null),
     slicer: oneOf(SLICER_IDS, given.slicer) ?? base.slicer,
   };
 }
+
+/** A project's plate number: a whole number from 1 to 99. */
+const plateNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99;
 
 /** Whether two settings slice the same (a spool picked again, or the same values in another order, are the same). */
 export function sameSlicing(a: SlicingSettings, b: SlicingSettings): boolean {
@@ -438,7 +451,7 @@ export function sameSlicing(a: SlicingSettings, b: SlicingSettings): boolean {
 
 function canonical(settings: SlicingSettings) {
   return Object.fromEntries(
-    [...Object.keys(DEFAULT_SLICING), "colours"].map((key) => [
+    [...Object.keys(DEFAULT_SLICING), "colours", "modelPlate"].map((key) => [
       key,
       key === "filaments"
         ? settings.filaments.map((filament) =>
@@ -451,14 +464,16 @@ function canonical(settings: SlicingSettings) {
                 from: choice.from,
                 filament: Object.fromEntries(Object.entries(choice.filament).sort(([x], [y]) => x.localeCompare(y))),
               }))
-          : settings[key as SlicingKey],
+          : key === "modelPlate"
+            ? (settings.modelPlate ?? 1)
+            : settings[key as SlicingKey],
     ]),
   );
 }
 
 /** The settings that differ between two, in the order they are shown. */
 export function changedSlicing(before: SlicingSettings, after: SlicingSettings): SlicingKey[] {
-  return ([...Object.keys(DEFAULT_SLICING), "colours"] as SlicingKey[]).filter(
+  return ([...Object.keys(DEFAULT_SLICING), "colours", "modelPlate"] as SlicingKey[]).filter(
     (key) => JSON.stringify(canonical(before)[key]) !== JSON.stringify(canonical(after)[key]),
   );
 }
@@ -538,6 +553,7 @@ export function slicingLine(settings: SlicingSettings): string[] {
         ? ""
         : strength.label
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
+    settings.modelPlate ? `Plate ${settings.modelPlate}` : "",
     orientationWords(settings),
     settings.scale !== 100 ? `${settings.scale}%` : "",
   ].filter(Boolean);

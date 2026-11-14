@@ -28,6 +28,8 @@ interface PlatePickerProps {
   value: number;
   onChange: (index: number) => void;
   disabled?: boolean;
+  /** Smaller tiles, picture beside the words, for where room is short (the slicing settings' panel). */
+  dense?: boolean;
   className?: string;
 }
 
@@ -56,6 +58,7 @@ function PlateTile({
   name,
   onPick,
   disabled,
+  dense,
   className,
 }: {
   plate: PlateOption;
@@ -63,12 +66,14 @@ function PlateTile({
   name: string;
   onPick: () => void;
   disabled?: boolean;
+  dense?: boolean;
   className?: string;
 }) {
   return (
     <label
       className={cn(
-        "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer flex-col gap-2 rounded-lg p-2 text-left",
+        "pressable has-focus-visible:shadow-ring relative flex min-w-0 cursor-pointer rounded-lg p-2 text-left",
+        dense ? "items-center gap-2.5" : "flex-col gap-2",
         selected
           ? "bg-semolina-soft text-semolina-ink ring-semolina ring-2 ring-inset"
           : "bg-tile text-ink-soft shadow-soft hover:text-ink hover:shadow-raised",
@@ -84,8 +89,8 @@ function PlateTile({
         onChange={onPick}
         className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
       />
-      <PlatePicture plate={plate} />
-      <span className="flex min-w-0 flex-col px-0.5">
+      <PlatePicture plate={plate} className={dense ? "size-12 shrink-0" : undefined} />
+      <span className={cn("flex min-w-0 flex-col", !dense && "px-0.5")}>
         <span className="text-small truncate font-semibold">{plateLabel(plate)}</span>
         <span className="text-caption text-ink-faint tabular-nums">{plateHeight(plate.height)}</span>
         {plate.detail && <span className="text-caption text-ink-soft tabular-nums">{plate.detail}</span>}
@@ -100,7 +105,7 @@ function PlateTile({
  * a radio group, which `[` and `]` step through; on a phone one line showing the plate chosen that opens a bottom
  * sheet of large tiles, within thumb's reach. A model with a single plate has no picker.
  */
-export function PlatePicker({ plates, value, onChange, disabled, className }: PlatePickerProps) {
+export function PlatePicker({ plates, value, onChange, disabled, dense, className }: PlatePickerProps) {
   const isDesktop = useIsDesktop();
   const name = useId();
   const [open, setOpen] = useState(false);
@@ -175,7 +180,7 @@ export function PlatePicker({ plates, value, onChange, disabled, className }: Pl
           <Kbd keys={["]"]} />
         </span>
       </legend>
-      <PlateGrid plates={plates} value={value} name={name} onPick={onChange} />
+      <PlateGrid plates={plates} value={value} name={name} onPick={onChange} dense={dense} />
     </fieldset>
   );
 }
@@ -185,11 +190,13 @@ function PlateGrid({
   value,
   name,
   onPick,
+  dense,
 }: {
   plates: readonly PlateOption[];
   value: number;
   name: string;
   onPick: (index: number) => void;
+  dense?: boolean;
 }): ReactNode {
   return (
     <div
@@ -204,7 +211,8 @@ function PlateGrid({
           name={name}
           selected={plate.index === value}
           onPick={() => onPick(plate.index)}
-          className="md:max-w-44 md:min-w-28 md:flex-1"
+          dense={dense}
+          className={dense ? "md:min-w-40 md:flex-1" : "md:max-w-44 md:min-w-28 md:flex-1"}
         />
       ))}
     </div>

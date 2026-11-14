@@ -16,6 +16,7 @@ import {
   worthRetrying,
 } from "@shared/slicing/words.ts";
 import { DEFAULT_PRINTER } from "@shared/spools";
+import { formatDuration } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ComponentPropsWithRef,
@@ -701,6 +702,14 @@ export function SliceResult({
   );
 }
 
+/** What a slice says of its plate, "1 h 20 · 34 g", for the plate picker. */
+function plateFigures(prefill: { estimatedMinutes?: number; weightGrams?: number } | undefined): string | undefined {
+  if (!prefill?.estimatedMinutes) return undefined;
+  return [formatDuration(prefill.estimatedMinutes), prefill.weightGrams ? `${Math.round(prefill.weightGrams)} g` : ""]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** The settings, loaded the first time they open: a phone's sheet, or a desktop's panel. */
 const loadSettings = () => import("./SliceSettings");
 
@@ -797,6 +806,7 @@ export default function ModelFileCard({
     scalable: isStlName(file.name),
     recipes: offered,
     ...(saved ? { sliced: fileUrl(file.id, "sliced") } : {}),
+    ...(plateFigures(prefill) ? { figures: plateFigures(prefill) } : {}),
   };
   // Its settings: a sheet on phones, a panel beside the page on desktop (but not over the attempt's sheet).
   const summary = slicingSummary(settings);

@@ -161,7 +161,7 @@ async function run(request: SliceRequest) {
   try {
     progress("reading", 0);
     const bytes = new Uint8Array(await request.file.arrayBuffer());
-    const read = readModel(bytes, request.name);
+    const read = readModel(bytes, request.name, chosen.modelPlate);
     // A model with colours of its own prints each in the filament matched to it.
     const matched = read.project ? null : matchColours(read.objects, request.spools, chosen);
     colourRows = matched?.rows;
@@ -478,9 +478,13 @@ function runArea(positions: Float32Array, run: { from: number; to: number }): nu
   return area;
 }
 
-/** The settings a slice is made with, and the colours someone chose (the setup's own don't keep them). */
+/** The settings a slice is made with, and the colours and plate someone chose (the setup's own don't keep them). */
 function withChoices(slicing: SlicingSettings, chosen: SliceOptions): SlicingSettings {
-  return chosen.colours?.length ? { ...slicing, colours: chosen.colours } : slicing;
+  return {
+    ...slicing,
+    ...(chosen.colours?.length ? { colours: chosen.colours } : {}),
+    ...(chosen.modelPlate ? { modelPlate: chosen.modelPlate } : {}),
+  };
 }
 
 /**
@@ -496,7 +500,7 @@ function engineObjects(objects: Placed[]): Placed[] {
 }
 
 /** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
-function readModel(bytes: Uint8Array, name: string) {
+function readModel(bytes: Uint8Array, name: string, plate?: number) {
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
   if (!zip) {
     const parsed = parseStl(bytes);
@@ -505,7 +509,7 @@ function readModel(bytes: Uint8Array, name: string) {
     if (!positions.length) throw new Problem("no-model");
     return { objects: [{ name, positions, extruder: 1 }], project: false, settings: undefined, painted: 0 };
   }
-  const model = readModel3mf(bytes);
+  const model = readModel3mf(bytes, { plate });
   if (model === "not-3mf") throw new Problem("unreadable");
   if (model === "no-objects") throw new Problem("no-model");
   // Filaments beyond what the project lists fall back to its first.

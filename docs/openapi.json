@@ -20355,6 +20355,12 @@
               "additionalProperties": false
             }
           },
+          "modelPlate": {
+            "description": "Which plate of a 3MF project with several it slices (the project's own number for it); absent: the first.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
           "scale": {
             "type": "integer",
             "minimum": 1,
