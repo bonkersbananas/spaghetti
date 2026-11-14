@@ -5,7 +5,7 @@
  * with (decision 0047).
  */
 import type { AttemptSettings } from "../attempts.ts";
-import type { SlicerId, SlicingSettings } from "./settings.ts";
+import type { SlicerId, SlicingFilament, SlicingSettings } from "./settings.ts";
 
 /** "slicer": a slicer's own file, kept as it is. "model": an `.stl` or plain `.3mf` that Spaghetti slices. */
 export type FileKind = "slicer" | "model";
@@ -79,6 +79,24 @@ export interface SliceFallback {
 /** The slicer's cautions worth a line on the card: "floating", parts that start in the air while supports are off. */
 export type SliceCaution = "floating";
 
+/** One of a model's own colours as a slice printed it: the colour, and the filament that printed it. */
+export interface SliceColour {
+  /** "#rrggbb": the colour (the heaviest of those merged into it), and what a choice for it is keyed by. */
+  hex: string;
+  /** The file's name for it ("Ketchup Red"). */
+  name?: string;
+  /** The names of the other colours merged into this one. */
+  merged?: string[];
+  /** Percent of the model's surface, whole. */
+  share: number;
+  /** What printed it. */
+  filament: SlicingFilament;
+  /** False for a stand-in made in the colour, as no spool in the Pantry is near it. */
+  inPantry: boolean;
+  /** Someone chose this filament for it (else it is the nearest spool). */
+  chosen?: boolean;
+}
+
 /** A model file's slicing, kept on its row: absent until it is sliced, or until slicing fails. */
 export interface FileSlice {
   status: "sliced" | "failed";
@@ -101,6 +119,8 @@ export interface FileSlice {
   fallback?: SliceFallback;
   /** What Spaghetti's own slicer printed otherwise than asked, in its words: "Auto Lift printed as spiral lifts". */
   notes?: string[];
+  /** A model with colours of its own (more than one): each and what printed it, the heaviest first. */
+  colours?: SliceColour[];
   /** How long the slicer took, in ms, on the device that sliced it: from the placed model to the packed file. */
   ms?: number;
   /** When it was sliced or failed (epoch ms). */

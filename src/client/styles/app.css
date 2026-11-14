@@ -275,6 +275,14 @@
     radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.32), transparent 46%),
     repeating-radial-gradient(circle, rgb(0 0 0 / 0.12) 0 1px, transparent 1px 3px);
 }
+/* A flat swatch's rim, stronger where its color would vanish into the surface (see colorTone). */
+.swatch {
+  --swatch-rim: color-mix(in srgb, var(--sg-ink) 15%, transparent);
+}
+:root:not([data-theme="dark"]) .swatch[data-tone="light"],
+[data-theme="dark"] .swatch[data-tone="dark"] {
+  --swatch-rim: color-mix(in srgb, var(--sg-ink) 35%, transparent);
+}
 /* The rims are variables so the hub, inside the disc, inherits its own. */
 .spool-wound {
   --spool-rim: color-mix(in srgb, var(--sg-ink) 15%, transparent);

@@ -1,0 +1,208 @@
+import type { ColourChoice } from "@shared/slicing/colours.ts";
+import { filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
+import { filamentWords } from "@shared/slicing/settings.ts";
+import type { SliceColour } from "@shared/slicing/types.ts";
+import { type SpoolLike, slotPlace } from "@shared/spools";
+import { useEffect, useRef, useState } from "react";
+import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
+import { Disclosure } from "@/components/ui/Disclosure";
+import { ArrowRightIcon, UndoIcon } from "@/components/ui/icons";
+import { MetaList } from "@/components/ui/MetaList";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { Swatch } from "@/components/ui/Swatch";
+import { scrollBehavior } from "@/lib/motion";
+
+/** The Pantry's spools offered under a colour, at most: a pantry is rarely bigger. */
+const MAX_SPOOLS = 12;
+const STAND_IN = "stand-in";
+
+/** The short line under a spool's name: its material and where it is ("PLA · A2", "PLA · Ext"), or the shelf. */
+export function spoolDetail(spool: SpoolLike): string {
+  return [spool.colorName ? spool.material : "", spool.slot ?? ""].filter(Boolean).join(" · ") || "On the shelf";
+}
+
+/** A spool's tile: its colour on the disc, its colour's name, and what it is and where. */
+export function spoolTile(spool: SpoolLike): ChoiceTile<string> {
+  return {
+    value: spool.id,
+    label: spool.colorName || spool.material,
+    detail: spoolDetail(spool),
+    glyph: <SpoolDisc color={spool.colorHex} size="sm" />,
+  };
+}
+
+const nameOf = (colour: SliceColour) => colour.name ?? colour.hex;
+/** What a filament is, to tell two colours on one spool: its spool, else its material and colour. */
+const keyOf = (colour: SliceColour) =>
+  colour.filament.spoolId ?? `${colour.filament.material}${colour.filament.colorHex}`;
+
+/**
+ * A model that brings colours of its own, in the Filament section of "Slice with…": one row for each colour, the model's
+ * on the left (a flat dot, its name, its share of the model) and the filament that prints it on the right (a spool
+ * disc, its name and place), the nearest Pantry spool until someone picks another. A colour no spool is near prints in a
+ * stand-in (a dashed ring, "Not in the Pantry yet"). A row opens in place to the spools; a pick is kept with the
+ * model's settings (`choices`). A flat dot is always a model colour and a disc is always a Pantry spool.
+ */
+export function ColourMatches({
+  colours,
+  choices,
+  spools,
+  onChange,
+  wrapped,
+}: {
+  /** What the last slice printed each colour in. */
+  colours: readonly SliceColour[];
+  /** What was chosen; the rest print in the nearest spool. */
+  choices: readonly ColourChoice[];
+  spools: readonly SpoolLike[];
+  onChange: (choices: ColourChoice[]) => void;
+  /** In a panel's column: the spools wrap in rows of four instead of scrolling sideways. */
+  wrapped: boolean;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
+  const choose = (colour: SliceColour, id: string) => {
+    const others = choices.filter((choice) => choice.from !== colour.hex);
+    if (id === STAND_IN) {
+      const filament = { material: "PLA", colorHex: colour.hex, ...(colour.name ? { colorName: colour.name } : {}) };
+      onChange([...others, { from: colour.hex, filament }]);
+      return;
+    }
+    const spool = offered.find((candidate) => candidate.id === id);
+    if (spool) onChange([...others, { from: colour.hex, filament: filamentOfSpool(spool) }]);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Colours</span>
+        <p className="text-small text-ink-soft text-pretty">Each colour in the model, and the spool that prints it.</p>
+      </div>
+      <ul className="flex flex-col">
+        {colours.map((colour) => {
+          const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
+          const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
+          return (
+            <li
+              key={colour.hex}
+              className="not-first:before:bg-hairline relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-0 not-first:before:h-px"
+            >
+              <Disclosure
+                appearance="plain"
+                open={open === colour.hex}
+                onOpenChange={(next) => setOpen(next ? colour.hex : null)}
+                title={
+                  <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <Swatch color={colour.hex} size="md" />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-small text-ink font-semibold text-balance">
+                          {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+                        </span>
+                        <MetaList className="text-caption text-ink-faint font-normal">
+                          {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
+                          {`${colour.share}%`}
+                        </MetaList>
+                      </span>
+                    </span>
+                    <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
+                    <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
+                      <SpoolDisc color={colour.filament.colorHex} size="sm" empty={!colour.inPantry} />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-small text-ink font-semibold text-balance">
+                          {colour.filament.colorName || colour.filament.material}
+                        </span>
+                        <span className="text-caption text-ink-faint font-normal">
+                          {!colour.inPantry
+                            ? "Not in the Pantry yet"
+                            : spool
+                              ? spoolDetail(spool)
+                              : filamentWords({ ...colour.filament, colorHex: undefined })}
+                        </span>
+                        {sharing.length > 0 && (
+                          <span className="text-caption text-ink-soft font-normal">
+                            Same spool as {nameOf(sharing[0] as SliceColour)}
+                            {sharing.length > 1 ? ` and ${sharing.length - 1} more` : ""}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  </span>
+                }
+              >
+                <Picker
+                  colour={colour}
+                  spool={spool}
+                  offered={offered}
+                  wrapped={wrapped}
+                  onPick={(id) => choose(colour, id)}
+                  onBack={() => onChange(choices.filter((choice) => choice.from !== colour.hex))}
+                />
+              </Disclosure>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** The spools under an open row, the picked one scrolled into view, and what is picked said in a line. */
+function Picker({
+  colour,
+  spool,
+  offered,
+  wrapped,
+  onPick,
+  onBack,
+}: {
+  colour: SliceColour;
+  spool: SpoolLike | undefined;
+  offered: readonly SpoolLike[];
+  wrapped: boolean;
+  onPick: (id: string) => void;
+  onBack: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  // The picked tile is in view when the row opens, though the row of tiles scrolls sideways.
+  useEffect(() => {
+    const picked = box.current?.querySelector<HTMLElement>("input:checked")?.parentElement;
+    picked?.scrollIntoView({ inline: "center", block: "nearest", behavior: scrollBehavior() });
+  }, []);
+  const filament = colour.filament;
+  return (
+    <div ref={box}>
+      <ChoiceTiles
+        label={`Print ${nameOf(colour)} in`}
+        {...(wrapped ? { layout: "grid" as const, columns: 4 as const, dense: true } : { layout: "scroll" as const })}
+        options={[
+          ...offered.map(spoolTile),
+          {
+            value: STAND_IN,
+            label: nameOf(colour),
+            detail: "Not in the Pantry yet",
+            glyph: <Swatch color={colour.hex} size="md" />,
+          },
+        ]}
+        value={filament.spoolId ?? STAND_IN}
+        onChange={onPick}
+        caption={
+          <>
+            <span className="text-ink font-semibold">{filamentWords(filament)}</span> ·{" "}
+            {!colour.inPantry
+              ? "a stand-in in the model's colour, not in the Pantry yet"
+              : `${spool?.slot ? `loaded ${slotPlace(spool.slot)}` : "on the shelf"}${colour.chosen ? "" : " · the nearest in the Pantry"}`}
+            {colour.chosen && (
+              <button
+                type="button"
+                className="text-ink-soft focus-ring mt-1 flex items-center gap-1 rounded-md font-medium underline"
+                onClick={onBack}
+              >
+                <UndoIcon size={14} aria-hidden /> Back to the nearest spool
+              </button>
+            )}
+          </>
+        }
+      />
+    </div>
+  );
+}

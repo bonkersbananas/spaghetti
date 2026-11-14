@@ -51,17 +51,18 @@ export const HOTDOG_COLOURS: { name: string; hex: string }[] = [
   { name: "Lettuce", hex: "#5FAE3B" },
   { name: "Cream", hex: "#F3E9D2" },
   { name: "Ivory", hex: "#F1E8D8" },
+  { name: "Grape", hex: "#6E32A0" },
 ];
 
 /**
- * A plain 3MF as a model site or a CAD tool gives it, with no Bambu metadata: thirteen small boxes in a row, each an
- * object with its own colour from the core's `basematerials` (eight named colours, `displaycolor` with an alpha
+ * A plain 3MF as a model site or a CAD tool gives it, with no Bambu metadata: fourteen small boxes in a row, each an
+ * object with its own colour from the core's `basematerials` (nine named colours, `displaycolor` with an alpha
  * byte), no colours on single triangles.
  */
 export function hotdogModel(): Uint8Array {
   const bases = HOTDOG_COLOURS.map((c) => `<base name="${c.name}" displaycolor="${c.hex}FF"/>`).join("");
   // Which colour each object takes: more than one object in some colours.
-  const order = [0, 2, 3, 3, 4, 5, 1, 6, 7, 6, 0, 2, 4];
+  const order = [0, 2, 3, 3, 4, 5, 1, 6, 7, 6, 0, 2, 4, 8];
   const objects = order
     .map(
       (colour, index) =>

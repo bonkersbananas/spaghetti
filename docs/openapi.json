@@ -18677,6 +18677,86 @@
                       "maxLength": 120
                     }
                   },
+                  "colours": {
+                    "description": "A model with colours of its own: each, and the filament that printed it.",
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "hex": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "merged": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80
+                          }
+                        },
+                        "share": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "filament": {
+                          "type": "object",
+                          "properties": {
+                            "material": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "colorHex": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "colorName": {
+                              "type": "string",
+                              "maxLength": 40
+                            },
+                            "brand": {
+                              "type": "string",
+                              "maxLength": 60
+                            },
+                            "finish": {
+                              "type": "string",
+                              "maxLength": 40
+                            },
+                            "spoolId": {
+                              "type": "string",
+                              "maxLength": 64
+                            }
+                          },
+                          "required": [
+                            "material"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "inPantry": {
+                          "type": "boolean"
+                        },
+                        "chosen": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "hex",
+                        "share",
+                        "filament",
+                        "inPantry"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
                   "ms": {
                     "description": "How long the slicer took on the device that sliced it, in ms.",
                     "type": "integer",
@@ -18941,6 +19021,86 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 120
+                        }
+                      },
+                      "colours": {
+                        "description": "A model with colours of its own: each, and the filament that printed it.",
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "hex": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "merged": {
+                              "maxItems": 16,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              }
+                            },
+                            "share": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "filament": {
+                              "type": "object",
+                              "properties": {
+                                "material": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 40
+                                },
+                                "colorHex": {
+                                  "type": "string",
+                                  "pattern": "^#[0-9a-f]{6}$"
+                                },
+                                "colorName": {
+                                  "type": "string",
+                                  "maxLength": 40
+                                },
+                                "brand": {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                "finish": {
+                                  "type": "string",
+                                  "maxLength": 40
+                                },
+                                "spoolId": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                }
+                              },
+                              "required": [
+                                "material"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "inPantry": {
+                              "type": "boolean"
+                            },
+                            "chosen": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "hex",
+                            "share",
+                            "filament",
+                            "inPantry"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "ms": {
@@ -20134,6 +20294,66 @@
           "nozzlePicked": {
             "description": "True when someone picked the nozzle size for this model (decision 0057); without it the model follows the main nozzle's size.",
             "type": "boolean"
+          },
+          "colours": {
+            "description": "What prints each of a model's own colours, where someone chose: the colour (#rrggbb, as the slice lists it) and the filament. A colour not listed prints in the Pantry spool nearest it.",
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "filament": {
+                  "type": "object",
+                  "properties": {
+                    "material": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "description": "\"PLA\", \"PETG-CF\": what the slicer's filament preset is picked by."
+                    },
+                    "colorHex": {
+                      "description": "#rrggbb; none for the stand-in nobody chose.",
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "colorName": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "brand": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60
+                    },
+                    "finish": {
+                      "description": "The Pantry's finish: \"basic\", \"matte\", \"silk\"…",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "spoolId": {
+                      "description": "The Pantry's spool it was picked from.",
+                      "type": "string",
+                      "pattern": "^[\\w-]{1,64}$"
+                    }
+                  },
+                  "required": [
+                    "material"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "from",
+                "filament"
+              ],
+              "additionalProperties": false
+            }
           },
           "scale": {
             "type": "integer",

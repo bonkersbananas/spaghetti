@@ -209,8 +209,17 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     setLayer(index);
   };
 
-  const onKeyDown = (event: React.KeyboardEvent) => {
-    if ((event.target as HTMLElement).tagName === "INPUT" || event.altKey || event.metaKey || event.ctrlKey) return;
+  // The keys belong to the viewer for as long as it is open, wherever focus is: the sheet's close button, the canvas after a drag, the slider.
+  // Text fields keep their keys, and so do the Filament/Feature radios (their arrows choose a colouring, as a radio group does).
+  const keys = useRef<(event: KeyboardEvent) => void>(() => {});
+  keys.current = (event) => {
+    if (event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || count < 1) return;
+    const target = event.target as HTMLElement | null;
+    const tag = target?.tagName;
+    const type = (target as HTMLInputElement | null)?.type;
+    if (target?.closest("[data-own-arrows]")) return;
+    if (tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+    if (tag === "INPUT" && type !== "range") return;
     const step = event.shiftKey ? 10 : 1;
     const key = event.key;
     let next: number | null = null;
@@ -222,16 +231,19 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     event.preventDefault();
     scrub(Math.min(count - 1, Math.max(0, next)));
   };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => keys.current(event);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const text = layerReadout(layer, count || 1, heights.current[layer], times.current[layer]);
   const filaments = summary?.filaments ?? [];
   const showFilaments = mode === "filament" && filaments.filter((f) => f.segments > 0).length > 1;
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: arrow keys step layers wherever focus is inside the viewer
     <div
       className={cn("flex h-full min-h-0 flex-col", className)}
-      onKeyDown={onKeyDown}
       data-viewer={state === "ready" && !building ? "ready" : state === "error" ? "error" : "busy"}
     >
       <div ref={stage} className="sg-stage relative min-h-0 flex-1 overflow-hidden" data-vaul-no-drag>
@@ -261,6 +273,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             aria-label="What the colours mean"
             // biome-ignore lint/a11y/noNoninteractiveTabindex: a row that scrolls sideways on a phone must be reachable by keyboard
             tabIndex={0}
+            data-own-arrows
             className="no-scrollbar focus-ring sg-fade-x absolute inset-x-0 top-3 flex gap-1.5 overflow-x-auto px-3 md:flex-wrap md:overflow-visible"
           >
             {showFilaments &&

@@ -24,7 +24,7 @@ describe("a plain 3MF's colours", () => {
   it("gives each object the named colour its basematerials say", () => {
     const model = read(hotdogModel());
     expect(model.project).toBe(false);
-    expect(model.objects).toHaveLength(13);
+    expect(model.objects).toHaveLength(14);
     expect(model.objects.every((object) => object.colours?.length === 1)).toBe(true);
     const first = model.objects[0];
     expect(first?.colours).toEqual([{ from: 0, to: 12, colour: { hex: "#d2281e", name: "Ketchup Red" } }]);

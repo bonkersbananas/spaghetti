@@ -7,7 +7,8 @@ import { ExpandIcon, type Icon } from "./icons";
 interface DisclosureProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: string;
+  /** Its name, or (a row that answers something, like a colour's spool) the row itself. */
+  title: ReactNode;
   /** One line on what's inside while it's closed: "PLA · 0.20 mm · bed 60 °C". */
   summary?: ReactNode;
   icon?: Icon;

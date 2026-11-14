@@ -1,3 +1,4 @@
+import { colorTone } from "@shared/spools";
 import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { PaletteIcon } from "./icons";
@@ -22,7 +23,11 @@ interface SwatchProps {
   className?: string;
 }
 
-/** A filament's color as a small round chip. Without a color, a quiet empty ring. */
+/**
+ * A color as a small round chip: a filament's, or a model's own (a flat dot, where a SpoolDisc is a spool). A color
+ * that would vanish into its surface (a black in dark mode, a cream in light) gets a stronger rim, as a SpoolDisc's.
+ * Without a color, a quiet empty ring.
+ */
 export function Swatch({ color, size = "sm", label, className }: SwatchProps) {
   return (
     <span
@@ -30,9 +35,10 @@ export function Swatch({ color, size = "sm", label, className }: SwatchProps) {
       className={cn(
         "inline-block shrink-0 rounded-full",
         size === "sm" ? "size-3.5" : "size-7",
-        color ? "shadow-well ring-ink/15 ring-1 ring-inset" : "ring-ink-ghost ring-1 ring-inset",
+        color ? "swatch shadow-well ring-1 ring-(--swatch-rim) ring-inset" : "ring-ink-ghost ring-1 ring-inset",
         className,
       )}
+      data-tone={color ? colorTone(color) : undefined}
       // A filament's color is data, not design.
       style={color ? { backgroundColor: color } : undefined} // design-lint-ignore
     />

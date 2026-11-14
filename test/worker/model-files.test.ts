@@ -249,6 +249,22 @@ const patchFile = (fileId: string, json: unknown, as: string | null = cookie) =>
 const restore = (fileId: string) => request(`/api/files/${fileId}/sliced/restore`, { method: "POST", cookie });
 
 describe("a model's slicing settings", () => {
+  it("keep the filaments picked for a model's own colours", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const picked = {
+      ...fine,
+      colours: [{ from: "#d2281e", filament: { material: "PLA", colorHex: "#c0392b", spoolId: "spool-1" } }],
+    };
+    const response = await patchFile(id, { slicing: picked });
+    expect(response.status).toBe(200);
+    expect((await response.json<ItemFileResponse>()).file.slicing).toEqual(picked);
+    expect(
+      (await patchFile(id, { slicing: { ...fine, colours: [{ from: "red", filament: { material: "PLA" } }] } })).status,
+    ).toBe(400);
+  });
+
   it("are kept with the model, whole, and put back to the defaults with null", async () => {
     const item = await idea();
     const id = uuid();

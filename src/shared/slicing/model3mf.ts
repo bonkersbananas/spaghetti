@@ -1,4 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
+import { boundsOf, plateArea, translate } from "./arrange.ts";
 import type { Config } from "./gcode3mf.ts";
 import { type ModelPaint, paintCodeStates } from "./paint.ts";
 
@@ -6,8 +7,23 @@ import { type ModelPaint, paintCodeStates } from "./paint.ts";
  * Reads the geometry of a `.3mf` that has no G-code: a Bambu Studio or Orca project, or a plain 3MF from anywhere
  * else (PrusaSlicer, Fusion, a model site). Every printable object becomes one triangle soup in plate coordinates
  * (millimetres, the build item's transform applied). For a Bambu or Orca project with plates, only the objects of
- * its first plate are read, and its settings come along. Never throws: a file it can't read gives a reason.
+ * one plate are read (the first, unless asked for another), moved from the plate's spot in Bambu's grid onto the
+ * bed, and its settings come along. Never throws: a file it can't read gives a reason.
  */
+
+/** One plate of a Bambu or Orca project. */
+export interface ModelPlate {
+  /** The project's own number for it (1 is the first): what Bambu Studio shows as "01". */
+  index: number;
+  /** What the project calls it; empty when it doesn't (as most don't). */
+  name: string;
+  /** The names of the objects on it, in the file's order. */
+  objects: string[];
+  /** The top of its tallest object, in mm. */
+  height: number;
+  /** Where its picture is in the file (Metadata/plate_N.png), when it has one: see readModelPlatePicture. */
+  picture?: string;
+}
 
 /** A colour a model brings: lowercase "#rrggbb" (alpha dropped) and the name the file gives it, when it does. */
 export interface ModelColour {
@@ -63,6 +79,15 @@ export interface Model3mf {
   settings?: Config;
   /** True when the file has sliced G-code: then it isn't ours to slice. */
   sliced: boolean;
+  /** Every plate of a project that lists them (one or more, in order); none for any other file. */
+  plates: ModelPlate[];
+  /** The plate `objects` are of: its `index`; 0 when the file has no plates. */
+  plate: number;
+}
+
+export interface ReadOptions {
+  /** The plate to read (a `ModelPlate.index`); the first when absent or not one of them. */
+  plate?: number;
 }
 
 export type Model3mfProblem = "not-3mf" | "no-objects";
@@ -234,7 +259,7 @@ function readMesh(body: string): Mesh {
   };
 }
 
-export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
+export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Model3mf | Model3mfProblem {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(input, {
@@ -283,7 +308,9 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     string,
     { name?: string; extruder?: number; skipParts: Set<string>; partExtruders: Map<string, number> }
   >();
-  let plateObjects: Set<string> | null = null;
+  /** The plates a project lists, and which plate each object's instance (object id, then ":", then its number) is on. */
+  const plateList: (ModelPlate & { name: string })[] = [];
+  const plateOf = new Map<string, number>();
   if (settingsText) {
     const text = strFromU8(settingsText);
     for (const match of text.matchAll(/<object\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/object>/g)) {
@@ -307,12 +334,26 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
         partExtruders,
       });
     }
-    const plate = /<plate>([\s\S]*?)<\/plate>/.exec(text)?.[1];
-    if (plate) {
-      plateObjects = new Set(
-        [...plate.matchAll(/<metadata\s+key="object_id"\s+value="([^"]+)"/g)].map((m) => m[1] as string),
-      );
+    for (const match of text.matchAll(/<plate>([\s\S]*?)<\/plate>/g)) {
+      const body = match[1] as string;
+      const meta = (scope: string, key: string) =>
+        new RegExp(`<metadata\\s+key="${key}"\\s+value="([^"]*)"`).exec(scope)?.[1];
+      const index = Number(meta(body.split("<model_instance")[0] ?? "", "plater_id"));
+      if (!Number.isInteger(index) || index < 1 || plateList.some((plate) => plate.index === index)) continue;
+      for (const instance of body.matchAll(/<model_instance>([\s\S]*?)<\/model_instance>/g)) {
+        const object = meta(instance[1] as string, "object_id");
+        if (object !== undefined) plateOf.set(`${object}:${meta(instance[1] as string, "instance_id") ?? 0}`, index);
+      }
+      const picture = meta(body, "thumbnail_file") ?? meta(body, "top_file");
+      plateList.push({
+        index,
+        name: decodeXml(meta(body, "plater_name") ?? "").trim(),
+        objects: [],
+        height: 0,
+        ...(picture ? { picture } : {}),
+      });
     }
+    plateList.sort((a, b) => a.index - b.index);
   }
 
   // The colours of the filaments a project lists, filament 1 first.
@@ -330,11 +371,22 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
   }
   const filamentColours = [settings?.filament_colour ?? []].flat().map((hex) => colourHex(hex));
 
+  // Bambu lays its plates out in a grid, columns left to right and rows going down (y falling), each 1.2 bed
+  // sizes from the next: a plate's objects sit at its grid spot, and go back to the first plate's when sliced.
+  let bed = plateArea(settings?.printable_area, undefined);
+  // A printable area without a readable corner gives no bed size: the X2D's (and Bambu's default) 256 mm does.
+  if (!(bed.maxX > bed.minX && bed.maxY > bed.minY)) bed = plateArea(undefined, undefined);
+  const columns = gridColumns(plateList.length);
+  const chosen = plateList.find((plate) => plate.index === options.plate) ?? plateList[0];
   const out: ModelObject[] = [];
+  const instances = new Map<string, number>();
   for (const item of items) {
     const id = item.objectid ?? "";
+    const instance = instances.get(id) ?? 0;
+    instances.set(id, instance + 1);
     if (item.printable === "0") continue;
-    if (plateObjects && plateObjects.size > 0 && !plateObjects.has(id)) continue;
+    const plateIndex = plateOf.get(`${id}:${instance}`);
+    if (plateList.length > 0 && plateIndex === undefined) continue;
     const def = rootObjects.get(id);
     if (!def || (def.type !== "model" && def.type !== "")) continue;
     const info = objectInfo.get(id);
@@ -370,10 +422,27 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     if (!triangles.length) continue;
     const parts = partsOf(runs, info);
     const paint = paintOf(painted);
+    const plate = plateList.find((candidate) => candidate.index === plateIndex);
+    const positions = Float32Array.from(triangles);
+    if (plate) {
+      const spot = plateList.indexOf(plate);
+      translate(
+        positions,
+        -(spot % columns) * 1.2 * (bed.maxX - bed.minX),
+        Math.floor(spot / columns) * 1.2 * (bed.maxY - bed.minY),
+        0,
+      );
+    }
+    const name = info?.name || def.name || `Object ${out.length + 1}`;
+    if (plate) {
+      plate.objects.push(name);
+      plate.height = Math.max(plate.height, boundsOf(positions).max[2]);
+    }
+    if (plate !== chosen) continue;
     const colours = coloursOf(runs, info, filamentColours, project);
     out.push({
-      name: info?.name || def.name || `Object ${out.length + 1}`,
-      positions: Float32Array.from(triangles),
+      name,
+      positions,
       ...(info?.extruder ? { extruder: info.extruder } : {}),
       ...(parts ? { parts } : {}),
       ...(paint ? { paint } : {}),
@@ -381,7 +450,31 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     });
   }
   if (!out.length) return "no-objects";
-  return { objects: out, project, ...(settings ? { settings } : {}), sliced };
+  return {
+    objects: out,
+    project,
+    ...(settings ? { settings } : {}),
+    sliced,
+    plates: plateList,
+    plate: chosen?.index ?? 0,
+  };
+}
+
+/** How many columns Bambu Studio's grid of `count` plates has: the square root, rounded, and one more if that fell short. */
+function gridColumns(count: number): number {
+  const root = Math.sqrt(count);
+  const rounded = Math.round(root);
+  return Math.max(1, root > rounded ? rounded + 1 : rounded);
+}
+
+/** A plate's picture out of a project (`ModelPlate.picture`'s path): the PNG's bytes, if the file has it. */
+export function readModelPlatePicture(input: Uint8Array, picture: string): Uint8Array | undefined {
+  try {
+    const found = unzipSync(input, { filter: (entry) => entry.name === picture });
+    return found[picture];
+  } catch {
+    return undefined;
+  }
 }
 
 /**
