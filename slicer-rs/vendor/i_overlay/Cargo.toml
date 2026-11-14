@@ -1,0 +1,34 @@
+# i_overlay 9.1.0 (https://github.com/iShape-Rust/iOverlay, MIT OR Apache-2.0), vendored with two changes to how it
+# splits segments where they cross (src/split/), each leaving every result as it was, bit for bit:
+# - It finds the crossings in passes, as each rounds its crossings to the integer grid and so can make new ones, and
+#   passes again until one makes none: up to 13 in a layer of tree supports, each over every pair of segments, for a
+#   few crossings after the first. Now a pass after the first tests only the pairs with a piece of a segment the last
+#   one split (`SplitSolver::fresh_pass`), while those are under a quarter of the segments: every other pair was
+#   tested before, found apart, and is unchanged since.
+# - After a pass splits segments, it no longer sorts them all again: the ones not split are still in order, and the
+#   pieces are sorted and merged in (`SplitSolver::apply`).
+# Its tests, examples and README are left out.
+[package]
+name = "i_overlay"
+version = "9.1.0"
+authors = ["Nail Sharipov <nailxsharipov@gmail.com>"]
+edition = "2024"
+rust-version = "1.88"
+description = "Boolean Operations for 2D Polygons: Supports intersection, union, difference, xor, and self-intersections for all polygon varieties."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/iShape-Rust/iOverlay"
+categories = ["algorithms", "graphics", "science::geo", "mathematics", "no-std"]
+
+[dependencies]
+i_tree = { version = "^0.20" }
+i_key_sort = { version = "^0.12" }
+i_float = { version = "^5.0.0" }
+i_shape = { version = "^5.0.0" }
+rayon = { optional = true, version = "^1.10" }
+
+[features]
+default = []
+glam = ["i_float/glam"]
+serde = ["i_float/serde", "i_shape/serde"]
+allow_multithreading = ["dep:rayon", "i_key_sort/allow_multithreading"]
+variable_stroke_debug = []
