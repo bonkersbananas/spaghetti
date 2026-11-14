@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
+import { raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -373,7 +374,7 @@ async function ideaWithModel(
   await openIdea(page, id);
   await page.getByTestId("idea-file-input").setInputFiles({
     name: file.name,
-    mimeType: "model/stl",
+    mimeType: file.name.endsWith(".3mf") ? "model/3mf" : "model/stl",
     buffer: Buffer.from(file.bytes),
   });
   const files = page.getByRole("region", { name: /^Files/ });
@@ -420,6 +421,12 @@ const RACK = {
   ]),
 };
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
+/** A project made for the X2D that asks for a raft, which Spaghetti's own slicer can't build yet. */
+const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject() };
+const RAFT_IDEA = {
+  title: "Ravioli stamp",
+  note: "Square, on a raft as the project says, to see if it lifts cleaner.",
+};
 
 /** A shelf bracket, an L: it can lie on its base or on its side, which the "Lay it down" tiles show. */
 const BRACKET = {
@@ -2056,13 +2063,13 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked, with slim tree supports where needed, which it can't build yet: OrcaSlicer's engine sliced it, and
-    // the card says why in one line.
+    // Ours picked, for a project that asks for a raft, which it can't build yet: OrcaSlicer's engine sliced it, and the
+    // card says why in one line.
     name: "idea-model-stepped-in",
     path: "/ideas",
     prepare: async (page) => {
-      await setSlicingDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
-      await ideaWithModel(page, RACK_IDEA, RACK, /Sliced by OrcaSlicer: our own slicer/);
+      await setSlicingDefaults(page, { slicer: "spaghetti" });
+      await ideaWithModel(page, RAFT_IDEA, RAFT, /Sliced by OrcaSlicer: our own slicer/);
       await sliceSaved(page);
     },
     beforeShot: modelInView,
