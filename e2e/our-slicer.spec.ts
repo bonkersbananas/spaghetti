@@ -182,6 +182,51 @@ test("a plate in two colours is sliced by ours, each object in its own filament"
   }
 });
 
+/** A beam on two pillars: its middle spans the air between them, a bridge. */
+const BEAM = () =>
+  boxesStl([
+    { at: [0, 0, 0], size: [6, 6, 8] },
+    { at: [20, 0, 0], size: [6, 6, 8] },
+    { at: [0, 0, 8], size: [26, 6, 2] },
+  ]);
+
+test("with a 0.2 mm as the main nozzle, ours slices with its presets, bridges with the plastic they ask for", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const fitMain = async (main: number) => {
+    const response = await page.request.put("/api/printer", {
+      headers: { Origin: new URL(page.url()).origin },
+      data: { nozzles: { main: { diameter: main, hardened: true }, auxiliary: { diameter: 0.4, hardened: true } } },
+    });
+    expect(response.ok()).toBe(true);
+  };
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    await fitMain(0.2);
+    const { id, files } = await ideaWithModel(page, "Beam", "beam.stl", BEAM());
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const file = await fileOf(page, id);
+    expect(file.slice.settings.slicer).toBe("spaghetti");
+    expect(file.slice.fallback).toBeUndefined();
+    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+    expect(sliced.ok()).toBe(true);
+    const zip = unzipSync(new Uint8Array(await sliced.body()));
+    const gcode = strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
+    // Bambu's 0.2 mm Standard: 0.10 mm layers of 0.22 mm lines.
+    expect(gcode).toMatch(/^; nozzle_diameter = 0\.2$/m);
+    expect(gcode).toMatch(/^; layer_height = 0\.1$/m);
+    expect(gcode).toContain("\n; LINE_WIDTH: 0.22\n");
+    // Its presets lay a bridge with half as much plastic again (bridge_flow 1.5), as Orca does: a flat line at the
+    // same spacing, 0.15 mm high.
+    expect(gcode).toContain("\n; FEATURE: Bridge\n; LINE_WIDTH: 0.21073\n; LAYER_HEIGHT: 0.15\n");
+  } finally {
+    await fitMain(0.4);
+    await setDefaults(page, null);
+  }
+});
+
 test("a part that floats is OrcaSlicer's to slice, which warns of it", async ({ page }) => {
   test.setTimeout(2 * SLICED);
   await signIn(page);
