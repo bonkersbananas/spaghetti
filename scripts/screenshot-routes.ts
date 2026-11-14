@@ -421,8 +421,8 @@ const RACK = {
   ]),
 };
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
-/** A project made for the X2D that asks for a raft, which Spaghetti's own slicer can't build yet. */
-const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject() };
+/** A project for the X2D that asks for a raft under its tree supports, which our own slicer can't build yet. */
+const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject({ enable_support: "1" }) };
 const RAFT_IDEA = {
   title: "Ravioli stamp",
   note: "Square, on a raft as the project says, to see if it lifts cleaner.",
@@ -2256,8 +2256,8 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked, for a project that asks for a raft, which it can't build yet: OrcaSlicer's engine sliced it, and the
-    // card says why in one line.
+    // Ours picked, for a project that asks for a raft under its tree supports, which it can't build yet: OrcaSlicer's
+    // engine sliced it, and the card says why in one line.
     name: "idea-model-stepped-in",
     path: "/ideas",
     prepare: async (page) => {

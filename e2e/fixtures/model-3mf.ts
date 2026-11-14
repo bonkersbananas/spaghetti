@@ -67,11 +67,11 @@ export function twoColourProject(): Uint8Array {
 
 /**
  * A Bambu Studio or OrcaSlicer project made for the X2D with its 0.4 mm nozzle, a block on its plate, that asks for a
- * raft of two layers (`raft_layers`): a project for the printer in use says all its settings, and our own slicer
- * can't build a raft yet.
+ * raft of two layers (`raft_layers`) and for `settings` besides: a project for the printer in use says all its
+ * settings. Our own slicer refused rafts until release 17, and still refuses one under tree supports.
  */
-export function raftProject(): Uint8Array {
-  return boxProject({ raft_layers: "2" });
+export function raftProject(settings: Record<string, string> = {}): Uint8Array {
+  return boxProject({ raft_layers: "2", ...settings });
 }
 
 /**
