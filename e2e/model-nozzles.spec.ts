@@ -93,15 +93,15 @@ test("with a 0.2 mm only in the auxiliary, it slices for the main nozzle and say
   await row.click();
 
   const settings = page.getByRole("dialog", { name: "How to slice it" });
-  // No choice of nozzle: one line where it would be.
-  await expect(settings.getByRole("group", { name: "Nozzle" })).toHaveCount(0);
-  await expect(settings.getByText("Slices for the main nozzle (0.4 mm)")).toBeVisible();
-  await expect(
-    settings.getByText("to slice for the 0.2 mm, fit it as the main nozzle", { exact: false }),
-  ).toBeVisible();
-
-  // Another size from More is for slicing ahead of a swap: the card says the file needs it as the main nozzle.
+  // The choice of nozzle is first under More, the sizes fitted marked (decision 0057); no line yet: it slices for the
+  // main nozzle.
+  await expect(settings.getByText("For a 0.4 mm nozzle", { exact: false })).toHaveCount(0);
   await settings.getByRole("button", { name: /^More/ }).click();
+  const nozzle = settings.getByRole("group", { name: "Nozzle" });
+  await expect(nozzle.getByRole("radio", { name: "0.4 mm (main nozzle)" })).toBeChecked();
+  await expect(nozzle.getByRole("radio", { name: "0.2 mm (other nozzle)" })).toBeVisible();
+
+  // Another size is a try-slice: the card says the file needs it as the main nozzle.
   await settings.getByRole("radio", { name: "0.6 mm" }).click();
   await expect(settings.getByText("For a 0.6 mm nozzle", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -111,4 +111,87 @@ test("with a 0.2 mm only in the auxiliary, it slices for the main nozzle and say
   await files.getByRole("button", { name: "Slice for the 0.4 mm" }).click();
   await expect(warning).toBeHidden({ timeout: SLICED });
   await expect(row).toBeVisible();
+});
+
+/** The slicing a saved model's slice was made with, by file name, from the idea's files. */
+async function sliceNozzleOf(page: Page, ideaId: string, name: string) {
+  const { item } = await (await page.request.get(`/api/items/${ideaId}`)).json();
+  const file = (item.files as { name: string; slice?: { settings: { slicing?: { nozzle: number } } } }[]).find(
+    (candidate) => candidate.name === name,
+  );
+  return file?.slice?.settings.slicing?.nozzle;
+}
+
+// Decision 0057: a model tries another nozzle size from "Slice with…", without touching the Printer page.
+test("a model tries a 0.2 mm nozzle on its own: kept across a reload, said on Print it, and cleared by the reset", async ({
+  page,
+}) => {
+  test.setTimeout(4 * SLICED);
+  await signIn(page);
+  // One model sliced on the idea page, which must not follow.
+  const ideaId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: origin(page), data: { id: ideaId, title: "Other cube" } });
+  await page.goto(`/ideas/${ideaId}`);
+  await page.getByTestId("idea-file-input").setInputFiles({
+    name: "other.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(boxStl(10)),
+  });
+  await expect(page.getByRole("region", { name: /^Files/ }).getByText(/Sliced by Spaghetti$/)).toBeVisible({
+    timeout: SLICED,
+  });
+
+  // The model on a twist.
+  const twistId = crypto.randomUUID();
+  await page.request.post("/api/twists", { headers: origin(page), data: { id: twistId, name: "Fusilli knob" } });
+  await page.goto(`/twists/${twistId}`);
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  const adapt = page.getByRole("dialog", { name: "Adapt an STL" });
+  await adapt.getByTestId("adapt-file-input").setInputFiles({
+    name: "knob.stl",
+    mimeType: "model/stl",
+    buffer: Buffer.from(boxStl(20)),
+  });
+  await adapt.getByRole("textbox", { name: "Scale" }).fill("110");
+  await adapt.getByRole("button", { name: "Keep with the twist" }).click();
+  await expect(adapt).toBeHidden();
+  const model = page.getByRole("region", { name: "Model" });
+  await expect(model.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
+  // Fitted as it is, Print it says nothing about a nozzle.
+  await expect(page.getByText(/fit it as the main nozzle before printing/)).toHaveCount(0);
+
+  // Pick 0.2 mm under More: this model slices again for it.
+  await model.getByRole("button", { name: /^Slice with…/ }).click();
+  let settings = page.getByRole("dialog", { name: "How to slice it" });
+  await settings.getByRole("button", { name: /^More/ }).click();
+  await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
+  const warning = model.getByText("Sliced for a 0.2 mm nozzle; the main nozzle has a 0.4 mm.");
+  await page.keyboard.press("Escape");
+  await expect(warning).toBeVisible({ timeout: SLICED });
+  const printNote = "Sliced for a 0.2 mm nozzle: fit it as the main nozzle before printing";
+  await expect(page.getByText(printNote)).toBeVisible();
+  // Printing isn't blocked.
+  await expect(page.getByRole("button", { name: /^Print it/ })).toBeEnabled();
+  // Nothing else changed: the Printer page's nozzle, and the other model's slice.
+  const printer = await (await page.request.get("/api/printer")).json();
+  expect(printer.setup.nozzles.main.diameter).toBe(0.4);
+  expect(await sliceNozzleOf(page, ideaId, "other.stl")).toBe(0.4);
+
+  // Kept across a reload: the sheet shows the pick, and the note stays.
+  await page.reload();
+  await expect(page.getByText(printNote)).toBeVisible();
+  await page
+    .getByRole("region", { name: "Model" })
+    .getByRole("button", { name: /^Slice with…/ })
+    .click();
+  settings = page.getByRole("dialog", { name: "How to slice it" });
+  await settings.getByRole("button", { name: /^More/ }).click();
+  await expect(settings.getByRole("radio", { name: /^0\.2 mm/ })).toBeChecked();
+
+  // Back to the usual settings clears it: sliced for the main nozzle again, with an undo.
+  await settings.getByRole("button", { name: "Back to the usual settings" }).click();
+  await expect(settings.getByRole("radio", { name: /^0\.4 mm/ })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(warning).toBeHidden({ timeout: SLICED });
+  await expect(page.getByText(printNote)).toHaveCount(0);
 });

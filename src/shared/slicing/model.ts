@@ -15,6 +15,7 @@ import {
   strengthOf,
   strengthWords,
   supportWords,
+  withNozzle,
 } from "./settings.ts";
 import type { FileSlice } from "./types.ts";
 
@@ -24,7 +25,10 @@ export const slicingOfSlice = (slice: FileSlice): SlicingSettings =>
 
 /** The settings a model's next slice uses: what was chosen for it, else what its slice was made with, else `defaults`. */
 export function modelSlicing(file: Pick<AttemptFile, "slicing" | "slice">, defaults: SlicingSettings): SlicingSettings {
-  return file.slicing ?? (file.slice ? slicingOfSlice(file.slice) : defaults);
+  const own = file.slicing ?? (file.slice ? slicingOfSlice(file.slice) : null);
+  if (!own) return defaults;
+  // A model nobody picked a nozzle size for follows the main nozzle (the defaults' `nozzle`, decision 0057).
+  return own.nozzlePicked || own.nozzle === defaults.nozzle ? own : withNozzle(own, defaults.nozzle);
 }
 
 /** Settings chosen for a model that its slice wasn't made with yet: a change still being sliced, or never sliced. */

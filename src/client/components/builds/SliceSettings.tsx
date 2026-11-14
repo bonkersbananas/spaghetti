@@ -103,6 +103,11 @@ export interface SlicingChoicesProps {
    * sheet, down the first column, then down the second.
    */
   twoColumns?: boolean;
+  /**
+   * A model's settings back to the usual ones (the Printer page's defaults, the main nozzle): offered while it has
+   * settings of its own. The caller says what that undoes.
+   */
+  onReset?: () => void;
   /** Under the last group: the engine's licence and the files (a model's settings). */
   after?: ReactNode;
 }
@@ -124,11 +129,17 @@ export function SlicingChoices({
   recipes = [],
   lying,
   twoColumns,
+  onReset,
   after,
 }: SlicingChoicesProps) {
   const set = (change: Partial<SlicingSettings>) => onChange(slicingFor(change, settings));
   // Another nozzle keeps the quality's name: its tiles' heights are that nozzle's own.
-  const setNozzle = (nozzle: number) => onChange(withNozzle(settings, nozzle));
+  // A size other than the main nozzle's is the model's own pick; the main nozzle's size goes back to following it
+  // (decision 0057).
+  const setNozzle = (nozzle: number) => {
+    const { nozzlePicked: _, ...next } = withNozzle(settings, nozzle);
+    onChange(nozzle === main ? next : { ...next, nozzlePicked: true });
+  };
   const model = scope === "model";
   const range = layerRange(settings.nozzle);
   const qualities = qualitiesFor(settings.nozzle);
@@ -248,14 +259,22 @@ export function SlicingChoices({
       </p>
     </div>
   );
-  // Which nozzle it slices for, when that needs saying (the two fitted differ, or the settings are for another size):
-  // one calm line, no choice, since the engine prints every slice with the main nozzle. After the filament, so
-  // Quality, Strength and Supports keep a phone's first screen and the desktop panel's first column still fits.
+  // Which nozzle it slices for, when that needs saying: a model sliced for a size the main nozzle doesn't have, or the
+  // workspace's defaults with two sizes fitted (the choice itself is a model's, at the top of More). One calm line,
+  // after the filament, so Quality, Strength and Supports keep a phone's first screen and the desktop panel's first
+  // column still fits.
   const nozzleGroup = nozzles &&
     main !== undefined &&
-    (nozzles.auxiliary.diameter !== main || settings.nozzle !== main) && (
-      <NozzleNote nozzle={settings.nozzle} main={main} auxiliary={nozzles.auxiliary.diameter} workspace={!model} />
+    (model ? settings.nozzle !== main : nozzles.auxiliary.diameter !== main) && (
+      <NozzleNote nozzle={settings.nozzle} main={main} workspace={!model} />
     );
+  const resetGroup = model && onReset && (
+    <div className="-mt-3">
+      <Button variant="quiet" size="sm" icon={UndoIcon} onClick={onReset} className="-ml-3">
+        Back to the usual settings
+      </Button>
+    </div>
+  );
   const more = (
     <MoreSettings
       settings={settings}
@@ -265,7 +284,7 @@ export function SlicingChoices({
       scalable={model && scalable}
       model={model}
       nozzleSize={model}
-      mainNozzle={main}
+      nozzles={nozzles}
       setNozzle={setNozzle}
       defaultOpen={moreOpen}
     />
@@ -291,6 +310,7 @@ export function SlicingChoices({
             {filamentGroup}
             {filamentRule}
             {nozzleGroup}
+            {resetGroup}
           </div>
         </div>
       </div>
@@ -306,6 +326,7 @@ export function SlicingChoices({
       {filamentGroup}
       {filamentRule}
       {nozzleGroup}
+      {resetGroup}
       {more}
       {after}
     </div>
@@ -453,44 +474,49 @@ function LayItDown({
 }
 
 /**
- * Which nozzle a slice is for, in one calm line with the X2D's two nozzles drawn (the main one solid): always the main
- * one, since the engine prints every slice with it (decision 0056). With a smaller or bigger nozzle in the auxiliary,
- * it says how to slice for that one; settings for a size the main nozzle doesn't have (More) say so plainly.
+ * Which nozzle a slice is for, in one calm line with the nozzle drawn: a model's slice for a size the main nozzle doesn't
+ * have says so plainly (a file prints through the main nozzle, decision 0057); the workspace's defaults with two sizes
+ * fitted say that new models slice for the main one, and where another size is tried.
  */
-function NozzleNote({
-  nozzle,
-  main,
-  auxiliary,
-  workspace,
-}: {
-  nozzle: number;
-  main: number;
-  auxiliary: number;
-  workspace: boolean;
-}) {
-  const elsewhere = nozzle !== main;
+function NozzleNote({ nozzle, main, workspace }: { nozzle: number; main: number; workspace: boolean }) {
   return (
     <div className="flex flex-col gap-2.5">
       <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Nozzle</span>
       <div className="flex items-start gap-3">
         <NozzleGlyph diameter={nozzle} side="left" className="text-ink-soft mt-0.5" />
         <p className="text-small text-ink-soft text-pretty">
-          {elsewhere ? (
+          {workspace ? (
             <>
-              <span className="text-ink font-semibold">For a {nozzle} mm nozzle</span> · the main nozzle has a {main}{" "}
-              mm: fit this one as the main nozzle before printing it.
+              <span className="text-ink font-semibold">New models slice for the main nozzle ({main} mm)</span> · a model
+              can try another size under More.
             </>
           ) : (
             <>
-              <span className="text-ink font-semibold">
-                {workspace ? "New models slice" : "Slices"} for the main nozzle ({main} mm)
-              </span>
-              {auxiliary !== main && <> · to slice for the {auxiliary} mm, fit it as the main nozzle.</>}
+              <span className="text-ink font-semibold">For a {nozzle} mm nozzle</span> · the main nozzle has a {main}{" "}
+              mm: fit this one as the main nozzle before printing it.
             </>
           )}
         </p>
       </div>
     </div>
+  );
+}
+
+/** What the dots on the nozzle sizes mean: "● main nozzle  ○ other nozzle", the other only when its size differs. */
+function FittedLegend({ main, other }: { main: number; other?: number }) {
+  return (
+    <span className="text-caption text-ink-faint flex flex-wrap items-center gap-x-3">
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="bg-semolina size-1.5 rounded-full" />
+        main nozzle
+      </span>
+      {other !== undefined && other !== main && (
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="ring-semolina size-1.5 rounded-full ring-1 ring-inset" />
+          other nozzle: a file doesn't print through it
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -610,7 +636,7 @@ function MoreSettings({
   scalable,
   model,
   nozzleSize,
-  mainNozzle,
+  nozzles,
   setNozzle,
   defaultOpen,
 }: {
@@ -622,16 +648,17 @@ function MoreSettings({
   /** A model's: its plate too (a workspace's is on the Printer page). */
   model: boolean;
   /**
-   * Any of the X2D's nozzle sizes, for a model (to slice ahead of a swap): a size the main nozzle doesn't have says so
-   * here, under the Filament and on the card.
+   * Any of the X2D's nozzle sizes, for a model, first among the choices (decision 0057): the sizes fitted are marked,
+   * and a size the main nozzle doesn't have says so here, under the Filament and on the card.
    */
   nozzleSize: boolean;
-  /** The main nozzle's size, which the engine prints with: another size here says so. */
-  mainNozzle?: number;
+  /** The nozzles fitted, marked among the sizes: a file prints through the main one, so another size says so. */
+  nozzles?: PrinterSetup["nozzles"];
   setNozzle: (nozzle: number) => void;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
+  const mainNozzle = nozzles?.main.diameter;
   const style = SUPPORT_STYLES.find((choice) => choice.id === settings.supportStyle);
   const brim = BRIMS.find((choice) => choice.id === settings.brim);
   const patterns = PATTERNS.some((choice) => choice.id === settings.pattern)
@@ -667,6 +694,32 @@ function MoreSettings({
       appearance="plain"
     >
       <div className="flex flex-col gap-5 pt-1">
+        {/* The nozzle first: the qualities above are its own, and a model can try another size without touching the
+            Printer page. The sizes fitted are marked; a file prints through the main one. */}
+        {nozzleSize && (
+          <SettingRow label="Nozzle" wide>
+            <SegmentedControl
+              label="Nozzle"
+              labelHidden
+              options={SLICING_NOZZLES.map((nozzle) => ({
+                value: String(nozzle),
+                label: `${nozzle} mm`,
+                ...(nozzle === mainNozzle
+                  ? { mark: "solid" as const, markWords: "main nozzle" }
+                  : nozzle === nozzles?.auxiliary.diameter
+                    ? { mark: "ring" as const, markWords: "other nozzle" }
+                    : {}),
+              }))}
+              value={String(settings.nozzle)}
+              onChange={(value) => setNozzle(Number(value))}
+            />
+            <p className="text-caption text-ink-faint">
+              {(mainNozzle !== undefined && nozzleSentence(settings, mainNozzle)) ||
+                "The quality keeps its name: its layers are this nozzle's own."}
+            </p>
+            {mainNozzle !== undefined && <FittedLegend main={mainNozzle} other={nozzles?.auxiliary.diameter} />}
+          </SettingRow>
+        )}
         {/* How supports are built means nothing while they are off (or the model carries fins): the Supports tiles above turn them on. */}
         {supportsOn && (
           <SettingRow label="Kind of supports" wide>
@@ -752,22 +805,6 @@ function MoreSettings({
             <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
           </SettingRow>
         )}
-        {nozzleSize && (
-          <SettingRow label="Nozzle" wide>
-            <SegmentedControl
-              label="Nozzle"
-              labelHidden
-              options={SLICING_NOZZLES.map((nozzle) => ({ value: String(nozzle), label: `${nozzle} mm` }))}
-              value={String(settings.nozzle)}
-              onChange={(value) => setNozzle(Number(value))}
-            />
-            <p className="text-caption text-ink-faint">
-              {(mainNozzle !== undefined && nozzleSentence(settings, mainNozzle)) ||
-                "The quality keeps its name: its layers are this nozzle's own."}
-            </p>
-          </SettingRow>
-        )}
-        {/* What slices it, beside the nozzle it slices for. */}
         <SettingRow label="Slicer" wide>
           <SegmentedControl<SlicerId>
             label="Slicer"

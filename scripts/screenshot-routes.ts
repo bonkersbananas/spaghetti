@@ -1827,25 +1827,22 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
-    // A 0.2 mm nozzle fitted on the right (decision 0056): the engine prints every slice with the main nozzle, so there
-    // is no choice, only one line where it would be (after the filament on a phone, under the strength on desktop):
-    // it slices for the main 0.4 mm, and fitting the 0.2 mm as the main nozzle is how to slice for it.
+    // A model's nozzle size (decision 0057): first under More, the sizes fitted marked (a solid dot for the main 0.4 mm,
+    // a ring for the 0.2 mm fitted on the right), the legend under it.
     name: "slice-settings-nozzle",
     path: "/ideas",
     prepare: async (page) => {
       await fitSmallNozzle(page);
       const settings = await openSliceSettings(page);
-      const line = settings.getByText("Slices for the main nozzle (0.4 mm)");
-      await line.waitFor();
+      await settings.getByRole("button", { name: /^More/ }).click();
+      await settings.getByRole("group", { name: "Nozzle" }).waitFor();
+      await page.waitForTimeout(400);
     },
-    // After the filament: a big pantry's spools push it below the panel's fold on desktop too. Scrolled once the
-    // sheet has settled (its pictures still grow it while it opens).
+    // Scrolled once the sheet has settled (its pictures still grow it while it opens).
     beforeShot: async (page) => {
       await settleSliceSettings(page);
-      const line = page
-        .getByRole("dialog", { name: "How to slice it" })
-        .getByText("Slices for the main nozzle (0.4 mm)");
-      await line.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      const more = page.getByRole("dialog", { name: "How to slice it" }).getByRole("button", { name: /^More/ });
+      await more.evaluate((button) => button.scrollIntoView({ block: "start", behavior: "instant" }));
       await page.waitForTimeout(300);
     },
     cleanup: async (page) => {
@@ -3356,6 +3353,29 @@ export const shots: Shot[] = [
           .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
         await page.waitForTimeout(400);
       }
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // A twist's model sliced for a 0.2 mm nozzle that isn't fitted as the main one (decision 0057): its card says so, and
+    // "Print it" carries one calm line (above the button on a phone, beside it on desktop). Printing isn't blocked.
+    name: "twist-model-other-nozzle",
+    path: "/twists",
+    prepare: async (page) => {
+      await twistWithModel(page);
+      const model = page.getByRole("region", { name: "Model" });
+      await model.getByRole("button", { name: /^Slice with…/ }).click();
+      const settings = page.getByRole("dialog", { name: "How to slice it" });
+      await settings.getByRole("button", { name: /^More/ }).click();
+      await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
+      await page.keyboard.press("Escape");
+      await model.getByText("Sliced for a 0.2 mm nozzle; the main nozzle has a 0.4 mm.").waitFor({ timeout: 90_000 });
+      await page.getByText("Sliced for a 0.2 mm nozzle: fit it as the main nozzle before printing").waitFor();
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await model.evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
+      }
+      await page.waitForTimeout(500);
     },
     cleanup: removeTwistModels,
   },

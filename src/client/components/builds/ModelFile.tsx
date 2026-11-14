@@ -4,7 +4,7 @@ import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
-import { type SlicingSettings, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
+import { type SlicingSettings, sameSlicing, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
 import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
@@ -36,6 +36,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { PulseDot } from "@/components/ui/PulseDot";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { toast } from "@/components/ui/Toast";
 import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -498,7 +499,8 @@ function statusOf(
               mainNozzle !== undefined &&
               button(`Slice for the ${mainNozzle} mm`, () => {
                 const { nozzle, layerHeight } = withNozzle(sliced, mainNozzle);
-                onSlice({ nozzle, layerHeight });
+                // The main nozzle's size is no pick of the model's own: it follows the main nozzle again.
+                onSlice({ nozzle, layerHeight, nozzlePicked: false });
               })}
             {floating && onSlice && button("Supports where needed", () => onSlice({ supports: "where-needed" }))}
             {ahead && !again && onSlice && button("Slice it", () => onSlice({}))}
@@ -726,13 +728,20 @@ export default function ModelFileCard({
       fileId: file.id,
       name: file.name,
       source: () => fetchOriginal(file.id),
-      chosen: file.slicing ?? (file.slice ? slicingOfSlice(file.slice) : {}),
+      chosen: file.slicing || file.slice ? settings : {},
       target,
       again,
       ...(again ? { before: figuresOf(file.prefill) } : {}),
     });
   };
   const change_ = (next: SlicingSettings) => target && changeSlicing(queryClient, { target, file, next });
+  // Back to the usual settings (what a new model gets): kept as an undo toast, since the settings were work.
+  const resettable = !!file.slicing && (!sameSlicing(file.slicing, defaults) || !!file.slicing.nozzlePicked);
+  const reset = () => {
+    const before = settings;
+    change_(defaults);
+    toast.undo("Back to the usual settings", { onUndo: () => change_(before) });
+  };
   const actions: Omit<ModelActions, "settings"> = target
     ? {
         onSlice: (asked) => (Object.keys(asked).length ? change_(slicingFor(asked, settings)) : sliceNow()),
@@ -757,6 +766,7 @@ export default function ModelFileCard({
     spools,
     plates: setup.plates,
     nozzles: setup.nozzles,
+    ...(resettable ? { onReset: reset } : {}),
     slice: file.slice,
     scalable: isStlName(file.name),
     recipes: offered,

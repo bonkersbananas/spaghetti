@@ -114,6 +114,16 @@ export function nozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNo
     : `Sliced for a ${settings.nozzle} mm nozzle; the main nozzle has a ${mainNozzle} mm.`;
 }
 
+/**
+ * "Sliced for a 0.2 mm nozzle: fit it as the main nozzle before printing": the line "Print it" carries when the slice
+ * is for a size that isn't the main nozzle's (decision 0057). Calm, and no block: people may swap the nozzle first.
+ */
+export function printNozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNozzle: number): string | null {
+  return settings.nozzle === mainNozzle
+    ? null
+    : `Sliced for a ${settings.nozzle} mm nozzle: fit it as the main nozzle before printing`;
+}
+
 /** "312 mm" */
 const mm = (value: number) => `${Math.round(value)} mm`;
 

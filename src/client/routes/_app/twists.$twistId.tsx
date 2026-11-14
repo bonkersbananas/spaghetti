@@ -1,6 +1,9 @@
 import type { Twist } from "@shared/api";
 import { checkLinkUrl } from "@shared/link-safety";
 import { modelMarkOf } from "@shared/model-mark";
+import { slicingOfSlice } from "@shared/slicing/model.ts";
+import { printNozzleSentence } from "@shared/slicing/words.ts";
+import { DEFAULT_PRINTER } from "@shared/spools";
 import { TWIST_CHANGES_MAX, TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -25,6 +28,7 @@ import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
+import { printerQuery } from "@/lib/pantry-queries";
 import { hasPreview, photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -128,6 +132,12 @@ function TwistBody({ twist }: { twist: Twist }) {
       : "",
   ].filter(Boolean);
   const printWords = [printLabel, ...printFigures].join(" · ");
+  // A file prints through the main nozzle: a slice for another size says so where it could be printed (decision 0057).
+  const { data: printer } = useQuery(printerQuery);
+  const printNote =
+    model?.slice?.status === "sliced"
+      ? printNozzleSentence(slicingOfSlice(model.slice), (printer?.setup ?? DEFAULT_PRINTER).nozzles.main.diameter)
+      : null;
   function printIt() {
     if (!user || !canEdit(false)) return;
     const id = printTwist(queryClient, twist, value.name.trim() || twist.name, user.id);
@@ -151,6 +161,7 @@ function TwistBody({ twist }: { twist: Twist }) {
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
         <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
+        {isDesktop && printNote && <p className="text-caption text-ink-soft mr-2 max-w-60 text-right">{printNote}</p>}
         {isDesktop && (
           <Button
             variant="primary"
@@ -317,18 +328,26 @@ function TwistBody({ twist }: { twist: Twist }) {
           )}
         </div>
       </div>
+      {!isDesktop && printNote && <div aria-hidden className="h-6" />}
       {!isDesktop && (
         <ActionBar>
-          <Button
-            variant="primary"
-            size="lg"
-            icon={BuildsIcon}
-            className="min-w-0 flex-1"
-            disabled={readOnly || !user}
-            onClick={printIt}
-          >
-            {printWords}
-          </Button>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            {printNote && (
+              <p className="bg-paper text-caption text-ink-soft shadow-soft self-center rounded-lg px-3 py-1 text-center text-balance">
+                {printNote}
+              </p>
+            )}
+            <Button
+              variant="primary"
+              size="lg"
+              icon={BuildsIcon}
+              className="min-w-0"
+              disabled={readOnly || !user}
+              onClick={printIt}
+            >
+              {printWords}
+            </Button>
+          </div>
         </ActionBar>
       )}
     </article>
