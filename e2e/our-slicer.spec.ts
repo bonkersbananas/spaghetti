@@ -165,14 +165,15 @@ test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's
     await page.reload();
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
 
-    // A project made for the X2D that asks for a raft, which ours can't build yet: OrcaSlicer's engine slices it.
-    const raft = await ideaWithModel(page, "Block on a raft", "raft.3mf", raftProject());
-    await expect(raft.files.getByText("Sliced by OrcaSlicer: our own slicer can't do a raft yet")).toBeVisible({
-      timeout: SLICED,
-    });
+    // A project made for the X2D that asks for a raft under its tree supports, which ours can't build yet:
+    // OrcaSlicer's engine slices it.
+    const raft = await ideaWithModel(page, "Block on a raft", "raft.3mf", raftProject({ enable_support: "1" }));
+    await expect(
+      raft.files.getByText("Sliced by OrcaSlicer: our own slicer can't do a raft under tree supports yet"),
+    ).toBeVisible({ timeout: SLICED });
     const fallback = (await fileOf(page, raft.id)).slice;
     expect(fallback.settings.slicer).toBe("orca");
-    expect(fallback.fallback).toEqual({ why: "unsupported", what: "a raft" });
+    expect(fallback.fallback).toEqual({ why: "unsupported", what: "a raft under tree supports" });
     // What was asked for stays: the next slice asks ours again.
     expect(fallback.settings.slicing.slicer).toBe("spaghetti");
   } finally {
@@ -328,6 +329,29 @@ test("a project in spiral vase mode is sliced by ours", async ({ page }) => {
     // Until release 12 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "spiral vase mode" }.
     expect(slice.fallback).toBeUndefined();
     expect(slice.notes ?? []).toEqual([]);
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a project on a raft is sliced by ours, with supports off or normal ones", async ({ page }) => {
+  test.setTimeout(3 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    for (const [label, settings] of [
+      ["supports off", {}],
+      ["normal supports", { enable_support: "1", support_type: "normal(auto)" }],
+    ] as const) {
+      const { id } = await ideaWithModel(page, `Block on a raft, ${label}`, "raft.3mf", raftProject(settings));
+      await expect
+        .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+        .toBe("spaghetti");
+      const slice = (await fileOf(page, id)).slice;
+      // Until release 17 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "a raft" }.
+      expect(slice.fallback, label).toBeUndefined();
+      expect(slice.notes ?? [], label).toEqual([]);
+    }
   } finally {
     await setDefaults(page, null);
   }
