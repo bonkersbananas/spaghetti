@@ -23,6 +23,7 @@ pub mod monotonic;
 pub mod order;
 pub mod overhang;
 pub mod pack;
+pub mod paint;
 pub mod parts;
 pub mod plan;
 pub mod png;
@@ -245,6 +246,10 @@ pub struct Plate {
     /// Which object each mesh is of: a project's object whose parts print in different filaments comes as a mesh
     /// for each part.
     groups: Vec<usize>,
+    /// Each mesh's painted colours (`paint.rs`), when it has any.
+    paints: Vec<Option<paint::Paint>>,
+    /// The mesh an STL last added became, and where its triangles went: paint for it (`paint`) goes by the STL's.
+    last_stl: Option<(usize, mesh::Moves)>,
     project: bool,
     /// Whether a model came with no word of its filament (an STL, or a 3MF that isn't a project, added without one).
     unassigned: bool,
@@ -262,6 +267,7 @@ impl Plate {
     pub fn add_with_filament(&mut self, input: &Input, filament: Option<usize>) -> Result<(), Error> {
         let t0 = now();
         let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
+        self.last_stl = None;
         if input.bytes.starts_with(b"PK\x03\x04") {
             let model = threemf::read(input.bytes)?;
             self.project |= model.project;
@@ -269,11 +275,14 @@ impl Plate {
             self.filaments.extend(model.filaments.iter().map(|&f| filament.unwrap_or(f)));
             let next = self.groups.iter().map(|&g| g + 1).max().unwrap_or(0);
             self.groups.extend(model.groups.iter().map(|&g| next + g));
+            self.paints.resize(self.meshes.len(), None);
+            self.paints.extend(model.paints);
             self.meshes.extend(model.meshes);
         } else {
-            let mut m = mesh::read_stl(name, input.bytes)?;
+            let (mut m, moves) = mesh::read_stl_moved(name, input.bytes)?;
             let n = m.vertices.len();
             mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], true);
+            self.last_stl = Some((self.meshes.len(), moves));
             self.meshes.push(m);
             self.groups.push(self.groups.iter().map(|&g| g + 1).max().unwrap_or(0));
             self.unassigned |= filament.is_none();
@@ -291,32 +300,54 @@ impl Plate {
     pub fn add_part(&mut self, input: &Input, filament: usize, first: bool) -> Result<(), Error> {
         let t0 = now();
         let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
-        let meshes = if input.bytes.starts_with(b"PK\x03\x04") {
-            threemf::read(input.bytes)?.meshes
+        self.last_stl = None;
+        let (meshes, paints, moves) = if input.bytes.starts_with(b"PK\x03\x04") {
+            let model = threemf::read(input.bytes)?;
+            (model.meshes, model.paints, None)
         } else {
-            let mut m = mesh::read_stl(name, input.bytes)?;
+            let (mut m, moves) = mesh::read_stl_moved(name, input.bytes)?;
             let n = m.vertices.len();
             // Its heights as Orca holds a part's, not dropped onto the bed on its own.
             mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], false);
-            vec![m]
+            (vec![m], vec![None], Some(moves))
         };
         let group = match self.groups.last() {
             Some(&g) if !first => g,
             _ => self.groups.iter().map(|&g| g + 1).max().unwrap_or(0),
         };
-        for m in meshes {
+        if let Some(moves) = moves {
+            self.last_stl = Some((self.meshes.len(), moves));
+        }
+        self.paints.resize(self.meshes.len(), None);
+        for (m, paint) in meshes.into_iter().zip(paints) {
             self.meshes.push(m);
             self.groups.push(group);
             self.filaments.push(filament);
+            self.paints.push(paint);
         }
         self.title.get_or_insert_with(|| name.to_string());
         self.read_ms += now() - t0;
         Ok(())
     }
 
+    /// Paints the mesh the last STL added became (`add`, `add_in`, `add_part`): `paint`'s triangles are the STL's,
+    /// in its order. False when the last model added wasn't an STL, or the paint names triangles it doesn't have.
+    pub fn paint(&mut self, paint: &paint::Paint) -> bool {
+        let Some((k, moves)) = &self.last_stl else { return false };
+        let count = self.meshes[*k].triangles.len() as u32;
+        let places = moves.new_places();
+        if paint.triangles.iter().any(|&t| places(t).is_some_and(|n| n >= count)) {
+            return false;
+        }
+        let moved = paint.moved(places);
+        self.paints.resize(self.meshes.len(), None);
+        self.paints[*k] = (!moved.is_empty()).then_some(moved);
+        true
+    }
+
     /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
-        let Plate { mut meshes, mut filaments, mut groups, project, unassigned, title, read_ms } = self;
+        let Plate { mut meshes, mut filaments, mut groups, paints, project, unassigned, title, read_ms, .. } = self;
         filaments.resize(meshes.len(), 0);
         if groups.len() != meshes.len() {
             groups = (0..meshes.len()).collect();
@@ -324,6 +355,10 @@ impl Plate {
         let t0 = now();
         if let Some(what) = settings.unsupported() {
             return Err(Error::Unsupported(what));
+        }
+        // Painted colours: Orca's segmentation by paint isn't ported yet (OrcaSlicer's engine prints them).
+        if paints.iter().flatten().any(|p| p.states() > 1) {
+            return Err(Error::Unsupported("painted colours"));
         }
         // With several filaments, each object prints in the one its file or its caller gives it (a project's object
         // its parts each in theirs): models that say nothing would all print in the first (with one filament,

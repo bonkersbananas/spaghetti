@@ -133,6 +133,37 @@ fn the_same_models_give_the_same_file() {
 }
 
 #[test]
+fn painted_colours_are_refused_by_name_until_ours_prints_them() {
+    use spaghetti_slicer::{Plate, paint::Paint};
+    let cube = cube_stl(10.0);
+    // Paint as the app hands it: the STL's 12th triangle (index 11), its top's last, in filament 2.
+    let mut bytes = Vec::new();
+    for word in [1u32, 11, 1] {
+        bytes.extend_from_slice(&word.to_le_bytes());
+    }
+    bytes.push(b'8');
+    let paint = Paint::from_bytes(&bytes).expect("paint");
+    let mut plate = Plate::default();
+    plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
+    assert!(plate.paint(&paint));
+    assert_eq!(
+        plate.slice(&Settings::default(), &Options::default()).err(),
+        Some(Error::Unsupported("painted colours"))
+    );
+    // Paint for triangles the STL doesn't have isn't taken; nor is paint after a 3MF, which brings its own.
+    let mut past = bytes.clone();
+    past[4..8].copy_from_slice(&12u32.to_le_bytes());
+    let mut plate = Plate::default();
+    plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
+    assert!(!plate.paint(&Paint::from_bytes(&past).expect("paint")));
+    assert!(plate.slice(&Settings::default(), &Options::default()).is_ok());
+    // Unpainted, the same cube slices.
+    let mut plate = Plate::default();
+    plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
+    assert!(plate.slice(&Settings::default(), &Options::default()).is_ok());
+}
+
+#[test]
 fn models_that_cannot_print_are_refused() {
     let settings = Settings::default();
     let options = Options::default();

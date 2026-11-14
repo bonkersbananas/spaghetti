@@ -111,6 +111,46 @@ export function partsProject(): Uint8Array {
 }
 
 /**
+ * A Bambu Studio or OrcaSlicer project of one object made of three parts in two filaments: a T whose column's left
+ * half prints in filament 1 (white PLA), its right half in filament 2 (red PLA), and its bar on top in filament 1, its
+ * arms 16 mm out over the plate, so they need supports. Ours works them out for the whole T since slicer-rs-v18, and
+ * prints each layer's in the filament the layer starts with, as Orca does; before, it left such objects to OrcaSlicer's
+ * engine.
+ */
+export function tPartsProject(): Uint8Array {
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>
+<object id="1" type="model">${boxMesh([122, 122, 0], [6, 12, 20])}</object>
+<object id="2" type="model">${boxMesh([128, 122, 0], [6, 12, 20])}</object>
+<object id="3" type="model">${boxMesh([106, 122, 20], [44, 12, 5])}</object>
+<object id="4" type="model"><components><component objectid="1"/><component objectid="2"/><component objectid="3"/></components></object>
+</resources>
+<build><item objectid="4"/></build>
+</model>`;
+  const settings = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="4">
+    <metadata key="name" value="Two-tone T"/>
+    <metadata key="extruder" value="1"/>
+    <part id="1" subtype="normal_part"><metadata key="name" value="Left"/><metadata key="extruder" value="1"/></part>
+    <part id="2" subtype="normal_part"><metadata key="name" value="Right"/><metadata key="extruder" value="2"/></part>
+    <part id="3" subtype="normal_part"><metadata key="name" value="Bar"/><metadata key="extruder" value="1"/></part>
+  </object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <model_instance><metadata key="object_id" value="4"/></model_instance>
+  </plate>
+</config>`;
+  const project = { filament_type: ["PLA", "PLA"], filament_colour: ["#F2EEE4", "#C2412D"] };
+  return zipSync({
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(settings),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+  });
+}
+
+/**
  * A Bambu Studio or OrcaSlicer project of one coaster with a bow tie painted on its top: each of the top's two
  * triangles halved along the other diagonal (Orca's code 5 and 9, a split of one side), the front and back quarters
  * painted in filament 2 (red PLA, 8), the left and right ones left in the coaster's own (0, white PLA). OrcaSlicer's
