@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { writeStl } from "@shared/mesh";
+import { type ModelPaint, paintBytes } from "@shared/slicing/paint.ts";
 import { fallbackOf, notesOf, type SlicerWarning, warningsOf } from "@shared/slicing/slicers.ts";
 import type { SliceFallback } from "@shared/slicing/types.ts";
 
@@ -9,9 +10,9 @@ import type { SliceFallback } from "@shared/slicing/types.ts";
  * (slicer-rs/src/wasm.rs). It gets what OrcaSlicer's engine gets: the setup the app made (`sliceSetup`) and the
  * objects as the worker laid them on the plate, turned, scaled and with their fins, so it keeps their places (flag 1)
  * and their size (the setup's scale is 100), each with its filament on a plate in several (an object made of parts
- * in different filaments, part by part, each with its own). It answers with the packed
- * .gcode.3mf and what it warns of (Orca's warnings: an object that needs supports), or why OrcaSlicer's engine slices
- * it instead.
+ * in different filaments, part by part, each with its own) and a project's painted colours on it. It answers with the
+ * packed .gcode.3mf and what it warns of (Orca's warnings: an object that needs supports), or why OrcaSlicer's engine
+ * slices it instead.
  */
 
 interface Exports {
@@ -27,6 +28,11 @@ interface Exports {
    * joins the one added just before. Where parts overlap, the later one prints. In releases from slicer-rs-v16 on.
    */
   add_part?(name: number, nameLen: number, data: number, dataLen: number, filament: number, first: number): number;
+  /**
+   * Paints the STL added just before with a project's painted colours (`paintBytes`): 0, or 1 when they aren't paint
+   * for it. A module from before slicer-rs-v22 refuses a painted plate when it slices (code 8, "painted colours").
+   */
+  paint?(data: number, len: number): number;
   slice(flags: number): number;
   output_ptr(): number;
   output_len(): number;
@@ -36,6 +42,8 @@ interface Exports {
 
 /** `slice`'s flag: the objects stay where the worker put them. */
 const KEEP_PLACEMENT = 1;
+/** Not one of the module's codes: paint it wouldn't take (a fallback that says the slice failed). */
+const PAINT_REFUSED = -1;
 
 export type OursAnswer =
   | { ok: true; sliced: Uint8Array; ms: number; notes: string[]; warnings: SlicerWarning[] }
@@ -55,13 +63,21 @@ async function load(url: URL): Promise<Exports> {
 
 /**
  * An object as the worker laid it on the plate; on a plate in several filaments, the one it prints in (from 1), and
- * when it is made of parts in different filaments, each part with its own.
+ * when it is made of parts in different filaments, each part with its own. Painted, its paint, and each part's.
  */
 export interface OurObject {
   name: string;
   positions: Float32Array;
   filament?: number;
-  parts?: { positions: Float32Array; filament: number }[];
+  paint?: ModelPaint;
+  parts?: OurPart[];
+}
+
+/** A part of an object made of parts: its mesh, the filament it prints in (from 1) and the paint on it. */
+export interface OurPart {
+  positions: Float32Array;
+  filament: number;
+  paint?: ModelPaint;
 }
 
 /**
@@ -95,6 +111,17 @@ export async function sliceOurs(
     };
     const said = () =>
       new TextDecoder().decode(new Uint8Array(module.memory.buffer, module.summary_ptr(), module.summary_len()));
+    // A module that can't be handed paint can't print it: OrcaSlicer's engine slices the plate, and the card says why.
+    const paintIt = module.paint;
+    if (!paintIt && objects.some((object) => object.paint || object.parts?.some((part) => part.paint))) {
+      return { ok: false, fallback: { why: "unsupported", what: "painted colours" } };
+    }
+    // Paints the STL added just before; paint it won't take is a slice that failed.
+    const painted = (paint: ModelPaint | undefined) => {
+      if (!paint || !paintIt) return 0;
+      const bytes = paintBytes(paint);
+      return withBytes(bytes, (ptr) => paintIt(ptr, bytes.length)) ? PAINT_REFUSED : 0;
+    };
     const settings = encoder.encode(setup);
     let code = withBytes(settings, (ptr) => module.setup(ptr, settings.length));
     for (const object of objects) {
@@ -112,6 +139,7 @@ export async function sliceOurs(
               addPart(namePtr, name.length, stlPtr, stl.length, part.filament, index === 0 ? 1 : 0),
             ),
           );
+          if (!code) code = painted(part.paint);
         }
         continue;
       }
@@ -126,6 +154,7 @@ export async function sliceOurs(
             : module.add(namePtr, name.length, stlPtr, stl.length),
         ),
       );
+      if (!code) code = painted(object.paint);
     }
     if (code) return { ok: false, fallback: fallbackOf(code, said()) ?? { why: "failed" } };
     beforeSlice();
