@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import {
   brimProject,
+  partsProject,
   patternProject,
   raftProject,
   seamProject,
@@ -178,6 +179,52 @@ test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's
     expect(fallback.settings.slicing.slicer).toBe("spaghetti");
   } finally {
     // The worker's database is shared with the specs after this one.
+    await setDefaults(page, null);
+  }
+});
+
+test("an object made of parts in two filaments is sliced by ours, each part in its own", async ({ page }) => {
+  test.setTimeout(3 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    // A Bambu Studio project: one coaster, its left half in filament 1 and its right half in filament 2.
+    const { id, files } = await ideaWithModel(page, "Two-tone coaster", "two-tone.3mf", partsProject());
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const ours = await fileOf(page, id);
+    expect(ours.slice.settings.slicer).toBe("spaghetti");
+    expect(ours.slice.fallback).toBeUndefined();
+    expect(ours.slice.settings.filaments).toHaveLength(2);
+    const slicedFile = async (fileId: string) => {
+      const sliced = await page.request.get(`/api/files/${fileId}/sliced`);
+      expect(sliced.ok()).toBe(true);
+      const zip = unzipSync(new Uint8Array(await sliced.body()));
+      return {
+        info: strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array()),
+        gcode: strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array()),
+      };
+    };
+    // Both filaments print, over a prime tower, and the coaster stays one object, with one label to skip it by.
+    const ourFile = await slicedFile(ours.id);
+    expect(ourFile.info.match(/<filament id="/g)).toHaveLength(2);
+    expect(ourFile.info.match(/<object identify_id="/g)).toHaveLength(1);
+    expect(ourFile.gcode).toMatch(/^; model label id: 1$/m);
+    expect(ourFile.gcode).toContain("; FEATURE: Prime tower");
+
+    // OrcaSlicer's engine, picked under More, gets the coaster whole, in the object's filament, as before.
+    await files.getByRole("button", { name: "Slice with…" }).click();
+    const settings = page.getByRole("dialog", { name: "How to slice it" });
+    await settings.getByRole("button", { name: /^More/ }).click();
+    await settings.getByRole("group", { name: "Slicer" }).getByRole("radio", { name: "OrcaSlicer" }).click();
+    await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
+    await page.keyboard.press("Escape");
+    const engine = await fileOf(page, id);
+    expect(engine.slice.status).toBe("sliced");
+    expect(engine.slice.settings.filaments).toHaveLength(1);
+    const engineFile = await slicedFile(engine.id);
+    expect(engineFile.info.match(/<filament id="/g)).toHaveLength(1);
+    expect(engineFile.gcode).not.toContain("; FEATURE: Prime tower");
+  } finally {
     await setDefaults(page, null);
   }
 });

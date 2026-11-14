@@ -14,6 +14,19 @@ export interface ModelObject {
   positions: Float32Array;
   /** The filament the project gives it (1 is the first), when it says. */
   extruder?: number;
+  /**
+   * When a project's object is made of parts that print in different filaments: each part, in the object's order of
+   * them, as the triangles of `positions` it is (its own and its sub-parts', one after another).
+   */
+  parts?: ModelPart[];
+}
+
+/** A part of an object: its triangles `from` (the first) `to` (past the last), and its filament, when it says. */
+export interface ModelPart {
+  from: number;
+  to: number;
+  /** Its own filament (1 is the first), else its object's. */
+  extruder?: number;
 }
 
 export interface Model3mf {
@@ -187,7 +200,10 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
   // Bambu and Orca projects: names, extruders and part kinds in model_settings.config, plates in it too.
   const settingsText = files["Metadata/model_settings.config"];
   const project = settingsText !== undefined;
-  const objectInfo = new Map<string, { name?: string; extruder?: number; skipParts: Set<string> }>();
+  const objectInfo = new Map<
+    string,
+    { name?: string; extruder?: number; skipParts: Set<string>; partExtruders: Map<string, number> }
+  >();
   let plateObjects: Set<string> | null = null;
   if (settingsText) {
     const text = strFromU8(settingsText);
@@ -197,14 +213,19 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
         new RegExp(`<metadata\\s+key="${key}"\\s+value="([^"]*)"`).exec(scope)?.[1];
       const head = body.split("<part")[0] ?? "";
       const skipParts = new Set<string>();
-      for (const part of body.matchAll(/<part\s+id="([^"]+)"\s+subtype="([^"]+)"/g)) {
+      const partExtruders = new Map<string, number>();
+      // Each part, with its settings when it has any (`<part …/>` has none).
+      for (const part of body.matchAll(/<part\s+id="([^"]+)"\s+subtype="([^"]+)"[^>]*?(?:\/>|>([\s\S]*?)<\/part>)/g)) {
         if (part[2] !== "normal_part") skipParts.add(part[1] as string);
+        const own = Number(meta(part[3] ?? "", "extruder"));
+        if (Number.isInteger(own) && own > 0) partExtruders.set(part[1] as string, own);
       }
       const extruder = Number(meta(head, "extruder"));
       objectInfo.set(match[1] as string, {
         name: meta(head, "name"),
         ...(Number.isInteger(extruder) && extruder > 0 ? { extruder } : {}),
         skipParts,
+        partExtruders,
       });
     }
     const plate = /<plate>([\s\S]*?)<\/plate>/.exec(text)?.[1];
@@ -224,23 +245,31 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     if (!def || (def.type !== "model" && def.type !== "")) continue;
     const info = objectInfo.get(id);
     const triangles: number[] = [];
-    const visit = (object: ObjectDef, transform: Matrix, depth: number) => {
+    // Which part each run of triangles is of: the object's own component it comes through (null: the object's own).
+    const runs: { part: string | null; from: number; to: number }[] = [];
+    const visit = (object: ObjectDef, transform: Matrix, depth: number, part: string | null) => {
       if (depth > 8) return;
-      if (object.mesh) appendMesh(object.mesh, transform, scale.value, triangles);
+      if (object.mesh) {
+        const from = triangles.length / 9;
+        appendMesh(object.mesh, transform, scale.value, triangles);
+        if (triangles.length / 9 > from) runs.push({ part, from, to: triangles.length / 9 });
+      }
       for (const component of object.components) {
         if (info?.skipParts.has(component.id)) continue;
         const child = modelFile(component.file).get(component.id);
         if (child && (child.type === "model" || child.type === "")) {
-          visit(child, multiply(component.transform, transform), depth + 1);
+          visit(child, multiply(component.transform, transform), depth + 1, part ?? component.id);
         }
       }
     };
-    visit(def, matrix(item.transform), 0);
+    visit(def, matrix(item.transform), 0, null);
     if (!triangles.length) continue;
+    const parts = partsOf(runs, info);
     out.push({
       name: info?.name || def.name || `Object ${out.length + 1}`,
       positions: Float32Array.from(triangles),
       ...(info?.extruder ? { extruder: info.extruder } : {}),
+      ...(parts ? { parts } : {}),
     });
   }
   if (!out.length) return "no-objects";
@@ -258,6 +287,31 @@ export function readModel3mf(input: Uint8Array): Model3mf | Model3mfProblem {
     }
   }
   return { objects: out, project, ...(settings ? { settings } : {}), sliced };
+}
+
+/**
+ * An object's parts, when they print in different filaments (else undefined): each run of triangles of one part,
+ * runs of the same part one after another joined, with the part's filament (its own, else the object's).
+ */
+function partsOf(
+  runs: { part: string | null; from: number; to: number }[],
+  info: { extruder?: number; partExtruders: Map<string, number> } | undefined,
+): ModelPart[] | undefined {
+  const extruderOf = (part: string | null) =>
+    (part === null ? undefined : info?.partExtruders.get(part)) ?? info?.extruder;
+  const parts: (ModelPart & { part: string | null })[] = [];
+  for (const run of runs) {
+    const last = parts[parts.length - 1];
+    if (last && last.part === run.part && last.to === run.from) {
+      last.to = run.to;
+      continue;
+    }
+    const extruder = extruderOf(run.part);
+    parts.push({ part: run.part, from: run.from, to: run.to, ...(extruder ? { extruder } : {}) });
+  }
+  const filaments = new Set(parts.map((part) => part.extruder ?? 1));
+  if (filaments.size < 2) return undefined;
+  return parts.map(({ from, to, extruder }) => ({ from, to, ...(extruder ? { extruder } : {}) }));
 }
 
 function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[]) {

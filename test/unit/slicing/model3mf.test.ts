@@ -87,6 +87,54 @@ describe("readModel3mf", () => {
     expect(read.settings).toEqual({ printer_model: "Bambu Lab X2D", layer_height: "0.16" });
   });
 
+  it("reads each part of an object whose parts print in different filaments, as its triangles and filament", () => {
+    const read = readModel3mf(
+      zip({
+        "3D/3dmodel.model": model(
+          `<resources>
+             <object id="1" type="model">${MESH}</object>
+             <object id="2" type="model">${MESH}</object>
+             <object id="3" type="model">${MESH}</object>
+             <object id="7" type="model">${MESH}</object>
+             <object id="8" type="model"><components><component objectid="2"/><component objectid="3" transform="1 0 0 0 1 0 0 0 1 0 20 0"/></components></object>
+             <object id="10" type="model"><components><component objectid="1"/><component objectid="7"/><component objectid="8" transform="1 0 0 0 1 0 0 0 1 20 0 0"/><component objectid="3"/></components></object>
+             <object id="11" type="model"><components><component objectid="1"/><component objectid="2"/></components></object>
+           </resources>
+           <build><item objectid="10"/><item objectid="11" transform="1 0 0 0 1 0 0 0 1 60 0 0"/></build>`,
+        ),
+        "Metadata/model_settings.config": `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="10">
+    <metadata key="name" value="Sign"/>
+    <metadata key="extruder" value="1"/>
+    <part id="1" subtype="normal_part"><metadata key="name" value="board"/></part>
+    <part id="7" subtype="modifier_part"/>
+    <part id="8" subtype="normal_part"><metadata key="name" value="letters"/><metadata key="extruder" value="2"/></part>
+    <part id="3" subtype="normal_part"><metadata key="extruder" value="3"/></part>
+  </object>
+  <object id="11">
+    <metadata key="name" value="Plain"/>
+    <part id="1" subtype="normal_part"><metadata key="extruder" value="2"/></part>
+    <part id="2" subtype="normal_part"><metadata key="extruder" value="2"/></part>
+  </object>
+</config>`,
+      }),
+    );
+    if (typeof read === "string") throw new Error(read);
+    const [sign, plain] = read.objects;
+    // The board in the object's filament; the letters (a part of two meshes) in 2, the last part in 3; the modifier
+    // left out. The object's triangles are its parts' in that order, as before.
+    expect(sign?.positions.length).toBe(4 * 4 * 9);
+    expect(sign?.extruder).toBe(1);
+    expect(sign?.parts).toEqual([
+      { from: 0, to: 4, extruder: 1 },
+      { from: 4, to: 12, extruder: 2 },
+      { from: 12, to: 16, extruder: 3 },
+    ]);
+    // Parts that all print in one filament are just the object.
+    expect(plain?.parts).toBeUndefined();
+  });
+
   it("knows a sliced file, and says what it can't read", () => {
     const sliced = readModel3mf(
       zip({
