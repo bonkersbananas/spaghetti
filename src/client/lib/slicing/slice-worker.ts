@@ -9,7 +9,7 @@ import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
-import { type ModelPaint, paintLeaves, paintWithin } from "@shared/slicing/paint.ts";
+import { type ModelPaint, paintBetween, paintLeaves, paintWithin } from "@shared/slicing/paint.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
 import { type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import { cautionsOf, rustEstimateMs, type SlicerWarning } from "@shared/slicing/slicers.ts";
@@ -24,7 +24,7 @@ import type {
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
 import { withFins } from "./fins";
-import { type OurObject, type OursAnswer, sliceOurs } from "./ours";
+import { type OurObject, type OurPart, type OursAnswer, sliceOurs } from "./ours";
 
 /**
  * Slices one model off the main thread: reads the .stl or .3mf, puts its objects on the X2D's plate, draws the plate
@@ -83,8 +83,8 @@ interface Placed {
    */
   parts?: { from: number; to: number; extruder: number }[];
   /**
-   * A project's painted colours on it, in the filaments the project lists: OrcaSlicer's engine prints them. Its
-   * triangles are those of `positions`, which turning, scaling and placing keep in order.
+   * A project's painted colours on it, in the filaments the project lists: either slicer prints them. Its triangles
+   * are those of `positions`, which turning, scaling and placing keep in order (fins are added after them).
    */
   paint?: ModelPaint;
 }
@@ -165,9 +165,7 @@ async function run(request: SliceRequest) {
     });
     settings = setup.settings;
     slicing = setup.slicing;
-    // Ours can't do painted colours yet: OrcaSlicer's engine slices a plate with any, and the card says why.
-    const painted = read.objects.some((object) => object.paint);
-    const oursSlices = slicing.slicer === "spaghetti" && !painted;
+    const oursSlices = slicing.slicer === "spaghetti";
     // Ours prints each part of an object made of parts in its own filament (add_part), so its setup has every
     // filament the parts use; OrcaSlicer's engine gets each object whole, in the object's filament, as before.
     const partFilaments = Math.max(
@@ -228,7 +226,6 @@ async function run(request: SliceRequest) {
     // Spaghetti's own slicer when it is asked for; OrcaSlicer's engine for what ours can't slice yet (decision 0055).
     const ours = oursSlices ? await withOurs(request, oursSetup, objects, slicing) : null;
     if (ours && !ours.ok) fallback = ours.fallback;
-    else if (slicing.slicer === "spaghetti" && painted) fallback = { why: "unsupported", what: "painted colours" };
     if (ours?.ok && oursSetup !== setup) {
       settings = oursSetup.settings;
       slicing = oursSetup.slicing;
@@ -344,7 +341,8 @@ async function withOurs(
     slicing: { ...setup.slicing, scale: 100 },
   });
   // On a plate in several filaments each object says which it prints in, as Orca's engine is told (`extruder`), and
-  // an object made of parts in different filaments goes in part by part, each in its own.
+  // an object made of parts in different filaments goes in part by part, each in its own. A project's painted colours
+  // go with the object, or with each part, as the engine gets them (`paint.filaments`).
   const several = setup.filaments.length > 1;
   const ours: OurObject[] = objects.map((object) => {
     const parts = several ? partsOf(object) : null;
@@ -352,6 +350,7 @@ async function withOurs(
       name: object.name,
       positions: object.positions,
       ...(several ? { filament: object.extruder } : {}),
+      ...(object.paint ? { paint: object.paint } : {}),
       ...(parts ? { parts } : {}),
     };
   });
@@ -364,16 +363,20 @@ async function withOurs(
 }
 
 /**
- * An object's parts as meshes of their own, each with its filament, when they print in more than one (else null):
- * the triangles after the last part (its fins) print with the object's filament.
+ * An object's parts as meshes of their own, each with its filament and the paint on it, when they print in more than
+ * one (else null): the triangles after the last part (its fins) print with the object's filament.
  */
-function partsOf(object: Placed): { positions: Float32Array; filament: number }[] | null {
+function partsOf(object: Placed): OurPart[] | null {
   const parts = object.parts;
   if (!parts?.length || new Set(parts.map((part) => part.extruder)).size < 2) return null;
-  const out = parts.map((part) => ({
-    positions: object.positions.subarray(part.from * 9, part.to * 9),
-    filament: part.extruder,
-  }));
+  const out = parts.map((part): OurPart => {
+    const paint = object.paint ? paintBetween(object.paint, part.from, part.to) : null;
+    return {
+      positions: object.positions.subarray(part.from * 9, part.to * 9),
+      filament: part.extruder,
+      ...(paint ? { paint } : {}),
+    };
+  });
   const end = Math.max(...parts.map((part) => part.to)) * 9;
   if (end < object.positions.length) out.push({ positions: object.positions.subarray(end), filament: object.extruder });
   return out;

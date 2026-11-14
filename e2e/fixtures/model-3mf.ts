@@ -191,8 +191,8 @@ export function tPartsProject(): Uint8Array {
 /**
  * A Bambu Studio or OrcaSlicer project of one coaster with a bow tie painted on its top: each of the top's two
  * triangles halved along the other diagonal (Orca's code 5 and 9, a split of one side), the front and back quarters
- * painted in filament 2 (red PLA, 8), the left and right ones left in the coaster's own (0, white PLA). OrcaSlicer's
- * engine prints the paint, as Orca does; our own slicer steps aside for it.
+ * painted in filament 2 (red PLA, 8), the left and right ones left in the coaster's own (0, white PLA). Both slicers
+ * print the paint as Orca does: the bow tie red down through the top's shells.
  */
 export function paintedProject(): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
