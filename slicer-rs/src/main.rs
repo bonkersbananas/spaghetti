@@ -1,7 +1,7 @@
 //! The command line: slices STL and 3MF files into a `.gcode.3mf` with the app's default settings, or with a slice
 //! setup the app made from people's slicing settings.
 
-use spaghetti_slicer::{Input, Options, Plate, gcode, setup};
+use spaghetti_slicer::{Input, Options, Plate, gcode, profile, setup};
 use std::process::ExitCode;
 
 const USAGE: &str = "Usage: spaghetti-slicer [options] <model.stl|model.3mf>...
@@ -13,6 +13,8 @@ G-code are the X2D's own, filled as OrcaSlicer fills them. It is new: watch its 
 Options:
       --setup <file>    Slice with a slice setup (JSON): the configs the app's sliceSetup makes from its slicing
                         settings, as it hands them to Orca's engine (bench/setup.mts writes one)
+      --nozzle <mm>     Slice for the X2D's 0.2, 0.6 or 0.8 mm nozzle instead of its 0.4, with Bambu's presets for
+                        it (its Standard process and Bambu PLA Basic), which a setup is laid over
   -o, --output <file>   The .gcode.3mf to write (default: the first model's name with .gcode.3mf)
       --gcode <file>    Also write the plain G-code
       --stats <file>    Write the statistics as JSON (time, filament, per feature, per layer)
@@ -28,6 +30,7 @@ Options:
 struct Args {
     inputs: Vec<String>,
     setup: Option<String>,
+    nozzle: Option<f64>,
     output: Option<String>,
     gcode: Option<String>,
     stats: Option<String>,
@@ -44,6 +47,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
     let mut out = Args {
         inputs: vec![],
         setup: None,
+        nozzle: None,
         output: None,
         gcode: None,
         stats: None,
@@ -62,6 +66,11 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
             "--keep-placement" => out.keep_placement = true,
+            "--nozzle" => {
+                let mm = it.next().ok_or_else(|| "--nozzle needs a width in mm".to_string())?;
+                let width = mm.parse::<f64>().ok().filter(|&w| profile::x2d_nozzle(w).is_some());
+                out.nozzle = Some(width.ok_or_else(|| format!("--nozzle takes 0.2, 0.4, 0.6 or 0.8, not {mm}"))?);
+            }
             "--filaments" => {
                 let list = it.next().ok_or_else(|| "--filaments needs a list".to_string())?;
                 out.filaments = list
@@ -104,14 +113,22 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    // The nozzle's presets, which a setup is laid over.
+    let base = args.nozzle.and_then(profile::x2d_nozzle).unwrap_or_else(profile::x2d);
     let setup = match &args.setup {
-        None => setup::Setup::default(),
+        None => match setup::read_over("{}", &base) {
+            Ok(setup) => setup,
+            Err(e) => {
+                eprintln!("can't slice with the presets for the {} mm nozzle: {e}", args.nozzle.unwrap_or(0.4));
+                return ExitCode::FAILURE;
+            }
+        },
         Some(path) => match std::fs::read_to_string(path).map_err(|e| e.to_string()) {
             Err(e) => {
                 eprintln!("can't read {path}: {e}");
                 return ExitCode::FAILURE;
             }
-            Ok(text) => match setup::read(&text) {
+            Ok(text) => match setup::read_over(&text, &base) {
                 Ok(setup) => setup,
                 Err(e) => {
                     eprintln!("{path}: {e}");

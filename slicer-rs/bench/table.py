@@ -6,6 +6,8 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 results = json.load(open(os.path.join(HERE, "out/results.json")))
 MODELS = [("benchy", "3DBenchy", "225,154"), ("glasses", "Steampunk glasses", "30,080"), ("uobf", "UOBF text with clips", "1,354"), ("plate", "12 Benchies, one plate", "2,701,848")]
+# A Benchy for each of the X2D's other nozzles, with Bambu's presets for it (run.py's NOZZLES).
+NOZZLES = [("benchy-0.2", "0.2 mm nozzle, 0.10 mm layers", "225,154"), ("benchy-0.6", "0.6 mm nozzle, 0.30 mm layers", "225,154"), ("benchy-0.8", "0.8 mm nozzle, 0.40 mm layers", "225,154")]
 RUNNERS = [
     ("rust-native", "Rust, native, 4 threads"),
     ("rust-native-1t", "Rust, native, 1 thread"),
@@ -25,14 +27,18 @@ def size(b):
     return f"{b / 1e6:.2f} MB" if b >= 1e6 else f"{b / 1e3:.0f} kB"
 
 
-print("| Runner | " + " | ".join(m[1] for m in MODELS) + " |")
-print("| --- |" + " --- |" * len(MODELS))
-for key, label in RUNNERS:
-    cells = []
-    for m, _, _ in MODELS:
-        e = results.get(m, {}).get(key)
-        cells.append(f"{secs(e['wall_ms'])}, {e['peak_mb']:.0f} MB" if e and "wall_ms" in e else "–")
-    print(f"| {label} | " + " | ".join(cells) + " |")
+def speed(models):
+    print("| Runner | " + " | ".join(m[1] for m in models) + " |")
+    print("| --- |" + " --- |" * len(models))
+    for key, label in RUNNERS:
+        cells = []
+        for m, _, _ in models:
+            e = results.get(m, {}).get(key)
+            cells.append(f"{secs(e['wall_ms'])}, {e['peak_mb']:.0f} MB" if e and "wall_ms" in e else "–")
+        print(f"| {label} | " + " | ".join(cells) + " |")
+
+
+speed(MODELS)
 
 print()
 print("| Model | Rust `.gcode.3mf` | Orca's G-code, packed as the app packs it | Rust G-code | Orca G-code |")
@@ -49,19 +55,21 @@ def retractions(path):
         return sum(1 for line in f if line.startswith("G1 E") and not line.startswith("G1 E-"))
 
 
-print()
-print(
-    "| Model | Layers, Rust / Orca | Filament, Rust / Orca | Estimate, Rust / Orca | Extruding, Rust / Orca "
-    "| Travel, retractions and lifts, Rust / Orca | Retractions, Rust / Orca |"
-)
-print("| --- | --- | --- | --- | --- | --- | --- |")
-
-
 def pct(a, b):
     return f"{(a - b) / b * 100:+.1f} %".replace("-", "−")
 
 
-for m, label, _ in MODELS:
+def quality(models):
+    print(
+        "| Model | Layers, Rust / Orca | Filament, Rust / Orca | Estimate, Rust / Orca | Extruding, Rust / Orca "
+        "| Travel, retractions and lifts, Rust / Orca | Retractions, Rust / Orca |"
+    )
+    print("| --- | --- | --- | --- | --- | --- | --- |")
+    for m, label, _ in models:
+        quality_row(m, label)
+
+
+def quality_row(m, label):
     r = results[m]["rust-native"]["runs"][0]
     o = results[m]["orca-native"]["runs"][0]
     rs, os_ = r["stats"], o["stats"]
@@ -79,3 +87,13 @@ for m, label, _ in MODELS:
         f"| {r_moving / 60:.1f} / {o_moving / 60:.1f} min ({pct(r_moving, o_moving)}) "
         f"| {retractions(r['gcode']):,} / {retractions(o['gcode']):,} |"
     )
+
+
+print()
+quality(MODELS)
+nozzles = [n for n in NOZZLES if n[0] in results]
+if nozzles:
+    print()
+    speed(nozzles)
+    print()
+    quality(nozzles)

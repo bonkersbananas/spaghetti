@@ -1,4 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
+import { strFromU8, unzipSync } from "fflate";
+import { twoColourProject } from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -11,15 +13,16 @@ test.afterEach(async ({ page }) => {
 
 const SLICED = 60_000;
 
-/** An idea with an STL kept on it; returns its id and the files' region once the STL shows. */
-async function ideaWithModel(page: Page, title: string, name: string, stl: Uint8Array) {
+/** An idea with a model (.stl or .3mf) kept on it; returns its id and the files' region once the model shows. */
+async function ideaWithModel(page: Page, title: string, name: string, model: Uint8Array) {
   const id = crypto.randomUUID();
   await page.request.post("/api/items", {
     headers: { Origin: new URL(page.url()).origin },
     data: { id, title, note: "" },
   });
   await page.goto(`/ideas/${id}`);
-  await page.getByTestId("idea-file-input").setInputFiles({ name, mimeType: "model/stl", buffer: Buffer.from(stl) });
+  const mimeType = name.endsWith(".3mf") ? "model/3mf" : "model/stl";
+  await page.getByTestId("idea-file-input").setInputFiles({ name, mimeType, buffer: Buffer.from(model) });
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText(name)).toBeVisible();
   return { id, files };
@@ -104,35 +107,47 @@ test("a model picked for Spaghetti's own slicer is sliced by it in the browser, 
   await expect(viewer.getByText(/Layer \d+ of 100/)).toBeVisible();
 });
 
-test("what ours can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({ page }) => {
+/** A drying rack: a base, a post, and an arm that starts in the air beside the post (it needs supports). */
+const RACK = () =>
+  boxesStl([
+    { at: [0, 0, 0], size: [36, 36, 4] },
+    { at: [12, 12, 4], size: [12, 12, 46] },
+    { at: [30, 15, 34], size: [26, 6, 4] },
+  ]);
+
+test("ours slices tree supports; what it can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({
+  page,
+}) => {
   test.setTimeout(3 * SLICED);
   await signIn(page);
   try {
-    // The workspace slices with ours, with tree supports where needed (the usual kind), which ours can't build yet.
-    await setDefaults(page, { slicer: "spaghetti", supports: "where-needed" });
-    const { id, files } = await ideaWithModel(page, "Cube", "cube.stl", boxStl(20));
-    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do tree supports yet")).toBeVisible({
+    // The workspace slices with ours, with slim tree supports where needed, which ours can't build yet.
+    await setDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
+    const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
+    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do slim tree supports yet")).toBeVisible({
       timeout: SLICED,
     });
     await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
     const slice = (await fileOf(page, id)).slice;
-    expect(slice.fallback).toEqual({ why: "unsupported", what: "tree supports" });
+    expect(slice.fallback).toEqual({ why: "unsupported", what: "slim tree supports" });
     // What was asked for stays: the next slice asks ours again.
     expect(slice.settings.slicing.slicer).toBe("spaghetti");
 
-    // Normal supports, ours builds.
+    // Tree supports, the usual kind, ours builds: under the arm, which would fall.
     await files.getByRole("button", { name: "Slice with…" }).click();
     const settings = page.getByRole("dialog", { name: "How to slice it" });
     await settings.getByRole("button", { name: /^More/ }).click();
     await settings
       .getByRole("group", { name: "How supports are built" })
-      .getByRole("button", { name: "Normal" })
+      .getByRole("button", { name: "Tree", exact: true })
       .click();
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
-    expect((await fileOf(page, id)).slice.settings.slicing.supportStyle).toBe("normal");
-    expect((await fileOf(page, id)).slice.fallback).toBeUndefined();
+    const trees = (await fileOf(page, id)).slice;
+    expect(trees.settings.slicing.supportStyle).toBe("tree");
+    expect(trees.settings.slicing.supports).toBe("where-needed");
+    expect(trees.fallback).toBeUndefined();
     await page.keyboard.press("Escape");
     await page.reload();
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
@@ -142,22 +157,83 @@ test("what ours can't slice yet, OrcaSlicer's engine slices, and the card says w
   }
 });
 
+test("a plate in two colours is sliced by ours, each object in its own filament", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    // A Bambu Studio project: a white coaster in filament 1, a red one in filament 2.
+    const { id, files } = await ideaWithModel(page, "Coasters", "coasters.3mf", twoColourProject());
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const file = await fileOf(page, id);
+    expect(file.slice.settings.slicer).toBe("spaghetti");
+    expect(file.slice.fallback).toBeUndefined();
+    expect(file.slice.settings.filaments).toHaveLength(2);
+    // The file says which nozzle each of its two filaments prints with, as Orca's does for the printer.
+    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+    expect(sliced.ok()).toBe(true);
+    const zip = unzipSync(new Uint8Array(await sliced.body()));
+    const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
+    expect(/key="filament_maps" value="([^"]*)"/.exec(info)?.[1]?.split(" ")).toHaveLength(2);
+    // Both filaments print: two lines of filament in the plate's description, each with what it uses.
+    expect(info.match(/<filament id="/g)).toHaveLength(2);
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+/** A beam on two pillars: its middle spans the air between them, a bridge. */
+const BEAM = () =>
+  boxesStl([
+    { at: [0, 0, 0], size: [6, 6, 8] },
+    { at: [20, 0, 0], size: [6, 6, 8] },
+    { at: [0, 0, 8], size: [26, 6, 2] },
+  ]);
+
+test("with a 0.2 mm as the main nozzle, ours slices with its presets, bridges with the plastic they ask for", async ({
+  page,
+}) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  const fitMain = async (main: number) => {
+    const response = await page.request.put("/api/printer", {
+      headers: { Origin: new URL(page.url()).origin },
+      data: { nozzles: { main: { diameter: main, hardened: true }, auxiliary: { diameter: 0.4, hardened: true } } },
+    });
+    expect(response.ok()).toBe(true);
+  };
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    await fitMain(0.2);
+    const { id, files } = await ideaWithModel(page, "Beam", "beam.stl", BEAM());
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const file = await fileOf(page, id);
+    expect(file.slice.settings.slicer).toBe("spaghetti");
+    expect(file.slice.fallback).toBeUndefined();
+    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+    expect(sliced.ok()).toBe(true);
+    const zip = unzipSync(new Uint8Array(await sliced.body()));
+    const gcode = strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
+    // Bambu's 0.2 mm Standard: 0.10 mm layers of 0.22 mm lines.
+    expect(gcode).toMatch(/^; nozzle_diameter = 0\.2$/m);
+    expect(gcode).toMatch(/^; layer_height = 0\.1$/m);
+    expect(gcode).toContain("\n; LINE_WIDTH: 0.22\n");
+    // Its presets lay a bridge with half as much plastic again (bridge_flow 1.5), as Orca does: a flat line at the
+    // same spacing, 0.15 mm high.
+    expect(gcode).toContain("\n; FEATURE: Bridge\n; LINE_WIDTH: 0.21073\n; LAYER_HEIGHT: 0.15\n");
+  } finally {
+    await fitMain(0.4);
+    await setDefaults(page, null);
+  }
+});
+
 test("a part that floats is OrcaSlicer's to slice, which warns of it", async ({ page }) => {
   test.setTimeout(2 * SLICED);
   await signIn(page);
   try {
     await setDefaults(page, { slicer: "spaghetti" });
-    // An arm that starts in the air beside its post (as slicing-settings.spec.ts's drying rack).
-    const { id, files } = await ideaWithModel(
-      page,
-      "Drying rack",
-      "rack.stl",
-      boxesStl([
-        { at: [0, 0, 0], size: [36, 36, 4] },
-        { at: [12, 12, 4], size: [12, 12, 46] },
-        { at: [30, 15, 34], size: [26, 6, 4] },
-      ]),
-    );
+    // Without supports, its arm would print in the air (as slicing-settings.spec.ts's drying rack).
+    const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
     await expect(files.getByText("Parts of it float in the air.")).toBeVisible({ timeout: SLICED });
     await expect(
       files.getByText("Sliced by OrcaSlicer: our own slicer can't check for floating parts yet"),

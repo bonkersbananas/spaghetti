@@ -2,7 +2,7 @@
 
 use md5::{Digest, Md5};
 use spaghetti_slicer::region::Role;
-use spaghetti_slicer::{Error, Input, Options, Settings, setup, slice, zip};
+use spaghetti_slicer::{Error, Input, Options, Settings, profile, setup, slice, zip};
 
 /// A cube as a text STL, corners from 0 to `size`.
 fn cube_stl(size: f32) -> Vec<u8> {
@@ -348,6 +348,50 @@ fn the_x2d_gets_orcas_start_and_end_and_moves_it_can_print_safely() {
     assert_eq!(layers.len(), 100);
     assert!(layers.iter().all(|l| l == &[1]));
     assert_eq!(gcode.matches(";======== X2D timelapse gcode ========").count(), 100);
+}
+
+/// Each of the X2D's nozzles with Bambu's presets for it (`profile::x2d_nozzle`: its Standard process and Bambu PLA
+/// Basic), as the command line's `--nozzle` slices: a 20 mm cube in that process's layers, its moves as safe as the
+/// 0.4 mm's, its lines as wide as the presets say, no faster than the filament flows through that nozzle, and within
+/// 2 % of the plastic and printing time of native OrcaSlicer 2.5.0 with the same presets (Nov 14: all within 1.2 %).
+#[test]
+fn each_nozzle_slices_a_cube_with_bambus_presets_for_it() {
+    let stl = cube_stl(20.0);
+    for (nozzle, layers, width, orca_volume, orca_time) in [
+        (0.2, 200, "0.22", 2647.6, 2069.1),
+        (0.4, 100, "0.42", 2864.8, 537.5),
+        (0.6, 67, "0.62", 3308.3, 359.0),
+        (0.8, 50, "0.82", 3991.6, 288.0),
+    ] {
+        let settings = Settings::from_profile(profile::x2d_nozzle(nozzle).unwrap(), None);
+        let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        let s = &out.stats;
+        assert_eq!(s.layers, layers, "{nozzle} mm");
+        let near = |ours: f64, orca: f64| (ours / orca - 1.0).abs() < 0.02;
+        assert!(near(s.volume, orca_volume), "{nozzle} mm: {} mm³ against Orca's {orca_volume}", s.volume);
+        assert!(near(s.model_time, orca_time), "{nozzle} mm: {} s against Orca's {orca_time}", s.model_time);
+        let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+        assert_eq!(check_moves(&gcode, &settings).len(), layers);
+        assert!(gcode.contains(&format!("; LINE_WIDTH: {width}\n")), "{nozzle} mm");
+        // Every extrusion between the start and the end within the filament's volumetric speed for the nozzle
+        // (2 mm³/s through the 0.2 mm).
+        let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).unwrap();
+        let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().unwrap();
+        let area = std::f64::consts::PI * (settings.filament_diameter / 2.0).powi(2);
+        let (mut x, mut y, mut f, mut fastest) = (f64::NAN, f64::NAN, 0.0, 0.0f64);
+        for line in body.lines().filter(|l| l.starts_with("G1 ")) {
+            let (nx, ny) = (word(line, 'X').unwrap_or(x), word(line, 'Y').unwrap_or(y));
+            f = word(line, 'F').unwrap_or(f);
+            let length = (nx - x).hypot(ny - y);
+            if let Some(e) = word(line, 'E').filter(|&e| e > 0.0 && length > 0.05) {
+                fastest = fastest.max(e * area / length * f / 60.0);
+            }
+            (x, y) = (nx, ny);
+        }
+        assert!(fastest <= settings.max_volumetric_speed * 1.01, "{nozzle} mm: {fastest} mm³/s");
+        let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
+        assert!(info.contains(&format!(r#"nozzle_diameter="{nozzle}""#)), "{info}");
+    }
 }
 
 #[test]

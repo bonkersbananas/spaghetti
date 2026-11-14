@@ -505,7 +505,7 @@ fn island_paths(
         };
         let bridge = matches!(role, Role::Bridge | Role::InternalBridge);
         let spacing =
-            if bridge { s.bridge_flow(role == Role::InternalBridge, h).2 } else { Settings::spacing(width, h) };
+            if bridge { s.bridge_flow(role == Role::InternalBridge, h).spacing } else { Settings::spacing(width, h) };
         let style = solid_style(role, s);
         // Orca keeps a monotonic region's lines in the order its fill makes them.
         let sortable = style == SolidStyle::ZigZag;
@@ -956,8 +956,10 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         Role::BottomSurface => (s.solid_infill_width, s.solid_infill_speed),
         Role::Bridge | Role::InternalBridge => {
             let internal = role == Role::InternalBridge;
-            let (w, mm3, _) = s.bridge_flow(internal, h);
-            return (w, mm3, if internal { s.internal_bridge_speed } else { s.bridge_speed });
+            let f = s.bridge_flow(internal, h);
+            // Orca applies `internal_bridge_flow` to internal bridges as it writes them.
+            let mm3 = if internal { f.mm3_per_mm * s.internal_bridge_flow } else { f.mm3_per_mm };
+            return (f.width, mm3, if internal { s.internal_bridge_speed } else { s.bridge_speed });
         }
         Role::GapFill => (s.inner_wall_width, s.gap_infill_speed),
         // Only the first layer has one.
@@ -967,27 +969,22 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         // The tower writes its own G-code (`wipe_tower.rs`).
         Role::PrimeTower => (s.line_width, s.travel_speed),
         Role::OverhangWall => {
-            // Orca's bridging flow for walls: a bridge line wide (else an inner wall's), round threads if bridges
-            // are thick.
-            if s.thick_bridges {
-                let d = if s.bridge_width > 0.0 { s.bridge_width } else { s.nozzle_diameter };
-                return (d, std::f64::consts::PI * (d / 2.0).powi(2), s.bridge_speed);
-            }
-            (if s.bridge_width > 0.0 { s.bridge_width } else { s.inner_wall_width }, s.bridge_speed)
+            let f = s.overhang_wall_flow(h);
+            return (f.width, f.mm3_per_mm, s.bridge_speed);
         }
     };
     (w, Settings::mm3_per_mm(w, h), speed)
 }
 
 /// How high a role's paths are laid on a layer `h` high: a thick bridge (and with thick bridges an overhang wall) is
-/// a round thread as high as it is wide, anything else the layer's height.
+/// a round thread as high as it is wide, a flat one carrying more plastic (`bridge_flow`) is that much higher, and
+/// anything else is the layer's height.
 pub fn path_height(role: Role, h: f64, s: &Settings) -> f64 {
-    let thick = match role {
-        Role::InternalBridge => s.thick_internal_bridges,
-        Role::Bridge | Role::OverhangWall => s.thick_bridges,
-        _ => false,
-    };
-    if thick { flow(role, false, h, s).0 } else { h }
+    match role {
+        Role::Bridge | Role::InternalBridge => s.bridge_flow(role == Role::InternalBridge, h).height,
+        Role::OverhangWall => s.overhang_wall_flow(h).height,
+        _ => h,
+    }
 }
 
 /// An overhang wall's width, mm³ per mm, speed and acceleration on a layer `h` high.

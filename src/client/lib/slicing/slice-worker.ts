@@ -24,7 +24,7 @@ import type {
 import { settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
 import { readThreeMf } from "@shared/threemf/read.ts";
 import { withFins } from "./fins";
-import { type OursAnswer, sliceOurs } from "./ours";
+import { type OurObject, type OursAnswer, sliceOurs } from "./ours";
 
 /**
  * Slices one model off the main thread: reads the .stl or .3mf, puts its objects on the X2D's plate, draws the plate
@@ -309,7 +309,14 @@ async function withOurs(
     colours: setup.colours,
     slicing: { ...setup.slicing, scale: 100 },
   });
-  return sliceOurs(new URL(rust.wasm, rust.base), json, objects, () => {
+  // On a plate in several filaments each object says which it prints in, as Orca's engine is told (`extruder`).
+  const several = setup.filaments.length > 1;
+  const ours: OurObject[] = objects.map(({ name, positions, extruder }) => ({
+    name,
+    positions,
+    ...(several ? { filament: extruder } : {}),
+  }));
+  return sliceOurs(new URL(rust.wasm, rust.base), json, ours, () => {
     // Its one call can't say how far it is: the page paces the ring by about how long it takes.
     const layers = objects.reduce((sum, object) => sum + boundsOf(object.positions).max[2] / slicing.layerHeight, 0);
     const triangles = objects.reduce((sum, object) => sum + object.positions.length / 9, 0);

@@ -2,7 +2,8 @@
 <meta charset="utf-8" />
 <title>Slicer benchmark</title>
 <script type="module">
-  // Runs the WebAssembly slicer on the page's main thread, as the benchmark asks: window.runSlice(paths, keep).
+  // Runs the WebAssembly slicer on the page's main thread, as the benchmark asks: window.runSlice(paths, keep, setup),
+  // with the slice setup at `setup` when given.
   let instance;
   async function load() {
     if (instance) return 0;
@@ -12,7 +13,7 @@
     }));
     return performance.now() - t0;
   }
-  window.runSlice = async (paths, keep) => {
+  window.runSlice = async (paths, keep, setupPath) => {
     const instantiateMs = await load();
     const e = instance.exports;
     const files = await Promise.all(
@@ -21,10 +22,17 @@
         data: new Uint8Array(await (await fetch(p)).arrayBuffer()),
       })),
     );
+    const setup = setupPath ? new Uint8Array(await (await fetch(setupPath)).arrayBuffer()) : null;
     const t1 = performance.now();
-    // One file at a time: its name and bytes into WebAssembly memory, read onto the plate, freed.
     let code = 0;
-    for (const f of files) {
+    if (setup) {
+      const at = e.alloc(setup.length);
+      new Uint8Array(e.memory.buffer, at, setup.length).set(setup);
+      code = e.setup(at, setup.length);
+      e.dealloc(at, setup.length);
+    }
+    // One file at a time: its name and bytes into WebAssembly memory, read onto the plate, freed.
+    for (const f of code === 0 ? files : []) {
       const name = e.alloc(f.name.length);
       new Uint8Array(e.memory.buffer, name, f.name.length).set(f.name);
       const data = e.alloc(f.data.length);

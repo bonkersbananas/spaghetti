@@ -34,6 +34,11 @@ impl Default for Setup {
 /// Reads a setup. A setup this can't read is `Error::Setup`; one it can't slice yet (tree supports, a raft…) is
 /// `Error::Unsupported`, which says what.
 pub fn read(text: &str) -> Result<Setup, Error> {
+    read_over(text, &crate::profile::x2d())
+}
+
+/// Reads a setup laid over `base` instead of the X2D's 0.4 mm presets (another nozzle's, `profile::x2d_nozzle`).
+pub fn read_over(text: &str, base: &Profile) -> Result<Setup, Error> {
     let Some(Json::Object(mut root)) = json::parse(text) else { return Err(Error::Setup) };
     let mut object = |key: &str| match root.remove(key) {
         Some(Json::Object(map)) => Ok(map),
@@ -78,7 +83,7 @@ pub fn read(text: &str) -> Result<Setup, Error> {
         let manual_map = manual(&process).or_else(|| manual(&machine));
         let profiles = filaments
             .iter()
-            .map(|f| Arc::new(Profile::over_x2d(machine.clone(), process.clone(), f.clone())))
+            .map(|f| Arc::new(Profile::over(base, machine.clone(), process.clone(), f.clone())))
             .collect();
         let colours = (0..filaments.len())
             .map(|i| colours.get(i).cloned().unwrap_or_else(|| crate::filaments::stand_in(i).to_string()))
@@ -93,7 +98,7 @@ pub fn read(text: &str) -> Result<Setup, Error> {
         None => 100.0,
     };
     let filament = filaments.into_iter().next().unwrap_or_default();
-    let profile = Arc::new(Profile::over_x2d(machine, process, filament));
+    let profile = Arc::new(Profile::over(base, machine, process, filament));
     let mut settings = Settings::from_profile(profile, colour.as_deref());
     settings.palette = palette;
     if let Some(what) = settings.unsupported() {
