@@ -188,17 +188,17 @@ fn overlap(a: &[f64; 4], b: &[f64; 4]) -> bool {
     a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
 }
 
-/// The first layer pulled in by `pull` mm against elephant's foot, as Orca pulls in an object of more than one
-/// region (`PrintObject::slice_volumes`): the union of its regions, closed by one and a half times the slice closing
-/// radius `closing`, shrinks, and each region keeps its share of what is left. `shapes` and `owners` are the layer's
-/// shapes and their regions, `group` each region's object; `single` pulls in the shapes of the objects of one region
-/// as they always are. Each shape that is left comes with its region.
+/// The first layer pulled in against elephant's foot, as Orca pulls in an object of more than one region
+/// (`PrintObject::slice_volumes`): the union of its regions, closed by one and a half times the slice closing radius
+/// `closing`, is pulled in (`compensate`, `elephant.rs`), and each region keeps its share of what is left. `shapes`
+/// and `owners` are the layer's shapes and their regions, `group` each region's object; `single` pulls in the shapes
+/// of the objects of one region as they always are. Each shape that is left comes with its region.
 pub fn pull_first(
     shapes: &Shapes,
     owners: &[u32],
     group: &[u32],
-    pull: f64,
     closing: f64,
+    compensate: impl Fn(&Shapes) -> Shapes,
     single: impl Fn(&Shapes, &[u32]) -> (Shapes, Vec<u32>),
 ) -> (Shapes, Vec<u32>) {
     let group_of = |r: u32| group.get(r as usize).copied().unwrap_or(r);
@@ -216,7 +216,7 @@ pub fn pull_first(
     for g in groups {
         let mine: Shapes =
             shapes.iter().zip(owners).filter(|&(_, &r)| group_of(r) == g).map(|(s, _)| s.clone()).collect();
-        let trimming = geom::offset(&geom::closing(&mine, 1.5 * closing), -pull);
+        let trimming = compensate(&geom::closing(&mine, 1.5 * closing));
         let mut regions: Vec<u32> = owners.iter().copied().filter(|&r| group_of(r) == g).collect();
         regions.sort_unstable();
         regions.dedup();
@@ -289,7 +289,8 @@ mod tests {
     fn first_layer_pulls_in_round_the_whole_object() {
         // Two regions side by side: pulled in round their union, not where they meet.
         let shapes = vec![square(0.0, 0.0, 10.0, 10.0), square(10.0, 0.0, 20.0, 10.0)];
-        let (out, own) = pull_first(&shapes, &[0, 1], &[0, 0], 0.5, 0.049, |s, o| (s.clone(), o.to_vec()));
+        let pull = |s: &Shapes| geom::offset(s, -0.5);
+        let (out, own) = pull_first(&shapes, &[0, 1], &[0, 0], 0.049, pull, |s, o| (s.clone(), o.to_vec()));
         assert_eq!(own, vec![0, 1]);
         let a: Shapes = vec![out[0].clone()];
         let b: Shapes = vec![out[1].clone()];

@@ -6,6 +6,8 @@
 //! 0.1 µm units: its `SCALED_EPSILON` (100 nm) is one of them.
 
 use crate::geom::{self, Pt, Shape, Shapes};
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 
 /// A point in our units, wide enough for the products the tests take.
 pub(crate) type P = [i64; 2];
@@ -1077,10 +1079,296 @@ fn round(q: [f64; 2]) -> P {
     [q[0].round() as i64, q[1].round() as i64]
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// boost's Voronoi diagram, repaired as Orca's `Geometry::VoronoiDiagram` repairs it (Voronoi.cpp, VoronoiUtils.cpp,
+// VoronoiUtilsCgal.cpp).
+
+use boostvoronoi::prelude::{Diagram, EdgeIndex, VertexIndex};
+
+/// A diagram, and each of its vertices' points in the outline's own frame.
+struct Voronoi {
+    diagram: Diagram,
+    xy: Vec<[f64; 2]>,
+}
+
+fn diagram_of(segments: &[[i32; 4]]) -> Option<Diagram> {
+    use boostvoronoi::prelude::{Builder, Line as BvLine};
+    let built = Builder::<i32>::default().with_segments(segments.iter().map(|s| BvLine::<i32>::from(*s)));
+    built.and_then(|b| b.build()).ok()
+}
+
+fn points_of(diagram: &Diagram) -> Vec<[f64; 2]> {
+    diagram.vertices().iter().map(|v| [v.x(), v.y()]).collect()
+}
+
+/// Orca's `VoronoiDiagram::construct_voronoi`: boost's diagram of the segments, unless it has one of the faults Orca
+/// looks for (`detect_known_issues`); then the diagram of the segments turned by 30° (else 36°, then 25.7°, then
+/// 16.4°: the first without faults, or the last), its vertices turned back, those at the segments' ends put back on
+/// them exactly.
+fn voronoi(segments: &[[i32; 4]]) -> Option<Voronoi> {
+    let diagram = diagram_of(segments)?;
+    let xy = points_of(&diagram);
+    if !faulty(&diagram, &xy, segments) {
+        return Some(Voronoi { diagram, xy });
+    }
+    let mut out = Voronoi { diagram, xy };
+    for angle in [
+        std::f64::consts::PI / 6.0,
+        std::f64::consts::PI / 5.0,
+        std::f64::consts::PI / 7.0,
+        std::f64::consts::PI / 11.0,
+    ] {
+        let turned: Vec<[i32; 4]> = segments
+            .iter()
+            .map(|s| {
+                let (a, b) = (turn_point([s[0], s[1]], angle), turn_point([s[2], s[3]], angle));
+                [a[0], a[1], b[0], b[1]]
+            })
+            .collect();
+        let Some(diagram) = diagram_of(&turned) else { continue };
+        let xy = points_of(&diagram);
+        let fault = faulty(&diagram, &xy, &turned);
+        let xy = turn_back(&diagram, &xy, &turned, segments, angle);
+        out = Voronoi { diagram, xy };
+        if !fault {
+            break;
+        }
+    }
+    Some(out)
+}
+
+/// Orca's `Point::rotate`: turned round the origin, to whole units.
+fn turn_point(p: [i32; 2], angle: f64) -> [i32; 2] {
+    let (sin, cos) = (libm::sin(angle), libm::cos(angle));
+    let (x, y) = (f64::from(p[0]), f64::from(p[1]));
+    [(cos * x - sin * y).round() as i32, (cos * y + sin * x).round() as i32]
+}
+
+fn vertex0(diagram: &Diagram, e: EdgeIndex) -> Option<VertexIndex> {
+    diagram.edge(e).ok().and_then(|edge| edge.vertex0())
+}
+
+fn vertex1(diagram: &Diagram, e: EdgeIndex) -> Option<VertexIndex> {
+    diagram.edge_get_vertex1(e).ok().flatten()
+}
+
+/// Orca's `VoronoiUtils::compute_segment_cell_range`: in a segment's cell, the last edge starting at the segment's
+/// second end before any other, and the edge ending at its first end; None where either is missing.
+fn segment_cell_range(
+    diagram: &Diagram,
+    xy: &[[f64; 2]],
+    first: EdgeIndex,
+    segment: [i32; 4],
+) -> Option<(EdgeIndex, EdgeIndex)> {
+    let from = [i64::from(segment[0]), i64::from(segment[1])];
+    let to = [i64::from(segment[2]), i64::from(segment[3])];
+    let at = |v: VertexIndex| {
+        let q = xy[v.usize()];
+        [q[0].round() as i64, q[1].round() as i64]
+    };
+    let (mut begin, mut end) = (None, None);
+    let (mut seen_start, mut after_start, mut end_before_start) = (false, false, false);
+    let mut e = first;
+    for _ in 0..=diagram.edges().len() {
+        if let (Some(v0), Some(v1)) = (vertex0(diagram, e), vertex1(diagram, e)) {
+            if at(v0) == to && !after_start {
+                begin = Some(e);
+                seen_start = true;
+            } else if seen_start {
+                after_start = true;
+            }
+            if at(v1) == from && (end.is_none() || end_before_start) {
+                end_before_start = !after_start;
+                end = Some(e);
+            }
+        }
+        e = diagram.edge_get_next(e).ok()?;
+        if e == first {
+            break;
+        }
+    }
+    Some((begin?, end?))
+}
+
+/// Orca's `detect_known_issues`: a finite edge with an end that isn't, a parabola with no point for its focus, a
+/// segment's cell that doesn't run from one of its ends to the other along finite edges all on its left, or edges
+/// round a vertex out of turn (`is_voronoi_diagram_planar_angle`).
+fn faulty(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]]) -> bool {
+    let finite = |v: VertexIndex| xy[v.usize()].iter().all(|c| c.is_finite());
+    let cell_of =
+        |e: EdgeIndex| diagram.edge(e).ok().and_then(|edge| edge.cell().ok()).and_then(|c| diagram.cell(c).ok());
+    let twin_of = |e: EdgeIndex| diagram.edge(e).ok().and_then(|edge| edge.twin().ok());
+    for edge in diagram.edges() {
+        let e = edge.id();
+        if let (Some(v0), Some(v1)) = (vertex0(diagram, e), vertex1(diagram, e)) {
+            if !finite(v0) || !finite(v1) {
+                return true;
+            }
+            let point_in = |c: Option<&boostvoronoi::prelude::Cell>| c.is_some_and(|c| c.contains_point());
+            if edge.is_curved() && !point_in(cell_of(e)) && !point_in(twin_of(e).and_then(cell_of)) {
+                return true;
+            }
+        }
+    }
+    for cell in diagram.cells() {
+        if cell.is_degenerate() || !cell.contains_segment() {
+            continue;
+        }
+        let segment = segments[cell.source_index().usize()];
+        let Some(first) = cell.get_incident_edge() else { continue };
+        let Some((begin, end)) = segment_cell_range(diagram, xy, first, segment) else { return true };
+        let from = [f64::from(segment[0]), f64::from(segment[1])];
+        let along = [f64::from(segment[2] - segment[0]), f64::from(segment[3] - segment[1])];
+        let mut e = begin;
+        for _ in 0..=diagram.edges().len() {
+            if e == end {
+                break;
+            }
+            let (Some(_), Some(v1)) = (vertex0(diagram, e), vertex1(diagram, e)) else { return true };
+            let q = xy[v1.usize()];
+            if cross(along, [q[0] - from[0], q[1] - from[1]]) < 0.0 {
+                return true;
+            }
+            let Ok(next) = diagram.edge_get_next(e) else { return true };
+            e = next;
+        }
+    }
+    !planar(diagram, xy, segments)
+}
+
+/// The sign of a turn: 1 left, -1 right, 0 straight on.
+fn turn_sign(v: f64) -> i32 {
+    if v > 0.0 {
+        1
+    } else if v < 0.0 {
+        -1
+    } else {
+        0
+    }
+}
+
+/// The tangent where a parabolic edge leaves its first vertex (`calculate_parabolic_tangent_vector`), its focus the
+/// point of one of its cells and its directrix the other's segment, turned to the side of the focus.
+fn parabola_tangent(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]], e: EdgeIndex) -> Option<[f64; 2]> {
+    let edge = diagram.edge(e).ok()?;
+    let left = diagram.cell(edge.cell().ok()?).ok()?;
+    let right = diagram.cell(diagram.edge(edge.twin().ok()?).ok()?.cell().ok()?).ok()?;
+    let (point_cell, segment_cell) = if left.contains_point() { (left, right) } else { (right, left) };
+    let s = segments[point_cell.source_index().usize()];
+    let focus = if point_cell.contains_segment_startpoint() {
+        [f64::from(s[0]), f64::from(s[1])]
+    } else {
+        [f64::from(s[2]), f64::from(s[3])]
+    };
+    let d = segments[segment_cell.source_index().usize()];
+    let (u, v) = ([f64::from(d[0]), f64::from(d[1])], [f64::from(d[2]), f64::from(d[3])]);
+    let (p, q) = (xy[vertex0(diagram, e)?.usize()], xy[vertex1(diagram, e)?.usize()]);
+    // The focus's side, as Orca has it: the opposite of the turn from the edge's ends to it.
+    let side = -turn_sign(cross([q[0] - p[0], q[1] - p[1]], [focus[0] - p[0], focus[1] - p[1]]));
+    let dir = [v[0] - u[0], v[1] - u[1]];
+    let len2 = dot(dir, dir);
+    let along = dot(dir, [p[0] - u[0], p[1] - u[1]]);
+    let f = [(focus[0] - u[0]) * len2 - dir[0] * along, (focus[1] - u[1]) * len2 - dir[1] * along];
+    Some(if side == 1 { [-f[1], f[0]] } else { [f[1], -f[0]] })
+}
+
+/// Orca's `orientation_of_two_edges`: which way edge `b` turns from edge `a`, both leaving the same vertex.
+fn edge_turn(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]], a: EdgeIndex, b: EdgeIndex) -> Option<i32> {
+    let p = xy[vertex0(diagram, a)?.usize()];
+    let curved = |e: EdgeIndex| diagram.edge(e).is_ok_and(|edge| edge.is_curved());
+    let to = |e: EdgeIndex| -> Option<[f64; 2]> {
+        let q = xy[vertex1(diagram, e)?.usize()];
+        Some([q[0] - p[0], q[1] - p[1]])
+    };
+    Some(match (curved(a), curved(b)) {
+        (false, false) => turn_sign(cross(to(a)?, to(b)?)),
+        (true, true) => {
+            turn_sign(cross(parabola_tangent(diagram, xy, segments, a)?, parabola_tangent(diagram, xy, segments, b)?))
+        }
+        (true, false) => turn_sign(cross(parabola_tangent(diagram, xy, segments, a)?, to(b)?)),
+        (false, true) => -turn_sign(cross(parabola_tangent(diagram, xy, segments, b)?, to(a)?)),
+    })
+}
+
+/// Orca's `is_voronoi_diagram_planar_angle`: round every vertex with three finite edges or more, each edge lies
+/// counter-clockwise between the one before it and the one after (`check_if_three_edges_are_ccw`).
+fn planar(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]]) -> bool {
+    let finite = |v: Option<VertexIndex>| v.is_some_and(|v| xy[v.usize()].iter().all(|c| c.is_finite()));
+    for v in diagram.vertices() {
+        let Ok(first) = v.get_incident_edge() else { continue };
+        let mut edges = Vec::new();
+        let mut e = first;
+        for _ in 0..=diagram.edges().len() {
+            if finite(vertex0(diagram, e)) && finite(vertex1(diagram, e)) {
+                edges.push(e);
+            }
+            match diagram.edge_rot_next(e) {
+                Some(next) if next != first => e = next,
+                _ => break,
+            }
+        }
+        if edges.len() <= 2 {
+            continue;
+        }
+        for i in 0..edges.len() {
+            let prev = edges[(i + edges.len() - 1) % edges.len()];
+            let (curr, next) = (edges[i], edges[(i + 1) % edges.len()]);
+            let turn = |a, b| edge_turn(diagram, xy, segments, a, b).unwrap_or(0);
+            let ccw = match turn(prev, curr) {
+                0 => turn(prev, next) == -1,
+                1 => turn(prev, next) != 1 || turn(curr, next) != -1,
+                _ => turn(prev, next) == -1 || turn(curr, next) == 1,
+            };
+            if !ccw {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// The vertices of a diagram of the segments turned by `angle` (`turned`), back in the segments' own frame: those at
+/// a segment's ends (where a segment's cell starts and ends) on those ends exactly, the others turned back.
+fn turn_back(
+    diagram: &Diagram,
+    xy: &[[f64; 2]],
+    turned: &[[i32; 4]],
+    segments: &[[i32; 4]],
+    angle: f64,
+) -> Vec<[f64; 2]> {
+    // Each vertex's segment end: 0 for none, else (segment + 1) × 2, plus 1 for its second end.
+    let mut end_of = vec![0usize; xy.len()];
+    for cell in diagram.cells() {
+        if cell.is_degenerate() || !cell.contains_segment() {
+            continue;
+        }
+        let k = cell.source_index().usize();
+        let Some(first) = cell.get_incident_edge() else { continue };
+        if let Some((begin, end)) = segment_cell_range(diagram, xy, first, turned[k]) {
+            if let Some(v) = vertex1(diagram, end).filter(|v| end_of[v.usize()] == 0) {
+                end_of[v.usize()] = (k + 1) << 1;
+            }
+            if let Some(v) = vertex0(diagram, begin).filter(|v| end_of[v.usize()] == 0) {
+                end_of[v.usize()] = ((k + 1) << 1) | 1;
+            }
+        }
+    }
+    let (sin, cos) = (libm::sin(-angle), libm::cos(-angle));
+    xy.iter()
+        .zip(&end_of)
+        .map(|(q, &end)| match end {
+            0 => [cos * q[0] - sin * q[1], cos * q[1] + sin * q[0]],
+            _ => {
+                let s = segments[(end >> 1) - 1];
+                if end & 1 == 0 { [f64::from(s[0]), f64::from(s[1])] } else { [f64::from(s[2]), f64::from(s[3])] }
+            }
+        })
+        .collect()
+}
+
 /// `build_graph`: the island's coloured outline and the Voronoi diagram of its pieces, joined into a graph whose
 /// faces are the island's pieces of one colour. None where the diagram can't be made.
 fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
-    use boostvoronoi::prelude::{Builder, Line as BvLine};
     let lines: Vec<ColoredLine> = color_poly.iter().flatten().copied().collect();
     let points: Vec<P> = lines.iter().map(|l| l.line.a).collect();
     // The loops' own lines, from point to point (the coloured pieces meet end to start).
@@ -1096,8 +1384,7 @@ fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
         .iter()
         .map(|l| [l.line.a[0] as i32, l.line.a[1] as i32, l.line.b[0] as i32, l.line.b[1] as i32])
         .collect();
-    let built = Builder::<i32>::default().with_segments(segments.iter().map(|s| BvLine::<i32>::from(*s)));
-    let diagram = built.and_then(|b| b.build()).ok()?;
+    let Voronoi { diagram, xy } = voronoi(&segments)?;
 
     let mut graph = Graph {
         nodes: points.iter().map(|q| Node { point: [q[0] as f64, q[1] as f64], arcs: Vec::new() }).collect(),
@@ -1139,7 +1426,7 @@ fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
             }
         }
         for (k, v) in vertices.iter().enumerate() {
-            let vd = [v.x(), v.y()];
+            let vd = xy[k];
             let vp = trunc(vd);
             let Ok(incident) = v.get_incident_edge() else { continue };
             let incident = incident.usize();
@@ -1208,10 +1495,7 @@ fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
         processed[twin(e)] = true;
     };
     let nodes_count = |g: &Graph| g.nodes.len();
-    let vertex_xy = |v: boostvoronoi::prelude::VertexIndex| {
-        let vx = &vertices[v.usize()];
-        [vx.x(), vx.y()]
-    };
+    let vertex_xy = |v: boostvoronoi::prelude::VertexIndex| xy[v.usize()];
 
     for e in 0..edges.len() {
         if cell_source(e) > cell_source(twin(e)) || processed[e] {
@@ -1384,9 +1668,8 @@ fn clip_infinite_edge(
         } else {
             segments[cell2.source_index().usize()]
         };
-        // boost's low and high: the segment's ends in (x, y) order.
-        let (lo, hi) =
-            if (s[0], s[1]) <= (s[2], s[3]) { ([s[0], s[1]], [s[2], s[3]]) } else { ([s[2], s[3]], [s[0], s[1]]) };
+        // boost's low and high: a segment_data's first end and its second.
+        let (lo, hi) = ([s[0], s[1]], [s[2], s[3]]);
         [f64::from(hi[1] - lo[1]), f64::from(lo[0] - hi[0])]
     };
     let koef = bbox_max / direction[0].abs().max(direction[1].abs());
@@ -1657,14 +1940,18 @@ fn merge_box(a: Option<[i64; 4]>, b: Option<[i64; 4]>) -> Option<[i64; 4]> {
     }
 }
 
-/// `multi_material_segmentation_by_painting` for one object, its painted sides: each layer's shapes painted in each
-/// filament (`[layer][filament]`, filament 0 the first), from its layers' shapes (all its regions) cut at `slice_z`
-/// and its painted triangles (`facets`), for `filaments` filaments.
+/// `multi_material_segmentation_by_painting` for one object: each layer's shapes painted in each filament
+/// (`[layer][filament]`, filament 0 the first), from its layers' shapes (all its regions) cut at `slice_z`, each
+/// layer `heights` thick, for `filaments` filaments. Its sides as its painted triangles (`facets`) colour them, then
+/// its tops and bottoms as all its triangles (`surfaces`, each in its state) colour them, `shells` deep.
 pub fn painted_regions(
     slice_z: &[f64],
+    heights: &[f64],
     layers: &[Shapes],
     facets: &[(i32, Corners)],
+    surfaces: &[(i32, Corners)],
     filaments: usize,
+    shells: &Shells,
 ) -> Vec<Vec<Shapes>> {
     let n = layers.len();
     let states = filaments + 1;
@@ -1716,9 +2003,20 @@ pub fn painted_regions(
                 }
             }
         }
+        // Orca's `cut_segmented_layers`: kept to a band along the outline, on every other layer (the first, the
+        // third…) a band as deep as the interlocking depth where there is one.
+        let cut =
+            if l % 2 == 0 && shells.interlocking_depth != 0.0 { shells.interlocking_depth } else { shells.max_width };
+        if cut > 0.0 && out.iter().any(|f| !f.is_empty()) {
+            let inside = geom::offset_c2(&outlines[l], -cut, geom::Join::Miter(3.0));
+            for region in &mut out {
+                *region = geom::difference(region, &inside);
+            }
+        }
         out
     });
-    per_layer
+    let tops = tops_and_bottoms(slice_z, heights, &outlines, surfaces, states, shells);
+    crate::par::map_range(n, |l| merge_layer(&per_layer[l], &tops[l]))
 }
 
 /// `apply_mm_segmentation` for one object on one layer: each of its regions (its filament and shapes) gives what is
@@ -1778,6 +2076,397 @@ pub fn apply(regions: &[(usize, Shapes)], painted: &[Shapes]) -> Vec<(usize, Sha
     }
     by.into_iter()
         .map(|(f, shapes, merge)| (f, if merge { geom::closing(&shapes, 10.0 / geom::SCALE) } else { shapes }))
+        .collect()
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Painted tops and bottoms (Orca's `segmentation_top_and_bottom_layers`), and how they join the sides
+// (`merge_segmented_layers`).
+
+/// How far painted colours reach into an object.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Shells {
+    /// Layers a top colours, itself and those under it (`Settings::top_color_layers`); 0 for none.
+    pub top: usize,
+    /// Layers a bottom colours, itself and those over it.
+    pub bottom: usize,
+    /// The outer wall's line width, mm.
+    pub width: f64,
+    /// Whether gap fill prints (its speed is above 0): a painted patch may then be as thin as half a line.
+    pub gap_fill: bool,
+    /// mm: how far in from the outline a colour painted on the sides reaches (Orca's
+    /// `mmu_segmented_region_max_width`), and on every other layer how far, to interlock (its
+    /// `mmu_segmented_region_interlocking_depth`); 0 for as far as the segmentation takes it.
+    pub max_width: f64,
+    pub interlocking_depth: f64,
+}
+
+impl Shells {
+    /// Orca's `LayerColorStat` on a layer `height` mm thick, in nanometres and single precision as Orca works them
+    /// out: the outer wall's width, its spacing, and the radius thinner patches are opened away by.
+    fn stat(&self, height: f64) -> (f32, f32, f32) {
+        let w = self.width as f32;
+        let spacing = w - height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32;
+        let small = if self.gap_fill { 0.5 * w } else { w + 0.7 * spacing };
+        let nm = |mm: f32| mm / 1e-6;
+        (nm(w), nm(spacing), nm(small * 0.5))
+    }
+}
+
+/// Nanometres to mm.
+fn mm(nm: f32) -> f64 {
+    f64::from(nm) * 1e-6
+}
+
+/// Orca's `opening_ex`: shrunk by `d` mm and grown back, mitred (Clipper2's offsets, as Orca's).
+fn opening_c2(shapes: &Shapes, d: f64) -> Shapes {
+    if shapes.is_empty() {
+        return Vec::new();
+    }
+    let join = geom::Join::Miter(3.0);
+    geom::offset_c2(&geom::offset_c2(shapes, -d, join), d, join)
+}
+
+/// Every triangle of an object's meshes with its state, as Orca's `get_facets_strict` gives each state's: a painted
+/// triangle's leaves (those left unpainted in state 0), every other triangle whole in state 0; each with its corners
+/// in its mesh's order, so that it faces out of the object.
+pub fn surfaces(meshes: &[(&crate::mesh::Mesh, Option<&crate::paint::Paint>)]) -> Vec<(i32, Corners)> {
+    let mut out = Vec::new();
+    for (mesh, paint) in meshes {
+        let mut painted = vec![false; mesh.triangles.len()];
+        for (t, code, turned) in paint.iter().flat_map(|p| p.iter()) {
+            let Some(tri) = mesh.triangles.get(t as usize) else { continue };
+            let c = tri.map(|v| mesh.vertices[v as usize]);
+            // The code goes by the file's corners; a turned triangle's leaves face out again in the mesh's order.
+            let corners = if turned { [c[0], c[2], c[1]] } else { c };
+            let Some(leaves) = crate::paint::leaves(code, corners) else { continue };
+            painted[t as usize] = true;
+            out.extend(
+                leaves.into_iter().map(|(l, state)| (state as i32, if turned { [l[0], l[2], l[1]] } else { l })),
+            );
+        }
+        for (t, tri) in mesh.triangles.iter().enumerate() {
+            if !painted[t] {
+                out.push((0, tri.map(|v| mesh.vertices[v as usize])));
+            }
+        }
+    }
+    out
+}
+
+/// Twice a triangle's area seen from above: above 0 where it faces up, below where it faces down.
+fn facing(c: &Corners) -> f64 {
+    let [a, b, d] = c.map(|v| [f64::from(v[0]), f64::from(v[1])]);
+    (b[0] - a[0]) * (d[1] - b[1]) - (b[1] - a[1]) * (d[0] - b[0])
+}
+
+/// Where an edge crosses the height `z`, seen from above: worked out from its end lower in (z, x, y), whichever way
+/// the edge runs, so that the two triangles sharing an edge cross it at the same point.
+fn crossing(a: [f64; 3], b: [f64; 3], z: f64) -> [f64; 2] {
+    let (p, q) = if (a[2], a[0], a[1]) < (b[2], b[0], b[1]) { (a, b) } else { (b, a) };
+    let s = (z - p[2]) / (q[2] - p[2]);
+    [p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s]
+}
+
+/// The part of a triangle from the height `lo` up to `hi` (either may be infinite), seen from above, round it the way
+/// the triangle runs.
+fn piece(c: &[[f64; 3]; 3], lo: f64, hi: f64) -> Vec<Pt> {
+    fn push(out: &mut Vec<Pt>, q: [f64; 2]) {
+        let p = geom::pt((q[0] * geom::SCALE).round() as i32, (q[1] * geom::SCALE).round() as i32);
+        if out.last() != Some(&p) {
+            out.push(p);
+        }
+    }
+    let mut out: Vec<Pt> = Vec::with_capacity(6);
+    for i in 0..3 {
+        let (a, b) = (c[i], c[(i + 1) % 3]);
+        if a[2] >= lo && a[2] <= hi {
+            push(&mut out, [a[0], a[1]]);
+        }
+        // The planes the edge crosses, in the order it meets them.
+        for z in if a[2] < b[2] { [lo, hi] } else { [hi, lo] } {
+            if z.is_finite() && (a[2] - z) * (b[2] - z) < 0.0 {
+                push(&mut out, crossing(a, b, z));
+            }
+        }
+    }
+    while out.len() > 1 && out.first() == out.last() {
+        out.pop();
+    }
+    out
+}
+
+/// The loops round what `pieces` (each counter-clockwise) cover between them: an edge two pieces share, run once
+/// each way, cancels, and the edges left chain into loops, counter-clockwise round what is covered and clockwise
+/// round holes, as Orca chains a slab's lines along the open edges of the mesh.
+fn loops_of(pieces: &[Vec<Pt>]) -> Vec<geom::Contour> {
+    type Edge = (i32, i32, i32, i32);
+    let mut count: HashMap<Edge, i32, BuildHasherDefault<crate::mesh::FastHasher>> = HashMap::default();
+    for piece in pieces {
+        for (i, &a) in piece.iter().enumerate() {
+            let b = piece[(i + 1) % piece.len()];
+            if a == b {
+                continue;
+            }
+            if let Some(c) = count.get_mut(&(b.x, b.y, a.x, a.y)).filter(|c| **c > 0) {
+                *c -= 1;
+            } else {
+                *count.entry((a.x, a.y, b.x, b.y)).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut edges: Vec<Edge> = Vec::new();
+    for (e, c) in count {
+        edges.extend(std::iter::repeat_n(e, c.max(0) as usize));
+    }
+    // By where they start, so that a point's edges out are side by side.
+    edges.sort_unstable();
+    let mut used = vec![false; edges.len()];
+    let mut loops = Vec::new();
+    for first in 0..edges.len() {
+        if used[first] {
+            continue;
+        }
+        let start = (edges[first].0, edges[first].1);
+        let mut contour = Vec::new();
+        let mut e = first;
+        loop {
+            used[e] = true;
+            contour.push(geom::pt(edges[e].0, edges[e].1));
+            let to = (edges[e].2, edges[e].3);
+            if to == start {
+                break;
+            }
+            let mut k = edges.partition_point(|x| (x.0, x.1) < to);
+            while k < edges.len() && (edges[k].0, edges[k].1) == to && used[k] {
+                k += 1;
+            }
+            if k == edges.len() || (edges[k].0, edges[k].1) != to {
+                break;
+            }
+            e = k;
+        }
+        if contour.len() >= 3 {
+            loops.push(contour);
+        }
+    }
+    loops
+}
+
+/// What the `facets` of each state (0 to `states` − 1) cover on each layer's slab, seen from above: Orca's
+/// `slice_mesh_slabs` for each state's `get_facets_strict`. Tops (`top`) from the triangles facing up, between the
+/// layer's plane and the next layer's (all above the last layer's); bottoms from those facing down, between the plane
+/// under the layer's and its own (all below the first layer's). A face lying on a plane is the top of the layer cut
+/// there and the bottom of the layer over it, as a slice takes it. Loops under 0.01 mm² go, as Orca drops them
+/// (`remove_small`): `[layer][state]`, the loops counter-clockwise round what is covered.
+fn slabs(facets: &[(i32, Corners)], states: usize, slice_z: &[f64], top: bool) -> Vec<Vec<Vec<geom::Contour>>> {
+    let n = slice_z.len();
+    let mut buckets: Vec<Vec<u32>> = vec![Vec::new(); n];
+    for (i, (state, c)) in facets.iter().enumerate() {
+        if *state < 0 || *state as usize >= states {
+            continue;
+        }
+        let d = facing(c);
+        if (top && d <= 0.0) || (!top && d >= 0.0) {
+            continue;
+        }
+        let z = c.map(|v| f64::from(v[2]));
+        let (lo, hi) = (z[0].min(z[1]).min(z[2]), z[0].max(z[1]).max(z[2]));
+        // Planes at or under `lo`; planes under `hi`.
+        let at_or_under = slice_z.partition_point(|&p| p <= lo);
+        let under_hi = slice_z.partition_point(|&p| p < hi);
+        let (from, to) = match (top, lo == hi) {
+            // A level face: the slab whose plane is at or under it (a top), or the next one (a bottom).
+            (true, true) if at_or_under == 0 => continue,
+            (true, true) => (at_or_under - 1, at_or_under),
+            (false, true) => (at_or_under, at_or_under + 1),
+            // Slab k of the tops runs from plane k to plane k + 1; of the bottoms from plane k − 1 to plane k.
+            (true, false) => (at_or_under.saturating_sub(1), under_hi),
+            (false, false) => (at_or_under, under_hi + 1),
+        };
+        for b in &mut buckets[from.min(n)..to.min(n)] {
+            b.push(i as u32);
+        }
+    }
+    crate::par::map_range(n, |l| {
+        let (lo, hi) = if top {
+            (slice_z[l], slice_z.get(l + 1).copied().unwrap_or(f64::INFINITY))
+        } else {
+            (if l > 0 { slice_z[l - 1] } else { f64::NEG_INFINITY }, slice_z[l])
+        };
+        let mut pieces: Vec<Vec<Vec<Pt>>> = vec![Vec::new(); states];
+        for &i in &buckets[l] {
+            let (state, c) = &facets[i as usize];
+            let mut p = piece(&c.map(|v| v.map(f64::from)), lo, hi);
+            if p.len() < 3 {
+                continue;
+            }
+            // Each counter-clockwise from above: a bottom's triangle runs the other way.
+            if !top {
+                p.reverse();
+            }
+            pieces[*state as usize].push(p);
+        }
+        let min_area2 = 2.0 * scaled(0.1) * scaled(0.1);
+        pieces
+            .iter()
+            .map(|p| {
+                let mut loops = loops_of(p);
+                loops.retain(|c| (geom::area2(c) as f64).abs() >= min_area2);
+                loops
+            })
+            .collect()
+    })
+}
+
+/// `project_to_shells`: a top's (bottom's) `patch` on layer `l` carried into the `layers` under (over) it, nearest
+/// first, on each one outer wall's width and spacing (`step`, nm) further in from what every layer from `l` to it
+/// covers, opened by `small` (mm); it stops at the first layer it leaves nothing on.
+fn carry(
+    patch: &Shapes,
+    l: usize,
+    layers: &[usize],
+    outlines: &[Shapes],
+    step: f32,
+    small: f64,
+) -> Vec<(usize, Shapes)> {
+    let mut out = Vec::new();
+    let mut trimmed = outlines[l].clone();
+    let mut offset = 0f32;
+    for &k in layers {
+        offset -= step;
+        if trimmed.is_empty() {
+            break;
+        }
+        trimmed = geom::intersection(&trimmed, &outlines[k]);
+        let inner = geom::offset_c2(&trimmed, mm(offset), geom::Join::Miter(3.0));
+        let shell = opening_c2(&geom::intersection(patch, &inner), small);
+        if shell.is_empty() {
+            break;
+        }
+        out.push((k, shell));
+    }
+    out
+}
+
+/// `segmentation_top_and_bottom_layers` for one object: each layer's regions coloured by a painted top or bottom,
+/// by state (`[layer][state]`, state 0 the object's own filament). Each patch of its tops and bottoms seen from above
+/// on a layer's slab (`slabs`), less what the layer over a top (under a bottom) covers and opened by a quarter of a
+/// wall's width, colours that layer; and, one wall's width and spacing further in on each, the layers under a top
+/// (over a bottom) as deep as `shells` says, until nothing is left. A layer's own patches keep what other colours
+/// carry into it; then each colour gives way to those before it, and the object's own (0) to all of them.
+/// `outlines`: each layer's shapes as the segmentation takes them (`outline`).
+fn tops_and_bottoms(
+    slice_z: &[f64],
+    heights: &[f64],
+    outlines: &[Shapes],
+    surfaces: &[(i32, Corners)],
+    states: usize,
+    shells: &Shells,
+) -> Vec<Vec<Shapes>> {
+    let n = slice_z.len();
+    if shells.top == 0 && shells.bottom == 0 {
+        return vec![vec![Vec::new(); states]; n];
+    }
+    let none = || vec![vec![Vec::new(); states]; n];
+    let tops = if shells.top > 0 { slabs(surfaces, states, slice_z, true) } else { none() };
+    let bottoms = if shells.bottom > 0 { slabs(surfaces, states, slice_z, false) } else { none() };
+    // Each layer's own patches by state, and those it carries: (layer, state, shapes), under its tops and over its
+    // bottoms.
+    type Carried = Vec<(usize, usize, Shapes)>;
+    let per_layer: Vec<(Vec<Shapes>, Carried, Carried)> = crate::par::map_range(n, |l| {
+        let (width, spacing, small) = shells.stat(heights[l]);
+        let small = mm(small);
+        let mut own: Vec<Shapes> = vec![Vec::new(); states];
+        let (mut down, mut up) = (Vec::new(), Vec::new());
+        for s in 0..states {
+            // Bottoms first, as Orca appends them.
+            for top in [false, true] {
+                let loops = if top { &tops[l][s] } else { &bottoms[l][s] };
+                if loops.is_empty() {
+                    continue;
+                }
+                let mut patch = geom::union_contours(loops);
+                // A top the layer over it covers is no top (a bottom likewise).
+                let next = if top { outlines.get(l + 1) } else { l.checked_sub(1).map(|k| &outlines[k]) };
+                if let Some(cover) = next {
+                    patch = geom::difference(&patch, cover);
+                }
+                let patch = opening_c2(&patch, small);
+                if patch.is_empty() {
+                    continue;
+                }
+                let layers: Vec<usize> = if top {
+                    (l.saturating_sub(shells.top) + 1..l).rev().collect()
+                } else {
+                    (l + 1..(l + shells.bottom).min(n)).collect()
+                };
+                for (k, shell) in carry(&patch, l, &layers, outlines, spacing + width, small) {
+                    if top { &mut down } else { &mut up }.push((k, s, shell));
+                }
+                own[s].extend(patch);
+            }
+        }
+        (own, down, up)
+    });
+    // What each layer has carried into it, by state, in the order of the layers it comes from.
+    let mut carried_down: Vec<Vec<Shapes>> = vec![vec![Vec::new(); states]; n];
+    let mut carried_up: Vec<Vec<Shapes>> = vec![vec![Vec::new(); states]; n];
+    for (_, down, up) in &per_layer {
+        for (k, s, shapes) in down {
+            carried_down[*k][*s].extend(shapes.iter().cloned());
+        }
+        for (k, s, shapes) in up {
+            carried_up[*k][*s].extend(shapes.iter().cloned());
+        }
+    }
+    crate::par::map_range(n, |l| {
+        let mut by: Vec<Shapes> = per_layer[l].0.iter().map(|own| geom::union(own, &Vec::new())).collect();
+        let painted = geom::union_all(&by.iter().collect::<Vec<_>>());
+        for (s, region) in by.iter_mut().enumerate() {
+            let down = geom::difference(&geom::union(&carried_down[l][s], &Vec::new()), &painted);
+            let up = geom::difference(&geom::union(&carried_up[l][s], &Vec::new()), &painted);
+            if !down.is_empty() || !up.is_empty() {
+                *region = geom::union_all(&[&*region, &down, &up]);
+            }
+        }
+        // Trimmed by each other: each colour gives way to those before it, the object's own to all.
+        let mut taken: Shapes = Vec::new();
+        for region in by.iter_mut().skip(1) {
+            if !taken.is_empty() {
+                *region = geom::difference(region, &taken);
+            }
+            taken.extend(region.iter().cloned());
+        }
+        if !taken.is_empty() {
+            by[0] = geom::difference(&by[0], &taken);
+        }
+        by
+    })
+}
+
+/// `merge_segmented_layers` on one layer: its regions painted on the sides (`sides[f]`, filament `f`) less every
+/// top and bottom region (`tops[state]`, state 0 the object's own filament), then each painted filament's top and
+/// bottom regions added, where it has side regions too merged with them, closed by 0.1 µm (Orca's dimple removal).
+fn merge_layer(sides: &[Shapes], tops: &[Shapes]) -> Vec<Shapes> {
+    if tops.iter().all(Vec::is_empty) {
+        return sides.to_vec();
+    }
+    let all: Shapes = tops.iter().flatten().cloned().collect();
+    let eps = SCALED_EPSILON as f64 / geom::SCALE;
+    let join = geom::Join::Miter(3.0);
+    sides
+        .iter()
+        .enumerate()
+        .map(|(f, side)| {
+            let side = geom::difference(side, &all);
+            let Some(top) = tops.get(f + 1).filter(|t| !t.is_empty()) else { return side };
+            if side.is_empty() {
+                return top.clone();
+            }
+            let merged = geom::union(&side, top);
+            geom::offset_c2(&geom::offset_c2(&merged, eps, join), -eps, join)
+        })
         .collect()
 }
 
@@ -1844,6 +2533,59 @@ mod tests {
         // 0.1 mm of unpainted between two stretches in 1: painted 1.
         let out = filter_colorized(vec![l(0, 20_000, 1), l(20_000, 21_000, 0), l(21_000, 40_000, 1), l(40_000, 0, 0)]);
         assert_eq!(out.iter().map(|c| c.color).collect::<Vec<_>>(), vec![1, 1, 1, 0]);
+    }
+
+    #[test]
+    fn a_stretch_painted_partway_along_an_edge_takes_its_side_of_the_island() {
+        // A 9.67 by 20 mm island whose left edge is painted (2) from its bottom corner to halfway up: boost's diagram
+        // has no vertex where the paint ends (Orca rebuilds it turned by 30°), and the edge from there must run
+        // inside. The paint takes what is nearer its stretch: a trapezoid from that edge's ends to the middle line,
+        // 4.83 mm wide, 10.33 mm tall at the edge and 5.5 at the middle.
+        let corners = [
+            (1_380_000, 1_380_000),
+            (1_283_333, 1_380_000),
+            (1_283_333, 1_283_333),
+            (1_283_333, 1_180_000),
+            (1_380_000, 1_180_000),
+        ];
+        let colours = [0, 0, 2, 0, 0];
+        let mut poly: Vec<ColoredLine> = (0..5)
+            .map(|i| {
+                let (a, b) = (corners[i], corners[(i + 1) % 5]);
+                colored(Line::new([a.0, a.1], [b.0, b.1]), colours[i])
+            })
+            .collect();
+        for (k, l) in poly.iter_mut().enumerate() {
+            l.local = k;
+        }
+        let segments: Vec<[i32; 4]> = poly
+            .iter()
+            .map(|l| [l.line.a[0] as i32, l.line.a[1] as i32, l.line.b[0] as i32, l.line.b[1] as i32])
+            .collect();
+        let plain = diagram_of(&segments).expect("a diagram");
+        let xy = points_of(&plain);
+        assert!(faulty(&plain, &xy, &segments), "boost's own diagram has no fault");
+        // In it, the edges from the middle line's vertex out through where the paint ends run left across the
+        // outline, as Orca clips them (`clip_infinite_edge`, a segment's ends as boost keeps them).
+        let through = |e: &boostvoronoi::prelude::Edge| {
+            let one = vertex0(&plain, e.id()).is_some() != vertex1(&plain, e.id()).is_some();
+            let at = vertex0(&plain, e.id()).or(vertex1(&plain, e.id())).map(|v| xy[v.usize()]);
+            one && at.is_some_and(|q| (q[1] - 1_283_333.0).abs() < 1.0)
+        };
+        let mut crossing = 0;
+        for e in plain.edges().iter().filter(|e| through(e)) {
+            let line = clip_infinite_edge(&plain, &segments, e.id().usize(), 1e6, &|v: VertexIndex| xy[v.usize()])
+                .expect("clipped");
+            assert!(line[0][0].min(line[1][0]) < 1_283_333.0 - 1e5, "{line:?} stays inside");
+            crossing += 1;
+        }
+        assert!(crossing > 0);
+        let island: Shape = vec![corners.iter().map(|&(x, y)| geom::pt(x as i32, y as i32)).collect()];
+        let out = split_island(&island, &[poly], 3);
+        let (painted, rest) = (geom::area_mm2(&out[2]), geom::area_mm2(&out[0]));
+        let expected = (9.6667 / 2.0) * (10.3333 + 5.5) / 2.0;
+        assert!((painted - expected).abs() < 0.01, "{painted} mm² painted");
+        assert!((painted + rest - 9.6667 * 20.0).abs() < 0.01, "{rest} mm² left");
     }
 
     #[test]

@@ -96,6 +96,18 @@ pub struct Settings {
     pub bottom_shell_layers: usize,
     pub top_shell_thickness: f64,
     pub bottom_shell_thickness: f64,
+    /// Layers a painted top colours, itself and those under it, and a painted bottom, itself and those over it:
+    /// Orca's `top_color_penetration_layers` and `bottom_color_penetration_layers`, or the shells' where those are 0
+    /// (as in every preset).
+    pub top_color_layers: usize,
+    pub bottom_color_layers: usize,
+    /// mm: how far into an object a painted colour may reach (`mmu_segmented_region_max_width`), and how deep its
+    /// layers interlock with the colour beside it (`mmu_segmented_region_interlocking_depth`); 0, as in the presets,
+    /// for no limit.
+    pub painted_max_width: f64,
+    pub painted_interlocking_depth: f64,
+    /// Whether an object's filaments interlock with beams where they meet (`interlocking_beam`).
+    pub interlocking_beam: bool,
     pub sparse_density: f64,
     /// Degrees from the X axis.
     pub infill_direction: f64,
@@ -125,7 +137,10 @@ pub struct Settings {
     /// Lateral lattice infill's two angles, degrees (Orca's `lateral_lattice_angle_1` and `_2`): how far from upright
     /// each of its two sets of walls leans.
     pub lateral_lattice_angles: [f64; 2],
+    /// mm the first layer is pulled in against elephant's foot, where it is wide enough (`elephant.rs`).
     pub elephant_foot: f64,
+    /// How many layers Orca pulls in, by less on each (`elefant_foot_compensation_layers`): this pulls in the first.
+    pub elephant_foot_layers: usize,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
     /// mm: gaps and notches in a layer's outline narrower than twice this are closed (`slice_closing_radius`).
@@ -640,6 +655,18 @@ impl Settings {
             bottom_shell_layers: p.int("bottom_shell_layers").max(0) as usize,
             top_shell_thickness: p.float("top_shell_thickness"),
             bottom_shell_thickness: p.float("bottom_shell_thickness"),
+            top_color_layers: match p.int("top_color_penetration_layers") {
+                n if n > 0 => n as usize,
+                _ if spiral => 0,
+                _ => p.int("top_shell_layers").max(0) as usize,
+            },
+            bottom_color_layers: match p.int("bottom_color_penetration_layers") {
+                n if n > 0 => n as usize,
+                _ => p.int("bottom_shell_layers").max(0) as usize,
+            },
+            painted_max_width: p.float("mmu_segmented_region_max_width"),
+            painted_interlocking_depth: p.float("mmu_segmented_region_interlocking_depth"),
+            interlocking_beam: p.bool("interlocking_beam"),
             sparse_density: if spiral { 0.0 } else { share("sparse_infill_density") },
             infill_direction: p.float("infill_direction"),
             solid_infill_direction: p.float("solid_infill_direction"),
@@ -660,6 +687,7 @@ impl Settings {
                 .map(|(key, default)| if p.text(key).is_empty() { default } else { p.float(key) }),
             infill_anchor_max,
             elephant_foot: p.float("elefant_foot_compensation"),
+            elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
             slice_closing_radius: p.float("slice_closing_radius"),
             skirt_distance: p.float("skirt_distance"),
@@ -912,6 +940,9 @@ impl Settings {
         }
         if self.wall_generator == "arachne" {
             out.push("arachne walls printed as classic walls".into());
+        }
+        if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
+            out.push("elephant's foot compensated on the first layer only".into());
         }
         if !matches!(self.ironing_type.as_str(), "no ironing" | "") {
             out.push("no ironing".into());

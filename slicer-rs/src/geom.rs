@@ -398,6 +398,50 @@ pub fn union_clipper2(paths: &[Contour]) -> Shapes {
     }
 }
 
+/// Clipper2's boolean of closed paths, as Orca's `c2_clip`: collinear points dropped, the clips left out when there are
+/// none. Nothing when Clipper2 gives up.
+pub fn clip_clipper2(
+    op: clipper2_rs::ClipType,
+    fill: clipper2_rs::FillRule,
+    subjects: &[Contour],
+    clips: &[Contour],
+) -> Vec<Contour> {
+    let mut clipper = clipper2(subjects, clips);
+    match clipper.execute(op, fill) {
+        Ok(solution) => {
+            solution.closed.iter().map(|path| path.iter().map(|p| pt(p.x as i32, p.y as i32)).collect()).collect()
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
+/// `clip_clipper2` as shapes, Clipper2's tree read as Orca reads it (`shapes_of_tree`).
+pub fn clip_clipper2_shapes(
+    op: clipper2_rs::ClipType,
+    fill: clipper2_rs::FillRule,
+    subjects: &[Contour],
+    clips: &[Contour],
+) -> Shapes {
+    let mut clipper = clipper2(subjects, clips);
+    match clipper.execute_tree(op, fill) {
+        Ok((tree, _)) => shapes_of_tree(&tree),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn clipper2(subjects: &[Contour], clips: &[Contour]) -> clipper2_rs::Clipper64 {
+    let paths = |contours: &[Contour]| -> clipper2_rs::Paths64 {
+        contours.iter().map(|c| c.iter().map(|p| clipper2_rs::Point64::new(p.x as i64, p.y as i64)).collect()).collect()
+    };
+    let mut clipper = clipper2_rs::Clipper64::new();
+    clipper.set_preserve_collinear(false);
+    clipper.add_subject(&paths(subjects));
+    if !clips.is_empty() {
+        clipper.add_clip(&paths(clips));
+    }
+    clipper
+}
+
 /// Clipper2's tree as shapes, as Orca reads it (`c2_to_expolygons`): each outline with the holes right under it, then
 /// the islands in those holes. Clipper2 now and then nests a hole beside the outline round it rather than under it:
 /// a clockwise loop where an outline belongs goes to the smallest outline round it (`c2_attach_stray_holes`).

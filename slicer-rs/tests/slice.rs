@@ -142,34 +142,32 @@ fn the_same_models_give_the_same_file() {
 }
 
 #[test]
-fn painted_colours_are_refused_by_name_until_ours_prints_them() {
+fn painted_cubes_slice_unless_their_filaments_interlock() {
     use spaghetti_slicer::{Plate, paint::Paint};
     let cube = cube_stl(10.0);
-    // Paint as the app hands it: the STL's 12th triangle (index 11), its top's last, in filament 2.
+    // Paint as the app hands it: the STL's 12th triangle (index 11), its left side's last, in filament 2.
     let mut bytes = Vec::new();
     for word in [1u32, 11, 1] {
         bytes.extend_from_slice(&word.to_le_bytes());
     }
     bytes.push(b'8');
-    let paint = Paint::from_bytes(&bytes).expect("paint");
-    let mut plate = Plate::default();
-    plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
-    assert!(plate.paint(&paint));
-    assert_eq!(
-        plate.slice(&Settings::default(), &Options::default()).err(),
-        Some(Error::Unsupported("painted colours"))
-    );
+    let painted = |settings: &Settings, paint: &[u8]| {
+        let mut plate = Plate::default();
+        plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
+        let taken = plate.paint(&Paint::from_bytes(paint).expect("paint"));
+        (taken, plate.slice(settings, &Options::default()).err())
+    };
+    // In one filament everything prints in it, as Orca prints it; in two the paint prints too.
+    assert_eq!(painted(&Settings::default(), &bytes), (true, None));
+    let mut two = setup::read(TWO_FILAMENTS).unwrap().settings;
+    assert_eq!(painted(&two, &bytes), (true, None));
+    // Orca's beams where an object's filaments meet aren't ported: refused by name.
+    two.interlocking_beam = true;
+    assert_eq!(painted(&two, &bytes), (true, Some(Error::Unsupported("interlocking beams"))));
     // Paint for triangles the STL doesn't have isn't taken; nor is paint after a 3MF, which brings its own.
     let mut past = bytes.clone();
     past[4..8].copy_from_slice(&12u32.to_le_bytes());
-    let mut plate = Plate::default();
-    plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
-    assert!(!plate.paint(&Paint::from_bytes(&past).expect("paint")));
-    assert!(plate.slice(&Settings::default(), &Options::default()).is_ok());
-    // Unpainted, the same cube slices.
-    let mut plate = Plate::default();
-    plate.add_part(&Input { name: "c.stl", bytes: &cube }, 0, true).expect("a cube");
-    assert!(plate.slice(&Settings::default(), &Options::default()).is_ok());
+    assert_eq!(painted(&Settings::default(), &past), (false, None));
 }
 
 /// An extrusion: the tool, the feature, and the move's ends in mm.
@@ -208,32 +206,38 @@ fn extrusions(gcode: &str) -> Vec<Vec<Extrusion>> {
     layers
 }
 
-#[test]
-fn painted_sides_print_in_their_filament_as_orca_splits_them() {
+/// A model (an STL) kept where it is, its `triangles` painted in filament 2 ("8"), sliced in two filaments: each
+/// layer's extrusions.
+fn painted_layers(model: &[u8], triangles: &[u32]) -> Vec<Vec<Extrusion>> {
     use spaghetti_slicer::{Plate, paint::Paint};
     let settings = setup::read(TWO_FILAMENTS).unwrap().settings;
-    // A 20 mm box 10 mm tall, kept where it is, its front (y = 100, triangles 4 and 5) painted in filament 2 ("8").
+    let mut bytes = (triangles.len() as u32).to_le_bytes().to_vec();
+    for &t in triangles {
+        bytes.extend_from_slice(&t.to_le_bytes());
+    }
+    for end in 1..=triangles.len() as u32 {
+        bytes.extend_from_slice(&end.to_le_bytes());
+    }
+    bytes.extend(std::iter::repeat_n(b'8', triangles.len()));
+    let mut plate = Plate::default();
+    plate.add_part(&Input { name: "model.stl", bytes: model }, 0, true).expect("a model");
+    assert!(plate.paint(&Paint::from_bytes(&bytes).expect("paint")));
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    extrusions(&String::from_utf8(plate.slice(&settings, &options).expect("sliced").gcode).unwrap())
+}
+
+/// The lowest and highest of the points' x (`k` 0) or y (`k` 1).
+fn range(points: &[[f64; 2]], k: usize) -> (f64, f64) {
+    points.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p[k]), hi.max(p[k])))
+}
+
+#[test]
+fn painted_sides_print_in_their_filament_as_orca_splits_them() {
+    // A 20 mm box 10 mm tall, kept where it is, its front (y = 100, triangles 4 and 5) painted in filament 2.
     let box_stl = boxes_stl(&[([100., 100., 0.], [120., 120., 10.])]);
-    let sliced = |model: &[u8], triangles: &[u32]| {
-        let mut bytes = (triangles.len() as u32).to_le_bytes().to_vec();
-        for &t in triangles {
-            bytes.extend_from_slice(&t.to_le_bytes());
-        }
-        for end in 1..=triangles.len() as u32 {
-            bytes.extend_from_slice(&end.to_le_bytes());
-        }
-        bytes.extend(std::iter::repeat_n(b'8', triangles.len()));
-        let mut plate = Plate::default();
-        plate.add_part(&Input { name: "model.stl", bytes: model }, 0, true).expect("a model");
-        assert!(plate.paint(&Paint::from_bytes(&bytes).expect("paint")));
-        let options = Options { arrange: false, thumbnail: false, paint: true, ..Options::default() };
-        extrusions(&String::from_utf8(plate.slice(&settings, &options).expect("sliced").gcode).unwrap())
-    };
+    let sliced = painted_layers;
     let walls = |layer: &[Extrusion], tool: usize| -> Vec<[f64; 2]> {
         layer.iter().filter(|m| m.0 == Some(tool) && m.1 == "Outer wall").flat_map(|m| [m.2, m.3]).collect()
-    };
-    let range = |points: &[[f64; 2]], k: usize| {
-        points.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p[k]), hi.max(p[k])))
     };
     let near = |a: f64, b: f64| (a - b).abs() < 0.02;
 
@@ -294,6 +298,67 @@ fn painted_sides_print_in_their_filament_as_orca_splits_them() {
         let rest = walls(layer, 0);
         let nearest = rest.iter().map(|p| (p[0] - tip[0]).hypot(p[1] - tip[1])).fold(f64::MAX, f64::min);
         assert!(nearest < 0.005, "layer {i}: filament 1's wall passes {nearest} mm from the corner");
+    }
+}
+
+#[test]
+fn painted_tops_and_bottoms_colour_their_shells_as_orca_does() {
+    // The 20 mm box 10 mm tall (50 layers, 5 top shells and 3 bottom ones): each painted top or bottom colours its
+    // own layer whole, and the shell layers under (over) it one outer wall's width and spacing (0.797 mm) further in
+    // on each, as Orca's segmentation colours them; an unpainted one does so in the object's own filament.
+    let box_stl = boxes_stl(&[([100., 100., 0.], [120., 120., 10.])]);
+    let step = 0.42 + (0.42 - 0.2 * (1.0 - std::f64::consts::FRAC_PI_4));
+    // Each filament's extrusions on the object (the prime tower's left out).
+    let points = |layer: &[Extrusion], tool: usize| -> Vec<[f64; 2]> {
+        layer.iter().filter(|m| m.0 == Some(tool) && m.1 != "Prime tower").flat_map(|m| [m.2, m.3]).collect()
+    };
+    let inside = |points: &[[f64; 2]], inset: f64| {
+        let (xs, ys) = (range(points, 0), range(points, 1));
+        let (lo, hi) = (100.0 + inset - 1e-3, 120.0 - inset + 1e-3);
+        xs.0 >= lo && xs.1 <= hi && ys.0 >= lo && ys.1 <= hi
+    };
+
+    // Its top painted (triangles 2 and 3): the last layer prints in filament 2 alone, the four under it have it
+    // inside an inset growing by a step a layer, in filament 1's walls; below them, none.
+    let layers = painted_layers(&box_stl, &[2, 3]);
+    assert_eq!(layers.len(), 50);
+    assert!(points(&layers[49], 0).is_empty() && !points(&layers[49], 1).is_empty());
+    for (i, layer) in layers.iter().enumerate().take(49).skip(45) {
+        let (mine, painted) = (points(layer, 0), points(layer, 1));
+        assert!(!mine.is_empty() && !painted.is_empty(), "layer {i}");
+        assert!(
+            inside(&painted, (49 - i) as f64 * step),
+            "layer {i}: {:?} {:?}",
+            range(&painted, 0),
+            range(&painted, 1)
+        );
+    }
+    assert!(layers[..45].iter().all(|layer| points(layer, 1).is_empty()));
+
+    // Its bottom painted (triangles 0 and 1): the first layer in filament 2 alone, the two over it inside the inset.
+    let layers = painted_layers(&box_stl, &[0, 1]);
+    assert!(points(&layers[0], 0).is_empty() && !points(&layers[0], 1).is_empty());
+    for (i, layer) in layers.iter().enumerate().take(3).skip(1) {
+        let painted = points(layer, 1);
+        assert!(!painted.is_empty() && inside(&painted, i as f64 * step), "layer {i}");
+    }
+    assert!(layers[3..].iter().all(|layer| points(layer, 1).is_empty()));
+
+    // Its front painted, its top and bottom not: those take back the painted side's first and last layers in
+    // filament 1, and the shells next to them keep the paint only along the front, as deep as their inset.
+    let layers = painted_layers(&box_stl, &[4, 5]);
+    for (i, layer) in layers.iter().enumerate() {
+        let painted = points(layer, 1);
+        let depth = match i {
+            0 | 49 => {
+                assert!(painted.is_empty(), "layer {i} prints filament 2");
+                continue;
+            }
+            1 | 2 => i as f64 * step,
+            45..=48 => (49 - i) as f64 * step,
+            _ => continue,
+        };
+        assert!(!painted.is_empty() && range(&painted, 1).1 <= 100.0 + depth + 1e-3, "layer {i}");
     }
 }
 

@@ -161,7 +161,7 @@ pub unsafe extern "C" fn paint(data: *const u8, len: usize) -> u32 {
 pub extern "C" fn slice(flags: u32) -> u32 {
     let plate = PLATE.with(|p| std::mem::take(&mut *p.borrow_mut()));
     let Setup { settings, scale } = SETUP.with(|s| s.borrow().clone());
-    let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0, scale, ..Options::default() };
+    let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0, scale };
     match plate.slice(&settings, &options) {
         Ok(out) => {
             let t = &out.timings;
