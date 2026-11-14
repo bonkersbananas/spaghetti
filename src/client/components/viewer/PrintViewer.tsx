@@ -217,6 +217,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     const target = event.target as HTMLElement | null;
     const tag = target?.tagName;
     const type = (target as HTMLInputElement | null)?.type;
+    if (target?.closest("[data-own-arrows]")) return;
     if (tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
     if (tag === "INPUT" && type !== "range") return;
     const step = event.shiftKey ? 10 : 1;
@@ -272,6 +273,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             aria-label="What the colours mean"
             // biome-ignore lint/a11y/noNoninteractiveTabindex: a row that scrolls sideways on a phone must be reachable by keyboard
             tabIndex={0}
+            data-own-arrows
             className="no-scrollbar focus-ring sg-fade-x absolute inset-x-0 top-3 flex gap-1.5 overflow-x-auto px-3 md:flex-wrap md:overflow-visible"
           >
             {showFilaments &&
