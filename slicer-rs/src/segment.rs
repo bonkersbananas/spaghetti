@@ -1079,10 +1079,296 @@ fn round(q: [f64; 2]) -> P {
     [q[0].round() as i64, q[1].round() as i64]
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// boost's Voronoi diagram, repaired as Orca's `Geometry::VoronoiDiagram` repairs it (Voronoi.cpp, VoronoiUtils.cpp,
+// VoronoiUtilsCgal.cpp).
+
+use boostvoronoi::prelude::{Diagram, EdgeIndex, VertexIndex};
+
+/// A diagram, and each of its vertices' points in the outline's own frame.
+struct Voronoi {
+    diagram: Diagram,
+    xy: Vec<[f64; 2]>,
+}
+
+fn diagram_of(segments: &[[i32; 4]]) -> Option<Diagram> {
+    use boostvoronoi::prelude::{Builder, Line as BvLine};
+    let built = Builder::<i32>::default().with_segments(segments.iter().map(|s| BvLine::<i32>::from(*s)));
+    built.and_then(|b| b.build()).ok()
+}
+
+fn points_of(diagram: &Diagram) -> Vec<[f64; 2]> {
+    diagram.vertices().iter().map(|v| [v.x(), v.y()]).collect()
+}
+
+/// Orca's `VoronoiDiagram::construct_voronoi`: boost's diagram of the segments, unless it has one of the faults Orca
+/// looks for (`detect_known_issues`); then the diagram of the segments turned by 30° (else 36°, then 25.7°, then
+/// 16.4°: the first without faults, or the last), its vertices turned back, those at the segments' ends put back on
+/// them exactly.
+fn voronoi(segments: &[[i32; 4]]) -> Option<Voronoi> {
+    let diagram = diagram_of(segments)?;
+    let xy = points_of(&diagram);
+    if !faulty(&diagram, &xy, segments) {
+        return Some(Voronoi { diagram, xy });
+    }
+    let mut out = Voronoi { diagram, xy };
+    for angle in [
+        std::f64::consts::PI / 6.0,
+        std::f64::consts::PI / 5.0,
+        std::f64::consts::PI / 7.0,
+        std::f64::consts::PI / 11.0,
+    ] {
+        let turned: Vec<[i32; 4]> = segments
+            .iter()
+            .map(|s| {
+                let (a, b) = (turn_point([s[0], s[1]], angle), turn_point([s[2], s[3]], angle));
+                [a[0], a[1], b[0], b[1]]
+            })
+            .collect();
+        let Some(diagram) = diagram_of(&turned) else { continue };
+        let xy = points_of(&diagram);
+        let fault = faulty(&diagram, &xy, &turned);
+        let xy = turn_back(&diagram, &xy, &turned, segments, angle);
+        out = Voronoi { diagram, xy };
+        if !fault {
+            break;
+        }
+    }
+    Some(out)
+}
+
+/// Orca's `Point::rotate`: turned round the origin, to whole units.
+fn turn_point(p: [i32; 2], angle: f64) -> [i32; 2] {
+    let (sin, cos) = (libm::sin(angle), libm::cos(angle));
+    let (x, y) = (f64::from(p[0]), f64::from(p[1]));
+    [(cos * x - sin * y).round() as i32, (cos * y + sin * x).round() as i32]
+}
+
+fn vertex0(diagram: &Diagram, e: EdgeIndex) -> Option<VertexIndex> {
+    diagram.edge(e).ok().and_then(|edge| edge.vertex0())
+}
+
+fn vertex1(diagram: &Diagram, e: EdgeIndex) -> Option<VertexIndex> {
+    diagram.edge_get_vertex1(e).ok().flatten()
+}
+
+/// Orca's `VoronoiUtils::compute_segment_cell_range`: in a segment's cell, the last edge starting at the segment's
+/// second end before any other, and the edge ending at its first end; None where either is missing.
+fn segment_cell_range(
+    diagram: &Diagram,
+    xy: &[[f64; 2]],
+    first: EdgeIndex,
+    segment: [i32; 4],
+) -> Option<(EdgeIndex, EdgeIndex)> {
+    let from = [i64::from(segment[0]), i64::from(segment[1])];
+    let to = [i64::from(segment[2]), i64::from(segment[3])];
+    let at = |v: VertexIndex| {
+        let q = xy[v.usize()];
+        [q[0].round() as i64, q[1].round() as i64]
+    };
+    let (mut begin, mut end) = (None, None);
+    let (mut seen_start, mut after_start, mut end_before_start) = (false, false, false);
+    let mut e = first;
+    for _ in 0..=diagram.edges().len() {
+        if let (Some(v0), Some(v1)) = (vertex0(diagram, e), vertex1(diagram, e)) {
+            if at(v0) == to && !after_start {
+                begin = Some(e);
+                seen_start = true;
+            } else if seen_start {
+                after_start = true;
+            }
+            if at(v1) == from && (end.is_none() || end_before_start) {
+                end_before_start = !after_start;
+                end = Some(e);
+            }
+        }
+        e = diagram.edge_get_next(e).ok()?;
+        if e == first {
+            break;
+        }
+    }
+    Some((begin?, end?))
+}
+
+/// Orca's `detect_known_issues`: a finite edge with an end that isn't, a parabola with no point for its focus, a
+/// segment's cell that doesn't run from one of its ends to the other along finite edges all on its left, or edges
+/// round a vertex out of turn (`is_voronoi_diagram_planar_angle`).
+fn faulty(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]]) -> bool {
+    let finite = |v: VertexIndex| xy[v.usize()].iter().all(|c| c.is_finite());
+    let cell_of =
+        |e: EdgeIndex| diagram.edge(e).ok().and_then(|edge| edge.cell().ok()).and_then(|c| diagram.cell(c).ok());
+    let twin_of = |e: EdgeIndex| diagram.edge(e).ok().and_then(|edge| edge.twin().ok());
+    for edge in diagram.edges() {
+        let e = edge.id();
+        if let (Some(v0), Some(v1)) = (vertex0(diagram, e), vertex1(diagram, e)) {
+            if !finite(v0) || !finite(v1) {
+                return true;
+            }
+            let point_in = |c: Option<&boostvoronoi::prelude::Cell>| c.is_some_and(|c| c.contains_point());
+            if edge.is_curved() && !point_in(cell_of(e)) && !point_in(twin_of(e).and_then(cell_of)) {
+                return true;
+            }
+        }
+    }
+    for cell in diagram.cells() {
+        if cell.is_degenerate() || !cell.contains_segment() {
+            continue;
+        }
+        let segment = segments[cell.source_index().usize()];
+        let Some(first) = cell.get_incident_edge() else { continue };
+        let Some((begin, end)) = segment_cell_range(diagram, xy, first, segment) else { return true };
+        let from = [f64::from(segment[0]), f64::from(segment[1])];
+        let along = [f64::from(segment[2] - segment[0]), f64::from(segment[3] - segment[1])];
+        let mut e = begin;
+        for _ in 0..=diagram.edges().len() {
+            if e == end {
+                break;
+            }
+            let (Some(_), Some(v1)) = (vertex0(diagram, e), vertex1(diagram, e)) else { return true };
+            let q = xy[v1.usize()];
+            if cross(along, [q[0] - from[0], q[1] - from[1]]) < 0.0 {
+                return true;
+            }
+            let Ok(next) = diagram.edge_get_next(e) else { return true };
+            e = next;
+        }
+    }
+    !planar(diagram, xy, segments)
+}
+
+/// The sign of a turn: 1 left, -1 right, 0 straight on.
+fn turn_sign(v: f64) -> i32 {
+    if v > 0.0 {
+        1
+    } else if v < 0.0 {
+        -1
+    } else {
+        0
+    }
+}
+
+/// The tangent where a parabolic edge leaves its first vertex (`calculate_parabolic_tangent_vector`), its focus the
+/// point of one of its cells and its directrix the other's segment, turned to the side of the focus.
+fn parabola_tangent(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]], e: EdgeIndex) -> Option<[f64; 2]> {
+    let edge = diagram.edge(e).ok()?;
+    let left = diagram.cell(edge.cell().ok()?).ok()?;
+    let right = diagram.cell(diagram.edge(edge.twin().ok()?).ok()?.cell().ok()?).ok()?;
+    let (point_cell, segment_cell) = if left.contains_point() { (left, right) } else { (right, left) };
+    let s = segments[point_cell.source_index().usize()];
+    let focus = if point_cell.contains_segment_startpoint() {
+        [f64::from(s[0]), f64::from(s[1])]
+    } else {
+        [f64::from(s[2]), f64::from(s[3])]
+    };
+    let d = segments[segment_cell.source_index().usize()];
+    let (u, v) = ([f64::from(d[0]), f64::from(d[1])], [f64::from(d[2]), f64::from(d[3])]);
+    let (p, q) = (xy[vertex0(diagram, e)?.usize()], xy[vertex1(diagram, e)?.usize()]);
+    // The focus's side, as Orca has it: the opposite of the turn from the edge's ends to it.
+    let side = -turn_sign(cross([q[0] - p[0], q[1] - p[1]], [focus[0] - p[0], focus[1] - p[1]]));
+    let dir = [v[0] - u[0], v[1] - u[1]];
+    let len2 = dot(dir, dir);
+    let along = dot(dir, [p[0] - u[0], p[1] - u[1]]);
+    let f = [(focus[0] - u[0]) * len2 - dir[0] * along, (focus[1] - u[1]) * len2 - dir[1] * along];
+    Some(if side == 1 { [-f[1], f[0]] } else { [f[1], -f[0]] })
+}
+
+/// Orca's `orientation_of_two_edges`: which way edge `b` turns from edge `a`, both leaving the same vertex.
+fn edge_turn(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]], a: EdgeIndex, b: EdgeIndex) -> Option<i32> {
+    let p = xy[vertex0(diagram, a)?.usize()];
+    let curved = |e: EdgeIndex| diagram.edge(e).is_ok_and(|edge| edge.is_curved());
+    let to = |e: EdgeIndex| -> Option<[f64; 2]> {
+        let q = xy[vertex1(diagram, e)?.usize()];
+        Some([q[0] - p[0], q[1] - p[1]])
+    };
+    Some(match (curved(a), curved(b)) {
+        (false, false) => turn_sign(cross(to(a)?, to(b)?)),
+        (true, true) => {
+            turn_sign(cross(parabola_tangent(diagram, xy, segments, a)?, parabola_tangent(diagram, xy, segments, b)?))
+        }
+        (true, false) => turn_sign(cross(parabola_tangent(diagram, xy, segments, a)?, to(b)?)),
+        (false, true) => -turn_sign(cross(parabola_tangent(diagram, xy, segments, b)?, to(a)?)),
+    })
+}
+
+/// Orca's `is_voronoi_diagram_planar_angle`: round every vertex with three finite edges or more, each edge lies
+/// counter-clockwise between the one before it and the one after (`check_if_three_edges_are_ccw`).
+fn planar(diagram: &Diagram, xy: &[[f64; 2]], segments: &[[i32; 4]]) -> bool {
+    let finite = |v: Option<VertexIndex>| v.is_some_and(|v| xy[v.usize()].iter().all(|c| c.is_finite()));
+    for v in diagram.vertices() {
+        let Ok(first) = v.get_incident_edge() else { continue };
+        let mut edges = Vec::new();
+        let mut e = first;
+        for _ in 0..=diagram.edges().len() {
+            if finite(vertex0(diagram, e)) && finite(vertex1(diagram, e)) {
+                edges.push(e);
+            }
+            match diagram.edge_rot_next(e) {
+                Some(next) if next != first => e = next,
+                _ => break,
+            }
+        }
+        if edges.len() <= 2 {
+            continue;
+        }
+        for i in 0..edges.len() {
+            let prev = edges[(i + edges.len() - 1) % edges.len()];
+            let (curr, next) = (edges[i], edges[(i + 1) % edges.len()]);
+            let turn = |a, b| edge_turn(diagram, xy, segments, a, b).unwrap_or(0);
+            let ccw = match turn(prev, curr) {
+                0 => turn(prev, next) == -1,
+                1 => turn(prev, next) != 1 || turn(curr, next) != -1,
+                _ => turn(prev, next) == -1 || turn(curr, next) == 1,
+            };
+            if !ccw {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// The vertices of a diagram of the segments turned by `angle` (`turned`), back in the segments' own frame: those at
+/// a segment's ends (where a segment's cell starts and ends) on those ends exactly, the others turned back.
+fn turn_back(
+    diagram: &Diagram,
+    xy: &[[f64; 2]],
+    turned: &[[i32; 4]],
+    segments: &[[i32; 4]],
+    angle: f64,
+) -> Vec<[f64; 2]> {
+    // Each vertex's segment end: 0 for none, else (segment + 1) × 2, plus 1 for its second end.
+    let mut end_of = vec![0usize; xy.len()];
+    for cell in diagram.cells() {
+        if cell.is_degenerate() || !cell.contains_segment() {
+            continue;
+        }
+        let k = cell.source_index().usize();
+        let Some(first) = cell.get_incident_edge() else { continue };
+        if let Some((begin, end)) = segment_cell_range(diagram, xy, first, turned[k]) {
+            if let Some(v) = vertex1(diagram, end).filter(|v| end_of[v.usize()] == 0) {
+                end_of[v.usize()] = (k + 1) << 1;
+            }
+            if let Some(v) = vertex0(diagram, begin).filter(|v| end_of[v.usize()] == 0) {
+                end_of[v.usize()] = ((k + 1) << 1) | 1;
+            }
+        }
+    }
+    let (sin, cos) = (libm::sin(-angle), libm::cos(-angle));
+    xy.iter()
+        .zip(&end_of)
+        .map(|(q, &end)| match end {
+            0 => [cos * q[0] - sin * q[1], cos * q[1] + sin * q[0]],
+            _ => {
+                let s = segments[(end >> 1) - 1];
+                if end & 1 == 0 { [f64::from(s[0]), f64::from(s[1])] } else { [f64::from(s[2]), f64::from(s[3])] }
+            }
+        })
+        .collect()
+}
+
 /// `build_graph`: the island's coloured outline and the Voronoi diagram of its pieces, joined into a graph whose
 /// faces are the island's pieces of one colour. None where the diagram can't be made.
 fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
-    use boostvoronoi::prelude::{Builder, Line as BvLine};
     let lines: Vec<ColoredLine> = color_poly.iter().flatten().copied().collect();
     let points: Vec<P> = lines.iter().map(|l| l.line.a).collect();
     // The loops' own lines, from point to point (the coloured pieces meet end to start).
@@ -1098,8 +1384,7 @@ fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
         .iter()
         .map(|l| [l.line.a[0] as i32, l.line.a[1] as i32, l.line.b[0] as i32, l.line.b[1] as i32])
         .collect();
-    let built = Builder::<i32>::default().with_segments(segments.iter().map(|s| BvLine::<i32>::from(*s)));
-    let diagram = built.and_then(|b| b.build()).ok()?;
+    let Voronoi { diagram, xy } = voronoi(&segments)?;
 
     let mut graph = Graph {
         nodes: points.iter().map(|q| Node { point: [q[0] as f64, q[1] as f64], arcs: Vec::new() }).collect(),
@@ -1141,7 +1426,7 @@ fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
             }
         }
         for (k, v) in vertices.iter().enumerate() {
-            let vd = [v.x(), v.y()];
+            let vd = xy[k];
             let vp = trunc(vd);
             let Ok(incident) = v.get_incident_edge() else { continue };
             let incident = incident.usize();
@@ -1210,10 +1495,7 @@ fn build_graph(color_poly: &[Vec<ColoredLine>]) -> Option<Graph> {
         processed[twin(e)] = true;
     };
     let nodes_count = |g: &Graph| g.nodes.len();
-    let vertex_xy = |v: boostvoronoi::prelude::VertexIndex| {
-        let vx = &vertices[v.usize()];
-        [vx.x(), vx.y()]
-    };
+    let vertex_xy = |v: boostvoronoi::prelude::VertexIndex| xy[v.usize()];
 
     for e in 0..edges.len() {
         if cell_source(e) > cell_source(twin(e)) || processed[e] {
@@ -1386,9 +1668,8 @@ fn clip_infinite_edge(
         } else {
             segments[cell2.source_index().usize()]
         };
-        // boost's low and high: the segment's ends in (x, y) order.
-        let (lo, hi) =
-            if (s[0], s[1]) <= (s[2], s[3]) { ([s[0], s[1]], [s[2], s[3]]) } else { ([s[2], s[3]], [s[0], s[1]]) };
+        // boost's low and high: a segment_data's first end and its second.
+        let (lo, hi) = ([s[0], s[1]], [s[2], s[3]]);
         [f64::from(hi[1] - lo[1]), f64::from(lo[0] - hi[0])]
     };
     let koef = bbox_max / direction[0].abs().max(direction[1].abs());
@@ -2252,6 +2533,59 @@ mod tests {
         // 0.1 mm of unpainted between two stretches in 1: painted 1.
         let out = filter_colorized(vec![l(0, 20_000, 1), l(20_000, 21_000, 0), l(21_000, 40_000, 1), l(40_000, 0, 0)]);
         assert_eq!(out.iter().map(|c| c.color).collect::<Vec<_>>(), vec![1, 1, 1, 0]);
+    }
+
+    #[test]
+    fn a_stretch_painted_partway_along_an_edge_takes_its_side_of_the_island() {
+        // A 9.67 by 20 mm island whose left edge is painted (2) from its bottom corner to halfway up: boost's diagram
+        // has no vertex where the paint ends (Orca rebuilds it turned by 30°), and the edge from there must run
+        // inside. The paint takes what is nearer its stretch: a trapezoid from that edge's ends to the middle line,
+        // 4.83 mm wide, 10.33 mm tall at the edge and 5.5 at the middle.
+        let corners = [
+            (1_380_000, 1_380_000),
+            (1_283_333, 1_380_000),
+            (1_283_333, 1_283_333),
+            (1_283_333, 1_180_000),
+            (1_380_000, 1_180_000),
+        ];
+        let colours = [0, 0, 2, 0, 0];
+        let mut poly: Vec<ColoredLine> = (0..5)
+            .map(|i| {
+                let (a, b) = (corners[i], corners[(i + 1) % 5]);
+                colored(Line::new([a.0, a.1], [b.0, b.1]), colours[i])
+            })
+            .collect();
+        for (k, l) in poly.iter_mut().enumerate() {
+            l.local = k;
+        }
+        let segments: Vec<[i32; 4]> = poly
+            .iter()
+            .map(|l| [l.line.a[0] as i32, l.line.a[1] as i32, l.line.b[0] as i32, l.line.b[1] as i32])
+            .collect();
+        let plain = diagram_of(&segments).expect("a diagram");
+        let xy = points_of(&plain);
+        assert!(faulty(&plain, &xy, &segments), "boost's own diagram has no fault");
+        // In it, the edges from the middle line's vertex out through where the paint ends run left across the
+        // outline, as Orca clips them (`clip_infinite_edge`, a segment's ends as boost keeps them).
+        let through = |e: &boostvoronoi::prelude::Edge| {
+            let one = vertex0(&plain, e.id()).is_some() != vertex1(&plain, e.id()).is_some();
+            let at = vertex0(&plain, e.id()).or(vertex1(&plain, e.id())).map(|v| xy[v.usize()]);
+            one && at.is_some_and(|q| (q[1] - 1_283_333.0).abs() < 1.0)
+        };
+        let mut crossing = 0;
+        for e in plain.edges().iter().filter(|e| through(e)) {
+            let line = clip_infinite_edge(&plain, &segments, e.id().usize(), 1e6, &|v: VertexIndex| xy[v.usize()])
+                .expect("clipped");
+            assert!(line[0][0].min(line[1][0]) < 1_283_333.0 - 1e5, "{line:?} stays inside");
+            crossing += 1;
+        }
+        assert!(crossing > 0);
+        let island: Shape = vec![corners.iter().map(|&(x, y)| geom::pt(x as i32, y as i32)).collect()];
+        let out = split_island(&island, &[poly], 3);
+        let (painted, rest) = (geom::area_mm2(&out[2]), geom::area_mm2(&out[0]));
+        let expected = (9.6667 / 2.0) * (10.3333 + 5.5) / 2.0;
+        assert!((painted - expected).abs() < 0.01, "{painted} mm² painted");
+        assert!((painted + rest - 9.6667 * 20.0).abs() < 0.01, "{rest} mm² left");
     }
 
     #[test]
