@@ -66,6 +66,16 @@ jobs:
           ./target/release/spaghetti-slicer --setup /tmp/brim.json tests/models/bridge.stl -o /tmp/brim.gcode.3mf
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/brim-wasm.gcode.3mf --setup /tmp/brim.json tests/models/bridge.stl
           cmp /tmp/brim.gcode.3mf /tmp/brim-wasm.gcode.3mf
+      - name: The same, a plate in two filaments over a prime tower
+        run: |
+          echo '{"filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}' > /tmp/two.json
+          ./target/release/spaghetti-slicer --setup /tmp/two.json tests/models/two-colours.3mf -o /tmp/two.gcode.3mf --gcode /tmp/two.gcode
+          grep -q '; FEATURE: Prime tower' /tmp/two.gcode
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/two-wasm.gcode.3mf --setup /tmp/two.json tests/models/two-colours.3mf
+          cmp /tmp/two.gcode.3mf /tmp/two-wasm.gcode.3mf
+          ./target/release/spaghetti-slicer --setup /tmp/two.json --filaments 1,2 tests/models/bridge.stl tests/models/bridge.stl -o /tmp/two-stl.gcode.3mf
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/two-stl-wasm.gcode.3mf --setup /tmp/two.json --filaments 1,2 tests/models/bridge.stl tests/models/bridge.stl
+          cmp /tmp/two-stl.gcode.3mf /tmp/two-stl-wasm.gcode.3mf
       - name: The same, with normal supports under the bridge
         run: |
           echo '{"process": {"enable_support": "1", "support_type": "normal(auto)"}}' > /tmp/supports.json

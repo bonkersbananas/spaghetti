@@ -11,6 +11,11 @@ const MARGIN: f64 = 0.1;
 
 /// RGBA pixels, `size` × `size`.
 pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
+    render_each(meshes, size, &vec![colour; meshes.len()])
+}
+
+/// `render`, each mesh in its own colour (a plate in several filaments).
+pub fn render_each(meshes: &[Mesh], size: usize, colours: &[&str]) -> Vec<u8> {
     let big = size * SUPERSAMPLE;
     let az = AZIMUTH.to_radians();
     let el = ELEVATION.to_radians();
@@ -23,7 +28,7 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
     ];
     let key = normalize([-0.45, -0.6, 0.75]);
     let fill = normalize([0.7, -0.2, 0.3]);
-    let base = rgb(colour);
+    let bases: Vec<[u8; 3]> = (0..meshes.len()).map(|m| rgb(colours.get(m).copied().unwrap_or("#F2754E"))).collect();
 
     let (mut min_x, mut max_x, mut min_y, mut max_y) =
         (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
@@ -134,6 +139,7 @@ pub fn render(meshes: &[Mesh], size: usize, colour: &str) -> Vec<u8> {
                 m += 1;
             }
             let mesh = &meshes[m];
+            let base = bases[m];
             let [a, b, c] = mesh.triangles[i - first[m]].map(|v| mesh.vertices[v as usize]);
             let u = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
             let w = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];

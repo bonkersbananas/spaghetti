@@ -48,6 +48,12 @@ struct Soup<'a> {
 /// Cuts the meshes at every layer's plane; returns each layer's region (outlines with holes), simplified to
 /// `resolution` mm, and for each of its shapes the mesh (object) it is a slice of.
 pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> (Vec<Shapes>, Vec<Vec<u32>>) {
+    slice_objects(meshes, layers, resolution, false)
+}
+
+/// `slice`, each mesh's outlines kept to itself when `apart` (as Orca slices each object on its own): objects that
+/// touch, like the parts of a model in several filaments, stay apart instead of merging into one.
+pub fn slice_objects(meshes: &[Mesh], layers: &Layers, resolution: f64, apart: bool) -> (Vec<Shapes>, Vec<Vec<u32>>) {
     let planes = layers.slice_z();
     let n_layers = planes.len();
     let mut vertex_base = Vec::with_capacity(meshes.len());
@@ -88,7 +94,7 @@ pub fn slice(meshes: &[Mesh], layers: &Layers, resolution: f64) -> (Vec<Shapes>,
     let tolerance = (resolution * SCALE / 2.0).max(1.0) as i32;
     par::map_range(n_layers, |l| {
         let triangles = &items[starts[l]..starts[l + 1]];
-        cut_layer(&soup, triangles, planes[l], tolerance)
+        cut_layer(&soup, triangles, planes[l], tolerance, apart)
     })
     .into_iter()
     .unzip()
@@ -119,7 +125,7 @@ struct Segment {
 
 type EdgeMap = HashMap<u64, u32, BuildHasherDefault<FastHasher>>;
 
-fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) -> (Shapes, Vec<u32>) {
+fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32, apart: bool) -> (Shapes, Vec<u32>) {
     let mut segments: Vec<Segment> = Vec::with_capacity(triangles.len());
     for &(mi, ti) in triangles {
         let mesh = &soup.meshes[mi as usize];
@@ -222,6 +228,21 @@ fn cut_layer(soup: &Soup, triangles: &[(u32, u32)], plane: f64, tolerance: i32) 
         .map(|(c, mesh)| (geom::simplify_contour(c, tolerance), *mesh))
         .filter(|(c, _)| c.len() >= 3)
         .unzip();
+    if apart && meshes.iter().any(|&m| m != meshes[0]) {
+        let mut ids = meshes.clone();
+        ids.sort_unstable();
+        ids.dedup();
+        let mut shapes = Vec::new();
+        let mut owners = Vec::new();
+        for id in ids {
+            let mine: Vec<Contour> =
+                loops.iter().zip(&meshes).filter(|(_, m)| **m == id).map(|(c, _)| c.clone()).collect();
+            let union = geom::union_contours(&mine);
+            owners.extend(std::iter::repeat_n(id, union.len()));
+            shapes.extend(union);
+        }
+        return (shapes, owners);
+    }
     let shapes = geom::union_contours(&loops);
     let owners = owners(&shapes, &loops, &meshes);
     (shapes, owners)

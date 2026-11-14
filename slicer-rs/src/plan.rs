@@ -65,6 +65,7 @@ impl Path {
     }
 }
 
+#[derive(Default)]
 pub struct LayerPlan {
     /// The G-code layer's index (counting the support's own layers).
     pub index: usize,
@@ -78,6 +79,8 @@ pub struct LayerPlan {
     pub paths: Vec<Path>,
     /// Each object's support areas on the layer: a travel to support that stays inside one needn't retract.
     pub support_islands: Vec<(u32, Shapes)>,
+    /// With several filaments, where the prime tower is visited (and the filament changed) between the paths.
+    pub visits: Vec<crate::toolchange::Visit>,
 }
 
 /// The kind of each infill region, in the order they print.
@@ -103,6 +106,23 @@ pub fn plan_layer(
     supports: &[Option<&support::Layer>],
     s: &Settings,
 ) -> LayerPlan {
+    plan_layer_of(None, r, lower, i, (z, h), centres, brims, supports, s)
+}
+
+/// `plan_layer` for some of the objects only (`only[o]`, all when None): those printing with one filament.
+#[allow(clippy::too_many_arguments)]
+pub fn plan_layer_of(
+    only: Option<&[bool]>,
+    r: &LayerRegions,
+    lower: Option<&LayerRegions>,
+    i: usize,
+    (z, h): (f64, f64),
+    centres: &[(f64, f64)],
+    brims: &[Vec<Contour>],
+    supports: &[Option<&support::Layer>],
+    s: &Settings,
+) -> LayerPlan {
+    let takes = |o: u32| only.is_none_or(|only| only.get(o as usize).copied().unwrap_or(false));
     // Each object's layer below, where it differs from this one (where it doesn't, nothing hangs).
     let mut below: Vec<Option<Below>> = Vec::new();
     if let Some(lower) = lower
@@ -127,6 +147,9 @@ pub fn plan_layer(
         .zip(&r.fills)
         .enumerate()
         .map(|(k, (island, fills))| {
+            if !takes(island.object) {
+                return Vec::new();
+            }
             let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
             let under = below.get(island.object as usize).and_then(Option::as_ref);
             let trees = r.lightning.get(island.object as usize).map_or(&[][..], Vec::as_slice);
@@ -137,7 +160,10 @@ pub fn plan_layer(
     let mut nodes: Vec<(Option<usize>, u32)> =
         (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).map(|k| (Some(k), r.islands[k].object)).collect();
     for (o, layer) in supports.iter().enumerate() {
-        if layer.is_some_and(|l| !l.items.is_empty()) && !nodes.iter().any(|&(_, object)| object as usize == o) {
+        if takes(o as u32)
+            && layer.is_some_and(|l| !l.items.is_empty())
+            && !nodes.iter().any(|&(_, object)| object as usize == o)
+        {
             nodes.push((None, o as u32));
         }
     }
@@ -164,6 +190,7 @@ pub fn plan_layer(
         let (k, object) = nodes[t];
         if let Some(Some(layer)) = supports.get(object as usize)
             && !visited[object as usize]
+            && takes(object)
         {
             // Orca reckons the nozzle at the layer's start where the layer before ended, which is planned apart:
             // the plate's origin, where the tour ends, stands in for it.
@@ -180,12 +207,22 @@ pub fn plan_layer(
             paths.append(&mut per_island[k]);
         }
     }
-    if i == 0 && brims.iter().any(|b| !b.is_empty()) {
-        paths = with_brims(paths, brims, h, s);
+    if i == 0 && brims.iter().enumerate().any(|(o, b)| takes(o as u32) && !b.is_empty()) {
+        match only {
+            None => paths = with_brims(paths, brims, h, s),
+            Some(_) => {
+                let mine: Vec<Vec<Contour>> = brims
+                    .iter()
+                    .enumerate()
+                    .map(|(o, b)| if takes(o as u32) { b.clone() } else { Vec::new() })
+                    .collect();
+                paths = with_brims(paths, &mine, h, s);
+            }
+        }
     }
     let support_islands =
         supports.iter().enumerate().filter_map(|(o, l)| l.map(|l| (o as u32, l.islands.clone()))).collect();
-    LayerPlan { index: i, id: i, z, height: h, header_height: h as f32, paths, support_islands }
+    LayerPlan { index: i, id: i, z, height: h, header_height: h as f32, paths, support_islands, visits: Vec::new() }
 }
 
 /// A support layer's extrusions as Orca prints them on an object's first visit (`extrude_support`): chained from
@@ -929,6 +966,8 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
         Role::Brim => (s.first_layer_width, s.first_layer_speed),
         Role::Support => (s.support.line_width, s.support_speed),
         Role::SupportInterface => (s.support.line_width, s.support_interface_speed),
+        // The tower writes its own G-code (`wipe_tower.rs`).
+        Role::PrimeTower => (s.line_width, s.travel_speed),
         Role::OverhangWall => {
             let f = s.overhang_wall_flow(h);
             return (f.width, f.mm3_per_mm, s.bridge_speed);
