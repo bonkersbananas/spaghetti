@@ -206,11 +206,15 @@ pub fn regions(
     }
     let group_of = |o: u32| group.get(o as usize).copied().unwrap_or(o);
     let mixed = crate::parts::mixed(group);
-    // The first layer is pulled in a little against elephant's foot: each shape that leaves lies inside the one it
-    // came from, and belongs to its object (an object of several regions, round all of them, `parts::pull_first`).
-    // Not on a raft, as Orca's isn't.
+    // The first layer is pulled in against elephant's foot, as Orca compensates it (`elephant.rs`): where a shape is
+    // wide enough for the first layer's outer wall, its spacing and the compensation on both sides, by the whole of it,
+    // less where it narrows. Each shape that leaves lies inside the one it came from, and belongs to its object (an
+    // object of several regions, round all of them, `parts::pull_first`). Not on a raft, as Orca's isn't.
+    let first_width = s.first_layer_width;
+    let min_width = first_width + Settings::spacing(first_width, layers.height.first().copied().unwrap_or(0.0));
+    let compensate = |shapes: &Shapes| crate::elephant::compensate_shapes(shapes, min_width, s.elephant_foot);
     let pull = |slice: &Shapes, owners: &[u32]| -> (Shapes, Vec<u32>) {
-        let pulled = geom::offset(slice, -s.elephant_foot);
+        let pulled = compensate(slice);
         let objects = pulled.iter().map(|shape| owner_within(shape, slice, owners)).collect();
         (pulled, objects)
     };
@@ -218,7 +222,7 @@ pub fn regions(
         let (slice, objects) = if s.on_plate(i) && s.elephant_foot > 0.0 {
             if mixed {
                 let closing = s.slice_closing_radius;
-                crate::parts::pull_first(&slices[0], &owners[0], group, s.elephant_foot, closing, pull)
+                crate::parts::pull_first(&slices[0], &owners[0], group, closing, compensate, pull)
             } else {
                 pull(&slices[0], &owners[0])
             }

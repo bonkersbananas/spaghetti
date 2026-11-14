@@ -8,6 +8,7 @@ pub mod base_support;
 pub mod bridges;
 pub mod brim;
 pub mod config;
+pub mod elephant;
 pub mod filaments;
 pub mod fill;
 pub mod fmath;

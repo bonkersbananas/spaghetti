@@ -624,7 +624,10 @@ fn island_paths(
         if (geom::area_mm2(island_inner) - geom::area_mm2(region)).abs() < 1e-3 {
             return grown;
         }
-        let others = geom::difference(island_inner, region);
+        // What else fills the island: not the hairline slivers the booleans leave between the region and the inner
+        // area when they are one, which no line fits in and which would cut every line short of the walls.
+        let mut others = geom::difference(island_inner, region);
+        others.retain(|shape| geom::shape_area_mm2(shape) >= 1e-3);
         if others.is_empty() { grown } else { geom::difference(&grown, &others) }
     };
     let origin = (centre.0, centre.1);
