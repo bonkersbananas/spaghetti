@@ -168,15 +168,20 @@ test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's
     await page.reload();
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
 
-    // A project made for the X2D that asks for a raft under its tree supports, which ours can't build yet:
-    // OrcaSlicer's engine slices it.
-    const raft = await ideaWithModel(page, "Block on a raft", "raft.3mf", raftProject({ enable_support: "1" }));
+    // A project made for the X2D that asks for a raft under hybrid trees, Orca's classic ones, whose rafts ours
+    // can't build yet (it builds them under organic trees since release 20): OrcaSlicer's engine slices it.
+    const raft = await ideaWithModel(
+      page,
+      "Block on a raft",
+      "raft.3mf",
+      raftProject({ enable_support: "1", support_style: "tree_hybrid" }),
+    );
     await expect(
-      raft.files.getByText("Sliced by OrcaSlicer: our own slicer can't do a raft under tree supports yet"),
+      raft.files.getByText("Sliced by OrcaSlicer: our own slicer can't do a raft in this style of tree support yet"),
     ).toBeVisible({ timeout: SLICED });
     const fallback = (await fileOf(page, raft.id)).slice;
     expect(fallback.settings.slicer).toBe("orca");
-    expect(fallback.fallback).toEqual({ why: "unsupported", what: "a raft under tree supports" });
+    expect(fallback.fallback).toEqual({ why: "unsupported", what: "a raft in this style of tree support" });
     // What was asked for stays: the next slice asks ours again.
     expect(fallback.settings.slicing.slicer).toBe("spaghetti");
   } finally {
@@ -448,14 +453,16 @@ test("a project in spiral vase mode is sliced by ours", async ({ page }) => {
   }
 });
 
-test("a project on a raft is sliced by ours, with supports off or normal ones", async ({ page }) => {
-  test.setTimeout(3 * SLICED);
+test("a project on a raft is sliced by ours, with supports off, normal ones or organic trees", async ({ page }) => {
+  test.setTimeout(4 * SLICED);
   await signIn(page);
   try {
     await setDefaults(page, { slicer: "spaghetti" });
     for (const [label, settings] of [
       ["supports off", {}],
       ["normal supports", { enable_support: "1", support_type: "normal(auto)" }],
+      // The X2D's own supports: organic trees, which stand on the plate through the raft (since release 20).
+      ["organic trees", { enable_support: "1" }],
     ] as const) {
       const { id } = await ideaWithModel(page, `Block on a raft, ${label}`, "raft.3mf", raftProject(settings));
       await expect
