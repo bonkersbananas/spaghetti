@@ -66,6 +66,7 @@ async function* stlVertices(
   try {
     let carry = new Uint8Array(0);
     let binary: boolean | null = null;
+    let remaining = 0;
     let text = "";
     const decoder = new TextDecoder();
     const pending: number[] = [];
@@ -83,7 +84,9 @@ async function* stlVertices(
           continue;
         }
         const triangles = joined.length >= 84 ? new DataView(joined.buffer, joined.byteOffset).getUint32(80, true) : 0;
-        binary = size === 84 + 50 * triangles;
+        // Binary when the header's count fits the file: padding after the triangles is allowed (ASCII's bytes 80-83 are text, a count far too big).
+        binary = triangles > 0 && size >= 84 + 50 * triangles;
+        remaining = triangles;
         carry = new Uint8Array(0);
         chunk = binary ? joined.subarray(84) : joined;
       }
@@ -91,13 +94,14 @@ async function* stlVertices(
         const joined = new Uint8Array(carry.length + chunk.length);
         joined.set(carry);
         joined.set(chunk, carry.length);
-        const whole = joined.length - (joined.length % 50);
+        const whole = Math.min(joined.length - (joined.length % 50), remaining * 50);
+        remaining -= whole / 50;
         const view = new DataView(joined.buffer, joined.byteOffset, joined.length);
         const coords: number[] = [];
         for (let at = 0; at < whole; at += 50) {
           for (let k = 0; k < 9; k++) coords.push(view.getFloat32(at + 12 + k * 4, true));
         }
-        carry = joined.slice(whole);
+        carry = remaining > 0 ? joined.slice(whole) : new Uint8Array(0);
         const out = emit(coords);
         if (out) yield out;
       } else {

@@ -59,6 +59,15 @@ describe("an STL wrapped in a 3MF", () => {
     expect(flat).toEqual(TRIANGLES.flat().map(Math.fround));
   });
 
+  it("reads a binary STL that has padding after its triangles", async () => {
+    const stl = binaryStl(TRIANGLES);
+    const padded = new Uint8Array(stl.length + 17);
+    padded.set(stl);
+    padded.fill(7, stl.length);
+    const { triangles } = mesh(await collect(stlTo3mf(streamOf(padded, 60), padded.length)));
+    expect(triangles).toHaveLength(3);
+  });
+
   it("reads an ASCII STL and drops triangles that aren't numbers", async () => {
     const text = `solid t\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 0\n   vertex 1 0 0\n   vertex 0 1.5 0\n  endloop\n endfacet\n facet normal 0 0 1\n  outer loop\n   vertex nan 0 0\n   vertex 1 0 0\n   vertex 0 1 0\n  endloop\n endfacet\nendsolid t\n`;
     const bytes = new TextEncoder().encode(text);
