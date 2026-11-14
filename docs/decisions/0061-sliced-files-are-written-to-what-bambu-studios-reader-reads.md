@@ -1,0 +1,12 @@
+# 0061. Sliced files are written to what Bambu Studio's reader reads
+
+Status: Accepted (extends [0058](0058-open-in-bambu-studio-by-a-signed-link.md))
+
+**Decision:** Every `.gcode.3mf` Spaghetti hands over, from OrcaSlicer's engine (`gcode3mf.ts`) or from our own slicer (`pack.rs`), is checked against what Bambu Studio's own reader does with each entry (bbs_3mf.cpp, `PartPlateList::load_from_3mf_structure`, `PresetBundle::load_config_file_config` and `validate_presets`, `SelectMachineDialog`), not only against what Orca writes. `test/unit/slicing/bambu-rules.ts` holds the rules, each with the reason from the source; a writer that breaks one fails its test.
+
+- **Presets by their names:** Studio opens a file without a "Customized Preset" question only when `printer_settings_id` and each `filament_settings_id` are its own system presets (the X2D's are: `Bambu Lab X2D 0.4 nozzle`, `Bambu PLA Basic @BBL X2D 0.4 nozzle`), and without "Modified G-codes" only when `different_settings_to_system` names no G-code setting.
+- **Filament ids:** the AMS mapping and the printer match a file's filaments to trays by Bambu's own id (`GFA00` for Bambu PLA Basic: `tray_info_idx` in slice_info and `filament_ids` in the project settings), which Orca's presets don't carry; `bambu-ids.ts` has them from Studio's profiles. A filament Studio has no id for gets none.
+- **Printer id:** a file's `printer_model_id` is the X2D's `N6`; an empty one makes Studio's send dialog say the printer is incompatible with the file.
+- **One extruder variant:** the X2D's `extruder_variant_list` makes Studio expect every per-filament list expanded per extruder variant, else it refuses the file ("Invalid configuration file"); ours are one entry per filament, so the key is left out of what is written.
+- **Objects:** slice_info and plate_1.json list the objects by the ids the G-code labels them with (`; model label id:`), which the printer skips them by.
+- **Not settled without a real file:** whether Studio shows the plate's "Print plate" ready and no dirty-preset mark for a file that holds only some of the settings (ours writes the keys it reads, over Studio's defaults for the rest). A `.gcode.3mf` sliced by Bambu Studio itself for the X2D would settle it.

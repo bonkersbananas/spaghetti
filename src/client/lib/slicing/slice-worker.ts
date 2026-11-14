@@ -279,7 +279,13 @@ async function run(request: SliceRequest) {
         ...(png ? { thumbnail: new Uint8Array(await png.arrayBuffer()) } : {}),
         seconds: result.stats.printTimeSeconds ?? summary.seconds,
         grams: result.stats.filamentG ?? null,
-        objects: objects.map((object) => ({ name: object.name, box: boundsOf(object.positions) })),
+        layers: summary.layers,
+        objects: objects.map((object, index) => ({
+          name: object.name,
+          box: boundsOf(object.positions),
+          // The ids Orca labels the objects with in the G-code, which the printer skips them by.
+          ...(summary.labels.length === objects.length ? { id: summary.labels[index] as number } : {}),
+        })),
         settings: mergedSettings(setup),
         filaments: setup.filaments.map((filament, index) => ({
           type: first(filament.filament_type) ?? "PLA",

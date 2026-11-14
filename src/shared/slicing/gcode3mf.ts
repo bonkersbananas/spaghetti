@@ -1,5 +1,6 @@
 import { strToU8, type Zippable, zipSync } from "fflate";
 import type { Box } from "./arrange.ts";
+import { BAMBU_PRINTER_MODEL_IDS, bambuFilamentId } from "./bambu-ids.ts";
 import { md5Hex } from "./md5.ts";
 
 /**
@@ -20,6 +21,11 @@ export interface PackedFilament {
   colour: string;
   usedGrams?: number;
   usedMeters?: number;
+  /**
+   * Bambu's id of the filament ("GFA00", `tray_info_idx`): what Bambu Studio's AMS mapping and the printer match
+   * against the tray's. Taken from the preset's name in `settings.filament_settings_id` when not given.
+   */
+  trayInfoIdx?: string;
 }
 
 export interface Gcode3mfInput {
@@ -29,8 +35,10 @@ export interface Gcode3mfInput {
   /** The engine's estimate for the whole print, in seconds. */
   seconds: number | null;
   grams: number | null;
+  /** How many layers the G-code has, for the plate's list of filaments by layer. */
+  layers?: number | null;
   /** The objects as placed on the plate. */
-  objects: { name: string; box: Box }[];
+  objects: { name: string; box: Box; id?: number }[];
   /** Every setting the plate was sliced with (machine, process and filaments together), in Orca's text. */
   settings: Config;
   filaments: PackedFilament[];
@@ -58,8 +66,32 @@ const xml = (value: string) =>
 const first = (value: ConfigValue | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
 const round = (value: number, places: number) => Math.round(value * 10 ** places) / 10 ** places;
 
+/**
+ * What Bambu Studio can't take from a config of the X2D's: `extruder_variant_list` makes its reader expect every
+ * per-filament list in the file expanded to one entry per extruder variant (with `filament_self_index` saying which
+ * filament each belongs to), and it refuses the whole file ("Invalid configuration file") when they aren't; ours
+ * are one entry per filament. Without the key it reads them as the single-variant lists they are.
+ */
+const VARIANT_KEYS = ["extruder_variant_list"];
+
+/** The project settings as the file holds them: Studio's `filament_ids`, and nothing that expects variants. */
+function projectSettings(input: Gcode3mfInput): Config {
+  const out: Config = { ...input.settings };
+  for (const key of VARIANT_KEYS) delete out[key];
+  const names = [out.filament_settings_id ?? []].flat();
+  out.filament_ids = input.filaments.map(
+    (filament, index) => filament.trayInfoIdx ?? bambuFilamentId(names[index] ?? ""),
+  );
+  return out;
+}
+
+const EXTRUDER_TYPES: Record<string, string> = { "Direct Drive": "0", Bowden: "1" };
+
 export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
   const { settings } = input;
+  const project = projectSettings(input);
+  const printerModelId = BAMBU_PRINTER_MODEL_IDS[first(settings.printer_model) ?? ""] ?? "";
+  const extruderTypes = [settings.extruder_type ?? "Direct Drive"].flat().map((type) => EXTRUDER_TYPES[type] ?? "0");
   const nozzles = [settings.nozzle_diameter ?? "0.4"].flat();
   const supportUsed = first(settings.enable_support) === "1";
   const bedType = first(settings.curr_bed_type) ?? "Textured PEI Plate";
@@ -151,29 +183,57 @@ export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
         "  </header>",
         "  <plate>",
         '    <metadata key="index" value="1"/>',
+        `    <metadata key="extruder_type" value="${extruderTypes.join(" ")}"/>`,
+        '    <metadata key="nozzle_volume_type" value="0"/>',
+        `    <metadata key="printer_model_id" value="${xml(printerModelId)}"/>`,
         `    <metadata key="nozzle_diameters" value="${xml(nozzles.join(","))}"/>`,
+        ...(first(settings.timelapse_type) !== undefined
+          ? [`    <metadata key="timelapse_type" value="${xml(first(settings.timelapse_type) ?? "0")}"/>`]
+          : []),
         ...(input.seconds !== null ? [`    <metadata key="prediction" value="${Math.round(input.seconds)}"/>`] : []),
         ...(input.grams !== null ? [`    <metadata key="weight" value="${round(input.grams, 2)}"/>`] : []),
         '    <metadata key="outside" value="false"/>',
         `    <metadata key="support_used" value="${supportUsed}"/>`,
-        '    <metadata key="label_object_enabled" value="true"/>',
+        `    <metadata key="label_object_enabled" value="${input.objects.length < 64}"/>`,
+        '    <metadata key="enable_filament_dynamic_map" value="false"/>',
+        '    <metadata key="has_filament_switcher" value="false"/>',
+        `    <metadata key="filament_maps" value="${input.filaments.map(() => "1").join(" ")}"/>`,
+        `    <metadata key="limit_filament_maps" value="${input.filaments.map(() => "0").join(" ")}"/>`,
         ...input.objects.map(
-          (object, index) => `    <object identify_id="${index + 1}" name="${xml(object.name)}" skipped="false"/>`,
+          (object, index) =>
+            `    <object identify_id="${object.id ?? index + 1}" name="${xml(object.name)}" skipped="false"/>`,
         ),
         ...input.filaments.map(
           (filament, index) =>
-            `    <filament id="${index + 1}" type="${xml(filament.type)}" color="${xml(filament.colour)}" used_m="${round(filament.usedMeters ?? 0, 2)}" used_g="${round(filament.usedGrams ?? 0, 2)}"/>`,
+            `    <filament id="${index + 1}" tray_info_idx="${xml([project.filament_ids ?? []].flat()[index] ?? "")}" type="${xml(filament.type)}" color="${xml(filament.colour)}" used_m="${round(filament.usedMeters ?? 0, 2)}" used_g="${round(filament.usedGrams ?? 0, 2)}" group_id="0" nozzle_diameter="${Number(nozzles[0]) || 0.4}" volume_type="Standard" used_for_object="true" used_for_support="false"/>`,
         ),
+        `    <nozzle id="0" extruder_id="1" nozzle_diameter="${Number(nozzles[0]) || 0.4}" volume_type="Standard"/>`,
+        "    <layer_filament_lists>",
+        ...(input.layers
+          ? [
+              `      <layer_filament_list filament_list="${input.filaments.map((_, index) => index).join(" ")}" layer_ranges="0 ${Math.max(0, input.layers - 1)}" />`,
+            ]
+          : []),
+        "    </layer_filament_lists>",
         "  </plate>",
         "</config>",
         "",
       ].join("\n"),
     ),
+    "Metadata/filament_sequence.json": strToU8(
+      JSON.stringify({
+        plate_1: {
+          nozzle_sequence: input.filaments.map(() => 0),
+          optimal_assignment: input.filaments.map(() => 0),
+          sequence: input.filaments.map((_, index) => index + 1),
+        },
+      }),
+    ),
     "Metadata/plate_1.json": strToU8(
       JSON.stringify({
         bbox_all: bboxAll,
         bbox_objects: input.objects.map((object, index) => ({
-          id: index + 1,
+          id: object.id ?? index + 1,
           name: object.name,
           bbox: [object.box.min[0], object.box.min[1], object.box.max[0], object.box.max[1]],
           layer_height: Number(first(settings.layer_height)) || 0.2,
@@ -187,7 +247,7 @@ export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
         version: 2,
       }),
     ),
-    "Metadata/project_settings.config": strToU8(JSON.stringify(input.settings, null, 4)),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project, null, 4)),
   };
   if (input.thumbnail) files["Metadata/plate_1.png"] = [input.thumbnail, { level: 0 }];
   return zipSync(files, { level: 6 });
@@ -210,6 +270,8 @@ function bedTypeKey(bedType: string): string {
 export interface GcodeSummary {
   seconds: number | null;
   layers: number | null;
+  /** The ids the G-code labels its objects with (`; model label id: 22,23`), which the printer skips them by. */
+  labels: number[];
   /** Per filament, in the slicer's order. */
   grams: number[];
   millimetres: number[];
@@ -231,6 +293,10 @@ export function summarizeGcode(gcode: Uint8Array): GcodeSummary {
   return {
     seconds: total ? durationSeconds(total) : null,
     layers: layers ? Number(layers) : null,
+    labels: (/; model label id: ([\d,\s]+)/.exec(head)?.[1] ?? "")
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value > 0),
     grams: list(/; filament used \[g\] = ([^\n]+)/),
     millimetres: list(/; filament used \[mm\] = ([^\n]+)/),
   };
