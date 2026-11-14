@@ -421,8 +421,9 @@ const RACK = {
   ]),
 };
 const RACK_IDEA = { title: "Pasta drying rack", note: "A little rack to dry fresh tagliatelle on, one arm out." };
-/** A project for the X2D that asks for a raft under its tree supports, which our own slicer can't build yet. */
-const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject({ enable_support: "1" }) };
+/** A project for the X2D that asks for a raft under hybrid trees, Orca's classic ones, which our own slicer can't
+ * build yet. */
+const RAFT = { name: "ravioli-stamp.3mf", bytes: raftProject({ enable_support: "1", support_style: "tree_hybrid" }) };
 const TWO_TONE = { name: "two-tone-coaster.3mf", bytes: partsProject() };
 const TWO_TONE_IDEA = {
   title: "Two-tone coaster",
@@ -2315,7 +2316,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Ours picked, for a project that asks for a raft under its tree supports, which it can't build yet: OrcaSlicer's
+    // Ours picked, for a project that asks for a raft under hybrid trees, which it can't build yet: OrcaSlicer's
     // engine sliced it, and the card says why in one line.
     name: "idea-model-stepped-in",
     path: "/ideas",
