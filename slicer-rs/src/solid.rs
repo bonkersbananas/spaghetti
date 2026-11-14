@@ -401,6 +401,9 @@ impl Beading {
     }
 }
 
+/// mm: the shortest segment Arachne's simplification keeps in a line (`meshfix_maximum_resolution`).
+const ARACHNE_RESOLUTION: f64 = 0.5;
+
 /// The middle of a narrow region and its width there: where the odd beads run, and how wide the band is beside a
 /// loop.
 struct Axis {
@@ -688,7 +691,8 @@ fn bead(contour: &[Pt], level: usize, beading: &Beading, axis: &Axis) -> ThickPa
 }
 
 /// The points between `a` and `b` (each with its bead's width and shift) where the width bends away from a straight
-/// run between theirs by more than a twentieth of a bead, found by halving the side, moved in as the bead goes.
+/// run between theirs by more than a twentieth of a bead, found by halving the side, moved in as the bead goes; no
+/// closer together than Arachne's simplification leaves its lines' points (`ARACHNE_RESOLUTION`).
 fn along(
     path: &mut ThickPath,
     a: (Pt, (f64, f64)),
@@ -697,7 +701,7 @@ fn along(
     s: f64,
     deep: u32,
 ) {
-    if deep >= 6 || geom::dist(a.0, b.0) < s * geom::SCALE {
+    if deep >= 6 || geom::dist(a.0, b.0) < (2.0 * ARACHNE_RESOLUTION).max(s) * geom::SCALE {
         return;
     }
     let m = geom::pt(((a.0.x as i64 + b.0.x as i64) / 2) as i32, ((a.0.y as i64 + b.0.y as i64) / 2) as i32);
