@@ -128,10 +128,17 @@ mod tests {
         // The X2D's supports are organic trees, which slice, as normal ones do; not the other styles of tree, nor
         // snug normal ones or those on the plate only.
         assert!(read(r#"{"process": {"enable_support": "1"}}"#).is_ok());
-        assert_eq!(
-            refused(r#"{"process": {"enable_support": "1", "support_style": "tree_hybrid"}}"#),
-            Some(Error::Unsupported("this style of tree support"))
-        );
+        // By the names the app's settings give them, as the app says "our own slicer can't do … yet".
+        for (style, what) in [
+            ("tree_slim", "slim tree supports"),
+            ("tree_strong", "strong tree supports"),
+            ("tree_hybrid", "hybrid supports"),
+        ] {
+            assert_eq!(
+                refused(&format!(r#"{{"process": {{"enable_support": "1", "support_style": "{style}"}}}}"#)),
+                Some(Error::Unsupported(what))
+            );
+        }
         assert_eq!(
             refused(r#"{"process": {"enable_support": "1", "support_base_pattern": "rectilinear"}}"#),
             Some(Error::Unsupported("this support pattern"))
@@ -140,10 +147,7 @@ mod tests {
             |more: &str| format!(r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)"{more}}}}}"#);
         assert!(read(&normal("")).is_ok());
         assert!(read(&normal(r#", "support_critical_regions_only": "1""#)).is_ok());
-        assert_eq!(
-            read(&normal(r#", "support_style": "snug""#)).err(),
-            Some(Error::Unsupported("this style of support"))
-        );
+        assert_eq!(read(&normal(r#", "support_style": "snug""#)).err(), Some(Error::Unsupported("snug supports")));
         assert_eq!(
             read(&normal(r#", "support_on_build_plate_only": "1""#)).err(),
             Some(Error::Unsupported("supports on the plate only"))
@@ -152,9 +156,10 @@ mod tests {
             read(r#"{"process": {"enable_support": "1", "support_type": "normal(manual)"}}"#).err(),
             Some(Error::Unsupported("supports painted on"))
         );
+        assert_eq!(refused(r#"{"process": {"brim_type": "brim_ears"}}"#), Some(Error::Unsupported("brim ears")));
         assert_eq!(
-            refused(r#"{"process": {"brim_type": "brim_ears"}}"#),
-            Some(Error::Unsupported("this kind of brim"))
+            refused(r#"{"process": {"brim_type": "outer_and_inner"}}"#),
+            Some(Error::Unsupported("a brim inside holes"))
         );
         assert_eq!(refused(r#"{"process": {"spiral_mode": "1"}}"#), Some(Error::Unsupported("spiral vase mode")));
         // A raft prints with supports off too.
