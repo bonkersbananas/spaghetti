@@ -269,12 +269,55 @@ pub fn arrange(meshes: &mut [Mesh], bed: [f64; 2], height: f64) -> Result<(), Er
 }
 
 /// Puts objects that already sit on the plate down on the bed (a project laid out by its slicer, or files placed
-/// for a benchmark): only the lowest point moves to z = 0, nothing else.
+/// for a benchmark): only the lowest point moves to z = 0, nothing else. One that `settle_heights` has put on the
+/// bed is on it to a float's step, and stays as Orca has it.
 pub fn drop_to_bed(meshes: &mut [Mesh]) {
     for m in meshes {
         let low = m.bounds().min[2];
-        if low.is_finite() {
+        if low.is_finite() && low.abs() > ON_BED {
             m.translate([0.0, 0.0, -low]);
+        }
+    }
+}
+
+/// mm: how far above or below the bed an object's lowest corner may be and count as on it.
+const ON_BED: f64 = 1e-4;
+
+/// Gives an object's corners the heights Orca slices them at. Orca holds each part of an object (`parts`: its
+/// corners' range, and how far the part's transform moves it up, mm) round the middle of its bounding box, moved
+/// there in floats (`ModelVolume::center_geometry_after_creation`); it drops the object onto the bed in doubles
+/// when `drop` (`ModelObject::ensure_on_bed`, which its command line runs for STL files and other programs' 3MF
+/// files); and it moves the corners back in floats when it slices (`make_trafo_for_slicing`). A corner can end a
+/// float's step from where the file put it, and a face at a layer's cutting height then lies under or over it as
+/// in Orca: the Benchy's lettering, 0.3 mm deep, ends just under the cut at 0.3 mm, so Orca bridges over it on its
+/// second layer. Only heights: Orca slices across in its own units.
+pub fn settle_heights(vertices: &mut [[f32; 3]], parts: &[(std::ops::Range<usize>, f64)], drop: bool) {
+    // Each part round the middle of its box (in floats), and where its transform then puts that middle (doubles).
+    let mut moves = Vec::with_capacity(parts.len());
+    let mut low = f64::INFINITY;
+    for (range, up) in parts {
+        let part = &mut vertices[range.clone()];
+        let (lo, hi) = part.iter().fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), v| (lo.min(v[2]), hi.max(v[2])));
+        if part.is_empty() || !lo.is_finite() || !hi.is_finite() {
+            moves.push(0.0);
+            continue;
+        }
+        let middle = (lo as f64 + hi as f64) / 2.0;
+        let back = -(middle as f32);
+        let mut part_low = f32::INFINITY;
+        for v in part.iter_mut() {
+            v[2] += back;
+            part_low = part_low.min(v[2]);
+        }
+        let to = middle + up;
+        low = low.min(part_low as f64 + to);
+        moves.push(to);
+    }
+    let lift = if drop && low.is_finite() { -low } else { 0.0 };
+    for ((range, _), to) in parts.iter().zip(moves) {
+        let to = (to + lift) as f32;
+        for v in &mut vertices[range.clone()] {
+            v[2] += to;
         }
     }
 }
@@ -330,5 +373,36 @@ impl Hasher for FastHasher {
     }
     fn write_usize(&mut self, n: usize) {
         self.write_u64(n as u64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn heights_take_orcas_float_round_trip() {
+        // A part 48 mm tall, as the Benchy: its lettering's ceiling at 0.3 mm comes back a float's step under 0.3 mm
+        // (where the second layer is cut), a deck at 8.5 mm exactly at 8.5, and its bottom on the bed.
+        let mut v = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.3], [0.0, 0.0, 8.5], [0.0, 0.0, 48.0]];
+        settle_heights(&mut v, &[(0..4, 0.0)], true);
+        assert_eq!(v[0][2], 0.0);
+        assert!(v[1][2] < 0.3f32 && v[1][2] > 0.29999, "{}", v[1][2]);
+        assert_eq!(v[2][2], 8.5);
+        assert_eq!(v[3][2], 48.0);
+    }
+
+    #[test]
+    fn a_floating_part_is_put_on_the_bed_unless_a_project_holds_it_there() {
+        let mut v = vec![[0.0, 0.0, 5.0], [0.0, 0.0, 15.0]];
+        settle_heights(&mut v, &[(0..2, 0.0)], true);
+        assert_eq!((v[0][2], v[1][2]), (0.0, 10.0));
+        // Two parts, the second lifted 2 mm by its transform: the object's lowest corner goes to the bed.
+        let mut v = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 3.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
+        settle_heights(&mut v, &[(0..2, 0.0), (2..4, 2.0)], true);
+        assert_eq!(v.iter().map(|p| p[2]).collect::<Vec<_>>(), vec![0.0, 2.0, 1.0, 2.0]);
+        let mut v = vec![[0.0, 0.0, 5.0], [0.0, 0.0, 15.0]];
+        settle_heights(&mut v, &[(0..2, 0.0)], false);
+        assert_eq!((v[0][2], v[1][2]), (5.0, 15.0));
     }
 }

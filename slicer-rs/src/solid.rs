@@ -7,10 +7,13 @@
 //! runs of short lines that would only zig-zag are dropped (PrusaSlicer's filter against vibrating extrusions,
 //! which Orca took over); the strips the remaining lines cover are lines, the rest of the region loops.
 //!
-//! `narrow_loops` stands in for Orca's Arachne fill of the narrow parts (`FillConcentricInternal`): beads a solid
-//! line's spacing wide, as many as the band's width holds by Arachne's rules, so a band thinner than two beads is
-//! one line along its middle, as wide as the band (at least 85 % of the nozzle); a wider one gets a loop half a
-//! bead in from its edge, and so on inwards. Each bead fills its share of the band exactly.
+//! `narrow_loops` stands in for Orca's Arachne fill of the narrow parts (`FillConcentricInternal`), with Arachne's
+//! bead counts and widths but not its skeleton: a band holds as many beads, a solid line's spacing wide, as
+//! Arachne's thresholds give (measured against the line's width, as Arachne measures them), and the middle one or
+//! two take up what is left. So a band too thin for two beads is one line along its middle, as wide as the band (at
+//! least 85 % of the nozzle); one that holds two is a loop of two half-bands; a wider one gets a loop half a bead in
+//! from its edge, and so on inwards. The odd middle beads run along the region's medial axis, which also gives each
+//! loop the band's width beside it.
 
 use crate::geom::{self, Pt, Shape, Shapes};
 use crate::medial;
@@ -342,62 +345,285 @@ pub struct ThickPath {
     pub widths: Vec<f64>,
 }
 
-/// The narrow region filled with beads `w` mm apart (`nozzle` sets Arachne's narrowest bead and feature), in print
-/// order from `at`: loops half a bead in from the edge where two more beads fit, lines along the middle of what
-/// is too thin for that. Each ends a tenth of the nozzle short of where it started (Orca's seam gap), as Orca's.
-pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, at: Pt) -> Vec<ThickPath> {
-    let min_bead = 0.85 * nozzle;
-    let min_feature = 0.25 * nozzle;
-    // Arachne's width for two beads: one bead plus as much as splitting the middle bead needs.
-    let split_middle = (2.0 * min_bead / w - 1.0).clamp(0.01, 0.99);
-    let two_beads = w * (1.0 + split_middle);
-    let safety = 2.0 / geom::SCALE;
-    let mut paths: Vec<ThickPath> = Vec::new();
-    let centre_lines = |shapes: &Shapes, paths: &mut Vec<ThickPath>| {
-        for shape in shapes {
+/// Arachne's beads for the narrow fill (`FillConcentricInternal`'s strategy: `DistributedBeadingStrategy` with one
+/// centre bead, under `RedistributeBeadingStrategy` and `WideningBeadingStrategy`): how many beads a band holds, all a
+/// solid line's spacing wide but the middle one or two, which take up what is left.
+struct Beading {
+    /// The beads' width, mm: the solid line's spacing.
+    s: f64,
+    min_bead: f64,
+    min_feature: f64,
+    /// Arachne's `wall_split_middle_threshold` and `wall_add_middle_threshold`, of a bead's width.
+    split: f64,
+    add: f64,
+}
+
+impl Beading {
+    fn new(s: f64, nozzle: f64, h: f64) -> Beading {
+        // WallToolPaths measures both thresholds against the line's width, not its spacing.
+        let width = s + h * (1.0 - std::f64::consts::FRAC_PI_4);
+        let min_bead = 0.85 * nozzle;
+        Beading {
+            s,
+            min_bead,
+            min_feature: 0.25 * nozzle,
+            split: (2.0 * min_bead / width - 1.0).clamp(0.01, 0.99),
+            add: (min_bead / width).clamp(0.01, 0.99),
+        }
+    }
+
+    /// How many beads fill a band `t` mm wide (`getOptimalBeadCount`).
+    fn count(&self, t: f64) -> usize {
+        if t < self.min_feature {
+            return 0;
+        }
+        if t <= 2.0 * self.s {
+            return if t > self.two() { 2 } else { 1 };
+        }
+        let inner = t - 2.0 * self.s;
+        let naive = (inner / self.s).floor();
+        let threshold = self.s * if naive as usize % 2 == 1 { self.split } else { self.add };
+        2 + naive as usize + usize::from(inner - naive * self.s >= threshold)
+    }
+
+    /// The width from which a band holds two beads, mm (and, deeper in, two more).
+    fn two(&self) -> f64 {
+        (1.0 + self.split) * self.s
+    }
+
+    /// The width from which a band holds `n` beads or more, mm.
+    fn threshold(&self, n: usize) -> f64 {
+        match n {
+            0 | 1 => self.min_feature,
+            _ if n.is_multiple_of(2) => (n as f64 - 1.0 + self.split) * self.s,
+            _ => (n as f64 - 1.0 + self.add) * self.s,
+        }
+    }
+}
+
+/// mm: the shortest segment Arachne's simplification keeps in a line (`meshfix_maximum_resolution`).
+const ARACHNE_RESOLUTION: f64 = 0.5;
+
+/// The middle of a narrow region and its width there: where the odd beads run, and how wide the band is beside a
+/// loop.
+struct Axis {
+    lines: Vec<medial::ThickLine>,
+    /// Each segment of the middle lines (units) with the width at its ends (mm).
+    segments: Vec<(Pt, Pt, f64, f64)>,
+    cell: f64,
+    origin: (f64, f64),
+    size: (i64, i64),
+    /// The segments in each cell, as offsets into `ids`.
+    start: Vec<usize>,
+    ids: Vec<usize>,
+}
+
+impl Axis {
+    fn new(region: &Shapes, min_width: f64, cell: f64) -> Axis {
+        let mut lines = Vec::new();
+        for shape in region {
             // Nowhere as wide as the narrowest feature: no line (and no Voronoi diagram to pay for).
-            if max_inradius(shape) < min_feature / 2.0 * geom::SCALE {
+            if max_inradius(shape) < min_width / 2.0 * geom::SCALE {
                 continue;
             }
-            for line in medial::axis(shape, min_feature, 2.0 * two_beads) {
-                let widths = line.widths.iter().map(|&t| t.max(min_bead)).collect();
-                paths.push(ThickPath { points: line.points, widths });
+            lines.extend(medial::axis(shape, min_width, 1e3));
+        }
+        let mut segments = Vec::new();
+        for line in &lines {
+            for k in 1..line.points.len() {
+                segments.push((line.points[k - 1], line.points[k], line.widths[k - 1], line.widths[k]));
             }
         }
-    };
+        let cell = cell * geom::SCALE;
+        let bb = geom::bbox(region).unwrap_or([0, 0, 0, 0]);
+        let origin = (bb[0] as f64, bb[1] as f64);
+        let size =
+            (((bb[2] - bb[0]) as f64 / cell).floor() as i64 + 1, ((bb[3] - bb[1]) as f64 / cell).floor() as i64 + 1);
+        let cells_of = |a: Pt, b: Pt| {
+            let c = |v: i32, o: f64, n: i64| (((v as f64 - o) / cell).floor() as i64).clamp(0, n - 1);
+            (
+                c(a.x.min(b.x), origin.0, size.0),
+                c(a.y.min(b.y), origin.1, size.1),
+                c(a.x.max(b.x), origin.0, size.0),
+                c(a.y.max(b.y), origin.1, size.1),
+            )
+        };
+        let ncells = (size.0 * size.1) as usize;
+        let mut start = vec![0usize; ncells + 1];
+        for &(a, b, _, _) in &segments {
+            let (x0, y0, x1, y1) = cells_of(a, b);
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    start[(y * size.0 + x) as usize + 1] += 1;
+                }
+            }
+        }
+        for c in 0..ncells {
+            start[c + 1] += start[c];
+        }
+        let mut at = start.clone();
+        let mut ids = vec![0usize; start[ncells]];
+        for (k, &(a, b, _, _)) in segments.iter().enumerate() {
+            let (x0, y0, x1, y1) = cells_of(a, b);
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let c = (y * size.0 + x) as usize;
+                    ids[at[c]] = k;
+                    at[c] += 1;
+                }
+            }
+        }
+        Axis { lines, segments, cell, origin, size, start, ids }
+    }
+
+    /// Arachne's odd beads: along the middle, wherever the band holds an odd number of beads, the middle one, as
+    /// wide as the beads round it leave the band (at least the narrowest bead where it is the only one). Each stops
+    /// half of two beads' width short of where the band holds one bead more (the loop round that part curls round
+    /// there), and those shorter than half their narrowest width are left out (`removeSmallLines`).
+    fn odd_beads(&self, beading: &Beading) -> Vec<ThickPath> {
+        let trim = beading.two() / 2.0 * geom::SCALE;
+        let mut out = Vec::new();
+        for line in &self.lines {
+            // The line cut where its bead count changes, each run with its count.
+            let mut runs: Vec<(ThickPath, usize)> = Vec::new();
+            let mut count = beading.count(line.widths[0]);
+            let mut run = ThickPath { points: vec![line.points[0]], widths: vec![line.widths[0]] };
+            for k in 1..line.points.len() {
+                let (p, q) = (line.points[k - 1], line.points[k]);
+                let (tp, tq) = (line.widths[k - 1], line.widths[k]);
+                let target = beading.count(tq);
+                while count != target {
+                    let next = if target > count { count + 1 } else { count - 1 };
+                    let t = beading.threshold(count.max(next));
+                    let f = if tq != tp { ((t - tp) / (tq - tp)).clamp(0.0, 1.0) } else { 0.0 };
+                    let x = geom::pt(
+                        (p.x as f64 + (q.x - p.x) as f64 * f).round() as i32,
+                        (p.y as f64 + (q.y - p.y) as f64 * f).round() as i32,
+                    );
+                    run.points.push(x);
+                    run.widths.push(t);
+                    let done = std::mem::replace(&mut run, ThickPath { points: vec![x], widths: vec![t] });
+                    runs.push((done, count));
+                    count = next;
+                }
+                run.points.push(q);
+                run.widths.push(tq);
+            }
+            runs.push((run, count));
+            for k in 0..runs.len() {
+                let n = runs[k].1;
+                if n.is_multiple_of(2) {
+                    continue;
+                }
+                let m = (n - 1) / 2;
+                let (points, band) = (&runs[k].0.points, &runs[k].0.widths);
+                let widths = band
+                    .iter()
+                    .map(|&t| if m == 0 { t.max(beading.min_bead) } else { t - 2.0 * m as f64 * beading.s })
+                    .collect();
+                let mut path = ThickPath { points: points.clone(), widths };
+                if k + 1 < runs.len() && runs[k + 1].1 > n {
+                    clip_end(&mut path, trim);
+                }
+                if k > 0 && runs[k - 1].1 > n {
+                    path.points.reverse();
+                    path.widths.reverse();
+                    clip_end(&mut path, trim);
+                    path.points.reverse();
+                    path.widths.reverse();
+                }
+                let narrowest = path.widths.iter().cloned().fold(f64::INFINITY, f64::min);
+                if path.points.len() >= 2 && geom::length_mm(&path.points, false) >= narrowest / 2.0 {
+                    out.push(path);
+                }
+            }
+        }
+        out
+    }
+
+    /// The width of the band (mm) at the point of its middle nearest `p`, and how far that is (mm), looking no
+    /// further than `reach` mm.
+    fn width_near(&self, p: Pt, reach: f64) -> Option<(f64, f64)> {
+        if self.segments.is_empty() {
+            return None;
+        }
+        let (x, y) = (p.x as f64, p.y as f64);
+        let (cx, cy) =
+            (((x - self.origin.0) / self.cell).floor() as i64, ((y - self.origin.1) / self.cell).floor() as i64);
+        let mut best: Option<(f64, f64)> = None;
+        let mut best_d2 = f64::INFINITY;
+        let rings = (reach * geom::SCALE / self.cell).ceil() as i64 + 1;
+        for r in 0..=rings {
+            for iy in cy - r..=cy + r {
+                for ix in cx - r..=cx + r {
+                    if (iy - cy).abs() != r && (ix - cx).abs() != r {
+                        continue;
+                    }
+                    if ix < 0 || iy < 0 || ix >= self.size.0 || iy >= self.size.1 {
+                        continue;
+                    }
+                    let c = (iy * self.size.0 + ix) as usize;
+                    for &k in &self.ids[self.start[c]..self.start[c + 1]] {
+                        let (a, b, wa, wb) = self.segments[k];
+                        let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+                        let len2 = dx * dx + dy * dy;
+                        let t = if len2 > 0.0 {
+                            (((x - a.x as f64) * dx + (y - a.y as f64) * dy) / len2).clamp(0.0, 1.0)
+                        } else {
+                            0.0
+                        };
+                        let (px, py) = (a.x as f64 + t * dx, a.y as f64 + t * dy);
+                        let d2 = (x - px) * (x - px) + (y - py) * (y - py);
+                        if d2 < best_d2 {
+                            best_d2 = d2;
+                            best = Some((wa + (wb - wa) * t, d2.sqrt() / geom::SCALE));
+                        }
+                    }
+                }
+            }
+            // Every segment nearer than the rings reach is in them.
+            if best_d2.sqrt() <= r as f64 * self.cell {
+                break;
+            }
+        }
+        best.filter(|&(_, d)| d <= reach)
+    }
+}
+
+/// The narrow region filled with beads `w` mm apart (the solid line's spacing, at layers `h` mm high; `nozzle` sets
+/// Arachne's narrowest bead and feature), in print order from `at`: loops half a bead in from the edge where two
+/// beads fit and lines along the middle of what is too thin for that, each as wide as Arachne makes it there. Each
+/// ends a tenth of the nozzle short of where it started (Orca's seam gap), as Orca's.
+pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec<ThickPath> {
+    let beading = Beading::new(w, nozzle, h);
+    let two = beading.two();
     // Arachne simplifies its outline first (to 0.025 mm; this to 0.05, as the Voronoi diagram costs by the edge
-    // and the lines hardly move).
+    // and the lines hardly move), and leaves out pieces smaller than half a bead squared (`removeSmallAreas`).
     let mut rest = geom::simplify_shapes(region, 0.05);
-    for _ in 0..1000 {
-        if rest.is_empty() {
+    let smallest = (w / 2.0 * geom::SCALE).powi(2) * 2.0;
+    rest.retain(|shape| shape.first().is_some_and(|outer| geom::area2(outer).abs() as f64 >= smallest));
+    // The odd beads run along the middle; the loops go round it, a bead's width apart, as long as two more fit.
+    let axis = Axis::new(&rest, beading.min_feature, 2.0 * two);
+    let mut paths = axis.odd_beads(&beading);
+    for level in 0..1000 {
+        if rest.is_empty() || rest.iter().all(|shape| max_inradius(shape) < two / 2.0 * geom::SCALE) {
             break;
         }
-        // Where two beads fit: what is left of the region shrunk by two beads' half width. Nowhere: only lines
-        // along the middle.
-        if rest.iter().all(|shape| max_inradius(shape) < two_beads / 2.0 * geom::SCALE) {
-            break;
-        }
-        let core = geom::offset(&rest, -two_beads / 2.0);
+        // Where two beads fit: what is left of the region shrunk by two beads' half width.
+        let core = geom::offset(&rest, -two / 2.0);
         if core.is_empty() {
             break;
         }
         // The loop runs half a bead in from the edge, where the region is two beads wide.
-        let ring = geom::offset(&core, (two_beads - w) / 2.0);
-        let reached = geom::offset(&core, two_beads / 2.0 + safety);
-        let thin = geom::difference(&rest, &reached);
-        centre_lines(&thin, &mut paths);
-        for shape in &ring {
+        for shape in &geom::offset(&core, (two - w) / 2.0) {
             for contour in shape {
                 if contour.len() >= 3 {
-                    let mut points = contour.clone();
-                    points.push(points[0]);
-                    paths.push(ThickPath { widths: vec![w; points.len()], points });
+                    paths.push(bead(contour, level, &beading, &axis));
                 }
             }
         }
-        rest = geom::offset(&core, two_beads / 2.0 - w);
+        rest = geom::offset(&core, two / 2.0 - w);
     }
-    centre_lines(&rest, &mut paths);
 
     // Loops start nearest where the nozzle is; every path ends short by the seam gap.
     let clip = 0.1 * nozzle * geom::SCALE;
@@ -428,6 +654,92 @@ pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, at: Pt) -> Vec<ThickPa
         ordered.push(p);
     }
     ordered
+}
+
+/// A loop of the `level`th pair of beads in from the region's edge, closed: a bead's width where more beads lie
+/// inside it, else (the innermost pair) half of what is left of the band, laid in the middle of its half as Arachne
+/// lays it. Along a side over which the band's width changes, points are added where the width bends, so that it
+/// follows the band rather than run straight from corner to corner.
+fn bead(contour: &[Pt], level: usize, beading: &Beading, axis: &Axis) -> ThickPath {
+    let s = beading.s;
+    // How deep the loop runs, mm from the region's edge.
+    let depth = (level as f64 + 0.5) * s;
+    // The bead's width at a point of the loop, and how far in from the loop it goes, mm.
+    let look = |p: Pt| {
+        if let Some((t, d)) = axis.width_near(p, depth + 2.0 * s)
+            && (d - (t / 2.0 - depth)).abs() <= s
+            && beading.count(t) < 2 * level + 3
+        {
+            let left = (t - 2.0 * level as f64 * s).clamp(beading.two(), (2.0 + beading.add) * s);
+            return (left / 2.0, (left / 2.0 - s) / 2.0);
+        }
+        (s, 0.0)
+    };
+    let n = contour.len();
+    let mut path = ThickPath { points: Vec::with_capacity(n + 1), widths: Vec::with_capacity(n + 1) };
+    let looked: Vec<(f64, f64)> = contour.iter().map(|&p| look(p)).collect();
+    for i in 0..n {
+        let (width, shift) = looked[i];
+        path.points.push(if shift.abs() * geom::SCALE >= 1.0 { moved(contour, i, shift) } else { contour[i] });
+        path.widths.push(width);
+        let j = (i + 1) % n;
+        along(&mut path, (contour[i], looked[i]), (contour[j], looked[j]), &look, s, 0);
+    }
+    path.points.push(path.points[0]);
+    path.widths.push(path.widths[0]);
+    path
+}
+
+/// The points between `a` and `b` (each with its bead's width and shift) where the width bends away from a straight
+/// run between theirs by more than a twentieth of a bead, found by halving the side, moved in as the bead goes; no
+/// closer together than Arachne's simplification leaves its lines' points (`ARACHNE_RESOLUTION`).
+fn along(
+    path: &mut ThickPath,
+    a: (Pt, (f64, f64)),
+    b: (Pt, (f64, f64)),
+    look: &dyn Fn(Pt) -> (f64, f64),
+    s: f64,
+    deep: u32,
+) {
+    if deep >= 6 || geom::dist(a.0, b.0) < (2.0 * ARACHNE_RESOLUTION).max(s) * geom::SCALE {
+        return;
+    }
+    let m = geom::pt(((a.0.x as i64 + b.0.x as i64) / 2) as i32, ((a.0.y as i64 + b.0.y as i64) / 2) as i32);
+    let at_m = look(m);
+    if (at_m.0 - (a.1.0 + b.1.0) / 2.0).abs() <= 0.05 * s {
+        return;
+    }
+    along(path, a, (m, at_m), look, s, deep + 1);
+    // On the side, in along its normal (to its left, into the solid).
+    let (dx, dy) = ((b.0.x - a.0.x) as f64, (b.0.y - a.0.y) as f64);
+    let len = dx.hypot(dy);
+    let reach = at_m.1 * geom::SCALE;
+    path.points
+        .push(geom::pt((m.x as f64 - dy / len * reach).round() as i32, (m.y as f64 + dx / len * reach).round() as i32));
+    path.widths.push(at_m.0);
+    along(path, (m, at_m), b, look, s, deep + 1);
+}
+
+/// The `i`th point of a closed contour moved `d` mm to its left (into the solid, which contours keep on their left),
+/// along the bisector of its two edges' normals.
+fn moved(contour: &[Pt], i: usize, d: f64) -> Pt {
+    let n = contour.len();
+    let (a, p, b) = (contour[(i + n - 1) % n], contour[i], contour[(i + 1) % n]);
+    let unit = |u: Pt, v: Pt| {
+        let (dx, dy) = ((v.x - u.x) as f64, (v.y - u.y) as f64);
+        let len = dx.hypot(dy);
+        if len > 0.0 { (-dy / len, dx / len) } else { (0.0, 0.0) }
+    };
+    let (n0, n1) = (unit(a, p), unit(p, b));
+    let (mx, my) = (n0.0 + n1.0, n0.1 + n1.1);
+    let len = mx.hypot(my);
+    if len < 1e-6 {
+        return p;
+    }
+    // Along the bisector, as far as keeps both edges `d` away (a mitre), at most twice `d`.
+    let reach = d * (2.0 / len).min(2.0) * geom::SCALE;
+    let (dx, dy) = (mx / len * reach, my / len * reach);
+    geom::pt((p.x as f64 + dx).round() as i32, (p.y as f64 + dy).round() as i32)
 }
 
 /// Shortens a path by `d` units at its end.
@@ -507,17 +819,102 @@ mod tests {
 
     #[test]
     fn a_thin_band_is_one_line_along_its_middle() {
-        let paths = narrow_loops(&vec![rect(0.0, 0.0, 20.0, 0.5)], 0.38, 0.4, geom::pt(0, 0));
+        let paths = narrow_loops(&vec![rect(0.0, 0.0, 20.0, 0.5)], 0.38, 0.4, 0.2, geom::pt(0, 0));
         assert_eq!(paths.len(), 1, "{paths:?}");
         assert!(paths[0].widths.iter().all(|&w| (w - 0.5).abs() < 0.01), "{:?}", paths[0].widths);
     }
 
+    /// What paths lay for each mm of layer height: their lengths times their widths, mm².
+    fn laid(paths: &[ThickPath]) -> f64 {
+        let piece = |p: &ThickPath, k: usize| {
+            geom::dist(p.points[k - 1], p.points[k]) / geom::SCALE * (p.widths[k - 1] + p.widths[k]) / 2.0
+        };
+        paths.iter().map(|p| (1..p.points.len()).map(|k| piece(p, k)).sum::<f64>()).sum()
+    }
+
+    /// A loop (its ends a seam gap apart) rather than a line.
+    fn is_loop(p: &ThickPath) -> bool {
+        geom::dist(p.points[0], *p.points.last().unwrap()) < 0.1 * geom::SCALE
+    }
+
     #[test]
-    fn a_band_two_beads_wide_is_one_loop() {
-        let paths = narrow_loops(&vec![rect(0.0, 0.0, 20.0, 0.8)], 0.38, 0.4, geom::pt(0, 0));
+    fn bead_counts_change_where_their_thresholds_say() {
+        // The X2D's 0.2, 0.4 and 0.8 mm nozzles' solid lines at their layer heights.
+        for (s, nozzle, h) in [(0.19854, 0.2, 0.1), (0.38, 0.4, 0.2), (0.73416, 0.8, 0.4)] {
+            let b = Beading::new(s, nozzle, h);
+            for n in 1..12 {
+                let t = b.threshold(n);
+                assert!(b.count(t - 1e-9) < n && b.count(t + 1e-9) >= n, "{s} mm beads, {n} from {t} mm");
+            }
+            // Never fewer beads in a wider band.
+            let counts: Vec<usize> = (0..5000).map(|k| b.count(k as f64 * 0.001)).collect();
+            assert!(counts.windows(2).all(|w| w[0] <= w[1]), "{s}");
+        }
+        // On the 0.2 mm nozzle: one bead from 0.05 mm, two from 0.31 mm, three from 0.55, four from 0.70, five from
+        // 0.95 (Arachne's thresholds measured against the 0.22 mm line, not its 0.199 mm spacing).
+        let b = Beading::new(0.19854, 0.2, 0.1);
+        assert_eq!([0.04, 0.3, 0.4, 0.6, 0.8, 1.0].map(|t| b.count(t)), [0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn a_band_two_beads_wide_is_one_loop_of_half_bands() {
+        let paths = narrow_loops(&vec![rect(0.0, 0.0, 20.0, 0.8)], 0.38, 0.4, 0.2, geom::pt(0, 0));
         assert_eq!(paths.len(), 1, "{paths:?}");
+        // Two beads of half the band each, a quarter of the band in from its edges.
+        assert!(paths[0].widths.iter().all(|&w| (w - 0.4).abs() < 0.01), "{:?}", paths[0].widths);
+        let b = geom::bbox_of(&vec![paths[0].points.clone()]);
+        for (got, want) in b.iter().zip([0.2, 0.2, 19.8, 0.6]) {
+            assert!((geom::unsc(*got) - want).abs() < 0.015, "{b:?}");
+        }
         let length = geom::length_mm(&paths[0].points, false);
-        // Around a strip 0.42 mm wide, less the seam gap.
-        assert!((length - 2.0 * (19.62 + 0.42) + 0.04).abs() < 0.2, "{length}");
+        // Round a strip 0.4 mm wide, less the seam gap.
+        assert!((length - 2.0 * (19.6 + 0.4) + 0.04).abs() < 0.2, "{length}");
+    }
+
+    #[test]
+    fn a_band_three_beads_wide_is_a_loop_and_a_line_down_its_middle() {
+        // 1.2 mm holds three 0.38 mm beads: a loop a bead wide half a bead in, and what is left down the middle.
+        let paths = narrow_loops(&vec![rect(0.0, 0.0, 20.0, 1.2)], 0.38, 0.4, 0.2, geom::pt(0, 0));
+        assert_eq!(paths.len(), 2, "{paths:?}");
+        let (loops, lines): (Vec<&ThickPath>, Vec<&ThickPath>) = paths.iter().partition(|p| is_loop(p));
+        assert_eq!((loops.len(), lines.len()), (1, 1));
+        assert!(loops[0].widths.iter().all(|&w| (w - 0.38).abs() < 1e-9), "{:?}", loops[0].widths);
+        let b = geom::bbox_of(&vec![loops[0].points.clone()]);
+        for (got, want) in b.iter().zip([0.19, 0.19, 19.81, 1.01]) {
+            assert!((geom::unsc(*got) - want).abs() < 0.015, "{b:?}");
+        }
+        assert!(lines[0].widths.iter().all(|&w| (w - 0.44).abs() < 0.01), "{:?}", lines[0].widths);
+        assert!(lines[0].points.iter().all(|p| (geom::unsc(p.y) - 0.6).abs() < 0.01));
+        // The middle runs from where the corners' bisectors meet, less the seam gap.
+        let length = geom::length_mm(&lines[0].points, false);
+        assert!((length - 18.76).abs() < 0.1, "{length}");
+        let area = 20.0 * 1.2;
+        assert!((laid(&paths) / area - 1.0).abs() < 0.03, "{} of {area}", laid(&paths));
+    }
+
+    #[test]
+    fn a_tapering_band_changes_its_bead_count_along_it_and_fills_itself() {
+        // From 0.3 to 1.3 mm wide over 20 mm, at 0.38 mm beads: one bead until 0.61 mm (about 6.2 mm along), two
+        // until 1.07 mm (about 15.3 mm along), then three.
+        let band = vec![vec![geom::pt(0, 0), geom::pt(sc(20.0), 0), geom::pt(sc(20.0), sc(1.3)), geom::pt(0, sc(0.3))]];
+        let paths = narrow_loops(&vec![band.clone()], 0.38, 0.4, 0.2, geom::pt(0, 0));
+        let (loops, lines): (Vec<&ThickPath>, Vec<&ThickPath>) = paths.iter().partition(|p| is_loop(p));
+        assert_eq!((loops.len(), lines.len()), (1, 2), "{paths:?}");
+        let span = |p: &ThickPath| {
+            let xs: Vec<f64> = p.points.iter().map(|q| geom::unsc(q.x)).collect();
+            (xs.iter().cloned().fold(f64::INFINITY, f64::min), xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max))
+        };
+        let (thin, thick) =
+            if span(lines[0]).0 < span(lines[1]).0 { (lines[0], lines[1]) } else { (lines[1], lines[0]) };
+        // The one bead: as wide as the band, at least the narrowest bead, and stopping short of the loop's end.
+        assert!(thin.widths.iter().all(|&w| (0.34..0.62).contains(&w)), "{:?}", thin.widths);
+        let (_, end) = span(thin);
+        assert!(end > 5.0 && end < 6.2, "{end}");
+        // The middle of three: what the loop leaves, from where three fit to the far end.
+        assert!(thick.widths.iter().all(|&w| (0.3..0.55).contains(&w)), "{:?}", thick.widths);
+        let (start, _) = span(thick);
+        assert!(start > 14.5 && start < 16.0, "{start}");
+        let area = geom::area_mm2(&vec![band]);
+        assert!((laid(&paths) / area - 1.0).abs() < 0.05, "{} of {area}", laid(&paths));
     }
 }
