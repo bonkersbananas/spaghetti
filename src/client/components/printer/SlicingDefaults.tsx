@@ -1,6 +1,8 @@
 import { DEFAULT_SLICER, DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
+import { defaultNozzle } from "@shared/slicing/pantry.ts";
 import {
   type SlicingDefaults as Defaults,
+  nozzleWords,
   patternWords,
   qualityWords,
   slicerWords,
@@ -8,7 +10,9 @@ import {
   strengthOf,
   strengthWords,
   supportWords,
+  withNozzle,
 } from "@shared/slicing/settings.ts";
+import type { PrinterSetup } from "@shared/spools";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Disclosure } from "@/components/ui/Disclosure";
@@ -27,20 +31,22 @@ const loadTiles = () => import("@/components/builds/SliceSettings");
 const WorkspaceSlicing = lazy(() => loadTiles().then((m) => ({ default: m.WorkspaceSlicing })));
 
 /**
- * "Standard quality · Everyday strength · no supports": the defaults in the model card's words, while folded, with
- * the slicer when it isn't the usual one ("Spaghetti's own slicer", decision 0055).
+ * "Standard quality · Everyday strength · no supports": the defaults in the model card's words, while folded, on the
+ * main nozzle they slice for (named when it isn't the 0.4 mm), with the slicer when it isn't the usual one
+ * ("Spaghetti's own slicer", decision 0055).
  */
-function defaultsWords(value: Defaults | null): string[] {
-  const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
+function defaultsWords(value: Defaults | null, nozzles: PrinterSetup["nozzles"]): string[] {
+  const settings = withNozzle(slicingFor(value ?? {}, DEFAULT_SLICING), defaultNozzle({ nozzles }));
   const strength = strengthOf(settings);
   return [
-    qualityWords(settings.layerHeight),
+    qualityWords(settings.layerHeight, settings.nozzle),
+    nozzleWords(settings),
     strength
       ? strengthWords(strength)
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
     supportWords(settings) || "no supports",
     ...(settings.slicer !== DEFAULT_SLICER ? [slicerWords(settings.slicer)] : []),
-  ];
+  ].filter(Boolean);
 }
 
 /**
@@ -84,7 +90,7 @@ export function SlicingDefaults() {
         open={open}
         onOpenChange={setOpen}
         title="How new models are sliced"
-        summary={<MetaList>{defaultsWords(value.slicing)}</MetaList>}
+        summary={<MetaList>{defaultsWords(value.slicing, data.setup.nozzles)}</MetaList>}
       >
         <fieldset disabled={readOnly} className="min-w-0 pt-3">
           {/* Why the tiles are dimmed: offline the setup is for reading only. */}
@@ -94,7 +100,7 @@ export function SlicingDefaults() {
             </p>
           )}
           <Suspense fallback={<TilesSkeleton />}>
-            <WorkspaceSlicing value={value.slicing ?? undefined} onChange={setDefaults} />
+            <WorkspaceSlicing value={value.slicing ?? undefined} onChange={setDefaults} nozzles={data.setup.nozzles} />
           </Suspense>
         </fieldset>
       </Disclosure>
