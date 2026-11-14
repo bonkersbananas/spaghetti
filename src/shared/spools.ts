@@ -442,6 +442,9 @@ function spoolKind(spool: Pick<SpoolLike, "material" | "brand" | "line" | "finis
     .join(" ");
 }
 
+/** A multi-colour name that may wrap only after a slash ("Black/" "Purple"), never inside a colour word. */
+export const softSlashes = (name: string) => name.replaceAll("/", "/\u200b");
+
 /** A colour's plain name for each of a multi-colour spool's colours: "Black/Purple". */
 export function colorsName(colors: readonly string[]): string {
   const names = colors.map((hex) => nearestColorName(hex)).filter((name): name is string => !!name);

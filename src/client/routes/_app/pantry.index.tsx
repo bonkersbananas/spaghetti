@@ -1,5 +1,6 @@
 import type { Spool } from "@shared/api";
 import { recipesFor } from "@shared/recipes";
+import { materialKey } from "@shared/spools";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
@@ -55,7 +56,8 @@ function GroupRecipesIfAny({ material }: { material: string }) {
 function groups(spools: Spool[]): Array<{ material: string; spools: Spool[] }> {
   const byMaterial = new Map<string, Spool[]>();
   for (const spool of spools) {
-    const key = spool.material.trim().toUpperCase();
+    // PLA+ sits with PLA (its own line still says PLA+).
+    const key = materialKey(spool.material) || spool.material.trim().toUpperCase();
     byMaterial.set(key, [...(byMaterial.get(key) ?? []), spool]);
   }
   const order = (spool: Spool) => (spool.remaining === "empty" ? 1 : 0);
