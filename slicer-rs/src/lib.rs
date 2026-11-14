@@ -28,6 +28,8 @@ pub mod png;
 pub mod preheat;
 pub mod profile;
 pub mod region;
+pub mod seam;
+pub mod seam_mesh;
 pub mod section;
 pub mod setup;
 pub mod solid;
@@ -334,7 +336,12 @@ impl Plate {
             .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
             .collect();
         let sizes: Vec<(f64, f64)> = objects.iter().map(|o| (o.max[0] - o.min[0], o.max[1] - o.min[1])).collect();
-        let regions = region::regions(&slices, &owners, &layers, &centres, settings);
+        let mut regions = region::regions(&slices, &owners, &layers, &centres, settings);
+        // Where each wall loop starts, from the objects' outer walls and their surfaces (`seam.rs`). In spiral vase mode
+        // Orca starts every loop where the nozzle is instead (`GCode::extrude_loop`), so there are none to place.
+        if !settings.spiral_mode {
+            seam::place(&mut regions, &meshes, &layers.slice_z(), &layers.height, settings);
+        }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {
             Some(p) if p.profiles.len() > 1 => p.profiles.iter().any(|f| config::Settings::auto_lifts(f)),

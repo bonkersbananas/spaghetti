@@ -96,3 +96,9 @@ To look at one layer of any G-code (Orca's or ours), coloured by feature, Orca's
 ```sh
 python3 -I bench/layer-mvg.py out.gcode 120 layer.mvg && convert mvg:layer.mvg layer.png
 ```
+
+To see how near the outer walls start to Orca's, loop by loop (the same spot, the mirror image across the plate's middle, near or elsewhere, and how often where Orca's start in a corner):
+
+```sh
+python3 -I bench/seams.py bench/out/orca-native-benchy/plate_1.gcode bench/out/rust-native-4t-benchy/out.gcode
+```

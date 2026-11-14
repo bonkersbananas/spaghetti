@@ -126,6 +126,8 @@ pub struct LayerRegions {
     pub lightning: Vec<Vec<Contour>>,
     /// The layer's top surfaces (Orca's `stTop` slices), kept when supports are on: their bottom contacts land there.
     pub tops: Shapes,
+    /// Where each object's wall loops start on this layer (`seam.rs`), by object; empty until placed.
+    pub seams: Vec<crate::seam::LayerSeams>,
 }
 
 impl LayerRegions {
@@ -396,7 +398,7 @@ pub fn regions(
             let lightning =
                 lightning.iter_mut().map(|o| o.get_mut(l).map(std::mem::take).unwrap_or_default()).collect();
             let tops = kept_tops.get_mut(l).map(std::mem::take).unwrap_or_default();
-            LayerRegions { islands, fills, surfaces, unpulled: Vec::new(), lightning, tops }
+            LayerRegions { islands, fills, surfaces, unpulled: Vec::new(), lightning, tops, seams: Vec::new() }
         })
         .collect();
     if let Some(first) = out.first_mut()
