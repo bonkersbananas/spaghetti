@@ -288,7 +288,8 @@ pub fn supports(
             style,
             branch_radius: sp.classic_branch_diameter / 2.0,
             top_z_distance,
-            bottom_z_distance: sp.bottom_z_distance,
+            // Orca's classic trees take the top gap as set, the bottom one as the slicing parameters round it.
+            bottom_z_distance: s.support_gaps().1,
             xy_distance: sp.xy_distance,
             first_layer_gap: sp.first_layer_xy_distance,
             top_interface_layers: sp.top_interface_layers,

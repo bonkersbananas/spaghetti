@@ -296,6 +296,14 @@ pub struct SpiralSettings {
     pub finishing_flow: f64,
 }
 
+/// Which of Orca's support generators makes a raft when supports are off (`SupportSettings::raft_maker`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RaftMaker {
+    Normal,
+    OrganicTrees,
+    ClassicTrees,
+}
+
 /// What normal supports are made with (`support.rs`), by Orca's keys.
 #[derive(Clone, Debug)]
 pub struct SupportSettings {
@@ -334,7 +342,11 @@ pub struct SupportSettings {
     // Settings that change normal supports in ways this doesn't follow, which `unsupported` refuses.
     pub base_pattern: String,
     pub interface_pattern: String,
+    /// Orca's raft (`raft.rs`): its layers, the gap between it and the object, and how far it reaches past the
+    /// object's first layer (`raft_layers`, `raft_contact_distance`, `raft_expansion`).
     pub raft_layers: i64,
+    pub raft_contact_distance: f64,
+    pub raft_expansion: f64,
     pub on_build_plate_only: bool,
     pub bridge_no_support: bool,
     pub enforce_layers: i64,
@@ -427,28 +439,48 @@ impl SupportSettings {
 
     /// Whether these are Orca's normal supports in their snug style, which follow the overhangs instead of the grid.
     pub fn snug(&self) -> bool {
-        self.kind == "normal(auto)" && self.style == "snug"
+        self.kind.starts_with("normal") && self.style == "snug"
+    }
+
+    /// Which of Orca's generators makes a raft when supports are off (`_generate_support_material`): its tree code for
+    /// tree supports, painted or not, which makes it as its organic trees do (`generate_raft_contact`) in their
+    /// default style and as its classic trees do in theirs; else the normal generator.
+    pub fn raft_maker(&self) -> RaftMaker {
+        if !self.kind.starts_with("tree") {
+            RaftMaker::Normal
+        } else if matches!(self.style.as_str(), "tree_slim" | "tree_strong" | "tree_hybrid") {
+            RaftMaker::ClassicTrees
+        } else {
+            RaftMaker::OrganicTrees
+        }
     }
 
     /// What of supports this can't slice yet, in a few words: Orca's normal supports in their grid and snug styles, its
     /// organic trees and its classic ones (slim, strong and hybrid), made where they are needed, with the settings
-    /// Orca's presets give them.
+    /// Orca's presets give them; and a raft, which is support too, under any of them or with supports off.
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
+        // With supports off, only the settings a raft prints with matter.
+        let on = s.enable_support;
         // Each by its name in the app's settings, as the app says "our own slicer can't do … yet".
-        if kind == "tree(auto)" && !self.organic() && self.classic().is_none() {
+        if on && kind == "tree(auto)" && !self.organic() && self.classic().is_none() {
             Some("this style of tree support")
-        } else if kind != "normal(auto)" && kind != "tree(auto)" {
+        } else if on && kind != "normal(auto)" && kind != "tree(auto)" {
             Some("supports painted on")
-        } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "") {
+        } else if on && kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "") {
             Some("this style of support")
-        } else if self.raft_layers > 0 {
-            Some("a raft")
-        } else if self.on_build_plate_only {
+        } else if on && self.raft_layers > 0 && kind == "tree(auto)" {
+            Some("a raft under tree supports")
+        } else if !on && self.raft_layers > 0 && self.raft_maker() == RaftMaker::ClassicTrees {
+            Some("a raft in this style of tree support")
+        } else if on && self.on_build_plate_only {
             Some("supports on the plate only")
-        } else if self.threshold_angle <= 0.0 {
+        } else if on && self.threshold_angle <= 0.0 {
             Some("supports by overlap")
-        } else if !(if self.organic() || self.classic().is_some() {
+        } else if !on && self.wall_count > 0 {
+            // A raft's base would print in walled columns.
+            Some("these support settings")
+        } else if !(if on && (self.organic() || self.classic().is_some()) {
             // Other patterns fill trees' branches rather than drawing them as loops.
             matches!(self.base_pattern.as_str(), "default" | "none" | "")
         } else {
@@ -459,15 +491,23 @@ impl SupportSettings {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
             Some("supports without a gap or interface")
-        } else if !self.independent_layer_height
-            || self.enforce_layers > 0
+        } else if on && !self.independent_layer_height && !self.organic() && self.classic().is_none() {
+            // Normal supports' layers in step with the object's (Orca's `synchronize_layers`), as several filaments
+            // have them.
+            Some(if s.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+                "normal supports in several filaments"
+            } else {
+                "these support settings"
+            })
+        } else if self.enforce_layers > 0
             || self.expansion != 0.0
             || self.angle != 0.0
             || self.ironing
             || self.interface_loops
             || (self.wall_count > 0 && !self.organic() && self.classic().is_none())
-            || self.bridge_no_support
-            || s.thick_bridges
+            // These change how overhangs are found and supported, not a raft.
+            || (on && self.bridge_no_support)
+            || (on && s.thick_bridges)
         {
             Some("these support settings")
         } else if self.filament > 1 || self.interface_filament > 1 {
@@ -692,6 +732,8 @@ impl Settings {
                 base_pattern: text("support_base_pattern"),
                 interface_pattern: text("support_interface_pattern"),
                 raft_layers: p.int("raft_layers"),
+                raft_contact_distance: p.float("raft_contact_distance"),
+                raft_expansion: p.float("raft_expansion"),
                 on_build_plate_only: p.bool("support_on_build_plate_only"),
                 bridge_no_support: p.bool("bridge_no_support"),
                 enforce_layers: p.int("enforce_support_layers"),
@@ -785,13 +827,14 @@ impl Settings {
 
     /// What this can't slice yet, which the caller should slice elsewhere (the app: with Orca's engine).
     pub fn unsupported(&self) -> Option<&'static str> {
-        if self.enable_support
+        if (self.enable_support || self.support.raft_layers > 0)
             && let Some(what) = self.support.unsupported(self)
         {
             Some(what)
-        } else if self.support.raft_layers > 0 {
-            // Orca prints a raft under the objects whether or not supports are on.
-            Some("a raft")
+        } else if self.support.raft_layers > 0 && self.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+            // With a prime tower Orca turns the support's own layer heights off, which rounds the raft's gap to a
+            // layer, and prints the tower through that gap on layers of its own.
+            Some("a raft with several filaments")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
         } else if !matches!(
@@ -855,6 +898,37 @@ impl Settings {
         }
         out
     }
+    /// Gives the settings the plate's filaments (`setup.rs`, or the command line's stand-ins). With several a prime
+    /// tower prints, and with one Orca turns the support's own layer heights off (`normalize_fdm_2`): its supports'
+    /// layers follow the object's.
+    pub fn set_palette(&mut self, palette: Option<Arc<crate::filaments::Palette>>) {
+        if palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+            self.support.independent_layer_height = false;
+        }
+        self.palette = palette;
+    }
+
+    /// The support's gaps under the object and over it, mm (Orca's `gap_support_object` and `gap_object_support`): as
+    /// set, or in whole layers where the support's layers follow the object's (no independent support layer height,
+    /// as with several filaments).
+    pub fn support_gaps(&self) -> (f64, f64) {
+        let sp = &self.support;
+        let gap = |set: f64| {
+            if sp.independent_layer_height || set == 0.0 {
+                set
+            } else {
+                (set / self.layer_height + 1e-4).round() * self.layer_height
+            }
+        };
+        (gap(sp.top_z_distance), gap(sp.bottom_z_distance))
+    }
+
+    /// Whether an object's layer prints on the plate, as the print's first layer: its first one, unless a raft is
+    /// under it (`raft.rs`), whose own first layer is then the print's.
+    pub fn on_plate(&self, layer: usize) -> bool {
+        layer == 0 && self.support.raft_layers <= 0
+    }
+
     /// The cross-section of the filament, mm².
     pub fn filament_area(&self) -> f64 {
         PI * (self.filament_diameter / 2.0).powi(2)

@@ -17,16 +17,20 @@
 //! 6. Toolpaths: interfaces and columns as Orca's support pattern (`base_support.rs`), the flange as a loop round
 //!    rectilinear lines.
 //!
+//! A raft (`raft.rs`) is support too: its contact layer the object's first layer, grown, and the layers under it
+//! (`raft_base`), printed first (`raft_paths`); organic trees make theirs without the grid (`raft_alone`).
+//!
 //! What it leaves out: Orca's thinning of a column's layer where it overlaps a contact in height
-//! (`modulate_extrusion_by_overlapping_layers`) and its arcs; supports are refused with a raft, on the plate only,
-//! with painted or tree supports and the settings `config.rs` lists.
+//! (`modulate_extrusion_by_overlapping_layers`) and its arcs; supports are refused on the plate only, with painted
+//! supports, rafts under tree supports and the settings `config.rs` lists.
 
 use crate::base_support;
-use crate::config::Settings;
+use crate::config::{RaftMaker, Settings};
 use crate::geom::{self, Pt, Shape, Shapes};
 use crate::grid::{self, Grid};
 use crate::monotonic;
 use crate::par;
+use crate::raft::Raft;
 use crate::region::Role;
 
 const EPSILON: f64 = 1e-4;
@@ -101,12 +105,21 @@ pub struct Params {
     interface_turn: f64,
     /// mm²: a tree branch's island larger than this gets a second wall (`tree_branch_diameter_double_wall_area`).
     double_wall_area: f64,
+    /// Whether supports are on: with them off, the generator makes only the raft, if any.
+    enabled: bool,
+    /// The raft under the object (`raft.rs`), how far its contact layer reaches past the object's first layer, and
+    /// the density of its interface (`support_interface_spacing`, as the top interfaces' but never the base's).
+    raft: Option<Raft>,
+    raft_expansion: f64,
+    raft_interface_density: f64,
+    /// Whether the raft's base layers print a loop round their lines (Orca's `with_sheath`, which its organic trees
+    /// turn on).
+    raft_sheath: bool,
 }
 
 impl Params {
     pub fn new(s: &Settings) -> Params {
         let sp = &s.support;
-        let flow_spacing = |w: f64, h: f64| (w as f32 - h as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
         let spacing = flow_spacing(sp.line_width, s.layer_height);
         let first_spacing = flow_spacing(s.first_layer_width, s.first_layer_height);
         let support_spacing = sp.base_spacing + spacing;
@@ -141,6 +154,8 @@ impl Params {
             first_expansion: sp.first_layer_expansion,
             bottom_contact_height: s.layer_height as f32 as f64,
             brim: match s.brim_type.as_str() {
+                // An object on a raft has no brim (Orca's `has_brim`).
+                _ if sp.raft_layers > 0 => None,
                 "auto_brim" | "" => Some(BrimTrim { outer: false, inner: false, gap: 0.0 }),
                 kind if s.brim_width > 0.0 && kind != "no_brim" => Some(BrimTrim {
                     outer: matches!(kind, "outer_only" | "outer_and_inner"),
@@ -163,6 +178,11 @@ impl Params {
                 1 => f64::MAX,
                 _ => 1e-13,
             },
+            enabled: s.enable_support,
+            raft: Raft::of(s),
+            raft_expansion: sp.raft_expansion,
+            raft_interface_density: (spacing / (sp.interface_spacing + spacing)).min(1.0),
+            raft_sheath: if s.enable_support { sp.organic() } else { sp.raft_maker() == RaftMaker::OrganicTrees },
         }
     }
 
@@ -229,6 +249,9 @@ pub struct Layer {
     pub islands: Shapes,
     /// Whether it is on the plate (its flange prints with the first layer's speeds).
     pub first: bool,
+    /// Whether it is among the object's first support layers, as many as the raft has (Orca's `raft_layer`, whose
+    /// cooling it doesn't hold for the object layer above: it cools each on its own).
+    pub raft: bool,
 }
 
 /// What a support layer prints: each path grown by half its line spacing, with square corners and flat ends, as
@@ -256,6 +279,9 @@ enum Kind {
     Base,
     TopInterface,
     BottomInterface,
+    /// A raft's layers under its contact layer: its base (the first layer among them), and its interface.
+    RaftBase,
+    RaftInterface,
 }
 
 /// A layer of the generator (Orca's `SupportGeneratorLayer`).
@@ -413,16 +439,27 @@ fn remove_sticks(shapes: &mut Shapes) {
 /// The supports of one object, layer by layer, bottom up.
 pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
     let n = o.slices.len();
-    if n < 2 {
+    if n == 0 || (n < 2 && p.raft.is_none()) {
         return Vec::new();
     }
     let origin = ((o.origin.0 * 100.0).round() as i64, (o.origin.1 * 100.0).round() as i64);
     let gp = p.grid(origin);
+    // With supports off, a raft alone: only the first layer is looked at.
+    let looked = if p.enabled { n } else { 1 };
 
-    // 1. Overhangs.
-    let mut detected: Vec<Detected> =
-        par::map_range(n, |l| if l == 0 { Detected::default() } else { detect_overhangs(o, l, p) });
-    grow_sharp_tails(o, &mut detected, p);
+    // 1. Overhangs; on a raft, the first layer's whole slice, whose small islands are sharp tails.
+    let mut detected: Vec<Detected> = par::map_range(n, |l| {
+        if l == 0 {
+            if p.raft.is_some() { raft_overhangs(o) } else { Detected::default() }
+        } else if l < looked {
+            detect_overhangs(o, l, p)
+        } else {
+            Detected::default()
+        }
+    });
+    if p.enabled {
+        grow_sharp_tails(o, &mut detected, p);
+    }
     let mut present = vec![false; n];
     for (l, d) in detected.iter().enumerate() {
         present[l] = !d.overhangs.is_empty();
@@ -434,10 +471,14 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
     // 2. Top contacts.
     let mut arena: Vec<Gen> = Vec::new();
     let contacts: Vec<Option<Gen>> = par::map_range(n, |l| {
-        if l == 0 || !present[l] {
+        if !present[l] {
             return None;
         }
-        contact_layer(o, l, &detected[l], p, &gp)
+        match (l, p.raft) {
+            (0, Some(r)) => Some(raft_contact(o, &r, p, &gp)),
+            (0, None) => None,
+            _ => contact_layer(o, l, &detected[l], p, &gp),
+        }
     });
     let mut tops: Vec<usize> = Vec::new();
     for g in contacts.into_iter().flatten() {
@@ -476,10 +517,49 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
         }
     }
     let interfaces = interface_layers(&mut arena, &tops, &bottoms, &inter, p);
-    flange(o, &mut arena, &tops, &interfaces, &inter, p);
+    let rafts = match p.raft {
+        Some(r) if r.layers() > 1 => raft_base(&mut arena, &tops, &interfaces, &inter, &r, p),
+        _ => {
+            flange(o, &mut arena, &tops, &interfaces, &inter, p);
+            Vec::new()
+        }
+    };
 
-    // 6. Layers and toolpaths.
-    toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p)
+    // 6. Layers and toolpaths: the raft's layers under its contact layer, then the rest.
+    let mut layers = raft_paths(&arena, &rafts, o.origin, p);
+    layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p));
+    mark_raft(&mut layers, p);
+    layers
+}
+
+/// Marks the object's first support layers, as many as the raft has: Orca's G-code cools each of them on its own
+/// (`cooling_buffer_flush` at a `raft_layer`, which it tells by the support layer's index, whatever it prints).
+fn mark_raft(layers: &mut [Layer], p: &Params) {
+    let n = p.raft.map_or(0, |r| r.layers());
+    for layer in layers.iter_mut().take(n) {
+        layer.raft = true;
+    }
+}
+
+/// One object's raft as Orca's organic trees make it with supports off, when they have no trees to grow
+/// (`generate_raft_contact`): its contact layer the object's first layer grown by `raft_expansion` as it is, not put on
+/// the support grid as the normal generator puts it, and the layers under it as `raft_base` makes them.
+pub fn raft_alone(o: &Object, p: &Params) -> Vec<Layer> {
+    let Some(r) = p.raft else { return Vec::new() };
+    let Some(footprint) = o.slices.first().filter(|s| !s.is_empty()) else { return Vec::new() };
+    let mut g = Gen::new(Kind::TopContact, r.interface_top_z, r.contact_top_z, r.contact_height);
+    g.polygons = if p.raft_expansion > 0.0 {
+        geom::offset_c2(footprint, p.raft_expansion, geom::Join::Miter(3.0))
+    } else {
+        footprint.clone()
+    };
+    let mut arena = vec![g];
+    let tops = [0];
+    let rafts = if r.layers() > 1 { raft_base(&mut arena, &tops, &[], &[], &r, p) } else { Vec::new() };
+    let mut layers = raft_paths(&arena, &rafts, o.origin, p);
+    layers.extend(toolpaths(o, &mut arena, &tops, &[], &[], &[], p));
+    mark_raft(&mut layers, p);
+    layers
 }
 
 /// One object's organic trees as drawn (`tree.rs`), on the support's layers (the object's): each layer's branches
@@ -740,7 +820,8 @@ fn remove_small_overhangs(detected: &mut [Detected], p: &Params) {
     }
     let w = p.extrusion_width;
     let mut clusters: Vec<Cluster> = Vec::new();
-    for (l, d) in detected.iter().enumerate().skip(1) {
+    // The first layer has overhangs only on a raft (its whole slice), where it clusters as any other layer.
+    for (l, d) in detected.iter().enumerate() {
         for (k, shape) in d.overhangs.iter().enumerate() {
             let overhang = one(shape);
             let dilated = geom::offset(&overhang, w);
@@ -974,8 +1055,10 @@ fn intermediate_layers(arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], 
         inter.push(arena.len());
         arena.push(Gen::new(Kind::Intermediate, bottom, print, height));
     };
+    // On a raft, the support's own layers start on its interface (the contact layer's height is decided).
+    let raft_z = p.raft.map_or(0.0, |r| r.interface_top_z);
     let mut first = 0;
-    if !extremes.is_empty() && arena[extremes[0]].extreme_z().abs() < EPSILON {
+    if !extremes.is_empty() && (arena[extremes[0]].extreme_z() - raft_z).abs() < EPSILON {
         first = 1;
     }
     for idx in first..extremes.len() {
@@ -988,7 +1071,7 @@ fn intermediate_layers(arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], 
             continue;
         }
         let e1 = (idx > first).then(|| extremes[idx - 1]);
-        let mut z1 = e1.map_or(0.0, |e| arena[e].extreme_z());
+        let mut z1 = e1.map_or(raft_z, |e| arena[e].extreme_z());
         if z1.abs() < EPSILON {
             push(arena, &mut inter, 0.0, first_h, first_h);
             z1 = first_h;
@@ -1043,8 +1126,13 @@ fn intermediate_layers(arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], 
 /// and by 0.2 mm beside a sharp tail.
 fn trim_by_object(o: &Object, arena: &mut [Gen], layers: &[usize], tails: &[&Vec<Shape>], p: &Params) {
     let n = o.slices.len();
-    let todo: Vec<usize> =
-        layers.iter().copied().filter(|&i| !arena[i].polygons.is_empty() && arena[i].print_z >= EPSILON).collect();
+    // Not the raft's layers (its contact layer among them).
+    let raft_top = p.raft.map_or(0.0, |r| r.contact_top_z);
+    let todo: Vec<usize> = layers
+        .iter()
+        .copied()
+        .filter(|&i| !arena[i].polygons.is_empty() && arena[i].print_z >= raft_top + EPSILON)
+        .collect();
     let trimmed: Vec<Shapes> = {
         let arena = &*arena;
         par::map_range(todo.len(), |k| {
@@ -1269,6 +1357,285 @@ fn flange(o: &Object, arena: &mut [Gen], tops: &[usize], interfaces: &[usize], i
     }
 }
 
+/// The first layer's overhangs on a raft (Orca's `detect_overhangs` on the first object layer): its whole slice, holes
+/// and all, which the raft's contact layer holds up; its islands not over 6 mm both ways are sharp tails.
+fn raft_overhangs(o: &Object) -> Detected {
+    let mut out = Detected { overhangs: o.slices[0].clone(), ..Detected::default() };
+    for island in &o.slices[0] {
+        let (x, y) = size(&one(island));
+        if !(x > WELL_SUPPORTED && y > WELL_SUPPORTED) {
+            out.tails.push(island.clone());
+            out.tail_heights.push(o.height[0]);
+        }
+    }
+    out
+}
+
+/// The raft's contact layer (Orca's `detect_contacts`, `new_contact_layer` and `fill_contact_layer` on the first object
+/// layer over a raft): that layer grown by `raft_expansion`, put on the support grid (or, snug, closed and rounded
+/// off), from the top of the raft's interface to its own top, all of it dense.
+fn raft_contact(o: &Object, r: &Raft, p: &Params, gp: &grid::Params) -> Gen {
+    let footprint = &o.slices[0];
+    let contact = if p.raft_expansion > 0.0 {
+        geom::offset_c2(footprint, p.raft_expansion, geom::Join::Miter(3.0))
+    } else {
+        footprint.clone()
+    };
+    let mut g = Gen::new(Kind::TopContact, r.interface_top_z, r.contact_top_z, r.contact_height);
+    g.overhang = footprint.clone();
+    if p.snug {
+        g.contact = snug(&contact, p);
+        g.polygons = g.contact.clone();
+        return g;
+    }
+    // Nothing below to keep off.
+    let nothing: Shapes = Vec::new();
+    let grid = Grid::new(&contact, &nothing, gp);
+    g.contact = grid.extract(grid::EXPANSION_TO_PROPAGATE, true);
+    g.polygons = grid.extract(gp.expansion_to_slice(), true);
+    g
+}
+
+/// Orca's `generate_raft_base` with a raft of two layers or more: under its contact layer, its interface layers and
+/// its base, down to the first layer. The interface layers hold up the contact layer and what else rests on the raft
+/// (the first interface layer, grown by half a millimetre), with the columns that start there printed through them
+/// as base (each layer's `contact`); the base holds up both, and on the plate it grows by the first layer's expansion
+/// less that half millimetre. Returns the raft's layers, lowest first.
+fn raft_base(
+    arena: &mut Vec<Gen>,
+    tops: &[usize],
+    interfaces: &[usize],
+    inter: &[usize],
+    r: &Raft,
+    p: &Params,
+) -> Vec<usize> {
+    const FINE: f64 = 0.5;
+    let first_inflate = (p.first_expansion - FINE).max(0.0);
+    let contacts =
+        tops.first().copied().filter(|&t| arena[t].print_z <= p.first_layer_height.max(r.contact_top_z) + EPSILON);
+    let first_interface =
+        interfaces.first().copied().filter(|&i| arena[i].bottom_print_z() <= r.interface_top_z + EPSILON);
+    let columns_base = inter.first().copied().filter(|&i| arena[i].bottom_print_z() <= r.interface_top_z + EPSILON);
+    let mut interface_polygons: Shapes = Vec::new();
+    for g in [contacts, first_interface].into_iter().flatten() {
+        if !arena[g].polygons.is_empty() {
+            interface_polygons.extend(square(&arena[g].polygons, FINE));
+        }
+    }
+    let interface_polygons = geom::union_all(&[&interface_polygons]);
+    let (mut base, mut columns) = (Vec::new(), Vec::new());
+    if let Some(c) = columns_base {
+        // Columns standing on the raft's interface.
+        base = arena[c].polygons.clone();
+        columns =
+            if interface_polygons.is_empty() { base.clone() } else { geom::difference(&base, &interface_polygons) };
+    }
+    if !interface_polygons.is_empty() {
+        base = geom::union(&base, &interface_polygons);
+    }
+    let mut out: Vec<usize> = Vec::new();
+    let mut push = |arena: &mut Vec<Gen>, g: Gen| {
+        out.push(arena.len());
+        arena.push(g);
+    };
+    // The first layer.
+    let kind = if r.base_layers > 0 { Kind::RaftBase } else { Kind::RaftInterface };
+    let mut g = Gen::new(kind, 0.0, r.first_height, r.first_height);
+    g.polygons =
+        if first_inflate > 0.0 { geom::offset_c2(&base, first_inflate, geom::Join::Miter(3.0)) } else { base.clone() };
+    push(arena, g);
+    let mut z = r.first_height;
+    // The rest of the base.
+    for _ in 1..r.base_layers {
+        let mut g = Gen::new(Kind::RaftBase, z, z + r.base_height, r.base_height);
+        g.polygons = base.clone();
+        z += r.base_height;
+        push(arena, g);
+    }
+    // The interface under the contact layer.
+    for _ in 1..r.interface_layers {
+        let mut g = Gen::new(Kind::RaftInterface, z, z + r.interface_height, r.interface_height);
+        g.polygons = interface_polygons.clone();
+        g.contact = columns.clone();
+        z += r.interface_height;
+        push(arena, g);
+    }
+    out
+}
+
+/// The directions Orca's raft fills its layers in (`raft_angle_1st_layer`, `raft_angle_base`, `raft_angle_interface`,
+/// as filler angles, radians in float), which depend on how many layers of each kind it has.
+struct RaftAngles {
+    first: f32,
+    base: f32,
+    interface: f32,
+}
+
+impl RaftAngles {
+    fn of(r: &Raft) -> RaftAngles {
+        // The support's angle is 0 (`support_angle`, `unsupported` refuses others); its interface a quarter turn on.
+        let (base_angle, interface_angle) = (0.0f32, std::f32::consts::FRAC_PI_2);
+        if r.base_layers > 1 {
+            let turn = if r.interface_layers.is_multiple_of(2) { std::f32::consts::FRAC_PI_2 } else { 0.0 };
+            RaftAngles { first: interface_angle, base: base_angle, interface: interface_angle + turn }
+        } else if r.base_layers == 1 || r.interface_layers > 1 {
+            RaftAngles {
+                first: base_angle,
+                base: 0.0,
+                interface: (f64::from(interface_angle) + 0.5 * std::f64::consts::PI) as f32,
+            }
+        } else {
+            let a = (0.5 * std::f64::consts::PI) as f32;
+            RaftAngles { first: a, base: 0.0, interface: a }
+        }
+    }
+
+    /// Orca's `raft_interface_angle`: the interface's direction, an eighth of a turn either way by the layer's
+    /// interface id.
+    fn interface(&self, id: usize) -> f32 {
+        self.interface + if id % 2 == 1 { -std::f32::consts::FRAC_PI_4 } else { std::f32::consts::FRAC_PI_4 }
+    }
+}
+
+/// The direction a filler at this angle lays its lines in, as `base_support::fill` takes it (Orca's
+/// `_infill_direction`: a quarter turn on, in float).
+fn direction(filler_angle: f32) -> f64 {
+    f64::from(filler_angle + std::f32::consts::FRAC_PI_2)
+}
+
+/// The interface id Orca's support layers give the raft's contact layer (`generate_support_layers`): one more than
+/// the layer under it, the last interface layer's (counted from 0) or a base layer's (0); on a raft of one layer, 0.
+fn raft_contact_id(r: &Raft) -> usize {
+    match r.layers() {
+        1 => 0,
+        _ if r.interface_layers >= 2 => r.interface_layers - 1,
+        _ => 1,
+    }
+}
+
+/// The raft's layers under its contact layer, as Orca's `generate_support_toolpaths` prints them: the first layer as a
+/// loop round the raft's interface pattern at its own density (`raft_first_layer_density`), the base layers in the
+/// support's pattern and density, and the interface layers in the raft's interface pattern, an eighth of a turn
+/// either way by layer, with the columns that start on the raft printed through them as base.
+fn raft_paths(arena: &[Gen], rafts: &[usize], origin: (f64, f64), p: &Params) -> Vec<Layer> {
+    let Some(r) = p.raft else { return Vec::new() };
+    let angles = RaftAngles::of(&r);
+    // The raft's interface is the support pattern but at a density over 95 %, where it is straight lines.
+    let rectilinear = p.raft_interface_density > 0.95;
+    par::map_range(rafts.len(), |k| {
+        let g = &arena[rafts[k]];
+        let h = g.height;
+        let path = |role: Role, points: Vec<Pt>, width: f64| Path {
+            role,
+            points: geom::simplify_line(&points, RESOLUTION),
+            width,
+            height: h,
+        };
+        let mut items: Vec<Item> = Vec::new();
+        if k > 0 {
+            let area = if k < r.base_layers { &g.polygons } else { &g.contact };
+            let fill = |shape: &Shape| base_support::fill(shape, direction(angles.base), origin, p.spacing, p.density);
+            if p.raft_sheath {
+                // A loop round each part, as wide as a support line of the layer's height.
+                let line = Line { width: p.width, height: h, spacing: flow_spacing(p.width, h) };
+                items.extend(sheath_paths(area, line, Role::Support, false, fill));
+            } else {
+                for shape in &geom::closing(area, SCALED_EPSILON) {
+                    for line in fill(shape) {
+                        items.push(Item::Path(path(Role::Support, line, p.width)));
+                    }
+                }
+            }
+        }
+        let role = if k < r.base_layers { Role::Support } else { Role::SupportInterface };
+        if k == 0 {
+            let (angle, sp) = (direction(angles.first), p.first_spacing);
+            let line = Line { width: p.first_width, height: p.first_layer_height, spacing: sp };
+            items.extend(sheath_paths(&g.polygons, line, role, true, |inner: &Shape| {
+                if rectilinear {
+                    monotonic::rectilinear(inner, angle, origin, sp, p.first_density)
+                } else {
+                    base_support::fill(inner, angle, origin, sp, p.first_density)
+                }
+            }));
+        } else if k >= r.base_layers {
+            // Interface ids count the raft's interface layers from 0.
+            let angle = direction(angles.interface(k - r.base_layers));
+            for shape in &geom::closing(&g.polygons, SCALED_EPSILON) {
+                let lines = if rectilinear {
+                    monotonic::rectilinear(shape, angle, origin, p.spacing, p.raft_interface_density)
+                } else {
+                    base_support::fill(shape, angle, origin, p.spacing, p.raft_interface_density)
+                };
+                for line in lines {
+                    items.push(Item::Path(path(role, line, p.width)));
+                }
+            }
+        }
+        let islands = geom::union(&g.polygons, &g.contact);
+        Layer { print_z: g.print_z, height: h, items, islands, first: k == 0, raft: false }
+    })
+}
+
+/// A support line's width, height and spacing, mm (Orca's `Flow`).
+#[derive(Clone, Copy)]
+struct Line {
+    width: f64,
+    height: f64,
+    spacing: f64,
+}
+
+/// The spacing of a line this wide and high, mm, as Orca's float `Flow::spacing` works it out.
+fn flow_spacing(width: f64, height: f64) -> f64 {
+    (width as f32 - height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64
+}
+
+/// Orca's `fill_expolygons_with_sheath_generate_paths`: each part of the area, closed, a loop half a line in from its
+/// edge (stopping 15 % of a line short), then `fill`'s lines from 40 % of a line further in, as `role`. With `fixed`
+/// (Orca's `no_sort`, on the first layer) each part's loop and lines print together, in that order.
+fn sheath_paths(
+    area: &Shapes,
+    line: Line,
+    role: Role,
+    fixed: bool,
+    fill: impl Fn(&Shape) -> Vec<Vec<Pt>>,
+) -> Vec<Item> {
+    let Line { width: w, height: h, spacing: sp } = line;
+    let path = |points: Vec<Pt>, role: Role| Path {
+        role,
+        points: geom::simplify_line(&points, RESOLUTION),
+        width: w,
+        height: h,
+    };
+    let mut out = Vec::new();
+    let closed = geom::offset(&geom::offset(area, SCALED_EPSILON), -(SCALED_EPSILON + 0.5 * w));
+    for shape in &closed {
+        let mut group: Vec<Path> = Vec::new();
+        for (k, contour) in shape.iter().enumerate() {
+            let mut pl: Vec<Pt> = contour.clone();
+            pl.push(pl[0]);
+            if k > 0 {
+                pl.reverse();
+            }
+            clip_end(&mut pl, 0.15 * sp * geom::SCALE);
+            if pl.len() >= 2 {
+                group.push(path(pl, Role::Support));
+            }
+        }
+        for inner in &geom::offset(&one(shape), -0.4 * sp) {
+            for line in fill(inner) {
+                group.push(path(line, role));
+            }
+        }
+        if !fixed {
+            out.extend(group.into_iter().map(Item::Path));
+        } else if !group.is_empty() {
+            out.push(Item::Fixed(group));
+        }
+    }
+    out
+}
+
 /// Orca's `generate_support_layers` and `generate_support_toolpaths`: the generator's layers grouped by height into
 /// the support's layers, merged where they print alike, and filled.
 fn toolpaths(
@@ -1346,6 +1713,9 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
         (Some(a), Some(b)) => (arena[a.layer].height - arena[b.layer].height).abs() < EPSILON,
         _ => false,
     };
+    // The raft's contact layer, which nothing merges into and which prints as the raft's interface.
+    let raft_contact =
+        p.raft.filter(|r| top.is_some() && r.interface_layers > 0 && (z - r.contact_top_z).abs() < EPSILON);
     let merge = |into: &mut Option<Item>, from: &mut Option<Item>| {
         let (Some(a), Some(b)) = (into.as_mut(), from.take()) else { return };
         if let Some(rest) = b.to_extrude {
@@ -1359,12 +1729,12 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
         a.polygons.extend(b.polygons);
         a.polygons = geom::union_all(&[&a.polygons]);
     };
-    if p.top_interfaces > 0 && could_merge(&top, &interface) {
+    if p.top_interfaces > 0 && could_merge(&top, &interface) && raft_contact.is_none() {
         merge(&mut top, &mut interface);
     }
     // Organic trees' bottom contacts print nothing: nothing merges into them.
     if p.organic {
-    } else if could_merge(&bottom, &top) {
+    } else if could_merge(&bottom, &top) && raft_contact.is_none() {
         let mut b = bottom.take();
         merge(&mut top, &mut b);
     } else if could_merge(&bottom, &interface) {
@@ -1385,28 +1755,36 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
     };
     // Interfaces: the support pattern a quarter turn from the columns', denser.
     let interface_angle = (std::f32::consts::FRAC_PI_2 + p.interface_turn as f32 + std::f32::consts::FRAC_PI_2) as f64;
-    let extrude_interface = |item: &mut Option<Item>, bottom_density: bool| {
+    let extrude_interface = |item: &mut Option<Item>, density: f64, angle: f64| {
         let Some(item) = item.as_mut() else { return };
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
         if area.is_empty() {
             return;
         }
         let g = &arena[item.layer];
-        let density = if bottom_density { p.bottom_interface_density } else { p.top_interface_density };
         for shape in &geom::union_all(&[&area]) {
-            for line in base_support::fill(shape, interface_angle, origin, p.spacing, density) {
+            for line in base_support::fill(shape, angle, origin, p.spacing, density) {
                 item.paths.push(crate::support::Item::Path(path(Role::SupportInterface, line, p.width, g.height)));
             }
         }
     };
-    extrude_interface(&mut top, false);
+    match raft_contact {
+        // The raft's contact layer: its interface's density, turned as Orca turns it by its interface id.
+        Some(r) => {
+            let angle = direction(RaftAngles::of(&r).interface(raft_contact_id(&r)));
+            extrude_interface(&mut top, p.raft_interface_density, angle);
+        }
+        None => extrude_interface(&mut top, p.top_interface_density, interface_angle),
+    }
     if !p.organic {
-        extrude_interface(&mut bottom, true);
+        extrude_interface(&mut bottom, p.bottom_interface_density, interface_angle);
     }
     let interface_bottom = interface.as_ref().is_some_and(|i| arena[i.layer].kind == Kind::BottomInterface);
-    extrude_interface(&mut interface, interface_bottom);
+    let density = if interface_bottom { p.bottom_interface_density } else { p.top_interface_density };
+    extrude_interface(&mut interface, density, interface_angle);
     let mut base = base;
-    let mut first = false;
+    // A raft of one layer is its contact layer, on the plate.
+    let mut first = raft_contact.is_some_and(|r| r.layers() == 1);
     if let Some(item) = base.as_mut() {
         let g = &arena[item.layer];
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
@@ -1438,7 +1816,7 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
         items.extend(item.paths);
     }
     let islands = geom::union_all(&[&polys]);
-    Layer { print_z: z, height, items, islands, first }
+    Layer { print_z: z, height, items, islands, first, raft: false }
 }
 
 /// The classic trees' layers as drawn (`tree::classic`), printed as Orca's `TreeSupport::generate_toolpaths` prints
@@ -1452,7 +1830,6 @@ pub fn classic_layers(
     p: &Params,
 ) -> Vec<Layer> {
     use crate::tree::classic::draw::AreaType;
-    let flow_spacing = |w: f64, h: f64| (w as f32 - h as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
     // Orca's `_infill_direction` angles (the filler's and a quarter turn, in float): the interfaces' filler is at the
     // support angle and a quarter turn, the base's at the support angle.
     let interface_angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
@@ -1543,7 +1920,7 @@ pub fn classic_layers(
             }
         }
         let all: Shapes = d.groups.iter().map(|g| g.area.clone()).collect();
-        Layer { print_z: d.print_z, height: h, items, islands: geom::union_all(&[&all]), first }
+        Layer { print_z: d.print_z, height: h, items, islands: geom::union_all(&[&all]), first, raft: false }
     })
 }
 
@@ -1614,38 +1991,11 @@ fn walled_infill(
 /// Orca's `fill_expolygons_with_sheath_generate_paths` on the first layer: a loop round each part, half a line in,
 /// then rectilinear lines at `angle`, dense, each part's printed as it comes.
 fn flange_paths(area: &Shapes, angle: f64, origin: (f64, f64), p: &Params) -> Vec<Item> {
-    let (w, h, sp) = (p.first_width, p.first_layer_height, p.first_spacing);
-    let path = |points: Vec<Pt>| Path {
-        role: Role::Support,
-        points: geom::simplify_line(&points, RESOLUTION),
-        width: w,
-        height: h,
-    };
-    let mut out = Vec::new();
-    let closed = geom::offset(&geom::offset(area, SCALED_EPSILON), -(SCALED_EPSILON + 0.5 * w));
-    for shape in &closed {
-        let mut group: Vec<Path> = Vec::new();
-        for (k, contour) in shape.iter().enumerate() {
-            let mut pl: Vec<Pt> = contour.clone();
-            pl.push(pl[0]);
-            if k > 0 {
-                pl.reverse();
-            }
-            clip_end(&mut pl, 0.15 * sp * geom::SCALE);
-            if pl.len() >= 2 {
-                group.push(path(pl));
-            }
-        }
-        for inner in &geom::offset(&one(shape), -0.4 * sp) {
-            for line in monotonic::rectilinear(inner, angle, origin, sp, p.first_density) {
-                group.push(path(line));
-            }
-        }
-        if !group.is_empty() {
-            out.push(Item::Fixed(group));
-        }
-    }
-    out
+    let sp = p.first_spacing;
+    let line = Line { width: p.first_width, height: p.first_layer_height, spacing: sp };
+    sheath_paths(area, line, Role::Support, true, |inner: &Shape| {
+        monotonic::rectilinear(inner, angle, origin, sp, p.first_density)
+    })
 }
 
 /// Orca's `tree_supports_generate_paths`: each of a layer's branch islands as a loop half a line in from its edge,

@@ -14,6 +14,8 @@ use std::hash::BuildHasherDefault;
 pub struct Layers {
     pub top: Vec<f64>,
     pub height: Vec<f64>,
+    /// Where the object starts: 0 on the plate, above a raft its contact layer and the gap over it (`raft.rs`).
+    pub base: f64,
 }
 
 impl Layers {
@@ -27,14 +29,40 @@ impl Layers {
             top.push(z);
             heights.push(height);
         }
-        Layers { top, height: heights }
+        Layers { top, height: heights, base: 0.0 }
+    }
+
+    /// Uniform layers on a raft: from `base`, every one `height` thick (the first too, as Orca's object layers on a
+    /// raft are), up to the model's top.
+    pub fn on_raft(model_height: f64, height: f64, base: f64) -> Layers {
+        let (mut top, mut heights) = (Vec::new(), Vec::new());
+        let mut z = 0.0;
+        while z + 1e-6 < model_height || top.is_empty() {
+            z += height;
+            top.push(z + base);
+            heights.push(height);
+        }
+        Layers { top, height: heights, base }
     }
 
     /// Where each layer is cut: halfway up the layer, as a float, as Orca cuts (its meshes are floats too). A face
     /// at a round height then lies exactly on a plane rather than a hair below it, and belongs to what is under it:
-    /// a deck at 8.5 mm is part of the layer cut at 8.5 (the sum of the layers comes to 8.500000000000002).
+    /// a deck at 8.5 mm is part of the layer cut at 8.5 (the sum of the layers comes to 8.500000000000002). On a
+    /// raft, the model's own heights: halfway between the layer's bottom and top above the raft, as Orca keeps them.
     pub fn slice_z(&self) -> Vec<f64> {
-        self.top.iter().zip(&self.height).map(|(t, h)| (t - h / 2.0) as f32 as f64).collect()
+        if self.base == 0.0 {
+            return self.top.iter().zip(&self.height).map(|(t, h)| (t - h / 2.0) as f32 as f64).collect();
+        }
+        let mut lo = 0.0;
+        self.height
+            .iter()
+            .map(|h| {
+                let hi = lo + h;
+                let z = 0.5 * (lo + hi);
+                lo = hi;
+                z as f32 as f64
+            })
+            .collect()
     }
 }
 

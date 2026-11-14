@@ -100,7 +100,7 @@ pub fn read_over(text: &str, base: &Profile) -> Result<Setup, Error> {
     let filament = filaments.into_iter().next().unwrap_or_default();
     let profile = Arc::new(Profile::over(base, machine, process, filament));
     let mut settings = Settings::from_profile(profile, colour.as_deref());
-    settings.palette = palette;
+    settings.set_palette(palette);
     if let Some(what) = settings.unsupported() {
         return Err(Error::Unsupported(what));
     }
@@ -202,8 +202,36 @@ mod tests {
             && s.settings.wall_loops == 1
             && s.settings.top_shell_layers == 0
             && s.settings.sparse_density == 0.0));
-        // A raft prints with supports off too.
-        assert_eq!(refused(r#"{"process": {"raft_layers": "3"}}"#), Some(Error::Unsupported("a raft")));
+        // A raft slices (raft.rs) with supports off, as the generator Orca takes for the supports set makes it, and
+        // under normal supports; not yet under tree supports, nor with supports off where classic trees would make it.
+        assert!(read(r#"{"process": {"raft_layers": "3"}}"#).is_ok());
+        assert!(read(r#"{"process": {"raft_layers": "2", "support_type": "normal(auto)"}}"#).is_ok());
+        assert!(read(&normal(r#", "raft_layers": "2""#)).is_ok());
+        assert_eq!(refused(&tree(r#", "raft_layers": "2""#)), Some(Error::Unsupported("a raft under tree supports")));
+        assert_eq!(
+            refused(r#"{"process": {"raft_layers": "2", "support_style": "tree_hybrid"}}"#),
+            Some(Error::Unsupported("a raft in this style of tree support"))
+        );
+        assert_eq!(
+            refused(r#"{"process": {"raft_layers": "2"}, "filaments": [{}, {}]}"#),
+            Some(Error::Unsupported("a raft with several filaments"))
+        );
+        // Several filaments print a prime tower, with which Orca's supports follow the object's layers: trees slice,
+        // normal supports don't yet.
+        let several =
+            |more: &str| format!(r#"{{"process": {{"enable_support": "1"{more}}}, "filaments": [{{}}, {{}}]}}"#);
+        assert!(read(&several("")).is_ok_and(|s| !s.settings.support.independent_layer_height));
+        assert!(read(&several(r#", "support_style": "tree_hybrid""#)).is_ok());
+        assert_eq!(
+            refused(&several(r#", "support_type": "normal(auto)""#)),
+            Some(Error::Unsupported("normal supports in several filaments"))
+        );
+        assert!(read(&normal("")).is_ok_and(|s| s.settings.support.independent_layer_height));
+        // The command line's stand-in filaments too.
+        let mut s = read(&normal("")).unwrap().settings;
+        s.set_palette(Some(Arc::new(crate::filaments::palette_of(&s, 2))));
+        assert!(!s.support.independent_layer_height);
+        assert_eq!(s.unsupported(), Some("normal supports in several filaments"));
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))
