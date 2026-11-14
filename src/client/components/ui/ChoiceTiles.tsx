@@ -1,3 +1,4 @@
+import { softSlashes } from "@shared/spools";
 import { type ReactNode, useId } from "react";
 import { cn } from "@/lib/cn";
 
@@ -142,7 +143,7 @@ export function ChoiceTiles<T extends string>({
                     dense ? "text-caption tracking-tight" : "text-small",
                   )}
                 >
-                  {option.label}
+                  {softSlashes(option.label)}
                 </span>
               )}
               {option.detail && !strip && (

@@ -672,6 +672,21 @@ async function setSlicingDefaults(page: Page, change: Record<string, unknown> | 
   });
 }
 
+/**
+ * Loads the dual-colour (A3) and tri-colour (A4) silks into the AMS by the API, the way the Printer page does, so
+ * the shots of the AMS and of "Slice with…" show a multi-colour spool in a slot. The next shot's app is fresh.
+ */
+async function loadMultiColourSpools(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const slots: Array<[string, string]> = [
+    ["A3", SEED_SPOOL_IDS.blackPurple],
+    ["A4", SEED_SPOOL_IDS.blackGoldPurple],
+  ];
+  for (const [slot, spoolId] of slots) {
+    await page.request.put(`/api/printer/slots/${slot}`, { headers, data: { spoolId } });
+  }
+}
+
 /** The Printer page's slicing defaults (decision 0051). */
 const slicingDefaults = (page: Page) => page.locator("section[aria-labelledby=printer-slicing]");
 
@@ -2162,6 +2177,20 @@ export const shots: Shot[] = [
     name: "slice-settings-filament",
     path: "/ideas",
     prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      const filament = settings.getByRole("group", { name: "Filament" });
+      await filament.waitFor();
+      await filament.evaluate((group) => group.scrollIntoView({ block: "start", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Filament with the multi-colour silks loaded first: each tile draws its spool in its colours.
+    name: "slice-settings-filament-multicolour",
+    path: "/ideas",
+    prepare: async (page) => {
+      await loadMultiColourSpools(page);
       const settings = await openSliceSettings(page);
       const filament = settings.getByRole("group", { name: "Filament" });
       await filament.waitFor();
@@ -3970,6 +3999,30 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool", path: `/pantry/${SEED_SPOOL_IDS.silkGold}`, fullPage: true },
+  // The first twelve spools: a dual-colour and a tri-colour silk, each as its page shows it (no label photo: the
+  // spool itself, drawn in its colours, is the hero).
+  { name: "spool-dual-colour", path: `/pantry/${SEED_SPOOL_IDS.blackPurple}`, fullPage: true },
+  { name: "spool-tri-colour", path: `/pantry/${SEED_SPOOL_IDS.blackGoldPurple}`, fullPage: true },
+  {
+    // The new-spool sheet: a known product chosen (a tri-colour silk), its colours picked in order.
+    name: "spool-add-multicolour",
+    path: "/pantry",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Add (a )?spool/ })
+        .first()
+        .click();
+      const sheet = page.getByRole("dialog", { name: "New spool" });
+      await sheet.waitFor();
+      await sheet.getByRole("button", { name: /^SUNLU PLA\+ Silk tri-colour/ }).click();
+      await sheet.getByRole("group", { name: "Material" }).scrollIntoViewIfNeeded();
+      await sheet.getByRole("radiogroup", { name: "Colour to change" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   // Read the label (decision 0031): the way in, in Add a spool ...
   {
     name: "spool-add-label",
@@ -4056,6 +4109,17 @@ export const shots: Shot[] = [
     },
   },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
+  {
+    // The AMS with a dual-colour silk in A3 and a tri-colour in A4.
+    name: "printer-multicolour",
+    path: "/printer",
+    prepare: async (page) => {
+      await loadMultiColourSpools(page);
+      await page.reload();
+      await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+      await page.getByRole("button", { name: /^A3 Black\/Purple/ }).scrollIntoViewIfNeeded();
+    },
+  },
   {
     name: "printer",
     path: "/printer",

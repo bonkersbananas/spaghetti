@@ -39,7 +39,7 @@ test("adds a spool to the pantry and loads it into the AMS", { tag: "@phone" }, 
   await sheet.getByRole("radio", { name: "Blue" }).click();
   await expect(sheet.getByRole("textbox", { name: "Color name" })).toHaveValue("Blue");
   await sheet.getByLabel("Brand").fill("Polymaker");
-  await sheet.getByRole("button", { name: "Matte" }).click();
+  await sheet.getByRole("button", { name: "Matte", exact: true }).click();
   await sheet.getByRole("button", { name: "Add to pantry" }).click();
   await expect(sheet).toBeHidden();
 

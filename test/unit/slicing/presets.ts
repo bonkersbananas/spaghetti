@@ -21,6 +21,13 @@ function process(layer: string, pattern: string, extra: Record<string, string | 
   };
 }
 
+/** A filament preset with the nozzle temperature Orca's own preset has (one per extruder, as the engine flattens them). */
+const hot = (type: string, nozzle: string) => ({
+  ...filament(type),
+  nozzle_temperature: [nozzle, nozzle],
+  nozzle_temperature_initial_layer: [nozzle, nozzle],
+});
+
 const filament = (type: string, printers = X2D) => ({
   filament_type: [type],
   filament_colour: ["#FFFFFF"],
@@ -65,8 +72,12 @@ export const presets: PresetSet = {
   },
   filament: {
     "Bambu PLA Basic @BBL X2D 0.4 nozzle": filament("PLA"),
-    "Generic PLA @BBL X2D 0.4 nozzle": filament("PLA"),
-    "Generic PLA Silk @BBL X2D 0.4 nozzle": filament("PLA"),
+    "Generic PLA @BBL X2D 0.4 nozzle": hot("PLA", "220"),
+    "Generic PLA Silk @BBL X2D 0.4 nozzle": hot("PLA", "220"),
+    // Bambu's own lines for the X2D (a release of the engine with them in its presets.json).
+    "Bambu PLA Matte @BBL X2D 0.4 nozzle": hot("PLA", "220"),
+    "Bambu PLA Silk+ @BBL X2D 0.4 nozzle": hot("PLA", "230"),
+    "Bambu PLA Pure @BBL X2D 0.4 nozzle": hot("PLA", "220"),
     "Generic PETG @BBL X2D 0.4 nozzle": filament("PETG"),
     "Generic PETG-CF @BBL X2D 0.4 nozzle": filament("PETG-CF"),
     "Bambu PLA Basic @BBL X2D 0.2 nozzle": filament("PLA", X2D_02),

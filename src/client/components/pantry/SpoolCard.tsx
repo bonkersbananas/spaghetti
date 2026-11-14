@@ -28,6 +28,7 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
         <div className="bg-ink/3 flex size-16 shrink-0 items-center justify-center rounded-md">
           <SpoolDisc
             color={spool.colorHex}
+            colors={spool.colors}
             size="md"
             className="duration-base transition-transform group-hover:rotate-12"
           />

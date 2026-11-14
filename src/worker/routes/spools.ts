@@ -47,11 +47,35 @@ const color = z
   .transform((value) => value.toLowerCase())
   .nullable();
 
+/** A dual- or tri-colour spool's colours, in order. */
+const colorList = z
+  .array(
+    z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/i)
+      .transform((value) => value.toLowerCase()),
+  )
+  .min(2)
+  .max(3);
+
+/**
+ * The colour columns for what a request says: a multi-colour spool keeps its colours in `colors` and no `colorHex`
+ * (so nothing matches it as a single colour); a single colour clears the colours. Left alone when it says neither.
+ */
+function colourColumns<T extends { colors?: string[] | null; colorHex?: string | null }>(values: T) {
+  const { colors, ...rest } = values;
+  if (colors) return { ...rest, colorHex: null, colors: JSON.stringify(colors) };
+  if (colors === null || rest.colorHex) return { ...rest, colors: null };
+  return rest;
+}
+
 const fields = {
   material: z.string().trim().min(1).max(40),
   brand: words(60).optional(),
   colorName: words(60).optional(),
   colorHex: color.optional(),
+  colors: colorList.nullable().optional(),
+  line: words(40).optional(),
   finish: words(40).optional(),
   remaining: z.enum(REMAINING).optional(),
   note: z.string().max(20_000).optional(),
@@ -110,6 +134,17 @@ const readLabelBody = z.object({
 
 const notFound = "That spool isn't on the shelf any more.";
 
+/** The stored colours (JSON) as a list; null unless it is two or three colours. */
+function spoolColorList(stored: string | null): string[] | null {
+  if (!stored) return null;
+  try {
+    const parsed = colorList.safeParse(JSON.parse(stored));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export function toApiSpool(spool: Spool, slot: string | null, ledger?: SpoolGrams, read?: LabelReadRow): ApiSpool {
   const gramsLeft = ledger?.gramsLeft ?? null;
   return {
@@ -118,6 +153,8 @@ export function toApiSpool(spool: Spool, slot: string | null, ledger?: SpoolGram
     brand: spool.brand,
     colorName: spool.colorName,
     colorHex: spool.colorHex,
+    colors: spoolColorList(spool.colors),
+    line: spool.line,
     finish: spool.finish,
     remaining: levelOf({ remaining: spool.remaining, gramsLeft, netGrams: spool.netGrams }),
     netGrams: spool.netGrams,
@@ -196,7 +233,7 @@ export const spoolRoutes = new Hono<AppEnv>()
         .insert(spools)
         .values({
           id: spoolId,
-          ...values,
+          ...colourColumns(values),
           driedAt: driedAt ? new Date(Math.min(driedAt, now)) : null,
           createdBy: c.var.user.id,
           createdAt: created,
@@ -240,7 +277,7 @@ export const spoolRoutes = new Hono<AppEnv>()
       c.var.db
         .update(spools)
         .set({
-          ...values,
+          ...colourColumns(values),
           ...(marked?.some((field) => touched.includes(field))
             ? { labelFields: marked.filter((field) => !touched.includes(field)) }
             : {}),

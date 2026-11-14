@@ -14,6 +14,7 @@ import {
   machinePreset,
   ORCA_KEYS,
   type PresetSet,
+  pickFilamentPreset,
   processPreset,
   readSlicing,
   STAND_IN_COLOURS,
@@ -26,6 +27,33 @@ export type { PresetSet } from "./orca.ts";
 /** What a 3MF project brings: its settings (`Metadata/project_settings.config`). */
 export interface ProjectSettings {
   settings: Config;
+}
+
+/** The temperature keys a filament preset sets the nozzle with: the layers, and the first layer. */
+const NOZZLE_TEMPERATURES = ["nozzle_temperature", "nozzle_temperature_initial_layer"] as const;
+
+/**
+ * A filament preset with its nozzle temperatures inside the maker's range for that spool (`nozzleTempMin` and
+ * `nozzleTempMax`): a generic preset's 220 °C is left alone where it fits, and moved to the nearest end where it
+ * doesn't. Without a range, the preset as it is. The slicer-rs setup comes from these same configs.
+ */
+export function withinRange(
+  preset: Config,
+  filament: Pick<SlicingFilament, "nozzleTempMin" | "nozzleTempMax">,
+): Config {
+  const { nozzleTempMin: low, nozzleTempMax: high } = filament;
+  if (low === undefined || high === undefined) return preset;
+  const out: Config = { ...preset };
+  for (const key of NOZZLE_TEMPERATURES) {
+    const value = preset[key];
+    if (value === undefined) continue;
+    const clamp = (item: string) => {
+      const n = Number.parseFloat(item);
+      return Number.isFinite(n) ? String(Math.min(high, Math.max(low, n))) : item;
+    };
+    out[key] = Array.isArray(value) ? value.map(clamp) : clamp(value);
+  }
+  return out;
 }
 
 export interface SliceSetup {
@@ -214,15 +242,18 @@ export function sliceSetup(
   const colours: string[] = [];
   const colourChosen: boolean[] = [];
   for (const [index, filament] of filaments.entries()) {
-    const wanted = filamentPreset(filament, nozzle);
-    const name = presets.filament[wanted] ? wanted : fallback;
+    const name = pickFilamentPreset(presets, filament, nozzle, fallback);
     const base = presets.filament[name];
     if (!base) throw new MissingPreset(name);
     // A filament that names no colour of its own takes the project's for its place, else a stand-in's.
     const own = filament.colorHex ?? colourOf(projectColours[index]);
     const colour = (own ?? STAND_IN_COLOURS[index % STAND_IN_COLOURS.length] ?? STAND_IN_COLOURS[0]).toUpperCase();
     filamentNames.push(name);
-    filamentConfigs.push({ ...base, filament_colour: [colour], filament_settings_id: [name] });
+    filamentConfigs.push({
+      ...withinRange(base, filament),
+      filament_colour: [colour],
+      filament_settings_id: [name],
+    });
     colours.push(colour);
     colourChosen.push(!!own);
   }

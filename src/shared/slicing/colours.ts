@@ -4,7 +4,7 @@
  * colours (model3mf.ts), the slice worker prints with the plan, the Filament section shows it.
  */
 import type { SpoolLike } from "../spools.ts";
-import { slicingSpools } from "./pantry.ts";
+import { filamentOfSpool, slicingSpools } from "./pantry.ts";
 import type { SlicingFilament } from "./settings.ts";
 
 /**
@@ -126,18 +126,6 @@ export function matchColour(group: Pick<ColourGroup, "hex" | "name">, spools: re
   return {
     filament: { material: "PLA", colorHex: group.hex, ...(group.name ? { colorName: group.name } : {}) },
     inPantry: false,
-  };
-}
-
-/** A spool as a slice's filament (the same as pantry.ts's, kept here so the two don't import each other). */
-function filamentOfSpool(spool: SpoolLike): SlicingFilament {
-  return {
-    material: spool.material,
-    ...(spool.colorHex ? { colorHex: spool.colorHex.toLowerCase() } : {}),
-    ...(spool.colorName ? { colorName: spool.colorName } : {}),
-    ...(spool.brand ? { brand: spool.brand } : {}),
-    ...(spool.finish ? { finish: spool.finish } : {}),
-    spoolId: spool.id,
   };
 }
 

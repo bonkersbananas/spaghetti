@@ -115,7 +115,7 @@ function LinkedSpool({
   const name = spoolName(spool);
   return (
     <div className="bg-ink/3 flex min-w-0 flex-1 items-center gap-3 rounded-md py-2 pr-1 pl-2.5">
-      <SpoolDisc color={spool.colorHex} size="md" />
+      <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-small text-ink inline-flex min-w-0 items-center gap-1 font-semibold">
           <span className="truncate">{name.title}</span>
@@ -158,7 +158,7 @@ function SpoolChoices({ spools, index, onPick }: { spools: Spool[]; index: numbe
             onClick={() => onPick(spool)}
             className="pressable focus-ring bg-cream text-small text-ink-soft shadow-soft hover:text-ink rounded-pill inline-flex h-9 max-w-full items-center gap-2 pr-3.5 pl-1.5 font-semibold md:h-8"
           >
-            <SpoolDisc color={spool.colorHex} size="sm" />
+            <SpoolDisc color={spool.colorHex} colors={spool.colors} size="sm" />
             {spool.slot && <span className="text-ink-faint tabular">{spool.slot === "Ext" ? "Ext" : spool.slot}</span>}
             <span className="truncate">
               {name.title}

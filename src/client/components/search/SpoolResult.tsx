@@ -27,7 +27,7 @@ export const SpoolResult = forwardRef<HTMLAnchorElement, SpoolResultProps>(funct
       ref={ref}
       link={{ to: "/pantry/$spoolId", params: { spoolId: spool.id }, onPointerEnter: onHover, onClick: onOpen }}
       photo={spool.photo ? { src: photoSrc(spool.photo.id, "thumb"), color: spool.photo.color || undefined } : null}
-      tile={<SpoolDisc color={spool.colorHex} size="lg" />}
+      tile={<SpoolDisc color={spool.colorHex} colors={spool.colors} size="lg" />}
       size="lg"
       selected={selected}
     >

@@ -33,13 +33,22 @@ const slicingFilament = z
       .optional()
       .describe("#rrggbb; none for the stand-in nobody chose."),
     colorName: z.string().trim().min(1).max(40).optional(),
+    colors: z
+      .array(z.string().regex(/^#[0-9a-fA-F]{6}$/))
+      .min(2)
+      .max(3)
+      .optional()
+      .describe("The two or three colours of a multi-colour spool, in order (colorHex is the first)."),
     brand: z.string().trim().min(1).max(60).optional(),
+    line: z.string().trim().min(1).max(40).optional().describe('The product line before the material: "PolyTerra".'),
     finish: z.string().trim().min(1).max(40).optional().describe('The Pantry\'s finish: "basic", "matte", "silk"…'),
     spoolId: z
       .string()
       .regex(/^[\w-]{1,64}$/)
       .optional()
       .describe("The Pantry's spool it was picked from."),
+    nozzleTempMin: z.number().min(100).max(500).optional().describe("The maker's printing range in °C, low end."),
+    nozzleTempMax: z.number().min(100).max(500).optional().describe("The maker's printing range in °C, high end."),
   })
   .strict();
 

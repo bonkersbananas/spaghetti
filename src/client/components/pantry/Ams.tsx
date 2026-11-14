@@ -1,6 +1,6 @@
 import type { Spool } from "@shared/api";
 import type { UnknownTray } from "@shared/bridge";
-import { amsUnitLetters, EXTERNAL_SLOT, spoolName, unitSlots } from "@shared/spools";
+import { amsUnitLetters, EXTERNAL_SLOT, softSlashes, spoolName, unitSlots } from "@shared/spools";
 import { daysAgo } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DragEvent, lazy, Suspense, useState } from "react";
@@ -91,6 +91,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
     >
       <SpoolDisc
         color={spool?.colorHex ?? unknown?.colorHex}
+        colors={spool?.colors}
         empty={!spool && !unknown}
         size={shape === "bay" ? "lg" : "md"}
       />
@@ -114,7 +115,7 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
             spool ? "text-ink" : "text-ink-faint",
           )}
         >
-          {spool ? (name?.title ?? spool.material) : unknown ? "Which spool?" : "Empty"}
+          {spool ? softSlashes(name?.title ?? spool.material) : unknown ? "Which spool?" : "Empty"}
         </span>
         {!spool && unknown && (
           <span className="text-caption text-ink-soft block w-full min-w-0 font-medium">

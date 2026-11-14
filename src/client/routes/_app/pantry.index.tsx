@@ -55,7 +55,9 @@ function GroupRecipesIfAny({ material }: { material: string }) {
 function groups(spools: Spool[]): Array<{ material: string; spools: Spool[] }> {
   const byMaterial = new Map<string, Spool[]>();
   for (const spool of spools) {
-    const key = spool.material.trim().toUpperCase();
+    // PLA+ sits with PLA (its own line still says PLA+).
+    const upper = spool.material.trim().toUpperCase();
+    const key = upper === "PLA+" ? "PLA" : upper;
     byMaterial.set(key, [...(byMaterial.get(key) ?? []), spool]);
   }
   const order = (spool: Spool) => (spool.remaining === "empty" ? 1 : 0);

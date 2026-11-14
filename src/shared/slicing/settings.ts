@@ -6,7 +6,7 @@
  * normalized every field is there. Pure and small, so the cards and sheets can import it.
  */
 import { BED_TYPES, NOZZLE_DIAMETERS } from "../attempts.ts";
-import { finishLabel } from "../spools.ts";
+import { finishLabel, normalizeColors } from "../spools.ts";
 import type { ColourChoice } from "./colours.ts";
 import { DEFAULT_SLICER, DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 
@@ -67,12 +67,22 @@ export interface SlicingFilament {
   colorHex?: string;
   /** What people call the colour: "Orange". */
   colorName?: string;
+  /**
+   * The two or three colours of a co-extruded spool, in order (`colorHex` is the first, which is all the plate
+   * picture and the sliced file show). Only the Pantry's multi-colour spools have them.
+   */
+  colors?: string[];
   /** "Bambu", "Polymaker"… */
   brand?: string;
+  /** The product line before the material: "PolyTerra". */
+  line?: string;
   /** The Pantry's finish: "basic", "matte", "silk"… */
   finish?: string;
   /** The Pantry's spool, when it was picked from there. The values above stay, so a slice reads the same without it. */
   spoolId?: string;
+  /** The maker's printing range in °C, where the spool has one: the slice's nozzle temperature stays inside it. */
+  nozzleTempMin?: number;
+  nozzleTempMax?: number;
 }
 
 export interface SlicingSettings {
@@ -313,15 +323,28 @@ export function slicingFilament(value: unknown): SlicingFilament | null {
   const colorHex = typeof value.colorHex === "string" && COLOR.test(value.colorHex) ? value.colorHex : undefined;
   const colorName = text(value.colorName, 40);
   const brand = text(value.brand, 60);
+  const line = text(value.line, 40);
   const finish = text(value.finish, 40);
+  const colors = Array.isArray(value.colors)
+    ? normalizeColors(value.colors.filter((hex): hex is string => typeof hex === "string"))
+    : null;
+  const temp = (field: unknown) =>
+    typeof field === "number" && Number.isFinite(field) && field >= 100 && field <= 500 ? Math.round(field) : undefined;
+  const tempMin = temp(value.nozzleTempMin);
+  const tempMax = temp(value.nozzleTempMax);
   const spoolId = typeof value.spoolId === "string" && SPOOL_ID.test(value.spoolId) ? value.spoolId : undefined;
   return {
     material,
     ...(colorHex ? { colorHex: colorHex.toLowerCase() } : {}),
     ...(colorName ? { colorName } : {}),
+    ...(colors ? { colors } : {}),
     ...(brand ? { brand } : {}),
+    ...(line ? { line } : {}),
     ...(finish ? { finish: finish.toLowerCase() } : {}),
     ...(spoolId ? { spoolId } : {}),
+    ...(tempMin !== undefined && tempMax !== undefined && tempMin <= tempMax
+      ? { nozzleTempMin: tempMin, nozzleTempMax: tempMax }
+      : {}),
   };
 }
 

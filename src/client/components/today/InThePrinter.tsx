@@ -70,7 +70,7 @@ export function InThePrinter({ setup, slots, spools }: InThePrinterProps) {
             {index > 0 && <span aria-hidden className="bg-hairline mt-1.5 h-8 w-px shrink-0" />}
             {group.map(({ slot, spool }) => (
               <span key={slot} className="flex w-11 shrink-0 flex-col items-center gap-1">
-                <SpoolDisc color={spool?.colorHex} empty={!spool} />
+                <SpoolDisc color={spool?.colorHex} colors={spool?.colors} empty={!spool} />
                 <span className="text-caption text-ink-faint tabular">{slot}</span>
                 <span className="sr-only">{spool ? spoolName(spool).title : "empty"}</span>
               </span>
