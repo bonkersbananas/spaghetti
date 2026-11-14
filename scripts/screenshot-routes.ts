@@ -1771,7 +1771,8 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
-    // A tap on it: the browser can't tell whether Bambu Studio opened, so the card says where the download is.
+    // A tap on it, then the sliced file: the browser can't tell whether Bambu Studio opened, so the card says where the
+    // download is.
     name: "idea-model-open-tried",
     path: "/ideas",
     width: 1440,
@@ -1779,9 +1780,24 @@ export const shots: Shot[] = [
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
       await sliceSaved(page);
       await page.getByTestId("open-in-studio").first().click();
+      await page.getByTestId("open-in-studio-sliced").click();
       await page.getByText("Nothing opened?").first().waitFor();
     },
     beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // A sliced model has two things to open: its sliced file, ready to print, and the original model, to slice or tweak.
+    name: "idea-model-open-menu",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      await modelInView(page);
+      await page.getByTestId("open-in-studio").first().click();
+      await page.getByTestId("open-in-studio-sliced").waitFor();
+    },
     cleanup: removeModelItems,
   },
   {
