@@ -70,8 +70,8 @@ function RecentlyDeleted() {
                         <MetaList className="text-small text-ink-faint">
                           <span>{entry.stage === "idea" ? "Idea" : "Build"}</span>
                           <span>deleted {inlineTime(entry.deletedAt)}</span>
-                          <span>{goesFor(entry.deletedAt)}</span>
                         </MetaList>
+                        <span className="text-small text-ink-faint">{goesFor(entry.deletedAt)}</span>
                       </span>
                       <Button
                         variant="secondary"
@@ -108,8 +108,8 @@ function RecentlyDeleted() {
                         <MetaList className="text-small text-ink-faint">
                           <span>{entry.outcome ? OUTCOME_LABELS[entry.outcome] : "Was printing"}</span>
                           <span>printed {inlineTime(entry.printedAt)}</span>
-                          <span>{goesFor(entry.deletedAt)}</span>
                         </MetaList>
+                        <span className="text-small text-ink-faint">{goesFor(entry.deletedAt)}</span>
                       </span>
                       <Button
                         variant="secondary"

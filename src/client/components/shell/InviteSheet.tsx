@@ -65,7 +65,14 @@ export function InviteSheet({ open, onOpenChange }: { open: boolean; onOpenChang
       title="Invite someone"
       description="A link that adds one person to the kitchen. Good once, for a week."
       footer={
-        <Button variant="primary" icon={InviteIcon} fullWidth loading={make.isPending} onClick={() => make.mutate()}>
+        <Button
+          // The link above has the screen's one primary button (Share invite).
+          variant={fresh ? "secondary" : "primary"}
+          icon={InviteIcon}
+          fullWidth
+          loading={make.isPending}
+          onClick={() => make.mutate()}
+        >
           {fresh || waiting.length ? "Make another invite" : "Make an invite link"}
         </Button>
       }
