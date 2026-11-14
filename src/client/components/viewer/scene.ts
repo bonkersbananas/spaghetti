@@ -24,6 +24,8 @@ import {
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { boxGeometry, chunkGeometry } from "./chunks";
+import { plateGrid } from "./plate-grid";
+import { GRID_LINE_PX, GRID_OUTLINE_PX, GRID_STEP, gridOpacity, MAX_POLAR, plateSolidity } from "./plate-view";
 
 /**
  * The 3D viewer's scene: a build plate that looks like the printer's, and the toolpaths as small extrusions, one
@@ -95,12 +97,14 @@ varying float vTop;
 uniform vec3 uLight;
 uniform vec3 uSky;
 uniform vec3 uGround;
+uniform float uBelow; // 0 from above the plate, 1 from below: the lights mirror through the plate
 
 void main() {
   vec3 n = normalize(vNormal);
-  float key = max(dot(n, normalize(vec3(-0.45, 0.85, 0.5))), 0.0);
-  float fill = max(dot(n, normalize(vec3(0.6, 0.25, -0.4))), 0.0);
-  vec3 ambient = mix(uGround, uSky, n.y * 0.5 + 0.5);
+  float flip = 1.0 - 2.0 * uBelow;
+  float key = max(dot(n, normalize(vec3(-0.45, 0.85 * flip, 0.5))), 0.0);
+  float fill = max(dot(n, normalize(vec3(0.6, 0.25 * flip, -0.4))), 0.0);
+  vec3 ambient = mix(uGround, uSky, n.y * flip * 0.5 + 0.5);
   vec3 lit = vColor * (ambient * 0.62 + uLight * key * 0.5 + uLight * fill * 0.12);
   // The layer being drawn is a touch brighter, so the slider's position reads on the print.
   lit += vTop * 0.07;
@@ -200,6 +204,7 @@ function shadowTexture(): CanvasTexture {
 export interface SceneColors {
   plate: Color;
   plateEdge: Color;
+  plateGrid: Color;
   light: Color;
   sky: Color;
   ground: Color;
@@ -216,6 +221,13 @@ export class PrintScene {
   private readonly box = boxGeometry();
   private readonly chunks: Mesh[] = [];
   private plate: Group | null = null;
+  /** The plate's grid, in a scene of its own that is drawn first and under everything. */
+  private readonly backdrop = new Scene();
+  private readonly backdropPrint = new Group();
+  private grid: Mesh | null = null;
+  private readonly reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  private plateMaterials: MeshBasicMaterial[] = [];
+  private solidity = 1;
   private shadow: Mesh | null = null;
   private frame = 0;
   private animating = false;
@@ -241,6 +253,9 @@ export class PrintScene {
 
     this.print.rotation.x = -Math.PI / 2;
     this.scene.add(this.print);
+    this.backdropPrint.rotation.x = -Math.PI / 2;
+    this.backdrop.add(this.backdropPrint);
+    this.renderer.autoClear = false;
 
     this.material = new ShaderMaterial({
       vertexShader: vertex,
@@ -257,6 +272,7 @@ export class PrintScene {
         uLight: { value: new Color(1, 0.95, 0.88) },
         uSky: { value: new Color(1, 0.98, 0.94) },
         uGround: { value: new Color(0.62, 0.55, 0.47) },
+        uBelow: { value: 0 },
       },
       side: DoubleSide,
     });
@@ -267,7 +283,7 @@ export class PrintScene {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.09;
     this.controls.screenSpacePanning = true;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
+    this.controls.maxPolarAngle = MAX_POLAR;
     this.controls.minDistance = 20;
     // One finger turns the print, two pinch to zoom and drag to pan.
     this.controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
@@ -300,6 +316,11 @@ export class PrintScene {
         }
       });
     }
+    if (this.grid) {
+      this.backdropPrint.remove(this.grid);
+      this.grid.geometry.dispose();
+      (this.grid.material as ShaderMaterial).dispose();
+    }
     const plate = new Group();
     const top = new MeshBasicMaterial({ map: plateTexture(colors.plate, colors.plateEdge) });
     top.map?.repeat.set(1 / 64, 1 / 64);
@@ -313,6 +334,12 @@ export class PrintScene {
       curveSegments: 10,
     });
     const slab = new Mesh(geometry, [top, side]);
+    // From below the slab fades out and a quiet grid of its own edge colour takes over, so the underside shows.
+    this.plateMaterials = [top, side];
+    this.solidity = -1;
+    this.grid = plateGrid(PLATE, 14, GRID_STEP, GRID_OUTLINE_PX, GRID_LINE_PX, colors.plateGrid);
+    this.backdropPrint.add(this.grid);
+    this.sizeGrid();
     slab.position.z = -PLATE_THICKNESS - 0.8;
     plate.add(slab);
     this.plate = plate;
@@ -435,7 +462,7 @@ export class PrintScene {
       this.shadow.visible = false;
       return;
     }
-    this.shadow.visible = true;
+    this.shadow.visible = this.solidity > 0.5;
     const w = (b[3] - b[0]) * 1.5 + 14;
     const h = (b[4] - b[1]) * 1.5 + 14;
     this.shadow.scale.set(w, h, 1);
@@ -474,6 +501,7 @@ export class PrintScene {
     this.width = Math.max(1, width);
     this.height = Math.max(1, height);
     this.renderer.setSize(this.width, this.height, false);
+    this.sizeGrid();
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
     if (this.bounds && !this.fitted) this.fit();
@@ -492,13 +520,44 @@ export class PrintScene {
     this.animating = false;
     if (this.disposed) return;
     const moved = this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.fadePlate();
+    this.draw();
     if (moved) this.dirty();
   };
 
+  private sizeGrid() {
+    (this.grid?.material as ShaderMaterial | undefined)?.uniforms.uViewport?.value.set(this.width, this.height);
+  }
+
+  private draw() {
+    this.renderer.clear();
+    this.renderer.render(this.backdrop, this.camera);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Solid plate from above, a see-through grid from below. */
+  private fadePlate() {
+    const distance = this.camera.position.distanceTo(this.controls.target);
+    const solidity = plateSolidity(this.camera.position.y, distance, this.reducedMotion);
+    if (solidity === this.solidity) return;
+    this.solidity = solidity;
+    for (const m of this.plateMaterials) {
+      m.opacity = solidity;
+      // Solid, the slab is opaque (drawn first, so the print's shadow lies on it); only a fading slab is blended.
+      m.transparent = solidity < 0.99;
+      m.depthWrite = solidity > 0.99;
+      m.visible = solidity > 0.01;
+    }
+    const below = this.material.uniforms.uBelow;
+    if (below) below.value = 1 - solidity;
+    const opacity = (this.grid?.material as ShaderMaterial | undefined)?.uniforms.uOpacity;
+    if (opacity) opacity.value = gridOpacity(solidity);
+    this.placeShadow();
+  }
+
   /** A still of the current view, as a data URL (for a hero without a photo). */
   snapshot(): string {
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
     return this.canvas.toDataURL("image/png");
   }
 

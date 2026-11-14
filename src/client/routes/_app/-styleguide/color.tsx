@@ -44,6 +44,14 @@ const swatchGroups: Array<{ label: string; swatches: Array<[token: string, class
     ],
   },
   {
+    label: "The 3D view's plate",
+    swatches: [
+      ["sg-plate", "bg-[var(--sg-plate)]", "The plate seen from above"],
+      ["sg-plate-edge", "bg-[var(--sg-plate-edge)]", "Its speckle and rim"],
+      ["sg-plate-grid", "bg-[var(--sg-plate-grid)]", "The grid it fades to below, seen against the stage"],
+    ],
+  },
+  {
     label: "People",
     swatches: [
       ["person-tomato", "bg-person-tomato", ""],

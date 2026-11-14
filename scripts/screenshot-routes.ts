@@ -313,6 +313,26 @@ async function openViewer(page: Page) {
   await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
 }
 
+/** Orbits the 3D view to about 30 degrees under the plate's horizon and backs off until the plate's edge is in view. */
+async function orbitBelow(page: Page) {
+  const box = await page.getByRole("dialog", { name: "3D view" }).locator("canvas").boundingBox();
+  if (!box) return;
+  const x = box.x + box.width / 2;
+  await page.mouse.move(x, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + box.height * (0.6 - 0.16), { steps: 12 });
+  await page.mouse.up();
+  await page.mouse.move(x, box.y + box.height / 2);
+  await page
+    .getByRole("dialog", { name: "3D view" })
+    .locator("canvas")
+    .evaluate((canvas) => {
+      for (let i = 0; i < 14; i++)
+        canvas.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+    });
+  await page.waitForTimeout(1200);
+}
+
 async function closeDialog(page: Page) {
   await page.keyboard.press("Escape");
   await page.getByRole("dialog").waitFor({ state: "detached" });
@@ -2181,6 +2201,24 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The same sliced model seen from below the plate: the plate fades to a grid and the first layer shows.
+    name: "idea-model-viewer-below",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await files.getByRole("button", { name: `See ${FUSILLI.name} in 3D` }).click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+      await orbitBelow(page);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
     // A model too long for the plate: one sentence, and the one thing that helps.
     name: "idea-model-too-big",
     path: "/ideas",
@@ -2455,6 +2493,17 @@ export const shots: Shot[] = [
     prepare: openViewer,
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
+    },
+    cleanup: closeDialog,
+  },
+  {
+    // The tugboat's 3D view from below the plate: the see-through grid, and the hull's first layer through it.
+    name: "viewer-below",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: openViewer,
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+      await orbitBelow(page);
     },
     cleanup: closeDialog,
   },
