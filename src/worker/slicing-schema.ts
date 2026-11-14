@@ -70,6 +70,12 @@ export const slicingSettingsShape = z
       .describe("One per filament, filament 1 first."),
     plate: z.enum(SLICING_PLATES as [string, ...string[]]),
     nozzle: z.union([z.literal(0.2), z.literal(0.4), z.literal(0.6), z.literal(0.8)]).describe("mm"),
+    nozzlePicked: z
+      .boolean()
+      .optional()
+      .describe(
+        "True when someone picked the nozzle size for this model (decision 0057); without it the model follows the main nozzle's size.",
+      ),
     scale: z.number().int().min(LIMITS.scale.min).max(LIMITS.scale.max).describe("Percent of the model's own size."),
     orientation: z
       .tuple([z.number(), z.number(), z.number()])

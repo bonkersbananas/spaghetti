@@ -46,6 +46,16 @@ describe("a model's settings", () => {
     expect(modelSlicing({ slicing: null, slice: null }, fine)).toEqual(fine);
   });
 
+  it("follow the main nozzle until a size was picked for the model (decision 0057)", () => {
+    const main02 = withNozzle(DEFAULT_SLICING, 0.2);
+    // Nobody picked: the main nozzle's size, whatever it was sliced for, the quality keeping its name.
+    expect(modelSlicing({ slicing: null, slice: slice(DEFAULT_SLICING) }, main02)).toEqual(main02);
+    expect(modelSlicing({ slicing: DEFAULT_SLICING, slice: slice(DEFAULT_SLICING) }, main02).nozzle).toBe(0.2);
+    // Picked: kept, whatever the main nozzle is.
+    const picked = { ...withNozzle(DEFAULT_SLICING, 0.6), nozzlePicked: true };
+    expect(modelSlicing({ slicing: picked, slice: slice(picked) }, main02)).toEqual(picked);
+  });
+
   it("are ahead of its slice when they were changed since it was made", () => {
     expect(slicingAhead({ slicing: fine, slice: slice(fine) })).toBeNull();
     expect(slicingAhead({ slicing: null, slice: slice(fine) })).toBeNull();
