@@ -299,7 +299,7 @@ export class PrintScene {
     if (this.plate) {
       this.print.remove(this.plate);
       this.plate.traverse((o) => {
-        if (o instanceof Mesh) {
+        if (o instanceof Mesh || o instanceof LineSegments) {
           o.geometry.dispose();
           for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
             (m as MeshBasicMaterial).map?.dispose();
