@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { patternProject, raftProject, twoColourProject, vaseProject } from "./fixtures/model-3mf";
+import { patternProject, raftProject, seamProject, twoColourProject, vaseProject } from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -321,6 +321,25 @@ test("a project in spiral vase mode is sliced by ours", async ({ page }) => {
     // Until release 12 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "spiral vase mode" }.
     expect(slice.fallback).toBeUndefined();
     expect(slice.notes ?? []).toEqual([]);
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a project's nearest seams are sliced by ours as aligned ones, which it notes", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    const { id } = await ideaWithModel(page, "Block, nearest seams", "nearest.3mf", seamProject("nearest"));
+    await expect
+      .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+      .toBe("spaghetti");
+    const slice = (await fileOf(page, id)).slice;
+    expect(slice.fallback).toBeUndefined();
+    // Until release 13 ours started every wall at the back, whatever the project asked for, and said nothing; now it
+    // places Orca's aligned seams.
+    expect(slice.notes ?? []).toEqual(["nearest seams placed as aligned ones"]);
   } finally {
     await setDefaults(page, null);
   }
