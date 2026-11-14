@@ -239,6 +239,50 @@ pub enum Item {
     Fixed(Vec<Path>),
 }
 
+/// Which of a support layer's extrusions an item is (Orca's role of an extrusion, or of a collection of them): the
+/// base's, the interface's, or both in one group (`erMixed`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+    Base,
+    Interface,
+    Both,
+}
+
+/// How a filament prints an object's support on a layer (Orca's `process_layer`): which of its extrusions (`Both`: all
+/// of them), and whether straight after the change to it, as what the filament before flushes into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Pass {
+    pub part: Part,
+    pub flush: bool,
+}
+
+impl Item {
+    pub fn paths(&self) -> &[Path] {
+        match self {
+            Item::Path(path) => std::slice::from_ref(path),
+            Item::Fixed(group) => group,
+        }
+    }
+
+    pub fn part(&self) -> Part {
+        let of = |p: &Path| if p.role == Role::SupportInterface { Part::Interface } else { Part::Base };
+        let paths = self.paths();
+        let first = paths.first().map_or(Part::Base, of);
+        if paths.iter().all(|p| of(p) == first) { first } else { Part::Both }
+    }
+
+    /// mm³ of plastic (Orca's `total_volume`): each path's flow times its length, added up in order.
+    pub fn volume(&self) -> f64 {
+        self.paths()
+            .iter()
+            .map(|p| {
+                let length: f64 = p.points.windows(2).map(|w| geom::dist(w[0], w[1])).sum();
+                Settings::mm3_per_mm(p.width, p.height) * length / geom::SCALE
+            })
+            .sum()
+    }
+}
+
 /// One of the support's layers.
 #[derive(Clone, Debug)]
 pub struct Layer {

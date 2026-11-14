@@ -1,7 +1,8 @@
 """Writes the test models: python3 -I make.py (from this folder). bridge.stl: two 10 mm pillars 20 mm apart under
 a 3 mm beam, as three touching boxes, for walls, infill, top and bottom surfaces and a bridge. two-colours.3mf: a
 frame and the square that fills it, in two filaments. parts.3mf: one object of three parts in two filaments that cut
-into each other."""
+into each other. t-parts.3mf: a T of three parts in two filaments, whose bar needs supports. tees.3mf: three Ts, each
+in a filament of its own, whose supports take the flushes of the two that share a nozzle."""
 
 import struct
 
@@ -37,14 +38,14 @@ INSERT = [((5, 5, 0), (15, 15, 4))]
 AT = 118
 
 
-def mesh_xml(boxes):
+def mesh_xml(boxes, at=AT):
     vertices, faces = [], []
     for lo, hi in boxes:
         for a, b, c in box(lo, hi):
             n = len(vertices)
             vertices += [a, b, c]
             faces.append((n, n + 1, n + 2))
-    v = "".join(f'<vertex x="{x + AT}" y="{y + AT}" z="{z}"/>' for x, y, z in vertices)
+    v = "".join(f'<vertex x="{x + at}" y="{y + at}" z="{z}"/>' for x, y, z in vertices)
     t = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in faces)
     return f"<mesh><vertices>{v}</vertices><triangles>{t}</triangles></mesh>"
 
@@ -103,3 +104,68 @@ with zipfile.ZipFile("parts.3mf", "w", zipfile.ZIP_DEFLATED) as z:
     ]:
         z.writestr(zipfile.ZipInfo(name, date_time=(2026, 11, 14, 0, 0, 0)), text, zipfile.ZIP_DEFLATED)
 print("parts.3mf")
+
+
+def project(path, objects):
+    """A Bambu Studio project of `objects`, each a name and its parts: (name, filament, boxes) on the plate as they
+    are."""
+    resources, items, configs, k = "", "", "", 0
+    for name, parts in objects:
+        ids = []
+        for _, _, boxes in parts:
+            k += 1
+            ids.append(k)
+            resources += f'<object id="{k}" type="model">{mesh_xml(boxes, 0)}</object>'
+        k += 1
+        components = "".join(f'<component objectid="{i}"/>' for i in ids)
+        resources += f'<object id="{k}" type="model"><components>{components}</components></object>'
+        items += f'<item objectid="{k}"/>'
+        config = "".join(
+            f'    <part id="{i}" subtype="normal_part">\n      <metadata key="name" value="{part}"/>\n'
+            f'      <metadata key="extruder" value="{extruder}"/>\n    </part>\n'
+            for i, (part, extruder, _) in zip(ids, parts)
+        )
+        configs += (
+            f'  <object id="{k}">\n    <metadata key="name" value="{name}"/>\n'
+            f'    <metadata key="extruder" value="{parts[0][1]}"/>\n{config}  </object>\n'
+        )
+    model = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+        f"<resources>{resources}</resources><build>{items}</build></model>\n"
+    )
+    settings = f'<?xml version="1.0" encoding="UTF-8"?>\n<config>\n{configs}</config>\n'
+    # With the package's relationships, which Orca's command line needs to read it.
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+        "</Relationships>\n"
+    )
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, text in [
+            ("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n'),
+            ("_rels/.rels", rels),
+            ("3D/3dmodel.model", model),
+            ("Metadata/model_settings.config", settings),
+        ]:
+            z.writestr(zipfile.ZipInfo(name, date_time=(2026, 11, 14, 0, 0, 0)), text, zipfile.ZIP_DEFLATED)
+    print(path)
+
+
+# t-parts.3mf: a T 44 mm wide, 12 deep and 25 tall in the middle of the plate, its column's left half in filament 1,
+# its right half in filament 2 and its bar in filament 1, so its supports stand under the bar's arms on layers that
+# print both filaments.
+project("t-parts.3mf", [("T", [
+    ("left", 1, [((122, 122, 0), (128, 134, 20))]),
+    ("right", 2, [((128, 122, 0), (134, 134, 20))]),
+    ("bar", 1, [((106, 122, 20), (150, 134, 25))]),
+])])
+
+
+# tees.3mf: three Ts 40 mm wide, 10 deep and 25 tall, in filaments 1, 2 and 3: the X2D's two nozzles print three
+# filaments, so two of them share one, and each layer flushes once, into the supports first.
+def tee(x, y):
+    return [((x + 15, y, 0), (x + 25, y + 10, 20)), ((x, y, 20), (x + 40, y + 10, 25))]
+
+
+project("tees.3mf", [(f"tee {k + 1}", [(f"tee {k + 1}", k + 1, tee(x, y))]) for k, (x, y) in enumerate([(60, 123), (140, 123), (100, 83)])])

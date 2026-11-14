@@ -366,6 +366,20 @@ impl Plate {
                 return Err(Error::OffPlate);
             }
         }
+        // Orca's settings for as many filaments as the plate prints in: with more than one, a prime tower.
+        let used = if several {
+            let mut used = filaments.clone();
+            used.sort_unstable();
+            used.dedup();
+            used.len()
+        } else {
+            1
+        };
+        let for_plate = settings.for_filaments(used);
+        let settings = &for_plate;
+        if let Some(what) = settings.unsupported() {
+            return Err(Error::Unsupported(what));
+        }
         // In spiral vase mode Orca prints one object, and stops the slice when the plate has more: so the app's
         // fallback, Orca's engine, says why. An object made of parts there is left to Orca's engine too.
         let objects_on_plate = groups.iter().map(|&g| g + 1).max().unwrap_or(0);
@@ -378,9 +392,6 @@ impl Plate {
         // Each object prints as a region for each filament its parts print in (with one filament, one region).
         let region_filaments: Vec<usize> = if several { filaments.clone() } else { vec![0; meshes.len()] };
         let parts = parts::Regions::new(&groups, &region_filaments);
-        if settings.enable_support && parts.mixed() {
-            return Err(Error::Unsupported("supports for an object whose parts print in different filaments"));
-        }
         let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
         if height > settings.max_height {
             return Err(Error::TooTall);
@@ -457,7 +468,7 @@ impl Plate {
         let t3 = now();
         // A raft is support too, which Orca builds whether or not supports are on.
         let supports = if settings.enable_support || raft.is_some() {
-            object_supports(&regions, &layers, &centres, &sizes, settings)
+            object_supports(&regions, &layers, &centres, &sizes, &parts.group, settings)
         } else {
             Vec::new()
         };
@@ -485,21 +496,33 @@ impl Plate {
         let t4 = now();
         // Several filaments: the order they print in on each layer, and the prime tower (`toolchange.rs`).
         let colours = settings.palette.as_ref().filter(|p| p.profiles.len() > 1).map(|palette| {
+            // Each layer's objects that print islands in their filaments, and its supports, which print in whichever
+            // the layer has.
             let layer_objects: Vec<Vec<usize>> = schedule
                 .iter()
                 .map(|slot| {
-                    let mut here: Vec<usize> = Vec::new();
-                    if let Some(l) = slot.layer {
-                        here.extend(regions[l].islands.iter().map(|i| i.object as usize));
-                    }
-                    for (o, k) in slot.supports.iter().enumerate() {
-                        if k.is_some_and(|k| !supports[o][k].items.is_empty()) {
-                            here.push(o);
-                        }
-                    }
+                    let mut here: Vec<usize> = match slot.layer {
+                        Some(l) => regions[l].islands.iter().map(|i| i.object as usize).collect(),
+                        None => Vec::new(),
+                    };
                     here.sort_unstable();
                     here.dedup();
                     here
+                })
+                .collect();
+            let last = last_layers(&regions, group_objects.len());
+            let layer_supports: Vec<Vec<toolchange::SupportHere>> = schedule
+                .iter()
+                .map(|slot| {
+                    let on = |o: usize, k: usize| {
+                        let layer = &supports[o][k];
+                        (!layer.items.is_empty()).then(|| toolchange::SupportHere {
+                            object: o,
+                            with_layer: slot.layer.is_some_and(|l| last[parts.group[o] as usize] >= Some(l)),
+                            items: layer.items.iter().map(|item| (item.part(), item.volume())).collect(),
+                        })
+                    };
+                    slot.supports.iter().enumerate().filter_map(|(o, k)| on(o, (*k)?)).collect()
                 })
                 .collect();
             let zs: Vec<f64> = schedule.iter().map(|slot| slot.z).collect();
@@ -532,6 +555,7 @@ impl Plate {
                 &toolchange::Plate {
                     object_filament: &parts.filament,
                     layer_objects: &layer_objects,
+                    layer_supports: &layer_supports,
                     layer_z: &zs,
                     layer_h: &hs,
                     first_island: &first_island,
@@ -541,6 +565,7 @@ impl Plate {
                 },
             )
         });
+        let colours = colours.transpose().map_err(Error::Unsupported)?;
         // The bed's probing covers the prime tower's first layer too, grown by the skirt distance as the objects are
         // (Orca's skirt hull takes in the tower).
         let facts = match &colours {
@@ -552,28 +577,32 @@ impl Plate {
             }),
             None => facts,
         };
-        // Each object's brim prints with the first of its regions that the first layer comes to, as Orca prints an
-        // object's brim on its first visit to it.
-        let brim_loops: Vec<Vec<geom::Contour>> = if parts.mixed() {
-            let order = colours.as_ref().and_then(|c| c.orders.first());
-            let rank =
-                |r: usize| order.and_then(|o| o.iter().position(|&f| f == parts.filament[r])).unwrap_or(usize::MAX);
-            let mut owner: Vec<Option<usize>> = vec![None; group_objects.len()];
-            for &r in &first_owners {
-                let (r, g) = (r as usize, parts.group[r as usize] as usize);
-                if owner[g].is_none_or(|o| (rank(r), r) < (rank(o), o)) {
-                    owner[g] = Some(r);
-                }
+        // Each object's brim prints when Orca first comes to the object on the first layer: with the first of the
+        // layer's filaments that prints any of it, its islands or its support.
+        let brim_loops = brims.loops;
+        let brim_passes: Vec<Option<usize>> = match &colours {
+            Some(c) => {
+                let g0 = schedule.iter().position(|slot| slot.layer == Some(0));
+                let order = g0.and_then(|g| c.orders.get(g)).map_or(&[][..], Vec::as_slice);
+                let firsts = regions.first().map_or(&[][..], |r| r.islands.as_slice());
+                let supports_by: Vec<Vec<Option<support::Pass>>> = match g0 {
+                    Some(g) => order.iter().map(|&f| c.supports_of(g, f, objects.len())).collect(),
+                    None => Vec::new(),
+                };
+                (0..group_objects.len())
+                    .map(|g| {
+                        let mine = |r: usize| parts.group[r] as usize == g;
+                        order.iter().enumerate().find_map(|(k, &f)| {
+                            let islands = firsts
+                                .iter()
+                                .any(|i| mine(i.object as usize) && parts.filament[i.object as usize] == f);
+                            let support = supports_by[k].iter().enumerate().any(|(r, p)| p.is_some() && mine(r));
+                            (islands || support).then_some(f)
+                        })
+                    })
+                    .collect()
             }
-            let mut loops = brims.loops;
-            (0..parts.group.len())
-                .map(|r| {
-                    let g = parts.group[r] as usize;
-                    if owner[g] == Some(r) { std::mem::take(&mut loops[g]) } else { Vec::new() }
-                })
-                .collect()
-        } else {
-            brims.loops
+            None => Vec::new(),
         };
         let mut frame = bambu::Frame::new(settings.profile.clone(), &facts);
         if let (Some(c), Some(palette)) = (&colours, &settings.palette) {
@@ -621,7 +650,16 @@ impl Plate {
                             let plans = c.orders[g]
                                 .iter()
                                 .map(|&f| {
-                                    let only: Vec<bool> = c.object_filament.iter().map(|&of| of == f).collect();
+                                    let islands: Vec<bool> = c.object_filament.iter().map(|&of| of == f).collect();
+                                    let supports = c.supports_of(g, f, islands.len());
+                                    let brims: Vec<bool> = brim_passes.iter().map(|&p| p == Some(f)).collect();
+                                    let only = plan::Only {
+                                        islands: &islands,
+                                        supports: &supports,
+                                        brims: &brims,
+                                        group: &parts.group,
+                                        flushing: c.flushing(g),
+                                    };
                                     let s = &c.settings[f];
                                     let plan = plan::plan_layer_of(
                                         Some(&only),
@@ -812,21 +850,28 @@ fn support_warnings(
         .collect()
 }
 
-/// Each object's normal supports (`support.rs`), from its slices and top surfaces up to its last layer.
+/// Each object's supports (`support.rs`, `tree/`), from its slices and top surfaces up to its last layer. An object
+/// on the plate made of regions in different filaments (`group` gives each region's) has its supports worked out for
+/// all of it, as Orca works them out, and kept with its first region; its other regions have none.
 fn object_supports(
     regions: &[region::LayerRegions],
     layers: &section::Layers,
     centres: &[(f64, f64)],
     sizes: &[(f64, f64)],
+    group: &[u32],
     s: &Settings,
 ) -> Vec<Vec<support::Layer>> {
-    let objects = sizes.len();
+    let groups = group.iter().map(|&g| g as usize + 1).max().unwrap_or(0);
+    let mut first_region: Vec<Option<usize>> = vec![None; groups];
+    for (o, &g) in group.iter().enumerate() {
+        first_region[g as usize].get_or_insert(o);
+    }
     let params = support::Params::new(s);
-    let last = last_layers(regions, objects);
-    (0..objects)
-        .map(|o| {
-            let Some(top) = last[o] else { return Vec::new() };
-            let slices: Vec<geom::Shapes> = regions[..=top].iter().map(|r| r.slice_of(o as u32)).collect();
+    let last = last_layers(regions, groups);
+    let mut by_group: Vec<Vec<support::Layer>> = (0..groups)
+        .map(|g| {
+            let (Some(top), Some(o)) = (last[g], first_region[g]) else { return Vec::new() };
+            let slices: Vec<geom::Shapes> = regions[..=top].iter().map(|r| r.slice_of(g as u32)).collect();
             // The layers' top surfaces, each object's own.
             let tops = regions[..=top]
                 .iter()
@@ -834,7 +879,7 @@ fn object_supports(
                 .map(|(r, slice)| {
                     if r.tops.is_empty() || slice.is_empty() {
                         Vec::new()
-                    } else if objects == 1 {
+                    } else if groups == 1 {
                         r.tops.clone()
                     } else {
                         geom::intersection(&r.tops, slice)
@@ -864,6 +909,12 @@ fn object_supports(
             } else {
                 support::generate(&object, &params)
             }
+        })
+        .collect();
+    (0..group.len())
+        .map(|o| {
+            let g = group[o] as usize;
+            if first_region[g] == Some(o) { std::mem::take(&mut by_group[g]) } else { Vec::new() }
         })
         .collect()
 }

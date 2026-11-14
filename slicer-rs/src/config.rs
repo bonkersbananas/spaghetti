@@ -190,6 +190,13 @@ pub struct Settings {
     /// The layers a skirt goes up (`skirt_height`): a spiral starts no lower.
     pub skirt_height: usize,
     pub print_sequence: String,
+    /// Whether a plate in several filaments prints a prime tower (`enable_prime_tower`), and what makes Orca print
+    /// one for a single filament too (a smooth timelapse, the nozzle's wrapping detection), which this can't.
+    pub enable_prime_tower: bool,
+    pub tower_for_one: Option<&'static str>,
+    /// How many filaments the plate prints in (0 until `for_filaments` says), and whether a prime tower prints then.
+    pub used_filaments: usize,
+    pub prime_tower: bool,
     pub ironing_type: String,
     pub fuzzy_skin: String,
     /// How the nozzle lifts on a retraction (`z_hop_types`, the filament's own first).
@@ -378,8 +385,14 @@ pub struct SupportSettings {
     pub tree_auto_brim: bool,
     pub tree_brim_width: f64,
     pub max_bridge_length: f64,
+    /// The filaments the support's base and its interface print in (`support_filament`,
+    /// `support_interface_filament`; 0: whichever the layer has, "don't care").
     pub filament: i64,
     pub interface_filament: i64,
+    /// Whether a filament change flushes into the support printed in "don't care" filament (`flush_into_support`),
+    /// and into the objects' infill or the objects themselves (`flush_into_infill`, `flush_into_objects`).
+    pub flush_into: bool,
+    pub flush_into_objects: bool,
 }
 
 /// A setting that may be a share of another (Orca's float-or-percent): "50%" or "50".
@@ -494,11 +507,7 @@ impl SupportSettings {
         } else if on && !self.independent_layer_height && !self.organic() && self.classic().is_none() {
             // Normal supports' layers in step with the object's (Orca's `synchronize_layers`), as several filaments
             // have them.
-            Some(if s.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
-                "normal supports in several filaments"
-            } else {
-                "these support settings"
-            })
+            Some(if s.prime_tower { "normal supports in several filaments" } else { "these support settings" })
         } else if self.enforce_layers > 0
             || self.expansion != 0.0
             || self.angle != 0.0
@@ -510,7 +519,13 @@ impl SupportSettings {
             || (on && s.thick_bridges)
         {
             Some("these support settings")
-        } else if self.filament > 1 || self.interface_filament > 1 {
+        } else if self.filament > 1
+            || self.interface_filament > 1
+            || (s.palette.as_ref().is_some_and(|p| p.profiles.len() > 1)
+                && (self.filament != 0 || self.interface_filament != 0))
+        {
+            // With several filaments, support in the first prints in it whatever the object's: Orca's own choice
+            // of filament (`toolchange.rs`) is for support in "don't care" filament alone.
             Some("supports in another filament")
         } else {
             None
@@ -684,6 +699,16 @@ impl Settings {
             },
             skirt_height: p.int("skirt_height").max(0) as usize,
             print_sequence: text("print_sequence"),
+            enable_prime_tower: p.bool("enable_prime_tower"),
+            tower_for_one: if p.text("timelapse_type") == "1" {
+                Some("a smooth timelapse")
+            } else if p.bool("enable_wrapping_detection") {
+                Some("wrapping detection")
+            } else {
+                None
+            },
+            used_filaments: 0,
+            prime_tower: false,
             ironing_type: text("ironing_type"),
             fuzzy_skin: text("fuzzy_skin"),
             z_hop_type,
@@ -759,6 +784,8 @@ impl Settings {
                 max_bridge_length: p.float("max_bridge_length"),
                 filament: p.int("support_filament"),
                 interface_filament: p.int("support_interface_filament"),
+                flush_into: p.bool("flush_into_support"),
+                flush_into_objects: p.bool("flush_into_infill") || p.bool("flush_into_objects"),
             },
             overhang_speed: p.bool("enable_overhang_speed"),
             overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
@@ -831,10 +858,14 @@ impl Settings {
             && let Some(what) = self.support.unsupported(self)
         {
             Some(what)
-        } else if self.support.raft_layers > 0 && self.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+        } else if self.support.raft_layers > 0 && self.prime_tower {
             // With a prime tower Orca turns the support's own layer heights off, which rounds the raft's gap to a
             // layer, and prints the tower through that gap on layers of its own.
             Some("a raft with several filaments")
+        } else if self.used_filaments > 1 && !self.enable_prime_tower {
+            Some("several filaments without a prime tower")
+        } else if let Some(why) = self.tower_for_one.filter(|_| self.enable_prime_tower) {
+            Some(why)
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
         } else if !matches!(
@@ -898,14 +929,22 @@ impl Settings {
         }
         out
     }
-    /// Gives the settings the plate's filaments (`setup.rs`, or the command line's stand-ins). With several a prime
-    /// tower prints, and with one Orca turns the support's own layer heights off (`normalize_fdm_2`): its supports'
-    /// layers follow the object's.
+    /// Gives the settings the plate's filaments (`setup.rs`, or the command line's stand-ins).
     pub fn set_palette(&mut self, palette: Option<Arc<crate::filaments::Palette>>) {
-        if palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
-            self.support.independent_layer_height = false;
-        }
         self.palette = palette;
+    }
+
+    /// The settings for a plate that prints in `used` filaments, as Orca settles them (`normalize_fdm_2`): with more
+    /// than one a prime tower prints, and with one Orca turns the support's own layer heights off, so its layers
+    /// follow the object's.
+    pub fn for_filaments(&self, used: usize) -> Settings {
+        let mut s = self.clone();
+        s.used_filaments = used;
+        s.prime_tower = used > 1 && self.enable_prime_tower;
+        if s.prime_tower {
+            s.support.independent_layer_height = false;
+        }
+        s
     }
 
     /// The support's gaps under the object and over it, mm (Orca's `gap_support_object` and `gap_object_support`): as
