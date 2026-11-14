@@ -19,6 +19,7 @@
 use crate::bambu::Frame;
 use crate::config::{Settings, Value};
 use crate::filaments::{self, Flush, MIN_PURGE_VOLUME, Palette};
+use crate::fmath::Hyp;
 use crate::support::{Part, Pass};
 use crate::template::Vars;
 use crate::wipe_tower::{self, Piece, V, WipeTower};
@@ -724,7 +725,7 @@ impl Colours {
                     steps.push(Step::Travel { x: p[0], y: p[1], lift: false, lower: true });
                 } else {
                     let prev = route[i - 1];
-                    let long = (p[0] - prev[0]).hypot(p[1] - prev[1]) >= sn.retract_min_travel;
+                    let long = (p[0] - prev[0]).hyp(p[1] - prev[1]) >= sn.retract_min_travel;
                     steps.push(Step::Travel { x: p[0], y: p[1], lift: long, lower: false });
                 }
             }

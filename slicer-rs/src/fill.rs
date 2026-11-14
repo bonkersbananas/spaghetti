@@ -7,6 +7,7 @@
 //!
 //! Orca works in nanometres; the patterns are computed in nanometres here too, so they line up where Orca's do.
 
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, Shape, Shapes};
 use std::f64::consts::{FRAC_PI_2, PI};
 
@@ -779,7 +780,7 @@ pub(crate) fn crossing(a: (f64, f64), b: (f64, f64), c: Pt, d: Pt) -> Option<(f6
     let r = (b.0 - a.0, b.1 - a.1);
     let s = (dx - cx, dy - cy);
     let den = r.0 * s.1 - r.1 * s.0;
-    if den.abs() <= 1e-12 * (r.0.hypot(r.1) * s.0.hypot(s.1)) || den == 0.0 {
+    if den.abs() <= 1e-12 * (r.0.hyp(r.1) * s.0.hyp(s.1)) || den == 0.0 {
         return None;
     }
     let q = (cx - a.0, cy - a.1);
@@ -836,7 +837,7 @@ fn clip(lines: &[Vec<(f64, f64)>], grid: &EdgeGrid) -> Vec<Piece> {
             // The stretch's points after its start: the corners it passes, then its end.
             let mut rest: Vec<(f64, f64)> = (s0 + 1..=s1).map(|v| line[v]).collect();
             rest.push(at(s1, t1));
-            let Some(&next) = rest.iter().find(|q| (q.0 - start.0).hypot(q.1 - start.1) > 1e-6) else { continue };
+            let Some(&next) = rest.iter().find(|q| (q.0 - start.0).hyp(q.1 - start.1) > 1e-6) else { continue };
             if !grid.inside(((start.0 + next.0) / 2.0, (start.1 + next.1) / 2.0)) {
                 if let Some(piece) = current.take() {
                     out.push(piece);
@@ -1065,7 +1066,7 @@ impl Graph {
                 let p1 = if s == start.0 { start.2 } else { points[s] };
                 let p2 = if s == end.0 { end.2 } else { points[s + 1] };
                 let (vx, vy) = (p2.0 - p1.0, p2.1 - p1.1);
-                let l = vx.hypot(vy);
+                let l = vx.hyp(vy);
                 let (vx, vy) = if l > 0.0 { (vx / l * radius, vy / l * radius) } else { (radius, 0.0) };
                 // The cells along both sides of the thick segment.
                 let mut found: Vec<u32> = Vec::new();
@@ -1140,7 +1141,7 @@ impl Graph {
 fn clip_from_start(points: &[(f64, f64)], mut distance: f64) -> Option<(usize, f64, (f64, f64))> {
     for i in 1..points.len() {
         let (a, b) = (points[i - 1], points[i]);
-        let l = (b.0 - a.0).hypot(b.1 - a.1);
+        let l = (b.0 - a.0).hyp(b.1 - a.1);
         if l > distance {
             let t = distance / l;
             return Some((i - 1, t, (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)));
@@ -1154,7 +1155,7 @@ fn clip_from_start(points: &[(f64, f64)], mut distance: f64) -> Option<(usize, f
 fn clip_from_end(points: &[(f64, f64)], mut distance: f64) -> Option<(usize, f64, (f64, f64))> {
     for i in (0..points.len().saturating_sub(1)).rev() {
         let (b, a) = (points[i + 1], points[i]);
-        let l = (b.0 - a.0).hypot(b.1 - a.1);
+        let l = (b.0 - a.0).hyp(b.1 - a.1);
         if l > distance {
             let t = distance / l;
             return Some((i, 1.0 - t, (b.0 + (a.0 - b.0) * t, b.1 + (a.1 - b.1) * t)));
@@ -1176,7 +1177,7 @@ pub(crate) fn thick_collision(
     let v = (b.0 - a.0, b.1 - a.1);
     let lv = v.0 * v.0 + v.1 * v.1;
     let sv = (t.0 - s.0, t.1 - s.1);
-    let sl = sv.0.hypot(sv.1);
+    let sl = sv.0.hyp(sv.1);
     let r2 = offset * offset;
     if lv < EPS * EPS {
         let m = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
@@ -1827,7 +1828,7 @@ fn join_close_ends(lines: &mut Vec<Vec<Pt>>, max_gap: f64) {
             continue;
         }
         let (p, q) = (as_f(end_point(lines, a)), as_f(end_point(lines, b)));
-        let length = (q.0 - p.0).hypot(q.1 - p.1);
+        let length = (q.0 - p.0).hyp(q.1 - p.1);
         let mut crosses = false;
         if length > 2.0 * EPS {
             let dir = ((q.0 - p.0) / length, (q.1 - p.1) / length);
@@ -1969,7 +1970,7 @@ mod tests {
         for path in &paths {
             for w in path.windows(2) {
                 let (a, b) = ((geom::unsc(w[0].x), geom::unsc(w[0].y)), (geom::unsc(w[1].x), geom::unsc(w[1].y)));
-                if (b.0 - a.0).hypot(b.1 - a.1) < 3.0
+                if (b.0 - a.0).hyp(b.1 - a.1) < 3.0
                     || ((b.1 - a.1).atan2(b.0 - a.0).to_degrees().rem_euclid(180.0) - 45.0).abs() > 0.1
                 {
                     continue;
@@ -1997,7 +1998,7 @@ mod tests {
                     let (a, b) = ((geom::unsc(w[0].x), geom::unsc(w[0].y)), (geom::unsc(w[1].x), geom::unsc(w[1].y)));
                     let heading = (b.1 - a.1).atan2(b.0 - a.0).to_degrees().rem_euclid(180.0);
                     let way = [45.0, 135.0].iter().position(|h: &f64| (heading - h).abs() < 0.1);
-                    let Some(way) = way.filter(|_| (b.0 - a.0).hypot(b.1 - a.1) >= 3.0) else { continue };
+                    let Some(way) = way.filter(|_| (b.0 - a.0).hyp(b.1 - a.1) >= 3.0) else { continue };
                     let normal = (heading + 90.0).to_radians();
                     let across = (a.0 - cx) * normal.cos() + (a.1 - cy) * normal.sin();
                     let off = across.rem_euclid(spacing);

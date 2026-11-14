@@ -13,6 +13,7 @@
 //! fill it a line apart from the outside in, an even number of them.
 
 use crate::config::Settings;
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Join, Pt, Shape, Shapes};
 
 /// mm: Orca's `RESOLUTION`, to which the brim's band is simplified and its corners rounded.
@@ -361,7 +362,7 @@ fn corners(ring: &[Pt], threshold: f64, convex: bool) -> Vec<Pt> {
     }
     let cos_threshold = threshold.next_up().cos();
     let unit = |x: f64, y: f64| {
-        let l = x.hypot(y);
+        let l = x.hyp(y);
         if l > 0.0 { (x / l, y / l) } else { (x, y) }
     };
     let mut out = Vec::new();

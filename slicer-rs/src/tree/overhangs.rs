@@ -7,6 +7,7 @@
 //! (`support_critical_regions_only`), only cantilevers and sharp tails are held up.
 
 use super::{Config, mm};
+use crate::fmath::Hyp;
 use crate::geom::{self, Join, Shape, Shapes};
 use crate::par;
 
@@ -126,7 +127,7 @@ fn scan(
         let mut held: Option<Shapes> = None;
         for poly in &f.overhangs {
             let (w, h) = size_nm(&one(poly));
-            if w.hypot(h) <= min_reach_nm {
+            if w.hyp(h) <= min_reach_nm {
                 continue;
             }
             let held = held.get_or_insert_with(|| grow(&lower_offset, reach));

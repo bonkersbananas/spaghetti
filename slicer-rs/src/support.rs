@@ -26,6 +26,7 @@
 
 use crate::base_support;
 use crate::config::{RaftMaker, Settings};
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shape, Shapes};
 use crate::grid::{self, Grid};
 use crate::monotonic;
@@ -2136,13 +2137,13 @@ fn tree_paths(area: &Shapes, height: f64, p: &Params) -> Vec<Item> {
                     let m = cand.len();
                     let trunc = |x: f64, y: f64| geom::pt(x as i32, y as i32);
                     pl.push(trunc(f.0, f.1));
-                    let mut remaining = anchor_length - (sx - f.0).hypot(sy - f.1);
+                    let mut remaining = anchor_length - (sx - f.0).hyp(sy - f.1);
                     let mut i = start;
                     let mut j = (i + 1) % m;
                     let mut pi = (cand[i].0.x as f64, cand[i].0.y as f64);
                     let mut pj = (cand[j].0.x as f64, cand[j].0.y as f64);
                     let (mut vx, mut vy) = (pj.0 - pi.0, pj.1 - pi.1);
-                    let mut l = vx.hypot(vy);
+                    let mut l = vx.hyp(vy);
                     if remaining < (1.0 - t) * l {
                         pl.push(trunc(f.0 + vx * (remaining / l), f.1 + vy * (remaining / l)));
                     } else {
@@ -2153,7 +2154,7 @@ fn tree_paths(area: &Shapes, height: f64, p: &Params) -> Vec<Item> {
                             j = (i + 1) % m;
                             pj = (cand[j].0.x as f64, cand[j].0.y as f64);
                             (vx, vy) = (pj.0 - pi.0, pj.1 - pi.1);
-                            l = vx.hypot(vy);
+                            l = vx.hyp(vy);
                             if i == start {
                                 break;
                             }

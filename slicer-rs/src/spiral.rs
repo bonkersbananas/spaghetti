@@ -8,6 +8,7 @@
 //! down to `spiral_finishing_flow_ratio`.
 
 use crate::config::Settings;
+use crate::fmath::Hyp;
 use crate::gcode::{FORM_E, FORM_Z, Kind, LayerGcode, Move};
 use crate::geom::{self, Pt, Shapes};
 use crate::plan::LayerPlan;
@@ -162,7 +163,7 @@ pub(crate) fn rise(moves: &[Move], course: &Course, s: &Settings) -> Rise {
     let (mut total, mut rise, mut start_z) = (0.0, 0.0, None);
     let mut at = course.from;
     for m in moves {
-        let d = (mm3(m.x) - mm3(at[0])).hypot(mm3(m.y) - mm3(at[1]));
+        let d = (mm3(m.x) - mm3(at[0])).hyp(mm3(m.y) - mm3(at[1]));
         let extruding = m.e > 0.0 && m.kind != Kind::Wipe;
         if extruding {
             total += d;
@@ -191,7 +192,7 @@ pub(crate) fn rise(moves: &[Move], course: &Course, s: &Settings) -> Rise {
     for m in moves {
         out.at.push(out.moves.len());
         again_at.push(again.len());
-        let d = (mm3(m.x) - mm3(at[0])).hypot(mm3(m.y) - mm3(at[1]));
+        let d = (mm3(m.x) - mm3(at[0])).hyp(mm3(m.y) - mm3(at[1]));
         at = [m.x, m.y, m.z];
         let extruding = m.e > 0.0 && m.kind != Kind::Wipe;
         let retracting = m.e < 0.0;
@@ -226,7 +227,7 @@ pub(crate) fn rise(moves: &[Move], course: &Course, s: &Settings) -> Rise {
                     match nearest_on(p, below) {
                         Some((q, dist)) if dist < spiral.max_xy_smoothing => {
                             let target = [q[0] * (1.0 - factor) + p[0] * factor, q[1] * (1.0 - factor) + p[1] * factor];
-                            let moved = (target[0] - last_point[0]).hypot(target[1] - last_point[1]);
+                            let moved = (target[0] - last_point[0]).hyp(target[1] - last_point[1]);
                             if moved < min_segment {
                                 continue;
                             }

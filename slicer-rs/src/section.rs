@@ -318,7 +318,18 @@ fn pt0() -> Pt {
 /// A mesh with holes or broken edges leaves chains that don't close: join each chain's end to the nearest start
 /// (within `max_gap`), and keep the loops that close. What can't be closed is dropped.
 fn close_open_chains(mut open: Vec<(Contour, u32)>, closed: &mut Vec<(Contour, u32)>, max_gap: i64) {
-    let max2 = (max_gap as i128) * (max_gap as i128);
+    let max2 = d2_of(max_gap.unsigned_abs(), 0);
+    // Each chain's start by the cell it lies in, of a grid as wide as the largest gap: the starts within reach of a
+    // point lie in its cell and the eight round it. (A plate's objects are cut together, and a broken mesh can leave
+    // hundreds of chains on a layer: looking at every start for every end took most of the plate's slicing.)
+    let cell = max_gap.max(1);
+    let cell_of = |p: Pt| (i64::from(p.x).div_euclid(cell), i64::from(p.y).div_euclid(cell));
+    let mut starts: HashMap<(i64, i64), Vec<u32>, BuildHasherDefault<FastHasher>> = HashMap::default();
+    for (j, (chain, _)) in open.iter().enumerate() {
+        if let Some(&p) = chain.first() {
+            starts.entry(cell_of(p)).or_default().push(j as u32);
+        }
+    }
     let mut done = vec![false; open.len()];
     for first in 0..open.len() {
         if done[first] {
@@ -328,15 +339,20 @@ fn close_open_chains(mut open: Vec<(Contour, u32)>, closed: &mut Vec<(Contour, u
         let mesh = open[first].1;
         let mut chain = std::mem::take(&mut open[first].0);
         while let (Some(&end), Some(&head)) = (chain.last(), chain.first()) {
-            // Close the chain on itself when its own start is the nearest.
-            let mut best: Option<(usize, i128)> = None;
-            for (j, (other, _)) in open.iter().enumerate() {
-                if done[j] || other.is_empty() {
-                    continue;
-                }
-                let d = d2(end, other[0]);
-                if d <= max2 && best.is_none_or(|(_, bd)| d < bd) {
-                    best = Some((j, d));
+            // The nearest start within reach, the first chain of those as near; close the chain on itself when its
+            // own start is nearer.
+            let mut best: Option<(usize, u128)> = None;
+            let (cx, cy) = cell_of(end);
+            for at in [-1, 0, 1].into_iter().flat_map(|dx| [-1, 0, 1].map(|dy| (cx + dx, cy + dy))) {
+                for &j in starts.get(&at).map_or(&[][..], Vec::as_slice) {
+                    let (j, other) = (j as usize, &open[j as usize].0);
+                    if done[j] || other.is_empty() {
+                        continue;
+                    }
+                    let d = d2(end, other[0]);
+                    if d <= max2 && best.is_none_or(|(bj, bd)| d < bd || (d == bd && j < bj)) {
+                        best = Some((j, d));
+                    }
                 }
             }
             let self_d = d2(end, head);
@@ -357,9 +373,15 @@ fn close_open_chains(mut open: Vec<(Contour, u32)>, closed: &mut Vec<(Contour, u
     }
 }
 
+/// The square of the distance from `a` to `b`, exactly.
 #[inline]
-fn d2(a: Pt, b: Pt) -> i128 {
-    let dx = (a.x - b.x) as i128;
-    let dy = (a.y - b.y) as i128;
-    dx * dx + dy * dy
+fn d2(a: Pt, b: Pt) -> u128 {
+    d2_of((i64::from(a.x) - i64::from(b.x)).unsigned_abs(), (i64::from(a.y) - i64::from(b.y)).unsigned_abs())
+}
+
+/// `dx² + dy²` for sides under 2³² each: their squares in 64 bits, which WebAssembly multiplies itself, rather than
+/// in 128 bits, a call into software for each.
+#[inline]
+fn d2_of(dx: u64, dy: u64) -> u128 {
+    u128::from(dx * dx) + u128::from(dy * dy)
 }

@@ -17,6 +17,7 @@
 //! 5. Print each region as a zig-zag from left to right, joining runs along the outline where the link allows,
 //!    and turn the lines back.
 
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shape};
 use std::f64::consts::FRAC_PI_2;
 
@@ -474,7 +475,7 @@ fn distance_of_segments(n: usize, seg1: usize, seg2: usize, forward: bool) -> i6
 
 /// The length of a contour from `p1` on the edge ending at `seg1` forwards to `p2` on the edge ending at `seg2`.
 fn segment_length(poly: &[(i64, i64)], seg1: usize, p1: (i64, i64), seg2: usize, p2: (i64, i64)) -> f64 {
-    let d = |a: (i64, i64), b: (i64, i64)| ((a.0 - b.0) as f64).hypot((a.1 - b.1) as f64);
+    let d = |a: (i64, i64), b: (i64, i64)| ((a.0 - b.0) as f64).hyp((a.1 - b.1) as f64);
     let mut prev = p1;
     let mut len = 0.0;
     let mut step = |i: usize, prev: &mut (i64, i64)| {
@@ -995,7 +996,7 @@ fn region_length(region: &Region, flipped: bool, contours: &[Vec<(i64, i64)>], s
         let going_up = its[it].is_low();
         if no_perimeter {
             let other = if going_up { it - 1 } else { it + 1 };
-            total += (last.0 - segs[v].pos as f64).hypot(last.1 - its[other].pos() as f64);
+            total += (last.0 - segs[v].pos as f64).hyp(last.1 - its[other].pos() as f64);
         }
         let mut iright = its[it].right_horizontal();
         if going_up {

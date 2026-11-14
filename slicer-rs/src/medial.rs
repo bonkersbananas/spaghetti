@@ -3,6 +3,7 @@
 //! Rust port). Gap fill extrudes along Orca's (`gap_fill`), as wide as the region is; the lines along the middle of
 //! narrow solid infill take a plainer one (`axis`).
 
+use crate::fmath::Hyp;
 use crate::geom::{self, Pt, Shape, Shapes};
 use boostvoronoi::prelude::{Builder, Cell, Line, SourceCategory};
 use std::collections::HashMap;
@@ -210,7 +211,7 @@ pub fn gap_fill(shape: &Shape, min_width: f64, max_width: f64) -> Vec<ThickLine>
             if angle > std::f64::consts::PI {
                 angle = 2.0 * std::f64::consts::PI - angle;
             }
-            let length = (b.x() - a.x()).hypot(b.y() - a.y());
+            let length = (b.x() - a.x()).hyp(b.y() - a.y());
             if std::f64::consts::PI - angle > std::f64::consts::PI / 8.0
                 && (w0 < 1.0 || w1 < 1.0 || length >= min_units)
             {
@@ -396,7 +397,7 @@ fn finish_gap_lines(shape: &Shape, mut lines: Vec<Free>) -> Vec<Free> {
 }
 
 fn unit(v: [f64; 2]) -> [f64; 2] {
-    let l = v[0].hypot(v[1]);
+    let l = v[0].hyp(v[1]);
     if l > 0.0 { [v[0] / l, v[1] / l] } else { [0.0, 0.0] }
 }
 
@@ -435,13 +436,13 @@ fn segments_of(shape: &Shape) -> Vec<[i32; 4]> {
 fn site_distance(segments: &[[i32; 4]], cell: &Cell, x: f64, y: f64) -> f64 {
     let s = segments[cell.source_index().usize()].map(f64::from);
     match cell.source_category() {
-        SourceCategory::SegmentStart | SourceCategory::SinglePoint => (x - s[0]).hypot(y - s[1]),
-        SourceCategory::SegmentEnd => (x - s[2]).hypot(y - s[3]),
+        SourceCategory::SegmentStart | SourceCategory::SinglePoint => (x - s[0]).hyp(y - s[1]),
+        SourceCategory::SegmentEnd => (x - s[2]).hyp(y - s[3]),
         SourceCategory::Segment => {
             let (dx, dy) = (s[2] - s[0], s[3] - s[1]);
             let len2 = dx * dx + dy * dy;
             let t = if len2 > 0.0 { (((x - s[0]) * dx + (y - s[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-            (x - s[0] - t * dx).hypot(y - s[1] - t * dy)
+            (x - s[0] - t * dx).hyp(y - s[1] - t * dy)
         }
     }
 }
