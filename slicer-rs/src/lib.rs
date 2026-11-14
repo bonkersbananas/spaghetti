@@ -321,6 +321,7 @@ impl Plate {
             .iter()
             .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
             .collect();
+        let sizes: Vec<(f64, f64)> = objects.iter().map(|o| (o.max[0] - o.min[0], o.max[1] - o.min[1])).collect();
         let regions = region::regions(&slices, &owners, &layers, &centres, settings);
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {
@@ -335,7 +336,7 @@ impl Plate {
         drop((slices, owners));
         let t3 = now();
         let supports = if settings.enable_support {
-            object_supports(&regions, &layers, &centres, objects.len(), settings)
+            object_supports(&regions, &layers, &centres, &sizes, settings)
         } else {
             Vec::new()
         };
@@ -641,9 +642,10 @@ fn object_supports(
     regions: &[region::LayerRegions],
     layers: &section::Layers,
     centres: &[(f64, f64)],
-    objects: usize,
+    sizes: &[(f64, f64)],
     s: &Settings,
 ) -> Vec<Vec<support::Layer>> {
+    let objects = sizes.len();
     let params = support::Params::new(s);
     let last = last_layers(regions, objects);
     (0..objects)
@@ -670,8 +672,11 @@ fn object_supports(
                 slices,
                 tops,
                 origin: centres[o],
+                size: sizes[o],
             };
-            if s.support.organic() {
+            if s.support.classic().is_some() {
+                tree::classic::supports(&object, s, &params)
+            } else if s.support.organic() {
                 tree::supports(&object.slices, object.height, s, object.origin, s.bed)
                     .map_or_else(Vec::new, |t| support::generate_tree(&object, &params, t))
             } else {

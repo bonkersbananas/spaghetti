@@ -41,7 +41,7 @@ pub fn intersection(a: &Shapes, b: &Shapes) -> Shapes {
 }
 
 /// Orca's `contains` over polygons: whether `p` lies inside an odd number of contours, or on any edge.
-pub fn contains(shapes: &Shapes, p: Pt) -> bool {
+pub fn contains(shapes: &[geom::Shape], p: Pt) -> bool {
     let mut inside = false;
     let (px, py) = (p.x as i64, p.y as i64);
     for contour in shapes.iter().flatten() {

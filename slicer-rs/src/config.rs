@@ -322,6 +322,16 @@ pub struct SupportSettings {
     pub tree_top_rate: f64,
     /// `min_feature_size` as the trees read it: its number, a share of the nozzle, taken as millimetres.
     pub min_feature_size: f64,
+    /// Orca's classic trees (slim, strong and hybrid): the branches' diameter, their angle from vertical (degrees)
+    /// and how far apart their tips start (`tree_support_branch_diameter`, `_angle`, `_distance`), the brim round
+    /// them on the first layer (`tree_support_auto_brim`, `tree_support_brim_width`), and `max_bridge_length`,
+    /// which spaces their tips too.
+    pub classic_branch_diameter: f64,
+    pub classic_branch_angle: f64,
+    pub classic_branch_distance: f64,
+    pub tree_auto_brim: bool,
+    pub tree_brim_width: f64,
+    pub max_bridge_length: f64,
     pub filament: i64,
     pub interface_filament: i64,
 }
@@ -367,6 +377,20 @@ impl SupportSettings {
         self.kind == "tree(auto)" && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
     }
 
+    /// Orca's classic trees (its older tree code), in their slim, strong or hybrid style.
+    pub fn classic(&self) -> Option<crate::tree::classic::Style> {
+        use crate::tree::classic::Style;
+        if self.kind != "tree(auto)" {
+            return None;
+        }
+        match self.style.as_str() {
+            "tree_slim" => Some(Style::Slim),
+            "tree_strong" => Some(Style::Strong),
+            "tree_hybrid" => Some(Style::Hybrid),
+            _ => None,
+        }
+    }
+
     /// Whether these are Orca's normal supports in their snug style, which follow the overhangs instead of the grid.
     pub fn snug(&self) -> bool {
         self.kind == "normal(auto)" && self.style == "snug"
@@ -377,13 +401,8 @@ impl SupportSettings {
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
         // Each by its name in the app's settings, as the app says "our own slicer can't do … yet".
-        if kind == "tree(auto)" && !self.organic() {
-            Some(match self.style.as_str() {
-                "tree_slim" => "slim tree supports",
-                "tree_strong" => "strong tree supports",
-                "tree_hybrid" => "hybrid supports",
-                _ => "this style of tree support",
-            })
+        if kind == "tree(auto)" && !self.organic() && self.classic().is_none() {
+            Some("this style of tree support")
         } else if kind != "normal(auto)" && kind != "tree(auto)" {
             Some("supports painted on")
         } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "") {
@@ -394,12 +413,13 @@ impl SupportSettings {
             Some("supports on the plate only")
         } else if self.threshold_angle <= 0.0 {
             Some("supports by overlap")
-        } else if !(if self.organic() {
+        } else if !(if self.organic() || self.classic().is_some() {
             // Other patterns fill trees' branches rather than drawing them as loops.
             matches!(self.base_pattern.as_str(), "default" | "none" | "")
         } else {
             matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
         }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
+            || (self.classic().is_some() && !matches!(self.interface_pattern.as_str(), "auto" | ""))
         {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
@@ -410,7 +430,7 @@ impl SupportSettings {
             || self.angle != 0.0
             || self.ironing
             || self.interface_loops
-            || (self.wall_count > 0 && !self.organic())
+            || (self.wall_count > 0 && !self.organic() && self.classic().is_none())
             || self.bridge_no_support
             || s.thick_bridges
         {
@@ -638,6 +658,12 @@ impl Settings {
                 tree_branch_diameter_angle: p.float("tree_support_branch_diameter_angle"),
                 tree_top_rate: p.float("tree_support_top_rate"),
                 min_feature_size: p.float("min_feature_size"),
+                classic_branch_diameter: p.float("tree_support_branch_diameter"),
+                classic_branch_angle: p.float("tree_support_branch_angle"),
+                classic_branch_distance: p.float("tree_support_branch_distance"),
+                tree_auto_brim: p.bool("tree_support_auto_brim"),
+                tree_brim_width: p.float("tree_support_brim_width"),
+                max_bridge_length: p.float("max_bridge_length"),
                 filament: p.int("support_filament"),
                 interface_filament: p.int("support_interface_filament"),
             },
