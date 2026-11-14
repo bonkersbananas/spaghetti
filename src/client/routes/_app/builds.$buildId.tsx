@@ -62,6 +62,7 @@ import { Overline } from "@/components/ui/Overline";
 import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
+import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
@@ -492,6 +493,7 @@ function Build({ item }: { item: ItemView }) {
               />
             )
           )}
+          <ShareLinkButton title={title.trim()} />
           <IconButton
             icon={TrashIcon}
             label={scrapsToIdea ? "Scrap build" : "Delete build"}

@@ -26,6 +26,7 @@ import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
+import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -168,6 +169,7 @@ function TwistBody({ twist }: { twist: Twist }) {
       <h1 className="sr-only">{value.name || "Twist"}</h1>
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
+        <ShareLinkButton title={value.name} />
         <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
         {isDesktop && (
           <div className="ml-2 flex flex-col items-end gap-1.5">

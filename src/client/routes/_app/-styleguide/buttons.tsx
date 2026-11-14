@@ -2,6 +2,7 @@ import { OpenInStudio } from "@/components/builds/OpenInStudio";
 import { Button, ButtonLink, IconButton } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Panel, Section } from "./shared";
 
 export function ButtonSection() {
@@ -49,6 +50,7 @@ export function ButtonSection() {
           <IconButton icon={Icons.CloseIcon} label="Close" />
           <IconButton icon={Icons.CameraIcon} label="Take photo" variant="secondary" />
           <IconButton icon={Icons.PlusIcon} label="New idea" variant="primary" size="lg" />
+          <ShareLinkButton title="Desk tidy-up" />
           <span className="text-small text-ink-faint hidden items-center gap-2 md:flex">
             Keyboard hints: <Kbd keys={["G", "I"]} /> <Kbd keys={["/"]} />
           </span>
