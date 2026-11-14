@@ -992,4 +992,55 @@ mod tests {
         // A filament's "nil" leaves the printer's value, anything else wins.
         assert_eq!((s.retract_length, s.z_hop), (0.8, 0.2));
     }
+
+    /// A flow's width, height, mm³ per mm and spacing.
+    fn shape(f: Flow) -> (f64, f64, f64, f64) {
+        (f.width, f.height, f.mm3_per_mm, f.spacing)
+    }
+
+    fn close(a: Flow, b: (f64, f64, f64, f64)) -> bool {
+        let a = shape(a);
+        [a.0 - b.0, a.1 - b.1, a.2 - b.2, a.3 - b.3].iter().all(|d| d.abs() < 1e-6)
+    }
+
+    #[test]
+    fn orcas_flow_ratio_keeps_the_spacing_or_narrows_the_line() {
+        let line = Flow::flat(0.42, 0.2);
+        assert_eq!(line.with_flow_ratio(1.0), line);
+        // More plastic: the same spacing, taller (a 0.2 mm nozzle's bridge, half as much again).
+        let more = Flow::flat(0.2, 0.1).with_flow_ratio(1.5);
+        assert!(close(more, (0.2107301, 0.15, 0.0267810, 0.1785398)), "{more:?}");
+        // Less: narrower at the same height, and a round thread once narrower than high.
+        let less = line.with_flow_ratio(0.8);
+        assert!(close(less, shape(Flow::flat(0.344584, 0.2))), "{less:?}");
+        let thread = line.with_flow_ratio(0.1);
+        assert!(thread.width == thread.height && thread.spacing == line.spacing, "{thread:?}");
+    }
+
+    #[test]
+    fn bridges_and_overhang_walls_take_orcas_bridging_flow_for_each_nozzle() {
+        let at = |nozzle: f64| Settings::from_profile(profile::x2d_nozzle(nozzle).unwrap(), None);
+        // 0.4 mm: bridges as flat lines as wide as the nozzle, internal bridges as round threads 0.05 mm apart.
+        let s = at(0.4);
+        assert_eq!((s.bridge_flow_ratio, s.internal_bridge_flow), (1.0, 1.0));
+        assert!(close(s.bridge_flow(false, 0.2), (0.4, 0.2, 0.0714159, 0.3570796)));
+        assert!(close(s.bridge_flow(true, 0.2), (0.4, 0.4, 0.1256637, 0.45)));
+        assert!(close(s.overhang_wall_flow(0.2), (0.4, 0.2, 0.0714159, 0.3570796)));
+        // 0.2 mm: Bambu's presets lay bridges with half as much plastic again (bridge_flow 1.5): taller flat lines at
+        // the same spacing, and threads √1.5 times as wide (in single precision, as Orca's).
+        let s = at(0.2);
+        assert_eq!(s.bridge_flow_ratio, 1.5);
+        assert!(close(s.bridge_flow(false, 0.1), (0.2107301, 0.15, 0.0267810, 0.1785398)));
+        let d = (0.2f32 * 1.5f64.sqrt() as f32) as f64;
+        assert!(close(s.bridge_flow(true, 0.1), (d, d, PI * d * d / 4.0, d + 0.05)));
+        assert!(close(s.overhang_wall_flow(0.1), (0.2107301, 0.15, 0.0267810, 0.1785398)));
+        // 0.6 and 0.8 mm: as the 0.4 mm, at their width.
+        for nozzle in [0.6, 0.8] {
+            let s = at(nozzle);
+            let h = s.layer_height;
+            assert_eq!(s.bridge_flow_ratio, 1.0);
+            assert!(close(s.bridge_flow(false, h), shape(Flow::flat(nozzle, h))));
+            assert!(close(s.bridge_flow(true, h), (nozzle, nozzle, PI * nozzle * nozzle / 4.0, nozzle + 0.05)));
+        }
+    }
 }
