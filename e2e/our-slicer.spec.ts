@@ -107,35 +107,47 @@ test("a model picked for Spaghetti's own slicer is sliced by it in the browser, 
   await expect(viewer.getByText(/Layer \d+ of 100/)).toBeVisible();
 });
 
-test("what ours can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({ page }) => {
+/** A drying rack: a base, a post, and an arm that starts in the air beside the post (it needs supports). */
+const RACK = () =>
+  boxesStl([
+    { at: [0, 0, 0], size: [36, 36, 4] },
+    { at: [12, 12, 4], size: [12, 12, 46] },
+    { at: [30, 15, 34], size: [26, 6, 4] },
+  ]);
+
+test("ours slices tree supports; what it can't slice yet, OrcaSlicer's engine slices, and the card says why", async ({
+  page,
+}) => {
   test.setTimeout(3 * SLICED);
   await signIn(page);
   try {
-    // The workspace slices with ours, with tree supports where needed (the usual kind), which ours can't build yet.
-    await setDefaults(page, { slicer: "spaghetti", supports: "where-needed" });
-    const { id, files } = await ideaWithModel(page, "Cube", "cube.stl", boxStl(20));
-    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do tree supports yet")).toBeVisible({
+    // The workspace slices with ours, with slim tree supports where needed, which ours can't build yet.
+    await setDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
+    const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
+    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do slim tree supports yet")).toBeVisible({
       timeout: SLICED,
     });
     await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
     const slice = (await fileOf(page, id)).slice;
-    expect(slice.fallback).toEqual({ why: "unsupported", what: "tree supports" });
+    expect(slice.fallback).toEqual({ why: "unsupported", what: "slim tree supports" });
     // What was asked for stays: the next slice asks ours again.
     expect(slice.settings.slicing.slicer).toBe("spaghetti");
 
-    // Normal supports, ours builds.
+    // Tree supports, the usual kind, ours builds: under the arm, which would fall.
     await files.getByRole("button", { name: "Slice with…" }).click();
     const settings = page.getByRole("dialog", { name: "How to slice it" });
     await settings.getByRole("button", { name: /^More/ }).click();
     await settings
       .getByRole("group", { name: "How supports are built" })
-      .getByRole("button", { name: "Normal" })
+      .getByRole("button", { name: "Tree", exact: true })
       .click();
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
-    expect((await fileOf(page, id)).slice.settings.slicing.supportStyle).toBe("normal");
-    expect((await fileOf(page, id)).slice.fallback).toBeUndefined();
+    const trees = (await fileOf(page, id)).slice;
+    expect(trees.settings.slicing.supportStyle).toBe("tree");
+    expect(trees.settings.slicing.supports).toBe("where-needed");
+    expect(trees.fallback).toBeUndefined();
     await page.keyboard.press("Escape");
     await page.reload();
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible();
@@ -175,17 +187,8 @@ test("a part that floats is OrcaSlicer's to slice, which warns of it", async ({ 
   await signIn(page);
   try {
     await setDefaults(page, { slicer: "spaghetti" });
-    // An arm that starts in the air beside its post (as slicing-settings.spec.ts's drying rack).
-    const { id, files } = await ideaWithModel(
-      page,
-      "Drying rack",
-      "rack.stl",
-      boxesStl([
-        { at: [0, 0, 0], size: [36, 36, 4] },
-        { at: [12, 12, 4], size: [12, 12, 46] },
-        { at: [30, 15, 34], size: [26, 6, 4] },
-      ]),
-    );
+    // Without supports, its arm would print in the air (as slicing-settings.spec.ts's drying rack).
+    const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
     await expect(files.getByText("Parts of it float in the air.")).toBeVisible({ timeout: SLICED });
     await expect(
       files.getByText("Sliced by OrcaSlicer: our own slicer can't check for floating parts yet"),
