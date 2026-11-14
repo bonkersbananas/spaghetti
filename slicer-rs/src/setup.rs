@@ -197,7 +197,12 @@ mod tests {
             refused(r#"{"process": {"brim_type": "outer_and_inner"}}"#),
             Some(Error::Unsupported("a brim inside holes"))
         );
-        assert_eq!(refused(r#"{"process": {"spiral_mode": "1"}}"#), Some(Error::Unsupported("spiral vase mode")));
+        // Spiral vase mode slices (spiral.rs), with one wall, no top shells and no sparse infill as Orca prints it.
+        let spiral = read(r#"{"process": {"spiral_mode": "1", "wall_loops": "3", "sparse_infill_density": "20%"}}"#);
+        assert!(spiral.is_ok_and(|s| s.settings.spiral_mode
+            && s.settings.wall_loops == 1
+            && s.settings.top_shell_layers == 0
+            && s.settings.sparse_density == 0.0));
         // A raft prints with supports off too.
         assert_eq!(refused(r#"{"process": {"raft_layers": "3"}}"#), Some(Error::Unsupported("a raft")));
         // Several filaments slice (filaments.rs, toolchange.rs).

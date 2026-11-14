@@ -170,7 +170,15 @@ pub struct Settings {
     pub wall_generator: String,
     pub brim_type: String,
     pub enable_support: bool,
+    /// Spiral vase mode (`spiral_mode`): above the bottom layers, the outline's largest loop alone, one wall that
+    /// rises as it goes round (`spiral.rs`). Orca then prints one wall, no top shells and no sparse infill, whatever
+    /// the presets say, and these settings do too.
     pub spiral_mode: bool,
+    /// The spiral's settings (`spiral_mode_smooth`, `spiral_mode_max_xy_smoothing`, `spiral_starting_flow_ratio`,
+    /// `spiral_finishing_flow_ratio`).
+    pub spiral: SpiralSettings,
+    /// The layers a skirt goes up (`skirt_height`): a spiral starts no lower.
+    pub skirt_height: usize,
     pub print_sequence: String,
     pub ironing_type: String,
     pub fuzzy_skin: String,
@@ -263,6 +271,19 @@ pub struct Settings {
     /// The auxiliary fan from the first fan layer on (the printer's layer change G-code sets it lower for the first
     /// layers itself).
     pub aux_fan_speed: f64,
+}
+
+/// How a spiral vase's wall rises (`spiral.rs`), by Orca's keys.
+#[derive(Clone, Debug, Default)]
+pub struct SpiralSettings {
+    /// Whether each turn also eases from the turn below towards its own course (`spiral_mode_smooth`), within
+    /// `max_xy_smoothing` mm of it (`spiral_mode_max_xy_smoothing`, a share of the nozzle).
+    pub smooth: bool,
+    pub max_xy_smoothing: f64,
+    /// The flow the first turn starts at and the last one, run again flat, ends at: shares of the full flow
+    /// (`spiral_starting_flow_ratio`, `spiral_finishing_flow_ratio`).
+    pub starting_flow: f64,
+    pub finishing_flow: f64,
 }
 
 /// What normal supports are made with (`support.rs`), by Orca's keys.
@@ -518,6 +539,7 @@ impl Settings {
         let bridge_speed = at("bridge_speed");
         let travel_accel = at("travel_acceleration");
         let z_hop_type = z_hop_type(p);
+        let spiral = p.bool("spiral_mode");
         let colour = colour
             .filter(|c| !c.is_empty())
             .map(str::to_string)
@@ -548,12 +570,13 @@ impl Settings {
             process: Profile::name(&p.process, "print_settings_id"),
             layer_height: p.float("layer_height"),
             first_layer_height: p.float("initial_layer_print_height"),
-            wall_loops: p.int("wall_loops").max(0) as usize,
-            top_shell_layers: p.int("top_shell_layers").max(0) as usize,
+            // Spiral vase mode prints one wall, no top shells and no sparse infill (Orca's `normalize_fdm`).
+            wall_loops: if spiral { 1 } else { p.int("wall_loops").max(0) as usize },
+            top_shell_layers: if spiral { 0 } else { p.int("top_shell_layers").max(0) as usize },
             bottom_shell_layers: p.int("bottom_shell_layers").max(0) as usize,
             top_shell_thickness: p.float("top_shell_thickness"),
             bottom_shell_thickness: p.float("bottom_shell_thickness"),
-            sparse_density: share("sparse_infill_density"),
+            sparse_density: if spiral { 0.0 } else { share("sparse_infill_density") },
             infill_direction: p.float("infill_direction"),
             solid_infill_direction: p.float("solid_infill_direction"),
             outer_wall_width: width("outer_wall_line_width"),
@@ -597,7 +620,14 @@ impl Settings {
             wall_generator: text("wall_generator"),
             brim_type: text("brim_type"),
             enable_support: p.bool("enable_support"),
-            spiral_mode: p.bool("spiral_mode"),
+            spiral_mode: spiral,
+            spiral: SpiralSettings {
+                smooth: p.bool("spiral_mode_smooth"),
+                max_xy_smoothing: p.float_of("spiral_mode_max_xy_smoothing", nozzle_diameter),
+                starting_flow: p.float("spiral_starting_flow_ratio").clamp(0.0, 1.0),
+                finishing_flow: p.float("spiral_finishing_flow_ratio").clamp(0.0, 1.0),
+            },
+            skirt_height: p.int("skirt_height").max(0) as usize,
             print_sequence: text("print_sequence"),
             ironing_type: text("ironing_type"),
             fuzzy_skin: text("fuzzy_skin"),
@@ -747,8 +777,6 @@ impl Settings {
         } else if self.support.raft_layers > 0 {
             // Orca prints a raft under the objects whether or not supports are on.
             Some("a raft")
-        } else if self.spiral_mode {
-            Some("spiral vase mode")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
         } else if !matches!(self.brim_type.as_str(), "auto_brim" | "outer_only" | "no_brim" | "") {
@@ -801,7 +829,8 @@ impl Settings {
         if !matches!(self.fuzzy_skin.as_str(), "disabled_fuzzy" | "none" | "") {
             out.push("no fuzzy skin".into());
         }
-        if self.z_hop > 0.0 && !matches!(self.z_hop_type.as_str(), "Spiral Lift" | "Auto Lift") {
+        // In spiral vase mode every lift goes straight up, as Orca's do there.
+        if self.z_hop > 0.0 && !self.spiral_mode && !matches!(self.z_hop_type.as_str(), "Spiral Lift" | "Auto Lift") {
             out.push(format!("{} printed as spiral lifts", self.z_hop_type));
         }
         out

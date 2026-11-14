@@ -111,7 +111,14 @@ pub(crate) struct Move {
     /// An extrusion's width and height (Orca keeps them as floats, and writes them so).
     pub(crate) width: f32,
     pub(crate) height: f32,
+    /// How Orca's spiral vase writes it, when it rewrote it (`FORM_Z`, `FORM_E`; 0 as ever).
+    pub(crate) form: u8,
 }
+
+/// A move whose height Orca's spiral vase set: written first, to three decimals (`G1 Z0.601 X… Y… E…`).
+pub(crate) const FORM_Z: u8 = 1;
+/// A move whose filament Orca's spiral vase set: written to five decimals (`E0.00003`).
+pub(crate) const FORM_E: u8 = 2;
 
 /// What the G-code says between two moves.
 #[derive(Clone, Debug)]
@@ -179,6 +186,10 @@ pub struct LayerGcode {
     fans: [f64; 2],
     /// With several filaments: mm of each, and mm³ of each on the prime tower.
     by_filament: Vec<[f64; 2]>,
+    /// A spiral vase's last layer that ran round again flat: Orca's estimate counts that as a layer of its own.
+    again: bool,
+    /// A rising layer's turn as written, which a smoothed spiral's next turn eases away from (`spiral.rs`).
+    pub(crate) turn: Vec<[f64; 2]>,
 }
 
 /// The part and auxiliary fans for layer `i`, in percent, as Orca's cooling sets them at a layer's start
@@ -228,10 +239,16 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
     let mut built: Vec<_> = group
         .iter()
         .map(|&(plan, regions, from_z)| {
-            let (moves, notes) = build_layer(plan, regions, job, from_z);
-            let first = layer_start(plan);
-            let start = first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]);
-            (moves, notes, start, first)
+            let (moves, notes, turn) = build_layer(plan, regions, job, from_z);
+            // In spiral vase mode the nozzle travels onto the layer from where the one before ended, in its moves.
+            let (start, first) = match &plan.course {
+                Some(c) => (c.from, None),
+                None => {
+                    let first = layer_start(plan);
+                    (first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]), first)
+                }
+            };
+            (moves, notes, start, first, turn)
         })
         .collect();
     let (factor, cooling_time) = slowdown(built.iter().map(|b| (b.0.as_slice(), b.2)), s);
@@ -244,7 +261,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
     group
         .iter()
         .zip(built)
-        .map(|(&(plan, _, _), (moves, notes, start, first))| {
+        .map(|(&(plan, _, _), (moves, notes, start, first, turn))| {
             // The layer's markers (its fans go before them, in `assemble`), then its moves.
             let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
             text.extend_from_slice(
@@ -257,7 +274,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
             );
             let progress_at = text.len();
             let tool = job.colours.map_or(0, |c| c.start(plan.index));
-            let out = finish_layer(&moves, &notes, start, job, text, plan.header_height, (fans, tool));
+            let before = plan.course.as_ref().and_then(|c| c.before);
+            let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, tool));
             LayerGcode {
                 text: out.text,
                 progress_at,
@@ -274,6 +292,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                 features: out.features,
                 fans,
                 by_filament: out.by_filament,
+                again: turn.as_ref().is_some_and(|t| t.again),
+                turn: turn.map(|t| t.points).unwrap_or_default(),
             }
         })
         .collect()
@@ -296,7 +316,10 @@ fn travel_time(d: f64, first_layer: bool, s: &Settings) -> f64 {
 pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
     let s = job.settings;
     let n = layers.len();
-    let mut stats = Stats { layers: n, max_z: layers.last().map(|l| l.z).unwrap_or(0.0), ..Default::default() };
+    // A spiral vase's last layer run round again counts as a layer of its own, as Orca's estimate counts it.
+    let layers_written = n + layers.iter().filter(|l| l.again).count();
+    let mut stats =
+        Stats { layers: layers_written, max_z: layers.last().map(|l| l.z).unwrap_or(0.0), ..Default::default() };
     let mut at = [job.start[0], job.start[1]];
     let mut times = Vec::with_capacity(n);
     // With several filaments, each one's mm and mm³ on the prime tower.
@@ -474,7 +497,7 @@ impl<'a> Builder<'a> {
     }
 
     fn line(&mut self, x: f64, y: f64, z: f64, e: f64, f: f64, kind: Kind) {
-        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0, height: 0.0 };
+        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0, height: 0.0, form: 0 };
         self.push(m);
     }
 
@@ -625,6 +648,15 @@ impl<'a> Builder<'a> {
         self.lifted = true;
     }
 
+    /// Lifts the nozzle straight up by the z-hop at once, as Orca does in spiral vase mode (its `lazy_lift` there).
+    fn lift_straight(&mut self) {
+        if self.lifted || self.s.z_hop <= 0.0 {
+            return;
+        }
+        self.line(self.x, self.y, self.z + self.s.z_hop, 0.0, self.s.travel_speed, Kind::Lift);
+        self.lifted = true;
+    }
+
     /// Lowers the nozzle and pushes the filament back, ready to print.
     fn ready(&mut self) {
         if self.lifted {
@@ -692,6 +724,7 @@ impl<'a> Builder<'a> {
                 kind: Kind::Extrude(role),
                 width: width as f32,
                 height: height as f32,
+                form: 0,
             };
             self.push(m);
         }
@@ -920,17 +953,29 @@ impl<'a> Internal<'a> {
 /// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
 /// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
 /// a lift and the timelapse photo.
+/// What a spiral vase's rising layer gave besides its moves (`spiral.rs`).
+struct Turned {
+    again: bool,
+    points: Vec<[f64; 2]>,
+}
+
 fn build_layer<'a>(
     plan: &'a LayerPlan,
     regions: &'a LayerRegions,
     job: &'a Job<'a>,
     from_z: f64,
-) -> (Vec<Move>, Vec<(usize, Note)>) {
+) -> (Vec<Move>, Vec<(usize, Note)>, Option<Turned>) {
     let i = plan.index;
     let s = job.colours.map_or(job.settings, |c| &c.settings[c.start(i)]);
     let first_layer = i == 0;
     let points: usize = plan.paths.iter().map(|p| p.points.len()).sum();
-    let (x0, y0) = layer_start(plan).map(|[x, y]| (x, y)).unwrap_or((job.start[0], job.start[1]));
+    // In spiral vase mode the nozzle comes from where the layer before ended, neither retracted nor lifted: Orca
+    // turns off retracting at layer changes there, and moves up to the layer's height at once.
+    let course = plan.course.as_ref();
+    let (x0, y0) = match course {
+        Some(c) => (c.from[0], c.from[1]),
+        None => layer_start(plan).map(|[x, y]| (x, y)).unwrap_or((job.start[0], job.start[1])),
+    };
     let mut b = Builder {
         s,
         moves: Vec::with_capacity(points + plan.paths.len() * 8 + 8),
@@ -939,8 +984,8 @@ fn build_layer<'a>(
         y: y0,
         z: from_z,
         layer_z: plan.z,
-        retracted: true,
-        lifted: true,
+        retracted: course.is_none(),
+        lifted: course.is_none(),
         accel: f64::NAN,
         first_layer,
         layer_height: plan.height,
@@ -950,10 +995,15 @@ fn build_layer<'a>(
         prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
     };
-    if first_layer {
+    if course.is_some() {
+        b.line(x0, y0, plan.z, 0.0, s.travel_speed, Kind::Lift);
+    } else if first_layer {
         // Orca retracts at the first layer change, where the start G-code left the nozzle.
         b.line(x0, y0, from_z, -s.retract_length, s.retract_speed, Kind::Retract);
     }
+    // Spiral vase mode: the layer's first travel that moves the nozzle to the layer's height (Orca's
+    // `m_need_change_layer_lift_z`), which on the first layer is the first travel between paths.
+    let mut force_z = course.is_some();
     let mut change = job.frame.layer_change(i, plan.z, plan.z);
     change.push_str(";_SET_FAN_SPEED_CHANGING_LAYER\n");
     b.note(Note::Text(change));
@@ -1015,6 +1065,31 @@ fn build_layer<'a>(
         let to = path.points[0];
         let (x, y) = (geom::unsc(to.x), geom::unsc(to.y));
         match last {
+            None if course.is_some() => {
+                // Spiral vase mode: from where the layer before ended, retracting and lifting straight up for a
+                // travel of the retraction's minimum or more; then over at that height and down to the layer's.
+                if let Some(o) = owner(path) {
+                    b.note(Note::Printing(o));
+                }
+                let d = (x - b.x).hypot(y - b.y);
+                b.set_accel(b.travel_accel(path, d));
+                if d >= s.retract_min_travel {
+                    b.retract();
+                    b.lift_straight();
+                }
+                if let Some(o) = owner(path).filter(|_| labels) {
+                    b.note(Note::LabelStart(o));
+                    open_label = Some(o);
+                }
+                b.travel(x, y, false);
+                b.line(x, y, plan.z, 0.0, s.travel_speed, Kind::Lift);
+                if first_layer {
+                    b.line(x, y, plan.z, 0.0, s.travel_speed, Kind::Lift);
+                } else {
+                    force_z = false;
+                }
+                b.lifted = false;
+            }
             None => {
                 if let Some(o) = owner(path) {
                     b.note(Note::Printing(o));
@@ -1054,7 +1129,25 @@ fn build_layer<'a>(
                     }
                 };
                 let d = (x - b.x).hypot(y - b.y);
-                if d > 1e-6 {
+                if d > 1e-6 && course.is_some() {
+                    // Spiral vase mode: a retraction lifts straight up at once; the layer's first travel to its
+                    // height comes down as it goes, any other at the lifted height.
+                    b.set_accel(b.travel_accel(path, d));
+                    let here = geom::pt(geom::sc(b.x), geom::sc(b.y));
+                    if retracts(prev, path, d, here, to, &internal, s) {
+                        b.retract();
+                        b.lift_straight();
+                    }
+                    relabel(&mut b);
+                    if force_z {
+                        b.z = plan.z;
+                        b.travel(x, y, true);
+                        b.lifted = false;
+                        force_z = false;
+                    } else {
+                        b.travel(x, y, false);
+                    }
+                } else if d > 1e-6 {
                     b.set_accel(b.travel_accel(path, d));
                     let here = geom::pt(geom::sc(b.x), geom::sc(b.y));
                     let stay = !retracts(prev, path, d, here, to, &internal, s);
@@ -1101,8 +1194,10 @@ fn build_layer<'a>(
         if let Some(o) = owner(prev) {
             b.note(Note::Stopped(o));
         }
-        b.retract();
-        b.lift(None);
+        if course.is_none() {
+            b.retract();
+            b.lift(None);
+        }
         if let Some(o) = owner(prev).filter(|_| labels) {
             b.note(Note::LabelEnd(o));
         }
@@ -1112,7 +1207,36 @@ fn build_layer<'a>(
     if !photo_taken {
         b.note(Note::Text(layer_photo(plan, job, plan.z)));
     }
-    (b.moves, b.notes)
+    let Some(course) = course else { return (b.moves, b.notes, None) };
+    let mut turned = None;
+    if plan.spiral {
+        let r = crate::spiral::rise(&b.moves, course, s);
+        let mut notes: Vec<(usize, Note)> = b.notes.iter().map(|(k, n)| (r.at[*k], n.clone())).collect();
+        if let Some((start, again_at)) = &r.again {
+            // Orca runs the layer's G-code round again: its header, what it says and its extrusions.
+            notes.push((
+                *start,
+                Note::Text(format!(
+                    "; CHANGE_LAYER\n; Z_HEIGHT: {}\n; LAYER_HEIGHT: {}\n",
+                    format_g(plan.z),
+                    format_g(plan.header_height as f64)
+                )),
+            ));
+            notes.extend(b.notes.iter().map(|(k, n)| (again_at[*k], n.clone())));
+        }
+        if let Some(m) = r.moves.last() {
+            (b.x, b.y, b.z) = (m.x, m.y, m.z);
+        }
+        turned = Some(Turned { again: r.again.is_some(), points: r.points });
+        b.moves = r.moves;
+        b.notes = notes;
+    }
+    if course.last {
+        // Orca's last retraction, before the end G-code: wiping along the last path, then straight up.
+        b.retract();
+        b.lift_straight();
+    }
+    (b.moves, b.notes, turned)
 }
 
 /// Where a layer's first travel goes: its first visit to the prime tower when that comes first, else its first path.
@@ -1660,7 +1784,7 @@ fn finish_layer(
     notes: &[(usize, Note)],
     start: [f64; 3],
     job: &Job,
-    text: Vec<u8>,
+    (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
     (fans, mut tool): ([f64; 2], usize),
 ) -> LayerOut {
@@ -1688,8 +1812,15 @@ fn finish_layer(
         by_filament: vec![[0.0; 2]; filaments],
     };
     let area = s.filament_area();
-    let mut w =
-        Writer { feature: None, width: f64::NAN, height: header_height, accel: f64::NAN, feed: -1, first_accel: None };
+    // The feature and width the layer before ended with, where the G-code carries them over (spiral vase mode).
+    let mut w = Writer {
+        feature: before.map(|b| b.0),
+        width: before.map_or(f64::NAN, |b| b.1 as f64),
+        height: header_height,
+        accel: f64::NAN,
+        feed: -1,
+        first_accel: None,
+    };
     let mut wiping = false;
     let mut at = start;
     let mut next_note = 0;
@@ -1779,12 +1910,21 @@ fn finish_layer(
                     w.height = m.height;
                 }
                 w.feed(t, m.f, true);
-                t.extend_from_slice(b"G1 X");
+                // A spiral vase's rising line, as Orca's spiral writes it: the height first, to three decimals.
+                if m.form & FORM_Z != 0 {
+                    t.extend_from_slice(format!("G1 Z{:.3} X", m.z).as_bytes());
+                } else {
+                    t.extend_from_slice(b"G1 X");
+                }
                 num(t, m.x, 3);
                 t.extend_from_slice(b" Y");
                 num(t, m.y, 3);
-                t.extend_from_slice(b" E");
-                num(t, m.e, 5);
+                if m.form & FORM_E != 0 {
+                    t.extend_from_slice(format!(" E{:.5}", m.e).as_bytes());
+                } else {
+                    t.extend_from_slice(b" E");
+                    num(t, m.e, 5);
+                }
             }
             Kind::Travel | Kind::TravelZ => {
                 w.accel(t, m.accel);
@@ -1819,8 +1959,12 @@ fn finish_layer(
                 w.feed(t, m.f, false);
             }
             Kind::Lift => {
-                t.extend_from_slice(b"G1 Z");
-                num(t, m.z, 3);
+                if m.form & FORM_Z != 0 {
+                    t.extend_from_slice(format!("G1 Z{:.3}", m.z).as_bytes());
+                } else {
+                    t.extend_from_slice(b"G1 Z");
+                    num(t, m.z, 3);
+                }
                 w.feed(t, m.f, false);
             }
             Kind::Spiral { i, j } => {
@@ -2051,7 +2195,18 @@ fn time_custom(text: &str, s: &Settings) -> f64 {
                     Kind::Retract
                 };
                 if to != at || e != 0.0 {
-                    moves.push(Move { x: to[0], y: to[1], z: to[2], e, f: feed, accel, kind, width: 0.0, height: 0.0 });
+                    moves.push(Move {
+                        x: to[0],
+                        y: to[1],
+                        z: to[2],
+                        e,
+                        f: feed,
+                        accel,
+                        kind,
+                        width: 0.0,
+                        height: 0.0,
+                        form: 0,
+                    });
                 }
                 at = to;
             }
@@ -2152,7 +2307,18 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                     out.travel += (to[0] - at[0]).hypot(to[1] - at[1]);
                 }
                 if to != at || e != 0.0 {
-                    moves.push(Move { x: to[0], y: to[1], z: to[2], e, f: feed, accel, kind, width: 0.0, height: 0.0 });
+                    moves.push(Move {
+                        x: to[0],
+                        y: to[1],
+                        z: to[2],
+                        e,
+                        f: feed,
+                        accel,
+                        kind,
+                        width: 0.0,
+                        height: 0.0,
+                        form: 0,
+                    });
                 }
                 if to != at {
                     out.end = Some(to);
@@ -2174,6 +2340,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                     kind: Kind::Spiral { i, j },
                     width: 0.0,
                     height: 0.0,
+                    form: 0,
                 });
                 if to != at {
                     out.end = Some(to);
@@ -2210,6 +2377,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                             kind,
                             width: 0.0,
                             height: 0.0,
+                            form: 0,
                         });
                         from = p;
                     }
@@ -2565,6 +2733,7 @@ mod tests {
                     kind: Kind::Extrude(Role::OuterWall),
                     width: 0.42,
                     height: 0.2,
+                    form: 0,
                 }
             })
             .collect();
@@ -2655,6 +2824,7 @@ mod tests {
                 kind,
                 width: 0.4,
                 height: 0.2,
+                form: 0,
             };
             let moved = (nx - x).abs() > 1e-9 || (ny - y).abs() > 1e-9;
             if g == "G0" || g == "G1" {
