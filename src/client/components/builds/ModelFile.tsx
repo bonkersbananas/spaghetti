@@ -723,6 +723,12 @@ export default function ModelFileCard({
   /** Slices it as it is set up now, over the slice there (kept for an undo) if it has one. */
   const sliceNow = () => {
     if (!target) return;
+    // Settings that follow the main nozzle moved on from what is saved: keep them with this slice, so the card isn't
+    // left "ahead" of it.
+    if (file.slicing && !sameSlicing(file.slicing, settings)) {
+      changeSlicing(queryClient, { target, file, next: settings });
+      return;
+    }
     const again = file.slice?.status === "sliced";
     void startSlice(queryClient, {
       fileId: file.id,
