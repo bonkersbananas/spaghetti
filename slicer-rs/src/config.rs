@@ -317,12 +317,18 @@ impl SupportSettings {
     /// organic trees, made where they are needed, with the settings Orca's presets give them.
     fn unsupported(&self, s: &Settings) -> Option<&'static str> {
         let kind = self.kind.as_str();
+        // Each by its name in the app's settings, as the app says "our own slicer can't do … yet".
         if kind == "tree(auto)" && !self.organic() {
-            Some("this style of tree support")
+            Some(match self.style.as_str() {
+                "tree_slim" => "slim tree supports",
+                "tree_strong" => "strong tree supports",
+                "tree_hybrid" => "hybrid supports",
+                _ => "this style of tree support",
+            })
         } else if kind != "normal(auto)" && kind != "tree(auto)" {
             Some("supports painted on")
         } else if kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "") {
-            Some("this style of support")
+            Some(if self.style == "snug" { "snug supports" } else { "this style of support" })
         } else if self.raft_layers > 0 {
             Some("a raft")
         } else if self.on_build_plate_only {
@@ -647,7 +653,11 @@ impl Settings {
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
         } else if !matches!(self.brim_type.as_str(), "auto_brim" | "outer_only" | "no_brim" | "") {
-            Some("this kind of brim")
+            Some(match self.brim_type.as_str() {
+                "brim_ears" => "brim ears",
+                "inner_only" | "outer_and_inner" => "a brim inside holes",
+                _ => "this kind of brim",
+            })
         } else {
             None
         }
