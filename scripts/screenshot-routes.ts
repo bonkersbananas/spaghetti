@@ -3853,6 +3853,18 @@ export const shots: Shot[] = [
       await page.waitForTimeout(300);
     },
   },
+  { name: "styleguide-plate-picker", path: "/styleguide", selector: "#plate-picker" },
+  {
+    name: "styleguide-plate-picker-sheet",
+    path: "/styleguide",
+    // The phone's sheet of large tiles (desktop has the row, so there is nothing to open there).
+    beforeShot: async (page) => {
+      await page.locator("#plate-picker").evaluate((el) => el.scrollIntoView({ block: "center" }));
+      const button = page.locator("#plate-picker button");
+      if (await button.count()) await button.click();
+      await page.waitForTimeout(700);
+    },
+  },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },

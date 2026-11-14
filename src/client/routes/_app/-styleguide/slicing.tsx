@@ -21,6 +21,7 @@ import { ModelCard, type ModelState, SliceResult } from "@/components/builds/Mod
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
+import { type PlateOption, PlatePicker } from "@/components/ui/PlatePicker";
 import { LayersGlyph, NozzleGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import type { AttemptFileView } from "@/lib/items";
 import type { LyingState } from "@/lib/slicing/orientations";
@@ -105,6 +106,40 @@ function useBracketLying(colour: string): LyingState {
     });
   }, [colour]);
   return state;
+}
+
+/** A set of stackable bins in three heights, one a plate: the plate picker's pictures, drawn by the app's own code. */
+function usePlateOptions(colour: string): PlateOption[] {
+  const [plates, setPlates] = useState<PlateOption[]>([]);
+  useEffect(() => {
+    const size = 256;
+    const draw = (mesh: number[]) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      canvas
+        .getContext("2d")
+        ?.putImageData(
+          new ImageData(new Uint8ClampedArray(renderPlate([Float32Array.from(mesh)], { size, colour })), size, size),
+          0,
+          0,
+        );
+      return canvas.toDataURL();
+    };
+    setPlates(
+      [
+        { height: 120, detail: "3 h 5 · 94 g" },
+        { height: 96, detail: "2 h 40 · 78 g" },
+        { height: 57.6, detail: "1 h 35 · 47 g" },
+      ].map((plate, n) => ({
+        index: n + 1,
+        height: plate.height,
+        detail: plate.detail,
+        src: draw(box([-35, -35, 0], [70, 70, plate.height])),
+      })),
+    );
+  }, [colour]);
+  return plates;
 }
 
 const spool = (id: string, change: Partial<SpoolLike>): SpoolLike => ({
@@ -316,6 +351,8 @@ export function SlicingSection() {
   const [settings, setSettings] = useState(SETTINGS);
   const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
   const lying = useBracketLying(ORANGE);
+  const plates = usePlateOptions(ORANGE);
+  const [plate, setPlate] = useState(2);
   return (
     <Section
       id="slicing"
@@ -324,6 +361,15 @@ export function SlicingSection() {
     >
       <div className="grid gap-10 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
+          <Label>
+            Plate picker: a project's plates as pictures of what sits on each, with height and (sliced) time and grams;
+            on a phone one line that opens a sheet of large tiles, on desktop a row stepped with [ and ]
+          </Label>
+          <div id="plate-picker">
+            <Panel>
+              <PlatePicker plates={plates} value={plate} onChange={setPlate} />
+            </Panel>
+          </div>
           <Label>Choice tiles: a picture, a name, a figure, and what the picked one does</Label>
           <Panel>
             <ChoiceTiles<QualityId>
