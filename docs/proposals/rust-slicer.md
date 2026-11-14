@@ -9,7 +9,7 @@ A self-contained crate, about 37,000 lines of Rust on eight small crates (polygo
 The same code builds two ways:
 
 - **Native**: a 4.0 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
-- **WebAssembly**: a 3.5 MB module (1.09 MB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
+- **WebAssembly**: a 3.4 MB module (1.16 MB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
 
 What it does, in order:
 
@@ -117,6 +117,28 @@ The 0.2 mm nozzle's twice as many layers, of thinner lines, take a Benchy 2.3 ti
 | 3DBenchy, 0.8 mm nozzle | 361 kB | 274 kB | 1.18 MB | 1.06 MB |
 
 Our G-code runs from 6 % shorter than Orca's (the glasses) to 25 % longer: both drop the points a path doesn't need, but Orca also fits arcs to curves (its gyroid and crosshatch waves among them), where we write short lines, and lines of varying width (gap fill, narrow solid infill) take a width line for each stretch; walls slowing down over an overhang take a speed for each stretch, as Orca's do. Packed, ours runs from the same size (the glasses) to 55 % larger. We deflate at level 4 in parallel chunks, for speed, and our G-code packs less tightly: at level 6 in one stream, as Orca's above, the plate's would be 8.1 MB against 5.7 MB.
+
+### Faster in WebAssembly
+
+On Nov 14 the WebAssembly build was profiled in Node (V8's sampling profiler, which keeps Rust's function names) on a Benchy, the 12-Benchy plate and both models with organic trees, for where the browser loses time. Four changes took the largest of it, each leaving the file as it was, G-code and picture byte for byte:
+
+| WebAssembly, in Node | Release 20 | Now | Change |
+| --- | --- | --- | --- |
+| 3DBenchy | 3.09 s | 2.90 s | −6.0 % |
+| 3DBenchy, organic trees | 5.42 s | 5.06 s | −6.5 % |
+| Steampunk glasses, organic trees | 14.1 s | 13.6 s | −3.4 % |
+| 12 Benchies on one plate | 36.2 s | 33.5 s | −7.5 % |
+
+Medians of interleaved runs (five for the Benchy, three for the others) in the same sandbox as above, whose speed drifts by a few percent over minutes. The module is 10 % smaller (3.79 MB to 3.41 MB, 2 % gzipped).
+
+- **The plate's outlines.** Slicing cuts every object on a layer together, and a mesh with broken edges leaves chains that don't close, which it joins end to nearest start. Each end looked at every start: with twelve Benchies, up to 3,444 chains on a layer and 439 million distances for the plate (3 million for one Benchy), each squared in 128 bits, a call into software in WebAssembly. A grid of the starts, and squares in 64 bits, took the plate's slicing into outlines from 3.6 s to 1.3 s in WebAssembly; natively the plate slices 3 % faster on four threads.
+- **`hypot`.** In WebAssembly, Rust's `hypot` is CORE-MATH's, correctly rounded, and its three fused multiply-adds are calls into software there, as WebAssembly has none: 4 % of the glasses with trees, mostly smoothing branches. `fmath.rs` takes the same fast path with Dekker's exact products instead and hands the rest (special values, sizes far apart, results too near halfway between two doubles) to `hypot` itself, so it gives the same bits. Natively `hypot` is glibc's, as before; glibc is now and then a unit in the last place off the correctly rounded value, so far never on a model here.
+- **The thumbnail.** Its pixel loop, inlined into the renderer, ran at half speed in V8, as the seam rays once did (above): as a function of its own, the picture takes half the time (170 ms to 90 ms on a Benchy), pixel for pixel the same.
+- **Allocation.** Talc's allocator instead of Rust's own (dlmalloc) in WebAssembly: about as fast on a Benchy, a little faster with trees, and the module's code 11 % smaller with it.
+
+Tried and left out: WebAssembly's SIMD for the seam rays (a ray tested against a node's two children at once) took 12 % off their walk but only about 1 % off a slice, as the walk itself costs more than the box tests, and the module would need a browser with SIMD (Safari 16.4 or later; the app's Orca engine needs none). Scanning four segments at a time for where they cross, in the polygon library's list solver (i_overlay), came out slower: a segment has about seven others to look at, too few for SIMD to make up for setting it up. Its tree solver from 256 segments rather than 2,000 was slower; its list solver up to 8,000 helped a Benchy (−2.7 %) but slowed the glasses. And the same polygon operation on the same input twice in one slice is under 2 % of the points: not worth a cache.
+
+Where a Benchy's time goes now, in WebAssembly: regions 58 % (walls, shells and surfaces, and the seams' 565,000 rays), toolpaths 28 %, slicing into outlines 5 % and the picture 3 %. Nearly half of it is the polygon library: splitting segments where they cross (a quarter of a Benchy), the sweep that works out each edge's fill, building the graph. Faster still would mean patching it, vendored as `cpp_map` is, and the same for boostvoronoi, whose exact predicates' big-integer arithmetic takes another 4 %. The largest lever is threads: natively a slice is three times faster on four cores than on one, but WebAssembly's threads need a cross-origin isolated page (COOP and COEP headers), which the app isn't (its Orca engine was patched to run without one), and a worker pool for rayon.
 
 ## 3. Quality against Orca
 
@@ -392,7 +414,7 @@ In order of what matters for a good print with the default profile. A small item
 | Gap fill on every nozzle | On a Benchy, gap fill comes 3 to 9 % short of Orca's: where a gap ends in a corner, Orca's medial axis keeps short branches that print over the line's end two to four times (a third of the 0.8 mm's shortfall), and its lines reach further (section 3) | Small |
 | Arc fitting | Orca's default, a curve in one move: Orca writes the plate's walls in 342,000 moves, we in 564,000. Smaller files and smoother curves; and the classic trees' loops, which as chords take 0.3 to 0.5 % less plastic than Orca's arcs (section 3) | Small |
 | The overhang fan: more fan over overhangs and bridges | With the default PLA the fan runs full from the second layer, so nothing changes; filaments that cool less (PETG, ABS) get no extra fan there yet | Small |
-| Seams for less | Placing seams as Orca does adds a fifth to a slice, in the browser too, nearly all of it Orca's 565,000 rays on a Benchy (section 2). Fewer rays move the seams off Orca's; WebAssembly's SIMD, which the module doesn't use yet, could walk the ray tree four boxes at a time | Medium |
+| Seams for less | Placing seams as Orca does adds a fifth to a slice, in the browser too, nearly all of it Orca's 565,000 rays on a Benchy (section 2). Fewer rays move the seams off Orca's. WebAssembly's SIMD, testing a node's two children at once, took 12 % off the rays' walk but only about 1 % off a slice (section 2): the walk itself costs more than its box tests, so what would help is a tree that visits fewer nodes | Medium |
 | Faster tree supports, merging as Orca's | In the browser the glasses slice with trees only 1.25 times faster than Orca's engine (section 2), where without supports they slice 2.6 times faster: their supports take 2.3 s natively where Orca's take about 1.9 s, mostly placing the tips, growing the branches and drawing them. Since the offsets resolve their paths with Clipper2's sweep, branches merge where Orca's do far more often; the booleans could go the same way, through Orca's own wrappers round Clipper2 and their fill rules (tried with our fill rule instead, booleans that hand back Clipper2's points sliced the glasses with trees 9 % faster on one thread but took a Benchy's support back to 4.9 % over Orca's). A Benchy's roof at 9 mm comes out a fifth smaller (section 3) | Medium |
 | What normal supports still lack | Orca thins a column's layer where it overlaps a contact layer in height (`modulate_extrusion_by_overlapping_layers`): on the models here only where columns stand on a raft, 0.03 to 0.05 % more support than Orca's (section 3); supports only on the plate are refused. On a Benchy 0.7 % less support than Orca's: a few column ends come out shorter, where Orca's lines pass a few nanometres inside or outside a corner and ours, at 0.1 µm, run exactly through it | Small |
 | Painted colours | Multicolour prints from MakerWorld are mostly painted or made of parts: objects made of parts print as Orca's (section 3); the app hands a painted project to OrcaSlicer's engine, which prints its paint, until ours does | Large |
