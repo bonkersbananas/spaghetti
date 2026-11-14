@@ -3,6 +3,7 @@
  * short human sentence for why it couldn't be.
  */
 import { DEFAULT_SLICER } from "./defaults.ts";
+import { filamentStandIn } from "./orca.ts";
 import {
   filamentWords,
   orientationWords,
@@ -70,8 +71,9 @@ export function sliceSummary(settings: SliceSettings): string[] {
  * the usual one ("by Spaghetti's own slicer"), unless `slicer` is false (a slice's line says who made it).
  */
 export function slicingDetail(settings: SlicingSettings, { slicer = true }: { slicer?: boolean } = {}): string {
-  const quality = qualityOf(settings.layerHeight);
+  const quality = qualityOf(settings.layerHeight, settings.nozzle);
   const layers = `${settings.layerHeight.toFixed(2)} mm layers`;
+  const standIn = settings.filaments.map((filament) => filamentStandIn(filament, settings.nozzle)).find(Boolean);
   return [
     quality ? `${quality.label} (${layers})` : layers,
     `${settings.walls} walls and ${settings.infill}% ${patternWords(settings.pattern)} infill`,
@@ -81,13 +83,35 @@ export function slicingDetail(settings: SlicingSettings, { slicer = true }: { sl
       .map((filament) => `${filamentWords(filament)}${filament.brand ? ` (${filament.brand})` : ""}`)
       .join(" + "),
     settings.plate,
-    `${settings.nozzle} mm nozzle`,
+    `${settings.nozzle} mm nozzle${standIn ? ` (${standIn.material} sliced as ${standIn.as}, which has a preset for it)` : ""}`,
     orientationWords(settings) ? `laid ${orientationWords(settings)}` : "",
     settings.scale !== 100 ? `scaled to ${settings.scale}%` : "",
     slicer && settings.slicer !== DEFAULT_SLICER ? `by ${slicerWords(settings.slicer)}` : "",
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+/**
+ * "No 0.2 mm preset for PETG-CF: sliced as PETG.": a filament that slices as another material on its nozzle,
+ * because Bambu has none for it there (orca.ts `filamentStandIn`); null when every filament has its own.
+ */
+export function standInSentence(settings: Pick<SlicingSettings, "filaments" | "nozzle">): string | null {
+  for (const filament of settings.filaments) {
+    const standIn = filamentStandIn(filament, settings.nozzle);
+    if (standIn) return `No ${settings.nozzle} mm preset for ${standIn.material}: sliced as ${standIn.as}.`;
+  }
+  return null;
+}
+
+/**
+ * "Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.": a slice made for a size that isn't the main nozzle's,
+ * which the engine prints every slice with (decision 0056); null when it is the main nozzle's.
+ */
+export function nozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNozzle: number): string | null {
+  return settings.nozzle === mainNozzle
+    ? null
+    : `Sliced for a ${settings.nozzle} mm nozzle; the main nozzle has a ${mainNozzle} mm.`;
 }
 
 /** "312 mm" */
@@ -121,7 +145,7 @@ export function problemSentence(slice: FileSlice, options: { phone?: boolean } =
       return "The sliced file is over 25 MB, too large to keep.";
     case "nozzle": {
       const size = slice.settings.slicing?.nozzle;
-      return `Spaghetti can't slice for ${size ? `the ${size} mm` : "this"} nozzle yet, only the 0.4 mm one.`;
+      return `This slicer has no presets for ${size ? `the ${size} mm` : "this"} nozzle.`;
     }
     default: {
       const said = (slice.message ?? "").trim().replace(/\s+/g, " ");

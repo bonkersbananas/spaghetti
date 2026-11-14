@@ -5,7 +5,7 @@
 import type { PrinterSetup, SpoolLike } from "../spools.ts";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 import { ENGINE_NOZZLES } from "./orca.ts";
-import { normalizeSlicing, type SlicingFilament, type SlicingSettings } from "./settings.ts";
+import { normalizeSlicing, type SlicingFilament, type SlicingSettings, withNozzle } from "./settings.ts";
 
 /** A spool as a slice's filament: its plain words (so the slice reads the same without it) and its id. */
 export function filamentOfSpool(spool: SpoolLike): SlicingFilament {
@@ -53,15 +53,24 @@ export function ownedPlate(setup: Pick<PrinterSetup, "plates">, preferred = DEFA
 export const engineSlices = (nozzle: number) => ENGINE_NOZZLES.includes(nozzle);
 
 /**
+ * The nozzle a model nobody set up is sliced for: always the main one, at the size fitted there, since the engine
+ * prints every slice with it (decision 0056). The defaults' own `nozzle` only says which nozzle their layer height
+ * was set for.
+ */
+export const defaultNozzle = (setup: Pick<PrinterSetup, "nozzles">): number => setup.nozzles.main.diameter;
+
+/**
  * What a model nobody set up is sliced with here: `base` (Spaghetti's defaults) with the workspace's own from the
  * Printer page (how it prints: quality, strength, supports, brim), a filament from the Pantry when the base names
- * none of its own, a plate that is owned and the main nozzle fitted.
+ * none of its own, a plate that is owned and the main nozzle (`defaultNozzle`), its layer height the same named
+ * quality on that nozzle (`withNozzle`).
  */
 export function workshopDefaults(
   { spools, setup }: { spools: readonly SpoolLike[]; setup: PrinterSetup },
   given: SlicingSettings = DEFAULT_SLICING,
 ): SlicingSettings {
-  const base = setup.slicing ? normalizeSlicing({ ...given, ...setup.slicing }, given) : given;
+  const own = setup.slicing ? normalizeSlicing({ ...given, ...setup.slicing }, given) : given;
+  const base = withNozzle(own, defaultNozzle(setup));
   // The base's spool while it is still in the pantry with filament on it, else the likeliest one.
   const named = base.filaments[0]?.spoolId;
   const spool = named ? spools.find((candidate) => candidate.id === named && candidate.remaining !== "empty") : null;
@@ -70,7 +79,6 @@ export function workshopDefaults(
       ...base,
       filaments: [spool ? filamentOfSpool(spool) : pantryFilament(spools)],
       plate: ownedPlate(setup, base.plate),
-      nozzle: setup.nozzles.main.diameter,
     },
     base,
   );

@@ -96,6 +96,28 @@ pub unsafe extern "C" fn add(name: *const u8, name_len: usize, data: *const u8, 
     PLATE.with(|p| p.borrow_mut().add(&Input { name, bytes })).map_or_else(code, |()| 0)
 }
 
+/// `add`, the model's objects printing in the setup's filament `filament` (1-based): a plate in several filaments,
+/// whose models each name theirs (a model added with `add` prints in the filaments its file gives, and a plate in
+/// several filaments needs a file that gives them, a Bambu Studio or Orca project).
+///
+/// # Safety
+/// As `add`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn add_in(
+    name: *const u8,
+    name_len: usize,
+    data: *const u8,
+    data_len: usize,
+    filament: u32,
+) -> u32 {
+    // SAFETY: the host wrote `name_len` bytes at `name`.
+    let Ok(name) = std::str::from_utf8(unsafe { std::slice::from_raw_parts(name, name_len) }) else { return 6 };
+    // SAFETY: the host wrote `data_len` bytes at `data`.
+    let bytes = unsafe { std::slice::from_raw_parts(data, data_len) };
+    let filament = (filament as usize).max(1) - 1;
+    PLATE.with(|p| p.borrow_mut().add_with_filament(&Input { name, bytes }, Some(filament))).map_or_else(code, |()| 0)
+}
+
 /// Slices the models added since the last `slice` or `clear`. Flags: bit 0 keeps the objects where the files put
 /// them; bit 1 leaves out the picture. Returns 0 when it made a file, else an error code (see `code`).
 #[unsafe(no_mangle)]

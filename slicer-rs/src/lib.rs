@@ -7,6 +7,7 @@ pub mod base_support;
 pub mod bridges;
 pub mod brim;
 pub mod config;
+pub mod filaments;
 pub mod fill;
 pub mod gcode;
 pub mod geom;
@@ -31,9 +32,11 @@ pub mod support;
 pub mod surfaces;
 pub mod template;
 pub mod threemf;
+pub mod toolchange;
 pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+pub mod wipe_tower;
 pub mod zip;
 
 pub use config::Settings;
@@ -169,12 +172,26 @@ pub fn slice(inputs: &[Input], settings: &Settings, options: &Options) -> Result
     plate.slice(settings, options)
 }
 
+/// Keeps the meshes (and their filaments) where `keep` says.
+fn retain_by(meshes: &mut Vec<Mesh>, filaments: &mut Vec<usize>, keep: &[bool]) {
+    let mut k = keep.iter();
+    meshes.retain(|_| k.next().copied().unwrap_or(true));
+    let mut k = keep.iter();
+    filaments.retain(|_| k.next().copied().unwrap_or(true));
+}
+
 /// Models read from their files, not yet laid out or sliced. Adding the files one at a time lets each file's bytes
 /// go as soon as it is read, so a plate of big models never holds all of its files and all of its slices at once.
 #[derive(Default)]
 pub struct Plate {
     meshes: Vec<Mesh>,
+    /// Each mesh's filament (0-based).
+    filaments: Vec<usize>,
     project: bool,
+    /// Whether an object's parts print in different filaments (a project's).
+    mixed_parts: bool,
+    /// Whether a model came with no word of its filament (an STL, or a 3MF that isn't a project, added without one).
+    unassigned: bool,
     title: Option<String>,
     read_ms: f64,
 }
@@ -182,14 +199,24 @@ pub struct Plate {
 impl Plate {
     /// Reads one STL or 3MF file onto the plate.
     pub fn add(&mut self, input: &Input) -> Result<(), Error> {
+        self.add_with_filament(input, None)
+    }
+
+    /// `add`, its objects printing in filament `filament` (0-based), else in the filaments the file gives them.
+    pub fn add_with_filament(&mut self, input: &Input, filament: Option<usize>) -> Result<(), Error> {
         let t0 = now();
         let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
         if input.bytes.starts_with(b"PK\x03\x04") {
             let model = threemf::read(input.bytes)?;
             self.project |= model.project;
+            self.mixed_parts |= model.mixed_parts;
+            self.unassigned |= filament.is_none() && !model.project;
+            self.filaments.extend(model.filaments.iter().map(|&f| filament.unwrap_or(f)));
             self.meshes.extend(model.meshes);
         } else {
             self.meshes.push(mesh::read_stl(name, input.bytes)?);
+            self.unassigned |= filament.is_none();
+            self.filaments.push(filament.unwrap_or(0));
         }
         self.title.get_or_insert_with(|| name.to_string());
         self.read_ms += now() - t0;
@@ -198,15 +225,28 @@ impl Plate {
 
     /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
-        let Plate { mut meshes, project, title, read_ms } = self;
+        let Plate { mut meshes, mut filaments, project, mixed_parts, unassigned, title, read_ms } = self;
+        filaments.resize(meshes.len(), 0);
         let t0 = now();
         if let Some(what) = settings.unsupported() {
             return Err(Error::Unsupported(what));
         }
+        // With several filaments, each object prints in the one its file or its caller gives it: parts of it in others
+        // it can't print yet, and models that say nothing would all print in the first (with one filament, everything
+        // prints in it, as Orca prints it).
+        if settings.palette.as_ref().is_some_and(|p| p.profiles.len() > 1) {
+            if mixed_parts {
+                return Err(Error::Unsupported("parts of one object in different filaments"));
+            }
+            if unassigned {
+                return Err(Error::Unsupported("several filaments for models that don't say which they print in"));
+            }
+        }
         if meshes.iter().all(|m| m.triangles.is_empty()) {
             return Err(Error::NoModel);
         }
-        meshes.retain(|m| !m.triangles.is_empty());
+        let keep: Vec<bool> = meshes.iter().map(|m| !m.triangles.is_empty()).collect();
+        retain_by(&mut meshes, &mut filaments, &keep);
         let scaled = options.scale > 0.0 && (options.scale - 100.0).abs() > 1e-9;
         for m in &mut meshes {
             m.orient();
@@ -224,8 +264,8 @@ impl Plate {
             if places.contains(&mesh::OnPlate::Partly) {
                 return Err(Error::OffPlate);
             }
-            let mut place = places.into_iter();
-            meshes.retain(|_| place.next() == Some(mesh::OnPlate::Inside));
+            let keep: Vec<bool> = places.iter().map(|p| *p == mesh::OnPlate::Inside).collect();
+            retain_by(&mut meshes, &mut filaments, &keep);
             if meshes.is_empty() {
                 return Err(Error::OffPlate);
             }
@@ -271,11 +311,72 @@ impl Plate {
         let facts = with_support(facts, &supports, settings);
         let schedule = schedule(&layers, &supports, objects.len());
         let t4 = now();
-        let frame = bambu::Frame::new(settings.profile.clone(), &facts);
+        // Several filaments: the order they print in on each layer, and the prime tower (`toolchange.rs`).
+        let colours = settings.palette.as_ref().filter(|p| p.profiles.len() > 1).map(|palette| {
+            let layer_objects: Vec<Vec<usize>> = schedule
+                .iter()
+                .map(|slot| {
+                    let mut here: Vec<usize> = Vec::new();
+                    if let Some(l) = slot.layer {
+                        here.extend(regions[l].islands.iter().map(|i| i.object as usize));
+                    }
+                    for (o, k) in slot.supports.iter().enumerate() {
+                        if k.is_some_and(|k| !supports[o][k].items.is_empty()) {
+                            here.push(o);
+                        }
+                    }
+                    here.sort_unstable();
+                    here.dedup();
+                    here
+                })
+                .collect();
+            let zs: Vec<f64> = schedule.iter().map(|slot| slot.z).collect();
+            let hs: Vec<f64> = zs.iter().enumerate().map(|(g, z)| if g == 0 { *z } else { z - zs[g - 1] }).collect();
+            // Each object's smallest island on the first layer, which orders the first layer's filaments.
+            let mut first_island = vec![f64::INFINITY; objects.len()];
+            for (shape, &o) in first.iter().zip(&first_owners) {
+                if let (Some(outer), Some(f)) = (shape.first(), first_island.get_mut(o as usize)) {
+                    *f = f.min(geom::area2(outer) as f64 / 2.0 / (geom::SCALE * geom::SCALE));
+                }
+            }
+            toolchange::Colours::prepare(
+                settings,
+                palette,
+                &toolchange::Plate {
+                    object_filament: &filaments,
+                    layer_objects: &layer_objects,
+                    layer_z: &zs,
+                    layer_h: &hs,
+                    first_island: &first_island,
+                    object_boxes: &objects.iter().map(|o| [o.min[0], o.min[1], o.max[0], o.max[1]]).collect::<Vec<_>>(),
+                },
+            )
+        });
+        // The bed's probing covers the prime tower's first layer too, grown by the skirt distance as the objects are
+        // (Orca's skirt hull takes in the tower).
+        let facts = match &colours {
+            Some(c) => c.first_layer_corners.iter().fold(facts, |mut f, p| {
+                let m = settings.skirt_distance;
+                f.first_layer_min = [f.first_layer_min[0].min(p[0] - m), f.first_layer_min[1].min(p[1] - m)];
+                f.first_layer_max = [f.first_layer_max[0].max(p[0] + m), f.first_layer_max[1].max(p[1] + m)];
+                f
+            }),
+            None => facts,
+        };
+        let mut frame = bambu::Frame::new(settings.profile.clone(), &facts);
+        if let (Some(c), Some(palette)) = (&colours, &settings.palette) {
+            c.frame_vars(&mut frame, palette);
+        }
         let zs: Vec<f64> = schedule.iter().map(|slot| slot.z).collect();
         let photos = timelapse_spots(&objects, &zs, settings);
-        let job =
-            gcode::Job { settings, frame: &frame, objects: &objects, photos: &photos, start: frame.start_position() };
+        let job = gcode::Job {
+            settings,
+            frame: &frame,
+            objects: &objects,
+            photos: &photos,
+            start: frame.start_position(),
+            colours: colours.as_ref(),
+        };
         // Each layer from its regions to its G-code in one go, so only the text stays; the support's own layers
         // with the object layer above them, which they are cooled with.
         let empty = region::LayerRegions::default();
@@ -300,8 +401,40 @@ impl Plate {
                     };
                     let lower = slot.layer.and_then(|l| l.checked_sub(1)).map(|j| &regions[j]);
                     let h = slot.layer.map_or(slot.header_height as f64, |l| layers.height[l]);
-                    let mut plan =
-                        plan::plan_layer(regions_here, lower, l, (slot.z, h), &centres, &brims.loops, &here, settings);
+                    let mut plan = match &colours {
+                        Some(c) if !c.orders[g].is_empty() => {
+                            let plans = c.orders[g]
+                                .iter()
+                                .map(|&f| {
+                                    let only: Vec<bool> = c.object_filament.iter().map(|&of| of == f).collect();
+                                    let s = &c.settings[f];
+                                    let plan = plan::plan_layer_of(
+                                        Some(&only),
+                                        regions_here,
+                                        lower,
+                                        l,
+                                        (slot.z, h),
+                                        &centres,
+                                        &brims.loops,
+                                        &here,
+                                        s,
+                                    );
+                                    (f, plan)
+                                })
+                                .collect();
+                            c.combine(g, plans, &frame)
+                        }
+                        _ => plan::plan_layer(
+                            regions_here,
+                            lower,
+                            l,
+                            (slot.z, h),
+                            &centres,
+                            &brims.loops,
+                            &here,
+                            settings,
+                        ),
+                    };
                     (plan.index, plan.id, plan.header_height) = (g, slot.id, slot.header_height);
                     let from_z = if g == 0 { job.start[2] } else { schedule[g - 1].z + settings.z_hop };
                     (plan, regions_here, from_z)
@@ -318,11 +451,23 @@ impl Plate {
         let t6 = now();
         let thumbnail = options.thumbnail.then(|| {
             let size = 512;
-            png::encode(&png::render(&meshes, size, &settings.filament_colour), size, size)
+            let picture = match &settings.palette {
+                // Each object in its filament's colour.
+                Some(p) if p.profiles.len() > 1 => {
+                    let each: Vec<&str> = filaments
+                        .iter()
+                        .map(|&f| p.colours.get(f).map_or(settings.filament_colour.as_str(), String::as_str))
+                        .collect();
+                    png::render_each(&meshes, size, &each)
+                }
+                _ => png::render(&meshes, size, &settings.filament_colour),
+            };
+            png::encode(&picture, size, size)
         });
         let t7 = now();
         let title = title.as_deref().unwrap_or("Model");
-        let file = pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title);
+        let file =
+            pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &objects, settings, title, colours.as_ref());
         let t8 = now();
         Ok(Output {
             file,
@@ -560,7 +705,7 @@ pub enum Error {
     OffPlate,
     /// A slice setup that isn't one (`setup.rs`).
     Setup,
-    /// Settings this can't slice yet: what they ask for ("supports", "more than one filament"…).
+    /// Settings this can't slice yet: what they ask for ("tree supports", "a raft"…).
     Unsupported(&'static str),
 }
 

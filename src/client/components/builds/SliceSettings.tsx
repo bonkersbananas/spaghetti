@@ -3,7 +3,7 @@ import { plateName } from "@shared/attempts";
 import { DEFAULT_SLICER, DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { slicedName } from "@shared/slicing/files.ts";
 import { STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
-import { engineSlices, filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
+import { defaultNozzle, filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
 import { recipeSlicing, type SlicingRecipe } from "@shared/slicing/recipe.ts";
 import {
   BRIMS,
@@ -16,8 +16,8 @@ import {
   type Orientation,
   PATTERNS,
   patternWords,
-  QUALITIES,
   type QualityId,
+  qualitiesFor,
   qualityOf,
   SLICERS,
   SLICING_NOZZLES,
@@ -36,10 +36,12 @@ import {
   slicingFor,
   strengthOf,
   supportStyleWords,
+  withNozzle,
 } from "@shared/slicing/settings.ts";
 import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
-import { type SpoolLike, slotPlace } from "@shared/spools";
+import { nozzleSentence, standInSentence } from "@shared/slicing/words.ts";
+import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
 import { Fragment, type ReactNode, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -51,7 +53,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { LayersGlyph, PlatePicture, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
+import { LayersGlyph, NozzleGlyph, PlatePicture, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
@@ -76,6 +78,11 @@ export interface SlicingChoicesProps {
   spools: readonly SpoolLike[];
   /** The plates the Printer page says are owned. */
   plates: readonly string[];
+  /**
+   * The nozzles fitted. Every slice is for the main one (decision 0056): when the two differ, or the settings are for
+   * another size, a line says so where the filament is.
+   */
+  nozzles?: PrinterSetup["nozzles"];
   /** The slice there: whether parts float, or why it couldn't be (too big: scale to fit). */
   slice?: FileSlice | null;
   /** An STL, whose size can change (a 3MF's objects keep theirs). */
@@ -109,6 +116,7 @@ export function SlicingChoices({
   onChange,
   spools,
   plates,
+  nozzles,
   slice,
   scalable,
   moreOpen,
@@ -119,9 +127,13 @@ export function SlicingChoices({
   after,
 }: SlicingChoicesProps) {
   const set = (change: Partial<SlicingSettings>) => onChange(slicingFor(change, settings));
+  // Another nozzle keeps the quality's name: its tiles' heights are that nozzle's own.
+  const setNozzle = (nozzle: number) => onChange(withNozzle(settings, nozzle));
   const model = scope === "model";
   const range = layerRange(settings.nozzle);
-  const quality = qualityOf(settings.layerHeight);
+  const qualities = qualitiesFor(settings.nozzle);
+  const quality = qualityOf(settings.layerHeight, settings.nozzle);
+  const main = nozzles?.main.diameter;
   const strength = strengthOf(settings);
   const floating = slice?.status === "sliced" && !!slice.cautions?.includes("floating") && settings.supports === "off";
   const strong = (words: ReactNode) => <span className="text-ink font-semibold">{words}</span>;
@@ -134,7 +146,7 @@ export function SlicingChoices({
       label="Quality"
       columns={4}
       dense
-      options={QUALITIES.map((choice) => ({
+      options={qualities.map((choice) => ({
         value: choice.id,
         label: choice.label,
         detail: layerMillimetres(choice.layerHeight),
@@ -144,7 +156,7 @@ export function SlicingChoices({
       }))}
       value={quality?.id ?? null}
       onChange={(id) => {
-        const choice = QUALITIES.find((candidate) => candidate.id === id);
+        const choice = qualities.find((candidate) => candidate.id === id);
         if (choice) set({ layerHeight: choice.layerHeight });
       }}
       caption={
@@ -236,6 +248,14 @@ export function SlicingChoices({
       </p>
     </div>
   );
+  // Which nozzle it slices for, when that needs saying (the two fitted differ, or the settings are for another size):
+  // one calm line, no choice, since the engine prints every slice with the main nozzle. After the filament, so
+  // Quality, Strength and Supports keep a phone's first screen and the desktop panel's first column still fits.
+  const nozzleGroup = nozzles &&
+    main !== undefined &&
+    (nozzles.auxiliary.diameter !== main || settings.nozzle !== main) && (
+      <NozzleNote nozzle={settings.nozzle} main={main} auxiliary={nozzles.auxiliary.diameter} workspace={!model} />
+    );
   const more = (
     <MoreSettings
       settings={settings}
@@ -244,6 +264,9 @@ export function SlicingChoices({
       slice={slice}
       scalable={model && scalable}
       model={model}
+      nozzleSize={model}
+      mainNozzle={main}
+      setNozzle={setNozzle}
       defaultOpen={moreOpen}
     />
   );
@@ -267,6 +290,7 @@ export function SlicingChoices({
             {layGroup}
             {filamentGroup}
             {filamentRule}
+            {nozzleGroup}
           </div>
         </div>
       </div>
@@ -281,6 +305,7 @@ export function SlicingChoices({
       {layGroup}
       {filamentGroup}
       {filamentRule}
+      {nozzleGroup}
       {more}
       {after}
     </div>
@@ -427,6 +452,48 @@ function LayItDown({
   );
 }
 
+/**
+ * Which nozzle a slice is for, in one calm line with the X2D's two nozzles drawn (the main one solid): always the main
+ * one, since the engine prints every slice with it (decision 0056). With a smaller or bigger nozzle in the auxiliary,
+ * it says how to slice for that one; settings for a size the main nozzle doesn't have (More) say so plainly.
+ */
+function NozzleNote({
+  nozzle,
+  main,
+  auxiliary,
+  workspace,
+}: {
+  nozzle: number;
+  main: number;
+  auxiliary: number;
+  workspace: boolean;
+}) {
+  const elsewhere = nozzle !== main;
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-caption text-ink-faint font-sans font-semibold tracking-wider uppercase">Nozzle</span>
+      <div className="flex items-start gap-3">
+        <NozzleGlyph diameter={nozzle} side="left" className="text-ink-soft mt-0.5" />
+        <p className="text-small text-ink-soft text-pretty">
+          {elsewhere ? (
+            <>
+              <span className="text-ink font-semibold">For a {nozzle} mm nozzle</span> · the main nozzle has a {main}{" "}
+              mm: fit this one as the main nozzle before printing it.
+            </>
+          ) : (
+            <>
+              <span className="text-ink font-semibold">
+                {workspace ? "New models slice" : "Slices"} for the main nozzle ({main} mm)
+              </span>
+              {auxiliary !== main && <> · to slice for the {auxiliary} mm, fit it as the main nozzle.</>}
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** A spool's tile: its colour on the disc, its colour's name, and what it is and where. */
 function spoolTile(spool: SpoolLike): ChoiceTile<string> {
   return {
@@ -482,6 +549,8 @@ function FilamentChoice({
       <span className="text-ink font-semibold">{filament.material}</span> · the stand-in: spools in the Pantry show here
     </>
   );
+  // A filament the nozzle has no preset for slices as its nearest kin: said under the tiles, after what is picked.
+  const standIn = standInSentence(settings);
   const choose = (id: string) => {
     const spool = offered.find((candidate) => candidate.id === id);
     if (!spool) return;
@@ -504,7 +573,16 @@ function FilamentChoice({
         options={own ? [own, ...offered.map(spoolTile)] : offered.map(spoolTile)}
         value={picked ? picked.id : "own"}
         onChange={choose}
-        caption={caption}
+        caption={
+          standIn ? (
+            <>
+              {caption}
+              <span className="text-ink-soft mt-1 block">{standIn}</span>
+            </>
+          ) : (
+            caption
+          )
+        }
       />
     </div>
   );
@@ -531,6 +609,9 @@ function MoreSettings({
   slice,
   scalable,
   model,
+  nozzleSize,
+  mainNozzle,
+  setNozzle,
   defaultOpen,
 }: {
   settings: SlicingSettings;
@@ -538,8 +619,16 @@ function MoreSettings({
   plates: readonly string[];
   slice?: FileSlice | null;
   scalable: boolean;
-  /** A model's: its plate and nozzle too (a workspace's are on the Printer page). */
+  /** A model's: its plate too (a workspace's is on the Printer page). */
   model: boolean;
+  /**
+   * Any of the X2D's nozzle sizes, for a model (to slice ahead of a swap): a size the main nozzle doesn't have says so
+   * here, under the Filament and on the card.
+   */
+  nozzleSize: boolean;
+  /** The main nozzle's size, which the engine prints with: another size here says so. */
+  mainNozzle?: number;
+  setNozzle: (nozzle: number) => void;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
@@ -563,7 +652,7 @@ function MoreSettings({
     `${settings.walls} walls`,
     `${settings.infill}% ${patternWords(settings.pattern)}`,
     model ? plateName(settings.plate) : "",
-    model ? `${settings.nozzle} mm nozzle` : "",
+    nozzleSize ? `${settings.nozzle} mm nozzle` : "",
     model && settings.scale !== 100 ? `${settings.scale}%` : "",
     settings.slicer !== DEFAULT_SLICER ? slicerWords(settings.slicer) : "",
   ].filter(Boolean);
@@ -647,36 +736,48 @@ function MoreSettings({
           />
         </SettingRow>
         {model && (
-          <>
-            <SettingRow label="Plate" wide>
-              <ChipRow label="Plate" wrap>
-                {offeredPlates.map((plate) => (
-                  <ToggleChip
-                    key={plate}
-                    tone="semolina"
-                    selected={plate === settings.plate}
-                    onClick={() => set({ plate })}
-                  >
-                    {plateName(plate)}
-                  </ToggleChip>
-                ))}
-              </ChipRow>
-              <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
-            </SettingRow>
-            <SettingRow label="Nozzle" wide>
-              <SegmentedControl
-                label="Nozzle"
-                labelHidden
-                options={SLICING_NOZZLES.map((nozzle) => ({ value: String(nozzle), label: `${nozzle} mm` }))}
-                value={String(settings.nozzle)}
-                onChange={(value) => set({ nozzle: Number(value) })}
-              />
-              {!engineSlices(settings.nozzle) && (
-                <p className="text-caption text-ink-faint">Spaghetti slices for the 0.4 mm nozzle only, for now.</p>
-              )}
-            </SettingRow>
-          </>
+          <SettingRow label="Plate" wide>
+            <ChipRow label="Plate" wrap>
+              {offeredPlates.map((plate) => (
+                <ToggleChip
+                  key={plate}
+                  tone="semolina"
+                  selected={plate === settings.plate}
+                  onClick={() => set({ plate })}
+                >
+                  {plateName(plate)}
+                </ToggleChip>
+              ))}
+            </ChipRow>
+            <p className="text-caption text-ink-faint">The plates the Printer page says you have.</p>
+          </SettingRow>
         )}
+        {nozzleSize && (
+          <SettingRow label="Nozzle" wide>
+            <SegmentedControl
+              label="Nozzle"
+              labelHidden
+              options={SLICING_NOZZLES.map((nozzle) => ({ value: String(nozzle), label: `${nozzle} mm` }))}
+              value={String(settings.nozzle)}
+              onChange={(value) => setNozzle(Number(value))}
+            />
+            <p className="text-caption text-ink-faint">
+              {(mainNozzle !== undefined && nozzleSentence(settings, mainNozzle)) ||
+                "The quality keeps its name: its layers are this nozzle's own."}
+            </p>
+          </SettingRow>
+        )}
+        {/* What slices it, beside the nozzle it slices for. */}
+        <SettingRow label="Slicer" wide>
+          <SegmentedControl<SlicerId>
+            label="Slicer"
+            labelHidden
+            options={SLICERS.map((choice) => ({ value: choice.id, label: choice.label }))}
+            value={settings.slicer}
+            onChange={(value) => set({ slicer: value })}
+          />
+          {slicer && <Effect name={slicer.label} effect={slicer.effect} />}
+        </SettingRow>
         {scalable && (
           <SettingRow label="Size">
             <span className="flex items-center gap-2">
@@ -698,16 +799,6 @@ function MoreSettings({
             </span>
           </SettingRow>
         )}
-        <SettingRow label="Slicer" wide>
-          <SegmentedControl<SlicerId>
-            label="Slicer"
-            labelHidden
-            options={SLICERS.map((choice) => ({ value: choice.id, label: choice.label }))}
-            value={settings.slicer}
-            onChange={(value) => set({ slicer: value })}
-          />
-          {slicer && <Effect name={slicer.label} effect={slicer.effect} />}
-        </SettingRow>
       </div>
     </Disclosure>
   );
@@ -857,14 +948,18 @@ export default function SliceSettingsSheet({
 export function WorkspaceSlicing({
   value,
   onChange,
+  nozzles,
 }: {
   /** The workspace's own, or none: Spaghetti's defaults. */
   value: SlicingDefaults | undefined;
   /** Null goes back to Spaghetti's defaults. */
   onChange: (next: SlicingDefaults | null) => void;
+  /** The nozzles fitted: new models are sliced for one of them, the main one unless these defaults pick another. */
+  nozzles: PrinterSetup["nozzles"];
 }) {
-  const settings = slicingFor(value ?? {}, DEFAULT_SLICING);
-  const own = !!value && !sameSlicing(settings, DEFAULT_SLICING);
+  // What a new model would be sliced with: these defaults on the main nozzle (pantry.ts workshopDefaults).
+  const settings = withNozzle(slicingFor(value ?? {}, DEFAULT_SLICING), defaultNozzle({ nozzles }));
+  const own = !!value && !sameSlicing(settings, withNozzle(DEFAULT_SLICING, nozzles.main.diameter));
   // Going back throws away what was set here: the toast takes it back (never lose work).
   const reset = () => {
     const before = value;
@@ -878,6 +973,7 @@ export function WorkspaceSlicing({
         onChange={(next) => onChange(slicingDefaultsOf(next))}
         spools={[]}
         plates={[]}
+        nozzles={nozzles}
         scalable={false}
         scope="workspace"
       />

@@ -31,10 +31,12 @@ pub enum Role {
     /// Normal supports' columns and their dense interfaces with the object (`support.rs`).
     Support,
     SupportInterface,
+    /// The prime tower (`wipe_tower.rs`), printed when the filament changes.
+    PrimeTower,
 }
 
 impl Role {
-    pub const ALL: [Role; 13] = [
+    pub const ALL: [Role; 14] = [
         Role::InnerWall,
         Role::OuterWall,
         Role::OverhangWall,
@@ -48,6 +50,7 @@ impl Role {
         Role::Brim,
         Role::Support,
         Role::SupportInterface,
+        Role::PrimeTower,
     ];
 
     pub fn feature(self) -> &'static str {
@@ -65,6 +68,7 @@ impl Role {
             Role::Brim => "Brim",
             Role::Support => "Support",
             Role::SupportInterface => "Support interface",
+            Role::PrimeTower => "Prime tower",
         }
     }
 

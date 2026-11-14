@@ -4,7 +4,9 @@ and the quality facts (layers, filament, estimated time, per feature) next to na
     python3 -I run.py [--runs N] [--only runner,…] [--models name,…]
 
 Models are placed STLs (see place.py) in $BENCH_MODELS (default /home/agent/build/bench-in): benchy.stl,
-glasses.stl, uobf.stl and plate/benchy-1…12.stl. Runners whose tools are missing are skipped:
+glasses.stl, uobf.stl and plate/benchy-1…12.stl, and a plate in two filaments (colour.py): colour/block.stl and
+colour/letter.stl, each on a nozzle of its own as Orca groups them ("colour") or both on the left one, flushing
+between them ("colour-one-nozzle"). Runners whose tools are missing are skipped:
 - rust-native, rust-native-1t: ../target/release/spaghetti-slicer (cargo build --release)
 - rust-wasm-node, rust-wasm-chromium: ../target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm
 - orca-wasm-node, orca-wasm-chromium: the OrcaSlicer engine Spaghetti runs today, from $ORCA_SPIKE (a folder with
@@ -18,6 +20,7 @@ import json
 import os
 import shutil
 import statistics
+import struct
 import subprocess
 import sys
 import time
@@ -40,7 +43,69 @@ MODELS = {
     "glasses": ["glasses.stl"],
     "uobf": ["uobf.stl"],
     "plate": [f"plate/benchy-{k}.stl" for k in range(1, 13)],
+    "colour": ["colour/block.stl", "colour/letter.stl"],
+    "colour-one-nozzle": ["colour/block.stl", "colour/letter.stl"],
 }
+# Plates in several filaments: each file's filament (1-based), in the app's stand-in colours; and where a plate's
+# filaments go on nozzles of Orca's manual grouping (1 the left), the map.
+FILAMENTS = {"colour": [1, 2], "colour-one-nozzle": [1, 2]}
+COLOURS = ["#F2754E", "#4F7FC7"]
+FILAMENT_MAP = {"colour-one-nozzle": [1, 1]}
+BED = 256.0
+
+
+def stl_box(path):
+    """A binary STL's extent on the plate: min x, min y, max x, max y."""
+    with open(path, "rb") as f:
+        data = f.read()
+    n = struct.unpack_from("<I", data, 80)[0]
+    xs, ys = [], []
+    for k in range(n):
+        v = struct.unpack_from("<9f", data, 84 + 50 * k + 12)
+        xs += v[0::3]
+        ys += v[1::3]
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def tower_spot(files, width):
+    """Where the app puts the prime tower (its towerSpot): the first corner of the plate no object comes near."""
+    depth, margin = 50.0, 10.0
+    boxes = [stl_box(f) for f in files]
+    corners = [(BED - width - margin, BED - depth - margin), (margin, BED - depth - margin), (BED - width - margin, margin), (margin, margin)]
+    clear = lambda c: all(b[2] + 5 < c[0] or b[0] - 5 > c[0] + width or b[3] + 5 < c[1] or b[1] - 5 > c[1] + depth for b in boxes)
+    x, y = next((c for c in corners if clear(c)), corners[0])
+    return round(x), round(y)
+
+
+def rust_setup(model, d):
+    """The slice setup for a plate in several filaments (the app's sliceSetup gives one), and the arguments for it."""
+    if model not in FILAMENTS:
+        return []
+    setup = {"filaments": [{} for _ in COLOURS], "colours": COLOURS}
+    if model in FILAMENT_MAP:
+        setup["process"] = {"filament_map_mode": "Manual", "filament_map": [str(n) for n in FILAMENT_MAP[model]]}
+    json.dump(setup, open(f"{d}/setup.json", "w"))
+    return ["--setup", f"{d}/setup.json", "--filaments", ",".join(map(str, FILAMENTS[model]))]
+
+
+def colours_facts(gcode):
+    """A plate in several filaments, from its G-code: its tool changes, and the prime tower's extent on the first layer
+    (width and depth, mm, of where its extrusions end: Orca's arcs bulge a little beyond)."""
+    changes, layer, feature, box = 0, 0, "", [float("inf"), float("inf"), float("-inf"), float("-inf")]
+    x = y = 0.0
+    for line in open(gcode):
+        if line.startswith("; CHANGE_LAYER"):
+            layer += 1
+        elif line.startswith("; CP TOOLCHANGE START"):
+            changes += 1
+        elif line.startswith("; FEATURE: "):
+            feature = line[11:].strip()
+        elif line[:3] in ("G1 ", "G2 ", "G3 "):
+            words = dict((w[0], w[1:]) for w in line.split(";")[0].split()[1:] if w[0] in "XYE")
+            x, y = float(words.get("X", x)), float(words.get("Y", y))
+            if layer == 1 and feature == "Prime tower" and float(words.get("E", 0)) > 0 and ("X" in words or "Y" in words):
+                box = [min(box[0], x), min(box[1], y), max(box[2], x), max(box[3], y)]
+    return {"tool_changes": changes, "tower_mm": [round(box[2] - box[0], 2), round(box[3] - box[1], 2)] if box[0] < box[2] else None}
 
 
 def measure(cmd, env=None, cwd=None):
@@ -62,10 +127,15 @@ def rust_native(model, files, run, threads):
     d = os.path.join(OUT, f"rust-native-{threads}t-{model}")
     os.makedirs(d, exist_ok=True)
     m = measure(
-        CORES + [BIN, "--keep-placement", "--timings", "-o", f"{d}/out.gcode.3mf", "--gcode", f"{d}/out.gcode", "--stats", f"{d}/stats.json"] + files,
+        CORES
+        + [BIN, "--keep-placement", "--timings", "-o", f"{d}/out.gcode.3mf", "--gcode", f"{d}/out.gcode", "--stats", f"{d}/stats.json"]
+        + rust_setup(model, d)
+        + files,
         env={"RAYON_NUM_THREADS": str(threads)},
     )
     stats = json.load(open(f"{d}/stats.json"))["summary"]
+    if model in FILAMENTS:
+        stats.update(colours_facts(f"{d}/out.gcode"))
     return {
         "wall_ms": m["wall_ms"],
         "peak_mb": m["peak_mb"],
@@ -81,7 +151,7 @@ def rust_native(model, files, run, threads):
 def rust_wasm_node(model, files, run):
     d = os.path.join(OUT, f"rust-wasm-node-{model}")
     os.makedirs(d, exist_ok=True)
-    m = measure(["node", os.path.join(HERE, "wasm-node.mjs"), WASM, f"{d}/out.gcode.3mf", "--keep-placement"] + files)
+    m = measure(["node", os.path.join(HERE, "wasm-node.mjs"), WASM, f"{d}/out.gcode.3mf", "--keep-placement"] + rust_setup(model, d) + files)
     r = json.loads(m["stdout"].strip().splitlines()[-1])
     return {
         "wall_ms": m["wall_ms"],
@@ -184,6 +254,27 @@ def orca_native(model, files, run):
         "XDG_RUNTIME_DIR": "/tmp/xdg",
         "LD_LIBRARY_PATH": f"{NATIVE}/stubs:{root}/lib:{root}/usr/lib",
     }
+    process, filaments, extra = f"{PRESETS}/process.json", f"{PRESETS}/filament.json", []
+    if model in FILAMENTS:
+        # Each filament the presets' in its colour, each file in its filament, and the tower where the app puts it.
+        work = os.path.join(OUT, f"orca-native-{model}-presets")
+        os.makedirs(work, exist_ok=True)
+        names = []
+        for k, colour in enumerate(COLOURS):
+            f = json.load(open(f"{PRESETS}/filament.json"))
+            f["filament_colour"] = [colour]
+            names.append(f"{work}/filament-{k + 1}.json")
+            json.dump(f, open(names[-1], "w"))
+        p = json.load(open(process))
+        width = float(str(p.get("prime_tower_width", "35")).strip("[]'\""))
+        x, y = tower_spot(files, width)
+        p["wipe_tower_x"], p["wipe_tower_y"] = [str(x)], [str(y)]
+        process = f"{work}/process.json"
+        json.dump(p, open(process, "w"))
+        filaments = ";".join(names)
+        extra = ["--load-filament-ids", ",".join(map(str, FILAMENTS[model]))]
+        if model in FILAMENT_MAP:
+            extra += ["--filament-map-mode", "Manual", "--filament-map", ",".join(map(str, FILAMENT_MAP[model]))]
     m = measure(
         CORES
         + [
@@ -191,15 +282,16 @@ def orca_native(model, files, run):
             "--arrange",
             "0",
             "--load-settings",
-            f"{PRESETS}/machine.json;{PRESETS}/process.json",
+            f"{PRESETS}/machine.json;{process}",
             "--load-filaments",
-            f"{PRESETS}/filament.json",
+            filaments,
             "--slice",
             "0",
             "--outputdir",
             d,
             "--export-statistics",
         ]
+        + extra
         + files,
         env=env,
     )
@@ -207,13 +299,16 @@ def orca_native(model, files, run):
     if not os.path.exists(gcode):
         return {"error": m["stderr"][-300:], "wall_ms": m["wall_ms"], "peak_mb": m["peak_mb"]}
     stats = json.load(open(f"{d}/plate_1.statistics.json"))
+    summary = {k: v for k, v in stats["summary"].items() if k != "filaments" or model in FILAMENTS}
+    if model in FILAMENTS:
+        summary.update(colours_facts(gcode))
     return {
         "wall_ms": m["wall_ms"],
         "peak_mb": m["peak_mb"],
         "cpu_s": m["cpu_s"],
         "gcode_bytes": os.path.getsize(gcode),
         "file_bytes_estimate": deflated(gcode),
-        "stats": {k: v for k, v in stats["summary"].items() if k != "filaments"},
+        "stats": summary,
         "gcode": gcode,
     }
 

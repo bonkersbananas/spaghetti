@@ -8,6 +8,7 @@ import {
   normalizeSlicing,
   PATTERNS,
   QUALITIES,
+  qualitiesFor,
   qualityOf,
   qualityWords,
   STRENGTHS,
@@ -20,6 +21,7 @@ import {
   slicingSummary,
   strengthOf,
   supportWords,
+  withNozzle,
 } from "../../../src/shared/slicing/settings.ts";
 
 const orange = {
@@ -308,5 +310,64 @@ describe("fins", () => {
     expect(slicingProblems({ ...DEFAULT_SLICING, supports: "wings" })).toEqual([
       "supports is off, where-needed, everywhere or fins.",
     ]);
+  });
+});
+
+describe("each nozzle's qualities", () => {
+  it("are Bambu's own processes where it has them, the rest up to the tallest layer the nozzle prints", () => {
+    const heights = (nozzle: number) => qualitiesFor(nozzle).map((quality) => quality.layerHeight);
+    expect(heights(0.2)).toEqual([0.08, 0.1, 0.12, 0.14]);
+    expect(heights(0.4)).toEqual([0.12, 0.2, 0.24, 0.28]);
+    expect(heights(0.6)).toEqual([0.18, 0.3, 0.36, 0.42]);
+    expect(heights(0.8)).toEqual([0.24, 0.4, 0.48, 0.56]);
+    for (const nozzle of [0.2, 0.4, 0.6, 0.8]) {
+      const range = layerRange(nozzle);
+      for (const quality of qualitiesFor(nozzle)) {
+        expect(quality.layerHeight).toBeGreaterThanOrEqual(range.min);
+        expect(quality.layerHeight).toBeLessThanOrEqual(range.max);
+      }
+    }
+  });
+
+  it("name a height on its own nozzle", () => {
+    expect(qualityOf(0.1, 0.2)?.id).toBe("standard");
+    expect(qualityOf(0.2, 0.2)).toBeNull();
+    expect(qualityOf(0.12, 0.2)?.id).toBe("draft");
+    expect(qualityOf(0.12)?.id).toBe("fine");
+    expect(qualityWords(0.1, 0.2)).toBe("Standard quality");
+    expect(qualityWords(0.08, 0.2)).toBe("Fine");
+  });
+});
+
+describe("another nozzle", () => {
+  it("keeps the layer height's name: a model set to 0.20 mm, Standard, is sliced at 0.10 mm for the 0.2 mm nozzle", () => {
+    const standard = { ...DEFAULT_SLICING, layerHeight: 0.2 };
+    expect(withNozzle(standard, 0.2)).toEqual({ ...standard, nozzle: 0.2, layerHeight: 0.1 });
+    expect(withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.12 }, 0.2).layerHeight).toBe(0.08);
+    expect(withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.28 }, 0.2).layerHeight).toBe(0.14);
+    expect(withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.24 }, 0.6).layerHeight).toBe(0.36);
+    // And back again.
+    expect(withNozzle(withNozzle(standard, 0.2), 0.4)).toEqual(standard);
+    // Valid for the new nozzle, as the API checks it.
+    expect(slicingProblems(withNozzle(standard, 0.2))).toEqual([]);
+    expect(slicingProblems({ ...standard, nozzle: 0.2 })).not.toEqual([]);
+  });
+
+  it("keeps a height without a name in proportion, within what the nozzle prints", () => {
+    expect(withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.16 }, 0.2).layerHeight).toBe(0.08);
+    expect(withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.16 }, 0.8).layerHeight).toBe(0.32);
+    expect(withNozzle({ ...DEFAULT_SLICING, nozzle: 0.8, layerHeight: 0.17 }, 0.2).layerHeight).toBe(0.04);
+  });
+
+  it("changes nothing for the same nozzle or one the X2D doesn't take", () => {
+    expect(withNozzle(DEFAULT_SLICING, 0.4)).toBe(DEFAULT_SLICING);
+    expect(withNozzle(DEFAULT_SLICING, 0.5)).toBe(DEFAULT_SLICING);
+  });
+
+  it("is named on the card's row and line, unless it is the 0.4 mm", () => {
+    const fine = withNozzle({ ...DEFAULT_SLICING, layerHeight: 0.12 }, 0.2);
+    expect(slicingSummary(fine)).toEqual(["Fine", "Everyday strength", "No supports", "0.2 mm nozzle", "PLA"]);
+    expect(slicingLine(fine).slice(0, 2)).toEqual(["Fine", "0.2 mm nozzle"]);
+    expect(slicingSummary(DEFAULT_SLICING).join(" ")).not.toMatch(/nozzle/);
   });
 });

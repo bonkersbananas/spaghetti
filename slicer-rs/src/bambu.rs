@@ -27,6 +27,9 @@ pub struct Facts {
 pub struct Frame {
     print: Vars,
     profile: Arc<Profile>,
+    /// The presets of each extruder the print uses, when it uses more than the first: the machine limits written
+    /// are the highest of theirs (Orca's `print_machine_envelope`).
+    limits: Vec<Arc<Profile>>,
 }
 
 /// The `*_plate_temp_initial_layer` setting of a plate type.
@@ -109,7 +112,7 @@ impl Frame {
             );
         let physical = p.list("physical_extruder_map").first().and_then(|e| e.parse().ok()).unwrap_or(0);
         v.int("most_used_physical_extruder_id", physical).int("curr_physical_extruder_id", physical);
-        Frame { print: v, profile }
+        Frame { print: v, profile, limits: Vec::new() }
     }
 
     fn fill(&self, key: &str, own: &Vars) -> String {
@@ -125,9 +128,9 @@ impl Frame {
 
     /// The machine limits, as Orca writes them for Marlin (legacy) firmware: the left extruder's normal-mode values.
     pub fn envelope(&self) -> String {
-        let p = &self.profile;
-        let n = |key: &str| (p.float_at(key, 0) + 0.5) as i64;
-        let f = |key: &str| p.float_at(key, 0);
+        let limits = if self.limits.is_empty() { std::slice::from_ref(&self.profile) } else { &self.limits[..] };
+        let f = |key: &str| limits.iter().map(|p| p.float_at(key, 0)).fold(f64::MIN, f64::max);
+        let n = |key: &str| (f(key) + 0.5) as i64;
         format!(
             "M201 X{} Y{} Z{} E{}\nM203 X{} Y{} Z{} E{}\nM204 P{} R{} T{}\nM205 X{:.2} Y{:.2} Z{:.2} E{:.2} ; sets the jerk limits, mm/sec\n",
             n("machine_max_acceleration_x"),
@@ -241,6 +244,22 @@ impl Frame {
 
     pub fn var(&self, name: &str) -> Option<&Var> {
         self.print.0.get(name)
+    }
+
+    /// A template filled with `own` variables over the print's.
+    pub fn process(&self, template: &str, own: &Vars) -> String {
+        template::process(template, &[own, &self.print], 0).unwrap_or_else(|e| panic!("a template doesn't fill: {e}"))
+    }
+
+    /// The print's variables, to set what a plate in several filaments changes (`toolchange.rs`).
+    /// Writes the machine limits for these extruders' presets (each extruder the print uses, as `for_extruder` gives
+    /// them).
+    pub fn set_limits(&mut self, limits: Vec<Arc<Profile>>) {
+        self.limits = limits;
+    }
+
+    pub fn vars_mut(&mut self) -> &mut Vars {
+        &mut self.print
     }
 }
 
