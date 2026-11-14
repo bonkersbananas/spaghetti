@@ -2,7 +2,7 @@ import type { Twist } from "@shared/api";
 import { checkLinkUrl } from "@shared/link-safety";
 import { modelMarkOf } from "@shared/model-mark";
 import { slicingOfSlice } from "@shared/slicing/model.ts";
-import { printNozzleSentence } from "@shared/slicing/words.ts";
+import { nozzleSentence } from "@shared/slicing/words.ts";
 import { DEFAULT_PRINTER } from "@shared/spools";
 import { TWIST_CHANGES_MAX, TWIST_NAME_MAX, TWIST_NOTE_MAX } from "@shared/twists";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +17,7 @@ import { sourceLine } from "@/components/twists/TwistCard";
 import { TwistChanges } from "@/components/twists/TwistChanges";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Button, IconButton } from "@/components/ui/Button";
+import { Caution } from "@/components/ui/Caution";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDuration, TextArea, TextField } from "@/components/ui/Field";
 import { ArrowRightIcon, BuildsIcon, EditIcon, SlicerFileIcon, TrashIcon } from "@/components/ui/icons";
@@ -26,6 +27,7 @@ import { Photo } from "@/components/ui/Photo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
 import { printerQuery } from "@/lib/pantry-queries";
@@ -131,13 +133,19 @@ function TwistBody({ twist }: { twist: Twist }) {
       ? `${prefill.weightGrams.toLocaleString("en", { maximumFractionDigits: 1 })} g`
       : "",
   ].filter(Boolean);
-  const printWords = [printLabel, ...printFigures].join(" · ");
   // A file prints through the main nozzle: a slice for another size says so where it could be printed (decision 0057).
   const { data: printer } = useQuery(printerQuery);
   const printNote =
     model?.slice?.status === "sliced"
-      ? printNozzleSentence(slicingOfSlice(model.slice), (printer?.setup ?? DEFAULT_PRINTER).nozzles.main.diameter)
+      ? nozzleSentence(slicingOfSlice(model.slice), (printer?.setup ?? DEFAULT_PRINTER).nozzles.main.diameter)
       : null;
+  // A slice for a size that isn't fitted names its nozzle on the button, the weight left out on a phone to fit one line.
+  const sliceNozzle = printNote && model?.slice?.status === "sliced" ? slicingOfSlice(model.slice).nozzle : null;
+  const printWords = [
+    printLabel,
+    ...(sliceNozzle ? [`${sliceNozzle} mm`] : []),
+    ...(sliceNozzle && !isDesktop ? printFigures.slice(0, 1) : printFigures),
+  ].join(" · ");
   function printIt() {
     if (!user || !canEdit(false)) return;
     const id = printTwist(queryClient, twist, value.name.trim() || twist.name, user.id);
@@ -161,18 +169,19 @@ function TwistBody({ twist }: { twist: Twist }) {
       <DetailBar back={back}>
         <SaveStatus state={saveState} className="mr-2" />
         <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
-        {isDesktop && printNote && <p className="text-caption text-ink-soft mr-2 max-w-60 text-right">{printNote}</p>}
         {isDesktop && (
-          <Button
-            variant="primary"
-            icon={BuildsIcon}
-            shortcut={shortcutCaps("twistPrint")}
-            onClick={printIt}
-            disabled={readOnly || !user}
-            className="ml-2"
-          >
-            {printWords}
-          </Button>
+          <div className="ml-2 flex flex-col items-end gap-1.5">
+            <Button
+              variant="primary"
+              icon={BuildsIcon}
+              shortcut={shortcutCaps("twistPrint")}
+              onClick={printIt}
+              disabled={readOnly || !user}
+            >
+              {printWords}
+            </Button>
+            {printNote && <Caution className="max-w-sm">{printNote}</Caution>}
+          </div>
         )}
       </DetailBar>
       <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14">
@@ -328,15 +337,17 @@ function TwistBody({ twist }: { twist: Twist }) {
           )}
         </div>
       </div>
-      {!isDesktop && printNote && <div aria-hidden className="h-6" />}
+      {!isDesktop && printNote && <div aria-hidden className="h-14" />}
       {!isDesktop && (
         <ActionBar>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            {printNote && (
-              <p className="bg-paper text-caption text-ink-soft shadow-soft self-center rounded-lg px-3 py-1 text-center text-balance">
-                {printNote}
-              </p>
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 flex-col gap-2",
+              // The caution is part of the bar's own surface, so the page never shows round it.
+              printNote && "bg-paper shadow-raised rounded-2xl p-2.5",
             )}
+          >
+            {printNote && <Caution>{printNote}</Caution>}
             <Button
               variant="primary"
               size="lg"

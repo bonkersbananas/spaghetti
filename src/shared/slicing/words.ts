@@ -105,23 +105,14 @@ export function standInSentence(settings: Pick<SlicingSettings, "filaments" | "n
 }
 
 /**
- * "Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.": a slice made for a size that isn't the main nozzle's,
- * which the engine prints every slice with (decision 0056); null when it is the main nozzle's.
+ * "Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.": a slice made for a size that isn't
+ * the main nozzle's, which every file prints through (decisions 0056 and 0057). One sentence for the card, the sheet and
+ * "Print it"; null when it is the main nozzle's. Calm, and no block: people may swap the nozzle first.
  */
 export function nozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNozzle: number): string | null {
   return settings.nozzle === mainNozzle
     ? null
-    : `Sliced for a ${settings.nozzle} mm nozzle; the main nozzle has a ${mainNozzle} mm.`;
-}
-
-/**
- * "Sliced for a 0.2 mm nozzle: fit it as the main nozzle before printing": the line "Print it" carries when the slice
- * is for a size that isn't the main nozzle's (decision 0057). Calm, and no block: people may swap the nozzle first.
- */
-export function printNozzleSentence(settings: Pick<SlicingSettings, "nozzle">, mainNozzle: number): string | null {
-  return settings.nozzle === mainNozzle
-    ? null
-    : `Sliced for a ${settings.nozzle} mm nozzle: fit it as the main nozzle before printing`;
+    : `Sliced for a ${settings.nozzle}\u00A0mm nozzle; the main nozzle has the ${mainNozzle}\u00A0mm. Fit the ${settings.nozzle}\u00A0mm first.`;
 }
 
 /** "312 mm" */

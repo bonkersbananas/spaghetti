@@ -105,10 +105,17 @@ test("with a 0.2 mm only in the auxiliary, it slices for the main nozzle and say
   await settings.getByRole("radio", { name: "0.6 mm" }).click();
   await expect(settings.getByText("For a 0.6 mm nozzle", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  const warning = files.getByText("Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.");
+  const warning = files.getByText("Sliced for a 0.6 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.6 mm first.");
   await expect(warning).toBeVisible({ timeout: SLICED });
-  // One tap back to the main nozzle's size.
-  await files.getByRole("button", { name: "Slice for the 0.4 mm" }).click();
+  // A deliberate pick has no button of its own on the card: the way back is More's Nozzle (or Undo).
+  await expect(files.getByRole("button", { name: "Slice for the 0.4 mm" })).toHaveCount(0);
+  await files.getByRole("button", { name: /^Slice with…/ }).click();
+  await page.getByRole("dialog", { name: "How to slice it" }).getByRole("button", { name: /^More/ }).click();
+  await page
+    .getByRole("dialog", { name: "How to slice it" })
+    .getByRole("radio", { name: /^0\.4 mm/ })
+    .click();
+  await page.keyboard.press("Escape");
   await expect(warning).toBeHidden({ timeout: SLICED });
   await expect(row).toBeVisible();
 });
@@ -158,18 +165,18 @@ test("a model tries a 0.2 mm nozzle on its own: kept across a reload, said on Pr
   const model = page.getByRole("region", { name: "Model" });
   await expect(model.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
   // Fitted as it is, Print it says nothing about a nozzle.
-  await expect(page.getByText(/fit it as the main nozzle before printing/)).toHaveCount(0);
+  await expect(page.getByText(/Fit the 0\.2 mm first/)).toHaveCount(0);
 
   // Pick 0.2 mm under More: this model slices again for it.
   await model.getByRole("button", { name: /^Slice with…/ }).click();
   let settings = page.getByRole("dialog", { name: "How to slice it" });
   await settings.getByRole("button", { name: /^More/ }).click();
   await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
-  const warning = model.getByText("Sliced for a 0.2 mm nozzle; the main nozzle has a 0.4 mm.");
+  const warning = model.getByText("Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.");
   await page.keyboard.press("Escape");
   await expect(warning).toBeVisible({ timeout: SLICED });
-  const printNote = "Sliced for a 0.2 mm nozzle: fit it as the main nozzle before printing";
-  await expect(page.getByText(printNote)).toBeVisible();
+  const printNote = "Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.";
+  await expect(page.getByText(printNote).first()).toBeVisible();
   // Printing isn't blocked.
   await expect(page.getByRole("button", { name: /^Print it/ })).toBeEnabled();
   // Nothing else changed: the Printer page's nozzle, and the other model's slice.
@@ -179,7 +186,7 @@ test("a model tries a 0.2 mm nozzle on its own: kept across a reload, said on Pr
 
   // Kept across a reload: the sheet shows the pick, and the note stays.
   await page.reload();
-  await expect(page.getByText(printNote)).toBeVisible();
+  await expect(page.getByText(printNote).first()).toBeVisible();
   await page
     .getByRole("region", { name: "Model" })
     .getByRole("button", { name: /^Slice with…/ })

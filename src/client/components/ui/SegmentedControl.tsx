@@ -72,8 +72,8 @@ export function SegmentedControl<T extends string>({
                   <span
                     aria-hidden
                     className={cn(
-                      "size-1.5 shrink-0 rounded-full",
-                      mark === "solid" ? "bg-semolina" : "ring-semolina ring-1 ring-inset",
+                      "size-2 shrink-0 rounded-full",
+                      mark === "solid" ? "bg-semolina" : "ring-semolina ring-[1.5px] ring-inset",
                     )}
                   />
                   {markWords && <span className="sr-only">({markWords})</span>}

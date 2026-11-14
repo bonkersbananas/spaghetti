@@ -1851,6 +1851,37 @@ export const shots: Shot[] = [
     },
   },
   {
+    // 0.2 mm picked for the model (decision 0057), More folded again: the sheet's first screens with the Nozzle line after
+    // the filament, in the same words as the card and Print it.
+    name: "slice-settings-nozzle-picked",
+    path: "/ideas",
+    prepare: async (page) => {
+      await fitSmallNozzle(page);
+      const settings = await openSliceSettings(page);
+      const more = settings.getByRole("button", { name: /^More/ });
+      await more.click();
+      await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
+      await more.click();
+      await settings.getByText("Fit the 0.2 mm first.").waitFor();
+      await page
+        .getByText(/^Slicing with/)
+        .first()
+        .waitFor({ state: "hidden", timeout: 90_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(400);
+    },
+    beforeShot: async (page) => {
+      await settleSliceSettings(page);
+      const note = page.getByRole("dialog", { name: "How to slice it" }).getByText("Fit the 0.2 mm first.");
+      await note.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await closeSliceSettings(page);
+      await fitStockNozzles(page);
+    },
+  },
+  {
     // The 0.2 mm fitted as the main nozzle: the quality tiles are its own (Standard 0.10 mm), the same four names.
     name: "slice-settings-nozzle-qualities",
     path: "/ideas",
@@ -1882,7 +1913,9 @@ export const shots: Shot[] = [
       await settings.getByRole("button", { name: /^More/ }).click();
       await settings.getByRole("radio", { name: "0.6 mm" }).click();
       await page.keyboard.press("Escape");
-      await files.getByText("Sliced for a 0.6 mm nozzle; the main nozzle has a 0.4 mm.").waitFor({ timeout: 90_000 });
+      await files
+        .getByText("Sliced for a 0.6 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.6 mm first.")
+        .waitFor({ timeout: 90_000 });
       // Closing the sheet hands focus back to the row: a tap leaves no ring.
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.waitForTimeout(400);
@@ -3369,8 +3402,14 @@ export const shots: Shot[] = [
       await settings.getByRole("button", { name: /^More/ }).click();
       await settings.getByRole("radio", { name: /^0\.2 mm/ }).click();
       await page.keyboard.press("Escape");
-      await model.getByText("Sliced for a 0.2 mm nozzle; the main nozzle has a 0.4 mm.").waitFor({ timeout: 90_000 });
-      await page.getByText("Sliced for a 0.2 mm nozzle: fit it as the main nozzle before printing").waitFor();
+      await model
+        .getByText("Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.")
+        .first()
+        .waitFor({ timeout: 90_000 });
+      await page
+        .getByText("Sliced for a 0.2 mm nozzle; the main nozzle has the 0.4 mm. Fit the 0.2 mm first.")
+        .last()
+        .waitFor();
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       if ((page.viewportSize()?.width ?? 1440) < 768) {
         await model.evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));

@@ -492,31 +492,14 @@ function NozzleNote({ nozzle, main, workspace }: { nozzle: number; main: number;
             </>
           ) : (
             <>
-              <span className="text-ink font-semibold">For a {nozzle} mm nozzle</span> · the main nozzle has a {main}{" "}
-              mm: fit this one as the main nozzle before printing it.
+              <span className="text-ink font-semibold">For a {nozzle} mm nozzle</span> · the main nozzle has the {main}
+              {"\u00A0"}mm. Fit the {nozzle}
+              {"\u00A0"}mm first.
             </>
           )}
         </p>
       </div>
     </div>
-  );
-}
-
-/** What the dots on the nozzle sizes mean: "● main nozzle  ○ other nozzle", the other only when its size differs. */
-function FittedLegend({ main, other }: { main: number; other?: number }) {
-  return (
-    <span className="text-caption text-ink-faint flex flex-wrap items-center gap-x-3">
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden className="bg-semolina size-1.5 rounded-full" />
-        main nozzle
-      </span>
-      {other !== undefined && other !== main && (
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden className="ring-semolina size-1.5 rounded-full ring-1 ring-inset" />
-          other nozzle: a file doesn't print through it
-        </span>
-      )}
-    </span>
   );
 }
 
@@ -660,6 +643,7 @@ function MoreSettings({
   const [open, setOpen] = useState(!!defaultOpen);
   const mainNozzle = nozzles?.main.diameter;
   const style = SUPPORT_STYLES.find((choice) => choice.id === settings.supportStyle);
+  const quality = qualityOf(settings.layerHeight, settings.nozzle);
   const brim = BRIMS.find((choice) => choice.id === settings.brim);
   const patterns = PATTERNS.some((choice) => choice.id === settings.pattern)
     ? PATTERNS
@@ -713,11 +697,25 @@ function MoreSettings({
               value={String(settings.nozzle)}
               onChange={(value) => setNozzle(Number(value))}
             />
-            <p className="text-caption text-ink-faint">
-              {(mainNozzle !== undefined && nozzleSentence(settings, mainNozzle)) ||
-                "The quality keeps its name: its layers are this nozzle's own."}
-            </p>
-            {mainNozzle !== undefined && <FittedLegend main={mainNozzle} other={nozzles?.auxiliary.diameter} />}
+            {mainNozzle !== undefined && (
+              <>
+                <Effect
+                  name={`${settings.nozzle} mm`}
+                  effect={
+                    settings.nozzle === mainNozzle
+                      ? "on the main nozzle"
+                      : settings.nozzle === nozzles?.auxiliary.diameter
+                        ? `on the other nozzle: fit it as the main one to print`
+                        : "not fitted: fit it as the main nozzle to print"
+                  }
+                />
+                {settings.nozzle !== mainNozzle && quality && (
+                  <p className="text-small text-ink-faint">
+                    {quality.label} stays {quality.label}: {layerMillimetres(settings.layerHeight)} layers.
+                  </p>
+                )}
+              </>
+            )}
           </SettingRow>
         )}
         {/* How supports are built means nothing while they are off (or the model carries fins): the Supports tiles above turn them on. */}
