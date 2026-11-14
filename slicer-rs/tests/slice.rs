@@ -1348,14 +1348,89 @@ fn parts_of_one_object_print_in_their_filaments() {
     assert!(!gcode.contains(" id:1 copy 0"));
     let info = String::from_utf8(entry(&out.file, "Metadata/slice_info.config")).unwrap();
     assert_eq!(info.matches("<object identify_id=").count(), 1, "{info}");
-    // Supports for it are left to Orca's engine for now.
-    let mut supported = two.clone();
-    supported.enable_support = true;
-    let refused = slice(&[input()], &supported, &Options::default()).err();
-    assert_eq!(refused, Some(Error::Unsupported("supports for an object whose parts print in different filaments")));
     // With one filament, all of it prints in that one, as Orca prints it.
     let one = slice(&[input()], &Settings::default(), &Options::default()).unwrap();
     assert_eq!(one.stats.tool_changes, 0);
+}
+
+const T_PARTS: &[u8] = include_bytes!("models/t-parts.3mf");
+const TEES: &[u8] = include_bytes!("models/tees.3mf");
+
+/// Each layer's first filament printing anything but the tower, and the filaments its support prints in.
+fn layer_supports(gcode: &str) -> Vec<(Option<usize>, Vec<usize>)> {
+    let (mut layers, mut feature) = (Vec::new(), "");
+    for (tool, _, line) in tools_and_labels(gcode) {
+        if line.starts_with("; CHANGE_LAYER") {
+            layers.push((None, Vec::new()));
+        }
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        }
+        let extrudes =
+            ["G1 ", "G2 ", "G3 "].iter().any(|g| line.starts_with(g)) && line.contains(" E") && !line.contains(" E-");
+        if let (Some((first, support)), Some(tool)) = (layers.last_mut(), tool)
+            && extrudes
+            && feature != "Custom"
+            && feature != "Prime tower"
+        {
+            first.get_or_insert(tool);
+            if feature.starts_with("Support") && !support.contains(&tool) {
+                support.push(tool);
+            }
+        }
+    }
+    layers.into_iter().filter(|(_, support)| !support.is_empty()).collect()
+}
+
+/// Hybrid tree supports with the tower where the app puts it, in `filaments` filaments of Orca's colours.
+fn trees_in(filaments: usize) -> Settings {
+    let colours = ["#F2754E", "#4F7FC7", "#5FB36B"][..filaments].iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>();
+    let setup = format!(
+        r#"{{"process": {{"enable_support": "1", "support_type": "tree(auto)", "support_style": "tree_hybrid",
+        "wipe_tower_x": ["211"], "wipe_tower_y": ["196"]}}, "filaments": [{}], "colours": [{}]}}"#,
+        vec!["{}"; filaments].join(", "),
+        colours.join(", ")
+    );
+    setup::read(&setup).unwrap().settings
+}
+
+#[test]
+fn supports_for_an_object_in_parts_print_in_the_filament_each_layer_starts_with() {
+    // Orca works the supports out for the whole object, and prints them in whichever filament each layer starts
+    // with, not one of their own ("don't care", `support_filament` 0), so they add no filament change.
+    let out = slice(&[Input { name: "t-parts.3mf", bytes: T_PARTS }], &trees_in(2), &Options::default()).unwrap();
+    // Orca 2.5 (the X2D's presets): 125 layers, 1844.84 mm³ of support and 76.48 of interface, and 5490.57 of tower.
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    assert_eq!(out.stats.layers, 125);
+    assert!((volume(Role::Support) / 1844.84 - 1.0).abs() < 1e-3, "{}", volume(Role::Support));
+    assert!((volume(Role::SupportInterface) / 76.479 - 1.0).abs() < 1e-3, "{}", volume(Role::SupportInterface));
+    assert!((volume(Role::PrimeTower) / 5490.567 - 1.0).abs() < 1e-4, "{}", volume(Role::PrimeTower));
+    // Each layer's support in the filament the layer starts with, which alternates as Orca's order does.
+    let layers = layer_supports(&String::from_utf8(out.gcode).unwrap());
+    assert!(layers.len() > 90, "{} layers with support", layers.len());
+    assert!(layers.iter().all(|(first, support)| support.len() == 1 && first == &Some(support[0])), "{layers:?}");
+    assert!(layers.iter().any(|(_, s)| s[0] == 0) && layers.iter().any(|(_, s)| s[0] == 1));
+}
+
+#[test]
+fn a_filament_change_flushes_into_the_supports_first() {
+    // Three Ts in three filaments: two share a nozzle, and each layer's change between them flushes into the layer's
+    // supports (`flush_into_support`), which then print right after the change in the filament flushed into, as
+    // Orca's do: on every layer above the first, in a filament after the layer's first. On the first, the flush goes
+    // into one T's support, and the others print in the layer's first filament.
+    let out = slice(&[Input { name: "tees.3mf", bytes: TEES }], &trees_in(3), &Options::default()).unwrap();
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    // Orca 2.5: 4011.14 mm³ of support, 11204.76 of tower, and each filament's use.
+    assert!((volume(Role::Support) / 4011.143 - 1.0).abs() < 1e-3, "{}", volume(Role::Support));
+    assert!((volume(Role::PrimeTower) / 11204.756 - 1.0).abs() < 1e-4, "{}", volume(Role::PrimeTower));
+    let used: Vec<f64> = out.stats.filaments.iter().map(|f| f.volume).collect();
+    for (ours, orca) in used.iter().zip([6356.831, 14935.225, 12138.624]) {
+        assert!((ours / orca - 1.0).abs() < 3e-3, "{used:?}");
+    }
+    let layers = layer_supports(&String::from_utf8(out.gcode).unwrap());
+    assert_eq!(layers.len(), 99);
+    assert!(layers[1..].iter().all(|(first, support)| support.len() == 1 && Some(support[0]) != *first), "{layers:?}");
+    assert_eq!(layers[0], (Some(0), vec![0, 2]));
 }
 
 #[test]

@@ -212,26 +212,40 @@ mod tests {
             refused(r#"{"process": {"raft_layers": "2", "support_style": "tree_hybrid"}}"#),
             Some(Error::Unsupported("a raft in this style of tree support"))
         );
-        assert_eq!(
-            refused(r#"{"process": {"raft_layers": "2"}, "filaments": [{}, {}]}"#),
-            Some(Error::Unsupported("a raft with several filaments"))
-        );
-        // Several filaments print a prime tower, with which Orca's supports follow the object's layers: trees slice,
-        // normal supports don't yet.
+        // Several filaments print a prime tower once the plate prints more than one of them (`Settings::for_filaments`),
+        // and with it Orca's supports follow the object's layers: trees slice, normal supports and rafts don't yet.
         let several =
             |more: &str| format!(r#"{{"process": {{"enable_support": "1"{more}}}, "filaments": [{{}}, {{}}]}}"#);
-        assert!(read(&several("")).is_ok_and(|s| !s.settings.support.independent_layer_height));
-        assert!(read(&several(r#", "support_style": "tree_hybrid""#)).is_ok());
+        let on_two = |json: &str| read(json).unwrap().settings.for_filaments(2);
+        assert!(!on_two(&several("")).support.independent_layer_height);
+        assert_eq!(on_two(&several("")).unsupported(), None);
+        assert_eq!(on_two(&several(r#", "support_style": "tree_hybrid""#)).unsupported(), None);
         assert_eq!(
-            refused(&several(r#", "support_type": "normal(auto)""#)),
-            Some(Error::Unsupported("normal supports in several filaments"))
+            on_two(&several(r#", "support_type": "normal(auto)""#)).unsupported(),
+            Some("normal supports in several filaments")
         );
+        assert_eq!(
+            on_two(r#"{"process": {"raft_layers": "2"}, "filaments": [{}, {}]}"#).unsupported(),
+            Some("a raft with several filaments")
+        );
+        // A plate that prints in one of them prints no tower: its supports keep their own layers, as Orca's do.
+        let one = read(&several(r#", "support_type": "normal(auto)""#)).unwrap().settings.for_filaments(1);
+        assert!(one.support.independent_layer_height && one.unsupported().is_none());
         assert!(read(&normal("")).is_ok_and(|s| s.settings.support.independent_layer_height));
         // The command line's stand-in filaments too.
         let mut s = read(&normal("")).unwrap().settings;
         s.set_palette(Some(Arc::new(crate::filaments::palette_of(&s, 2))));
-        assert!(!s.support.independent_layer_height);
-        assert_eq!(s.unsupported(), Some("normal supports in several filaments"));
+        assert_eq!(s.for_filaments(2).unsupported(), Some("normal supports in several filaments"));
+        // Without a prime tower Orca changes filament where it is; with a smooth timelapse or wrapping detection it
+        // prints a tower for one filament too.
+        let untowered = read(r#"{"process": {"enable_prime_tower": "0"}, "filaments": [{}, {}]}"#).unwrap().settings;
+        assert_eq!(untowered.for_filaments(2).unsupported(), Some("several filaments without a prime tower"));
+        assert_eq!(untowered.for_filaments(1).unsupported(), None);
+        assert_eq!(refused(r#"{"process": {"timelapse_type": "1"}}"#), Some(Error::Unsupported("a smooth timelapse")));
+        assert_eq!(
+            refused(r#"{"process": {"enable_wrapping_detection": "1"}}"#),
+            Some(Error::Unsupported("wrapping detection"))
+        );
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))

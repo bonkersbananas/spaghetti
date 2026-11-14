@@ -117,10 +117,27 @@ pub fn plan_layer(
     plan_layer_of(None, r, lower, i, (z, h), centres, brims, supports, start, s)
 }
 
-/// `plan_layer` for some of the objects only (`only[o]`, all when None): those printing with one filament.
+/// What one filament prints of a layer, with several filaments (`toolchange.rs`).
+pub struct Only<'a> {
+    /// Each object's islands: those of the objects in this filament.
+    pub islands: &'a [bool],
+    /// Each object's support (held by the first region of its object on the plate), where this filament prints any
+    /// of it, and how.
+    pub supports: &'a [Option<support::Pass>],
+    /// Each object on the plate (by group), whether this filament prints its brim: the first filament on the first
+    /// layer that prints any of it.
+    pub brims: &'a [bool],
+    /// Each object's group: the object on the plate it is a region of.
+    pub group: &'a [u32],
+    /// Whether some support on the layer takes a flush: each filament then prints what it flushes into first.
+    pub flushing: bool,
+}
+
+/// `plan_layer` for what one filament prints of the layer (all of it when `only` is None). `brims` are by object on
+/// the plate (group).
 #[allow(clippy::too_many_arguments)]
 pub fn plan_layer_of(
-    only: Option<&[bool]>,
+    only: Option<&Only>,
     r: &LayerRegions,
     lower: Option<&LayerRegions>,
     i: usize,
@@ -131,7 +148,14 @@ pub fn plan_layer_of(
     start: Option<Pt>,
     s: &Settings,
 ) -> LayerPlan {
-    let takes = |o: u32| only.is_none_or(|only| only.get(o as usize).copied().unwrap_or(false));
+    let takes = |o: u32| only.is_none_or(|only| only.islands.get(o as usize).copied().unwrap_or(false));
+    let group_of = |o: u32| only.and_then(|only| only.group.get(o as usize)).map_or(o as usize, |&g| g as usize);
+    // How this filament prints each object's support: all of it, but for one filament of several.
+    let pass_of = |o: usize| match only {
+        None => Some(support::Pass { part: support::Part::Both, flush: false }),
+        Some(only) => only.supports.get(o).copied().flatten(),
+    };
+    let brim_here = |g: usize| only.is_none_or(|only| only.brims.get(g).copied().unwrap_or(false));
     // Each object's layer below (all of its regions: by group), where it differs from this one (where it doesn't,
     // nothing hangs).
     let mut below: Vec<Option<Below>> = Vec::new();
@@ -170,14 +194,19 @@ pub fn plan_layer_of(
         && supports.iter().all(|l| l.is_none_or(|l| l.items.is_empty()))
         && per_island.iter().filter(|p| !p.is_empty()).count() == 1
         && per_island.iter().flatten().all(|p| matches!(p.role, Role::OuterWall | Role::InnerWall));
+    // Each object on the plate's support that this filament prints, by the region holding it (its first).
+    let groups = supports.len().max(r.islands.iter().map(|i| i.group as usize + 1).max().unwrap_or(0));
+    let mut holder: Vec<Option<(usize, support::Pass)>> = vec![None; groups];
+    for (o, layer) in supports.iter().enumerate() {
+        if let Some(pass) = pass_of(o).filter(|_| layer.is_some_and(|l| !l.items.is_empty())) {
+            holder[group_of(o as u32)] = Some((o, pass));
+        }
+    }
     // The tour's stops: the islands that print anything, then each object with support and nothing else here.
     let mut nodes: Vec<(Option<usize>, u32)> =
         (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).map(|k| (Some(k), r.islands[k].object)).collect();
-    for (o, layer) in supports.iter().enumerate() {
-        if takes(o as u32)
-            && layer.is_some_and(|l| !l.items.is_empty())
-            && !nodes.iter().any(|&(_, object)| object as usize == o)
-        {
+    for &(o, _) in holder.iter().flatten() {
+        if !nodes.iter().any(|&(_, object)| group_of(object) == group_of(o as u32)) {
             nodes.push((None, o as u32));
         }
     }
@@ -199,31 +228,53 @@ pub fn plan_layer_of(
     let mut tour = order::tour(&points, Some(geom::pt(0, 2)));
     tour.reverse();
     let mut paths: Vec<Path> = Vec::new();
-    let mut visited = vec![false; supports.len()];
+    // Orca reckons the nozzle at the layer's start where the layer before ended, which is planned apart: the plate's
+    // origin, where the tour ends, stands in for it (in spiral vase mode, where it ended).
+    let end_of =
+        |paths: &[Path]| paths.last().map_or(start.unwrap_or(geom::pt(0, 0)), |p| p.points[p.points.len() - 1]);
+    let mut brims_done = vec![false; brims.len()];
+    // What this filament flushes into prints first (Orca's wipe extrusions), each object's on the tour's first visit
+    // to it, and the first layer's brims with them.
+    let flushing = only.is_some_and(|only| only.flushing);
+    if flushing {
+        let mut seen = vec![false; groups];
+        for &t in &tour {
+            let g = group_of(nodes[t].1);
+            if std::mem::replace(&mut seen[g], true) {
+                continue;
+            }
+            if i == 0 && g < brims.len() && brim_here(g) && !brims[g].is_empty() {
+                brims_done[g] = true;
+                let at = end_of(&paths);
+                paths.extend(brim_paths(&brims[g], nodes[t].1, at, h, s));
+            }
+            if let Some((o, pass)) = holder[g].filter(|(_, pass)| pass.flush)
+                && let Some(Some(layer)) = supports.get(o)
+            {
+                let at = end_of(&paths);
+                paths.extend(support_paths(layer, o as u32, pass.part, at, s));
+            }
+        }
+    }
+    let mut visited = vec![false; groups];
     // Spiral vase mode: the first layer's brims print first, so its loops start where they end.
     let spiral_brims = start.is_some() && i == 0;
-    let mut brims_done = vec![false; brims.len()];
     for t in tour {
         let (k, object) = nodes[t];
-        if let Some(Some(layer)) = supports.get(object as usize)
-            && !visited[object as usize]
-            && takes(object)
+        let g = group_of(object);
+        if !std::mem::replace(&mut visited[g], true)
+            && let Some((o, pass)) = holder[g].filter(|(_, pass)| !pass.flush)
+            && let Some(Some(layer)) = supports.get(o)
         {
-            // Orca reckons the nozzle at the layer's start where the layer before ended, which is planned apart:
-            // the plate's origin, where the tour ends, stands in for it (in spiral vase mode, where it ended).
-            let at = paths.last().map_or(start.unwrap_or(geom::pt(0, 0)), |p: &Path| p.points[p.points.len() - 1]);
-            paths.extend(support_paths(layer, object, at, s));
-        }
-        if let Some(v) = visited.get_mut(object as usize) {
-            *v = true;
+            let at = end_of(&paths);
+            paths.extend(support_paths(layer, o as u32, pass.part, at, s));
         }
         if let Some(k) = k {
             if let Some(start) = start {
-                let o = object as usize;
-                if spiral_brims && o < brims.len() && !brims_done[o] && takes(object) {
-                    brims_done[o] = true;
+                if spiral_brims && g < brims.len() && !brims_done[g] && brim_here(g) {
+                    brims_done[g] = true;
                     let at = paths.last().map_or(start, |p: &Path| p.points[p.points.len() - 1]);
-                    paths.extend(brim_paths(&brims[o], object, at, h, s));
+                    paths.extend(brim_paths(&brims[g], object, at, h, s));
                 }
                 let at = paths.last().map_or(start, |p: &Path| p.points[p.points.len() - 1]);
                 per_island[k] = island_at(k, Some(at), rising);
@@ -234,18 +285,14 @@ pub fn plan_layer_of(
             paths.append(&mut per_island[k]);
         }
     }
-    if i == 0 && !spiral_brims && brims.iter().enumerate().any(|(o, b)| takes(o as u32) && !b.is_empty()) {
-        match only {
-            None => paths = with_brims(paths, brims, h, s),
-            Some(_) => {
-                let mine: Vec<Vec<Contour>> = brims
-                    .iter()
-                    .enumerate()
-                    .map(|(o, b)| if takes(o as u32) { b.clone() } else { Vec::new() })
-                    .collect();
-                paths = with_brims(paths, &mine, h, s);
-            }
-        }
+    if i == 0 && !spiral_brims && brims.iter().enumerate().any(|(g, b)| brim_here(g) && !brims_done[g] && !b.is_empty())
+    {
+        let mine: Vec<&[Contour]> = brims
+            .iter()
+            .enumerate()
+            .map(|(g, b)| if brim_here(g) && !brims_done[g] { b.as_slice() } else { &[] })
+            .collect();
+        paths = with_brims(paths, &mine, &group_of, h, s);
     }
     let support_islands =
         supports.iter().enumerate().filter_map(|(o, l)| l.map(|l| (o as u32, l.islands.clone()))).collect();
@@ -265,7 +312,7 @@ pub fn plan_layer_of(
 
 /// A support layer's extrusions as Orca prints them on an object's first visit (`extrude_support`): chained from
 /// `at` (Orca's chaining with improvements), the flange's loop and lines in their own order.
-fn support_paths(layer: &support::Layer, object: u32, at: Pt, s: &Settings) -> Vec<Path> {
+fn support_paths(layer: &support::Layer, object: u32, part: support::Part, at: Pt, s: &Settings) -> Vec<Path> {
     let first = layer.first;
     let make = |p: &support::Path| {
         let mm3_per_mm = Settings::mm3_per_mm(p.width, p.height);
@@ -290,8 +337,10 @@ fn support_paths(layer: &support::Layer, object: u32, at: Pt, s: &Settings) -> V
             parts: Vec::new(),
         }
     };
-    let ends: Vec<(Pt, Pt)> = layer
-        .items
+    // The base or the interface alone, where they print in different filaments: Orca then leaves out what is both.
+    let items: Vec<&support::Item> =
+        layer.items.iter().filter(|item| part == support::Part::Both || item.part() == part).collect();
+    let ends: Vec<(Pt, Pt)> = items
         .iter()
         .map(|item| match item {
             support::Item::Path(p) => (p.points[0], p.points[p.points.len() - 1]),
@@ -301,10 +350,10 @@ fn support_paths(layer: &support::Layer, object: u32, at: Pt, s: &Settings) -> V
             }
         })
         .collect();
-    let reversible: Vec<bool> = layer.items.iter().map(|item| matches!(item, support::Item::Path(_))).collect();
+    let reversible: Vec<bool> = items.iter().map(|item| matches!(item, support::Item::Path(_))).collect();
     let mut out = Vec::new();
     for (k, reversed) in order::chain(&ends, &reversible, Some(at), true) {
-        match &layer.items[k] {
+        match items[k] {
             support::Item::Path(p) => {
                 let mut path = make(p);
                 if reversed {
@@ -322,15 +371,21 @@ fn support_paths(layer: &support::Layer, object: u32, at: Pt, s: &Settings) -> V
 /// brim when it first comes to the object. Each loop starts at the point on it nearest where the nozzle is (the
 /// plate's origin for the layer's first, where Orca's writer reckons it is) and stops the seam gap short of that
 /// point, as Orca's `extrude_loop` splits and clips loops other than walls.
-fn with_brims(paths: Vec<Path>, brims: &[Vec<Contour>], h: f64, s: &Settings) -> Vec<Path> {
-    let mut out = Vec::with_capacity(paths.len() + brims.iter().map(Vec::len).sum::<usize>());
+fn with_brims(
+    paths: Vec<Path>,
+    brims: &[&[Contour]],
+    group_of: &dyn Fn(u32) -> usize,
+    h: f64,
+    s: &Settings,
+) -> Vec<Path> {
+    let mut out = Vec::with_capacity(paths.len() + brims.iter().map(|b| b.len()).sum::<usize>());
     let mut done = vec![false; brims.len()];
     let mut at = geom::pt(0, 0);
     for p in paths {
-        let o = p.object as usize;
-        if o < brims.len() && !done[o] {
-            done[o] = true;
-            out.extend(brim_paths(&brims[o], p.object, at, h, s));
+        let g = group_of(p.object);
+        if g < brims.len() && !done[g] {
+            done[g] = true;
+            out.extend(brim_paths(brims[g], p.object, at, h, s));
         }
         at = p.points[p.points.len() - 1];
         out.push(p);
