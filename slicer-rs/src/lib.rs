@@ -24,6 +24,7 @@ pub mod overhang;
 pub mod pack;
 pub mod plan;
 pub mod png;
+pub mod preheat;
 pub mod profile;
 pub mod region;
 pub mod section;
@@ -459,7 +460,13 @@ impl Plate {
         let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         drop(regions);
         let t5 = now();
-        let g = gcode::assemble(texts, &job);
+        let mut g = gcode::assemble(texts, &job);
+        // Orca's pre-cooling and pre-heating of the nozzle that waits, added after the estimate as Orca adds it.
+        if let Some(p) = colours.as_ref().and_then(preheat::Params::of)
+            && let Some(text) = preheat::add_lines(&g.text, &p, settings)
+        {
+            g.text = text;
+        }
         let t6 = now();
         let thumbnail = options.thumbnail.then(|| {
             let size = 512;

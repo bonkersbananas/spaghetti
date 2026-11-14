@@ -78,7 +78,7 @@ pub struct Gcode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Kind {
+pub(crate) enum Kind {
     Extrude(Role),
     Travel,
     /// A travel that names its height too (`G1 X Y Z`), as Orca writes the travel after a lift.
@@ -97,20 +97,20 @@ enum Kind {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Move {
-    x: f64,
-    y: f64,
-    z: f64,
+pub(crate) struct Move {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) z: f64,
     /// mm of filament, relative.
-    e: f64,
+    pub(crate) e: f64,
     /// mm/s.
-    f: f64,
+    pub(crate) f: f64,
     /// mm/s², or NaN where none is set yet.
-    accel: f64,
-    kind: Kind,
+    pub(crate) accel: f64,
+    pub(crate) kind: Kind,
     /// An extrusion's width and height (Orca keeps them as floats, and writes them so).
-    width: f32,
-    height: f32,
+    pub(crate) width: f32,
+    pub(crate) height: f32,
 }
 
 /// What the G-code says between two moves.
@@ -1273,7 +1273,7 @@ struct Block {
 
 /// How many straight pieces Orca's estimator splits an arc of radius `r` and `angle` radians into (to within
 /// 0.0125 mm, `ArcWelder::arc_discretization_steps`).
-fn arc_steps(r: f64, angle: f64) -> usize {
+pub(crate) fn arc_steps(r: f64, angle: f64) -> usize {
     const DEVIATION: f64 = 0.0125;
     let d = r - DEVIATION;
     if d < 1e-4 {
@@ -1441,6 +1441,30 @@ fn timing(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<f64> {
 
 /// `timing`, the planner starting again from rest at `resets` (move index, where the nozzle is then).
 fn timing_with(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, [f64; 3])]) -> Vec<f64> {
+    let (blocks, index) = plan(moves, start, s, resets);
+    let mut times = vec![0.0; moves.len()];
+    for k in 0..blocks.len() {
+        let exit = if k + 1 < blocks.len() { blocks[k + 1].entry } else { blocks[k].safe };
+        times[index[k]] += trapezoid(&blocks[k], exit);
+    }
+    times
+}
+
+/// Each move's seconds (`timing`), and whether Orca's processor marks a point inside it where its speed stops rising
+/// or starts falling (`actual_speed_moves`, kept for its preview: points that carry the move's line but no time).
+pub(crate) fn timing_and_turns(moves: &[Move], start: [f64; 3], s: &Settings) -> Vec<(f64, bool)> {
+    let (blocks, index) = plan(moves, start, s, &[]);
+    let mut out = vec![(0.0, false); moves.len()];
+    for k in 0..blocks.len() {
+        let exit = if k + 1 < blocks.len() { blocks[k + 1].entry } else { blocks[k].safe };
+        out[index[k]].0 += trapezoid(&blocks[k], exit);
+        out[index[k]].1 |= speed_turns(&blocks[k], exit);
+    }
+    out
+}
+
+/// The planner's blocks for `moves` once its passes have settled their entry speeds, and the move each belongs to.
+fn plan(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, [f64; 3])]) -> (Vec<Block>, Vec<usize>) {
     let mut p = Planner {
         s,
         blocks: Vec::with_capacity(moves.len()),
@@ -1497,12 +1521,26 @@ fn timing_with(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, 
         }
     }
 
-    let mut times = vec![0.0; moves.len()];
-    for k in 0..blocks.len() {
-        let exit = if k + 1 < blocks.len() { blocks[k + 1].entry } else { blocks[k].safe };
-        times[index[k]] += trapezoid(&blocks[k], exit);
+    (blocks, index)
+}
+
+/// Whether a block's speed stops rising or starts falling inside it, as Orca's trapezoid has it
+/// (`TimeBlock::calculate_trapezoid`): more than 0.1 µm from either end.
+fn speed_turns(b: &Block, exit: f64) -> bool {
+    const EPSILON: f64 = 1e-4;
+    let (v0, v1, vc, a, d) = (b.entry, exit, b.cruise, b.accel, b.dist);
+    if a <= 0.0 {
+        return false;
     }
-    times
+    let mut accelerate = ((vc * vc - v0 * v0) / (2.0 * a)).max(0.0);
+    let decelerate = ((vc * vc - v1 * v1) / (2.0 * a)).max(0.0);
+    let mut cruise = d - accelerate - decelerate;
+    if cruise < 0.0 {
+        accelerate = ((2.0 * a * d - v0 * v0 + v1 * v1) / (4.0 * a)).clamp(0.0, d);
+        cruise = 0.0;
+    }
+    let (until, after) = (accelerate, accelerate + cruise);
+    (EPSILON < until && until < d - EPSILON) || (d - after > EPSILON && after > until + EPSILON)
 }
 
 /// Seconds to cover a block from its entry speed to `exit`, accelerating towards its cruise speed.

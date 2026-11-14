@@ -1051,6 +1051,46 @@ fn two_filaments_change_once_a_layer_over_a_prime_tower() {
 }
 
 #[test]
+fn the_waiting_nozzle_cools_and_heats_again_as_orcas_does() {
+    let settings = setup::read(TWO_FILAMENTS).unwrap().settings;
+    let input = || Input { name: "two-colours.3mf", bytes: TWO_COLOURS };
+    let out = slice(&[input()], &settings, &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    let lines: Vec<&str> = gcode.lines().collect();
+    // Orca's lines (`M104 T<nozzle> S<°C> N0 ;Multi extruder pre cooling` or `pre heating`): the nozzle a change of
+    // nozzle leaves cools while it waits, and heats again to its printing temperature before it is needed (between the
+    // M632 and M633 that let the printer skip it); the nozzle that waits at the end cools to 25 °C.
+    let mut cooled: [Option<i64>; 2] = [None; 2];
+    let (mut cools, mut heats, mut last) = (0, 0, 0);
+    for (i, l) in lines.iter().enumerate() {
+        let Some(rest) = l.strip_prefix("M104 T").filter(|_| l.contains(";Multi extruder pre")) else { continue };
+        let words: Vec<&str> = rest.split_whitespace().collect();
+        let (nozzle, temp): (usize, i64) = (words[0].parse().unwrap(), words[1][1..].parse().unwrap());
+        assert_eq!(lines[i - 1], "M400", "line {i}");
+        if l.ends_with("pre heating") {
+            heats += 1;
+            assert_eq!(temp, 220, "{l}");
+            assert!(lines[i - 2].starts_with("M632 S") && lines[i + 1] == "M633", "line {i}");
+            assert!(cooled[nozzle].take().is_some(), "nozzle {nozzle} heats without having cooled: line {i}");
+        } else {
+            cools += 1;
+            assert!((25..220).contains(&temp), "{l}");
+            cooled[nozzle] = Some(temp);
+            last = temp;
+        }
+    }
+    assert!(heats >= 15 && cools == heats + 1, "{cools} coolings, {heats} heatings");
+    assert_eq!(last, 25);
+    // They come after the estimate, as Orca's do: without them (`enable_pre_heating` off) the G-code is the same,
+    // and so is every figure.
+    let off = r##"{"filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"], "machine": {"enable_pre_heating": "0"}}"##;
+    let plain = slice(&[input()], &setup::read(off).unwrap().settings, &Options::default()).unwrap();
+    assert_eq!(without_preheat(&gcode), String::from_utf8(plain.gcode).unwrap());
+    assert_eq!(out.stats.total_time, plain.stats.total_time);
+    assert_eq!(out.stats.weight, plain.stats.weight);
+}
+
+#[test]
 fn two_filaments_on_one_nozzle_flush_between_them() {
     let setup = r##"{"process": {"filament_map_mode": "Manual", "filament_map": ["1", "1"]},
         "filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}"##;
@@ -1069,6 +1109,8 @@ fn two_filaments_on_one_nozzle_flush_between_them() {
     // Flushing counts in the filament used.
     let printed: f64 = s.filaments.iter().map(|f| f.volume - f.flush).sum();
     assert!((s.volume - printed - flushed).abs() < 1e-6);
+    // One nozzle never waits: nothing to cool or heat ahead.
+    assert!(!gcode.contains(";Multi extruder pre"));
 }
 
 #[test]
@@ -1111,4 +1153,76 @@ fn several_filaments_need_each_models_filament() {
     plate.add_with_filament(&input(), Some(1)).unwrap();
     let out = plate.slice(&two, &Options::default()).unwrap();
     assert_eq!(out.stats.tool_changes, out.stats.layers);
+}
+
+/// Orca's pre-cooling and pre-heating lines taken out of a G-code file (`M400` and `M104 … ;Multi extruder pre
+/// cooling`, and `M632`, `M400`, `M104 … ;Multi extruder pre heating`, `M633`).
+fn without_preheat(gcode: &str) -> String {
+    let lines: Vec<&str> = gcode.split_inclusive('\n').collect();
+    let mut out = String::with_capacity(gcode.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let at = |k: usize| lines.get(i + k).copied().unwrap_or("");
+        if at(0).starts_with("M632 ") && at(1) == "M400\n" && at(2).contains(";Multi extruder pre heating") {
+            i += 4;
+        } else if at(0) == "M400\n" && at(1).contains(";Multi extruder pre cooling") {
+            i += 2;
+        } else {
+            out.push_str(at(0));
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Orca's pre-heating, run on G-code Orca wrote for the benchmark's plate in two colours (`bench/run.py`, model
+/// "colour") with its lines taken out, puts them back where Orca did: every line, at its place or a move from it, its
+/// temperature within 1 °C (where our estimator's time differs a little from Orca's). `PREHEAT_OUT` keeps ours.
+/// `ORCA_GCODE=…/plate_1.gcode cargo test --release --test slice -- --ignored --nocapture preheat`
+#[test]
+#[ignore]
+fn preheat_puts_back_orcas_lines() {
+    let Ok(path) = std::env::var("ORCA_GCODE") else { return };
+    let orca = std::fs::read_to_string(path).unwrap();
+    // The plate's two PLA filaments at 220 °C, the first (filament 1) on the right extruder, as Orca grouped them.
+    let p = spaghetti_slicer::preheat::Params {
+        temperature: vec![220, 220],
+        pre_cooling: vec![0, 0],
+        preheat_delta: vec![0.0, 0.0],
+        extruder_of: vec![1, 0],
+        heating: vec![1.5, 1.5],
+        cooling: vec![2.0, 2.0],
+        physical: vec![1, 0],
+        nozzles: vec![1],
+        switcher_offset: None,
+        change_secs: 5.0,
+        load_secs: 29.0,
+        unload_secs: 29.0,
+    };
+    let bare = without_preheat(&orca);
+    assert!(bare.len() < orca.len(), "no pre-heating lines in the file");
+    let ours = spaghetti_slicer::preheat::add_lines(bare.as_bytes(), &p, &Settings::default()).unwrap();
+    let ours = String::from_utf8(ours).unwrap();
+    if let Ok(path) = std::env::var("PREHEAT_OUT") {
+        std::fs::write(path, &ours).unwrap();
+    }
+    // Each line: where it is, which nozzle, how hot, cooling or heating.
+    let lines = |g: &str| -> Vec<(usize, String, i64, bool)> {
+        g.lines()
+            .enumerate()
+            .filter(|(_, l)| l.contains(";Multi extruder pre"))
+            .map(|(i, l)| {
+                let w: Vec<&str> = l.split_whitespace().collect();
+                (i, w[1].to_string(), w[2][1..].parse().unwrap(), l.ends_with("heating"))
+            })
+            .collect()
+    };
+    let (theirs, mine) = (lines(&orca), lines(&ours));
+    assert_eq!(theirs.len(), mine.len());
+    let mut same = 0;
+    for (a, b) in theirs.iter().zip(&mine) {
+        assert!(a.1 == b.1 && a.3 == b.3 && (a.2 - b.2).abs() <= 1 && a.0.abs_diff(b.0) <= 2, "Orca {a:?}, ours {b:?}");
+        same += usize::from(a == b);
+    }
+    println!("{same} of {} lines exactly as Orca's", theirs.len());
 }

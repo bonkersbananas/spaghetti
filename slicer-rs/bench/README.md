@@ -55,6 +55,12 @@ target/release/spaghetti-slicer --keep-placement --filaments 1,2 $BENCH_MODELS/c
 python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models colour,colour-one-nozzle
 ```
 
+The lines that cool a waiting nozzle and heat it again (`;Multi extruder pre cooling`, `pre heating`) come from a pass after the estimate, as in Orca's G-code processor. To hold ours to Orca's, run it on Orca's own G-code with Orca's lines taken out: it puts them back, each within a move and 1 °C, and says how many exactly (93 of 101 on the plate):
+
+```sh
+ORCA_GCODE=bench/out/orca-native-colour/plate_1.gcode cargo test --release --test slice -- --ignored --nocapture preheat
+```
+
 ## Other nozzles
 
 `--nozzle 0.2` (or 0.6, 0.8) slices for another of the X2D's nozzles with Bambu's presets for it (`profiles/x2d-0.2/` and the others, from the engine's release 2: the nozzle's machine, its Standard process and Bambu PLA Basic), which a setup is laid over. It is the command line's only: the WebAssembly module slices what the app's setup brings, a nozzle's presets whole. `run.py` slices a Benchy for each (`benchy-0.2`, `benchy-0.6`, `benchy-0.8`), every runner with those presets, on the Textured PEI plate; `table.py` prints their tables after the others:
