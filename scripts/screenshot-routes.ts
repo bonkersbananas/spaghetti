@@ -1611,6 +1611,34 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // On a computer, "Open in Bambu Studio" on the model's card and beside the idea's other quiet actions (the one
+    // model's page-level way in); a phone has neither (idea-model-card).
+    name: "idea-model-open",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      await page.getByTestId("open-in-studio").first().waitFor();
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
+    // A tap on it: the browser can't tell whether Bambu Studio opened, so the card says where the download is.
+    name: "idea-model-open-tried",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      await page.getByTestId("open-in-studio").first().click();
+      await page.getByText("Nothing opened?").first().waitFor();
+    },
+    beforeShot: modelInView,
+    cleanup: removeModelItems,
+  },
+  {
     // An idea with a model and no photo, in the Ideas list: the model's plate picture is its card's picture.
     name: "ideas-model-cover",
     path: "/ideas",

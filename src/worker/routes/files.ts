@@ -10,6 +10,7 @@ import {
   MAX_SLICER_FILE_BYTES,
   ONE_REQUEST_FILE_BYTES,
 } from "../../shared/api.ts";
+import { type OpenLinkResponse, openName } from "../../shared/open-link.ts";
 import { isStlName, slicedName } from "../../shared/slicing/files.ts";
 import { SLICER_IDS } from "../../shared/slicing/settings.ts";
 import type { PreviousSlice } from "../../shared/slicing/types.ts";
@@ -27,9 +28,11 @@ import {
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile } from "../http.ts";
+import { canSignLinks, signOpenLink } from "../open-link.ts";
 import { type FilePart, fileKey, fileKeys } from "../photos.ts";
 import { slicingSettings } from "../slicing-schema.ts";
 import { loadAttempt, settings } from "./attempts.ts";
+import { openable } from "./open.ts";
 
 const THUMB_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
@@ -743,6 +746,31 @@ function touched(
  * signed-in people, while the attempt or item is there; and the sliced part's upload.
  */
 export const fileRoutes = new Hono<AppEnv>()
+  /**
+   * A signed, short-lived link to one .3mf for Bambu Studio to fetch itself (decision 0058): the original, or a
+   * model's sliced file (`part`, default the sliced one when there is one). People only.
+   */
+  .post("/:id/open-link", async (c) => {
+    const id = c.req.param("id");
+    if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    if (!canSignLinks(c.env)) {
+      return apiError(
+        c,
+        503,
+        "open_unavailable",
+        "Opening in Bambu Studio needs a key on the server; see docs/deploy.md.",
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const asked = z.object({ part: z.enum(["file", "sliced"]).optional() }).safeParse(body);
+    if (!asked.success) return apiError(c, 400, "invalid", "part is file or sliced.");
+    const part = asked.data.part ?? "sliced";
+    const found = await openable(c, id, part);
+    if (!found) return apiError(c, 404, "not_found", "There is no .3mf of that file to open.");
+    const { token, expiresAt } = await signOpenLink(c.env, id, part);
+    const url = `${new URL(c.req.url).origin}/open/${token}/${openName(found.name)}`;
+    return c.json<OpenLinkResponse>({ url, name: found.name, expiresAt });
+  })
   .get("/:id/:part?", async (c) => {
     const part = c.req.param("part") ?? "file";
     if (part !== "file" && part !== "thumb" && part !== "sliced") {

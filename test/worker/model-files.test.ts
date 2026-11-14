@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentScope, NewTokenResponse } from "../../src/shared/agents.ts";
 import type { AttemptResponse, ItemFileResponse, ItemResponse, RecipeResponse } from "../../src/shared/api.ts";
 import type { Change } from "../../src/shared/changes.ts";
+import type { OpenLinkResponse } from "../../src/shared/open-link.ts";
 import { DEFAULT_SLICING } from "../../src/shared/slicing/defaults.ts";
 import type { SlicingSettings } from "../../src/shared/slicing/settings.ts";
 import type { FileSlice } from "../../src/shared/slicing/types.ts";
+import { signOpenLink, verifyOpenLink } from "../../src/worker/open-link.ts";
 import { PURGE_AFTER_MS, purgeDeleted } from "../../src/worker/photos.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
 
@@ -595,3 +597,115 @@ describe("models, for agents", () => {
 async function itemOf(id: string) {
   return (await (await request(`/api/items/${id}`, { cookie })).json<ItemResponse>()).item;
 }
+
+describe("open in Bambu Studio: signed links (decision 0058)", () => {
+  const link = (id: string, json: unknown = {}, as: string | null = cookie) =>
+    request(`/api/files/${id}/open-link`, { method: "POST", json, ...(as ? { cookie: as } : {}) });
+  /** What Bambu Studio sends: no cookie. */
+  const fetchLink = (url: string) => request(new URL(url).pathname);
+
+  async function slicedModel(name = "Benchy.stl") {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id, modelForm({ name }));
+    await putSliced(id, slicedForm());
+    return { item, id };
+  }
+
+  it("needs a signed-in person to make a link", async () => {
+    const { id } = await slicedModel();
+    expect((await link(id, {}, null)).status).toBe(401);
+  });
+
+  it("makes a link to the sliced file that downloads its bytes with no cookie, named for the file", async () => {
+    const { id } = await slicedModel();
+    const response = await link(id);
+    expect(response.status).toBe(200);
+    const made = await response.json<OpenLinkResponse>();
+    expect(made.name).toBe("Benchy.gcode.3mf");
+    expect(made.url).toMatch(/^http:\/\/spaghetti\.test\/open\/[^/]+\/Benchy\.gcode\.3mf$/);
+    expect(made.expiresAt).toBeGreaterThan(Date.now() + 9 * 60_000);
+    expect(made.expiresAt).toBeLessThanOrEqual(Date.now() + 10 * 60_000);
+    const download = await fetchLink(made.url);
+    expect(download.status).toBe(200);
+    expect(download.headers.get("cache-control")).toBe("no-store");
+    expect(download.headers.get("content-disposition")).toContain('filename="Benchy.gcode.3mf"');
+    expect(new Uint8Array(await download.arrayBuffer())).toEqual(SLICED);
+  });
+
+  it("opens a plain .3mf's own bytes, and offers nothing for an .stl that isn't sliced", async () => {
+    const item = await idea();
+    const threemf = uuid();
+    await putModel(item.id, threemf, modelForm({ name: "Bracket v2.3mf", bytes: SLICED }));
+    const made = await (await link(threemf, { part: "file" })).json<OpenLinkResponse>();
+    expect(made.url).toMatch(/\/Bracket-v2\.3mf$/);
+    const download = await fetchLink(made.url);
+    expect(new Uint8Array(await download.arrayBuffer())).toEqual(SLICED);
+
+    const stl = uuid();
+    await putModel(item.id, stl);
+    expect((await link(stl, { part: "file" })).status).toBe(404);
+    expect((await link(stl)).status).toBe(404);
+  });
+
+  it("stops working once it has expired, and when the file is gone", async () => {
+    const { item, id } = await slicedModel();
+    const now = Date.now();
+    const { token } = await signOpenLink(env, id, "sliced", now - 11 * 60_000);
+    expect((await request(`/open/${token}/Benchy.gcode.3mf`)).status).toBe(404);
+    const live = await (await link(id)).json<OpenLinkResponse>();
+    expect((await fetchLink(live.url)).status).toBe(200);
+    await request(`/api/items/${item.id}`, { method: "DELETE", cookie });
+    expect((await fetchLink(live.url)).status).toBe(404);
+  });
+
+  it("refuses a tampered link and another file's link", async () => {
+    const one = await slicedModel();
+    const two = await slicedModel("Other.stl");
+    const made = await (await link(one.id)).json<OpenLinkResponse>();
+    const token = new URL(made.url).pathname.split("/")[2] as string;
+    const [fileId, part, expires, signature] = token.split(".") as [string, string, string, string];
+    const tries = [
+      // Later expiry, the same signature.
+      `${fileId}.${part}.${Number(expires) + 3_600_000}.${signature}`,
+      // Another file, the first's signature.
+      `${two.id}.${part}.${expires}.${signature}`,
+      // The original instead of the sliced file.
+      `${fileId}.file.${expires}.${signature}`,
+      `${fileId}.${part}.${expires}.${signature.slice(0, -1)}${signature.endsWith("A") ? "B" : "A"}`,
+      `${fileId}.${part}.${expires}`,
+      "garbage",
+    ];
+    for (const attempt of tries) expect((await request(`/open/${attempt}/x.3mf`)).status).toBe(404);
+    expect(await verifyOpenLink(env, token)).toEqual({ id: one.id, part: "sliced" });
+    expect(await verifyOpenLink(env, token, Number(expires))).toBeNull();
+  });
+
+  it("is signed under a key of its own: no key, no links", async () => {
+    const { id } = await slicedModel();
+    const key = env.WEBHOOK_SECRET_KEY;
+    try {
+      (env as { WEBHOOK_SECRET_KEY?: string }).WEBHOOK_SECRET_KEY = undefined;
+      expect((await link(id)).status).toBe(503);
+    } finally {
+      (env as { WEBHOOK_SECRET_KEY?: string }).WEBHOOK_SECRET_KEY = key;
+    }
+  });
+
+  it("is for people only: an agent token can't make one", async () => {
+    const { id } = await slicedModel();
+    const agent = await (
+      await request("/api/agents", {
+        method: "POST",
+        json: { name: "Claude", scopes: ["read", "capture", "attempts", "printer"] },
+        cookie,
+      })
+    ).json<NewTokenResponse>();
+    const response = await request(`/api/files/${id}/open-link`, {
+      method: "POST",
+      json: {},
+      headers: { Authorization: `Bearer ${agent.token}` },
+    });
+    expect(response.status).toBe(403);
+  });
+});
