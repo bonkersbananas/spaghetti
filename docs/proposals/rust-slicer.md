@@ -9,7 +9,7 @@ A self-contained crate, about 37,000 lines of Rust on eight small crates (polygo
 The same code builds two ways:
 
 - **Native**: a 4.0 MB command line, `spaghetti-slicer model.stl -o model.gcode.3mf`, slicing on every core (OrcaSlicer's AppImage is 210 MB).
-- **WebAssembly**: a 3.4 MB module (1.16 MB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
+- **WebAssembly**: a 3.5 MB module (1.20 MB gzip; Orca's engine is 11 MB, 3.4 MB gzip), one thread, with a plain C interface and no generated bindings (`src/wasm.rs`).
 
 What it does, in order:
 
@@ -129,7 +129,7 @@ On Nov 14 the WebAssembly build was profiled in Node (V8's sampling profiler, wh
 | Steampunk glasses, organic trees | 14.1 s | 13.6 s | −3.4 % |
 | 12 Benchies on one plate | 36.2 s | 33.5 s | −7.5 % |
 
-Medians of interleaved runs (five for the Benchy, three for the others) in the same sandbox as above, whose speed drifts by a few percent over minutes. The module is 10 % smaller (3.79 MB to 3.41 MB, 2 % gzipped).
+Medians of interleaved runs (five for the Benchy, three for the others) in the same sandbox as above, whose speed drifts by a few percent over minutes. The module is 10 % smaller (3.92 MB to 3.54 MB, as main stands with the painted sides, and 2 % gzipped).
 
 - **The plate's outlines.** Slicing cuts every object on a layer together, and a mesh with broken edges leaves chains that don't close, which it joins end to nearest start. Each end looked at every start: with twelve Benchies, up to 3,444 chains on a layer and 439 million distances for the plate (3 million for one Benchy), each squared in 128 bits, a call into software in WebAssembly. A grid of the starts, and squares in 64 bits, took the plate's slicing into outlines from 3.6 s to 1.3 s in WebAssembly; natively the plate slices 3 % faster on four threads.
 - **`hypot`.** In WebAssembly, Rust's `hypot` is CORE-MATH's, correctly rounded, and its three fused multiply-adds are calls into software there, as WebAssembly has none: 4 % of the glasses with trees, mostly smoothing branches. `fmath.rs` takes the same fast path with Dekker's exact products instead and hands the rest (special values, sizes far apart, results too near halfway between two doubles) to `hypot` itself, so it gives the same bits. Natively `hypot` is glibc's, as before; glibc is now and then a unit in the last place off the correctly rounded value, so far never on a model here.
@@ -444,7 +444,7 @@ Before any of it, a watched print (section 5's first row). For the module in the
 ## 6. Where it could run
 
 - **On a bridge-like host, as an offline slicing proxy.** A 4 MB program, slicing a Benchy in under half a second and a full plate in about 5 s, in 250 MB. It needs nothing installed, and nothing from Bambu or the internet.
-- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 1.09 MB gzip, a Benchy is ready in about two seconds instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
+- **In the browser, in place of Orca's engine.** The download shrinks from 3.4 MB to 1.20 MB gzip, a Benchy is ready in about three seconds instead of nine, and a phone's memory is spared. Only once quality is at parity: today the engine *is* Orca, and its files are what the printer's own software would make.
 - **In the Worker itself**, for single models: a Benchy needs 30 MB of WebAssembly memory and 2.3 s of CPU. That fits in a Worker's 128 MB, if the account's CPU limit allows a few seconds a request. Orca's engine can't run there (its heap starts at 256 MB). A plate of many models would not fit.
 
 ## 7. Recommendation
