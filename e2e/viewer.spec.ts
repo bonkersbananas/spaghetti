@@ -80,6 +80,47 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   await expect(dialog).toHaveCount(0);
 });
 
+test("the arrow keys step layers as soon as the 3D view opens, and after a drag on the canvas", async ({ page }) => {
+  test.setTimeout(90_000); // the first open reads 317 layers in a worker, slow on a shared runner
+  await signIn(page);
+  const itemId = await buildWithTugboat(page);
+  await page.goto(`/builds/${itemId}`);
+  await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
+  await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
+
+  // Nothing clicked yet: focus is outside the viewer.
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog.getByText(/^Layer 316 of 317/)).toBeVisible();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(dialog.getByText(/^Layer 306 of 317/)).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog.getByText(/^Layer 307 of 317/)).toBeVisible();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(dialog.getByText(/^Layer 317 of 317/)).toBeVisible();
+
+  // After a drag on the canvas, which doesn't move focus.
+  const box = await dialog.locator("canvas").boundingBox();
+  if (!box) throw new Error("no canvas");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 30, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(dialog.getByText(/^Layer 307 of 317/)).toBeVisible();
+
+  // On the slider, Shift steps ten and a plain arrow steps one (not twice).
+  await dialog.getByRole("slider", { name: "Layer" }).focus();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(dialog.getByText(/^Layer 297 of 317/)).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog.getByText(/^Layer 298 of 317/)).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
+
 test("a file with no G-code says so instead of drawing nothing", async ({ page }) => {
   await signIn(page);
   const itemId = await buildWithTugboat(page);
