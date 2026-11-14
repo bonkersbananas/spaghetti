@@ -337,7 +337,6 @@ export class PrintScene {
     // From below the slab fades out and a quiet grid of its own edge colour takes over, so the underside shows.
     this.plateMaterials = [top, side];
     this.solidity = -1;
-    for (const m of this.plateMaterials) m.transparent = true;
     this.grid = plateGrid(PLATE, 14, GRID_STEP, GRID_OUTLINE_PX, GRID_LINE_PX, colors.plateGrid);
     this.backdropPrint.add(this.grid);
     this.sizeGrid();
@@ -544,6 +543,8 @@ export class PrintScene {
     this.solidity = solidity;
     for (const m of this.plateMaterials) {
       m.opacity = solidity;
+      // Solid, the slab is opaque (drawn first, so the print's shadow lies on it); only a fading slab is blended.
+      m.transparent = solidity < 0.99;
       m.depthWrite = solidity > 0.99;
       m.visible = solidity > 0.01;
     }
