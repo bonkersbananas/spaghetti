@@ -172,6 +172,131 @@ fn painted_colours_are_refused_by_name_until_ours_prints_them() {
     assert!(plate.slice(&Settings::default(), &Options::default()).is_ok());
 }
 
+/// An extrusion: the tool, the feature, and the move's ends in mm.
+type Extrusion = (Option<usize>, String, [f64; 2], [f64; 2]);
+
+/// Each layer's extrusions (`G1` moves that push filament and go somewhere).
+fn extrusions(gcode: &str) -> Vec<Vec<Extrusion>> {
+    let mut layers: Vec<Vec<Extrusion>> = Vec::new();
+    let (mut tool, mut feature, mut at) = (None, String::new(), [0.0, 0.0]);
+    for line in gcode.lines() {
+        if line == "; CHANGE_LAYER" {
+            layers.push(Vec::new());
+        } else if let Some(name) = line.strip_prefix("; FEATURE: ") {
+            feature = name.to_string();
+        }
+        let code = line.split(';').next().unwrap_or("").trim();
+        if let Some(t) = code.split_whitespace().next().and_then(|w| w.strip_prefix('T'))
+            && let Ok(t) = t.parse::<usize>()
+            && t < 16
+        {
+            tool = Some(t);
+        }
+        if !["G0 ", "G1 ", "G2 ", "G3 "].iter().any(|g| code.starts_with(g)) {
+            continue;
+        }
+        let to = [word(code, 'X').unwrap_or(at[0]), word(code, 'Y').unwrap_or(at[1])];
+        if code.starts_with("G1 ")
+            && word(code, 'E').is_some_and(|e| e > 0.0)
+            && to != at
+            && let Some(layer) = layers.last_mut()
+        {
+            layer.push((tool, feature.clone(), at, to));
+        }
+        at = to;
+    }
+    layers
+}
+
+#[test]
+fn painted_sides_print_in_their_filament_as_orca_splits_them() {
+    use spaghetti_slicer::{Plate, paint::Paint};
+    let settings = setup::read(TWO_FILAMENTS).unwrap().settings;
+    // A 20 mm box 10 mm tall, kept where it is, its front (y = 100, triangles 4 and 5) painted in filament 2 ("8").
+    let box_stl = boxes_stl(&[([100., 100., 0.], [120., 120., 10.])]);
+    let sliced = |model: &[u8], triangles: &[u32]| {
+        let mut bytes = (triangles.len() as u32).to_le_bytes().to_vec();
+        for &t in triangles {
+            bytes.extend_from_slice(&t.to_le_bytes());
+        }
+        for end in 1..=triangles.len() as u32 {
+            bytes.extend_from_slice(&end.to_le_bytes());
+        }
+        bytes.extend(std::iter::repeat_n(b'8', triangles.len()));
+        let mut plate = Plate::default();
+        plate.add_part(&Input { name: "model.stl", bytes: model }, 0, true).expect("a model");
+        assert!(plate.paint(&Paint::from_bytes(&bytes).expect("paint")));
+        let options = Options { arrange: false, thumbnail: false, paint: true, ..Options::default() };
+        extrusions(&String::from_utf8(plate.slice(&settings, &options).expect("sliced").gcode).unwrap())
+    };
+    let walls = |layer: &[Extrusion], tool: usize| -> Vec<[f64; 2]> {
+        layer.iter().filter(|m| m.0 == Some(tool) && m.1 == "Outer wall").flat_map(|m| [m.2, m.3]).collect()
+    };
+    let range = |points: &[[f64; 2]], k: usize| {
+        points.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p[k]), hi.max(p[k])))
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 0.02;
+
+    // The whole front: as Orca splits the box (the region nearer the painted side than any other), the front
+    // quarter of each layer prints in filament 2, a triangle from the front corners to the middle, walls round it;
+    // the rest in filament 1, which never reaches the front.
+    let layers = sliced(&box_stl, &[4, 5]);
+    assert_eq!(layers.len(), 50);
+    for (i, layer) in layers.iter().enumerate().take(45).skip(5) {
+        let (front, rest) = (walls(layer, 1), walls(layer, 0));
+        assert!(!front.is_empty() && !rest.is_empty(), "layer {i}");
+        let (ys, xs) = (range(&front, 1), range(&front, 0));
+        assert!(near(ys.0, 100.21) && near(ys.1, 110.0 - 0.21 * 2f64.sqrt()), "layer {i}: {ys:?}");
+        // Its front corners are 45°: the wall's corners there stand 0.21 / tan 22.5° in.
+        let corner = 0.21 / (std::f64::consts::PI / 8.0).tan();
+        assert!(near(xs.0, 100.0 + corner) && near(xs.1, 120.0 - corner), "layer {i}: {xs:?}");
+        let ys = range(&rest, 1);
+        assert!(ys.0 > 100.4 && near(ys.1, 119.79), "layer {i}: {ys:?}");
+    }
+
+    // Half the front, cut along its diagonal (triangle 5: from the bottom left corner to the top right): the
+    // painted stretch of each layer's front edge runs from x = 100 to 100 + 2 z, and so does the region in
+    // filament 2. Its edge moves from layer to layer, where each region has walls: as Orca finds the shells over
+    // the whole object, those call for no solid infill.
+    let layers = sliced(&box_stl, &[5]);
+    for (i, layer) in layers.iter().enumerate().take(44).skip(20) {
+        let z = 0.2 * i as f64 + 0.1;
+        let xs = range(&walls(layer, 1), 0);
+        assert!(near(xs.1, 100.0 + 2.0 * z - 0.21), "layer {i}: {xs:?}");
+        assert!(layer.iter().all(|m| m.1 != "Internal solid infill"), "layer {i} has solid infill");
+    }
+
+    // A 24-sided prism (radius 12 round x = y = 110) painted on four sides, from 45° to 105°: filament 2 takes the
+    // sector between them, and filament 1's wall turns round its tip at a sharp corner on the sector's middle, 0.21
+    // / sin 30° from the axis, as Orca's does: the split leaves points a hair apart there, which would make it a flat
+    // if the regions weren't simplified as Orca's walls simplify them.
+    let mut prism = String::from("solid prism\n");
+    let corner = |k: usize, z: f64| {
+        let a = 2.0 * std::f64::consts::PI * (k % 24) as f64 / 24.0;
+        [110.0 + 12.0 * a.cos(), 110.0 + 12.0 * a.sin(), z]
+    };
+    for k in 0..24 {
+        let (b0, b1, t0, t1) = (corner(k, 0.0), corner(k + 1, 0.0), corner(k, 10.0), corner(k + 1, 10.0));
+        for facet in [[[110.0, 110.0, 0.0], b1, b0], [[110.0, 110.0, 10.0], t0, t1], [b0, b1, t1], [b0, t1, t0]] {
+            prism.push_str(" facet normal 0 0 0\n  outer loop\n");
+            for v in facet {
+                prism.push_str(&format!("   vertex {} {} {}\n", v[0], v[1], v[2]));
+            }
+            prism.push_str("  endloop\n endfacet\n");
+        }
+    }
+    prism.push_str("endsolid prism\n");
+    let sides: Vec<u32> = (3..=6).flat_map(|k| [4 * k + 2, 4 * k + 3]).collect();
+    let layers = sliced(prism.as_bytes(), &sides);
+    let middle = 75f64.to_radians();
+    let tip = [110.0 - 0.42 * middle.cos(), 110.0 - 0.42 * middle.sin()];
+    for (i, layer) in layers.iter().enumerate().take(44).skip(6) {
+        let rest = walls(layer, 0);
+        let nearest = rest.iter().map(|p| (p[0] - tip[0]).hypot(p[1] - tip[1])).fold(f64::MAX, f64::min);
+        assert!(nearest < 0.005, "layer {i}: filament 1's wall passes {nearest} mm from the corner");
+    }
+}
+
 #[test]
 fn models_that_cannot_print_are_refused() {
     let settings = Settings::default();
