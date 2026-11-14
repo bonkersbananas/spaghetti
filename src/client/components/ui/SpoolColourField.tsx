@@ -21,7 +21,7 @@ interface SpoolColourFieldProps {
 const SLOT_NAMES = ["first", "second", "third"] as const;
 
 const COUNTS = [
-  { value: "1", label: "One colour" },
+  { value: "1", label: "One" },
   { value: "2", label: "Two" },
   { value: "3", label: "Three" },
 ] as const;
@@ -70,7 +70,7 @@ export function SpoolColourField({ value, onChange, className }: SpoolColourFiel
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       <SegmentedControl
-        label="How many colours"
+        label="How many colours: one, two or three"
         labelHidden
         options={COUNTS}
         value={String(count)}
@@ -98,9 +98,9 @@ export function SpoolColourField({ value, onChange, className }: SpoolColourFiel
               </button>
             ))}
           </div>
-          <span className="text-small text-ink-faint">Pick the colours in order.</span>
         </div>
       )}
+      {count > 1 && <p className="text-small text-ink-faint">Pick the colours in order.</p>}
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Common colors">
         {QUICK_COLORS.map((color) => {
           const selected = colors[slot] === color.hex;

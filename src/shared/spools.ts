@@ -144,7 +144,19 @@ export function colorsTone(colors: readonly string[]): ColorTone {
 }
 
 /** Materials offered as chips when adding a spool, most common first. */
-export const SPOOL_MATERIALS = ["PLA", "PETG", "ABS", "ASA", "TPU", "PLA-CF", "PETG-CF", "PA", "PC", "PVA"] as const;
+export const SPOOL_MATERIALS = [
+  "PLA",
+  "PLA+",
+  "PETG",
+  "ABS",
+  "ASA",
+  "TPU",
+  "PLA-CF",
+  "PETG-CF",
+  "PA",
+  "PC",
+  "PVA",
+] as const;
 
 /** Brands people are likely to type, spelled as the makers spell them, offered as suggestions. */
 export const BRANDS = [
