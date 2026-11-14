@@ -1,6 +1,13 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { patternProject, raftProject, seamProject, twoColourProject, vaseProject } from "./fixtures/model-3mf";
+import {
+  brimProject,
+  patternProject,
+  raftProject,
+  seamProject,
+  twoColourProject,
+  vaseProject,
+} from "./fixtures/model-3mf";
 import { boxesStl, boxStl } from "./fixtures/model-stl";
 import { clearIdeas, signIn } from "./helpers";
 
@@ -321,6 +328,26 @@ test("a project in spiral vase mode is sliced by ours", async ({ page }) => {
     // Until release 12 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "spiral vase mode" }.
     expect(slice.fallback).toBeUndefined();
     expect(slice.notes ?? []).toEqual([]);
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a project's brim ears or brim inside holes is sliced by ours", async ({ page }) => {
+  test.setTimeout(4 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    for (const brim of ["brim_ears", "outer_and_inner", "inner_only"]) {
+      const { id } = await ideaWithModel(page, `Block with ${brim}`, `${brim}.3mf`, brimProject(brim));
+      await expect
+        .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
+        .toBe("spaghetti");
+      const slice = (await fileOf(page, id)).slice;
+      // Until release 14 ours refused them, and Orca's engine sliced them: { why: "unsupported", what: "brim ears" }.
+      expect(slice.fallback, brim).toBeUndefined();
+      expect(slice.notes ?? [], brim).toEqual([]);
+    }
   } finally {
     await setDefaults(page, null);
   }

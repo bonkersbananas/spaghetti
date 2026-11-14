@@ -91,6 +91,14 @@ export function vaseProject(): Uint8Array {
 }
 
 /**
+ * The same block in a project whose brim is `brim`: brim ears ("brim_ears", a disc at each sharp corner) or a brim
+ * inside holes ("inner_only", "outer_and_inner"), which our own slicer refused until release 14.
+ */
+export function brimProject(brim: string): Uint8Array {
+  return boxProject({ brim_type: brim });
+}
+
+/**
  * The same block in a project that asks for its seams `position` (`seam_position`: "nearest" or "random"), which our
  * own slicer places as aligned ones since release 13, saying so.
  */
