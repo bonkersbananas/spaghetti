@@ -270,7 +270,13 @@ export function SlicingChoices({
     );
   const resetGroup = model && onReset && (
     <div className="-mt-3">
-      <Button variant="quiet" size="sm" icon={UndoIcon} onClick={onReset} className="-ml-3">
+      <Button
+        variant="quiet"
+        size="sm"
+        icon={UndoIcon}
+        onClick={onReset}
+        className="-ml-3 h-auto max-w-full py-2 text-left whitespace-normal"
+      >
         Back to the usual settings
       </Button>
     </div>
