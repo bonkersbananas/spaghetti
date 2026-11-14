@@ -95,8 +95,9 @@ export const slicingSettings = slicingSettingsShape
   .transform((value): SlicingSettings => normalizeSlicing(value));
 
 /**
- * A workspace's defaults (the Printer page, decision 0051): how a model nobody set up prints. The filament, plate
- * and nozzle aren't among them: they come from the Pantry and the setup.
+ * A workspace's defaults (the Printer page, decision 0051): how a model nobody set up prints, with the nozzle its
+ * layer height was set for. The filament and plate aren't among them: they come from the Pantry and the
+ * setup.
  */
 export const slicingDefaults = slicingSettingsShape
   .pick({
@@ -107,13 +108,20 @@ export const slicingDefaults = slicingSettingsShape
     supports: true,
     supportStyle: true,
     brim: true,
+    nozzle: true,
     slicer: true,
   })
+  .partial({ nozzle: true })
   .strict()
   .superRefine((value, ctx) => {
     for (const problem of slicingProblems({ ...DEFAULT_SLICING, ...value })) {
       ctx.addIssue({ code: "custom", message: problem });
     }
   })
-  .transform((value): SlicingDefaults => slicingDefaultsOf(normalizeSlicing({ ...DEFAULT_SLICING, ...value })))
+  .transform((value): SlicingDefaults => {
+    const { nozzle, ...defaults } = slicingDefaultsOf(normalizeSlicing({ ...DEFAULT_SLICING, ...value }));
+    // Defaults that name no nozzle keep naming none: their layer height is the 0.4 mm's (new models slice for the
+    // main nozzle whatever it is, the quality keeping its name there).
+    return value.nozzle === undefined ? defaults : { ...defaults, nozzle };
+  })
   .meta({ id: "SlicingDefaults" });

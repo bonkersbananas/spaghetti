@@ -28,13 +28,33 @@ export const ORCA_PRINTER = "Bambu Lab X2D";
 export const machinePreset = (nozzle: number) => `${ORCA_PRINTER} ${nozzle} nozzle`;
 
 /**
- * The nozzle sizes the engine's release (scripts/slicer/engine.json) has presets for: the 0.4 mm one so far. The
- * others need a release whose presets.json has their machine, processes and filaments (resolve-presets.mjs).
+ * The nozzle sizes the engine's release (scripts/slicer/engine.json) has presets for: all four of the X2D's since
+ * release 2, whose presets.json has their machines, processes and filaments (resolve-presets.mjs).
  */
-export const ENGINE_NOZZLES: readonly number[] = [0.4];
+export const ENGINE_NOZZLES: readonly number[] = [0.2, 0.4, 0.6, 0.8];
 
-/** The filament presets' suffix for a nozzle: "@BBL X2D 0.4 nozzle". */
-const filamentSuffix = (nozzle: number) => `@BBL X2D ${nozzle} nozzle`;
+/**
+ * The filament presets' suffix for a nozzle: "@BBL X2D 0.4 nozzle", "@BBL X2D 0.2 nozzle"; Bambu's presets for the
+ * 0.6 and 0.8 mm nozzles are one set, "@BBL X2D".
+ */
+const filamentSuffix = (nozzle: number) =>
+  nozzle === 0.6 || nozzle === 0.8 ? "@BBL X2D" : `@BBL X2D ${nozzle} nozzle`;
+
+/**
+ * The materials Bambu has no 0.2 mm preset for, and what slices in their place: no carbon fibre (it clogs a nozzle
+ * that fine), no TPU, PA, PP or PCTG. Silk is Bambu's own silk PLA there, the same thing under another name. `as` is
+ * the stand-in's material in the words a note says it with.
+ */
+const SMALL_NOZZLE_STAND_INS: Readonly<Record<string, { preset: string; as?: string }>> = {
+  "Generic PLA Silk": { preset: "Bambu PLA Silk" },
+  "Generic PLA-CF": { preset: "Generic PLA", as: "PLA" },
+  "Generic PETG-CF": { preset: "Generic PETG", as: "PETG" },
+  "Generic PCTG": { preset: "Generic PETG", as: "PETG" },
+  "Generic TPU": { preset: "Generic PLA", as: "PLA" },
+  "Generic PA": { preset: "Generic PLA", as: "PLA" },
+  "Generic PA-CF": { preset: "Generic PLA", as: "PLA" },
+  "Generic PP": { preset: "Generic PLA", as: "PLA" },
+};
 
 /**
  * Orca's own colour for a filament nobody coloured, then a few more for a project's other filaments: only for the
@@ -94,32 +114,54 @@ export function processPreset(presets: PresetSet, machine: string, layerHeight: 
 }
 
 /**
- * The filament preset for a filament: Bambu's own PLA Basic for Bambu's PLA (and a PLA nobody named a brand for),
- * Orca's generic preset for the rest (silk PLA has its own), and generic PLA for a material it doesn't know.
+ * The kind of preset a filament slices with, without its nozzle: Bambu's own PLA Basic for Bambu's PLA (and a PLA
+ * nobody named a brand for), Orca's generic preset for the rest (silk PLA has its own), and generic PLA for a
+ * material it doesn't know.
  */
-export function filamentPreset(filament: Pick<SlicingFilament, "material" | "brand" | "finish">, nozzle: number) {
-  const generic = (name: string) => `Generic ${name} ${filamentSuffix(nozzle)}`;
+function filamentKind(filament: Pick<SlicingFilament, "material" | "brand" | "finish">): string {
   const key = materialKey(filament.material);
   const silk = filament.finish === "silk" || /\bSILK\b/i.test(filament.material);
   if (!key || key === "PLA") {
-    if (silk) return generic("PLA Silk");
+    if (silk) return "Generic PLA Silk";
     const bambu = !filament.brand || /^bambu/i.test(filament.brand);
-    return bambu ? `Bambu PLA Basic ${filamentSuffix(nozzle)}` : generic("PLA");
+    return bambu ? "Bambu PLA Basic" : "Generic PLA";
   }
-  if (key.startsWith("PLA"))
-    return key.includes("CF") ? generic("PLA-CF") : silk ? generic("PLA Silk") : generic("PLA");
-  if (key.startsWith("PETG") || key === "PET") return key.includes("CF") ? generic("PETG-CF") : generic("PETG");
-  if (key.startsWith("PCTG")) return generic("PCTG");
-  if (key.startsWith("ABS")) return generic("ABS");
-  if (key.startsWith("ASA")) return generic("ASA");
-  if (key.startsWith("TPU") || key.startsWith("TPE")) return generic("TPU");
-  if (key.startsWith("PAHT")) return generic("PA-CF");
-  if (key.startsWith("PA")) return key.includes("CF") ? generic("PA-CF") : generic("PA");
-  if (key.startsWith("PC")) return generic("PC");
-  if (key.startsWith("PVA")) return generic("PVA");
-  if (key.startsWith("HIPS")) return generic("HIPS");
-  if (key.startsWith("PP")) return generic("PP");
-  return generic("PLA");
+  if (key.startsWith("PLA")) return key.includes("CF") ? "Generic PLA-CF" : silk ? "Generic PLA Silk" : "Generic PLA";
+  if (key.startsWith("PETG") || key === "PET") return key.includes("CF") ? "Generic PETG-CF" : "Generic PETG";
+  if (key.startsWith("PCTG")) return "Generic PCTG";
+  if (key.startsWith("ABS")) return "Generic ABS";
+  if (key.startsWith("ASA")) return "Generic ASA";
+  if (key.startsWith("TPU") || key.startsWith("TPE")) return "Generic TPU";
+  if (key.startsWith("PAHT")) return "Generic PA-CF";
+  if (key.startsWith("PA")) return key.includes("CF") ? "Generic PA-CF" : "Generic PA";
+  if (key.startsWith("PC")) return "Generic PC";
+  if (key.startsWith("PVA")) return "Generic PVA";
+  if (key.startsWith("HIPS")) return "Generic HIPS";
+  if (key.startsWith("PP")) return "Generic PP";
+  return "Generic PLA";
+}
+
+/**
+ * The filament preset for a filament on a nozzle (filamentKind's, for that nozzle). On the 0.2 mm nozzle, a material
+ * Bambu has no preset for slices with its nearest kin (`filamentStandIn` says which).
+ */
+export function filamentPreset(filament: Pick<SlicingFilament, "material" | "brand" | "finish">, nozzle: number) {
+  const kind = filamentKind(filament);
+  const preset = nozzle === 0.2 ? (SMALL_NOZZLE_STAND_INS[kind]?.preset ?? kind) : kind;
+  return `${preset} ${filamentSuffix(nozzle)}`;
+}
+
+/**
+ * When a filament slices as another material on a nozzle, because Bambu has no preset for it there: its material
+ * and the stand-in's ("PETG-CF", "PETG"), for "No 0.2 mm preset for PETG-CF: sliced as PETG". Else null.
+ */
+export function filamentStandIn(
+  filament: Pick<SlicingFilament, "material" | "brand" | "finish">,
+  nozzle: number,
+): { material: string; as: string } | null {
+  if (nozzle !== 0.2) return null;
+  const as = SMALL_NOZZLE_STAND_INS[filamentKind(filament)]?.as;
+  return as ? { material: filament.material, as } : null;
 }
 
 /** Bambu Studio's plate names as Orca's `curr_bed_type` has them: the smooth PEI plate is its "High Temp Plate". */
@@ -266,24 +308,48 @@ export function applySlicing(configs: Pick<OrcaConfigs, "machine" | "process">, 
 }
 
 /**
- * What a slice's record says about the presets (shared/slicing/types.ts SliceSettings), for a slice that failed
- * before presets.json was at hand: the presets the settings would have used.
+ * The X2D's process presets in presets.json for each nozzle, by layer height, Standard where Bambu has two of a
+ * height (processPreset picks from the file itself; this is for a slice that failed before it was at hand).
  */
-export function presetRecord(settings: SlicingSettings): Omit<SliceSettings, "scale" | "engine" | "orca"> {
-  // The X2D's process presets in presets.json, by layer height (processPreset picks from the file itself).
-  const heights: Array<[number, string]> = [
+const PROCESSES: Readonly<Record<string, ReadonlyArray<[number, string]>>> = {
+  "0.2": [
+    [0.08, "0.08mm High Quality @BBL X2D 0.2 nozzle"],
+    [0.1, "0.10mm Standard @BBL X2D 0.2 nozzle"],
+    [0.12, "0.12mm Balanced Quality @BBL X2D 0.2 nozzle"],
+  ],
+  "0.4": [
     [0.08, "0.08mm High Quality @BBL X2D"],
     [0.12, "0.12mm High Quality @BBL X2D"],
     [0.16, "0.16mm Standard @BBL X2D"],
     [0.2, "0.20mm Standard @BBL X2D"],
     [0.24, "0.24mm Standard @BBL X2D"],
-  ];
-  const nearest = heights.reduce((best, entry) =>
-    Math.abs(entry[0] - settings.layerHeight) < Math.abs(best[0] - settings.layerHeight) ? entry : best,
+  ],
+  "0.6": [
+    [0.18, "0.18mm Balanced Quality @BBL X2D 0.6 nozzle"],
+    [0.24, "0.24mm Balanced Quality @BBL X2D 0.6 nozzle"],
+    [0.3, "0.30mm Standard @BBL X2D 0.6 nozzle"],
+  ],
+  "0.8": [
+    [0.24, "0.24mm Balanced Quality @BBL X2D 0.8 nozzle"],
+    [0.32, "0.32mm Balanced Quality @BBL X2D 0.8 nozzle"],
+    [0.4, "0.40mm Standard @BBL X2D 0.8 nozzle"],
+  ],
+};
+
+/**
+ * What a slice's record says about the presets (shared/slicing/types.ts SliceSettings), for a slice that failed
+ * before presets.json was at hand: the presets the settings would have used.
+ */
+export function presetRecord(settings: SlicingSettings): Omit<SliceSettings, "scale" | "engine" | "orca"> {
+  const heights = PROCESSES[String(settings.nozzle)] ?? PROCESSES["0.4"] ?? [];
+  const nearest = heights.reduce<[number, string] | undefined>(
+    (best, entry) =>
+      !best || Math.abs(entry[0] - settings.layerHeight) < Math.abs(best[0] - settings.layerHeight) ? entry : best,
+    undefined,
   );
   return {
     machine: machinePreset(settings.nozzle),
-    process: settings.nozzle === DEFAULT_SLICING.nozzle ? nearest[1] : DEFAULT_PRESETS.process,
+    process: nearest?.[1] ?? DEFAULT_PRESETS.process,
     filaments: settings.filaments.map((filament) => filamentPreset(filament, settings.nozzle)),
     layerHeight: settings.layerHeight,
     materials: settings.filaments.map((filament) => filament.material),

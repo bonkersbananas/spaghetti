@@ -128,6 +128,7 @@ describe("the workspace's defaults", () => {
       supports: "where-needed",
       supportStyle: "tree",
       brim: "auto",
+      nozzle: 0.4,
     });
     const setup = { ...DEFAULT_PRINTER, slicing: defaults };
     expect(workshopDefaults({ spools: [spool("pla", { slot: "A1" })], setup })).toEqual({
