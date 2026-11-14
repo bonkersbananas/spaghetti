@@ -1,4 +1,5 @@
 import { layMeshDown, type Mesh, restingFaces } from "@shared/mesh";
+import type { ColourChoice } from "@shared/slicing/colours.ts";
 import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { filamentOfSpool } from "@shared/slicing/pantry.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
@@ -11,10 +12,11 @@ import {
   SUPPORT_PLACEMENTS,
   withNozzle,
 } from "@shared/slicing/settings.ts";
-import type { FileSlice } from "@shared/slicing/types.ts";
+import type { FileSlice, SliceColour } from "@shared/slicing/types.ts";
 import type { SpoolLike } from "@shared/spools";
 import { DEFAULT_PRINTER } from "@shared/spools";
 import { useEffect, useState } from "react";
+import { ColourMatches } from "@/components/builds/ColourMatches";
 import { ModelCard, type ModelState, SliceResult } from "@/components/builds/ModelFile";
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
@@ -240,6 +242,58 @@ const sliced = (more: Partial<Extract<ModelState, { kind: "sliced" }>> = {}): Mo
   saved: true,
   ...more,
 });
+
+const DEMO_COLOURS: SliceColour[] = [
+  {
+    hex: "#d2281e",
+    name: "Ketchup Red",
+    merged: ["Tomato Red"],
+    share: 38,
+    filament: { material: "PLA", colorHex: "#c0392b", colorName: "Red", spoolId: "s1" },
+    inPantry: true,
+  },
+  {
+    hex: "#e3b505",
+    name: "Mustard",
+    share: 24,
+    filament: { material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", spoolId: "s2" },
+    inPantry: true,
+  },
+  {
+    hex: "#d9a25e",
+    name: "Bun",
+    share: 22,
+    filament: { material: "PLA", colorHex: "#d9a25e", colorName: "Bun" },
+    inPantry: false,
+  },
+  {
+    hex: "#f3e9d2",
+    name: "Cream",
+    share: 16,
+    filament: { material: "PLA", colorHex: "#f4f1ea", colorName: "Jade white", spoolId: "s3" },
+    inPantry: true,
+  },
+];
+const DEMO_SPOOLS: SpoolLike[] = [
+  { id: "s1", material: "PLA", colorHex: "#c0392b", colorName: "Red", slot: "A1" },
+  { id: "s2", material: "PLA", colorHex: "#f0b323", colorName: "Sunflower", slot: "A2" },
+  { id: "s3", material: "PLA", colorHex: "#f4f1ea", colorName: "Jade white", slot: "A3" },
+  { id: "s4", material: "PETG", colorHex: "#2c8a87", colorName: "Teal" },
+];
+
+/** The colour rows with a pick that sticks, as the sheet has them. */
+function ColourMatchesDemo() {
+  const [choices, setChoices] = useState<ColourChoice[]>([]);
+  const colours = DEMO_COLOURS.map((colour) => {
+    const choice = choices.find((c) => c.from === colour.hex);
+    return choice
+      ? { ...colour, filament: choice.filament, inPantry: !!choice.filament.spoolId, chosen: true }
+      : colour;
+  });
+  return (
+    <ColourMatches colours={colours} choices={choices} spools={DEMO_SPOOLS} onChange={setChoices} wrapped={false} />
+  );
+}
 
 export function SlicingSection() {
   const [quality, setQuality] = useState<QualityId>("fine");
@@ -498,6 +552,13 @@ export function SlicingSection() {
 
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
+          <Label>
+            A model with colours of its own, in the Filament section (live): each colour with the filament that prints
+            it, the nearest spool until another is picked, and "not in the Pantry yet" for a colour none is near
+          </Label>
+          <Panel className="max-w-md">
+            <ColourMatchesDemo />
+          </Panel>
           <Label>
             Its result at a phone's sheet's foot: slicing again, what the change did with its undo, and a change it
             couldn't slice

@@ -4,6 +4,7 @@ import { presetRecord } from "@shared/slicing/orca.ts";
 import { type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import { pacedFraction } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions, SliceProblem } from "@shared/slicing/types.ts";
+import type { SpoolLike } from "@shared/spools.ts";
 import type { SliceMessage, SlicePhase, SliceRequest } from "./slice-worker";
 
 /** A model sliced: the .gcode.3mf, its plate picture, how it went, and what the app's reader makes of it. */
@@ -47,6 +48,8 @@ const PHASES: Record<SlicePhase, [number, number]> = {
 export interface SliceAsk {
   chosen: SliceOptions;
   defaults: SlicingSettings;
+  /** The Pantry's spools, for a model with colours of its own to match them to (issue #313). */
+  spools?: SpoolLike[];
 }
 
 /** A slice that couldn't be made, with the settings it was asked for. */
@@ -148,6 +151,7 @@ export function sliceModel(
       name,
       chosen: ask.chosen,
       defaults: ask.defaults,
+      spools: ask.spools ?? [],
       engine: { base, host: engine.host, version: engine.version },
       rust,
     } satisfies SliceRequest);

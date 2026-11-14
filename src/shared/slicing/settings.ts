@@ -7,6 +7,7 @@
  */
 import { BED_TYPES, NOZZLE_DIAMETERS } from "../attempts.ts";
 import { finishLabel } from "../spools.ts";
+import type { ColourChoice } from "./colours.ts";
 import { DEFAULT_SLICER, DEFAULT_SLICING, STAND_IN_FILAMENT } from "./defaults.ts";
 
 /**
@@ -107,6 +108,12 @@ export interface SlicingSettings {
    * lays it as the file does. The original file stays as it is; only the slice is turned (`layMeshDown`).
    */
   orientation: Orientation | null;
+  /**
+   * What prints each of the model's own colours, where someone chose (issue #313): the colour (a group's `from`, as
+   * the slice lists it) and the filament. A colour not listed prints in the Pantry spool nearest it. Only a model
+   * with colours of its own has any; kept with its settings so a re-slice and a reprint keep them.
+   */
+  colours?: ColourChoice[];
   /** Which slicer slices it (decision 0055): `DEFAULT_SLICER` (defaults.ts) unless someone picked one. */
   slicer: SlicerId;
 }
@@ -290,6 +297,7 @@ export function orientationOf(value: unknown): Orientation | null | undefined {
 }
 
 const COLOR = /^#[0-9a-f]{6}$/i;
+const MAX_CHOICES = 16;
 const SPOOL_ID = /^[\w-]{1,64}$/;
 
 /** A filament as given, or null when it says no material. Unknown fields are dropped. */
@@ -310,6 +318,19 @@ export function slicingFilament(value: unknown): SlicingFilament | null {
     ...(finish ? { finish: finish.toLowerCase() } : {}),
     ...(spoolId ? { spoolId } : {}),
   };
+}
+
+/** A model's colour choices as given: each a colour and a filament; the others are dropped. */
+export function colourChoices(value: unknown): ColourChoice[] {
+  if (!Array.isArray(value)) return [];
+  const out: ColourChoice[] = [];
+  for (const item of value.slice(0, MAX_CHOICES)) {
+    if (!isRecord(item) || typeof item.from !== "string" || !COLOR.test(item.from)) continue;
+    const filament = slicingFilament(item.filament);
+    const from = item.from.toLowerCase();
+    if (filament && !out.some((choice) => choice.from === from)) out.push({ from, filament });
+  }
+  return out;
 }
 
 /**
@@ -358,7 +379,13 @@ export function slicingProblems(value: unknown): string[] {
   if (value.nozzlePicked !== undefined && typeof value.nozzlePicked !== "boolean") {
     problems.push("nozzlePicked is true or false.");
   }
-  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked"]);
+  if (value.colours !== undefined) {
+    const given = value.colours;
+    if (!Array.isArray(given) || given.length > MAX_CHOICES || colourChoices(given).length !== given.length) {
+      problems.push("colours lists up to 16 choices, each a colour like #f2754e and the filament that prints it.");
+    }
+  }
+  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked", "colours"]);
   for (const key of Object.keys(value)) if (!known.has(key)) problems.push(`${key} isn't a slicing setting.`);
   return problems;
 }
@@ -396,6 +423,7 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     plate: oneOf(SLICING_PLATES, given.plate) ?? base.plate,
     nozzle: nozzleOk,
     ...(given.nozzlePicked === true ? { nozzlePicked: true } : {}),
+    ...(colourChoices(given.colours).length ? { colours: colourChoices(given.colours) } : {}),
     scale: whole("scale"),
     orientation:
       orientationOf(given.orientation) === undefined ? base.orientation : (orientationOf(given.orientation) ?? null),
@@ -410,20 +438,27 @@ export function sameSlicing(a: SlicingSettings, b: SlicingSettings): boolean {
 
 function canonical(settings: SlicingSettings) {
   return Object.fromEntries(
-    Object.keys(DEFAULT_SLICING).map((key) => [
+    [...Object.keys(DEFAULT_SLICING), "colours"].map((key) => [
       key,
       key === "filaments"
         ? settings.filaments.map((filament) =>
             Object.fromEntries(Object.entries(filament).sort(([x], [y]) => x.localeCompare(y))),
           )
-        : settings[key as SlicingKey],
+        : key === "colours"
+          ? [...(settings.colours ?? [])]
+              .sort((x, y) => x.from.localeCompare(y.from))
+              .map((choice) => ({
+                from: choice.from,
+                filament: Object.fromEntries(Object.entries(choice.filament).sort(([x], [y]) => x.localeCompare(y))),
+              }))
+          : settings[key as SlicingKey],
     ]),
   );
 }
 
 /** The settings that differ between two, in the order they are shown. */
 export function changedSlicing(before: SlicingSettings, after: SlicingSettings): SlicingKey[] {
-  return (Object.keys(DEFAULT_SLICING) as SlicingKey[]).filter(
+  return ([...Object.keys(DEFAULT_SLICING), "colours"] as SlicingKey[]).filter(
     (key) => JSON.stringify(canonical(before)[key]) !== JSON.stringify(canonical(after)[key]),
   );
 }

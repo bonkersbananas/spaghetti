@@ -60,6 +60,7 @@ import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { type Lying, type LyingState, useLying } from "@/lib/slicing/orientations";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { ColourMatches } from "./ColourMatches";
 
 /**
  * How to slice a model (decision 0047): the four choices people make, as big tiles that say what they do (Quality,
@@ -242,14 +243,26 @@ export function SlicingChoices({
       <LayItDown state={lying} value={settings.orientation} onChange={(orientation) => set({ orientation })} />
     </div>
   );
-  const filamentGroup = model && (
-    <FilamentChoice
-      settings={settings}
-      spools={spools}
-      onChange={(filaments) => set({ filaments })}
-      wrapped={!!twoColumns}
-    />
-  );
+  // A model with colours of its own: each colour and what prints it, in place of one filament to pick.
+  const colours = slice?.status === "sliced" ? slice.colours : undefined;
+  const filamentGroup =
+    model &&
+    (colours && colours.length > 1 ? (
+      <ColourMatches
+        colours={colours}
+        choices={settings.colours ?? []}
+        spools={spools}
+        onChange={(next) => set({ colours: next })}
+        wrapped={!!twoColumns}
+      />
+    ) : (
+      <FilamentChoice
+        settings={settings}
+        spools={spools}
+        onChange={(filaments) => set({ filaments })}
+        wrapped={!!twoColumns}
+      />
+    ));
   // The workspace's defaults carry no filament of their own: where the choice would be, it says where it comes from.
   const filamentRule = !model && (
     <div className="flex flex-col gap-2.5">

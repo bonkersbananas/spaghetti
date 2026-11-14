@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { paintedProject, partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
+import { hotdogModel, paintedProject, partsProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -448,6 +448,12 @@ const TWO_TONE = { name: "two-tone-coaster.3mf", bytes: partsProject() };
 const TWO_TONE_IDEA = {
   title: "Two-tone coaster",
   note: "One coaster, half white and half tomato red: the project's two parts, each in its own filament.",
+};
+/** A plain 3MF of thirteen parts in eight named colours (issue #313): matched to the Pantry's spools in the settings. */
+const HOTDOG = { name: "hotdog-hero.3mf", bytes: hotdogModel() };
+const HOTDOG_IDEA = {
+  title: "Hotdog hero",
+  note: "A model that brings its own colours: each is matched to a spool from the Pantry.",
 };
 /** A project with painted colours, which our own slicer can't do yet: OrcaSlicer's engine prints them. */
 const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
@@ -1845,6 +1851,21 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await openSliceSettings(page);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // A model with colours of its own (issue #313): the Filament section lists each colour and the spool that prints
+    // it; the first is open, with the Pantry's spools to pick from.
+    name: "slice-settings-colours",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      const colours = settings.getByText("Colours", { exact: true });
+      await colours.waitFor();
+      await settings.getByRole("button", { name: /Ketchup Red/ }).click();
+      await colours.evaluate((heading) => heading.scrollIntoView({ block: "start", behavior: "instant" }));
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,

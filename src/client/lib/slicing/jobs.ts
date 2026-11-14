@@ -126,12 +126,17 @@ export const onPhone = () => typeof matchMedia === "function" && matchMedia("(po
  * plate the Printer page owns and its main nozzle (shared/slicing/pantry.ts), from what the app already has.
  */
 export async function slicingDefaults(queryClient: QueryClient): Promise<SlicingSettings> {
+  return (await pantryAndDefaults(queryClient)).defaults;
+}
+
+/** The workshop's defaults and the Pantry's spools they came from (the spools match a model's own colours). */
+async function pantryAndDefaults(queryClient: QueryClient) {
   // Offline or failing, what was seen last (or nothing: the stand-in, the stock plate).
   const [spools, printer] = await Promise.all([
     queryClient.ensureQueryData(spoolsQuery).catch(() => queryClient.getQueryData(spoolsQuery.queryKey) ?? []),
     queryClient.ensureQueryData(printerQuery).catch(() => queryClient.getQueryData(printerQuery.queryKey)),
   ]);
-  return workshopDefaults({ spools, setup: printer?.setup ?? DEFAULT_PRINTER });
+  return { spools, defaults: workshopDefaults({ spools, setup: printer?.setup ?? DEFAULT_PRINTER }) };
 }
 
 /** A saved model's original, for slicing it again. */
@@ -192,7 +197,8 @@ export function startSlice(
     if (controller.signal.aborted) return null;
     update(entry, { status: "slicing" });
     let outcome: SliceOutcome;
-    const ask = { chosen: entry.chosen, defaults: entry.defaults ?? (await slicingDefaults(queryClient)) };
+    const pantry = await pantryAndDefaults(queryClient);
+    const ask = { chosen: entry.chosen, defaults: entry.defaults ?? pantry.defaults, spools: pantry.spools };
     if (controller.signal.aborted) return null;
     try {
       const blob = typeof job.source === "function" ? await job.source() : job.source;

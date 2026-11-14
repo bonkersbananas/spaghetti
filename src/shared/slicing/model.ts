@@ -65,6 +65,8 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
       return after.brim === "on" ? "a brim" : after.brim === "off" ? "no brim" : "a brim where needed";
     case "filaments":
       return after.filaments[0] ? filamentWords(after.filaments[0]) : "other filament";
+    case "colours":
+      return "the colours printed in other filaments";
     case "plate":
       return `the ${after.plate}`;
     case "nozzle":

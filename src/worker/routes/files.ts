@@ -125,6 +125,31 @@ const fileSlice = z.object({
     .max(8)
     .optional()
     .describe("What Spaghetti's own slicer printed otherwise than asked, in its words."),
+  colours: z
+    .array(
+      z.object({
+        hex: z.string().regex(/^#[0-9a-f]{6}$/),
+        name: z.string().trim().min(1).max(80).optional(),
+        merged: z.array(z.string().trim().min(1).max(80)).max(16).optional(),
+        share: z.number().int().min(0).max(100),
+        filament: z.object({
+          material: z.string().trim().min(1).max(40),
+          colorHex: z
+            .string()
+            .regex(/^#[0-9a-f]{6}$/)
+            .optional(),
+          colorName: z.string().max(40).optional(),
+          brand: z.string().max(60).optional(),
+          finish: z.string().max(40).optional(),
+          spoolId: z.string().max(64).optional(),
+        }),
+        inPantry: z.boolean(),
+        chosen: z.boolean().optional(),
+      }),
+    )
+    .max(16)
+    .optional()
+    .describe("A model with colours of its own: each, and the filament that printed it."),
   ms: z
     .number()
     .int()
