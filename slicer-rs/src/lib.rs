@@ -140,14 +140,11 @@ pub struct Options {
     /// Percent of the models' own size, scaled about their origin before they are laid out (as the app scales);
     /// scaled models are always arranged.
     pub scale: f64,
-    /// Prints painted colours on the objects' sides, as Orca's segmentation by paint splits them (`segment.rs`); the
-    /// painted tops and bottoms are still to be ported. Off, painted projects are refused, as the app slices them.
-    pub paint: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { arrange: true, thumbnail: true, scale: 100.0, paint: false }
+        Options { arrange: true, thumbnail: true, scale: 100.0 }
     }
 }
 
@@ -264,22 +261,37 @@ fn paint_regions(
     owners: &mut [Vec<u32>],
     meshes: &[Mesh],
     paints: &[Option<paint::Paint>],
-    slice_z: &[f64],
+    layers: &section::Layers,
     settings: &Settings,
 ) {
+    let (slice_z, heights) = (&layers.slice_z(), &layers.height);
     // The filaments the setup has: paint in any past them prints in the object's own.
     let filaments = settings.palette.as_ref().map_or(1, |p| p.profiles.len());
     // What Orca's walls simplify each region to first: a fifth of the resolution, with arc fitting.
     let tolerance = 0.2 * settings.resolution;
+    // With interlocking beams Orca doesn't keep painted sides to a width (and the beams are refused).
+    let cut = |mm: f64| if settings.interlocking_beam { 0.0 } else { mm };
+    let shells = segment::Shells {
+        top: settings.top_color_layers,
+        bottom: settings.bottom_color_layers,
+        width: settings.outer_wall_width,
+        gap_fill: settings.gap_infill_speed > 0.0,
+        max_width: cut(settings.painted_max_width),
+        interlocking_depth: cut(settings.painted_interlocking_depth),
+    };
     for g in 0..parts.members.len() {
         let painted: Vec<(&Mesh, &paint::Paint)> = parts.members[g]
             .iter()
             .filter_map(|&m| paints.get(m).and_then(Option::as_ref).map(|p| (&meshes[m], p)))
             .collect();
-        if painted.is_empty() {
+        if painted.iter().all(|(_, p)| p.states() <= 1) {
             continue;
         }
         let facets = segment::facets(&painted);
+        // Every triangle of the object, painted or not, for its tops and bottoms.
+        let all: Vec<(&Mesh, Option<&paint::Paint>)> =
+            parts.members[g].iter().map(|&m| (&meshes[m], paints.get(m).and_then(Option::as_ref))).collect();
+        let surfaces = segment::surfaces(&all);
         // The object's regions: those it has now, and any made for it below.
         let before: Vec<bool> = parts.group.iter().map(|&rg| rg as usize == g).collect();
         let is_mine = |r: u32| before.get(r as usize).copied().unwrap_or(true);
@@ -288,7 +300,7 @@ fn paint_regions(
             .zip(owners.iter())
             .map(|(s, o)| s.iter().zip(o).filter(|&(_, &r)| is_mine(r)).map(|(s, _)| s.clone()).collect())
             .collect();
-        let by_layer = segment::painted_regions(slice_z, &layers, &facets, filaments);
+        let by_layer = segment::painted_regions(slice_z, heights, &layers, &facets, &surfaces, filaments, &shells);
         for (l, painted) in by_layer.iter().enumerate() {
             if painted.iter().all(Vec::is_empty) {
                 continue;
@@ -443,12 +455,6 @@ impl Plate {
         if let Some(what) = settings.unsupported() {
             return Err(Error::Unsupported(what));
         }
-        // Painted colours: Orca's segmentation by paint is being ported (OrcaSlicer's engine prints them); with
-        // `options.paint`, the sides print as it splits them, the tops and bottoms not yet.
-        let painting = options.paint;
-        if paints.iter().flatten().any(|p| p.states() > 1) && !painting {
-            return Err(Error::Unsupported("painted colours"));
-        }
         // With several filaments, each object prints in the one its file or its caller gives it (a project's object
         // its parts each in theirs): models that say nothing would all print in the first (with one filament,
         // everything prints in it, as Orca prints it).
@@ -527,6 +533,12 @@ impl Plate {
         // Each object prints as a region for each filament its parts print in (with one filament, one region).
         let region_filaments: Vec<usize> = if several { filaments.clone() } else { vec![0; meshes.len()] };
         let mut parts = parts::Regions::new(&groups, &region_filaments);
+        // Orca interlocks an object's filaments with beams where they meet (`InterlockingGenerator`), which isn't
+        // ported: refused for an object in several, by its parts or its paint.
+        let painted = several && paints.iter().flatten().any(|p| p.states() > 1);
+        if settings.interlocking_beam && (parts.mixed() || painted) {
+            return Err(Error::Unsupported("interlocking beams"));
+        }
         let height = meshes.iter().map(|m| m.bounds().max[2]).fold(0.0, f64::max);
         if height > settings.max_height {
             return Err(Error::TooTall);
@@ -548,8 +560,8 @@ impl Plate {
         // merged into a region (`parts.rs`); from here on each region is an object of its own, of its group.
         parts.assign(&mut slices, &mut owners, &meshes);
         // Painted objects: their regions re-split by their paint (`segment.rs`), each painted filament a region.
-        if painting && several {
-            paint_regions(&mut parts, &mut slices, &mut owners, &meshes, &paints, &layers.slice_z(), settings);
+        if several {
+            paint_regions(&mut parts, &mut slices, &mut owners, &meshes, &paints, &layers, settings);
         }
         let t2 = now();
         // The plate's objects, and one for each region (an object's own, unless its parts print in several filaments).
@@ -641,7 +653,10 @@ impl Plate {
                 .iter()
                 .map(|slot| {
                     let mut here: Vec<usize> = match slot.layer {
-                        Some(l) => regions[l].islands.iter().map(|i| i.object as usize).collect(),
+                        Some(l) => (0..regions[l].islands.len())
+                            .filter(|&k| regions[l].prints(k))
+                            .map(|k| regions[l].islands[k].object as usize)
+                            .collect(),
                         None => Vec::new(),
                     };
                     here.sort_unstable();
@@ -723,7 +738,10 @@ impl Plate {
             Some(c) => {
                 let g0 = schedule.iter().position(|slot| slot.layer == Some(0));
                 let order = g0.and_then(|g| c.orders.get(g)).map_or(&[][..], Vec::as_slice);
-                let firsts = regions.first().map_or(&[][..], |r| r.islands.as_slice());
+                // The first layer's islands that print something.
+                let firsts: Vec<&region::Island> = regions.first().map_or(Vec::new(), |r| {
+                    r.islands.iter().enumerate().filter(|&(k, _)| r.prints(k)).map(|(_, i)| i).collect()
+                });
                 let supports_by: Vec<Vec<Option<support::Pass>>> = match g0 {
                     Some(g) => order.iter().map(|&f| c.supports_of(g, f, objects.len())).collect(),
                     None => Vec::new(),

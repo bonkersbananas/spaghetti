@@ -25,8 +25,6 @@ Options:
       --parts           Slice the models as the parts of one object (each in its --filaments filament), as Orca
                         prints an object made of parts: where two overlap, the later one's
       --keep-placement  Keep the objects where the files put them instead of arranging them on the plate
-      --paint           Print a project's painted colours on its objects' sides, as OrcaSlicer splits them (being
-                        ported: painted tops and bottoms are not yet); without it, painted projects are refused
       --no-thumbnail    Leave out the plate picture
       --timings         Print how long each step took
   -h, --help            Show this";
@@ -39,8 +37,6 @@ struct Args {
     gcode: Option<String>,
     stats: Option<String>,
     keep_placement: bool,
-    /// Whether painted colours print (their sides).
-    paint: bool,
     /// Whether the models are the parts of one object.
     parts: bool,
     thumbnail: bool,
@@ -60,7 +56,6 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
         gcode: None,
         stats: None,
         keep_placement: false,
-        paint: false,
         parts: false,
         thumbnail: true,
         timings: false,
@@ -76,7 +71,6 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
             "--keep-placement" => out.keep_placement = true,
-            "--paint" => out.paint = true,
             "--parts" => out.parts = true,
             "--nozzle" => {
                 let mm = it.next().ok_or_else(|| "--nozzle needs a width in mm".to_string())?;
@@ -159,8 +153,7 @@ fn main() -> ExitCode {
     if let (Some(map), Some(palette)) = (&args.filament_map, &mut settings.palette) {
         std::sync::Arc::make_mut(palette).manual_map = Some(map.iter().map(|n| n - 1).collect());
     }
-    let options =
-        Options { arrange: !args.keep_placement, thumbnail: args.thumbnail, scale: setup.scale, paint: args.paint };
+    let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail, scale: setup.scale };
     // One file at a time: each file's bytes go once it is read.
     let mut plate = Plate::default();
     for (k, path) in args.inputs.iter().enumerate() {
