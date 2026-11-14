@@ -258,48 +258,82 @@ test("an object made of parts in two filaments gets its supports from ours, each
     );
     // Supports print under the arms, in no filament of their own: on each layer in the one it starts with, which
     // alternates, so both filaments print some.
-    const supportTools = new Set<string>();
-    let tool = "T0";
-    let feature = "";
-    for (const line of gcode.split("\n")) {
-      const change = /^T\d\b/.exec(line);
-      if (change) tool = change[0];
-      if (line.startsWith("; FEATURE: ")) feature = line.slice("; FEATURE: ".length);
-      if (feature === "Support" && /^G[123] .* E\.?\d/.test(line)) supportTools.add(tool);
-    }
-    expect([...supportTools].sort()).toEqual(["T0", "T1"]);
+    expect([...(toolsByFeature(gcode).get("Support") ?? [])].sort()).toEqual(["T0", "T1"]);
   } finally {
     await setDefaults(page, null);
   }
 });
 
-test("a painted project is sliced by OrcaSlicer's engine in its colours, ours stepping aside", async ({ page }) => {
-  test.setTimeout(2 * SLICED);
+test("a painted project is sliced by ours in its colours, and by OrcaSlicer's engine when it is picked", async ({
+  page,
+}) => {
+  test.setTimeout(3 * SLICED);
   await signIn(page);
   try {
     await setDefaults(page, { slicer: "spaghetti" });
     // A Bambu Studio project: a white coaster with a red bow tie painted on its top.
     const { id, files } = await ideaWithModel(page, "Farfalle coaster", "farfalle.3mf", paintedProject());
-    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do painted colours yet")).toBeVisible({
-      timeout: SLICED,
-    });
-    const file = await fileOf(page, id);
-    expect(file.slice.settings.slicer).toBe("orca");
-    expect(file.slice.fallback).toEqual({ why: "unsupported", what: "painted colours" });
-    expect(file.slice.settings.filaments).toHaveLength(2);
-    // The paint prints: both filaments used, over a prime tower.
-    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
-    expect(sliced.ok()).toBe(true);
-    const zip = unzipSync(new Uint8Array(await sliced.body()));
-    const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
-    const used = [...info.matchAll(/<filament id="(\d+)"[^>]*\bused_g="([\d.]+)"/g)].map((match) => Number(match[2]));
-    expect(used).toHaveLength(2);
-    for (const grams of used) expect(grams).toBeGreaterThan(0);
-    expect(strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array())).toContain("; FEATURE: Prime tower");
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const ours = await fileOf(page, id);
+    expect(ours.slice.settings.slicer).toBe("spaghetti");
+    expect(ours.slice.fallback).toBeUndefined();
+    expect(ours.slice.settings.filaments).toHaveLength(2);
+    const slicedFile = async (fileId: string) => {
+      const sliced = await page.request.get(`/api/files/${fileId}/sliced`);
+      expect(sliced.ok()).toBe(true);
+      const zip = unzipSync(new Uint8Array(await sliced.body()));
+      const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
+      return {
+        grams: [...info.matchAll(/<filament id="(\d+)"[^>]*\bused_g="([\d.]+)"/g)].map((match) => Number(match[2])),
+        gcode: strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array()),
+      };
+    };
+    // The paint prints: both filaments used, over a prime tower; the bow tie in red on the coaster's top, as Orca's
+    // segmentation colours the top shells under paint, its bottom all white.
+    const ourFile = await slicedFile(ours.id);
+    expect(ourFile.grams).toHaveLength(2);
+    for (const grams of ourFile.grams) expect(grams).toBeGreaterThan(0);
+    expect(ourFile.gcode).toContain("; FEATURE: Prime tower");
+    const tools = toolsByFeature(ourFile.gcode);
+    expect([...(tools.get("Top surface") ?? [])].sort()).toEqual(["T0", "T1"]);
+    expect([...(tools.get("Bottom surface") ?? [])]).toEqual(["T0"]);
+
+    // OrcaSlicer's engine, picked under More, prints the paint with Orca's own segmentation.
+    await files.getByRole("button", { name: "Slice with…" }).click();
+    const settings = page.getByRole("dialog", { name: "How to slice it" });
+    await settings.getByRole("button", { name: /^More/ }).click();
+    await settings.getByRole("group", { name: "Slicer" }).getByRole("radio", { name: "OrcaSlicer" }).click();
+    await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
+    await page.keyboard.press("Escape");
+    const engine = await fileOf(page, id);
+    expect(engine.slice.status).toBe("sliced");
+    expect(engine.slice.settings.filaments).toHaveLength(2);
+    const engineFile = await slicedFile(engine.id);
+    expect(engineFile.grams).toHaveLength(2);
+    for (const grams of engineFile.grams) expect(grams).toBeGreaterThan(0);
+    expect(engineFile.gcode).toContain("; FEATURE: Prime tower");
   } finally {
     await setDefaults(page, null);
   }
 });
+
+/** The tools (T0, T1…) each feature of a G-code extrudes with. */
+function toolsByFeature(gcode: string): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  let tool = "T0";
+  let feature = "";
+  for (const line of gcode.split("\n")) {
+    const change = /^T\d\b/.exec(line);
+    if (change) tool = change[0];
+    if (line.startsWith("; FEATURE: ")) feature = line.slice("; FEATURE: ".length);
+    if (feature && /^G[123] .* E\.?\d/.test(line)) {
+      const tools = out.get(feature) ?? new Set<string>();
+      tools.add(tool);
+      out.set(feature, tools);
+    }
+  }
+  return out;
+}
 
 test("a plate in two colours is sliced by ours, each object in its own filament", async ({ page }) => {
   test.setTimeout(2 * SLICED);
