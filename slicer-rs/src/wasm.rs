@@ -141,6 +141,20 @@ pub unsafe extern "C" fn add_part(
     PLATE.with(|p| p.borrow_mut().add_part(&Input { name, bytes }, filament, first != 0)).map_or_else(code, |()| 0)
 }
 
+/// Paints the STL added just before (by `add`, `add_in` or `add_part`) with a project's painted colours: its `len`
+/// bytes at `data`, as `paint::Paint::from_bytes` reads them (its painted triangles, by their place in the STL, and
+/// their codes). Returns 0, or 1 when they aren't paint for it.
+///
+/// # Safety
+/// `data` must point at `len` bytes the host wrote after `alloc`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn paint(data: *const u8, len: usize) -> u32 {
+    // SAFETY: the host wrote `len` bytes at `data`.
+    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
+    let Some(paint) = crate::paint::Paint::from_bytes(bytes) else { return 1 };
+    if PLATE.with(|p| p.borrow_mut().paint(&paint)) { 0 } else { 1 }
+}
+
 /// Slices the models added since the last `slice` or `clear`. Flags: bit 0 keeps the objects where the files put
 /// them; bit 1 leaves out the picture. Returns 0 when it made a file, else an error code (see `code`).
 #[unsafe(no_mangle)]

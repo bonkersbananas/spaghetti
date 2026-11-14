@@ -5,6 +5,7 @@
 
 use crate::Error;
 use crate::mesh::Mesh;
+use crate::paint::Paint;
 use crate::zip;
 use std::collections::HashMap;
 
@@ -18,6 +19,8 @@ pub struct Model {
     /// Which of the plate's objects each mesh is of: an object whose parts print in different filaments comes as one
     /// mesh for each part, in the object's order of them, each in its part's filament.
     pub groups: Vec<usize>,
+    /// Each mesh's painted colours, when it has any: each painted triangle's `paint_color`, Orca's code.
+    pub paints: Vec<Option<Paint>>,
 }
 
 type Matrix = [f64; 12];
@@ -86,6 +89,8 @@ struct ObjectDef {
     kind: String,
     vertices: Vec<[f64; 3]>,
     triangles: Vec<[u32; 3]>,
+    /// Painted triangles (their index in `triangles`) and their codes.
+    paint: Vec<(u32, String)>,
     components: Vec<(String, String, Matrix)>,
 }
 
@@ -114,6 +119,7 @@ fn read_model_file(text: &str, file: &str) -> HashMap<String, ObjectDef> {
             kind: attr(head, "type").unwrap_or("model").to_string(),
             vertices: Vec::new(),
             triangles: Vec::new(),
+            paint: Vec::new(),
             components: Vec::new(),
         };
         if body.contains("<mesh") {
@@ -127,6 +133,9 @@ fn read_model_file(text: &str, file: &str) -> HashMap<String, ObjectDef> {
                 let t = [n("v1"), n("v2"), n("v3")];
                 // A corner that isn't one of the mesh's vertices leaves the triangle out.
                 if t.iter().all(|&i| i < count) {
+                    if let Some(code) = attr(tag, "paint_color").filter(|c| !c.is_empty()) {
+                        def.paint.push((def.triangles.len() as u32, code.to_string()));
+                    }
                     def.triangles.push(t);
                 }
             }
@@ -252,6 +261,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
     let mut meshes = Vec::new();
     let mut filaments = Vec::new();
     let mut groups = Vec::new();
+    let mut paints = Vec::new();
     let mut objects = 0;
     for (id, transform) in items {
         if plate_objects.as_ref().is_some_and(|ids| !ids.contains(&id)) {
@@ -273,6 +283,8 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         // Which of the object's parts (its own components, by id) each triangle is of.
         let mut part_ids: Vec<String> = Vec::new();
         let mut triangle_part: Vec<usize> = Vec::new();
+        // Painted triangles: their index in `triangles`, code, and whether their corners were turned (a mirrored part).
+        let mut painted: Vec<(u32, String, bool)> = Vec::new();
         // Depth-first through components (at most 8 deep), loading other model files as they are named.
         let mut stack: Vec<(String, String, Matrix, usize, Option<String>)> =
             vec![(root_name.clone(), id.clone(), transform, 0, None)];
@@ -308,11 +320,13 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                 }),
                 None => usize::MAX,
             };
+            let first = triangles.len() as u32;
             for t in &object.triangles {
                 let t = [t[0] + base, t[1] + base, t[2] + base];
                 triangles.push(if flip { [t[0], t[2], t[1]] } else { t });
                 triangle_part.push(part_index);
             }
+            painted.extend(object.paint.iter().map(|(t, code)| (first + t, code.clone(), flip)));
             for (path, child, ct) in object.components.iter().rev() {
                 if item_info.is_some_and(|i| i.skip_parts.contains(child)) {
                     continue;
@@ -344,12 +358,16 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                 for (k, part) in own.into_iter().chain(each) {
                     let mut index: HashMap<u32, u32> = HashMap::new();
                     let mut part_vertices = Vec::new();
+                    // Each of the object's triangles in this part: its index among the part's.
+                    let mut in_part: HashMap<u32, u32> = HashMap::new();
                     let part_triangles: Vec<[u32; 3]> = triangles
                         .iter()
                         .zip(&triangle_part)
-                        .filter(|&(_, &p)| p == k)
-                        .map(|(t, _)| {
-                            t.map(|v| {
+                        .enumerate()
+                        .filter(|&(_, (_, &p))| p == k)
+                        .map(|(t, (corners, _))| {
+                            in_part.insert(t as u32, in_part.len() as u32);
+                            corners.map(|v| {
                                 *index.entry(v).or_insert_with(|| {
                                     part_vertices.push(vertices[v as usize]);
                                     (part_vertices.len() - 1) as u32
@@ -361,14 +379,18 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                         continue;
                     }
                     let e = part.and_then(|p| info.part_extruders.get(p).copied().flatten()).or(info.extruder);
-                    meshes
-                        .push(Mesh { name: name.clone(), vertices: part_vertices, triangles: part_triangles }.welded());
+                    let (mesh, moves) =
+                        Mesh { name: name.clone(), vertices: part_vertices, triangles: part_triangles }.welded_moved();
+                    meshes.push(mesh);
+                    paints.push(paint_of(&painted, |t| in_part.get(&t).copied(), &moves));
                     filaments.push(filament(e));
                     groups.push(objects);
                 }
             }
             None => {
-                meshes.push(Mesh { name, vertices, triangles }.welded());
+                let (mesh, moves) = Mesh { name, vertices, triangles }.welded_moved();
+                meshes.push(mesh);
+                paints.push(paint_of(&painted, Some, &moves));
                 filaments.push(filament(item_info.and_then(|i| i.extruder)));
                 groups.push(objects);
             }
@@ -378,7 +400,27 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
     if meshes.is_empty() {
         return Err(Error::NoModel);
     }
-    Ok(Model { meshes, project, filaments, groups })
+    Ok(Model { meshes, project, filaments, groups, paints })
+}
+
+/// A mesh's paint, from its object's painted triangles: `place` gives an object's triangle's place among the mesh's
+/// (None: not the mesh's), `moves` where the mesh's went as it was welded. None when nothing is painted.
+fn paint_of(
+    painted: &[(u32, String, bool)],
+    place: impl Fn(u32) -> Option<u32>,
+    moves: &crate::mesh::Moves,
+) -> Option<Paint> {
+    let now = moves.new_places();
+    let mut kept: Vec<(u32, &str, bool)> = painted
+        .iter()
+        .filter_map(|(t, code, turned)| place(*t).and_then(&now).map(|n| (n, code.as_str(), *turned)))
+        .collect();
+    kept.sort_by_key(|k| k.0);
+    let mut paint = Paint::default();
+    for (t, code, turned) in kept {
+        paint.push(t, code.as_bytes(), turned);
+    }
+    (!paint.is_empty()).then_some(paint)
 }
 
 fn det(m: &Matrix) -> f64 {
@@ -419,6 +461,43 @@ mod tests {
         assert_eq!(m.meshes[0].vertices[1], [110.0, 20.0, 0.0]);
         assert_eq!(m.meshes[1].vertices[0], [50.0, 0.0, 0.0]);
         assert_eq!(m.meshes[1].triangles.len(), 4);
+    }
+
+    #[test]
+    fn reads_painted_colours_with_their_triangles_wherever_they_go() {
+        // A collapsed triangle first (dropped), then the tetra with two painted triangles; a second tetra, mirrored,
+        // one triangle painted (its corners turned back outward, its code still going by the file's order).
+        let painted = r#"<mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="0" y="10" z="0"/><vertex x="0" y="0" z="10"/></vertices><triangles><triangle v1="0" v2="0" v3="1"/><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3" paint_color="8"/><triangle v1="1" v2="2" v3="3"/><triangle v1="0" v2="3" v3="2" paint_color="081"/></triangles></mesh>"#;
+        let other =
+            TETRA.replace(r#"<triangle v1="0" v2="2" v3="1"/>"#, r#"<triangle v1="0" v2="2" v3="1" paint_color="4"/>"#);
+        let model = format!(
+            r#"<?xml version="1.0"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model">{painted}</object><object id="2" type="model">{other}</object><object id="3" type="model"><components><component objectid="1"/><component objectid="2" transform="-1 0 0 0 1 0 0 0 1 30 0 0"/></components></object></resources><build><item objectid="3"/></build></model>"#
+        );
+        let codes = |p: &Paint| {
+            p.iter()
+                .map(|(t, code, turned)| (t, String::from_utf8_lossy(code).into_owned(), turned))
+                .collect::<Vec<_>>()
+        };
+        // One mesh: the collapsed triangle gone, the others keep their order.
+        let whole = read(&three_mf(&model)).expect("a model");
+        assert_eq!(whole.meshes.len(), 1);
+        assert_eq!(whole.meshes[0].triangles.len(), 8);
+        let paint = whole.paints[0].as_ref().expect("paint");
+        assert_eq!(codes(paint), vec![(1, "8".into(), false), (3, "081".into(), false), (4, "4".into(), true)]);
+        // Parts in different filaments: each part a mesh with its own paint.
+        let settings = r#"<?xml version="1.0"?><config><object id="3"><metadata key="name" value="Painted"/><part id="1" subtype="normal_part"><metadata key="extruder" value="1"/></part><part id="2" subtype="normal_part"><metadata key="extruder" value="2"/></part></object></config>"#;
+        let parts = read(&project(&model, Some(settings))).expect("a model");
+        assert_eq!(parts.meshes.len(), 2);
+        assert_eq!(
+            codes(parts.paints[0].as_ref().expect("paint")),
+            vec![(1, "8".into(), false), (3, "081".into(), false)]
+        );
+        assert_eq!(codes(parts.paints[1].as_ref().expect("paint")), vec![(0, "4".into(), true)]);
+        // Unpainted models have none.
+        let plain = format!(
+            r#"<?xml version="1.0"?><model unit="millimeter"><resources><object id="1" type="model">{TETRA}</object></resources><build><item objectid="1"/></build></model>"#
+        );
+        assert_eq!(read(&three_mf(&plain)).expect("a model").paints, vec![None]);
     }
 
     #[test]
