@@ -36,6 +36,7 @@ import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
+import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { useVia } from "@/lib/agents";
@@ -280,6 +281,7 @@ function Idea({ item }: { item: ItemView }) {
         <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
         <DetailBar back={back}>
           <SaveStatus state={saveState} className="mr-2" />
+          <ShareLinkButton title={title.trim()} />
           <IconButton
             icon={TrashIcon}
             label="Delete idea"
