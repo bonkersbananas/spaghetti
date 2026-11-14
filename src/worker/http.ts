@@ -12,6 +12,7 @@ import { byPrintTime, describeChanges } from "../shared/attempts.ts";
 import type { Coach } from "../shared/coach.ts";
 import type { PhotoRead } from "../shared/photo-read.ts";
 import type { Reaction } from "../shared/reactions.ts";
+import { cleanFileName } from "../shared/slicing/files.ts";
 import type {
   Attempt,
   AttemptFileRow,
@@ -71,7 +72,7 @@ export function toApiPart(part: Part): ApiPart {
 export function toApiFile(file: Omit<AttemptFileRow, "attemptId">): ApiAttemptFile {
   return {
     id: file.id,
-    name: file.name,
+    name: cleanFileName(file.name),
     size: file.size,
     stored: file.stored,
     hasThumb: file.hasThumb,

@@ -5,5 +5,31 @@ export const isStlName = (name: string) => /\.stl$/i.test(name);
 
 /** "Benchy.stl" → "Benchy.gcode.3mf": the name a model's sliced file goes by. */
 export function slicedName(name: string): string {
-  return `${name.replace(/\.(stl|3mf)$/i, "").trim() || "model"}.gcode.3mf`;
+  return `${
+    cleanFileName(name)
+      .replace(/\.(stl|3mf)$/i, "")
+      .trim() || "model"
+  }.gcode.3mf`;
+}
+
+/**
+ * A file's name without the marks Finder and browsers add to copies: "marshmellow (1).3mf" → "marshmellow.3mf",
+ * "x.gcode (3) copy.3mf" → "x.gcode.3mf". Double extensions stay. A "-2" goes only straight after a known
+ * extension ("x.gcode-2.3mf"); "bracket-v2" and "m3-8" are names, not copies.
+ */
+export function cleanFileName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || !/^\.[A-Za-z0-9]{1,8}$/.test(name.slice(dot))) return name;
+  let base = name.slice(0, dot);
+  const extension = name.slice(dot);
+  for (;;) {
+    const next = base
+      .replace(/\s*\(\d+\)$/, "")
+      .replace(/\s+copy(\s+\d+)?$/i, "")
+      .replace(/(\.(?:gcode|3mf|stl))-\d+$/i, "$1");
+    if (next === base) break;
+    base = next;
+  }
+  base = base.trim();
+  return base ? `${base}${extension}` : name;
 }

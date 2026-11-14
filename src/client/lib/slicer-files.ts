@@ -1,6 +1,6 @@
 import { type AttemptFile, MAX_MODEL_FILE_BYTES, MAX_SLICER_FILE_BYTES, type Spool } from "@shared/api";
 import type { AttemptFilament, AttemptSettings } from "@shared/attempts";
-import { isStlName } from "@shared/slicing/files.ts";
+import { cleanFileName, isStlName } from "@shared/slicing/files.ts";
 import type { FileKind } from "@shared/slicing/types.ts";
 import { filamentFromSpool, matchFilaments } from "@shared/spools";
 import { printablePlates, settingsFromFile, slicerName } from "@shared/threemf/prefill.ts";
@@ -29,11 +29,18 @@ export interface SlicerFileDraft {
 
 const NOTHING_READ: ThreeMfResult = { kind: "unknown", plates: [], settings: {}, warnings: [] };
 
+/** The same file under its clean name ("marshmellow (1).3mf" → "marshmellow.3mf"): what is queued, shown and uploaded. */
+export function withCleanName(file: File): File {
+  const name = cleanFileName(file.name);
+  return name === file.name ? file : new File([file], name, { type: file.type, lastModified: file.lastModified });
+}
+
 /**
  * Reads a dropped or picked file, with no network. A sliced .gcode.3mf is read as before; an .stl or a .3mf with
  * no G-code is a model to slice. Null (with a toast) when it is neither, or a model too large to keep.
  */
-export async function readSlicerFile(file: File): Promise<SlicerFileDraft | null> {
+export async function readSlicerFile(picked: File): Promise<SlicerFileDraft | null> {
+  const file = withCleanName(picked);
   const model = (): SlicerFileDraft | null => {
     if (file.size > MAX_MODEL_FILE_BYTES) {
       toast.error(

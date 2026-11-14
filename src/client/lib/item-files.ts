@@ -86,9 +86,11 @@ export function keepFile(
  * Reads a picked or dropped file and keeps it with the item. It shows on the page at once; a refusal takes it off
  * again with a word about why. Needs a connection (offline, saved things are read-only).
  */
-export async function addItemFile(queryClient: QueryClient, itemId: string, file: File): Promise<void> {
-  const draft = await readSlicerFile(file);
+export async function addItemFile(queryClient: QueryClient, itemId: string, picked: File): Promise<void> {
+  const draft = await readSlicerFile(picked);
   if (!draft) return;
+  // The draft holds the file under its clean name.
+  const file = draft.file;
   if (draft.kind === "model") return addItemModel(queryClient, itemId, draft);
   const { form, plate, prefill } = bodyOf(draft);
   // The plate's picture shows at once, from this device.
