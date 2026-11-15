@@ -320,6 +320,11 @@ async function run(request: SliceRequest) {
         objects: objects.map((object, index) => ({
           name: object.name,
           box: boundsOf(object.positions),
+          mesh: {
+            positions: object.positions,
+            ...(object.extruder ? { extruder: object.extruder } : {}),
+            ...(object.parts ? { parts: object.parts } : {}),
+          },
           // The ids Orca labels the objects with in the G-code, which the printer skips them by.
           ...(summary.labels.length === objects.length ? { id: summary.labels[index] as number } : {}),
         })),

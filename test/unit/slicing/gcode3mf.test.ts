@@ -45,6 +45,22 @@ const settings = {
   textured_plate_temp: ["55", "70"],
 };
 
+/** The twelve triangles of a box, nine floats each. */
+function boxMesh(min: number[], max: number[]): Float32Array {
+  const [x0, y0, z0] = min as [number, number, number];
+  const [x1, y1, z1] = max as [number, number, number];
+  const c = (i: number) => [i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0];
+  const quads = [
+    [0, 1, 3, 2],
+    [4, 6, 7, 5],
+    [0, 4, 5, 1],
+    [2, 3, 7, 6],
+    [0, 2, 6, 4],
+    [1, 5, 7, 3],
+  ] as const;
+  return new Float32Array(quads.flatMap(([a, b, d, e]) => [...c(a), ...c(b), ...c(d), ...c(a), ...c(d), ...c(e)]));
+}
+
 function packed() {
   return packGcode3mf({
     gcode: GCODE,
@@ -53,8 +69,26 @@ function packed() {
     grams: 3.73,
     layers: 100,
     objects: [
-      { name: "cube.stl", box: { min: [118, 118, 0], max: [138, 138, 20] }, id: 22 },
-      { name: "lid & cap.stl", box: { min: [90, 100, 0], max: [110, 120, 4] }, id: 23 },
+      {
+        name: "cube.stl",
+        box: { min: [118, 118, 0], max: [138, 138, 20] },
+        id: 22,
+        mesh: { positions: boxMesh([118, 118, 0], [138, 138, 20]), extruder: 1 },
+      },
+      {
+        name: "lid & cap.stl",
+        box: { min: [90, 100, 0], max: [110, 120, 4] },
+        id: 23,
+        // Two parts, each in its own filament.
+        mesh: {
+          positions: boxMesh([90, 100, 0], [110, 120, 4]),
+          extruder: 1,
+          parts: [
+            { from: 0, to: 6, extruder: 1 },
+            { from: 6, to: 12, extruder: 2 },
+          ],
+        },
+      },
     ],
     settings,
     filaments: [
@@ -67,6 +101,18 @@ function packed() {
 }
 
 describe("packGcode3mf", () => {
+  it("carries the objects' meshes, their parts and filaments, and puts them on the plate", () => {
+    const files = unzipSync(packed());
+    const model = strFromU8(files["3D/3dmodel.model"] as Uint8Array);
+    expect(model.match(/<mesh>/g)).toHaveLength(3);
+    expect(model.match(/<item /g)).toHaveLength(2);
+    expect(model).toContain("<components>");
+    const settings = strFromU8(files["Metadata/model_settings.config"] as Uint8Array);
+    expect(settings).toContain('<metadata key="name" value="lid &amp; cap.stl"/>');
+    expect(settings).toContain('<metadata key="identify_id" value="23"/>');
+    expect(settings).toContain('<metadata key="extruder" value="2"/>');
+  });
+
   it("lays the file out as Orca's own export does, with the G-code's MD5 and the plate picture", () => {
     const files = unzipSync(packed());
     expect(Object.keys(files).sort()).toEqual([
