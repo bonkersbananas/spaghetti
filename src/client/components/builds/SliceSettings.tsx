@@ -1074,7 +1074,9 @@ export default function SliceSettingsSheet({
       // first choices down.
       headerActions={
         projectPlates && projectPlates.length > 1 ? (
-          <div className="flex min-w-0 flex-col items-end">
+          // On the desktop panel "Slice all" sits in the tiles' row, so the close button stays level with them; on a
+          // phone the sheet's header is narrow and it goes under them.
+          <div className={cn("flex min-w-0", isDesktop ? "flex-row-reverse items-center gap-1" : "flex-col items-end")}>
             <PlatePicker
               inSheet
               plates={projectPlates}
@@ -1091,7 +1093,7 @@ export default function SliceSettingsSheet({
                 size="sm"
                 icon={LayersIcon}
                 onClick={() => compare.run(projectPlates.map((plate) => plate.index))}
-                className="-mr-1"
+                className={isDesktop ? undefined : "-mr-1"}
               >
                 Slice all {projectPlates.length}
               </Button>
