@@ -24,6 +24,7 @@ import { useReadOnly } from "@/lib/read-only";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIdle } from "@/lib/use-idle";
 
+const LowUnderBays = lazy(() => import("@/components/pantry/LowUnderBays").then((m) => ({ default: m.LowUnderBays })));
 const Upkeep = lazy(() => import("@/components/printer/Upkeep").then((m) => ({ default: m.Upkeep })));
 // Below the fold, or only after a tap: their own chunks, not part of the first load.
 const DryingTable = lazy(() => import("@/components/printer/DryingTable").then((m) => ({ default: m.DryingTable })));
@@ -199,6 +200,10 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           </div>
         </PrinterSection>
       </fieldset>
+      {/* What is low, right under the bays that hold it, with the way onto the shopping list. */}
+      <Suspense fallback={null}>
+        <LowUnderBays />
+      </Suspense>
 
       {idle ? (
         <Suspense fallback={<UpkeepSkeleton />}>
