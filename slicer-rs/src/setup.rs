@@ -310,13 +310,17 @@ mod tests {
         assert!(!untowered.for_filaments(2).prime_tower && untowered.for_filaments(2).support.independent_layer_height);
         assert_eq!(untowered.for_filaments(1).unsupported(), None);
         assert_eq!(refused(r#"{"process": {"timelapse_type": "1"}}"#), Some(Error::Unsupported("a smooth timelapse")));
-        // Wrapping detection in one filament lifts the nozzle before each layer, where the printer has no G-code or
-        // area for it, as the X2D (gcode.rs); its own G-code, several filaments, whose prime tower it reshapes, and
-        // spiral vase mode don't slice yet.
+        // Wrapping detection lifts the nozzle before each layer, where the printer has no G-code or area for it, as
+        // the X2D (gcode.rs), and in several filaments before the layer's first visit to the prime tower, which it
+        // reshapes (toolchange.rs, wipe_tower.rs), or without a tower before the layer's first filament; the
+        // printer's own G-code and spiral vase mode don't slice yet.
         let wrapping = read(r#"{"process": {"enable_wrapping_detection": "1"}, "filaments": [{}, {}]}"#).unwrap();
-        assert!(wrapping.settings.wrapping_detection);
+        assert!(wrapping.settings.wrapping_detection && wrapping.settings.wrapping_layers == 20);
         assert_eq!(wrapping.settings.for_filaments(1).unsupported(), None);
-        assert_eq!(wrapping.settings.for_filaments(2).unsupported(), Some("wrapping detection"));
+        assert_eq!(wrapping.settings.for_filaments(2).unsupported(), None);
+        let untowered =
+            r#"{"process": {"enable_wrapping_detection": "1", "enable_prime_tower": "0"}, "filaments": [{}, {}]}"#;
+        assert_eq!(read(untowered).unwrap().settings.for_filaments(2).unsupported(), None);
         for json in [
             r#"{"process": {"enable_wrapping_detection": "1", "spiral_mode": "1"}}"#,
             r#"{"machine": {"wrapping_detection_gcode": "M1002"}, "process": {"enable_wrapping_detection": "1"}}"#,

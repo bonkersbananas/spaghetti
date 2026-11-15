@@ -52,6 +52,10 @@ pub enum Step {
     /// Orca's writer no longer knows where the nozzle is (after its own change G-code): the travel to the next path
     /// goes over, then down to the layer.
     Lost,
+    /// Wrapping detection, before the layer's first visit to the tower: pull the filament back and lift by the z-hop
+    /// from where the nozzle is at once (Orca's `retract` with `apply_instantly`), after which Orca's writer no longer
+    /// takes the nozzle's place for known (`insert_wrapping_detection_gcode`), so its next lift goes straight up.
+    Wrap,
 }
 
 /// G-code a visit writes as it is, and what it costs.
@@ -150,8 +154,13 @@ pub struct Colours {
     flushing: Vec<bool>,
     /// Whether a prime tower prints: without one each change happens where the nozzle is (`change_steps`).
     pub towered: bool,
+    /// Whether the nozzle's wrapping detection retracts and lifts before each layer's first visit to the tower.
+    wrapping: bool,
     /// Without a tower, what each change finds, in the order of `flushes`.
     untowered: Vec<Untowered>,
+    /// Each G-code layer, whether its timelapse photo comes before one of its visits to the tower or changes (where
+    /// the camera's extruder prints when one starts), else after the layer.
+    photo_in_layer: Vec<bool>,
     /// The way to the filament cutter the printer's change G-code may take (`get_path_of_change_filament`).
     change_path: [[f64; 2]; 3],
 }
@@ -414,7 +423,10 @@ impl Colours {
         // Without a prime tower (`enable_prime_tower` off on a plate in several filaments) Orca changes filament where
         // the nozzle is (`GCode::set_extruder`).
         let towered = !(settings.used_filaments > 1 && !settings.enable_prime_tower);
-        let has_tower: Vec<bool> = partitions.iter().map(|&p| towered && p > 0).collect();
+        // With wrapping detection the first layers print the tower whatever they print (`fill_wipe_tower_partitions`).
+        let wrapping = |g: usize| settings.wrapping_detection && g < settings.wrapping_layers;
+        let has_tower: Vec<bool> =
+            partitions.iter().enumerate().map(|(g, &p)| towered && (p > 0 || wrapping(g))).collect();
 
         let p0 = &settings.profile;
         let mut params = tower_params(settings, &per_filament, &extruder_of);
@@ -527,6 +539,10 @@ impl Colours {
                 flushes.push((g, current, f, written));
                 changes += 1;
                 current = f;
+            }
+            if settings.wrapping_detection && partitions[g] == 0 {
+                // A layer that prints the tower only for the wrapping detection prints its walls, no infill.
+                tower.set_last_layer_extruder_fill(false);
             }
             if g + 1 < layers && !has_tower[g + 1] {
                 // Orca stops planning the tower once no layer above changes filament.
@@ -652,6 +668,37 @@ impl Colours {
             let at = tower.position();
             pts.iter().map(|p| [cos * p[0] - sin * p[1] + at.x as f64, sin * p[0] + cos * p[1] + at.y as f64]).collect()
         };
+        // Where each layer's photo comes, as `gcode.rs` takes it: before the first visit to the tower (or change, without
+        // one) that starts in a filament on the camera's extruder, as `combine` makes the visits.
+        let photo_head = |f: usize| extruder_of.get(f) == Some(&most_used_extruder);
+        let photo_in_layer: Vec<bool> = (0..layers)
+            .map(|g| {
+                let order = &orders[g];
+                let mut current = starts[g];
+                if !towered {
+                    return order.iter().any(|&f| {
+                        let change = f != current;
+                        let from = std::mem::replace(&mut current, f);
+                        change && photo_head(from)
+                    });
+                }
+                let mut k = 0;
+                for (i, &f) in order.iter().enumerate() {
+                    if f == current && i + 1 != order.len() {
+                        continue;
+                    }
+                    if k >= pieces[g].len() {
+                        break;
+                    }
+                    k += 1;
+                    if photo_head(current) {
+                        return true;
+                    }
+                    current = f;
+                }
+                false
+            })
+            .collect();
         let colours = Colours {
             settings: per_filament,
             extruder_of,
@@ -677,7 +724,9 @@ impl Colours {
             support_passes,
             flushing,
             towered,
+            wrapping: settings.wrapping_detection,
             untowered,
+            photo_in_layer,
             change_path: change_path(p0, plate.object_boxes),
         };
         match refusal {
@@ -710,6 +759,12 @@ impl Colours {
     /// Whether filament `f`'s extruder is the one the timelapse camera follows.
     pub fn photo_head(&self, f: usize) -> bool {
         self.extruder_of.get(f) == Some(&self.most_used_extruder)
+    }
+
+    /// Whether G-code layer `g` takes its timelapse photo before one of its visits to the tower or changes, rather
+    /// than after it (`photo_in_layer`).
+    pub fn photo_in_layer(&self, g: usize) -> bool {
+        self.photo_in_layer.get(g).copied().unwrap_or(false)
     }
 
     /// mm on the plate of a point in the tower's frame.
@@ -775,7 +830,10 @@ impl Colours {
             if change {
                 count += 1;
             }
-            let steps = self.visit_steps(g, &out, piece, current, f, count, frame);
+            let mut steps = self.visit_steps(g, &out, piece, current, f, count, frame);
+            if k == 1 && self.wrapping {
+                wrap_first_visit(&mut steps, piece.is_finish_first);
+            }
             out.visits.push(Visit { at, from: current, to: f, steps });
             current = f;
         }
@@ -1766,6 +1824,23 @@ fn next_permutation(v: &mut [usize]) -> bool {
     true
 }
 
+/// The wrapping detection's steps in a layer's first visit to the tower (Orca's `insert_wrapping_detection_gcode`, before
+/// the tower's first G-code of the layer): the retraction and lift first, after which the visit's own retraction lifts
+/// again at once where the tool change starts it (its `retract` with `apply_instantly`), straight up from there, while
+/// the one before a sparse part of the tower first lifts only where the nozzle isn't lifted yet (`lazy_lift`).
+fn wrap_first_visit(steps: &mut Vec<Step>, finish_first: bool) {
+    steps.insert(0, Step::Wrap);
+    if finish_first {
+        return;
+    }
+    if let Some(i) = steps.iter().position(|s| matches!(s, Step::Retract { lift: true, .. })) {
+        if let Step::Retract { lift, .. } = &mut steps[i] {
+            *lift = false;
+        }
+        steps.insert(i + 1, Step::LiftAgain);
+    }
+}
+
 /// The tower's settings from the print's (`WipeTower`'s constructor).
 fn tower_params(s: &Settings, per: &[Settings], extruder_of: &[usize]) -> wipe_tower::Params {
     let p = &s.profile;
@@ -1848,6 +1923,7 @@ fn tower_params(s: &Settings, per: &[Settings], extruder_of: &[usize]) -> wipe_t
         first_layer_flow_ratio: 1.0,
         shared_bed,
         extruder_of: extruder_of.to_vec(),
+        wrapping: s.wrapping_detection,
     }
 }
 

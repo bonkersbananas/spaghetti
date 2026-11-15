@@ -2918,3 +2918,66 @@ fn wrapping_detection_lifts_the_nozzle_before_each_layer_as_orcas_does() {
         assert_eq!(after[2] == down, k == 0, "layer {k}: {after:?}");
     }
 }
+
+#[test]
+fn wrapping_detection_with_a_prime_tower_lifts_before_each_layers_first_visit_as_orcas_does() {
+    // A 20 mm box in filament 1 and a 2 mm one in filament 2, the tower where the app puts it, with the nozzle's
+    // wrapping detection: Orca then prints the tower at its full depth on every layer and on each of the first 20
+    // layers, those above the short box with its walls alone, and before each layer's first visit to the tower
+    // retracts and lifts at once; above the tower each layer lifts before its first path. Native OrcaSlicer 2.5.1
+    // (Nov 15) prints 712.26 mm³ of tower, layer for layer as ours.
+    let tall = boxes_stl(&[([100., 100., 0.], [115., 115., 20.])]);
+    let low = boxes_stl(&[([130., 100., 0.], [145., 115., 2.])]);
+    let setup = r##"{"process": {"enable_wrapping_detection": "1", "wipe_tower_x": ["211"], "wipe_tower_y": ["196"]},
+        "filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}"##;
+    let settings = setup::read(setup).unwrap().settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_with_filament(&Input { name: "tall.stl", bytes: &tall }, Some(0)).unwrap();
+    plate.add_with_filament(&Input { name: "low.stl", bytes: &low }, Some(1)).unwrap();
+    let out = plate.slice(&settings, &options).unwrap();
+    assert_eq!(out.stats.layers, 100);
+    let tower = out.stats.features[Role::ALL.iter().position(|&r| r == Role::PrimeTower).unwrap()].volume;
+    assert!((tower - 712.26).abs() < 0.05, "{tower} mm³ of tower");
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    let short = |v: f64| {
+        let s = format!("{v:.3}");
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        s.strip_prefix('0').unwrap_or(s).to_string()
+    };
+    let hop = settings.z_hop;
+    for (k, layer) in layers.iter().enumerate() {
+        let z: f64 = layer.lines().next().and_then(|l| l.strip_prefix("; Z_HEIGHT: ")).unwrap().parse().unwrap();
+        let tower = layer.find("; WIPE_TOWER_START");
+        assert_eq!(tower.is_some(), k < 20, "layer {k}");
+        let Some(tower) = tower else {
+            // Above the tower the lift comes after the layer change: in a spiral where the layer before took its
+            // photo before its visit to the tower (Orca's writer knows where the nozzle is), else straight up.
+            let (change, label) = (layer.find("M991 S0 P").unwrap(), layer.find("M624").unwrap());
+            let lift = if k == 20 {
+                format!("\nG3 Z{} I1.217 J0 P1  F60000\n", short(z + hop))
+            } else {
+                format!("\nG1 Z{} F60000\n", short(z + hop))
+            };
+            assert!(layer[change..label].contains(&lift), "layer {k}: {}", &layer[change..label]);
+            continue;
+        };
+        if (10..20).contains(&k) {
+            // The tower alone, first: the photo lifts the nozzle, the wrapping detection straight up once more (its
+            // writer doesn't know where the nozzle is after the photo), then the tower's walls, no infill.
+            let before = &layer[..tower];
+            let lift =
+                format!("M625\nG1 Z{}\nM204 S10000\nG1 X232.015 Y216.535\nG1 Z{}\n", short(z + 2.0 * hop), short(z));
+            assert!(before.contains(&lift), "layer {k}: {before}");
+            assert!(!layer.contains("CP EMPTY GRID"), "layer {k}");
+        }
+    }
+    // On a layer that changes filament at the tower first, the change's own retraction lifts again, straight up
+    // from the wrapping detection's lift, after the tower's G-code starts (Orca's `append_tcr` with the writer not
+    // knowing where the nozzle is).
+    let one = layers[1];
+    let head = one.find("M220 B\nM220 S100\n; WIPE_TOWER_START\n").unwrap();
+    assert!(one[..head].contains("G3 Z.8 I1.217 J0 P1  F60000\n"), "{}", &one[..head]);
+    assert!(one[head..].starts_with("M220 B\nM220 S100\n; WIPE_TOWER_START\nG1 Z1.2\n"), "{}", &one[head..head + 80]);
+}
