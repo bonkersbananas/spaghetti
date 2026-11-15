@@ -616,7 +616,10 @@ function FilamentChoice({
           labelHidden
           options={settings.filaments.slice(0, 8).map((_, at) => ({ value: String(at), label: `Filament ${at + 1}` }))}
           value={String(slot)}
-          onChange={(value) => setIndex(Number(value))}
+          onChange={(value) => {
+            setIndex(Number(value));
+            setAnyColour(false);
+          }}
         />
       )}
       <ChoiceTiles
