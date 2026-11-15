@@ -10,8 +10,13 @@ import { useCallback } from "react";
 export function useStickyColumn() {
   return useCallback((column: HTMLElement | null) => {
     if (!column) return;
-    const place = () =>
+    // Sticky only from 48 rem (tokens.css): a phone measures nothing, which would force a layout in the middle of the
+    // page's first commit (a tap on an idea spent 13 ms on it); turning the phone sideways triggers a resize.
+    const wide = window.matchMedia("(min-width: 48rem)");
+    const place = () => {
+      if (!wide.matches) return;
       column.style.setProperty("--sticky-top", `${Math.min(24, window.innerHeight - column.offsetHeight - 24)}px`);
+    };
     place();
     const observer = new ResizeObserver(place);
     observer.observe(column);

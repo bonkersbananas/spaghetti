@@ -317,10 +317,13 @@ test("photos seen online, and the thumbnails below the fold, show with no connec
   await context.setOffline(true);
   await page.goto("/ideas");
   await expect(page.getByRole("status").filter({ hasText: "Showing what you saw" })).toBeVisible();
+  // The cards below the first screen draw two frames after it (useAfterPaint): wait for all of them, then go to the last.
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link")).toHaveCount(40);
   const last = page.getByRole("list", { name: "Ideas" }).getByRole("link").last();
   await last.scrollIntoViewIfNeeded();
   await expect.poll(() => picturesLoaded(page)).toBe(true);
   await page.reload();
+  await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link")).toHaveCount(40);
   await page.getByRole("list", { name: "Ideas" }).getByRole("link").last().scrollIntoViewIfNeeded();
   await expect.poll(() => picturesLoaded(page)).toBe(true);
 

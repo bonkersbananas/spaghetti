@@ -23,7 +23,7 @@ import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
 // The way to the wishlists on phones: on demand, so desktop (which has the sidebar) never loads it.
 const WishlistLink = lazy(() =>
@@ -37,8 +37,12 @@ export const Route = createFileRoute("/_app/ideas/")({
 /** The inbox's grid: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
+/** How many cards a phone (or a laptop) shows before it scrolls: the rest draw after the first paint (useAfterPaint). */
+const FIRST_SCREEN = { phone: 8, desktop: 12 };
+
 function Ideas() {
   useListPicker();
+  const after = useAfterPaint();
   const { items: all, isPending, error, refetch } = useIdeas();
   // "Has a model" / "Needs designing": one tap each, tap again to see everything. Only offered once an idea has a model.
   const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
@@ -57,7 +61,10 @@ function Ideas() {
   const byId = new Map(people?.map((person) => [person.id, person]));
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
-  const { queue, rest } = splitQueue(items);
+  const { queue, rest: everything } = splitQueue(items);
+  // The cards below the fold wait for the first paint, so a tap on Ideas (or on a delete that lands here) shows the top
+  // of the grid at once; a return to the page draws it whole, for the scroll position the router restores.
+  const rest = after ? everything : everything.slice(0, isDesktop ? FIRST_SCREEN.desktop : FIRST_SCREEN.phone);
   const [dragged, setDragged] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const menuFor = (item: (typeof items)[number], index: number): UpNextMenu => ({

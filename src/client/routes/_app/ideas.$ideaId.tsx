@@ -57,7 +57,7 @@ import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext } from "@/lib/up-next";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
@@ -122,6 +122,7 @@ const back = { to: "/ideas", label: "Ideas" } as const;
 
 function Idea({ item }: { item: ItemView }) {
   const stickyColumn = useStickyColumn();
+  const after = useAfterPaint();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
@@ -467,7 +468,7 @@ function Idea({ item }: { item: ItemView }) {
                 )}
               </p>
             </div>
-            {!item.pending && (
+            {after && !item.pending && (
               <ItemReactions
                 itemId={item.id}
                 reactions={item.reactions}
@@ -477,7 +478,7 @@ function Idea({ item }: { item: ItemView }) {
               />
             )}
             {/* The conversation follows the words it is about, in the same column (as on a build). */}
-            {!item.pending && (
+            {after && !item.pending && (
               <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />
             )}
           </div>
