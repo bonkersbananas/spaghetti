@@ -51,6 +51,8 @@ export function useAutosave<T>(
     clearTimeout(timer.current);
     if (running.current) return running.current;
     if (!dirty()) return Promise.resolve();
+    // Typed during a save that went through, with the screen gone: sent once the save has settled.
+    let again = false;
     const run = (async () => {
       const sending = latest.current;
       if (mounted.current) setState("saving");
@@ -62,7 +64,7 @@ export function useAutosave<T>(
         if (dirty()) {
           // Typed since: a mounted field waits for a pause in the typing, one that is gone sends at once.
           if (mounted.current) timer.current = setTimeout(() => void flush.current(), delay);
-          // (sent below, once this save has settled: it is still "running" here)
+          else again = true;
         } else if (mounted.current) setState("saved");
       } catch (error) {
         // A request the server answered with a refusal won't succeed by repeating it, and nobody is left to see it.
@@ -75,7 +77,7 @@ export function useAutosave<T>(
       }
     })().finally(() => {
       running.current = null;
-      if (!mounted.current && dirty()) void flush.current();
+      if (again) void flush.current();
     });
     running.current = run;
     return run;

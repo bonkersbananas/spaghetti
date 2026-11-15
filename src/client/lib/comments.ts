@@ -127,7 +127,7 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
           withComments(queryClient, itemId, (list) => list.filter((c) => c.id !== id));
           // Back in the box, ahead of anything typed since.
           const typed = readDraft(itemId);
-          setDraft(itemId, typed ? `${body}\n${typed}` : body);
+          if (!typed.includes(body)) setDraft(itemId, typed ? `${body}\n${typed}` : body);
           toast.error("Couldn't send that", "Your message is back in the box.");
           return;
         }
