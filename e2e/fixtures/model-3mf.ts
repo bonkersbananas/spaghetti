@@ -232,8 +232,8 @@ export function paintedProject(): Uint8Array {
 /**
  * A Bambu Studio or OrcaSlicer project of a T, a slab 40 mm wide on a pillar 20 mm tall, whose supports are painted
  * on: the slab's underside enforces support (`paint_supports`), and the project asks for supports only where painted
- * (`normal(manual)`). Our own slicer can't print painted supports yet, so OrcaSlicer's engine slices it; until the app
- * handed the engine the paint (Nov 15) it printed no support at all.
+ * (`normal(manual)`). Both slicers support the slab where it is painted: ours since release 26, and OrcaSlicer's engine
+ * since the app hands it the paint (Nov 15); before that it printed no support at all.
  */
 export function paintedSupportsProject(): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
